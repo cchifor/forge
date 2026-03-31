@@ -47,23 +47,13 @@ services:
       - app-network
 
 {% if has_frontend %}
-  # ── Frontend ──
+  # ── Frontend (nginx) ──
   frontend:
     build:
       context: ./{{ frontend_slug }}
       dockerfile: Dockerfile
     ports:
-      - "{{ frontend_port }}:{{ frontend_port }}"
-    environment:
-      VITE_API_BASE_URL: "http://localhost:{{ frontend_port }}"
-{% if include_keycloak %}
-      VITE_AUTH_DISABLED: "false"
-      VITE_KEYCLOAK_URL: "http://localhost:{{ keycloak_port }}"
-      VITE_KEYCLOAK_REALM: "{{ keycloak_realm }}"
-      VITE_KEYCLOAK_CLIENT_ID: "{{ keycloak_client_id }}"
-{% else %}
-      VITE_AUTH_DISABLED: "true"
-{% endif %}
+      - "{{ frontend_port }}:80"
     depends_on:
       - backend
     networks:

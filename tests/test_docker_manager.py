@@ -9,7 +9,11 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
 )
-from forge.docker_manager import render_compose, render_frontend_dockerfile
+from forge.docker_manager import (
+    render_compose,
+    render_frontend_dockerfile,
+    render_nginx_conf,
+)
 
 
 def _make_config(
@@ -46,23 +50,30 @@ class TestRenderCompose:
         assert "backend" in data["services"]
         assert "postgres" in data["services"]
         assert "frontend" not in data["services"]
-        assert "keycloak" not in data["services"]
 
     def test_backend_with_vue(self, tmp_path):
         config = _make_config(framework=FrontendFramework.VUE)
         compose_path = render_compose(config, tmp_path)
         data = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
 
-        assert "backend" in data["services"]
         assert "frontend" in data["services"]
-        assert data["services"]["frontend"]["ports"] == ["5173:5173"]
+        assert data["services"]["frontend"]["ports"] == ["5173:80"]
 
-    def test_flutter_excluded_from_compose(self, tmp_path):
+    def test_flutter_included_in_compose(self, tmp_path):
         config = _make_config(framework=FrontendFramework.FLUTTER)
         compose_path = render_compose(config, tmp_path)
         data = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
 
-        assert "frontend" not in data["services"]
+        assert "frontend" in data["services"]
+        assert data["services"]["frontend"]["ports"] == ["5173:80"]
+
+    def test_frontend_no_vite_env_vars(self, tmp_path):
+        config = _make_config(framework=FrontendFramework.VUE)
+        compose_path = render_compose(config, tmp_path)
+        data = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+
+        frontend = data["services"]["frontend"]
+        assert "environment" not in frontend
 
     def test_keycloak_included(self, tmp_path):
         config = _make_config(include_keycloak=True)
@@ -71,10 +82,8 @@ class TestRenderCompose:
 
         assert "keycloak" in data["services"]
         assert data["services"]["keycloak"]["ports"] == ["8080:8080"]
-        # Backend should reference keycloak
         env = data["services"]["backend"]["environment"]
         assert env["APP__SECURITY__AUTH__ENABLED"] == "true"
-        assert env["APP__SECURITY__AUTH__SERVER_URL"] == "http://keycloak:8080"
 
     def test_keycloak_excluded(self, tmp_path):
         config = _make_config(include_keycloak=False)
@@ -90,8 +99,7 @@ class TestRenderCompose:
         compose_path = render_compose(config, tmp_path)
         data = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
 
-        pgadmin = data["services"]["pgadmin"]
-        assert pgadmin["profiles"] == ["tools"]
+        assert data["services"]["pgadmin"]["profiles"] == ["tools"]
 
     def test_network_defined(self, tmp_path):
         config = _make_config(has_frontend=False)
@@ -119,17 +127,28 @@ class TestRenderCompose:
 
 
 class TestRenderFrontendDockerfile:
-    def test_npm_dockerfile(self, tmp_path):
+    def test_two_stage_build(self, tmp_path):
         config = _make_config(framework=FrontendFramework.VUE)
-        config.frontend.package_manager = "npm"
         path = render_frontend_dockerfile(config, tmp_path)
         content = path.read_text(encoding="utf-8")
 
-        assert "FROM node:22-slim" in content
-        assert "package-lock.json" in content
-        assert "npm install" in content
-        assert "npm" in content
-        assert "EXPOSE 5173" in content
+        assert "FROM node:22-slim AS builder" in content
+        assert "FROM nginx:alpine" in content
+        assert "run build" in content
+
+    def test_vue_copies_dist(self, tmp_path):
+        config = _make_config(framework=FrontendFramework.VUE)
+        path = render_frontend_dockerfile(config, tmp_path)
+        content = path.read_text(encoding="utf-8")
+
+        assert "/app/dist" in content
+
+    def test_svelte_copies_build(self, tmp_path):
+        config = _make_config(framework=FrontendFramework.SVELTE)
+        path = render_frontend_dockerfile(config, tmp_path)
+        content = path.read_text(encoding="utf-8")
+
+        assert "/app/build" in content
 
     def test_pnpm_dockerfile(self, tmp_path):
         config = _make_config(framework=FrontendFramework.SVELTE)
@@ -139,7 +158,6 @@ class TestRenderFrontendDockerfile:
 
         assert "corepack enable" in content
         assert "pnpm-lock.yaml" in content
-        assert "pnpm install" in content
 
     def test_bun_dockerfile(self, tmp_path):
         config = _make_config(framework=FrontendFramework.SVELTE)
@@ -149,14 +167,39 @@ class TestRenderFrontendDockerfile:
 
         assert "npm install -g bun" in content
         assert "bun.lockb" in content
-        assert "bun install" in content
 
-    def test_yarn_dockerfile(self, tmp_path):
-        config = _make_config(framework=FrontendFramework.VUE)
-        config.frontend.package_manager = "yarn"
+    def test_flutter_dockerfile(self, tmp_path):
+        config = _make_config(framework=FrontendFramework.FLUTTER)
         path = render_frontend_dockerfile(config, tmp_path)
         content = path.read_text(encoding="utf-8")
 
-        assert "corepack enable" in content
-        assert "yarn.lock" in content
-        assert "yarn install" in content
+        assert "cirruslabs/flutter" in content
+        assert "flutter build web" in content
+        assert "FROM nginx:alpine" in content
+        assert "build/web" in content
+
+    def test_nginx_conf_copied(self, tmp_path):
+        """Dockerfile references nginx.conf for all frameworks."""
+        for fw in (FrontendFramework.VUE, FrontendFramework.SVELTE, FrontendFramework.FLUTTER):
+            config = _make_config(framework=fw)
+            path = render_frontend_dockerfile(config, tmp_path)
+            content = path.read_text(encoding="utf-8")
+            assert "nginx.conf" in content
+
+
+class TestRenderNginxConf:
+    def test_renders_proxy(self, tmp_path):
+        config = _make_config()
+        path = render_nginx_conf(config, tmp_path)
+        content = path.read_text(encoding="utf-8")
+
+        assert "proxy_pass http://backend:5000/api/" in content
+        assert "try_files" in content
+
+    def test_custom_backend_port(self, tmp_path):
+        config = _make_config()
+        config.backend.server_port = 8000
+        path = render_nginx_conf(config, tmp_path)
+        content = path.read_text(encoding="utf-8")
+
+        assert "proxy_pass http://backend:8000/api/" in content

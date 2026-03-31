@@ -35,6 +35,11 @@ ps_exec() {
   powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$1"
 }
 
+get_version() {
+  # Extract just the version number, ignoring any extra output (e.g. Docker WSL warnings)
+  "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1
+}
+
 # -- Banner -------------------------------------------------------------------
 
 echo -e ""
@@ -48,22 +53,22 @@ echo -e ""
 # -- uv (REQUIRED) -----------------------------------------------------------
 
 if installed uv; then
-  echo -e "  ${GREEN}[ok]${NC} uv $(uv --version)"
+  echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
 else
   echo -e "  ${WARN}[..]${NC} Installing uv..."
   if [[ "$os" == "windows" ]]; then
-    ps_exec "irm https://astral.sh/uv/install.ps1 | iex"
+    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" > /dev/null 2>&1
     eval "$(powershell.exe -NoProfile -Command '
       $p = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
            [System.Environment]::GetEnvironmentVariable("Path","Machine")
       $p -split ";" | ForEach-Object { if ($_) { "export PATH=\"" + ($_ -replace "\\\\","/") + ":\$PATH\"" } }
     ')" 2>/dev/null || true
   else
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null
     source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH"
   fi
   if installed uv; then
-    echo -e "  ${GREEN}[ok]${NC} uv installed"
+    echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
   else
     echo -e "  ${RED}[!!] uv installation failed. Aborting.${NC}"
     exit 1
@@ -73,30 +78,30 @@ fi
 # -- git (recommended) -------------------------------------------------------
 
 if installed git; then
-  echo -e "  ${GREEN}[ok]${NC} git $(git --version | cut -d' ' -f3)"
+  echo -e "  ${GREEN}[ok]${NC} git $(get_version git --version)"
 else
   echo -e "  ${WARN}[--]${NC} git not found ${MUTED}(needed for project generation)${NC}"
   case "$os" in
     macos)
-      echo -e "  ${MUTED}Run:${NC} xcode-select --install" ;;
+      echo -e "       ${MUTED}Run:${NC} xcode-select --install" ;;
     linux)
-      echo -e "  ${MUTED}Run:${NC} sudo apt install git ${MUTED}(or your distro equivalent)${NC}" ;;
+      echo -e "       ${MUTED}Run:${NC} sudo apt install git ${MUTED}(or your distro equivalent)${NC}" ;;
     windows)
-      echo -e "  ${MUTED}Run:${NC} winget install Git.Git" ;;
+      echo -e "       ${MUTED}Run:${NC} winget install Git.Git" ;;
   esac
 fi
 
 # -- docker (recommended) ----------------------------------------------------
 
 if installed docker; then
-  echo -e "  ${GREEN}[ok]${NC} docker $(docker --version | cut -d' ' -f3 | tr -d ',')"
+  echo -e "  ${GREEN}[ok]${NC} docker $(get_version docker --version)"
 else
   echo -e "  ${WARN}[--]${NC} docker not found ${MUTED}(needed to run the generated stack)${NC}"
   case "$os" in
     macos|windows)
-      echo -e "  ${MUTED}Download:${NC} https://docker.com/products/docker-desktop" ;;
+      echo -e "       ${MUTED}Download:${NC} https://docker.com/products/docker-desktop" ;;
     linux)
-      echo -e "  ${MUTED}Run:${NC} curl -fsSL https://get.docker.com | sh" ;;
+      echo -e "       ${MUTED}Run:${NC} curl -fsSL https://get.docker.com | sh" ;;
   esac
 fi
 
@@ -107,17 +112,20 @@ echo -e ""
 echo -e "  ${MUTED}Installing forge-cli...${NC}"
 
 if [[ "$os" == "windows" ]]; then
-  ps_exec "uv tool install $TOOL"
+  ps_exec "uv tool install $TOOL" > /dev/null 2>&1
 else
-  uv tool install "$TOOL"
+  uv tool install "$TOOL" > /dev/null 2>&1
 fi
 
-echo -e ""
 echo -e "  ${GREEN}[ok]${NC} forge installed"
+
+# -- Done ---------------------------------------------------------------------
+
 echo -e ""
-echo -e "  ${MUTED}To get started:${NC}"
+echo -e "  ${NC}To get started, open a new terminal and run:${NC}"
 echo -e ""
-echo -e "  forge          ${MUTED}# generate a project${NC}"
-echo -e "  cd <project>   ${MUTED}# enter the project${NC}"
-echo -e "  docker compose up --build"
+echo -e "    ${GREEN}forge${NC}"
+echo -e ""
+echo -e "  ${MUTED}Then follow the prompts to generate your project.${NC}"
+echo -e "  ${MUTED}For more info: https://github.com/cchifor/forge-cli${NC}"
 echo -e ""

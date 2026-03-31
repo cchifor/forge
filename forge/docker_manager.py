@@ -12,8 +12,13 @@ from forge.config import FrontendFramework, ProjectConfig
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
+BUILD_DIR = {
+    FrontendFramework.VUE: "dist",
+    FrontendFramework.SVELTE: "build",
+}
 
-# ── Rendering ───────────────────────────────────────────────────────────────
+
+# -- Rendering ----------------------------------------------------------------
 
 def _jinja_env() -> Environment:
     return Environment(
@@ -31,7 +36,7 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
 
     has_frontend = (
         config.frontend is not None
-        and config.frontend.framework in (FrontendFramework.VUE, FrontendFramework.SVELTE)
+        and config.frontend.framework != FrontendFramework.NONE
     )
 
     context = {
@@ -64,15 +69,19 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
 
 
 def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Path:
-    """Render a Node.js dev Dockerfile into the frontend directory."""
+    """Render a two-stage production Dockerfile into the frontend directory."""
     env = _jinja_env()
-    template = env.get_template("Dockerfile.node.j2")
-
     fc = config.frontend
-    context = {
-        "package_manager": fc.package_manager if fc else "npm",
-        "server_port": fc.server_port if fc else 5173,
-    }
+
+    if fc.framework == FrontendFramework.FLUTTER:
+        template = env.get_template("Dockerfile.flutter.j2")
+        context = {}
+    else:
+        template = env.get_template("Dockerfile.node.j2")
+        context = {
+            "package_manager": fc.package_manager if fc else "npm",
+            "build_dir": BUILD_DIR.get(fc.framework, "dist"),
+        }
 
     output = template.render(context)
     dockerfile_path = frontend_dir / "Dockerfile"
@@ -80,7 +89,22 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
     return dockerfile_path
 
 
-# ── Lifecycle ───────────────────────────────────────────────────────────────
+def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:
+    """Render nginx.conf into the frontend directory."""
+    env = _jinja_env()
+    template = env.get_template("nginx.conf.j2")
+
+    context = {
+        "backend_port": config.backend.server_port if config.backend else 5000,
+    }
+
+    output = template.render(context)
+    nginx_path = frontend_dir / "nginx.conf"
+    nginx_path.write_text(output, encoding="utf-8")
+    return nginx_path
+
+
+# -- Lifecycle ----------------------------------------------------------------
 
 def boot(project_root: Path) -> None:
     """Run docker compose up --build with error handling."""

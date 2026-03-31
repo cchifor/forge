@@ -12,7 +12,7 @@ from copier import run_copy
 
 from forge import variable_mapper
 from forge.config import FrontendFramework, ProjectConfig
-from forge.docker_manager import render_compose, render_frontend_dockerfile
+from forge.docker_manager import render_compose, render_frontend_dockerfile, render_nginx_conf
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -39,37 +39,22 @@ def generate(config: ProjectConfig) -> Path:
         print(f"  Generating {config.frontend.framework.value} frontend ...")
         _generate_frontend(config, project_root)
 
-    # 3. Render Docker Compose (Vue/Svelte get full Docker; Flutter excluded)
+    # 3. Render Docker Compose
     if config.backend:
         print("  Rendering docker-compose.yml ...")
         render_compose(config, project_root)
 
-    # 4. Render frontend Dockerfile (Vue/Svelte only)
-    if config.frontend and config.frontend.framework in (
-        FrontendFramework.VUE,
-        FrontendFramework.SVELTE,
-    ):
+    # 4. Render frontend Dockerfile and nginx.conf (all frameworks)
+    if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         print("  Rendering frontend Dockerfile ...")
         frontend_dir = project_root / config.frontend_slug
         render_frontend_dockerfile(config, frontend_dir)
+        render_nginx_conf(config, frontend_dir)
 
-    # 5. Post-process: patch Svelte vite proxy for Docker networking
-    if config.frontend and config.frontend.framework == FrontendFramework.SVELTE:
-        _patch_svelte_proxy(config, project_root)
-
-    # 6. Clean up per-template .git repos and create unified one
+    # 5. Clean up per-template .git repos and create unified one
     print("  Initializing git repository ...")
     _cleanup_sub_git_repos(project_root)
     _git_init(project_root)
-
-    # 7. Notify about Flutter
-    if config.frontend and config.frontend.framework == FrontendFramework.FLUTTER:
-        print()
-        print(
-            f"  Note: Flutter frontend generated at ./{config.frontend_slug}. "
-            "Run it natively with `flutter run`. "
-            "It is not included in Docker Compose."
-        )
 
     return project_root
 
@@ -124,23 +109,6 @@ def _generate_frontend(config: ProjectConfig, project_root: Path) -> Path:
         )
 
     return project_root / config.frontend_slug
-
-
-def _patch_svelte_proxy(config: ProjectConfig, project_root: Path) -> None:
-    """Svelte's vite.config.ts hardcodes the proxy target. Patch it for Docker."""
-    if config.backend is None:
-        return
-    vite_config = project_root / config.frontend_slug / "vite.config.ts"
-    if not vite_config.exists():
-        return
-    content = vite_config.read_text(encoding="utf-8")
-    docker_target = f"http://backend:{config.backend.server_port}"
-    patched = content.replace(
-        "target: 'http://localhost:5000'",
-        f"target: '{docker_target}'",
-    )
-    if patched != content:
-        vite_config.write_text(patched, encoding="utf-8")
 
 
 def _force_remove_readonly(func, path, _exc_info):

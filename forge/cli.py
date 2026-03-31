@@ -253,11 +253,7 @@ def main() -> None:
     print(f"\n  Project generated at: {project_root}")
 
     # Offer to boot Docker
-    has_docker_services = config.backend is not None and (
-        config.frontend is None
-        or config.frontend.framework != FrontendFramework.FLUTTER
-    )
-    if has_docker_services:
+    if config.backend is not None:
         print()
         if _ask_confirm("Start Docker Compose stack?", default=False):
             boot(project_root)

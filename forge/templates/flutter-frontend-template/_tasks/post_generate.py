@@ -135,7 +135,8 @@ def run_command(cmd, description, timeout=300):
     spinner.start()
     try:
         result = subprocess.run(
-            cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=timeout,
+            cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
         )
         ok = result.returncode == 0
         spinner.stop(success=ok)
@@ -169,7 +170,8 @@ def scaffold_flutter_project():
         result = subprocess.run(
             [flutter_bin, "create", "--org", ORG_NAME, "--project-name", PROJECT_SLUG,
              "--platforms", "web,android,ios,windows,macos,linux", "--no-pub", PROJECT_SLUG],
-            cwd=str(tmp), capture_output=True, text=True, timeout=120,
+            cwd=str(tmp), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=120,
         )
         if result.returncode != 0:
             spinner.stop(success=False)
