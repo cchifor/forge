@@ -20,9 +20,17 @@ if [[ "$os" == "linux" ]] && grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 ask() {
-  # Read from /dev/tty so prompts work even when piped (curl | bash)
-  read -rp "$1 [Y/n] " a </dev/tty
-  [[ "${a:-Y}" =~ ^[Yy]$ ]]
+  if [[ "$os" == "windows" ]]; then
+    # WSL's /dev/tty doesn't connect to the Windows console;
+    # delegate prompts to PowerShell so input actually works.
+    local a
+    a=$(powershell.exe -NoProfile -Command "Read-Host '$1 [Y/n]'" | tr -d '\r')
+    [[ "${a:-Y}" =~ ^[Yy]$ ]]
+  else
+    # Read from /dev/tty so prompts work even when piped (curl | bash)
+    read -rp "$1 [Y/n] " a </dev/tty
+    [[ "${a:-Y}" =~ ^[Yy]$ ]]
+  fi
 }
 
 installed() {
