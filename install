@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="https://github.com/your-org/forge-cli.git"
+TOOL="git+${REPO}"
+
+# -- Helpers ------------------------------------------------------------------
+
+raw_os=$(uname -s)
+case "$raw_os" in
+  Darwin*)               os="macos" ;;
+  Linux*)                os="linux" ;;
+  MINGW*|MSYS*|CYGWIN*)  os="windows" ;;
+  *)                     os="unknown" ;;
+esac
+
+ask() {
+  read -rp "$1 [Y/n] " a
+  [[ "${a:-Y}" =~ ^[Yy]$ ]]
+}
+
+installed() {
+  command -v "$1" &>/dev/null
+}
+
+ps_exec() {
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$1"
+}
+
+# -- Banner -------------------------------------------------------------------
+
+echo ""
+echo "  +===================================+"
+echo "  |        forge installer             |"
+echo "  +===================================+"
+echo ""
+echo "  Detected OS: $os"
+echo ""
+echo "  Checking prerequisites..."
+echo ""
+
+# -- uv (REQUIRED) -----------------------------------------------------------
+
+if installed uv; then
+  echo "  [ok] uv $(uv --version)"
+else
+  echo "  [--] uv is not installed (required)"
+  if ask "  Install uv now?"; then
+    if [[ "$os" == "windows" ]]; then
+      ps_exec "irm https://astral.sh/uv/install.ps1 | iex"
+      # Refresh PATH from Windows environment
+      eval "$(powershell.exe -NoProfile -Command '
+        $p = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
+             [System.Environment]::GetEnvironmentVariable("Path","Machine")
+        $p -split ";" | ForEach-Object { if ($_) { "export PATH=\"" + ($_ -replace "\\\\","/") + ":\$PATH\"" } }
+      ')" 2>/dev/null || true
+    else
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH"
+    fi
+    if installed uv; then
+      echo "  [ok] uv installed"
+    else
+      echo "  [!!] uv installation failed. Aborting."
+      exit 1
+    fi
+  else
+    echo "  [!!] Cannot continue without uv. Aborting."
+    exit 1
+  fi
+fi
+
+# -- git (recommended) -------------------------------------------------------
+
+if installed git; then
+  echo "  [ok] git $(git --version | cut -d' ' -f3)"
+else
+  echo "  [--] git is not installed (needed for project generation)"
+  if ask "  Install git now?"; then
+    case "$os" in
+      macos)
+        xcode-select --install 2>/dev/null \
+          || echo "  Xcode CLT install triggered -- re-run after it completes."
+        exit 0
+        ;;
+      linux)
+        if installed apt-get; then
+          sudo apt-get update -qq && sudo apt-get install -y -qq git
+        elif installed dnf; then
+          sudo dnf install -y git
+        elif installed pacman; then
+          sudo pacman -Sy --noconfirm git
+        elif installed apk; then
+          sudo apk add git
+        else
+          echo "  [!!] Could not detect package manager. Install git manually."
+        fi
+        ;;
+      windows)
+        ps_exec "winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements" \
+          || echo "  [!!] winget failed. Download from https://git-scm.com/downloads/win"
+        ;;
+    esac
+  else
+    echo "  [!!] Skipping -- you will need git later for project generation"
+  fi
+fi
+
+# -- docker (recommended) ----------------------------------------------------
+
+if installed docker; then
+  echo "  [ok] docker $(docker --version | cut -d' ' -f3 | tr -d ',')"
+else
+  echo "  [--] docker is not installed (needed to run the generated stack)"
+  if ask "  Install Docker now?"; then
+    case "$os" in
+      macos)
+        echo "  Download Docker Desktop: https://docker.com/products/docker-desktop"
+        echo "  Re-run this script after installation."
+        exit 0
+        ;;
+      linux)
+        curl -fsSL https://get.docker.com | sh
+        echo "  [ok] docker installed"
+        ;;
+      windows)
+        ps_exec "winget install --id Docker.DockerDesktop -e --accept-source-agreements --accept-package-agreements" \
+          && echo "  [ok] Docker Desktop installed -- restart may be required" \
+          || echo "  [!!] Download from https://docker.com/products/docker-desktop"
+        ;;
+    esac
+  else
+    echo "  [!!] Skipping -- you will need docker later to run the stack"
+  fi
+fi
+
+echo ""
+
+# -- Install forge-cli --------------------------------------------------------
+
+echo "  Installing forge-cli..."
+uv tool install "$TOOL"
+echo ""
+echo "  [ok] forge installed. Run 'forge' from anywhere."
+echo ""
+
+# -- Offer to run -------------------------------------------------------------
+
+if ask "  Would you like to run forge now?"; then
+  forge
+fi
