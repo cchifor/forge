@@ -1,4 +1,19 @@
 services:
+  # ── Migrations (runs once before backend starts) ──
+  migrate:
+    build:
+      context: ./{{ backend_slug }}
+      dockerfile: Dockerfile
+    environment:
+      ENV: development
+      APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ db_name }}"
+    command: ["python", "-m", "app", "db", "upgrade"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
   # ── Backend ──
   backend:
     build:
@@ -18,8 +33,8 @@ services:
       APP__SECURITY__AUTH__ENABLED: "false"
 {% endif %}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 {% if include_keycloak %}
       keycloak:
         condition: service_healthy
@@ -76,6 +91,7 @@ services:
       KC_DB_URL_DATABASE: keycloak
       KC_DB_USERNAME: postgres
       KC_DB_PASSWORD: postgres
+      KC_HEALTH_ENABLED: "true"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     depends_on:
