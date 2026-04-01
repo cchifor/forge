@@ -36,8 +36,31 @@ ps_exec() {
 }
 
 get_version() {
-  # Extract just the version number, ignoring any extra output (e.g. Docker WSL warnings)
   "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1
+}
+
+spin() {
+  local pid=$1
+  local msg=$2
+  local frames=('/' '-' '\' '|')
+  local i=0
+  # Hide cursor
+  printf "\033[?25l"
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r  ${MUTED}[%s]${NC} %s" "${frames[i]}" "$msg"
+    i=$(( (i + 1) % ${#frames[@]} ))
+    sleep 0.15
+  done
+  wait "$pid" 2>/dev/null
+  local ret=$?
+  # Show cursor
+  printf "\033[?25h"
+  if [ $ret -eq 0 ]; then
+    printf "\r  ${GREEN}[ok]${NC} %-40s\n" "$msg"
+  else
+    printf "\r  ${RED}[!!]${NC} %-40s\n" "$msg failed"
+  fi
+  return $ret
 }
 
 # -- Banner -------------------------------------------------------------------
@@ -55,22 +78,27 @@ echo -e ""
 if installed uv; then
   echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
 else
-  echo -e "  ${WARN}[..]${NC} Installing uv..."
   if [[ "$os" == "windows" ]]; then
-    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" > /dev/null 2>&1
+    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" > /dev/null 2>&1 &
+  else
+    curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1 &
+  fi
+  spin $! "Installing uv..." || {
+    echo -e "  ${RED}[!!] Cannot continue without uv. Aborting.${NC}"
+    exit 1
+  }
+  # Refresh PATH
+  if [[ "$os" == "windows" ]]; then
     eval "$(powershell.exe -NoProfile -Command '
       $p = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
            [System.Environment]::GetEnvironmentVariable("Path","Machine")
       $p -split ";" | ForEach-Object { if ($_) { "export PATH=\"" + ($_ -replace "\\\\","/") + ":\$PATH\"" } }
     ')" 2>/dev/null || true
   else
-    curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null
     source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH"
   fi
-  if installed uv; then
-    echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
-  else
-    echo -e "  ${RED}[!!] uv installation failed. Aborting.${NC}"
+  if ! installed uv; then
+    echo -e "  ${RED}[!!] uv not found on PATH after install. Aborting.${NC}"
     exit 1
   fi
 fi
@@ -109,20 +137,22 @@ echo -e ""
 
 # -- Install forge-cli --------------------------------------------------------
 
-echo -e "  ${MUTED}Installing forge-cli...${NC}"
-
 if [[ "$os" == "windows" ]]; then
-  ps_exec "uv tool install $TOOL" > /dev/null 2>&1
+  ps_exec "uv tool install $TOOL" > /dev/null 2>&1 &
 else
-  uv tool install "$TOOL" > /dev/null 2>&1
+  uv tool install "$TOOL" > /dev/null 2>&1 &
 fi
-
-echo -e "  ${GREEN}[ok]${NC} forge installed"
+spin $! "Installing forge-cli..." || {
+  echo -e "  ${RED}[!!] Installation failed. Aborting.${NC}"
+  exit 1
+}
 
 # -- Done ---------------------------------------------------------------------
 
 echo -e ""
-echo -e "  ${NC}To get started, open a new terminal and run:${NC}"
+echo -e "  ${GREEN}Done!${NC} forge-cli is ready."
+echo -e ""
+echo -e "  To get started, open a new terminal and run:"
 echo -e ""
 echo -e "    ${GREEN}forge${NC}"
 echo -e ""

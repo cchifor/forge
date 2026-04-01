@@ -32,7 +32,9 @@ def generate(config: ProjectConfig) -> Path:
     # 1. Generate backend
     if config.backend:
         print("  Generating backend ...")
-        _generate_backend(config, project_root)
+        backend_dir = _generate_backend(config, project_root)
+        print("  Installing backend dependencies ...")
+        _run_uv_sync(backend_dir)
 
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
@@ -109,6 +111,24 @@ def _generate_frontend(config: ProjectConfig, project_root: Path) -> Path:
         )
 
     return project_root / config.frontend_slug
+
+
+def _run_uv_sync(backend_dir: Path) -> None:
+    """Run uv sync in the backend directory to install dependencies and update the lock file."""
+    result = subprocess.run(
+        ["uv", "sync"],
+        cwd=str(backend_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        print("  [!!] uv sync failed. You can run it manually:")
+        print(f"       cd {backend_dir} && uv sync")
+        if result.stderr:
+            for line in result.stderr.strip().splitlines()[-5:]:
+                print(f"       {line}")
 
 
 def _force_remove_readonly(func, path, _exc_info):

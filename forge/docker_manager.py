@@ -106,11 +106,31 @@ def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:
 
 # -- Lifecycle ----------------------------------------------------------------
 
+def _docker_running() -> bool:
+    """Check if the Docker daemon is reachable."""
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def boot(project_root: Path) -> None:
     """Run docker compose up --build with error handling."""
     compose_file = project_root / "docker-compose.yml"
     if not compose_file.exists():
         print("  Error: docker-compose.yml not found.")
+        return
+
+    if not _docker_running():
+        print("  Error: Docker is not running.")
+        print("  Please start Docker Desktop and try again:")
+        print(f"    cd {project_root}")
+        print("    docker compose up --build")
         return
 
     print("  Starting Docker Compose stack ...")
