@@ -63,6 +63,7 @@ source = { editable = "." }
 dependencies = [
     { name = "copier" },
     { name = "jinja2" },
+    { name = "pyyaml" },
     { name = "questionary" },
 ]
 
@@ -76,6 +77,7 @@ dev = [
 requires-dist = [
     { name = "copier", specifier = ">=9.0.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary", specifier = ">=2.0.0" },
 ]
 

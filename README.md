@@ -24,14 +24,11 @@ The installer checks for `uv`, `git`, and `docker`, asks before installing anyth
 **Prerequisites**: `uv` (installed automatically), Git, Docker. Node.js 22+ for Vue/Svelte frontends. Flutter SDK only if generating Flutter.
 
 <details>
-<summary>Manual install (if you already have uv)</summary>
+<summary>Other install methods</summary>
 
 ```bash
-# Global
+# Global (if you already have uv)
 uv tool install git+https://github.com/cchifor/forge-cli.git
-
-# One-shot (CI/CD, AI agents)
-uvx --from git+https://github.com/cchifor/forge-cli.git forge
 
 # Development
 git clone https://github.com/cchifor/forge-cli.git
@@ -41,18 +38,122 @@ uv run forge
 
 </details>
 
+### Headless (scripts, CI/CD, AI agents)
+
+Run forge without installing it and without interactive prompts -- a single command that generates a project and exits:
+
+```bash
+uvx --from git+https://github.com/cchifor/forge-cli.git forge \
+  --config stack.yaml --yes --no-docker
+```
+
+Or pipe JSON directly from an AI agent (no file on disk):
+
+```bash
+echo '{"project_name":"my-shop","frontend":{"framework":"vue","features":"products,orders"}}' \
+  | uvx --from git+https://github.com/cchifor/forge-cli.git forge --config - --yes --no-docker
+```
+
+`uvx` downloads forge into a temporary cached environment, runs it, and exits. No global install needed. See [Usage > Headless](#headless-scripts-cicd-ai-agents) for the full config file format and all CLI flags.
+
 ---
 
 ## Usage
+
+### Interactive (human developers)
 
 ```bash
 forge
 ```
 
-Follow the prompts to pick a backend, a frontend (or `None`), CRUD entities, and feature toggles. Once generated:
+Follow the prompts to pick a backend, a frontend (or `None`), CRUD entities, and feature toggles.
+
+### Headless (scripts, CI/CD, AI agents)
+
+Run without prompts by passing a config file, CLI flags, or both. Add `--yes` to skip confirmation and `--no-docker` to skip the Docker boot step.
+
+**From a YAML config file:**
 
 ```bash
-cd acme/
+forge --config stack.yaml --yes --no-docker
+```
+
+```yaml
+# stack.yaml
+project_name: my-shop
+description: An e-commerce platform
+
+backend:
+  server_port: 5000
+  python_version: "3.13"
+
+frontend:
+  framework: vue          # vue | svelte | flutter | none
+  features: products, orders, customers
+  author_name: Jane Doe
+  package_manager: pnpm   # npm | pnpm | yarn | bun
+  server_port: 5173
+  include_auth: true
+  include_chat: false
+  include_openapi: false
+  default_color_scheme: indigo  # vue only
+  # org_name: com.example       # flutter only
+
+keycloak:
+  port: 8080
+  realm: master
+  client_id: my-shop
+```
+
+**From CLI flags (no file needed):**
+
+```bash
+forge --project-name my-shop --frontend vue --features "products,orders" --yes
+```
+
+**Pipe JSON from stdin (AI agents):**
+
+```bash
+echo '{"project_name":"my-shop","frontend":{"framework":"vue","features":"products,orders"}}' \
+  | forge --config - --yes --no-docker
+```
+
+<details>
+<summary>All CLI flags</summary>
+
+| Flag | Description | Default |
+|---|---|---|
+| `--config FILE` | YAML/JSON config file (`-` for stdin) | |
+| `--project-name NAME` | Project name | `My Platform` |
+| `--description DESC` | Project description | `A full-stack application` |
+| `--output-dir DIR` | Output directory | `.` |
+| `--backend-port PORT` | Backend server port | `5000` |
+| `--python-version VER` | `3.13`, `3.12`, or `3.11` | `3.13` |
+| `--frontend FRAMEWORK` | `vue`, `svelte`, `flutter`, or `none` | `none` |
+| `--features LIST` | Comma-separated CRUD entities | `items` |
+| `--author-name NAME` | Author name | `Your Name` |
+| `--package-manager PM` | `npm`, `pnpm`, `yarn`, or `bun` | `npm` |
+| `--frontend-port PORT` | Frontend server port | `5173` |
+| `--color-scheme SCHEME` | Vue color scheme | `blue` |
+| `--org-name ORG` | Flutter org (reverse domain) | `com.example` |
+| `--include-auth` | Enable Keycloak authentication | |
+| `--no-auth` | Disable Keycloak authentication | |
+| `--include-chat` | Enable AI chat panel | |
+| `--include-openapi` | Enable OpenAPI code generation | |
+| `--keycloak-port PORT` | Keycloak host port | `8080` |
+| `--keycloak-realm REALM` | Keycloak realm | `master` |
+| `--keycloak-client-id ID` | Keycloak client ID | derived from name |
+| `--yes`, `-y` | Skip confirmation prompts | |
+| `--no-docker` | Skip Docker Compose boot | |
+
+CLI flags override config file values. Config file values override defaults.
+
+</details>
+
+### After generation
+
+```bash
+cd my_shop/
 docker compose up --build          # start the stack
 docker compose --profile tools up  # include pgAdmin
 docker compose down --volumes      # stop and clean up
