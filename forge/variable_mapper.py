@@ -21,6 +21,34 @@ def backend_context(config: ProjectConfig) -> dict[str, Any]:
     }
 
 
+def rust_backend_context(config: ProjectConfig) -> dict[str, Any]:
+    """Build data dict for the rust-service-template (Copier)."""
+    bc = config.backend
+    if bc is None:
+        raise ValueError("Backend config is required.")
+    return {
+        "project_name": config.backend_slug,
+        "project_description": bc.description,
+        "server_port": bc.server_port,
+        "db_name": config.backend_slug,
+        "rust_edition": bc.rust_edition,
+    }
+
+
+def node_backend_context(config: ProjectConfig) -> dict[str, Any]:
+    """Build data dict for the node-service-template (Copier)."""
+    bc = config.backend
+    if bc is None:
+        raise ValueError("Backend config is required.")
+    return {
+        "project_name": config.backend_slug,
+        "project_description": bc.description,
+        "server_port": bc.server_port,
+        "db_name": config.backend_slug,
+        "node_version": bc.node_version,
+    }
+
+
 def vue_context(config: ProjectConfig) -> dict[str, Any]:
     """Build data dict for the vue-frontend-template (Copier)."""
     fc = config.frontend

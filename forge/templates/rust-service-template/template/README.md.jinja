@@ -1,0 +1,46 @@
+# {{ project_title }}
+
+{{ project_description }}
+
+## Quick Start
+
+```bash
+# Run database migrations
+sqlx migrate run
+
+# Start development server
+cargo run
+```
+
+The server starts on [http://localhost:{{ server_port }}](http://localhost:{{ server_port }}).
+
+## API Endpoints
+
+| Method | Path                  | Description        |
+| ------ | --------------------- | ------------------ |
+| GET    | `/api/v1`             | Welcome message    |
+| GET    | `/api/v1/info`        | Service info       |
+| GET    | `/api/v1/health/live` | Liveness probe     |
+| GET    | `/api/v1/health/ready`| Readiness probe    |
+| GET    | `/api/v1/items`       | List items         |
+| POST   | `/api/v1/items`       | Create item        |
+| GET    | `/api/v1/items/:id`   | Get item           |
+| PATCH  | `/api/v1/items/:id`   | Update item        |
+| DELETE | `/api/v1/items/:id`   | Delete item        |
+
+## Commands
+
+| Command              | Description              |
+| -------------------- | ------------------------ |
+| `cargo run`          | Start server             |
+| `cargo test`         | Run tests                |
+| `cargo clippy`       | Lint                     |
+| `sqlx migrate run`   | Run migrations           |
+
+## Docker
+
+```bash
+docker compose up -d
+```
+
+Starts the app, PostgreSQL, and optionally pgAdmin (`--profile tools`).

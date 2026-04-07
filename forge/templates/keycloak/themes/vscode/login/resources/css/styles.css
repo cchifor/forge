@@ -1,0 +1,639 @@
+/*
+ * VS Code Theme for Keycloak — Login, Register & Password Reset
+ *
+ * Dual-mode: Dark Modern (default) + Light Modern via prefers-color-scheme.
+ * Colors matched to VS Code 2026 Dark Modern / Light Modern defaults.
+ * Targets Keycloak 25's PatternFly 5 (pf-v5-c-*) class structure.
+ *
+ * Covers: login, registration, password reset, error, and info pages.
+ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Design Tokens — Dark Modern (default)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Backgrounds */
+  --vsc-bg-page: #181818;
+  --vsc-bg-card: #1f1f1f;
+  --vsc-bg-input: #313131;
+  --vsc-bg-hover: #2a2d2e;
+  --vsc-bg-badge: #252526;
+
+  /* Borders */
+  --vsc-border: #3c3c3c;
+  --vsc-border-subtle: #2d2d2d;
+
+  /* Text */
+  --vsc-text: #cccccc;
+  --vsc-text-secondary: #9d9d9d;
+  --vsc-text-muted: #6a6a6a;
+  --vsc-text-heading: #e0e0e0;
+
+  /* Accent (VS Code blue) */
+  --vsc-accent: #0078d4;
+  --vsc-accent-hover: #026ec1;
+  --vsc-accent-active: #0062a3;
+  --vsc-accent-fg: #ffffff;
+
+  /* Links */
+  --vsc-link: #4daafc;
+  --vsc-link-hover: #74bfff;
+
+  /* States */
+  --vsc-error: #f14c4c;
+  --vsc-error-bg: rgba(241, 76, 76, 0.12);
+  --vsc-success: #73c991;
+  --vsc-success-bg: rgba(115, 201, 145, 0.12);
+  --vsc-info: #75beff;
+  --vsc-info-bg: rgba(117, 190, 255, 0.10);
+  --vsc-warning: #cca700;
+
+  /* Focus */
+  --vsc-focus-ring: #0078d4;
+  --vsc-input-border: #3c3c3c;
+  --vsc-input-border-focus: #0078d4;
+  --vsc-input-border-error: #f14c4c;
+
+  /* Typography */
+  --vsc-font: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --vsc-font-size: 13px;
+  --vsc-font-size-sm: 12px;
+  --vsc-font-size-lg: 18px;
+  --vsc-font-size-xl: 22px;
+  --vsc-weight-normal: 400;
+  --vsc-weight-medium: 500;
+  --vsc-weight-semibold: 600;
+  --vsc-line-height: 1.5;
+
+  /* Shape */
+  --vsc-radius: 4px;
+  --vsc-radius-lg: 6px;
+  --vsc-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --vsc-transition: 0.12s ease-out;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Design Tokens — Light Modern
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --vsc-bg-page: #f8f8f8;
+    --vsc-bg-card: #ffffff;
+    --vsc-bg-input: #ffffff;
+    --vsc-bg-hover: #e8e8e8;
+    --vsc-bg-badge: #f0f0f0;
+
+    --vsc-border: #d4d4d4;
+    --vsc-border-subtle: #e5e5e5;
+
+    --vsc-text: #3b3b3b;
+    --vsc-text-secondary: #616161;
+    --vsc-text-muted: #767676;
+    --vsc-text-heading: #1e1e1e;
+
+    --vsc-accent: #0078d4;
+    --vsc-accent-hover: #106ebe;
+    --vsc-accent-active: #005a9e;
+
+    --vsc-link: #0066bf;
+    --vsc-link-hover: #005a9e;
+
+    --vsc-error: #e51400;
+    --vsc-error-bg: rgba(229, 20, 0, 0.06);
+    --vsc-success: #388a34;
+    --vsc-success-bg: rgba(56, 138, 52, 0.06);
+    --vsc-info: #0078d4;
+    --vsc-info-bg: rgba(0, 120, 212, 0.06);
+    --vsc-warning: #bf8803;
+
+    --vsc-input-border: #cecece;
+
+    --vsc-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Base & Page Background
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+html {
+  color-scheme: dark light;
+}
+
+html, body {
+  background: var(--vsc-bg-page) !important;
+  color: var(--vsc-text) !important;
+  font-family: var(--vsc-font) !important;
+  font-size: var(--vsc-font-size) !important;
+  line-height: var(--vsc-line-height) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Login Page Layout
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.pf-v5-c-login {
+  background: var(--vsc-bg-page) !important;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Remove PatternFly decorative backgrounds */
+.pf-v5-c-login::before,
+.pf-v5-c-login::after {
+  display: none !important;
+}
+
+.pf-v5-c-login__container {
+  max-width: 440px;
+  width: 100%;
+  padding: 0 16px;
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────── */
+
+.pf-v5-c-login__main,
+.pf-v5-c-card {
+  background: var(--vsc-bg-card) !important;
+  border: 1px solid var(--vsc-border) !important;
+  border-radius: var(--vsc-radius-lg) !important;
+  box-shadow: var(--vsc-shadow) !important;
+  padding: 36px 32px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Typography
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Page header (realm name "Strive") */
+.pf-v5-c-login__header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.pf-v5-c-brand {
+  color: var(--vsc-text-heading) !important;
+  font-family: var(--vsc-font) !important;
+  font-size: var(--vsc-font-size-xl) !important;
+  font-weight: var(--vsc-weight-semibold) !important;
+}
+
+/* Form title ("Sign in", "Register", "Forgot your password?") */
+.pf-v5-c-login__main-header,
+#kc-page-title,
+.pf-v5-c-title {
+  color: var(--vsc-text-heading) !important;
+  font-family: var(--vsc-font) !important;
+  font-weight: var(--vsc-weight-semibold) !important;
+  font-size: var(--vsc-font-size-lg) !important;
+  margin-bottom: 20px !important;
+  line-height: 1.3;
+}
+
+/* Labels */
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text,
+label {
+  color: var(--vsc-text) !important;
+  font-family: var(--vsc-font) !important;
+  font-size: var(--vsc-font-size) !important;
+  font-weight: var(--vsc-weight-normal) !important;
+  margin-bottom: 4px !important;
+}
+
+/* Helper & instruction text */
+.pf-v5-c-form__helper-text,
+.pf-v5-c-helper-text__item-text,
+.pf-v5-c-login__main-footer-band-item,
+.instruction,
+#kc-info-message,
+.kc-feedback-text {
+  color: var(--vsc-text-secondary) !important;
+  font-size: var(--vsc-font-size) !important;
+  line-height: var(--vsc-line-height);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Form Inputs (shared across login, register, password reset)
+ *
+ * Keycloak 25 / PF5 structure:
+ *   <span class="pf-v5-c-form-control">        ← wrapper (gets border)
+ *     <input class="pf-v5-c-form-control" />    ← ALSO has the class!
+ *   </span>
+ *
+ * Both elements match .pf-v5-c-form-control. We use:
+ *   span.pf-v5-c-form-control  → wrapper styling (border, bg, radius)
+ *   input.pf-v5-c-form-control → reset (transparent, no border)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Wrapper (span): border, background, shape */
+span.pf-v5-c-form-control,
+div.pf-v5-c-form-control {
+  background: var(--vsc-bg-input) !important;
+  border: 1px solid var(--vsc-input-border) !important;
+  border-radius: var(--vsc-radius) !important;
+  color: var(--vsc-text) !important;
+  font-family: var(--vsc-font) !important;
+  font-size: var(--vsc-font-size) !important;
+  padding: 4px 8px !important;
+  transition: border-color var(--vsc-transition) !important;
+  outline: none !important;
+}
+
+/* Inner input (also has .pf-v5-c-form-control): fully transparent */
+input.pf-v5-c-form-control,
+select.pf-v5-c-form-control,
+textarea.pf-v5-c-form-control {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 2px 4px !important;
+  margin: 0 !important;
+  color: inherit !important;
+  font: inherit !important;
+  width: 100% !important;
+}
+
+/* Also reset any bare input inside a wrapper */
+.pf-v5-c-form-control input,
+.pf-v5-c-form-control select,
+.pf-v5-c-form-control textarea {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 2px 4px !important;
+  margin: 0 !important;
+  color: inherit !important;
+  font: inherit !important;
+  width: 100% !important;
+}
+
+/* Focus: highlight the WRAPPER via :focus-within */
+span.pf-v5-c-form-control:focus-within,
+div.pf-v5-c-form-control:focus-within {
+  border-color: var(--vsc-input-border-focus) !important;
+  outline: 1px solid var(--vsc-focus-ring) !important;
+  outline-offset: -1px;
+}
+
+/* Prevent inner input focus from showing its own outline */
+input.pf-v5-c-form-control:focus,
+.pf-v5-c-form-control input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Validation error state */
+span.pf-v5-c-form-control[aria-invalid="true"],
+div.pf-v5-c-form-control[aria-invalid="true"],
+.pf-m-error span.pf-v5-c-form-control,
+.pf-m-error div.pf-v5-c-form-control {
+  border-color: var(--vsc-input-border-error) !important;
+}
+
+input::placeholder {
+  color: var(--vsc-text-muted) !important;
+  opacity: 1;
+}
+
+/* Form group spacing */
+.pf-v5-c-form__group {
+  margin-bottom: 14px !important;
+}
+
+/* Required field asterisk */
+.pf-v5-c-form__label-required {
+  color: var(--vsc-error) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Buttons
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Primary button (Log In, Register, Submit) */
+.pf-v5-c-button.pf-m-primary,
+input[type="submit"],
+button[type="submit"] {
+  background: var(--vsc-accent) !important;
+  color: var(--vsc-accent-fg) !important;
+  border: none !important;
+  border-radius: var(--vsc-radius) !important;
+  font-family: var(--vsc-font) !important;
+  font-size: var(--vsc-font-size) !important;
+  font-weight: var(--vsc-weight-normal) !important;
+  padding: 8px 14px !important;
+  cursor: pointer;
+  transition: background var(--vsc-transition) !important;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+input[type="submit"]:hover,
+button[type="submit"]:hover {
+  background: var(--vsc-accent-hover) !important;
+}
+
+.pf-v5-c-button.pf-m-primary:active,
+input[type="submit"]:active,
+button[type="submit"]:active {
+  background: var(--vsc-accent-active) !important;
+}
+
+.pf-v5-c-button.pf-m-primary:focus-visible,
+input[type="submit"]:focus-visible,
+button[type="submit"]:focus-visible {
+  outline: 2px solid var(--vsc-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+/* Secondary / link buttons (Back to Login, Cancel) */
+.pf-v5-c-button.pf-m-link {
+  color: var(--vsc-link) !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 4px 8px !important;
+  font-size: var(--vsc-font-size) !important;
+}
+
+.pf-v5-c-button.pf-m-link:hover {
+  color: var(--vsc-link-hover) !important;
+  text-decoration: underline;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Links
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+a {
+  color: var(--vsc-link) !important;
+  text-decoration: none !important;
+  transition: color var(--vsc-transition) !important;
+}
+
+a:hover {
+  color: var(--vsc-link-hover) !important;
+  text-decoration: underline !important;
+}
+
+/* "Register" and "Forgot Password?" links below the form */
+.pf-v5-c-login__main-footer-band,
+#kc-registration,
+#kc-form-options {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.pf-v5-c-login__main-footer-band {
+  border-top: 1px solid var(--vsc-border) !important;
+  padding-top: 16px !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Alerts & Messages (error, success, info — all pages)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Error alert */
+.pf-v5-c-alert.pf-m-danger,
+.alert-error {
+  background: var(--vsc-error-bg) !important;
+  border: 1px solid var(--vsc-error) !important;
+  border-radius: var(--vsc-radius) !important;
+  color: var(--vsc-error) !important;
+  padding: 10px 14px !important;
+  margin-bottom: 16px;
+}
+
+.pf-v5-c-alert.pf-m-danger .pf-v5-c-alert__icon,
+.pf-v5-c-alert.pf-m-danger .pf-v5-c-alert__title {
+  color: var(--vsc-error) !important;
+}
+
+/* Success alert ("Check your email") */
+.pf-v5-c-alert.pf-m-success,
+.alert-success {
+  background: var(--vsc-success-bg) !important;
+  border: 1px solid var(--vsc-success) !important;
+  border-radius: var(--vsc-radius) !important;
+  color: var(--vsc-success) !important;
+  padding: 10px 14px !important;
+  margin-bottom: 16px;
+}
+
+/* Info alert (password reset instructions, verification) */
+.pf-v5-c-alert.pf-m-info,
+.alert-info {
+  background: var(--vsc-info-bg) !important;
+  border: 1px solid var(--vsc-info) !important;
+  border-radius: var(--vsc-radius) !important;
+  color: var(--vsc-info) !important;
+  padding: 10px 14px !important;
+  margin-bottom: 16px;
+}
+
+/* Warning alert */
+.pf-v5-c-alert.pf-m-warning {
+  background: rgba(204, 167, 0, 0.10) !important;
+  border: 1px solid var(--vsc-warning) !important;
+  border-radius: var(--vsc-radius) !important;
+  color: var(--vsc-warning) !important;
+  padding: 10px 14px !important;
+}
+
+/* Validation error text below fields */
+.pf-v5-c-helper-text__item.pf-m-error,
+.pf-v5-c-helper-text__item.pf-m-error .pf-v5-c-helper-text__item-text {
+  color: var(--vsc-error) !important;
+  font-size: var(--vsc-font-size-sm) !important;
+}
+
+/* Instruction text (password reset "Enter your email...") */
+.pf-v5-c-login__main-body .instruction,
+#kc-info .pf-v5-c-form__helper-text,
+#kc-info-message {
+  color: var(--vsc-text-secondary) !important;
+  font-size: var(--vsc-font-size) !important;
+  margin-bottom: 16px;
+  line-height: var(--vsc-line-height);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Checkbox (Remember Me, Terms and Conditions)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.pf-v5-c-check__label {
+  color: var(--vsc-text) !important;
+  font-size: var(--vsc-font-size) !important;
+}
+
+.pf-v5-c-check__input {
+  accent-color: var(--vsc-accent);
+}
+
+.pf-v5-c-check__input:checked {
+  background: var(--vsc-accent) !important;
+  border-color: var(--vsc-accent) !important;
+}
+
+.pf-v5-c-check__input:focus-visible {
+  outline: 2px solid var(--vsc-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+/* Terms and conditions link within registration */
+.pf-v5-c-check__label a {
+  color: var(--vsc-link) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Password Field Toggle (eye icon)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Password toggle button (eye icon) — align with input wrapper */
+.pf-v5-c-button.pf-m-control,
+.pf-v5-c-input-group__item .pf-v5-c-button {
+  background: var(--vsc-bg-input) !important;
+  color: var(--vsc-text-secondary) !important;
+  border: 1px solid var(--vsc-input-border) !important;
+  border-left: none !important;
+  border-radius: 0 var(--vsc-radius) var(--vsc-radius) 0 !important;
+  padding: 4px 10px !important;
+}
+
+/* When the input group has a toggle, round only the left side of the wrapper */
+.pf-v5-c-input-group span.pf-v5-c-form-control,
+.pf-v5-c-input-group div.pf-v5-c-form-control {
+  border-radius: var(--vsc-radius) 0 0 var(--vsc-radius) !important;
+  border-right: none !important;
+}
+
+.pf-v5-c-button.pf-m-control:hover {
+  color: var(--vsc-text) !important;
+  background: var(--vsc-bg-hover) !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Social / Identity Provider Login Buttons
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.pf-v5-c-login__main-footer-links-item a {
+  background: var(--vsc-bg-badge) !important;
+  border: 1px solid var(--vsc-border) !important;
+  color: var(--vsc-text) !important;
+  border-radius: var(--vsc-radius) !important;
+  padding: 8px 16px !important;
+  display: inline-flex;
+  align-items: center;
+  transition: background var(--vsc-transition) !important;
+}
+
+.pf-v5-c-login__main-footer-links-item a:hover {
+  background: var(--vsc-bg-hover) !important;
+  text-decoration: none !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Registration Page — Multi-field Form
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#kc-register-form .pf-v5-c-form__group {
+  margin-bottom: 14px !important;
+}
+
+/* "Already have an account? Log in" link at bottom */
+#kc-form-options .pf-v5-c-form__helper-text {
+  text-align: center;
+  margin-top: 12px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Password Reset Page
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Back to login link */
+#kc-form-options a {
+  color: var(--vsc-link) !important;
+  font-size: var(--vsc-font-size) !important;
+}
+
+/* "You should receive an email shortly" info section */
+#kc-info-wrapper {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vsc-border);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Error Page
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#kc-error-message {
+  color: var(--vsc-error) !important;
+}
+
+#kc-error-message h1,
+#kc-error-message .pf-v5-c-title {
+  color: var(--vsc-error) !important;
+  font-size: var(--vsc-font-size-lg) !important;
+}
+
+#kc-error-message p {
+  color: var(--vsc-text-secondary) !important;
+  margin-top: 8px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Footer
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.pf-v5-c-login__footer {
+  color: var(--vsc-text-muted) !important;
+  font-size: var(--vsc-font-size-sm) !important;
+  text-align: center;
+  padding: 16px 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Responsive
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .pf-v5-c-login__main,
+  .pf-v5-c-card {
+    padding: 24px 20px !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    box-shadow: none !important;
+  }
+
+  .pf-v5-c-login__container {
+    padding: 0;
+  }
+}

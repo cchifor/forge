@@ -69,15 +69,15 @@ class TestRunBackendCmd:
 # -- _setup_backend -----------------------------------------------------------
 
 class TestSetupBackend:
-    def test_calls_four_commands(self, tmp_path):
+    def test_calls_five_commands(self, tmp_path):
         with patch("forge.generator._run_backend_cmd") as mock_cmd:
             mock_cmd.return_value = True
             _setup_backend(tmp_path)
 
-        assert mock_cmd.call_count == 4
+        assert mock_cmd.call_count == 5
         descriptions = [call.args[2] for call in mock_cmd.call_args_list]
         assert descriptions == [
-            "Install dependencies", "Lint fix", "Format", "Tests",
+            "Install dependencies", "Lint fix", "Format", "Type check", "Tests",
         ]
 
 

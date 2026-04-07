@@ -1,0 +1,143 @@
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use http_body_util::BodyExt;
+use tower::ServiceExt;
+
+/// Integration test stubs for CRUD endpoints.
+///
+/// These tests validate the request/response contract without a live database.
+/// They use a standalone Axum router with mock handlers that return the expected
+/// shapes. Full integration tests require a running PostgreSQL instance.
+
+fn mock_item() -> serde_json::Value {
+    serde_json::json!({
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "Test Item",
+        "description": null,
+        "tags": [],
+        "status": "DRAFT",
+        "customer_id": "550e8400-e29b-41d4-a716-446655440001",
+        "user_id": "550e8400-e29b-41d4-a716-446655440002",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+    })
+}
+
+fn build_mock_router() -> axum::Router {
+    use axum::routing::{get, post};
+    use axum::Json;
+
+    axum::Router::new()
+        .route(
+            "/api/v1/items",
+            get(|| async {
+                Json(serde_json::json!({
+                    "items": [mock_item()],
+                    "total": 1,
+                    "skip": 0,
+                    "limit": 20
+                }))
+            })
+            .post(|| async { (StatusCode::CREATED, Json(mock_item())) }),
+        )
+        .route(
+            "/api/v1/items/{id}",
+            get(|| async { Json(mock_item()) })
+                .patch(|| async { Json(mock_item()) })
+                .delete(|| async { StatusCode::NO_CONTENT }),
+        )
+}
+
+#[tokio::test]
+async fn list_items_returns_paginated() {
+    let app = build_mock_router();
+
+    let request = Request::builder()
+        .uri("/api/v1/items")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["items"].is_array());
+    assert_eq!(json["total"], 1);
+    assert_eq!(json["skip"], 0);
+    assert_eq!(json["limit"], 20);
+}
+
+#[tokio::test]
+async fn create_item_returns_201() {
+    let app = build_mock_router();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/items")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "name": "Test Item",
+                "customer_id": "550e8400-e29b-41d4-a716-446655440001",
+                "user_id": "550e8400-e29b-41d4-a716-446655440002"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["name"], "Test Item");
+}
+
+#[tokio::test]
+async fn get_item_by_id() {
+    let app = build_mock_router();
+
+    let request = Request::builder()
+        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["id"], "550e8400-e29b-41d4-a716-446655440000");
+}
+
+#[tokio::test]
+async fn update_item_returns_updated() {
+    let app = build_mock_router();
+
+    let request = Request::builder()
+        .method("PATCH")
+        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "name": "Updated" }).to_string(),
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn delete_item_returns_204() {
+    let app = build_mock_router();
+
+    let request = Request::builder()
+        .method("DELETE")
+        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}

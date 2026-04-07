@@ -40,6 +40,7 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
     )
 
     context = {
+        "backend_language": config.backend.language.value if config.backend else "python",
         "backend_slug": config.backend_slug,
         "backend_port": config.backend.server_port if config.backend else 5000,
         "db_name": config.backend_slug,
@@ -50,10 +51,12 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
         ),
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
+        "traefik_dashboard_port": 8888,
         "keycloak_realm": (
             config.frontend.keycloak_realm
             if config.frontend and config.include_keycloak
-            else "master"
+            and config.frontend.keycloak_realm != "master"
+            else config.project_slug
         ),
         "keycloak_client_id": (
             config.frontend.keycloak_client_id
@@ -87,6 +90,31 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
     dockerfile_path = frontend_dir / "Dockerfile"
     dockerfile_path.write_text(output, encoding="utf-8")
     return dockerfile_path
+
+
+def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
+    """Render keycloak-realm.json into the project root."""
+    env = _jinja_env()
+    template = env.get_template("keycloak-realm.json.j2")
+
+    fc = config.frontend
+    context = {
+        "project_name": config.project_name,
+        "keycloak_realm": (
+            fc.keycloak_realm
+            if fc and fc.keycloak_realm and fc.keycloak_realm != "master"
+            else config.project_slug
+        ),
+        "keycloak_client_id": (
+            fc.keycloak_client_id if fc and fc.keycloak_client_id
+            else config.project_slug
+        ),
+    }
+
+    output = template.render(context)
+    realm_path = project_root / "keycloak-realm.json"
+    realm_path.write_text(output, encoding="utf-8")
+    return realm_path
 
 
 def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:

@@ -45,7 +45,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "httpx>=0.28.1",
     "ruff>=0.15.8",
-    "mypy>=1.19.1",
+    "ty>=0.0.1a1",
     "pre-commit>=3.5.0",
     "testcontainers[postgres]>=4.0.0",
 ]
@@ -76,11 +76,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
-
-[tool.mypy]
-python_version = "3.13"
-plugins = ["pydantic.mypy"]
-ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["src/app", "src/service"]

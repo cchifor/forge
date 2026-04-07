@@ -11,9 +11,14 @@ from pathlib import Path
 from copier import run_copy
 
 from forge import variable_mapper
-from forge.config import FrontendFramework, ProjectConfig
-from forge.docker_manager import render_compose, render_frontend_dockerfile, render_nginx_conf
-from forge.e2e_templates import generate_e2e_conftest, generate_e2e_test
+from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
+from forge.docker_manager import render_compose, render_frontend_dockerfile, render_keycloak_realm, render_nginx_conf
+from forge.e2e_templates import (
+    generate_e2e_auth_conftest,
+    generate_e2e_auth_tests,
+    generate_e2e_conftest,
+    generate_e2e_test,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -36,11 +41,24 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
 
     # 1. Generate backend
     if config.backend:
-        _log("  Generating backend ...")
-        backend_dir = _generate_backend(config, project_root, quiet=quiet)
-        if not quiet:
-            print("  Setting up backend ...")
-            _setup_backend(backend_dir)
+        if config.backend.language == BackendLanguage.NODE:
+            _log("  Generating Node.js backend ...")
+            backend_dir = _generate_node_backend(config, project_root, quiet=quiet)
+            if not quiet:
+                print("  Setting up Node.js backend ...")
+                _setup_node_backend(backend_dir)
+        elif config.backend.language == BackendLanguage.RUST:
+            _log("  Generating Rust backend ...")
+            backend_dir = _generate_rust_backend(config, project_root, quiet=quiet)
+            if not quiet:
+                print("  Setting up Rust backend ...")
+                _setup_rust_backend(backend_dir)
+        else:
+            _log("  Generating Python backend ...")
+            backend_dir = _generate_backend(config, project_root, quiet=quiet)
+            if not quiet:
+                print("  Setting up backend ...")
+                _setup_backend(backend_dir)
 
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
@@ -51,13 +69,31 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
     if config.backend:
         _log("  Rendering docker-compose.yml ...")
         render_compose(config, project_root)
-        # Copy Keycloak DB init script if auth is enabled
+        # Copy auth infrastructure if Keycloak is enabled
         if config.include_keycloak:
-            # Write with explicit LF line endings -- CRLF breaks the
-            # shebang inside the Linux container.
+            # Write init-db.sh with explicit LF (CRLF breaks shebang in Linux)
             src = (TEMPLATES_DIR / "init-db.sh").read_text(encoding="utf-8")
             dst = project_root / "init-db.sh"
             dst.write_bytes(src.replace("\r\n", "\n").encode("utf-8"))
+            # Render Keycloak realm JSON
+            _log("  Rendering keycloak-realm.json ...")
+            render_keycloak_realm(config, project_root)
+            # Copy gatekeeper service
+            _log("  Copying gatekeeper ...")
+            gatekeeper_src = TEMPLATES_DIR / "gatekeeper"
+            gatekeeper_dst = project_root / "gatekeeper"
+            if gatekeeper_src.exists():
+                shutil.copytree(str(gatekeeper_src), str(gatekeeper_dst), dirs_exist_ok=True)
+            # Copy keycloak (Dockerfile + themes)
+            _log("  Copying keycloak ...")
+            keycloak_src = TEMPLATES_DIR / "keycloak"
+            keycloak_dst = project_root / "keycloak"
+            if keycloak_src.exists():
+                shutil.copytree(str(keycloak_src), str(keycloak_dst), dirs_exist_ok=True)
+            # Copy validate.sh (LF line endings for Linux containers)
+            validate_src = (TEMPLATES_DIR / "validate.sh").read_text(encoding="utf-8")
+            validate_dst = project_root / "validate.sh"
+            validate_dst.write_bytes(validate_src.replace("\r\n", "\n").encode("utf-8"))
 
     # 4. Generate Playwright e2e tests
     if (
@@ -103,9 +139,17 @@ def _generate_e2e_tests(config: ProjectConfig, project_root: Path) -> None:
     e2e_dir = project_root / "tests" / "e2e"
     e2e_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write conftest.py
+    # Write conftest.py -- use auth-enhanced version when Keycloak enabled
     conftest_path = e2e_dir / "conftest.py"
-    conftest_path.write_text(generate_e2e_conftest(), encoding="utf-8")
+    if config.include_keycloak:
+        conftest_path.write_text(generate_e2e_auth_conftest(), encoding="utf-8")
+    else:
+        conftest_path.write_text(generate_e2e_conftest(), encoding="utf-8")
+
+    # Write auth flow tests when Keycloak enabled
+    if config.include_keycloak:
+        auth_test_path = e2e_dir / "test_auth.py"
+        auth_test_path.write_text(generate_e2e_auth_tests(), encoding="utf-8")
 
     # Write per-feature test files
     for feature_name in config.frontend.features:
@@ -130,6 +174,62 @@ def _generate_backend(config: ProjectConfig, project_root: Path, quiet: bool = F
         quiet=quiet,
     )
     return dst
+
+
+def _generate_node_backend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+    """Generate Node.js backend using Copier."""
+    ctx = variable_mapper.node_backend_context(config)
+    dst = project_root / config.backend_slug
+    dst.mkdir(exist_ok=True)
+    template_path = TEMPLATES_DIR / "node-service-template"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Node.js template not found at {template_path}")
+    run_copy(
+        src_path=str(template_path),
+        dst_path=str(dst),
+        data=ctx,
+        unsafe=True,
+        defaults=True,
+        overwrite=True,
+        quiet=quiet,
+    )
+    return dst
+
+
+def _generate_rust_backend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+    """Generate Rust backend using Copier."""
+    ctx = variable_mapper.rust_backend_context(config)
+    dst = project_root / config.backend_slug
+    dst.mkdir(exist_ok=True)
+    template_path = TEMPLATES_DIR / "rust-service-template"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Rust template not found at {template_path}")
+    run_copy(
+        src_path=str(template_path),
+        dst_path=str(dst),
+        data=ctx,
+        unsafe=True,
+        defaults=True,
+        overwrite=True,
+        quiet=quiet,
+    )
+    return dst
+
+
+def _setup_rust_backend(backend_dir: Path) -> None:
+    """Build, lint, and test the generated Rust backend."""
+    _run_backend_cmd(backend_dir, ["cargo", "build"], "Build")
+    _run_backend_cmd(backend_dir, ["cargo", "fmt", "--check"], "Format check")
+    _run_backend_cmd(backend_dir, ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"], "Lint")
+    _run_backend_cmd(backend_dir, ["cargo", "test"], "Tests")
+
+
+def _setup_node_backend(backend_dir: Path) -> None:
+    """Install deps, lint, type check, and test the generated Node.js backend."""
+    _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies")
+    _run_backend_cmd(backend_dir, ["npx", "biome", "check", "src/"], "Lint check")
+    _run_backend_cmd(backend_dir, ["npx", "tsc", "--noEmit"], "Type check")
+    _run_backend_cmd(backend_dir, ["npx", "vitest", "run"], "Tests")
 
 
 def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
@@ -201,6 +301,7 @@ def _setup_backend(backend_dir: Path) -> None:
     _run_backend_cmd(backend_dir, ["uv", "sync"], "Install dependencies")
     _run_backend_cmd(backend_dir, ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"], "Lint fix")
     _run_backend_cmd(backend_dir, ["uv", "run", "ruff", "format", "src/", "tests/"], "Format")
+    _run_backend_cmd(backend_dir, ["uv", "run", "ty", "check", "src/"], "Type check")
     _run_backend_cmd(backend_dir, ["uv", "run", "pytest", "-v"], "Tests")
 
 

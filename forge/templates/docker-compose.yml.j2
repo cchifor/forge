@@ -1,4 +1,5 @@
 services:
+{% if backend_language == "python" %}
   # ── Migrations (runs once before backend starts) ──
   migrate:
     build:
@@ -13,6 +14,7 @@ services:
         condition: service_healthy
     networks:
       - app-network
+{% endif %}
 
   # ── Backend ──
   backend:
@@ -22,8 +24,16 @@ services:
     ports:
       - "{{ backend_port }}:{{ backend_port }}"
     environment:
+{% if backend_language == "python" %}
       ENV: development
       APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ db_name }}"
+{% elif backend_language == "node" %}
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
+{% elif backend_language == "rust" %}
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
+      RUST_LOG: info
+{% endif %}
 {% if include_keycloak %}
       APP__SECURITY__AUTH__ENABLED: "true"
       APP__SECURITY__AUTH__SERVER_URL: "http://keycloak:8080"
@@ -32,9 +42,21 @@ services:
 {% else %}
       APP__SECURITY__AUTH__ENABLED: "false"
 {% endif %}
+{% if include_keycloak %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.middlewares=auth"
+      - "traefik.http.services.backend.loadbalancer.server.port={{ backend_port }}"
+{% endif %}
     depends_on:
+{% if backend_language == "python" %}
       migrate:
         condition: service_completed_successfully
+{% else %}
+      postgres:
+        condition: service_healthy
+{% endif %}
 {% if include_keycloak %}
       keycloak:
         condition: service_healthy
@@ -72,6 +94,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "{{ frontend_port }}:80"
+{% if include_keycloak %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+{% endif %}
     depends_on:
       - backend
     networks:
@@ -79,10 +108,59 @@ services:
 {% endif %}
 
 {% if include_keycloak %}
+  # ── Edge Router ──
+  # Dashboard: http://localhost:{{ traefik_dashboard_port }}
+  traefik:
+    image: traefik:v2.11
+    ports:
+      - "80:80"
+      - "{{ traefik_dashboard_port }}:8080"
+    environment:
+      TRAEFIK_API_INSECURE: "true"
+      TRAEFIK_PROVIDERS_DOCKER: "true"
+      TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT: "false"
+      TRAEFIK_ENTRYPOINTS_WEB_ADDRESS: ":80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+
+  # ── Auth Gateway (OIDC ForwardAuth) ──
+  gatekeeper:
+    build:
+      context: ./gatekeeper
+      dockerfile: Dockerfile
+    environment:
+      ENV: development
+      KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
+      GATEKEEPER_CLIENT_ID: gatekeeper
+      GATEKEEPER_CLIENT_SECRET: gatekeeper-dev-secret
+      COOKIE_NAME: tenant_session
+      COOKIE_SECURE: "False"
+      REFRESH_COOKIE_NAME: tenant_refresh
+      REDIS_URL: "redis://redis:6379"
+      DEFAULT_RATE_LIMIT: "600"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.auth.forwardauth.address=http://gatekeeper:5000/auth"
+      - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=X-Gatekeeper-User-Id,X-Gatekeeper-Email,X-Gatekeeper-Tenant,X-Gatekeeper-Roles,X-Gatekeeper-Auth-Method,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset"
+      - "traefik.http.middlewares.auth.forwardauth.trustForwardHeader=true"
+      - "traefik.http.routers.gatekeeper.rule=PathPrefix(`/callback`) || PathPrefix(`/logout`)"
+      - "traefik.http.services.gatekeeper.loadbalancer.server.port=5000"
+    networks:
+      - app-network
+
   # ── Identity Provider ──
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    command: start-dev
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    command: start-dev --import-realm
     ports:
       - "{{ keycloak_port }}:8080"
     environment:
@@ -94,6 +172,8 @@ services:
       KC_HEALTH_ENABLED: "true"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,6 +183,16 @@ services:
       timeout: 5s
       retries: 15
       start_period: 30s
+    networks:
+      - app-network
+
+  # ── Session Cache ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - app-network
 {% endif %}
@@ -122,6 +212,9 @@ services:
 
 volumes:
   pgdata:
+{% if include_keycloak %}
+  redis_data:
+{% endif %}
 
 networks:
   app-network:

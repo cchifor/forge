@@ -69,7 +69,7 @@ class TestBackendConfig:
 
     def test_defaults(self):
         bc = BackendConfig(project_name="Test")
-        assert bc.description == "A Python microservice"
+        assert bc.description == "A microservice"
         assert bc.python_version == "3.13"
         assert bc.server_port == 5000
 

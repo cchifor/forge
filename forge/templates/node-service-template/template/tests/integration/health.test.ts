@@ -1,0 +1,48 @@
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { buildApp } from "../../src/app.js";
+import type { FastifyInstance } from "fastify";
+
+vi.mock("../../src/lib/prisma.js", () => ({
+	prisma: {
+		$queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
+		$disconnect: vi.fn(),
+		item: {
+			findMany: vi.fn(),
+			findFirst: vi.fn(),
+			findUnique: vi.fn(),
+			create: vi.fn(),
+			update: vi.fn(),
+			delete: vi.fn(),
+			count: vi.fn(),
+		},
+	},
+}));
+
+let app: FastifyInstance;
+
+beforeAll(async () => {
+	app = await buildApp();
+});
+
+afterAll(async () => {
+	await app.close();
+});
+
+describe("Health endpoints", () => {
+	it("GET /api/v1/health/live returns UP", async () => {
+		const res = await app.inject({ method: "GET", url: "/api/v1/health/live" });
+		expect(res.statusCode).toBe(200);
+		const body = JSON.parse(res.payload);
+		expect(body.status).toBe("UP");
+		expect(body.details).toBe("Service is running");
+	});
+
+	it("GET /api/v1/health/ready returns readiness status", async () => {
+		const res = await app.inject({ method: "GET", url: "/api/v1/health/ready" });
+		expect(res.statusCode).toBe(200);
+		const body = JSON.parse(res.payload);
+		expect(body.status).toBe("UP");
+		expect(body.components).toHaveProperty("database");
+		expect(body.systemInfo).toHaveProperty("nodeVersion");
+	});
+});

@@ -9,6 +9,12 @@ from enum import Enum
 from typing import Optional
 
 
+class BackendLanguage(Enum):
+    PYTHON = "python"
+    NODE = "node"
+    RUST = "rust"
+
+
 class FrontendFramework(Enum):
     VUE = "vue"
     SVELTE = "svelte"
@@ -48,10 +54,13 @@ def validate_features(features: list[str]) -> None:
 
 @dataclass
 class BackendConfig:
-    """Matches python-service-template copier.yml schema."""
+    """Backend service configuration."""
     project_name: str
-    description: str = "A Python microservice"
+    language: BackendLanguage = BackendLanguage.PYTHON
+    description: str = "A microservice"
     python_version: str = "3.13"
+    node_version: str = "22"
+    rust_edition: str = "2024"
     server_port: int = 5000
 
     def validate(self) -> None:
@@ -72,7 +81,7 @@ class FrontendConfig:
     include_openapi: bool = False
     server_port: int = 5173
     keycloak_url: str = "http://localhost:8080"
-    keycloak_realm: str = "master"
+    keycloak_realm: str = ""
     keycloak_client_id: str = ""
     default_color_scheme: str = "blue"  # Vue only
     org_name: str = "com.example"  # Flutter only
@@ -141,6 +150,14 @@ class ProjectConfig:
             )
         ports[db_port] = "postgres"
         if self.include_keycloak:
+            # Traefik dashboard uses port 8888
+            traefik_dashboard_port = 8888
+            if traefik_dashboard_port in ports:
+                raise ValueError(
+                    f"Port {traefik_dashboard_port} (Traefik dashboard) "
+                    f"conflicts with {ports[traefik_dashboard_port]}."
+                )
+            ports[traefik_dashboard_port] = "Traefik dashboard"
             if self.keycloak_port in ports:
                 raise ValueError(
                     f"Port {self.keycloak_port} (Keycloak) conflicts "

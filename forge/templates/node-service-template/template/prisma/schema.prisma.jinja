@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Item {
+  id          String     @id @default(uuid())
+  name        String     @db.VarChar(255)
+  description String?
+  tags        String[]   @default([])
+  status      ItemStatus @default(DRAFT)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("items")
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model BackgroundTask {
+  id          String     @id @default(uuid())
+  taskType    String     @map("task_type") @db.VarChar(100)
+  status      TaskStatus @default(PENDING)
+  payload     Json?
+  result      Json?
+  error       String?
+  attempts    Int        @default(0)
+  maxRetries  Int        @default(3) @map("max_retries")
+  scheduledAt DateTime   @default(now()) @map("scheduled_at")
+  startedAt   DateTime?  @map("started_at")
+  completedAt DateTime?  @map("completed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  @@index([status, scheduledAt], map: "ix_bg_tasks_status_scheduled")
+  @@map("background_tasks")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String   @db.VarChar(50)
+  entityType String?  @map("entity_type") @db.VarChar(100)
+  entityId   String?  @map("entity_id") @db.VarChar(255)
+  username   String?  @db.VarChar(255)
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(500)
+  statusCode Int?     @map("status_code")
+  method     String?  @db.VarChar(10)
+  path       String?  @db.VarChar(500)
+  metadata   Json?    @map("meta_data")
+  durationMs Float?   @map("duration_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}

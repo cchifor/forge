@@ -241,7 +241,7 @@ python_service/
 │   └── integration/
 │       ├── conftest.py                         # In-memory SQLite, TestClient, DI override, FakeUser
 │       └── test_items_api.py                   # Full CRUD flow: create, list, get, update, delete, 404
-├── pyproject.toml                              # Project config: deps, ruff, mypy, pytest
+├── pyproject.toml                              # Project config: deps, ruff, ty, pytest
 ├── Dockerfile                                  # Multi-stage: python:3.13-slim builder + runtime
 ├── docker-compose.yaml                         # app + postgres:16-alpine + pgadmin
 ├── alembic.ini                                 # Alembic config
@@ -844,7 +844,7 @@ logging:
 | CLI | Typer | >= 0.15 |
 | Testing | pytest + pytest-asyncio | |
 | Linting | Ruff | >= 0.3 |
-| Type Checking | mypy | >= 1.10 |
+| Type Checking | ty (Astral) | >= 0.0.1 |
 | Containerization | Docker (multi-stage) | python:3.13-slim |
 | Database (dev) | SQLite (aiosqlite) | |
 | Database (prod) | PostgreSQL (asyncpg) | >= 16 |

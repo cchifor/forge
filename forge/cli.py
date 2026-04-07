@@ -12,6 +12,7 @@ import questionary
 
 from forge.config import (
     BackendConfig,
+    BackendLanguage,
     FrontendConfig,
     FrontendFramework,
     ProjectConfig,
@@ -46,8 +47,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", metavar="DIR", default=".")
 
     # Backend
+    p.add_argument("--backend-language", choices=["python", "node", "rust"],
+                    help="Backend language: python (FastAPI), node (Fastify), or rust (Axum)")
     p.add_argument("--backend-port", type=int, metavar="PORT")
     p.add_argument("--python-version", choices=["3.13", "3.12", "3.11"])
+    p.add_argument("--node-version", choices=["22", "24"])
+    p.add_argument("--rust-edition", choices=["2021", "2024"])
 
     # Frontend
     p.add_argument("--frontend", choices=list(FRAMEWORK_MAP.keys()),
@@ -158,10 +163,16 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
     output_dir = args.output_dir
 
     # Backend
+    lang_str = _get(args, "backend_language", cfg, "backend", "language", default="python")
+    backend_language = BackendLanguage(lang_str) if lang_str in ("python", "node", "rust") else BackendLanguage.PYTHON
+
     backend = BackendConfig(
         project_name=project_name,
+        language=backend_language,
         description=description,
         python_version=_get(args, "python_version", cfg, "backend", "python_version", default="3.13"),
+        node_version=_get(args, "node_version", cfg, "backend", "node_version", default="22"),
+        rust_edition=_get(args, "rust_edition", cfg, "backend", "rust_edition", default="2024"),
         server_port=_get(args, "backend_port", cfg, "backend", "server_port", default=5000),
     )
 
@@ -196,7 +207,10 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
     # Keycloak
     include_keycloak = include_auth
     keycloak_port = _get(args, "keycloak_port", cfg, "keycloak", "port", default=8080)
-    kc_realm = _get(args, "keycloak_realm", cfg, "keycloak", "realm", default="master")
+    kc_realm = _get(
+        args, "keycloak_realm", cfg, "keycloak", "realm",
+        default=project_name.lower().replace(" ", "-").replace("_", "-"),
+    )
     kc_client_id = _get(
         args, "keycloak_client_id", cfg, "keycloak", "client_id",
         default=project_name.lower().replace(" ", "-").replace("_", "-"),
@@ -297,16 +311,43 @@ def _collect_inputs() -> ProjectConfig | None:
     description = _ask_text("Description:", default="A full-stack application")
 
     print()
-    print("  -- Backend (Python / FastAPI) --")
-    backend_port = _ask_port("Backend server port:", default="5000")
-    python_version = _ask_select(
-        "Python version:", choices=["3.13", "3.12", "3.11"]
+    print("  -- Backend --")
+    backend_lang_choice = _ask_select(
+        "Backend language:",
+        choices=["Python (FastAPI)", "Node.js (Fastify)", "Rust (Axum)"],
     )
+    if "Node" in backend_lang_choice:
+        backend_language = BackendLanguage.NODE
+    elif "Rust" in backend_lang_choice:
+        backend_language = BackendLanguage.RUST
+    else:
+        backend_language = BackendLanguage.PYTHON
+
+    backend_port = _ask_port("Backend server port:", default="5000")
+
+    python_version = "3.13"
+    node_version = "22"
+    rust_edition = "2024"
+    if backend_language == BackendLanguage.PYTHON:
+        python_version = _ask_select(
+            "Python version:", choices=["3.13", "3.12", "3.11"]
+        )
+    elif backend_language == BackendLanguage.NODE:
+        node_version = _ask_select(
+            "Node.js version:", choices=["22", "24"]
+        )
+    elif backend_language == BackendLanguage.RUST:
+        rust_edition = _ask_select(
+            "Rust edition:", choices=["2024", "2021"]
+        )
 
     backend = BackendConfig(
         project_name=project_name,
+        language=backend_language,
         description=description,
         python_version=python_version,
+        node_version=node_version,
+        rust_edition=rust_edition,
         server_port=backend_port,
     )
 
@@ -391,7 +432,10 @@ def _collect_inputs() -> ProjectConfig | None:
         print("  -- Keycloak --")
         keycloak_port = _ask_port("Keycloak host port:", default="8080")
         kc_url = f"http://localhost:{keycloak_port}"
-        kc_realm = _ask_text("Keycloak realm:", default="master")
+        kc_realm = _ask_text(
+            "Keycloak realm:",
+            default=project_name.lower().replace(" ", "-").replace("_", "-"),
+        )
         kc_client_id = _ask_text(
             "Keycloak client ID:",
             default=project_name.lower().replace(" ", "-").replace("_", "-"),

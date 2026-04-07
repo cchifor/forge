@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0",
     "pyyaml>=6.0",
+    "ty>=0.0.1a7",
 ]
 
 [project.scripts]
@@ -53,3 +54,6 @@ exclude_lines = [
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+[tool.ty.environment]
+python-version = "3.13"

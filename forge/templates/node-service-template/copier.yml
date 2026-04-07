@@ -1,0 +1,50 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_skip_if_exists:
+  - ".env"
+_exclude:
+  - "node_modules"
+  - "dist"
+  - "coverage"
+
+# ---------------------------------------------------------------------------
+# Questions (prompted during generation)
+# ---------------------------------------------------------------------------
+
+project_name:
+  type: str
+  help: "Service name in kebab-case"
+  default: "my-service"
+  validator: "{% if not project_name | regex_search('^[a-z][a-z0-9-]*$') %}Must be lowercase kebab-case (e.g. my-service){% endif %}"
+
+project_description:
+  type: str
+  help: "One-line description"
+  default: "A Node.js microservice"
+
+server_port:
+  type: int
+  help: "HTTP server port"
+  default: 5000
+
+db_name:
+  type: str
+  help: "PostgreSQL database name"
+  default: "{{ project_name | replace('-', '_') }}"
+
+node_version:
+  type: str
+  help: "Node.js version"
+  default: "22"
+  choices:
+    - "22"
+    - "24"
+
+# ---------------------------------------------------------------------------
+# Derived variables (not prompted)
+# ---------------------------------------------------------------------------
+
+project_title:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', ' ') | title }}"
