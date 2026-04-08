@@ -1,4 +1,4 @@
-"""CLI entry point for forge-cli. Supports interactive and headless modes."""
+"""CLI entry point for forge. Supports interactive and headless modes."""
 
 from __future__ import annotations
 

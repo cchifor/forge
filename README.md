@@ -6,7 +6,7 @@
 
 [Quick Start](#quick-start) · [Features](#features) · [Usage](#usage-examples) · [Architecture](#architecture) · [Contributing](#contributing)
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge-cli) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge-cli) [![tests](https://img.shields.io/badge/tests-137%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge-cli)
+[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge) [![tests](https://img.shields.io/badge/tests-137%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge)
 
 **3 Backend Languages** *(Python/FastAPI, Node.js/Fastify, Rust/Axum)*
 **3 Frontend Frameworks** *(Vue 3, Svelte 5, Flutter)*
@@ -43,7 +43,7 @@
 | **Full CRUD Generation** | Name your entities (e.g., `products, orders`) and forge generates domain models, ORM models, repositories, services, REST endpoints, API clients, UI pages, schemas, MSW handlers, and tests — for every entity, in every layer. |
 | **Agentic UI** | Vue template includes a split-pane workspace with [AG-UI protocol](https://github.com/ag-ui-protocol/ag-ui) (SSE streaming) and [MCP ext-apps](https://github.com/anthropics/ext-apps) (sandboxed iframes). Dual-engine rendering for trusted Vue components and third-party extensions. |
 | **Production Docker** | Two-stage Dockerfiles (builder + slim runtime) for every backend and frontend. nginx reverse proxy with SPA fallback. PostgreSQL 16 with health checks. One-shot migration containers. |
-| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge-cli) OIDC ForwardAuth proxy, [Traefik v2.11](https://traefik.io) edge router, Redis session cache, JWT route guards, user registration, and sample users. |
+| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge) OIDC ForwardAuth proxy, [Traefik v2.11](https://traefik.io) edge router, Redis session cache, JWT route guards, user registration, and sample users. |
 | **Headless / Agent Mode** | `--config`, `--json`, `--quiet` flags for CI/CD and AI agents. Pipe JSON from stdin, get structured output on stdout. No TTY required. Works with `uvx` for zero-install execution. |
 | **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. Playwright E2E browser tests for auth flows. Docker testcontainers for real PostgreSQL integration tests. |
 | **Cross-Platform** | Windows (Git Bash), Linux, macOS. LF line endings enforced for Docker container scripts. |
@@ -68,7 +68,7 @@
 **Step 1 — Install forge globally:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cchifor/forge-cli/main/install | bash
+curl -fsSL https://raw.githubusercontent.com/cchifor/forge/main/install | bash
 ```
 
 **Step 2 — Generate a full-stack project:**
@@ -173,7 +173,7 @@ On error, `--json` returns a structured error object (exit code 2):
 **Zero-install one-shot (no global install needed):**
 
 ```bash
-uvx --from git+https://github.com/cchifor/forge-cli.git forge \
+uvx --from git+https://github.com/cchifor/forge.git forge \
   --config stack.yaml --yes --no-docker --json
 ```
 
@@ -338,8 +338,8 @@ Svelte and Flutter generate analogous files for their respective frameworks.
 
 ## Support
 
-- **Issues:** [github.com/cchifor/forge-cli/issues](https://github.com/cchifor/forge-cli/issues)
-- **Discussions:** [github.com/cchifor/forge-cli/discussions](https://github.com/cchifor/forge-cli/discussions)
+- **Issues:** [github.com/cchifor/forge/issues](https://github.com/cchifor/forge/issues)
+- **Discussions:** [github.com/cchifor/forge/discussions](https://github.com/cchifor/forge/discussions)
 
 ---
 
@@ -361,8 +361,8 @@ We welcome contributions of all sizes — from typo fixes to new backend templat
 ### Development setup
 
 ```bash
-git clone https://github.com/cchifor/forge-cli.git
-cd forge-cli
+git clone https://github.com/cchifor/forge.git
+cd forge
 uv sync                         # install dependencies
 uv run pytest -v                # run tests (137 tests, 67%+ coverage)
 uv run forge                    # run locally
@@ -413,4 +413,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Project Status
 
-**Active development.** forge-cli is under active development. The API is stabilizing but breaking changes may occur before v1.0. Contributions and feedback are welcome.
+**Active development.** forge is under active development. The API is stabilizing but breaking changes may occur before v1.0. Contributions and feedback are welcome.

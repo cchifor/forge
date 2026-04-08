@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="https://github.com/cchifor/forge-cli.git"
+REPO="https://github.com/cchifor/forge.git"
 TOOL="git+${REPO}"
 
 MUTED='\033[0;2m'
@@ -110,9 +110,9 @@ fi
 
 echo -e ""
 
-# -- Install forge-cli --------------------------------------------------------
+# -- Install forge --------------------------------------------------------
 
-echo -e "  ${MUTED}Installing forge-cli...${NC}"
+echo -e "  ${MUTED}Installing forge...${NC}"
 echo -e ""
 
 if [[ "$os" == "windows" ]]; then
@@ -124,12 +124,12 @@ fi
 # -- Done ---------------------------------------------------------------------
 
 echo -e ""
-echo -e "  ${GREEN}Done!${NC} forge-cli is ready."
+echo -e "  ${GREEN}Done!${NC} forge is ready."
 echo -e ""
 echo -e "  To get started, run:"
 echo -e ""
 echo -e "    ${GREEN}forge${NC}"
 echo -e ""
 echo -e "  ${MUTED}Then follow the prompts to generate your project.${NC}"
-echo -e "  ${MUTED}For more info: https://github.com/cchifor/forge-cli${NC}"
+echo -e "  ${MUTED}For more info: https://github.com/cchifor/forge${NC}"
 echo -e ""

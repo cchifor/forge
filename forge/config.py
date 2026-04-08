@@ -1,4 +1,4 @@
-"""Configuration dataclasses for forge-cli."""
+"""Configuration dataclasses for forge."""
 
 from __future__ import annotations
 
