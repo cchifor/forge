@@ -30,11 +30,11 @@ async function bootstrap() {
   await auth.init()
 
 {%- if include_auth %}
-  // Wire auth into API client
+  // Wire auth into API client (Gatekeeper uses HttpOnly cookies, no Bearer token needed)
   configureApiClient({
-    getToken: auth.getToken,
+    getToken: async () => null,
     onUnauthorized: () => {
-      auth.logout()
+      auth.login()
     },
   })
 {%- else %}

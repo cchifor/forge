@@ -36,7 +36,7 @@ function handleLogin() {
     router.replace(redirect)
   } else {
     const redirect = (route.query.redirect as string) || '/'
-    login(window.location.origin + redirect)
+    login(redirect)
   }
 }
 </script>
@@ -67,7 +67,7 @@ function handleLogin() {
           </template>
           <template v-else>
             <LogIn class="mr-2 h-4 w-4" />
-            Sign in with Keycloak
+            Sign in
           </template>
         </Button>
       </CardContent>

@@ -279,6 +279,22 @@ export function useAuth() {
 """
 
 
+def patch_home_api_paths(first_backend: str) -> None:
+    """Prefix health/info API paths with the first backend name for Traefik routing."""
+    files_to_patch = [
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useHealth.ts",
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useInfo.ts",
+        PROJECT_DIR / "src" / "shared" / "mocks" / "handlers.ts",
+        PROJECT_DIR / "src" / "shared" / "mocks" / "handlers.test.ts",
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useHealth.test.ts",
+    ]
+    for fpath in files_to_patch:
+        if fpath.exists():
+            text = fpath.read_text(encoding="utf-8")
+            text = text.replace("api/v1/", f"api/{first_backend}/v1/")
+            fpath.write_text(text, encoding="utf-8")
+
+
 def patch_conditional_files() -> None:
     # Patch sidebar branding (can't use Jinja2 in .vue files due to {{ }} conflicts)
     sidebar = PROJECT_DIR / "src" / "shared" / "components" / "AppSidebar.vue"
@@ -417,6 +433,10 @@ def main() -> None:
         inject_feature_into_hubs(ctx)
         print(f"    {ctx['plural']}: 8 files → /api/{ctx['backend_name']}/v1/{ctx['plural']}")
     print(f"  Generated {len(features)} feature(s): {', '.join(features)}")
+
+    # Patch home page API paths to use the first backend's route prefix
+    first_backend = next(iter(feature_backend_map.values()), "backend")
+    patch_home_api_paths(first_backend)
 
     print("\n> Patching conditional files")
     patch_conditional_files()

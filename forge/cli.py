@@ -245,7 +245,7 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
     keycloak_port = _get(args, "keycloak_port", cfg, "keycloak", "port", default=8080)
     kc_realm = _get(
         args, "keycloak_realm", cfg, "keycloak", "realm",
-        default=project_name.lower().replace(" ", "-").replace("_", "-"),
+        default="app",  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
     )
     kc_client_id = _get(
         args, "keycloak_client_id", cfg, "keycloak", "client_id",
@@ -497,7 +497,7 @@ def _collect_inputs() -> ProjectConfig | None:
         kc_url = f"http://localhost:{keycloak_port}"
         kc_realm = _ask_text(
             "Keycloak realm:",
-            default=project_name.lower().replace(" ", "-").replace("_", "-"),
+            default="app",  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
         )
         kc_client_id = _ask_text(
             "Keycloak client ID:",

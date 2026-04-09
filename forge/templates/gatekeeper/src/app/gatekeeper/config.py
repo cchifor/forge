@@ -32,6 +32,7 @@ class GatekeeperSettings(BaseSettings):
     )
 
     keycloak_base_url: str = "http://keycloak:8080/realms"
+    keycloak_external_url: str = ""  # Browser-facing URL; falls back to keycloak_base_url
     gatekeeper_client_id: str = "multi-tenant-gateway"
     gatekeeper_client_secret: str = "super-secret-string"
     cookie_name: str = "tenant_session"

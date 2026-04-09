@@ -90,7 +90,12 @@ def build_login_url(
         Per-tenant OIDC client ID.  Falls back to static config.
     """
     cfg = get_settings()
-    base_url = issuer_url or f"{cfg.keycloak_base_url}/{tenant}"
+    # For browser-facing redirects, prefer the external URL
+    # (internal Docker hostname is not reachable from the browser)
+    if cfg.keycloak_external_url:
+        base_url = f"{cfg.keycloak_external_url}/{tenant}"
+    else:
+        base_url = issuer_url or f"{cfg.keycloak_base_url}/{tenant}"
     cid = client_id or cfg.gatekeeper_client_id
     base = f"{base_url}/protocol/openid-connect/auth"
     params = urllib.parse.urlencode(
@@ -110,7 +115,10 @@ def build_logout_url(tenant: str, *, issuer_url: str | None = None) -> str:
     Construct the Keycloak end-session endpoint URL for the given tenant.
     """
     cfg = get_settings()
-    base_url = issuer_url or f"{cfg.keycloak_base_url}/{tenant}"
+    if cfg.keycloak_external_url:
+        base_url = f"{cfg.keycloak_external_url}/{tenant}"
+    else:
+        base_url = issuer_url or f"{cfg.keycloak_base_url}/{tenant}"
     return f"{base_url}/protocol/openid-connect/logout"
 
 

@@ -277,6 +277,22 @@ export function useAuth() {
 """
 
 
+def patch_home_api_paths(first_backend: str) -> None:
+    """Prefix health/info API paths with the first backend name for Traefik routing."""
+    files_to_patch = [
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useHealth.ts",
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useInfo.ts",
+        PROJECT_DIR / "src" / "shared" / "mocks" / "handlers.ts",
+        PROJECT_DIR / "src" / "shared" / "mocks" / "handlers.test.ts",
+        PROJECT_DIR / "src" / "features" / "home" / "api" / "useHealth.test.ts",
+    ]
+    for fpath in files_to_patch:
+        if fpath.exists():
+            text = fpath.read_text(encoding="utf-8")
+            text = text.replace("api/v1/", f"api/{first_backend}/v1/")
+            fpath.write_text(text, encoding="utf-8")
+
+
 def patch_conditional_files() -> None:
     if not INCLUDE_CHAT:
         app_vue = PROJECT_DIR / "src" / "app" / "App.vue"
@@ -395,6 +411,9 @@ def main() -> None:
         inject_feature_into_hubs(ctx)
         print(f"    {ctx['plural']}: 8 files (index, api, schema, test, list, create, detail, msw)")
     print(f"  Generated {len(features)} feature(s): {', '.join(features)}")
+
+    # Patch home page API paths to use the backend route prefix
+    patch_home_api_paths("backend")
 
     print("\n> Patching conditional files")
     patch_conditional_files()

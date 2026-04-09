@@ -69,6 +69,25 @@ def hydrate_user(payload: TokenPayload, headers: Headers) -> User:
 
 async def authenticate_request(request: Request) -> User | None:
     provider = get_auth_provider_from_state(request)
+
+    # ── Gatekeeper ForwardAuth headers (gateway already validated the token) ──
+    gk_user_id = request.headers.get("x-gatekeeper-user-id")
+    if gk_user_id:
+        user = User(
+            id=gk_user_id,
+            username=request.headers.get("x-gatekeeper-email", "unknown"),
+            email=request.headers.get("x-gatekeeper-email", ""),
+            first_name="",
+            last_name="",
+            roles=[r for r in request.headers.get("x-gatekeeper-roles", "").split(",") if r],
+            customer_id=gk_user_id,
+            org_id=None,
+            token={},
+        )
+        request.state.user = user
+        return user
+
+    # ── Bearer token (direct API access / Swagger) ──
     token = await extract_token(request)
 
     if not token:

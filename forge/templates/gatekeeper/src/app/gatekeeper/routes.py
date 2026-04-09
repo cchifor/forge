@@ -14,7 +14,7 @@ import logging
 import httpx
 import jwt
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 import hmac
@@ -53,6 +53,134 @@ router = APIRouter(tags=["gatekeeper"])
 async def metrics() -> Response:
     """Prometheus scrape target — returns all registered metrics."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ── GET /auth/userinfo ──────────────────────────────────────────────────────
+
+
+@router.get("/auth/userinfo")
+async def auth_userinfo(request: Request) -> Response:
+    """
+    Return the authenticated user's identity as JSON.
+
+    The frontend calls this on startup to populate the user object.
+    Reads the session cookie, verifies the JWT, and returns user info.
+    """
+    cfg = get_settings()
+
+    # Resolve tenant
+    forwarded_host = request.headers.get("x-forwarded-host")
+    try:
+        tenant = extract_tenant(forwarded_host, request.headers.get("host"))
+    except ValueError:
+        return Response(status_code=400, content="Missing host information")
+
+    # Resolve per-tenant OIDC config
+    hostname = forwarded_host or request.headers.get("host", "")
+    tc = await resolve_tenant_config(hostname)
+    if tc is None:
+        tc = get_fallback_config(tenant)
+
+    access_token = request.cookies.get(cfg.cookie_name)
+    if not access_token:
+        return Response(status_code=401, content="Not authenticated")
+
+    try:
+        payload = await verify_token(
+            access_token, tenant,
+            issuer_url=tc.issuer_url, client_id=tc.client_id,
+        )
+    except jwt.ExpiredSignatureError:
+        # Try refresh
+        refresh_token_cookie = request.cookies.get(cfg.refresh_cookie_name)
+        if not refresh_token_cookie:
+            return Response(status_code=401, content="Token expired")
+        try:
+            token_data = await refresh_tokens(
+                tenant, refresh_token_cookie,
+                issuer_url=tc.issuer_url,
+                client_id=tc.client_id,
+                client_secret=tc.client_secret,
+            )
+            new_access = token_data["access_token"]
+            payload = await verify_token(
+                new_access, tenant,
+                issuer_url=tc.issuer_url, client_id=tc.client_id,
+            )
+            # Return JSON with refreshed cookies
+            realm_access = payload.get("realm_access", {})
+            roles = [r for r in realm_access.get("roles", []) if not r.startswith("default-roles")]
+            resp = JSONResponse({
+                "sub": payload.get("sub", ""),
+                "userId": payload.get("sub", ""),
+                "email": payload.get("email", ""),
+                "preferredUsername": payload.get("preferred_username", payload.get("email", "")),
+                "givenName": payload.get("given_name", ""),
+                "familyName": payload.get("family_name", ""),
+                "roles": roles,
+                "tenant": tenant,
+            })
+            _set_token_cookie(resp, name=cfg.cookie_name, value=new_access)
+            new_refresh = token_data.get("refresh_token", refresh_token_cookie)
+            _set_token_cookie(resp, name=cfg.refresh_cookie_name, value=new_refresh)
+            return resp
+        except (httpx.HTTPStatusError, jwt.InvalidTokenError, KeyError):
+            return Response(status_code=401, content="Token refresh failed")
+    except jwt.InvalidTokenError:
+        return Response(status_code=401, content="Invalid token")
+
+    realm_access = payload.get("realm_access", {})
+    roles = [r for r in realm_access.get("roles", []) if not r.startswith("default-roles")]
+    return JSONResponse({
+        "sub": payload.get("sub", ""),
+        "userId": payload.get("sub", ""),
+        "email": payload.get("email", ""),
+        "preferredUsername": payload.get("preferred_username", payload.get("email", "")),
+        "givenName": payload.get("given_name", ""),
+        "familyName": payload.get("family_name", ""),
+        "roles": roles,
+        "tenant": tenant,
+    })
+
+
+# ── GET /auth/login ────────────────────────────────────────────────────────
+
+
+@router.get("/auth/login")
+async def auth_login(request: Request, redirect_uri: str = "/") -> Response:
+    """
+    Login initiation endpoint for the frontend.
+
+    Builds the Keycloak authorization URL and redirects the browser to start
+    the OIDC Authorization Code flow.  The ``redirect_uri`` query parameter
+    is forwarded as OIDC ``state`` so the user is sent back to the correct
+    page after login.
+    """
+    forwarded_host = request.headers.get("x-forwarded-host")
+    try:
+        tenant = extract_tenant(forwarded_host, request.headers.get("host"))
+    except ValueError:
+        return Response(status_code=400, content="Missing host information")
+
+    hostname = forwarded_host or request.headers.get("host", "")
+    tc = await resolve_tenant_config(hostname)
+    if tc is None:
+        tc = get_fallback_config(tenant)
+
+    scheme = request.headers.get("x-forwarded-proto", "http")
+    host = forwarded_host or request.headers.get("host", "localhost")
+    callback_uri = f"{scheme}://{host}/callback"
+
+    safe_redirect = validate_state(redirect_uri)
+
+    login_url = build_login_url(
+        tenant,
+        callback_uri,
+        state=safe_redirect,
+        issuer_url=tc.issuer_url if tc else None,
+        client_id=tc.client_id if tc else None,
+    )
+    return RedirectResponse(url=login_url, status_code=302)
 
 
 # ── GET /auth ───────────────────────────────────────────────────────────────

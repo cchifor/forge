@@ -138,6 +138,7 @@ services:
     environment:
       ENV: development
       KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
+      KEYCLOAK_EXTERNAL_URL: "http://localhost:{{ keycloak_port }}/realms"
       GATEKEEPER_CLIENT_ID: gatekeeper
       GATEKEEPER_CLIENT_SECRET: gatekeeper-dev-secret
       COOKIE_NAME: tenant_session
@@ -155,7 +156,7 @@ services:
       - "traefik.http.middlewares.auth.forwardauth.address=http://gatekeeper:5000/auth"
       - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=X-Gatekeeper-User-Id,X-Gatekeeper-Email,X-Gatekeeper-Tenant,X-Gatekeeper-Roles,X-Gatekeeper-Auth-Method,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset"
       - "traefik.http.middlewares.auth.forwardauth.trustForwardHeader=true"
-      - "traefik.http.routers.gatekeeper.rule=PathPrefix(`/callback`) || PathPrefix(`/logout`)"
+      - "traefik.http.routers.gatekeeper.rule=PathPrefix(`/callback`) || PathPrefix(`/logout`) || PathPrefix(`/auth/userinfo`) || PathPrefix(`/auth/login`)"
       - "traefik.http.services.gatekeeper.loadbalancer.server.port=5000"
     networks:
       - app-network

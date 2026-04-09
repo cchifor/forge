@@ -1,5 +1,4 @@
 import { ref, computed, readonly } from 'vue'
-import Keycloak from 'keycloak-js'
 
 export interface AuthUser {
   id: string
@@ -16,7 +15,6 @@ const user = ref<AuthUser | null>(null)
 const isLoading = ref(true)
 const isInitialized = ref(false)
 
-let keycloakInstance: Keycloak | null = null
 let authDisabled = false
 
 const DEV_USER: AuthUser = {
@@ -30,22 +28,18 @@ const DEV_USER: AuthUser = {
   orgId: null,
 }
 
-function parseTokenToUser(tokenParsed: Record<string, unknown>): AuthUser {
-  const realmAccess = tokenParsed.realm_access as
-    | { roles?: string[] }
-    | undefined
-  return {
-    id: String(tokenParsed.sub ?? ''),
-    email: String(tokenParsed.email ?? ''),
-    username: String(tokenParsed.preferred_username ?? ''),
-    firstName: String(tokenParsed.given_name ?? ''),
-    lastName: String(tokenParsed.family_name ?? ''),
-    roles: realmAccess?.roles ?? [],
-    customerId: String(tokenParsed.customer_id ?? tokenParsed.sub ?? ''),
-    orgId: tokenParsed.org_id ? String(tokenParsed.org_id) : null,
-  }
-}
-
+/**
+ * Gatekeeper-based authentication composable.
+ *
+ * With Gatekeeper ForwardAuth, authentication is handled at the gateway level:
+ * - If the user reaches the app, they are authenticated (Traefik/Gatekeeper
+ *   would have redirected to Keycloak login otherwise).
+ * - Login: redirect to /callback which triggers the OIDC authorization flow.
+ * - Logout: redirect to /logout which clears the session cookie.
+ * - User info: Gatekeeper injects X-Gatekeeper-* headers on proxied requests;
+ *   the frontend fetches user info from the first backend's /api/whoami endpoint.
+ * - Tokens are in HttpOnly cookies — no JS access needed.
+ */
 export function useAuth() {
   const isAuthenticated = computed(() => !!user.value)
 
@@ -61,34 +55,29 @@ export function useAuth() {
       return
     }
 
-    keycloakInstance = new Keycloak({
-      url: import.meta.env.VITE_KEYCLOAK_URL,
-      realm: import.meta.env.VITE_KEYCLOAK_REALM,
-      clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
-    })
-
+    // With Gatekeeper ForwardAuth, if we can load the page we're authenticated.
+    // Fetch user info from the gateway's /auth/userinfo endpoint.
     try {
-      const authenticated = await keycloakInstance.init({
-        onLoad: 'check-sso',
-        silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
-        silentCheckSsoFallback: false,
-        checkLoginIframe: false,
-      })
-
-      if (authenticated && keycloakInstance.tokenParsed) {
-        user.value = parseTokenToUser(
-          keycloakInstance.tokenParsed as Record<string, unknown>,
-        )
+      const res = await fetch('/auth/userinfo', { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        user.value = {
+          id: data.userId || data.sub || '',
+          email: data.email || '',
+          username: data.preferredUsername || data.email || '',
+          firstName: data.givenName || '',
+          lastName: data.familyName || '',
+          roles: data.roles || [],
+          customerId: data.customerId || data.userId || data.sub || '',
+          orgId: data.orgId || null,
+        }
+      } else {
+        // Not authenticated — Gatekeeper will handle redirect on next navigation
+        user.value = null
       }
-
-      // Auto-refresh token
-      keycloakInstance.onTokenExpired = () => {
-        keycloakInstance?.updateToken(30).catch(() => {
-          user.value = null
-        })
-      }
-    } catch (error) {
-      console.error('Keycloak init failed:', error)
+    } catch {
+      // Network error or CORS — treat as authenticated without user details
+      // (Gatekeeper would have redirected if truly unauthenticated)
       user.value = null
     } finally {
       isLoading.value = false
@@ -98,15 +87,9 @@ export function useAuth() {
 
   async function getToken(): Promise<string | null> {
     if (authDisabled) return 'dev-token'
-    if (!keycloakInstance) return null
-
-    try {
-      await keycloakInstance.updateToken(30)
-      return keycloakInstance.token ?? null
-    } catch {
-      user.value = null
-      return null
-    }
+    // With Gatekeeper, the session token is in an HttpOnly cookie.
+    // No client-side token access is needed — the cookie is sent automatically.
+    return null
   }
 
   function login(redirectUri?: string) {
@@ -114,9 +97,9 @@ export function useAuth() {
       user.value = DEV_USER
       return
     }
-    keycloakInstance?.login({
-      redirectUri: redirectUri ?? window.location.origin,
-    })
+    // Redirect to Gatekeeper's login endpoint to start the OIDC flow
+    const redirect = redirectUri ?? window.location.href
+    window.location.href = `/auth/login?redirect_uri=${encodeURIComponent(redirect)}`
   }
 
   function logout() {
@@ -124,9 +107,8 @@ export function useAuth() {
       user.value = null
       return
     }
-    keycloakInstance?.logout({
-      redirectUri: window.location.origin + '/login',
-    })
+    user.value = null
+    window.location.href = '/logout'
   }
 
   function hasRole(role: string): boolean {

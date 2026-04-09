@@ -70,7 +70,7 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
             config.frontend.keycloak_realm
             if config.frontend and config.include_keycloak
             and config.frontend.keycloak_realm != "master"
-            else config.project_slug
+            else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
         ),
         "keycloak_client_id": (
             config.frontend.keycloak_client_id
@@ -117,7 +117,7 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
         "keycloak_realm": (
             fc.keycloak_realm
             if fc and fc.keycloak_realm and fc.keycloak_realm != "master"
-            else config.project_slug
+            else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
         ),
         "keycloak_client_id": (
             fc.keycloak_client_id if fc and fc.keycloak_client_id

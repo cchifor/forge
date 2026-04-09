@@ -1,32 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-// Mock keycloak-js before importing useAuth
-const mockInit = vi.fn()
-const mockLogin = vi.fn()
-const mockLogout = vi.fn()
-const mockUpdateToken = vi.fn()
-
-vi.mock('keycloak-js', () => ({
-  default: vi.fn(() => ({
-    init: mockInit,
-    login: mockLogin,
-    logout: mockLogout,
-    updateToken: mockUpdateToken,
-    token: 'mock-kc-token',
-    tokenParsed: {
-      sub: 'kc-user-id',
-      email: 'kc@example.com',
-      preferred_username: 'kcuser',
-      given_name: 'KC',
-      family_name: 'User',
-      realm_access: { roles: ['user'] },
-      customer_id: 'cust-1',
-      org_id: null,
-    },
-    onTokenExpired: null as (() => void) | null,
-  })),
-}))
-
 describe('useAuth – dev mode (VITE_AUTH_DISABLED=true)', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -104,12 +77,11 @@ describe('useAuth – dev mode (VITE_AUTH_DISABLED=true)', () => {
   })
 })
 
-describe('useAuth – Keycloak mode', () => {
+describe('useAuth – Gatekeeper mode', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.stubEnv('VITE_AUTH_DISABLED', 'false')
-    mockInit.mockReset()
-    mockUpdateToken.mockReset()
+    vi.restoreAllMocks()
   })
 
   async function loadUseAuth() {
@@ -117,56 +89,122 @@ describe('useAuth – Keycloak mode', () => {
     return mod.useAuth()
   }
 
-  it('init() creates Keycloak and calls init()', async () => {
-    mockInit.mockResolvedValue(true)
+  it('init() fetches /auth/userinfo and sets user on success', async () => {
+    const mockUser = {
+      userId: 'gk-user-id',
+      email: 'user@example.com',
+      preferredUsername: 'testuser',
+      givenName: 'Test',
+      familyName: 'User',
+      roles: ['user'],
+      customerId: 'cust-1',
+      orgId: null,
+    }
 
-    const auth = await loadUseAuth()
-    await auth.init()
-
-    expect(mockInit).toHaveBeenCalledWith(
-      expect.objectContaining({ onLoad: 'check-sso', checkLoginIframe: false }),
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(mockUser), { status: 200 }),
     )
-    expect(auth.isLoading.value).toBe(false)
-  })
-
-  it('init() sets user from tokenParsed on successful auth', async () => {
-    mockInit.mockResolvedValue(true)
 
     const auth = await loadUseAuth()
     await auth.init()
 
-    expect(auth.user.value).not.toBeNull()
-    expect(auth.user.value!.email).toBe('kc@example.com')
+    expect(auth.isLoading.value).toBe(false)
+    expect(auth.user.value).toMatchObject({
+      id: 'gk-user-id',
+      email: 'user@example.com',
+      username: 'testuser',
+      firstName: 'Test',
+      lastName: 'User',
+      roles: ['user'],
+    })
   })
 
-  it('init() leaves user null when authentication fails', async () => {
-    mockInit.mockResolvedValue(false)
+  it('init() sets user to null when /auth/userinfo returns non-ok', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('Unauthorized', { status: 401 }),
+    )
 
     const auth = await loadUseAuth()
     await auth.init()
 
     expect(auth.user.value).toBeNull()
+    expect(auth.isLoading.value).toBe(false)
   })
 
-  it('getToken() calls updateToken and returns token', async () => {
-    mockInit.mockResolvedValue(true)
-    mockUpdateToken.mockResolvedValue(true)
+  it('init() sets user to null on network error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'))
+
+    const auth = await loadUseAuth()
+    await auth.init()
+
+    expect(auth.user.value).toBeNull()
+    expect(auth.isLoading.value).toBe(false)
+  })
+
+  it('getToken() returns null (cookie-based auth)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ userId: 'test' }), { status: 200 }),
+    )
 
     const auth = await loadUseAuth()
     await auth.init()
 
     const token = await auth.getToken()
-    expect(mockUpdateToken).toHaveBeenCalledWith(30)
-    expect(token).toBe('mock-kc-token')
+    expect(token).toBeNull()
   })
 
-  it('getToken() returns null when keycloak is not initialized', async () => {
-    // Do not call init – keycloakInstance stays null because we reset modules
-    // but we need authDisabled to be false, which happens in init.
-    // Instead, test via the no-init path: getToken checks !keycloakInstance
+  it('login() redirects to /callback with redirect_uri', async () => {
     const auth = await loadUseAuth()
-    // Skip init so keycloakInstance remains null
-    const token = await auth.getToken()
-    expect(token).toBeNull()
+
+    // Mock window.location
+    const locationHref = vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      href: 'http://app.localhost/',
+    } as Location)
+
+    // login() sets window.location.href — spy on the setter
+    const hrefSetter = vi.fn()
+    locationHref.mockReturnValue(
+      new Proxy(window.location, {
+        get(target, prop) {
+          if (prop === 'href') return 'http://app.localhost/'
+          return Reflect.get(target, prop)
+        },
+        set(_target, prop, value) {
+          if (prop === 'href') hrefSetter(value)
+          return true
+        },
+      }),
+    )
+
+    auth.login('http://app.localhost/dashboard')
+    expect(hrefSetter).toHaveBeenCalledWith(
+      '/auth/login?redirect_uri=http%3A%2F%2Fapp.localhost%2Fdashboard',
+    )
+
+    locationHref.mockRestore()
+  })
+
+  it('logout() redirects to /logout', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ userId: 'test' }), { status: 200 }),
+    )
+
+    const auth = await loadUseAuth()
+    await auth.init()
+
+    const hrefSetter = vi.fn()
+    vi.spyOn(window, 'location', 'get').mockReturnValue(
+      new Proxy(window.location, {
+        set(_target, prop, value) {
+          if (prop === 'href') hrefSetter(value)
+          return true
+        },
+      }),
+    )
+
+    auth.logout()
+    expect(auth.user.value).toBeNull()
+    expect(hrefSetter).toHaveBeenCalledWith('/logout')
   })
 })
