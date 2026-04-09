@@ -6,7 +6,7 @@
 
 [Quick Start](#quick-start) · [Features](#features) · [Usage](#usage-examples) · [Architecture](#architecture) · [Contributing](#contributing)
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge) [![tests](https://img.shields.io/badge/tests-136%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge)
+[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge) [![tests](https://img.shields.io/badge/tests-137%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge)
 
 **3 Backend Languages** *(Python/FastAPI, Node.js/Fastify, Rust/Axum — mix multiple per project)*
 **3 Frontend Frameworks** *(Vue 3, Svelte 5, Flutter)*
@@ -38,11 +38,11 @@
 
 | Category | What you get |
 |----------|-------------|
-| **Backend Choice** | Python ([FastAPI](https://fastapi.tiangolo.com) + SQLAlchemy + Alembic), Node.js ([Fastify 5](https://fastify.dev) + Prisma 6 + Zod), or Rust ([Axum 0.8](https://github.com/tokio-rs/axum) + SQLx + serde). All three produce the same REST API contract. **Multi-backend**: generate multiple backends per project (e.g., a Python API gateway + a Rust data processor + a Node.js notification service), each with its own name, language, port, and Docker Compose service. |
+| **Backend Choice** | Python ([FastAPI](https://fastapi.tiangolo.com) + SQLAlchemy + Alembic), Node.js ([Fastify 5](https://fastify.dev) + Prisma 6 + Zod), or Rust ([Axum 0.8](https://github.com/tokio-rs/axum) + SQLx + serde). **Multi-backend**: generate multiple backends per project, each with its own name, language, port, features, database, migration container, and Traefik route. |
 | **Frontend Choice** | [Vue 3](https://vuejs.org), [Svelte 5](https://svelte.dev), [Flutter](https://flutter.dev) (web), or none. Each includes TanStack Query / Zod / Vite and a responsive dashboard with health checks. |
 | **Full CRUD Generation** | Name your entities (e.g., `products, orders`) and forge generates domain models, ORM models, repositories, services, REST endpoints, API clients, UI pages, schemas, MSW handlers, and tests — for every entity, in every layer. |
 | **Agentic UI** | Vue template includes a split-pane workspace with [AG-UI protocol](https://github.com/ag-ui-protocol/ag-ui) (SSE streaming) and [MCP ext-apps](https://github.com/anthropics/ext-apps) (sandboxed iframes). Dual-engine rendering for trusted Vue components and third-party extensions. |
-| **Production Docker** | Two-stage Dockerfiles (builder + slim runtime) for every backend and frontend. nginx reverse proxy with SPA fallback. PostgreSQL 16 with health checks. One-shot migration containers. |
+| **Production Docker** | Two-stage Dockerfiles for every backend and frontend. [Traefik v2.11](https://traefik.io) API gateway with per-backend path routing and auto-load-balancing. Dedicated migration containers for all languages (Alembic, Prisma Migrate, sqlx). nginx serves static files + SPA fallback only. PostgreSQL 16 with per-backend databases. |
 | **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge) OIDC ForwardAuth proxy, [Traefik v2.11](https://traefik.io) edge router, Redis session cache, JWT route guards, user registration, and sample users. |
 | **Headless / Agent Mode** | `--config`, `--json`, `--quiet` flags for CI/CD and AI agents. Pipe JSON from stdin, get structured output on stdout. No TTY required. Works with `uvx` for zero-install execution. |
 | **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. Playwright E2E browser tests for auth flows. Docker testcontainers for real PostgreSQL integration tests. |
@@ -85,7 +85,7 @@ Follow the interactive prompts to pick your backend (Python, Node.js, or Rust), 
 cd my_platform/ && docker compose up --build
 ```
 
-Your app is now running: frontend at `http://localhost:5173`, backend API at `http://localhost:5000/api/v1/health/live`.
+Your app is now running at `http://localhost` (Traefik gateway). API health: `http://localhost/api/backend/v1/health/live`. Traefik dashboard: `http://localhost:8080`.
 
 ---
 
@@ -115,13 +115,13 @@ description: An e-commerce platform
 backend:
   language: python          # python | node | rust
   server_port: 5000
+  features: products, orders, customers
   python_version: "3.13"    # python only
   # node_version: "22"      # node only
   # rust_edition: "2024"    # rust only
 
 frontend:
   framework: vue            # vue | svelte | flutter | none
-  features: products, orders, customers
   package_manager: pnpm
   include_auth: true
 
@@ -138,22 +138,24 @@ keycloak:
 project_name: my-platform
 
 backends:
-  - name: api-gateway
+  - name: users
     language: python
     server_port: 5000
-  - name: data-processor
+    features: users, profiles
+  - name: catalog
     language: rust
     server_port: 5001
+    features: products, categories
   - name: notifications
     language: node
     server_port: 5002
+    features: alerts
 
 frontend:
   framework: vue
-  features: products, orders
 ```
 
-Each backend gets its own directory, Dockerfile, Docker Compose service, and database. The frontend proxies `/api` to the first backend.
+Each backend gets its own directory, Dockerfile, database, migration container, and Traefik route. The API gateway routes `http://localhost/api/users/v1/users` → users service, `http://localhost/api/catalog/v1/products` → catalog service, etc.
 
 **From CLI flags (no file needed):**
 
@@ -228,18 +230,24 @@ Expected output:
 
 ## Architecture
 
-### Docker Compose (with auth enabled)
+### Docker Compose
+
+Traefik is always present as the API gateway, routing requests by path prefix to the correct backend. Each backend has a dedicated migration container that runs before the service starts.
 
 ```
-Browser → Traefik :80 → ForwardAuth(Gatekeeper) → Backend :5000
-                ↓                                       ↑
-          Keycloak :8080 ← OIDC code exchange ← Gatekeeper
-                                                       ↑
-                                                  Redis :6379
+Browser → Traefik :80 (API Gateway, always present)
+            ├── /api/users/*          → users:5000         (Python/FastAPI)
+            ├── /api/catalog/*        → catalog:5001        (Rust/Axum)
+            ├── /api/notifications/*  → notifications:5002  (Node.js/Fastify)
+            ├── /                     → frontend:80         (nginx static + SPA)
+            └── (optional) ForwardAuth → Gatekeeper         (when auth enabled)
 
-          PostgreSQL :5432 ← Backend + Keycloak (shared)
-          pgAdmin :5050    (tools profile)
+          PostgreSQL :5432 ← per-backend databases + Keycloak
+          Migration containers run before each backend starts:
+            users-migrate (Alembic) | catalog-migrate (sqlx) | notifications-migrate (Prisma)
 ```
+
+nginx serves static files and SPA fallback only — all API routing is handled by Traefik. Scaling works out of the box: `docker compose up --scale users=3` and Traefik auto-load-balances.
 
 ### Agentic UI (Vue template, `--include-chat`)
 
@@ -307,13 +315,13 @@ User message → useAiChat → useAgentClient → HTTP POST (SSE stream)
 <details>
 <summary>Backend languages</summary>
 
-| Language | Framework | ORM / Database | Validation | Migrations | Tooling |
-|----------|-----------|----------------|------------|------------|---------|
-| Python | FastAPI | SQLAlchemy 2.0 + asyncpg | Pydantic | Alembic | uv, Ruff, ty |
-| Node.js | Fastify 5 | Prisma 6 | Zod | Prisma Migrate | pnpm, Biome, tsc |
-| Rust | Axum 0.8 | SQLx 0.8 | serde | SQLx Migrate | Cargo, clippy, rustfmt |
+| Language | Framework | ORM / Database | Validation | Migration Container | Tooling |
+|----------|-----------|----------------|------------|---------------------|---------|
+| Python | FastAPI | SQLAlchemy 2.0 + asyncpg | Pydantic | `{name}-migrate` runs Alembic | uv, Ruff, ty |
+| Node.js | Fastify 5 | Prisma 6 | Zod | `{name}-migrate` runs Prisma Migrate | pnpm, Biome, tsc |
+| Rust | Axum 0.8 | SQLx 0.8 | serde | `{name}-migrate` runs sqlx binary | Cargo, clippy, rustfmt |
 
-All backends generate the same API contract: `GET /api/v1/health/live`, `GET /api/v1/health/ready`, full CRUD on `/api/v1/items`.
+All backends generate the same API contract: `GET /api/v1/health/live`, `GET /api/v1/health/ready`, full CRUD on `/api/v1/{entity}`. The entity name is parameterized from `BackendConfig.features`.
 
 </details>
 
@@ -331,10 +339,12 @@ All backends generate the same API contract: `GET /api/v1/health/live`, `GET /ap
 <details>
 <summary>Default ports and credentials</summary>
 
+All services are accessed through Traefik on port **80**. Direct ports are for debugging only.
+
 | Service | Port | Username | Password |
 |---------|------|----------|----------|
-| Backend API | `5000` | — | — |
-| Frontend (nginx) | `5173` | — | — |
+| Traefik (gateway) | `80` | — | — |
+| Backend API (direct) | `5000+` | — | — |
 | PostgreSQL | `5432` | `postgres` | `postgres` |
 | Keycloak Admin | `8080` | `admin` | `admin` |
 | Sample User | — | `dev@localhost` | `devpass` |
@@ -389,7 +399,7 @@ We welcome contributions of all sizes — from typo fixes to new backend templat
 git clone https://github.com/cchifor/forge.git
 cd forge
 uv sync                         # install dependencies
-uv run pytest -v                # run tests (137 tests, 67%+ coverage)
+uv run pytest -v                # run tests (137 tests, 69%+ coverage)
 uv run forge                    # run locally
 ```
 
