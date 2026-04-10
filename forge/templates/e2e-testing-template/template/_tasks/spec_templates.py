@@ -99,16 +99,17 @@ test.describe('Authentication', () => {
     ).toBeTruthy();
   });
 
-  test('login with valid credentials', async ({ app }) => {
-    await app.nav.goToDashboard();
+  test('login with valid credentials', async ({ app, baseURL }) => {
+    // Navigate to Gatekeeper login (like clicking "Sign in" on the Vue login page)
+    await app.page.goto(`${baseURL}/auth/login?redirect_uri=/`);
     await app.page.waitForSelector('#username, input[name="username"]', {
       timeout: 15000,
     });
     await app.page.fill('#username, input[name="username"]', process.env.TEST_USER || 'dev@localhost');
     await app.page.fill('#password, input[name="password"]', process.env.TEST_PASSWORD || 'devpass');
     await app.page.click('#kc-login, input[type="submit"]');
-    await app.page.waitForTimeout(3000);
-    expect(app.page.url()).not.toContain('realms');
+    await app.page.waitForURL((url) => !url.href.includes('/realms/'), { timeout: 15000 });
+    expect(app.page.url()).toContain('app.localhost');
   });
 
   test('authenticated user accesses protected page', async ({ app }) => {
@@ -123,7 +124,11 @@ test.describe('Authentication', () => {
   test('logout ends session', async ({ app }) => {
     await app.nav.goToDashboard();
     await app.auth.loginAs('user');
-    await app.auth.logout();
+    await app.nav.goToDashboard();
+    // Logout via Gatekeeper endpoint
+    await app.page.goto('/logout');
+    await app.page.waitForTimeout(2000);
+    // Navigate back — should be redirected to login
     await app.nav.goToDashboard();
     await app.page.waitForTimeout(3000);
     const url = app.page.url();

@@ -32,10 +32,14 @@ export class AuthManager {
   async logout(): Promise<void> {
     console.log('[auth] Logging out');
     await this.context.clearCookies();
-    await this.page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
+    try {
+      await this.page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+    } catch {
+      // localStorage not accessible on about:blank or cross-origin pages
+    }
     await this.page.reload();
   }
 }
