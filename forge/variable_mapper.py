@@ -169,6 +169,23 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
     }
 
 
+def e2e_context(config: ProjectConfig) -> dict[str, Any]:
+    """Build data dict for the e2e-platform-template (Copier)."""
+    fc = config.frontend
+    framework = fc.framework.value if fc else "vue"
+    return {
+        "project_name": config.project_name,
+        "features": ", ".join(config.all_features),
+        "include_auth": config.include_keycloak,
+        "base_url": f"http://localhost:{fc.server_port}" if fc else "http://localhost:5173",
+        "frontend_framework": framework,
+        "backend_features": _build_backend_features_json(config),
+        "keycloak_url": fc.keycloak_url if fc and config.include_keycloak else "",
+        "keycloak_realm": fc.keycloak_realm if fc and config.include_keycloak else "",
+        "keycloak_client_id": fc.keycloak_client_id if fc and config.include_keycloak else "",
+    }
+
+
 def frontend_context(config: ProjectConfig) -> dict[str, Any]:
     """Dispatch to the correct frontend mapper."""
     if config.frontend is None:

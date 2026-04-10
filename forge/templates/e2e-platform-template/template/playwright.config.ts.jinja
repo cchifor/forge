@@ -1,0 +1,33 @@
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: [
+    ['html', { open: 'never' }],
+    ['list'],
+  ],
+  use: {
+    baseURL: process.env.BASE_URL || '{{ base_url }}',
+{% if frontend_framework == 'vue' %}
+    testIdAttribute: 'data-test',
+{% else %}
+    testIdAttribute: 'data-testid',
+{% endif %}
+    trace: 'on-first-retry',
+    video: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+{% if include_auth %}
+  globalSetup: './e2e-platform/auth/global-setup.ts',
+{% endif %}
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});

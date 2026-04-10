@@ -38,6 +38,7 @@ pub struct PaginatedResponse<T: Serialize> {
     pub total: i64,
     pub skip: i64,
     pub limit: i64,
+    pub has_more: bool,
 }
 
 #[derive(Debug, Deserialize)]

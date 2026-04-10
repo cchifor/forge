@@ -1,0 +1,30 @@
+import type { BrowserContext, Page } from '@playwright/test';
+import * as path from 'path';
+
+export type Persona = 'admin' | 'user';
+
+const AUTH_DIR = path.join(__dirname, '..', '..', '.auth');
+
+export class AuthManager {
+  constructor(
+    private readonly page: Page,
+    private readonly context: BrowserContext,
+  ) {}
+
+  async loginAs(persona: Persona): Promise<void> {
+    const statePath = path.join(AUTH_DIR, `${persona}-state.json`);
+    await this.context.storageState({ path: statePath });
+    const cookies = (await import(statePath)).cookies ?? [];
+    await this.context.addCookies(cookies);
+    await this.page.reload();
+  }
+
+  async logout(): Promise<void> {
+    await this.context.clearCookies();
+    await this.page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await this.page.reload();
+  }
+}

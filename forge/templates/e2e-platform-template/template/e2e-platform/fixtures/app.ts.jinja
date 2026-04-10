@@ -1,0 +1,35 @@
+import { test as base } from '@playwright/test';
+import { Navigation } from '../actions/Navigation';
+import { ApiHelper } from '../actions/ApiHelper';
+import { Assertions } from '../actions/Assertions';
+{% if include_auth %}
+import { AuthManager } from '../auth/AuthManager';
+{% endif %}
+
+export type AppFixtures = {
+  app: {
+    nav: Navigation;
+    api: ApiHelper;
+    assertions: Assertions;
+    page: import('@playwright/test').Page;
+{% if include_auth %}
+    auth: AuthManager;
+{% endif %}
+  };
+};
+
+export const test = base.extend<AppFixtures>({
+  app: async ({ page, request{% if include_auth %}, context{% endif %} }, use) => {
+    await use({
+      nav: new Navigation(page),
+      api: new ApiHelper(request),
+      assertions: new Assertions(page),
+      page,
+{% if include_auth %}
+      auth: new AuthManager(page, context),
+{% endif %}
+    });
+  },
+});
+
+export { expect } from '@playwright/test';

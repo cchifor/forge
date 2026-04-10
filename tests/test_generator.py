@@ -8,9 +8,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from forge.config import BackendConfig, FrontendConfig, FrontendFramework, ProjectConfig
 from forge.generator import (
     _cleanup_sub_git_repos,
     _force_remove_readonly,
+    _generate_e2e_tests,
     _git_init,
     _run_backend_cmd,
     _setup_backend,
@@ -154,3 +156,65 @@ class TestGitInit:
 
         for call in mock_run.call_args_list:
             assert call.kwargs["cwd"] == str(tmp_path)
+
+
+# -- _generate_e2e_tests -------------------------------------------------------
+
+class TestGenerateE2eTests:
+    def _make_config(self):
+        bc = BackendConfig(
+            name="backend",
+            features=["items"],
+            server_port=5000,
+        )
+        fc = FrontendConfig(
+            framework=FrontendFramework.VUE,
+            project_name="Test App",
+            features=["items"],
+            server_port=5173,
+        )
+        return ProjectConfig(
+            project_name="Test App",
+            backends=[bc],
+            frontend=fc,
+            include_keycloak=False,
+        )
+
+    def test_calls_run_copy(self, tmp_path):
+        config = self._make_config()
+        config.output_dir = str(tmp_path)
+        project_root = tmp_path / "test_app"
+        project_root.mkdir()
+
+        with patch("forge.generator.run_copy") as mock_copy:
+            result = _generate_e2e_tests(config, project_root)
+
+        mock_copy.assert_called_once()
+        call_kwargs = mock_copy.call_args.kwargs
+        assert "e2e-platform-template" in call_kwargs["src_path"]
+        assert call_kwargs["dst_path"] == str(project_root / "test_app-e2e")
+        assert call_kwargs["data"]["project_name"] == "Test App"
+        assert call_kwargs["data"]["features"] == "items"
+        assert call_kwargs["data"]["include_auth"] is False
+        assert call_kwargs["defaults"] is True
+        assert call_kwargs["unsafe"] is True
+
+    def test_output_directory_name(self, tmp_path):
+        config = self._make_config()
+        project_root = tmp_path / "my_project"
+        project_root.mkdir()
+
+        with patch("forge.generator.run_copy"):
+            result = _generate_e2e_tests(config, project_root)
+
+        assert result == project_root / "test_app-e2e"
+
+    def test_creates_output_directory(self, tmp_path):
+        config = self._make_config()
+        project_root = tmp_path / "my_project"
+        project_root.mkdir()
+
+        with patch("forge.generator.run_copy"):
+            _generate_e2e_tests(config, project_root)
+
+        assert (project_root / "test_app-e2e").is_dir()

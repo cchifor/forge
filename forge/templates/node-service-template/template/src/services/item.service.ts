@@ -35,7 +35,7 @@ export async function list(params: ListParams): Promise<PaginatedItems> {
 		prisma.item.count({ where }),
 	]);
 
-	return { items, total, skip, limit };
+	return { items, total, skip, limit, has_more: skip + items.length < total };
 }
 
 export async function create(tenant: TenantContext, data: ItemCreate) {

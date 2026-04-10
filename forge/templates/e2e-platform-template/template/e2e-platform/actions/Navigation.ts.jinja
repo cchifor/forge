@@ -1,0 +1,25 @@
+import type { Page } from '@playwright/test';
+
+export class Navigation {
+  constructor(private readonly page: Page) {}
+
+  async goTo(feature: string): Promise<void> {
+    await this.page.goto(`/${feature}`);
+  }
+
+  async goToCreate(feature: string): Promise<void> {
+    await this.page.goto(`/${feature}/new`);
+  }
+
+  async goToDetail(feature: string, id: string): Promise<void> {
+    await this.page.goto(`/${feature}/${id}`);
+  }
+
+  async goToDashboard(): Promise<void> {
+    await this.page.goto('/');
+  }
+
+  async goToSettings(): Promise<void> {
+    await this.page.goto('/settings');
+  }
+}

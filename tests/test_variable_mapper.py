@@ -10,6 +10,7 @@ from forge.config import (
 )
 from forge.variable_mapper import (
     backend_context,
+    e2e_context,
     flutter_context,
     frontend_context,
     svelte_context,
@@ -151,3 +152,46 @@ class TestFrontendContextDispatch:
         config.frontend = None
         with pytest.raises(ValueError):
             frontend_context(config)
+
+
+class TestE2eContext:
+    def test_maps_all_fields(self):
+        config = _make_config(framework=FrontendFramework.VUE)
+        ctx = e2e_context(config)
+        assert ctx["project_name"] == "Test App"
+        assert ctx["features"] == "items, orders"
+        assert ctx["include_auth"] is True
+        assert ctx["base_url"] == "http://localhost:5173"
+        assert ctx["frontend_framework"] == "vue"
+        assert ctx["keycloak_url"] == "http://localhost:8080"
+        assert ctx["keycloak_realm"] == "myrealm"
+        assert ctx["keycloak_client_id"] == "test-app"
+        assert "backend_features" in ctx
+
+    def test_no_auth(self):
+        config = _make_config(framework=FrontendFramework.VUE)
+        config.include_keycloak = False
+        ctx = e2e_context(config)
+        assert ctx["include_auth"] is False
+        assert ctx["keycloak_url"] == ""
+        assert ctx["keycloak_realm"] == ""
+        assert ctx["keycloak_client_id"] == ""
+
+    def test_svelte_framework(self):
+        config = _make_config(framework=FrontendFramework.SVELTE)
+        ctx = e2e_context(config)
+        assert ctx["frontend_framework"] == "svelte"
+
+    def test_multi_backend_features(self):
+        config = _make_config(framework=FrontendFramework.VUE)
+        config.backends.append(BackendConfig(
+            name="orders-svc",
+            features=["orders"],
+            server_port=5001,
+        ))
+        ctx = e2e_context(config)
+        import json
+        bf = json.loads(ctx["backend_features"])
+        assert "backend" in bf
+        assert "orders-svc" in bf
+        assert bf["orders-svc"]["port"] == 5001

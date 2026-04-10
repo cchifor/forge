@@ -1,0 +1,32 @@
+import type { Page } from '@playwright/test';
+import { expect } from '@playwright/test';
+
+export class Assertions {
+  constructor(private readonly page: Page) {}
+
+  async expectVisible(testId: string): Promise<void> {
+    await expect(this.page.getByTestId(testId)).toBeVisible();
+  }
+
+  async expectHidden(testId: string): Promise<void> {
+    await expect(this.page.getByTestId(testId)).toBeHidden();
+  }
+
+  async expectToast(message: string): Promise<void> {
+    await expect(
+      this.page.getByRole('status').filter({ hasText: message }),
+    ).toBeVisible({ timeout: 5000 });
+  }
+
+  async expectUrl(pattern: RegExp): Promise<void> {
+    await expect(this.page).toHaveURL(pattern);
+  }
+
+  async expectCount(testId: string, count: number): Promise<void> {
+    await expect(this.page.getByTestId(testId)).toHaveCount(count);
+  }
+
+  async expectText(testId: string, text: string): Promise<void> {
+    await expect(this.page.getByTestId(testId)).toContainText(text);
+  }
+}

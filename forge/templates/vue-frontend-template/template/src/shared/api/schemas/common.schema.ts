@@ -6,7 +6,7 @@ export function paginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
     total: z.number().int(),
     skip: z.number().int(),
     limit: z.number().int(),
-    has_more: z.boolean(),
+    has_more: z.boolean().optional(),
   })
 }
 

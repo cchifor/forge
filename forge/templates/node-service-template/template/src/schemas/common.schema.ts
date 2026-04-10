@@ -21,5 +21,6 @@ export function paginatedSchema<T extends z.ZodType>(itemSchema: T) {
 		total: z.number(),
 		skip: z.number(),
 		limit: z.number(),
+		has_more: z.boolean(),
 	});
 }

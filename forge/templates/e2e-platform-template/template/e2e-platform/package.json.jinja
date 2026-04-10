@@ -1,0 +1,17 @@
+{
+  "name": "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}-e2e",
+  "version": "0.1.0",
+  "description": "E2E testing platform for {{ project_name }}",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:report": "npx playwright show-report",
+    "build:types": "tsc --emitDeclarationOnly --outDir .agent-context"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "typescript": "^5.8.0"
+  }
+}

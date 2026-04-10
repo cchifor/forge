@@ -1,0 +1,51 @@
+import type { APIRequestContext } from '@playwright/test';
+
+interface BackendInfo {
+  port: number;
+  features: string[];
+}
+
+const BACKEND_FEATURES: Record<string, BackendInfo> = JSON.parse(
+  '{{ backend_features }}'
+);
+
+export class ApiHelper {
+  constructor(private readonly request: APIRequestContext) {}
+
+  private backendFor(feature: string): string {
+    for (const [name, info] of Object.entries(BACKEND_FEATURES)) {
+      if (info.features.includes(feature)) {
+        return name;
+      }
+    }
+    return Object.keys(BACKEND_FEATURES)[0] ?? 'backend';
+  }
+
+  private apiUrl(feature: string, id?: string): string {
+    const backend = this.backendFor(feature);
+    const base = `/api/${backend}/v1/${feature}`;
+    return id ? `${base}/${id}` : base;
+  }
+
+  async create<T extends Record<string, unknown>>(
+    feature: string,
+    data: T,
+  ): Promise<Record<string, unknown>> {
+    const response = await this.request.post(this.apiUrl(feature), { data });
+    return response.json();
+  }
+
+  async list(feature: string): Promise<Record<string, unknown>> {
+    const response = await this.request.get(this.apiUrl(feature));
+    return response.json();
+  }
+
+  async get(feature: string, id: string): Promise<Record<string, unknown>> {
+    const response = await this.request.get(this.apiUrl(feature, id));
+    return response.json();
+  }
+
+  async delete(feature: string, id: string): Promise<void> {
+    await this.request.delete(this.apiUrl(feature, id));
+  }
+}

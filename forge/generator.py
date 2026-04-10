@@ -13,17 +13,12 @@ from copier import run_copy
 from forge import variable_mapper
 from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
 from forge.docker_manager import render_compose, render_frontend_dockerfile, render_init_db, render_keycloak_realm, render_nginx_conf
-from forge.e2e_templates import (
-    generate_e2e_auth_conftest,
-    generate_e2e_auth_tests,
-    generate_e2e_conftest,
-    generate_e2e_test,
-)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 TEMPLATE_DIRS = {
     "backend": "python-service-template",
+    "e2e": "e2e-platform-template",
     FrontendFramework.VUE: "vue-frontend-template",
     FrontendFramework.SVELTE: "svelte-frontend-template",
     FrontendFramework.FLUTTER: "flutter-frontend-template",
@@ -102,7 +97,7 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         and config.frontend.generate_e2e_tests
     ):
         _log("  Generating Playwright e2e tests ...")
-        _generate_e2e_tests(config, project_root)
+        _generate_e2e_tests(config, project_root, quiet=quiet)
 
     # 5. Render frontend Dockerfile and nginx.conf (all frameworks)
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
@@ -119,44 +114,24 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
     return project_root
 
 
-def _make_feature_context(plural_name: str) -> dict[str, str]:
-    """Derive all naming variants from a plural feature name."""
-    singular = (
-        plural_name.rstrip("s")
-        if plural_name.endswith("s") and len(plural_name) > 1
-        else plural_name
+def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+    """Generate E2E testing platform using Copier template."""
+    ctx = variable_mapper.e2e_context(config)
+    dst = project_root / f"{config.project_slug}-e2e"
+    dst.mkdir(exist_ok=True)
+    template_path = TEMPLATES_DIR / "e2e-platform-template"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template not found: {template_path}")
+    run_copy(
+        src_path=str(template_path),
+        dst_path=str(dst),
+        data=ctx,
+        unsafe=True,
+        defaults=True,
+        overwrite=True,
+        quiet=quiet,
     )
-    return {
-        "plural": plural_name,
-        "singular": singular,
-        "Plural": plural_name[0].upper() + plural_name[1:],
-        "Singular": singular[0].upper() + singular[1:],
-    }
-
-
-def _generate_e2e_tests(config: ProjectConfig, project_root: Path) -> None:
-    """Generate Playwright e2e test files for each frontend feature."""
-    e2e_dir = project_root / "tests" / "e2e"
-    e2e_dir.mkdir(parents=True, exist_ok=True)
-
-    # Write conftest.py -- use auth-enhanced version when Keycloak enabled
-    conftest_path = e2e_dir / "conftest.py"
-    if config.include_keycloak:
-        conftest_path.write_text(generate_e2e_auth_conftest(), encoding="utf-8")
-    else:
-        conftest_path.write_text(generate_e2e_conftest(), encoding="utf-8")
-
-    # Write auth flow tests when Keycloak enabled
-    if config.include_keycloak:
-        auth_test_path = e2e_dir / "test_auth.py"
-        auth_test_path.write_text(generate_e2e_auth_tests(), encoding="utf-8")
-
-    # Write per-feature test files
-    for feature_name in config.frontend.features:
-        ctx = _make_feature_context(feature_name)
-        test_content = generate_e2e_test(ctx)
-        test_path = e2e_dir / f"test_{feature_name}.py"
-        test_path.write_text(test_content, encoding="utf-8")
+    return dst
 
 
 def _generate_single_backend(bc: BackendConfig, template_name: str, dst: Path, quiet: bool = False) -> Path:

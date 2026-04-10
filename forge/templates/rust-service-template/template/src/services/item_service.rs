@@ -70,6 +70,7 @@ pub async fn list(
         total,
         skip,
         limit,
+        has_more: skip + limit < total,
     })
 }
 

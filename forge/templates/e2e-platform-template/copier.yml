@@ -1,0 +1,60 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_exclude:
+  - node_modules
+  - .auth
+  - test-results
+  - playwright-report
+  - "*.pyc"
+  - __pycache__
+
+# Questions
+project_name:
+  type: str
+  default: "My Platform"
+  help: "Project name"
+
+features:
+  type: str
+  default: "items"
+  help: "Comma-separated feature names"
+
+include_auth:
+  type: bool
+  default: false
+  help: "Include Keycloak authentication flows"
+
+base_url:
+  type: str
+  default: "http://localhost:5173"
+  help: "Default URL for the application"
+
+frontend_framework:
+  type: str
+  default: "vue"
+  help: "Frontend framework (vue/svelte/flutter)"
+
+# Hidden variables (passed programmatically, not prompted)
+backend_features:
+  type: str
+  when: false
+  default: "{}"
+
+keycloak_url:
+  type: str
+  when: false
+  default: "http://localhost:8080"
+
+keycloak_realm:
+  type: str
+  when: false
+  default: "app"
+
+keycloak_client_id:
+  type: str
+  when: false
+  default: ""
+
+_tasks:
+  - command: python _tasks/post_generate.py
+    when: "{{ True }}"

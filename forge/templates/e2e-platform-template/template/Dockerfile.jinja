@@ -1,0 +1,10 @@
+FROM mcr.microsoft.com/playwright:v1.52.0-jammy
+
+WORKDIR /app
+
+COPY e2e-platform/package.json e2e-platform/package-lock.json* ./
+RUN npm ci
+
+COPY . .
+
+CMD ["npx", "playwright", "test"]
