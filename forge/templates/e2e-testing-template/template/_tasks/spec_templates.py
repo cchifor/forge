@@ -4,6 +4,10 @@ FEATURE_SPEC_TEMPLATE = """\
 import {{ test, expect }} from '../e2e-platform/fixtures/app';
 
 test.describe('{Plural}', () => {{
+  test.beforeEach(async ({{ app }}) => {{
+    await app.auth.loginAs('user');
+  }});
+
   test.describe('List', () => {{
     test('loads and shows items', async ({{ app }}) => {{
       // Create an item via API so the list isn't empty

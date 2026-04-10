@@ -10,7 +10,10 @@ const BACKEND_FEATURES: Record<string, BackendInfo> = JSON.parse(
 );
 
 export class ApiHelper {
-  constructor(private readonly request: APIRequestContext) {}
+  constructor(
+    private readonly request: APIRequestContext,
+    private readonly getCookies?: () => Promise<string>,
+  ) {}
 
   private backendFor(feature: string): string {
     for (const [name, info] of Object.entries(BACKEND_FEATURES)) {
@@ -27,25 +30,65 @@ export class ApiHelper {
     return id ? `${base}/${id}` : base;
   }
 
+  private async headers(): Promise<Record<string, string>> {
+    const h: Record<string, string> = {};
+    if (this.getCookies) {
+      h['Cookie'] = await this.getCookies();
+    }
+    return h;
+  }
+
   async create<T extends Record<string, unknown>>(
     feature: string,
     data: T,
   ): Promise<Record<string, unknown>> {
-    const response = await this.request.post(this.apiUrl(feature), { data });
+    const url = this.apiUrl(feature);
+    console.log(`[api] POST ${url}`, JSON.stringify(data));
+    const response = await this.request.post(url, {
+      data,
+      headers: await this.headers(),
+    });
+    console.log(`[api] ← ${response.status()}`);
+    if (!response.ok()) {
+      const body = await response.text();
+      throw new Error(`API POST ${url} failed: ${response.status()} ${body}`);
+    }
     return response.json();
   }
 
   async list(feature: string): Promise<Record<string, unknown>> {
-    const response = await this.request.get(this.apiUrl(feature));
+    const url = this.apiUrl(feature);
+    console.log(`[api] GET ${url}`);
+    const response = await this.request.get(url, {
+      headers: await this.headers(),
+    });
+    console.log(`[api] ← ${response.status()}`);
+    if (!response.ok()) {
+      const body = await response.text();
+      throw new Error(`API GET ${url} failed: ${response.status()} ${body}`);
+    }
     return response.json();
   }
 
   async get(feature: string, id: string): Promise<Record<string, unknown>> {
-    const response = await this.request.get(this.apiUrl(feature, id));
+    const url = this.apiUrl(feature, id);
+    console.log(`[api] GET ${url}`);
+    const response = await this.request.get(url, {
+      headers: await this.headers(),
+    });
+    if (!response.ok()) {
+      const body = await response.text();
+      throw new Error(`API GET ${url} failed: ${response.status()} ${body}`);
+    }
     return response.json();
   }
 
   async delete(feature: string, id: string): Promise<void> {
-    await this.request.delete(this.apiUrl(feature, id));
+    const url = this.apiUrl(feature, id);
+    console.log(`[api] DELETE ${url}`);
+    const response = await this.request.delete(url, {
+      headers: await this.headers(),
+    });
+    console.log(`[api] ← ${response.status()}`);
   }
 }

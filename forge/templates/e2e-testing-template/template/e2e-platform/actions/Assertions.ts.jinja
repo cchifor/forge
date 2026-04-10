@@ -5,11 +5,21 @@ export class Assertions {
   constructor(private readonly page: Page) {}
 
   async expectVisible(testId: string): Promise<void> {
-    await expect(this.page.getByTestId(testId)).toBeVisible();
+    try {
+      await expect(this.page.getByTestId(testId)).toBeVisible();
+    } catch (e) {
+      console.log(`[assert] FAIL expectVisible('${testId}') at ${this.page.url()}`);
+      throw e;
+    }
   }
 
   async expectHidden(testId: string): Promise<void> {
-    await expect(this.page.getByTestId(testId)).toBeHidden();
+    try {
+      await expect(this.page.getByTestId(testId)).toBeHidden();
+    } catch (e) {
+      console.log(`[assert] FAIL expectHidden('${testId}') at ${this.page.url()}`);
+      throw e;
+    }
   }
 
   async expectToast(message: string): Promise<void> {
