@@ -488,7 +488,7 @@ function handleSubmit() {{
       </CardContent>
       <CardFooter class="gap-2">
         <Button variant="outline" @click="router.push('/{plural}')">Cancel</Button>
-        <Button :disabled="create{Singular}.isPending.value" @click="handleSubmit">
+        <Button type="submit" :disabled="create{Singular}.isPending.value">
           <Loader2 v-if="create{Singular}.isPending.value" class="mr-2 h-4 w-4 animate-spin" />
           {{{{ create{Singular}.isPending.value ? 'Creating...' : 'Create {Singular}' }}}}
         </Button>
