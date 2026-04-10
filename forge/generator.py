@@ -18,7 +18,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 TEMPLATE_DIRS = {
     "backend": "python-service-template",
-    "e2e": "e2e-platform-template",
+    "e2e": "e2e-testing-template",
     FrontendFramework.VUE: "vue-frontend-template",
     FrontendFramework.SVELTE: "svelte-frontend-template",
     FrontendFramework.FLUTTER: "flutter-frontend-template",
@@ -119,7 +119,7 @@ def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool =
     ctx = variable_mapper.e2e_context(config)
     dst = project_root / f"{config.project_slug}-e2e"
     dst.mkdir(exist_ok=True)
-    template_path = TEMPLATES_DIR / "e2e-platform-template"
+    template_path = TEMPLATES_DIR / "e2e-testing-template"
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
     run_copy(

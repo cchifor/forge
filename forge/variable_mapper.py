@@ -170,7 +170,7 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
 
 
 def e2e_context(config: ProjectConfig) -> dict[str, Any]:
-    """Build data dict for the e2e-platform-template (Copier)."""
+    """Build data dict for the e2e-testing-template (Copier)."""
     fc = config.frontend
     framework = fc.framework.value if fc else "vue"
     return {

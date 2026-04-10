@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "forge" / "templates" / "e2e-platform-template"
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "forge" / "templates" / "e2e-testing-template"
 
 
 class TestCopierConfig:
