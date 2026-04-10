@@ -21,7 +21,7 @@
 			auth.login();
 			goto(redirect, { replaceState: true });
 		} else {
-			auth.login(window.location.origin + redirect);
+			auth.login(redirect);
 		}
 	}
 </script>
@@ -44,7 +44,7 @@
 				onclick={handleLogin}
 			>
 				<LogIn class="h-4 w-4" />
-				Sign in with Keycloak
+				Sign in
 			</button>
 		</div>
 

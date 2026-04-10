@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../theme/design_tokens.dart';
 import '../../../shared/feedback/feedback_extensions.dart';
@@ -56,9 +58,19 @@ class LoginPage extends ConsumerWidget {
                     child: FilledButton.icon(
                       onPressed: authState.isLoading
                           ? null
-                          : () => ref
-                              .read(authControllerProvider.notifier)
-                              .login(),
+                          : () {
+                              if (kIsWeb) {
+                                // On web, redirect to Gatekeeper login endpoint
+                                launchUrl(
+                                  Uri.parse('/auth/login?redirect_uri=${Uri.encodeComponent('/')}'),
+                                  webOnlyWindowName: '_self',
+                                );
+                              } else {
+                                ref
+                                    .read(authControllerProvider.notifier)
+                                    .login();
+                              }
+                            },
                       icon: authState.isLoading
                           ? const SizedBox(
                               width: 18,

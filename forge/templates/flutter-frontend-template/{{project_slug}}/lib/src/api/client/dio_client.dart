@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/config/env_config.dart';
@@ -23,6 +24,8 @@ Dio dio(Ref ref) {
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Accept': 'application/json'},
       contentType: 'application/json',
+      // On web, send cookies for Gatekeeper ForwardAuth
+      extra: kIsWeb ? {'withCredentials': true} : null,
     ),
   );
 

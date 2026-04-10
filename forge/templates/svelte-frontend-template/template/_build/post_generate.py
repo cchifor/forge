@@ -215,6 +215,22 @@ def generate_features():
     return features
 
 
+# -- Home API path patching ---------------------------------------------------
+
+def patch_home_api_paths(first_backend: str) -> None:
+    """Prefix health/info API paths with the first backend name for Traefik routing."""
+    files_to_patch = [
+        PROJECT_DIR / "src" / "lib" / "features" / "dashboard" / "api" / "health.ts",
+        PROJECT_DIR / "src" / "lib" / "features" / "dashboard" / "api" / "info.ts",
+        PROJECT_DIR / "src" / "test" / "mocks" / "handlers.ts",
+    ]
+    for fpath in files_to_patch:
+        if fpath.exists():
+            text = fpath.read_text(encoding="utf-8")
+            text = text.replace("api/v1/", f"api/{first_backend}/v1/")
+            fpath.write_text(text, encoding="utf-8")
+
+
 # -- Config patching ----------------------------------------------------------
 
 def patch_config_files():
@@ -356,6 +372,9 @@ def main():
     print("> Generating features")
     features = generate_features()
     print()
+
+    # 1b. Patch home page API paths to use the backend route prefix
+    patch_home_api_paths("backend")
 
     # 2. Configure
     print("> Configuring project")

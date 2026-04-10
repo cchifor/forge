@@ -274,15 +274,7 @@ def patch_web_files():
         content = content.replace("<title>my_app</title>", "<title>%s</title>" % PROJECT_NAME)
         index_html.write_text(content, encoding="utf-8")
 
-    if INCLUDE_AUTH:
-        sso = PROJECT_DIR / "web" / "silent-check-sso.html"
-        sso.parent.mkdir(parents=True, exist_ok=True)
-        sso.write_text(
-            '<!doctype html>\n<html>\n<body>\n<script>\n'
-            '  parent.postMessage(location.href, location.origin);\n'
-            '</script>\n</body>\n</html>\n',
-            encoding="utf-8",
-        )
+    # silent-check-sso.html removed — Gatekeeper handles auth on web
 
 
 def generate_readme(features):

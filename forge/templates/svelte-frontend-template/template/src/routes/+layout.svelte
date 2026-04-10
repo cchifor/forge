@@ -21,8 +21,8 @@
 		await auth.init();
 
 		configureApiClient({
-			getToken: auth.getToken,
-			onUnauthorized: () => auth.logout()
+			getToken: async () => null,
+			onUnauthorized: () => auth.login()
 		});
 
 		settings.applyTheme();
