@@ -130,11 +130,10 @@ test.describe('Authentication', () => {
     await app.page.waitForTimeout(2000);
     // Navigate back — should be redirected to login
     await app.nav.goToDashboard();
-    await app.page.waitForTimeout(3000);
-    const url = app.page.url();
-    expect(
-      url.includes('auth') || url.includes('realms') || url.includes('login'),
-    ).toBeTruthy();
+    await app.page.waitForURL(
+      (url) => url.href.includes('auth') || url.href.includes('realms') || url.href.includes('login'),
+      { timeout: 10000 },
+    );
   });
 });
 """
