@@ -164,7 +164,7 @@ frontend:
   framework: vue
 ```
 
-Each backend gets its own directory, Dockerfile, database, migration container, and Traefik route. All services are accessed through `http://app.localhost`: `/api/users/v1/users` → users service, `/api/catalog/v1/products` → catalog service, etc.
+Each backend goes into `services/`, the frontend into `apps/`, and auth infrastructure into `infra/`. All services are accessed through `http://app.localhost`: `/api/users/v1/users` → users service, `/api/catalog/v1/products` → catalog service, etc.
 
 **From CLI flags (no file needed):**
 
@@ -244,21 +244,48 @@ Each feature generates 8 tests: list, search, empty state, create, validate, det
 
 ## Architecture
 
+### Project Structure
+
+Forge generates an organized **monorepo** following industry-standard conventions:
+
+```
+my-platform/
+├── services/                    ← Business domain services
+│   ├── users/                     Python/FastAPI + SQLAlchemy + Alembic
+│   ├── catalog/                   Node.js/Fastify + Prisma + Zod
+│   └── shipping/                  Rust/Axum + SQLx + serde
+│
+├── apps/                        ← Frontend applications
+│   └── frontend/                  Vue 3 / Svelte 5 / Flutter
+│
+├── infra/                       ← Platform infrastructure
+│   ├── keycloak/                  Identity provider (Dockerfile + themes)
+│   ├── gatekeeper/                OIDC ForwardAuth proxy
+│   └── keycloak-realm.json        Pre-configured realm + users
+│
+├── tests/                       ← E2E testing suite
+│   └── e2e/                       Playwright specs + test platform helpers
+│
+├── docker-compose.yml           ← Root orchestration (all services)
+├── init-db.sh                   ← Per-service database creation
+└── README.md
+```
+
 ### Docker Compose
 
 Traefik is always present as the API gateway. All traffic goes through `http://app.localhost` using hostname-based routing. Each backend has a dedicated migration container that runs before the service starts.
 
 ```
 Browser → http://app.localhost → Traefik :80
-            ├── Host(app.localhost) + /api/users/*          → users:5000         (Python/FastAPI)
-            ├── Host(app.localhost) + /api/catalog/*         → catalog:5001       (Rust/Axum)
-            ├── Host(app.localhost) + /api/notifications/*   → notifications:5002 (Node.js/Fastify)
-            ├── Host(app.localhost)                          → frontend:80        (nginx static + SPA)
-            └── (optional) ForwardAuth                      → Gatekeeper         (when auth enabled)
+            ├── Host(app.localhost) + /api/users/*          → services/users:5000       (Python/FastAPI)
+            ├── Host(app.localhost) + /api/catalog/*         → services/catalog:5001     (Node.js/Fastify)
+            ├── Host(app.localhost) + /api/shipping/*        → services/shipping:5002    (Rust/Axum)
+            ├── Host(app.localhost)                          → apps/frontend:80          (nginx SPA)
+            └── (optional) ForwardAuth                      → infra/gatekeeper          (OIDC proxy)
 
-          PostgreSQL :15432 ← per-backend databases + Keycloak
-          Migration containers run before each backend starts:
-            users-migrate (Alembic) | catalog-migrate (sqlx) | notifications-migrate (Prisma)
+          PostgreSQL :15432 ← per-service databases (users, catalog, shipping, keycloak)
+          Migration containers run before each service starts:
+            users-migrate (Alembic) | catalog-migrate (Prisma) | shipping-migrate (sqlx)
 ```
 
 nginx serves static files and SPA fallback only — all API routing is handled by Traefik. The URL `http://app.localhost` works identically with and without authentication. Scaling works out of the box: `docker compose up --scale users=3` and Traefik auto-load-balances.
