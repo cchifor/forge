@@ -118,7 +118,7 @@ def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool =
     """Generate E2E testing platform using Copier template."""
     ctx = variable_mapper.e2e_context(config)
     dst = project_root / "tests" / "e2e"
-    dst.mkdir(exist_ok=True)
+    dst.mkdir(parents=True, exist_ok=True)
     template_path = TEMPLATES_DIR / "e2e-testing-template"
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
@@ -143,7 +143,7 @@ def _generate_single_backend(bc: BackendConfig, template_name: str, dst: Path, q
         BackendLanguage.RUST: variable_mapper.rust_backend_context,
     }
     ctx = ctx_fn[bc.language](bc)
-    dst.mkdir(exist_ok=True)
+    dst.mkdir(parents=True, exist_ok=True)
     template_path = TEMPLATES_DIR / template_name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
@@ -202,7 +202,7 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
     else:
         # Vue/Svelte use _subdirectory: template, generating INTO dst_path.
         dst = project_root / "apps" / config.frontend_slug
-        dst.mkdir(exist_ok=True)
+        dst.mkdir(parents=True, exist_ok=True)
         run_copy(
             src_path=str(TEMPLATES_DIR / template_dir),
             dst_path=str(dst),
