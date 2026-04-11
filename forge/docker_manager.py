@@ -127,7 +127,9 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
     }
 
     output = template.render(context)
-    realm_path = project_root / "keycloak-realm.json"
+    infra_dir = project_root / "infra"
+    infra_dir.mkdir(parents=True, exist_ok=True)
+    realm_path = infra_dir / "keycloak-realm.json"
     realm_path.write_text(output, encoding="utf-8")
     return realm_path
 

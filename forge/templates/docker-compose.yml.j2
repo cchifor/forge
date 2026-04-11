@@ -3,7 +3,7 @@ services:
   # ── Migrations for {{ be.name }} ──
   {{ be.name }}-migrate:
     build:
-      context: ./{{ be.name }}
+      context: ./services/{{ be.name }}
       dockerfile: Dockerfile
     environment:
 {% if be.language == "python" %}
@@ -26,7 +26,7 @@ services:
   # ── {{ be.name }} ──
   {{ be.name }}:
     build:
-      context: ./{{ be.name }}
+      context: ./services/{{ be.name }}
       dockerfile: Dockerfile
     environment:
 {% if be.language == "python" %}
@@ -98,7 +98,7 @@ services:
   # ── Frontend (nginx — static files + SPA fallback only) ──
   frontend:
     build:
-      context: ./{{ frontend_slug }}
+      context: ./apps/{{ frontend_slug }}
       dockerfile: Dockerfile
     labels:
       - "traefik.enable=true"
@@ -133,7 +133,7 @@ services:
   # ── Auth Gateway (OIDC ForwardAuth) ──
   gatekeeper:
     build:
-      context: ./gatekeeper
+      context: ./infra/gatekeeper
       dockerfile: Dockerfile
     environment:
       ENV: development
@@ -164,7 +164,7 @@ services:
   # ── Identity Provider ──
   keycloak:
     build:
-      context: ./keycloak
+      context: ./infra/keycloak
       dockerfile: Dockerfile
     command: start-dev --import-realm
     ports:
@@ -179,7 +179,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./infra/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -222,7 +222,7 @@ services:
   # where Traefik is listening — identical to real user experience.
   e2e:
     build:
-      context: ./{{ project_slug }}-e2e
+      context: ./tests/e2e
       dockerfile: Dockerfile
     network_mode: host
     environment:

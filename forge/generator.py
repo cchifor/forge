@@ -36,7 +36,7 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
 
     # 1. Generate backends
     for bc in config.backends:
-        backend_dir = project_root / bc.name
+        backend_dir = project_root / "services" / bc.name
         if bc.language == BackendLanguage.NODE:
             _log(f"  Generating Node.js backend '{bc.name}' ...")
             _generate_single_backend(bc, "node-service-template", backend_dir, quiet)
@@ -76,13 +76,13 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
             gatekeeper_src = TEMPLATES_DIR / "gatekeeper"
-            gatekeeper_dst = project_root / "gatekeeper"
+            gatekeeper_dst = project_root / "infra" / "gatekeeper"
             if gatekeeper_src.exists():
                 shutil.copytree(str(gatekeeper_src), str(gatekeeper_dst), dirs_exist_ok=True)
             # Copy keycloak (Dockerfile + themes)
             _log("  Copying keycloak ...")
             keycloak_src = TEMPLATES_DIR / "keycloak"
-            keycloak_dst = project_root / "keycloak"
+            keycloak_dst = project_root / "infra" / "keycloak"
             if keycloak_src.exists():
                 shutil.copytree(str(keycloak_src), str(keycloak_dst), dirs_exist_ok=True)
             # Copy validate.sh (LF line endings for Linux containers)
@@ -102,7 +102,7 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
     # 5. Render frontend Dockerfile and nginx.conf (all frameworks)
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         _log("  Rendering frontend Dockerfile ...")
-        frontend_dir = project_root / config.frontend_slug
+        frontend_dir = project_root / "apps" / config.frontend_slug
         render_frontend_dockerfile(config, frontend_dir)
         render_nginx_conf(config, frontend_dir)
 
@@ -117,7 +117,7 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
 def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
     """Generate E2E testing platform using Copier template."""
     ctx = variable_mapper.e2e_context(config)
-    dst = project_root / f"{config.project_slug}-e2e"
+    dst = project_root / "tests" / "e2e"
     dst.mkdir(exist_ok=True)
     template_path = TEMPLATES_DIR / "e2e-testing-template"
     if not template_path.exists():
@@ -187,10 +187,12 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
 
     if fw == FrontendFramework.FLUTTER:
         # Flutter template has no _subdirectory; it creates {{project_slug}}/
-        # inside dst_path, so pass the project root directly.
+        # inside dst_path, so pass the apps directory.
+        apps_dir = project_root / "apps"
+        apps_dir.mkdir(parents=True, exist_ok=True)
         run_copy(
             src_path=str(TEMPLATES_DIR / template_dir),
-            dst_path=str(project_root),
+            dst_path=str(apps_dir),
             data=ctx,
             unsafe=True,
             defaults=True,
@@ -199,7 +201,7 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
         )
     else:
         # Vue/Svelte use _subdirectory: template, generating INTO dst_path.
-        dst = project_root / config.frontend_slug
+        dst = project_root / "apps" / config.frontend_slug
         dst.mkdir(exist_ok=True)
         run_copy(
             src_path=str(TEMPLATES_DIR / template_dir),
@@ -211,7 +213,7 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
             quiet=quiet,
         )
 
-    return project_root / config.frontend_slug
+    return project_root / "apps" / config.frontend_slug
 
 
 def _run_backend_cmd(backend_dir: Path, cmd: list[str], description: str) -> bool:
@@ -259,12 +261,10 @@ def _force_remove_readonly(func, path, _exc_info):
 
 
 def _cleanup_sub_git_repos(project_root: Path) -> None:
-    """Remove .git directories from generated subdirectories."""
-    for child in project_root.iterdir():
-        if child.is_dir():
-            git_dir = child / ".git"
-            if git_dir.exists():
-                shutil.rmtree(git_dir, onerror=_force_remove_readonly)
+    """Remove .git directories from generated subdirectories (recursive)."""
+    for git_dir in project_root.rglob(".git"):
+        if git_dir.is_dir() and git_dir.parent != project_root:
+            shutil.rmtree(git_dir, onerror=_force_remove_readonly)
 
 
 def _git_init(project_root: Path) -> None:
