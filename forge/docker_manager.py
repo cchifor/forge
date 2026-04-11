@@ -66,7 +66,7 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
         ),
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
-        "traefik_dashboard_port": 8888,
+        "traefik_dashboard_port": 9090,
         "keycloak_realm": (
             config.frontend.keycloak_realm
             if config.frontend and config.include_keycloak
