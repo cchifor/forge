@@ -28,6 +28,10 @@ registerWorkspaceComponent('approval_review', {
   component: defineAsyncComponent(() => import('./ApprovalReview.vue')),
   label: 'Review & Approve',
 })
+registerWorkspaceComponent('user_prompt', {
+  component: defineAsyncComponent(() => import('./UserPromptReview.vue')),
+  label: 'Question',
+})
 registerWorkspaceComponent('fallback', {
   component: defineAsyncComponent(() => import('./FallbackActivity.vue')),
   label: 'Activity',

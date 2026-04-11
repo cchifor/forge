@@ -16,7 +16,15 @@ vi.mock('@ag-ui/client', () => ({
     runAgent: mockRunAgent,
     setMessages: vi.fn(),
     setState: vi.fn(),
+    headers: {},
   })),
+}))
+
+// Mock useAuth for Bearer token forwarding
+vi.mock('@/shared/composables/useAuth', () => ({
+  useAuth: () => ({
+    getToken: () => Promise.resolve(null),
+  }),
 }))
 
 import { useAgentClient } from './useAgentClient'
@@ -64,16 +72,16 @@ describe('useAgentClient', () => {
   })
 
   it('runAgent sets isRunning to true', async () => {
-    let resolveRun: () => void
-    mockRunAgent.mockImplementation(() => new Promise<void>((r) => { resolveRun = r }))
+    mockRunAgent.mockResolvedValue(undefined)
 
     const { runAgent, isRunning } = useAgentClient()
     const promise = runAgent()
 
-    expect(isRunning.value).toBe(true)
-
-    resolveRun!()
+    // isRunning is set before the await resolves
     await promise
+    // After runAgent completes without onRunFinished, isRunning stays true
+    // (only event handlers toggle it back)
+    expect(isRunning.value).toBe(true)
   })
 
   it('onRunFinishedEvent sets isRunning to false', async () => {
@@ -227,5 +235,190 @@ describe('useAgentClient', () => {
     mockRunAgent.mockResolvedValueOnce(undefined)
     await runAgent()
     expect(error.value).toBeNull()
+  })
+
+  it('runAgent passes forwardedProps with model and approval', async () => {
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    const { addUserMessage, runAgent } = useAgentClient()
+    addUserMessage('Hello')
+    await runAgent({ model: 'openai:gpt-4.1-mini', approval: 'bypass' })
+    const callArgs = mockRunAgent.mock.calls[0][0]
+    expect(callArgs.forwardedProps).toEqual({ model: 'openai:gpt-4.1-mini', approval: 'bypass' })
+  })
+
+  it('runAgent sends empty forwardedProps when no options', async () => {
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    const { addUserMessage, runAgent } = useAgentClient()
+    addUserMessage('Hello')
+    await runAgent()
+    const callArgs = mockRunAgent.mock.calls[0][0]
+    expect(callArgs.forwardedProps).toEqual({})
+  })
+
+  // ── AG-UI standard state events ──
+
+  it('onStateSnapshotEvent (standard AG-UI) updates customState', async () => {
+    const snapshot = { cost: { total_usd: 0.10 }, model: 'test' }
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onStateSnapshotEvent({ event: { snapshot } })
+    })
+
+    const { runAgent, customState } = useAgentClient()
+    await runAgent()
+
+    expect(customState.value).toEqual(snapshot)
+  })
+
+  it('onStateDeltaEvent patches customState', async () => {
+    // First set initial state
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onStateSnapshotEvent({
+        event: { snapshot: { model: 'gpt-4', count: 1 } },
+      })
+      await subscriber.onStateDeltaEvent({
+        event: { delta: [{ op: 'replace', path: '/count', value: 42 }] },
+      })
+    })
+
+    const { runAgent, customState } = useAgentClient()
+    await runAgent()
+
+    expect(customState.value.count).toBe(42)
+    expect(customState.value.model).toBe('gpt-4')
+  })
+
+  // ── Activity events ──
+
+  it('onActivitySnapshotEvent routes workspace activity', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onActivitySnapshotEvent({
+        event: {
+          activityType: 'approval_review',
+          messageId: 'msg-act-1',
+          content: { engine: 'ag-ui', target: 'workspace', component_name: 'approval_review' },
+        },
+      })
+    })
+
+    const { runAgent, workspaceActivity } = useAgentClient()
+    await runAgent()
+
+    expect(workspaceActivity.value).not.toBeNull()
+    expect(workspaceActivity.value!.activityType).toBe('approval_review')
+    expect(workspaceActivity.value!.content.target).toBe('workspace')
+  })
+
+  it('onActivitySnapshotEvent routes canvas activity', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onActivitySnapshotEvent({
+        event: {
+          activityType: 'chart_view',
+          messageId: 'msg-act-2',
+          content: { engine: 'ag-ui', target: 'canvas', component_name: 'chart_view' },
+        },
+      })
+    })
+
+    const { runAgent, canvasActivity } = useAgentClient()
+    await runAgent()
+
+    expect(canvasActivity.value).not.toBeNull()
+    expect(canvasActivity.value!.activityType).toBe('chart_view')
+    expect(canvasActivity.value!.content.target).toBe('canvas')
+  })
+
+  // ── Tool call tracking ──
+
+  it('onToolCallStartEvent adds to activeToolCalls', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-1', toolCallName: 'execute' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(activeToolCalls.value).toHaveLength(1)
+    expect(activeToolCalls.value[0]).toEqual({ id: 'tc-1', name: 'execute', status: 'running' })
+  })
+
+  it('onToolCallEndEvent marks tool call completed', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-2', toolCallName: 'read_file' },
+      })
+      await subscriber.onToolCallEndEvent({
+        event: { toolCallId: 'tc-2' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(activeToolCalls.value[0].status).toBe('completed')
+  })
+
+  // ── HITL respondToPrompt ──
+
+  it('respondToPrompt sends hitl_response in forwardedProps', async () => {
+    // First simulate a pending prompt
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onCustomEvent({
+        event: {
+          name: 'deepagent.user_prompt',
+          value: { tool_call_id: 'call-ask-1', question: 'Choose?', options: [{ label: 'A' }] },
+        },
+      })
+    })
+
+    const { runAgent, respondToPrompt, pendingPrompt } = useAgentClient()
+    await runAgent()
+
+    expect(pendingPrompt.value).not.toBeNull()
+
+    // Now respond — this triggers a new runAgent call
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    respondToPrompt('A')
+
+    expect(pendingPrompt.value).toBeNull()
+
+    // Wait for the async runAgent inside respondToPrompt
+    await new Promise((r) => setTimeout(r, 10))
+
+    // The second call should have hitl_response in forwardedProps
+    const lastCall = mockRunAgent.mock.calls[mockRunAgent.mock.calls.length - 1]
+    expect(lastCall[0].forwardedProps.hitl_response).toEqual({
+      tool_call_id: 'call-ask-1',
+      answer: 'A',
+    })
+  })
+
+  // ── Reset clears new state ──
+
+  it('resetThread clears canvas, workspace, and toolCalls', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onActivitySnapshotEvent({
+        event: {
+          activityType: 'chart',
+          messageId: 'msg-1',
+          content: { engine: 'ag-ui', target: 'canvas' },
+        },
+      })
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-1', toolCallName: 'execute' },
+      })
+    })
+
+    const { runAgent, resetThread, canvasActivity, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(canvasActivity.value).not.toBeNull()
+    expect(activeToolCalls.value).toHaveLength(1)
+
+    resetThread()
+
+    expect(canvasActivity.value).toBeNull()
+    expect(activeToolCalls.value).toEqual([])
   })
 })

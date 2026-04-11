@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge'
 import type { WorkspaceActivity, AgentState } from '../../types'
 
@@ -21,7 +21,7 @@ onMounted(async () => {
 
   bridge = new AppBridge(
     null,
-    { name: 'forge-workspace', version: '1.0.0' },
+    { name: props.activity.activityType || 'mcp-app', version: '1.0.0' },
     { openLinks: {}, logging: {} },
     {
       hostContext: {
@@ -50,6 +50,14 @@ onMounted(async () => {
     if (height && iframe) iframe.style.height = `${height}px`
   }
 
+  // Handle tool calls from MCP app (bidirectional communication)
+  if ('ontoolcall' in bridge) {
+    ;(bridge as any).ontoolcall = async ({ name, arguments: args }: any) => {
+      emit('action', { type: 'mcp_tool_call', data: { toolName: name, args: args || {} } })
+      return {}
+    }
+  }
+
   const transport = new PostMessageTransport(iframe.contentWindow, iframe.contentWindow)
   await bridge.connect(transport)
 
@@ -62,12 +70,36 @@ onMounted(async () => {
   }
 })
 
+// Re-send tool input when activity content changes
+watch(
+  () => props.activity.content,
+  (newContent) => {
+    if (bridge) {
+      try {
+        bridge.sendToolInput({ arguments: newContent.initialContext || newContent })
+      } catch {
+        // Bridge may not be connected yet
+      }
+    }
+  },
+  { deep: true },
+)
+
 onUnmounted(async () => {
   if (bridge) {
     await bridge.teardownResource({}).catch(() => {})
     bridge = null
   }
 })
+
+// Expose sendToolResult for parent components to push results back to the app
+function sendToolResult(result: any) {
+  if (bridge && 'sendToolResult' in bridge) {
+    ;(bridge as any).sendToolResult(result)
+  }
+}
+
+defineExpose({ sendToolResult })
 </script>
 
 <template>

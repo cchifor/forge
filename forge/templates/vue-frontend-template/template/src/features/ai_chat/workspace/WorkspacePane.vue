@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowLeft, X, Sparkles } from 'lucide-vue-next'
+import { X, Sparkles } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
 import { useWorkspace } from '../composables/useWorkspace'
 import { useAiChat } from '../composables/useAiChat'
@@ -8,8 +8,8 @@ import { resolveWorkspaceComponent } from './registry'
 import { AgUiEngine, McpExtEngine } from './engines'
 import type { WorkspaceAction } from '../types'
 
-const { currentActivity, activityHistory, hasActivity, clearActivity, goBack } = useWorkspace()
-const { sendMessage } = useAiChat()
+const { currentActivity, hasActivity, clearActivity } = useWorkspace()
+const { sendMessage, respondToPrompt } = useAiChat()
 
 const resolved = computed(() => {
   if (!currentActivity.value) return null
@@ -17,7 +17,13 @@ const resolved = computed(() => {
 })
 
 function handleAction(action: WorkspaceAction) {
-  sendMessage(JSON.stringify(action))
+  if (action.type === 'hitl_response') {
+    respondToPrompt(action.data.answer)
+  } else if (action.type === 'mcp_tool_call') {
+    sendMessage(`[MCP Tool Call] ${action.data.toolName}: ${JSON.stringify(action.data.args)}`)
+  } else {
+    sendMessage(JSON.stringify(action))
+  }
 }
 </script>
 
@@ -26,15 +32,6 @@ function handleAction(action: WorkspaceAction) {
     <!-- Header -->
     <div class="flex h-14 shrink-0 items-center justify-between border-b px-4">
       <div class="flex items-center gap-2">
-        <Button
-          v-if="activityHistory.length > 0"
-          variant="ghost"
-          size="icon"
-          class="h-8 w-8 interactive-press"
-          @click="goBack"
-        >
-          <ArrowLeft class="h-4 w-4" />
-        </Button>
         <div class="flex h-7 w-7 items-center justify-center rounded-full ai-gradient">
           <Sparkles class="h-3.5 w-3.5 text-white" />
         </div>
@@ -53,7 +50,7 @@ function handleAction(action: WorkspaceAction) {
     </div>
 
     <!-- Content: engine router -->
-    <div class="flex-1 overflow-auto">
+    <div class="flex-1 overflow-auto scrollbar-thin">
       <AgUiEngine
         v-if="currentActivity.engine === 'ag-ui'"
         :activity="currentActivity"

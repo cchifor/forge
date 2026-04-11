@@ -42,9 +42,13 @@ export function useAiChat() {
     uiStore.setChatOpen(false)
   }
 
-  function sendMessage(content: string) {
+  function sendMessage(content: string, options?: { model?: string; approval?: string }) {
     agentClient.addUserMessage(content)
-    agentClient.runAgent()
+    agentClient.runAgent(options)
+  }
+
+  function respondToPrompt(answer: string) {
+    agentClient.respondToPrompt(answer)
   }
 
   function clearMessages() {
@@ -56,6 +60,9 @@ export function useAiChat() {
     messages,
     isGenerating,
     chatContext,
+    pendingPrompt: agentClient.pendingPrompt,
+    canvasActivity: agentClient.canvasActivity,
+    activeToolCalls: agentClient.activeToolCalls,
     agentState: agentClient.state,
     customState: agentClient.customState,
     runError: agentClient.error,
@@ -63,6 +70,7 @@ export function useAiChat() {
     openChat,
     closeChat,
     sendMessage,
+    respondToPrompt,
     clearMessages,
   }
 }

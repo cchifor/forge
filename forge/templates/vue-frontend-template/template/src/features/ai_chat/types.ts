@@ -16,6 +16,7 @@ export interface AgentState {
     current_tokens: number
     max_tokens: number
   }
+  model?: string
   [key: string]: any
 }
 
@@ -28,6 +29,34 @@ export interface WorkspaceActivity {
   activityType: string
   messageId: string
   content: Record<string, any>
+}
+
+// ── Tool call tracking ──
+
+export interface ToolCallInfo {
+  id: string
+  name: string
+  status: 'running' | 'completed' | 'error'
+  args?: Record<string, unknown>
+}
+
+// ── HITL (Human-in-the-Loop) ──
+
+export interface UserPromptOption {
+  label: string
+  description?: string
+  recommended?: string
+}
+
+export interface UserPromptPayload {
+  tool_call_id: string
+  question: string
+  options: UserPromptOption[]
+}
+
+export interface HitlResponse {
+  tool_call_id: string
+  answer: string
 }
 
 export type { Message }

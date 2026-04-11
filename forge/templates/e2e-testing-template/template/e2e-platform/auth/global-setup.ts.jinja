@@ -13,11 +13,6 @@ interface TestPersona {
 
 const PERSONAS: TestPersona[] = [
   {
-    name: 'admin',
-    username: process.env.ADMIN_USER || 'admin@localhost',
-    password: process.env.ADMIN_PASSWORD || 'adminpass',
-  },
-  {
     name: 'user',
     username: process.env.TEST_USER || 'dev@localhost',
     password: process.env.TEST_PASSWORD || 'devpass',

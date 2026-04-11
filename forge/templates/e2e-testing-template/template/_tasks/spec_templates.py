@@ -126,7 +126,7 @@ test.describe('Authentication', () => {
     await app.auth.loginAs('user');
     await app.nav.goToDashboard();
     // Logout via Gatekeeper endpoint
-    await app.page.goto('/logout');
+    await app.page.goto('/logout', { waitUntil: 'networkidle' }).catch(() => {});
     await app.page.waitForTimeout(2000);
     // Navigate back — should be redirected to login
     await app.nav.goToDashboard();

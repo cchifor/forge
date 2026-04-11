@@ -18,9 +18,13 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+{%- if include_chat %}
     "@ag-ui/client": "^0.0.51",
     "@ag-ui/core": "^0.0.51",
     "@modelcontextprotocol/ext-apps": "^0.1.0",
+    "fast-json-patch": "^3.1.1",
+    "marked": "^18.0.0",
+{%- endif %}
     "@tanstack/vue-query": "^5.75.0",
     "@tanstack/vue-table": "^8.21.3",
     "@vueuse/core": "^13.1.0",

@@ -1,20 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ref, nextTick } from 'vue'
+import { shallowRef } from 'vue'
 
 // Mock crypto.randomUUID
-let uuidCounter = 0
 vi.stubGlobal('crypto', {
-  randomUUID: () => `uuid-${++uuidCounter}`,
+  randomUUID: () => 'uuid-1',
 })
 
-// Mock useAiChat to return controllable messages ref
-const mockMessages = ref<any[]>([])
-const mockSendMessage = vi.fn()
+// Mock useAgentClient to return controllable workspaceActivity ref
+const mockWorkspaceActivity = shallowRef<any>(null)
+const mockClearWorkspaceActivity = vi.fn(() => {
+  mockWorkspaceActivity.value = null
+})
 
-vi.mock('./useAiChat', () => ({
-  useAiChat: () => ({
-    messages: mockMessages,
-    sendMessage: mockSendMessage,
+vi.mock('./useAgentClient', () => ({
+  useAgentClient: () => ({
+    workspaceActivity: mockWorkspaceActivity,
+    clearWorkspaceActivity: mockClearWorkspaceActivity,
   }),
 }))
 
@@ -22,106 +23,64 @@ import { useWorkspace } from './useWorkspace'
 
 describe('useWorkspace', () => {
   beforeEach(() => {
-    uuidCounter = 0
-    mockMessages.value = []
+    mockWorkspaceActivity.value = null
     vi.clearAllMocks()
-
-    // Reset module-level state by getting a handle and clearing
-    const { clearActivity } = useWorkspace()
-    clearActivity()
   })
 
-  it('initial state: currentActivity is null, hasActivity is false', () => {
-    const { currentActivity, hasActivity } = useWorkspace()
-
-    expect(currentActivity.value).toBeNull()
-    expect(hasActivity.value).toBe(false)
-  })
-
-  it('activity message with engine field sets currentActivity', async () => {
-    const { currentActivity } = useWorkspace()
-
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', engine: 'mcp-ext', activityType: 'credential_form', content: { field: 'value' } },
-    ]
-    await nextTick()
-
-    expect(currentActivity.value).not.toBeNull()
-    expect(currentActivity.value!.engine).toBe('mcp-ext')
-    expect(currentActivity.value!.activityType).toBe('credential_form')
-  })
-
-  it('activity defaults engine to ag-ui when missing', async () => {
-    const { currentActivity } = useWorkspace()
-
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', activityType: 'file_explorer', content: {} },
-    ]
-    await nextTick()
-
-    expect(currentActivity.value!.engine).toBe('ag-ui')
-  })
-
-  it('activity extracts activityType and content', async () => {
-    const { currentActivity } = useWorkspace()
-
-    const contentData = { name: 'test.txt', path: '/tmp/test.txt' }
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', activityType: 'file_explorer', content: contentData },
-    ]
-    await nextTick()
-
-    expect(currentActivity.value!.activityType).toBe('file_explorer')
-    expect(currentActivity.value!.content).toEqual(contentData)
-    expect(currentActivity.value!.messageId).toBe('msg-1')
-  })
-
-  it('clearActivity resets both current and history', async () => {
-    const { currentActivity, activityHistory, clearActivity } = useWorkspace()
-
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', activityType: 'credential_form', content: {} },
-    ]
-    await nextTick()
-
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', activityType: 'credential_form', content: {} },
-      { id: 'msg-2', role: 'activity', activityType: 'approval_review', content: {} },
-    ]
-    await nextTick()
-
-    expect(currentActivity.value).not.toBeNull()
-    expect(activityHistory.value.length).toBeGreaterThan(0)
-
-    clearActivity()
-
-    expect(currentActivity.value).toBeNull()
-    expect(activityHistory.value).toHaveLength(0)
-  })
-
-  it('non-activity role messages are ignored', async () => {
-    const { currentActivity, hasActivity } = useWorkspace()
-
-    mockMessages.value = [
-      { id: 'msg-1', role: 'user', content: 'Hello' },
-      { id: 'msg-2', role: 'assistant', content: 'Hi there' },
-    ]
-    await nextTick()
-
-    expect(currentActivity.value).toBeNull()
-    expect(hasActivity.value).toBe(false)
-  })
-
-  it('hasActivity computed updates reactively', async () => {
+  it('initial state: hasActivity is false', () => {
     const { hasActivity } = useWorkspace()
-
     expect(hasActivity.value).toBe(false)
+  })
 
-    mockMessages.value = [
-      { id: 'msg-1', role: 'activity', activityType: 'credential_form', content: {} },
-    ]
-    await nextTick()
+  it('initial state: currentActivity is null', () => {
+    const { currentActivity } = useWorkspace()
+    expect(currentActivity.value).toBeNull()
+  })
+
+  it('hasActivity is true when workspaceActivity is set', () => {
+    mockWorkspaceActivity.value = {
+      engine: 'ag-ui',
+      activityType: 'approval_review',
+      messageId: 'msg-1',
+      content: { component_name: 'approval_review' },
+    }
+
+    const { hasActivity, currentActivity } = useWorkspace()
 
     expect(hasActivity.value).toBe(true)
+    expect(currentActivity.value).not.toBeNull()
+    expect(currentActivity.value!.activityType).toBe('approval_review')
+  })
+
+  it('clearActivity calls clearWorkspaceActivity', () => {
+    mockWorkspaceActivity.value = {
+      engine: 'ag-ui',
+      activityType: 'user_prompt',
+      messageId: 'msg-2',
+      content: {},
+    }
+
+    const { clearActivity, hasActivity } = useWorkspace()
+
+    expect(hasActivity.value).toBe(true)
+
+    clearActivity()
+
+    expect(mockClearWorkspaceActivity).toHaveBeenCalledOnce()
+    expect(hasActivity.value).toBe(false)
+  })
+
+  it('currentActivity reflects workspaceActivity ref', () => {
+    const activity = {
+      engine: 'mcp-ext' as const,
+      activityType: 'credential_form',
+      messageId: 'msg-3',
+      content: { entry_url: 'https://example.com' },
+    }
+    mockWorkspaceActivity.value = activity
+
+    const { currentActivity } = useWorkspace()
+
+    expect(currentActivity.value).toEqual(activity)
   })
 })
