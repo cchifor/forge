@@ -43,9 +43,10 @@
 | **Full CRUD Generation** | Name your entities (e.g., `products, orders`) and forge generates domain models, ORM models, repositories, services, REST endpoints, API clients, UI pages, schemas, MSW handlers, and tests — for every entity, in every layer. |
 | **Agentic UI** | Vue template includes a split-pane workspace with [AG-UI protocol](https://github.com/ag-ui-protocol/ag-ui) (SSE streaming) and [MCP ext-apps](https://github.com/anthropics/ext-apps) (sandboxed iframes). Dual-engine rendering for trusted Vue components and third-party extensions. |
 | **Production Docker** | Two-stage Dockerfiles for every backend and frontend. [Traefik v2.11](https://traefik.io) API gateway with per-backend path routing and auto-load-balancing. Dedicated migration containers for all languages (Alembic, Prisma Migrate, sqlx). nginx serves static files + SPA fallback only. PostgreSQL 16 with per-backend databases. |
-| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge) OIDC ForwardAuth proxy, [Traefik v2.11](https://traefik.io) edge router, Redis session cache, JWT route guards, user registration, and sample users. |
+| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge) OIDC ForwardAuth proxy (cookie-based — no keycloak-js on the frontend), [Traefik v2.11](https://traefik.io) edge router, Redis session cache, route guards, and sample users. Gatekeeper provides `/auth/login`, `/auth/userinfo`, `/logout` endpoints. |
+| **Multi-Tenancy** | All three backends enforce tenant isolation. Gatekeeper injects `X-Gatekeeper-User-Id`, `X-Gatekeeper-Tenant`, `X-Gatekeeper-Roles` headers. Python uses repository-level `_apply_scopes()`, Node.js/Rust use tenant middleware. Service-to-service calls propagate tenant context via headers. |
 | **Headless / Agent Mode** | `--config`, `--json`, `--quiet` flags for CI/CD and AI agents. Pipe JSON from stdin, get structured output on stdout. No TTY required. Works with `uvx` for zero-install execution. |
-| **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. Playwright E2E browser tests for auth flows. Docker testcontainers for real PostgreSQL integration tests. |
+| **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. **28 Playwright E2E tests** per project (8 per feature + 4 auth) — run containerized via `docker compose --profile test run e2e`. Deterministic `data-test` selectors on all UI components. Docker testcontainers for real PostgreSQL integration tests. |
 | **Cross-Platform** | Windows (Git Bash), Linux, macOS. LF line endings enforced for Docker container scripts. |
 
 ---
@@ -85,7 +86,15 @@ Follow the interactive prompts to pick your backend (Python, Node.js, or Rust), 
 cd my_platform/ && docker compose up --build
 ```
 
-Your app is now running at `http://app.localhost` (Traefik gateway). API health: `http://app.localhost/api/backend/v1/health/live`. Traefik dashboard: `http://localhost:8080`.
+Your app is now running at `http://app.localhost` (Traefik gateway). API health: `http://app.localhost/api/backend/v1/health/live`. Traefik dashboard: `http://localhost:19090`.
+
+**Step 4 — Run E2E tests (optional):**
+
+```bash
+docker compose --profile test run --rm e2e
+```
+
+Runs 28 Playwright browser tests (8 per feature + 4 auth) in a containerized Chromium instance against the live stack.
 
 ---
 
@@ -126,7 +135,7 @@ frontend:
   include_auth: true
 
 keycloak:
-  port: 8080
+  port: 18080
   realm: my-shop
   client_id: my-shop
 ```
@@ -203,28 +212,33 @@ uvx --from git+https://github.com/cchifor/forge.git forge \
   --config stack.yaml --yes --no-docker --json
 ```
 
-### Validate authentication (after docker compose up)
+### Run E2E tests (after docker compose up)
 
-When auth is enabled, a `validate.sh` script runs Playwright browser tests against the live stack:
+When a frontend is generated, forge creates a complete Playwright E2E testing suite in `{project}-e2e/`. Tests run in a containerized Chromium browser against the live stack:
 
 ```bash
 cd my_shop/
 docker compose up --build -d
-bash validate.sh
+docker compose --profile test run --rm e2e
 ```
 
 Expected output:
 ```
-  [ok] Keycloak ready
-  [ok] Frontend ready
-  [ok] Backend ready
+[global-setup] Authenticating user via http://app.localhost
+[global-setup] ✓ user
 
-  Running E2E auth validation...
-
-  tests/e2e/test_auth.py::TestLogin::test_login_with_valid_credentials PASSED
-  tests/e2e/test_auth.py::TestRegistration::test_register_new_user PASSED
+  ✓  1 [chromium] › tests/auth.spec.ts › Authentication › unauthenticated user redirected to login
+  ✓  2 [chromium] › tests/auth.spec.ts › Authentication › login with valid credentials
+  ✓  3 [chromium] › tests/products.spec.ts › Products › List › loads and shows items
+  ✓  4 [chromium] › tests/products.spec.ts › Products › Create › fills form and submits
+  ✓  5 [chromium] › tests/products.spec.ts › Products › Detail › edit flow
+  ✓  6 [chromium] › tests/products.spec.ts › Products › Detail › delete flow
   ...
+
+  28 passed (30s)
 ```
+
+Each feature generates 8 tests: list, search, empty state, create, validate, detail, edit, delete. Auth adds 4 more: unauthenticated redirect, login, protected access, logout.
 
 ---
 
@@ -242,7 +256,7 @@ Browser → http://app.localhost → Traefik :80
             ├── Host(app.localhost)                          → frontend:80        (nginx static + SPA)
             └── (optional) ForwardAuth                      → Gatekeeper         (when auth enabled)
 
-          PostgreSQL :5432 ← per-backend databases + Keycloak
+          PostgreSQL :15432 ← per-backend databases + Keycloak
           Migration containers run before each backend starts:
             users-migrate (Alembic) | catalog-migrate (sqlx) | notifications-migrate (Prisma)
 ```
@@ -298,7 +312,7 @@ User message → useAiChat → useAgentClient → HTTP POST (SSE stream)
 | `--include-chat` | Enable AI chat panel | |
 | `--include-openapi` | Enable OpenAPI code generation | |
 | `--no-e2e-tests` | Skip Playwright E2E test generation | |
-| `--keycloak-port PORT` | Keycloak host port | `8080` |
+| `--keycloak-port PORT` | Keycloak host port | `18080` |
 | `--keycloak-realm REALM` | Keycloak realm | derived from name |
 | `--keycloak-client-id ID` | Keycloak client ID | derived from name |
 | `--yes`, `-y` | Skip confirmation prompts | |
@@ -344,12 +358,12 @@ All services are accessed through `http://app.localhost` (Traefik on port 80). D
 | Service | Port | Username | Password |
 |---------|------|----------|----------|
 | Traefik (gateway) | `80` | — | — |
+| Traefik Dashboard | `19090` | — | — |
 | Backend API (direct) | `5000+` | — | — |
-| PostgreSQL | `5432` | `postgres` | `postgres` |
-| Keycloak Admin | `8080` | `admin` | `admin` |
+| PostgreSQL | `15432` | `postgres` | `postgres` |
+| Keycloak Admin | `18080` | `admin` | `admin` |
 | Sample User | — | `dev@localhost` | `devpass` |
 | pgAdmin | `5050` | `admin@localhost.com` | `admin` |
-| Traefik Dashboard | `8888` | — | — |
 | Gatekeeper Secret | — | — | `gatekeeper-dev-secret` |
 
 </details>
@@ -357,13 +371,13 @@ All services are accessed through `http://app.localhost` (Traefik on port 80). D
 <details>
 <summary>What each entity generates</summary>
 
-**Python backend** — domain model, ORM model, repository, service, REST endpoints, unit tests, integration tests.
+**Python backend** — domain model, ORM model, repository (tenant-scoped), service, REST endpoints, Gatekeeper header auth, unit tests, integration tests.
 
-**Node.js backend** — Prisma model, Zod schema, service, Fastify routes, unit tests, integration tests.
+**Node.js backend** — Prisma model (snake_case), Zod schema, tenant middleware, service (scoped by `customer_id`), Fastify routes, S2S HTTP client, unit tests, integration tests.
 
-**Rust backend** — SQLx model, service, Axum routes, SQL migration, integration tests.
+**Rust backend** — SQLx model, TenantContext extractor, service (scoped by `customer_id`), Axum routes, S2S client, SQL migration, integration tests.
 
-**Vue frontend** — Vue Query composable, Zod schema, schema tests, list/create/detail pages, barrel export, MSW mock handlers.
+**Vue frontend** — Vue Query composable, Zod schema, schema tests, list/create/detail pages (with `data-test` selectors), AlertDialog for delete confirmation, barrel export, MSW mock handlers.
 
 Svelte and Flutter generate analogous files for their respective frameworks.
 
