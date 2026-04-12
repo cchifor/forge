@@ -29,7 +29,7 @@ fn build_mock_router() -> axum::Router {
 
     axum::Router::new()
         .route(
-            "/api/v1/items",
+            "/api/v1/{{ entity_plural }}",
             get(|| async {
                 Json(serde_json::json!({
                     "items": [mock_item()],
@@ -41,7 +41,7 @@ fn build_mock_router() -> axum::Router {
             .post(|| async { (StatusCode::CREATED, Json(mock_item())) }),
         )
         .route(
-            "/api/v1/items/{id}",
+            "/api/v1/{{ entity_plural }}/{id}",
             get(|| async { Json(mock_item()) })
                 .patch(|| async { Json(mock_item()) })
                 .delete(|| async { StatusCode::NO_CONTENT }),
@@ -53,7 +53,7 @@ async fn list_items_returns_paginated() {
     let app = build_mock_router();
 
     let request = Request::builder()
-        .uri("/api/v1/items")
+        .uri("/api/v1/{{ entity_plural }}")
         .body(Body::empty())
         .unwrap();
 
@@ -76,7 +76,7 @@ async fn create_item_returns_201() {
     // they are injected from TenantContext (Gatekeeper headers)
     let request = Request::builder()
         .method("POST")
-        .uri("/api/v1/items")
+        .uri("/api/v1/{{ entity_plural }}")
         .header("content-type", "application/json")
         .body(Body::from(
             serde_json::json!({
@@ -99,7 +99,7 @@ async fn get_item_by_id() {
     let app = build_mock_router();
 
     let request = Request::builder()
-        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
         .body(Body::empty())
         .unwrap();
 
@@ -117,7 +117,7 @@ async fn update_item_returns_updated() {
 
     let request = Request::builder()
         .method("PATCH")
-        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
         .header("content-type", "application/json")
         .body(Body::from(
             serde_json::json!({ "name": "Updated" }).to_string(),
@@ -134,7 +134,7 @@ async fn delete_item_returns_204() {
 
     let request = Request::builder()
         .method("DELETE")
-        .uri("/api/v1/items/550e8400-e29b-41d4-a716-446655440000")
+        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
         .body(Body::empty())
         .unwrap();
 

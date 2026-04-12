@@ -1,4 +1,4 @@
-"""Integration tests for the Items API endpoints."""
+"""Integration tests for the {{ entity_plural | title }} API endpoints."""
 
 from httpx import AsyncClient
 
@@ -6,7 +6,7 @@ from httpx import AsyncClient
 class TestCreateItem:
     async def test_create_item(self, client: AsyncClient):
         response = await client.post(
-            "/api/v1/items",
+            "/api/v1/{{ entity_plural }}",
             json={"name": "Test Item", "description": "A test item", "tags": ["test"]},
         )
         assert response.status_code == 201
@@ -18,20 +18,20 @@ class TestCreateItem:
 
     async def test_create_item_minimal(self, client: AsyncClient):
         response = await client.post(
-            "/api/v1/items",
+            "/api/v1/{{ entity_plural }}",
             json={"name": "Minimal Item"},
         )
         assert response.status_code == 201
         assert response.json()["name"] == "Minimal Item"
 
     async def test_create_item_missing_name(self, client: AsyncClient):
-        response = await client.post("/api/v1/items", json={})
+        response = await client.post("/api/v1/{{ entity_plural }}", json={})
         assert response.status_code == 422
 
 
 class TestListItems:
     async def test_list_empty(self, client: AsyncClient):
-        response = await client.get("/api/v1/items")
+        response = await client.get("/api/v1/{{ entity_plural }}")
         assert response.status_code == 200
         data = response.json()
         assert data["items"] == []
@@ -41,9 +41,9 @@ class TestListItems:
     async def test_list_with_data(self, client: AsyncClient):
         # Create 3 items
         for i in range(3):
-            await client.post("/api/v1/items", json={"name": f"Item {i}"})
+            await client.post("/api/v1/{{ entity_plural }}", json={"name": f"Item {i}"})
 
-        response = await client.get("/api/v1/items")
+        response = await client.get("/api/v1/{{ entity_plural }}")
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 3
@@ -51,9 +51,9 @@ class TestListItems:
 
     async def test_list_pagination(self, client: AsyncClient):
         for i in range(5):
-            await client.post("/api/v1/items", json={"name": f"Page Item {i}"})
+            await client.post("/api/v1/{{ entity_plural }}", json={"name": f"Page Item {i}"})
 
-        response = await client.get("/api/v1/items?skip=0&limit=2")
+        response = await client.get("/api/v1/{{ entity_plural }}?skip=0&limit=2")
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 5
@@ -63,25 +63,25 @@ class TestListItems:
 
 class TestGetItem:
     async def test_get_item(self, client: AsyncClient):
-        create_resp = await client.post("/api/v1/items", json={"name": "Get Me"})
+        create_resp = await client.post("/api/v1/{{ entity_plural }}", json={"name": "Get Me"})
         item_id = create_resp.json()["id"]
 
-        response = await client.get(f"/api/v1/items/{item_id}")
+        response = await client.get(f"/api/v1/{{ entity_plural }}/{item_id}")
         assert response.status_code == 200
         assert response.json()["name"] == "Get Me"
 
     async def test_get_item_not_found(self, client: AsyncClient):
-        response = await client.get("/api/v1/items/00000000-0000-0000-0000-000000000099")
+        response = await client.get("/api/v1/{{ entity_plural }}/00000000-0000-0000-0000-000000000099")
         assert response.status_code == 404
 
 
 class TestUpdateItem:
     async def test_update_item(self, client: AsyncClient):
-        create_resp = await client.post("/api/v1/items", json={"name": "Old Name"})
+        create_resp = await client.post("/api/v1/{{ entity_plural }}", json={"name": "Old Name"})
         item_id = create_resp.json()["id"]
 
         response = await client.patch(
-            f"/api/v1/items/{item_id}",
+            f"/api/v1/{{ entity_plural }}/{item_id}",
             json={"name": "New Name", "status": "ACTIVE"},
         )
         assert response.status_code == 200
@@ -91,7 +91,7 @@ class TestUpdateItem:
 
     async def test_update_not_found(self, client: AsyncClient):
         response = await client.patch(
-            "/api/v1/items/00000000-0000-0000-0000-000000000099",
+            "/api/v1/{{ entity_plural }}/00000000-0000-0000-0000-000000000099",
             json={"name": "X"},
         )
         assert response.status_code == 404
@@ -99,17 +99,17 @@ class TestUpdateItem:
 
 class TestDeleteItem:
     async def test_delete_item(self, client: AsyncClient):
-        create_resp = await client.post("/api/v1/items", json={"name": "Delete Me"})
+        create_resp = await client.post("/api/v1/{{ entity_plural }}", json={"name": "Delete Me"})
         item_id = create_resp.json()["id"]
 
-        delete_resp = await client.delete(f"/api/v1/items/{item_id}")
+        delete_resp = await client.delete(f"/api/v1/{{ entity_plural }}/{item_id}")
         assert delete_resp.status_code == 204
 
-        get_resp = await client.get(f"/api/v1/items/{item_id}")
+        get_resp = await client.get(f"/api/v1/{{ entity_plural }}/{item_id}")
         assert get_resp.status_code == 404
 
     async def test_delete_not_found(self, client: AsyncClient):
-        response = await client.delete("/api/v1/items/00000000-0000-0000-0000-000000000099")
+        response = await client.delete("/api/v1/{{ entity_plural }}/00000000-0000-0000-0000-000000000099")
         assert response.status_code == 404
 
 

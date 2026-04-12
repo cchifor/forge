@@ -170,7 +170,6 @@ class TestGenerateE2eTests:
         fc = FrontendConfig(
             framework=FrontendFramework.VUE,
             project_name="Test App",
-            features=["items"],
             server_port=5173,
         )
         return ProjectConfig(

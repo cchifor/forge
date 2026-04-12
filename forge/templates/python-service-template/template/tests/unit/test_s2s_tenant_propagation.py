@@ -20,8 +20,11 @@ class FakeServiceClient(ServiceClient):
 
 
 @pytest.fixture
-def s2s_client():
-    return FakeServiceClient()
+async def s2s_client():
+    client = FakeServiceClient()
+    await client.start()
+    yield client
+    await client.stop()
 
 
 class TestS2STenantPropagation:
@@ -90,7 +93,7 @@ class TestS2STenantPropagation:
 
             call_kwargs = mock_req.call_args
             headers = call_kwargs.kwargs.get("headers", {})
-            assert headers.get("x-request-id") == "req-789"
+            assert headers.get("X-Request-ID") == "req-789"
 
     @pytest.mark.asyncio
     async def test_no_error_when_context_not_set(self, s2s_client):

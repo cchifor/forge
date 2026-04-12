@@ -43,6 +43,6 @@ describe("Health endpoints", () => {
 		const body = JSON.parse(res.payload);
 		expect(body.status).toBe("UP");
 		expect(body.components).toHaveProperty("database");
-		expect(body.systemInfo).toHaveProperty("nodeVersion");
+		expect(body.system_info).toHaveProperty("node_version");
 	});
 });

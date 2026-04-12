@@ -8,7 +8,7 @@ use crate::middleware::tenant::TenantContext;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let client = ServiceClient::new("http://notification:5001", "notification");
 /// let resp = client.get("/api/v1/notifications", &tenant, correlation_id).await?;
 /// ```

@@ -51,12 +51,14 @@ class TestBuildConfig:
     def test_from_config_dict(self):
         cfg = {
             "project_name": "my-shop",
-            "frontend": {"framework": "vue", "features": "products, orders"},
+            "backend": {"features": "products, orders"},
+            "frontend": {"framework": "vue"},
         }
         config = _build_config(_default_args(), cfg)
         assert config.project_name == "my-shop"
         assert config.frontend.framework == FrontendFramework.VUE
-        assert config.frontend.features == ["products", "orders"]
+        assert config.backend.features == ["products", "orders"]
+        assert config.all_features == ["products", "orders"]
 
     def test_cli_flags_override_config(self):
         cfg = {"project_name": "from-file"}
@@ -88,6 +90,40 @@ class TestBuildConfig:
         cfg = {"frontend": {"framework": "svelte", "include_auth": False}}
         config = _build_config(_default_args(), cfg)
         assert config.include_keycloak is False
+
+    def test_features_flag_sets_backend_features(self):
+        """--features CLI flag should set backend features, not frontend."""
+        args = _default_args(features="products, orders", frontend="vue")
+        config = _build_config(args, {})
+        assert config.backend.features == ["products", "orders"]
+        assert config.all_features == ["products", "orders"]
+
+    def test_backend_features_from_config_file(self):
+        """Single backend features from config file flow to all_features."""
+        cfg = {
+            "backend": {"features": "widgets, gadgets"},
+            "frontend": {"framework": "svelte"},
+        }
+        config = _build_config(_default_args(), cfg)
+        assert config.backend.features == ["widgets", "gadgets"]
+        assert config.all_features == ["widgets", "gadgets"]
+
+    def test_multi_backend_features_aggregate(self):
+        """Multi-backend features aggregate into all_features."""
+        cfg = {
+            "backends": [
+                {"name": "svc-a", "language": "python", "features": ["items", "orders"]},
+                {"name": "svc-b", "language": "node", "features": ["products"], "server_port": 5001},
+            ],
+            "frontend": {"framework": "vue"},
+        }
+        config = _build_config(_default_args(), cfg)
+        assert config.all_features == ["items", "orders", "products"]
+
+    def test_default_backend_features_when_none_specified(self):
+        """Backend defaults to ['items'] when no features specified."""
+        config = _build_config(_default_args(), {})
+        assert config.backend.features == ["items"]
 
 
 class TestLoadConfigFile:
