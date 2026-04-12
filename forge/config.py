@@ -80,7 +80,7 @@ class FrontendConfig:
     framework: FrontendFramework
     project_name: str
     description: str = "A frontend application"
-    features: list[str] = field(default_factory=lambda: ["items"])
+    features: list[str] = field(default_factory=list)
     author_name: str = "Your Name"
     version: str = "0.1.0"
     package_manager: str = "npm"
@@ -150,6 +150,15 @@ class ProjectConfig:
             raise ValueError("Project name cannot be empty.")
         for bc in self.backends:
             bc.validate()
+        # Cross-validate: backend features must not collide with frontend reserved names
+        if self.frontend and self.frontend.framework != FrontendFramework.NONE:
+            for bc in self.backends:
+                for f in bc.features:
+                    if f in FRONTEND_RESERVED:
+                        raise ValueError(
+                            f"Feature '{f}' on backend '{bc.name}' is reserved "
+                            f"in the frontend template."
+                        )
         if self.frontend:
             self.frontend.validate()
         if self.include_keycloak:
@@ -198,10 +207,14 @@ class ProjectConfig:
 
     @property
     def all_features(self) -> list[str]:
-        """Aggregate features across all backends."""
-        features = []
+        """Aggregate deduplicated features across all backends, preserving order."""
+        seen: set[str] = set()
+        features: list[str] = []
         for bc in self.backends:
-            features.extend(bc.features)
+            for f in bc.features:
+                if f not in seen:
+                    seen.add(f)
+                    features.append(f)
         return features
 
     @property

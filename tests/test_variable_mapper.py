@@ -30,7 +30,6 @@ def _make_config(framework=FrontendFramework.VUE, **fe_overrides):
         framework=framework,
         project_name="Test App",
         description="A test frontend",
-        features=["items", "orders"],
         author_name="Dev",
         package_manager="pnpm",
         include_auth=True,

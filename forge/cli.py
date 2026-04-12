@@ -193,11 +193,20 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
         lang_str = _get(args, "backend_language", cfg, "backend", "language", default="python")
         backend_language = BackendLanguage(lang_str) if lang_str in ("python", "node", "rust") else BackendLanguage.PYTHON
         backend_name = _get(args, "backend_name", cfg, "backend", "name", default="backend")
+        features_raw = _get(args, "features", cfg, "backend", "features", default=None)
+        if features_raw:
+            if isinstance(features_raw, list):
+                backend_features = features_raw
+            else:
+                backend_features = [f.strip() for f in str(features_raw).split(",") if f.strip()]
+        else:
+            backend_features = ["items"]
         backends.append(BackendConfig(
             name=backend_name,
             project_name=project_name,
             language=backend_language,
             description=description,
+            features=backend_features,
             python_version=_get(args, "python_version", cfg, "backend", "python_version", default="3.13"),
             node_version=_get(args, "node_version", cfg, "backend", "node_version", default="22"),
             rust_edition=_get(args, "rust_edition", cfg, "backend", "rust_edition", default="2024"),
@@ -212,23 +221,12 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
     include_auth = False
 
     if framework != FrontendFramework.NONE:
-        # Aggregate features from all backends for the frontend
-        all_backend_features = []
-        for bc in backends:
-            all_backend_features.extend(bc.features)
-        # Allow frontend-level features override, fallback to backend-aggregated
-        features_raw = _get(args, "features", cfg, "frontend", "features", default=None)
-        if features_raw:
-            features = [f.strip() for f in features_raw.split(",") if f.strip()]
-        else:
-            features = all_backend_features if all_backend_features else ["items"]
         include_auth = _get(args, "include_auth", cfg, "frontend", "include_auth", default=True)
 
         frontend = FrontendConfig(
             framework=framework,
             project_name=project_name,
             description=description,
-            features=features,
             author_name=_get(args, "author_name", cfg, "frontend", "author_name", default="Your Name"),
             package_manager=_get(args, "package_manager", cfg, "frontend", "package_manager", default="npm"),
             include_auth=include_auth,
@@ -378,12 +376,15 @@ def _collect_inputs() -> ProjectConfig | None:
             "Rust edition:", choices=["2024", "2021"]
         )
 
+    features = _ask_features()
+
     backends: list[BackendConfig] = []
     backends.append(BackendConfig(
         name=backend_name,
         project_name=project_name,
         language=backend_language,
         description=description,
+        features=features,
         python_version=python_version,
         node_version=node_version,
         rust_edition=rust_edition,
@@ -406,11 +407,13 @@ def _collect_inputs() -> ProjectConfig | None:
         else:
             be_lang = BackendLanguage.PYTHON
         be_port = _ask_port("Server port:", default=str(5000 + len(backends)))
+        be_features = _ask_features()
         backends.append(BackendConfig(
             name=be_name,
             project_name=project_name,
             language=be_lang,
             description=description,
+            features=be_features,
             server_port=be_port,
         ))
 
@@ -433,7 +436,6 @@ def _collect_inputs() -> ProjectConfig | None:
 
     if framework != FrontendFramework.NONE:
         author_name = _ask_text("Author name:", default="Your Name")
-        features = _ask_features()
 
         pkg_choices = {
             FrontendFramework.VUE: ["npm", "pnpm", "yarn"],
@@ -473,7 +475,6 @@ def _collect_inputs() -> ProjectConfig | None:
             framework=framework,
             project_name=project_name,
             description=description,
-            features=features,
             author_name=author_name,
             package_manager=pkg_manager,
             include_auth=include_auth,
@@ -621,7 +622,7 @@ def main() -> None:
         if config.frontend and config.frontend.framework != FrontendFramework.NONE:
             result["frontend_dir"] = str(project_root / config.frontend_slug)
             result["framework"] = config.frontend.framework.value
-            result["features"] = config.frontend.features
+            result["features"] = config.all_features
         _real_stdout.write(json.dumps(result) + "\n")
         _real_stdout.flush()
     else:

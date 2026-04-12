@@ -174,3 +174,29 @@ class TestProjectConfig:
             ),
         )
         cfg.validate()  # should not raise
+
+    def test_all_features_deduplicates(self):
+        """Multi-backend with overlapping features should deduplicate."""
+        cfg = self._make_config(
+            backends=[
+                BackendConfig(project_name="Test", name="svc-a", features=["items", "orders"], server_port=5000),
+                BackendConfig(project_name="Test", name="svc-b", features=["orders", "products"], server_port=5001),
+            ],
+        )
+        assert cfg.all_features == ["items", "orders", "products"]
+
+    def test_backend_reserved_feature_with_frontend(self):
+        """Backend feature that conflicts with frontend reserved names should be rejected."""
+        cfg = self._make_config(
+            backends=[BackendConfig(project_name="Test", features=["auth"])],
+        )
+        with pytest.raises(ValueError, match="reserved"):
+            cfg.validate()
+
+    def test_backend_reserved_feature_without_frontend(self):
+        """Backend reserved feature is fine when no frontend is configured."""
+        cfg = self._make_config(
+            backends=[BackendConfig(project_name="Test", features=["auth"])],
+            frontend=None,
+        )
+        cfg.validate()  # should not raise

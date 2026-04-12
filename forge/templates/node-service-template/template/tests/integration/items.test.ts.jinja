@@ -53,19 +53,19 @@ beforeEach(() => {
 describe("Item CRUD endpoints", () => {
 	describe("authentication", () => {
 		it("returns 401 without tenant headers", async () => {
-			const res = await app.inject({ method: "GET", url: "/api/v1/items" });
+			const res = await app.inject({ method: "GET", url: "/api/v1/{{ entity_plural }}" });
 			expect(res.statusCode).toBe(401);
 		});
 	});
 
-	describe("GET /api/v1/items", () => {
+	describe("GET /api/v1/{{ entity_plural }}", () => {
 		it("returns paginated items scoped to tenant", async () => {
 			vi.mocked(prisma.item.findMany).mockResolvedValue([mockItem]);
 			vi.mocked(prisma.item.count).mockResolvedValue(1);
 
 			const res = await app.inject({
 				method: "GET",
-				url: "/api/v1/items",
+				url: "/api/v1/{{ entity_plural }}",
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(200);
@@ -90,21 +90,21 @@ describe("Item CRUD endpoints", () => {
 
 			const res = await app.inject({
 				method: "GET",
-				url: "/api/v1/items?status=ACTIVE",
+				url: "/api/v1/{{ entity_plural }}?status=ACTIVE",
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(200);
 		});
 	});
 
-	describe("POST /api/v1/items", () => {
+	describe("POST /api/v1/{{ entity_plural }}", () => {
 		it("creates an item with tenant context", async () => {
 			vi.mocked(prisma.item.findFirst).mockResolvedValue(null);
 			vi.mocked(prisma.item.create).mockResolvedValue(mockItem);
 
 			const res = await app.inject({
 				method: "POST",
-				url: "/api/v1/items",
+				url: "/api/v1/{{ entity_plural }}",
 				headers: TENANT_HEADERS,
 				payload: { name: "Test Item" },
 			});
@@ -126,7 +126,7 @@ describe("Item CRUD endpoints", () => {
 
 			const res = await app.inject({
 				method: "POST",
-				url: "/api/v1/items",
+				url: "/api/v1/{{ entity_plural }}",
 				headers: TENANT_HEADERS,
 				payload: { name: "Test Item" },
 			});
@@ -134,13 +134,13 @@ describe("Item CRUD endpoints", () => {
 		});
 	});
 
-	describe("GET /api/v1/items/:id", () => {
+	describe("GET /api/v1/{{ entity_plural }}/:id", () => {
 		it("returns item by ID scoped to tenant", async () => {
 			vi.mocked(prisma.item.findFirst).mockResolvedValue(mockItem);
 
 			const res = await app.inject({
 				method: "GET",
-				url: `/api/v1/items/${mockItem.id}`,
+				url: `/api/v1/{{ entity_plural }}/${mockItem.id}`,
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(200);
@@ -154,14 +154,14 @@ describe("Item CRUD endpoints", () => {
 
 			const res = await app.inject({
 				method: "GET",
-				url: "/api/v1/items/other-tenant-item-id",
+				url: "/api/v1/{{ entity_plural }}/other-tenant-item-id",
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(404);
 		});
 	});
 
-	describe("PATCH /api/v1/items/:id", () => {
+	describe("PATCH /api/v1/{{ entity_plural }}/:id", () => {
 		it("updates an item within tenant scope", async () => {
 			const updated = { ...mockItem, name: "Updated" };
 			vi.mocked(prisma.item.findFirst).mockResolvedValueOnce(mockItem); // getById
@@ -170,7 +170,7 @@ describe("Item CRUD endpoints", () => {
 
 			const res = await app.inject({
 				method: "PATCH",
-				url: `/api/v1/items/${mockItem.id}`,
+				url: `/api/v1/{{ entity_plural }}/${mockItem.id}`,
 				headers: TENANT_HEADERS,
 				payload: { name: "Updated" },
 			});
@@ -181,14 +181,14 @@ describe("Item CRUD endpoints", () => {
 		});
 	});
 
-	describe("DELETE /api/v1/items/:id", () => {
+	describe("DELETE /api/v1/{{ entity_plural }}/:id", () => {
 		it("deletes an item within tenant scope", async () => {
 			vi.mocked(prisma.item.findFirst).mockResolvedValue(mockItem);
 			vi.mocked(prisma.item.delete).mockResolvedValue(mockItem);
 
 			const res = await app.inject({
 				method: "DELETE",
-				url: `/api/v1/items/${mockItem.id}`,
+				url: `/api/v1/{{ entity_plural }}/${mockItem.id}`,
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(204);
@@ -199,7 +199,7 @@ describe("Item CRUD endpoints", () => {
 
 			const res = await app.inject({
 				method: "DELETE",
-				url: "/api/v1/items/nonexistent",
+				url: "/api/v1/{{ entity_plural }}/nonexistent",
 				headers: TENANT_HEADERS,
 			});
 			expect(res.statusCode).toBe(404);
