@@ -1,25 +1,27 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Home, Package, User, Settings } from 'lucide-vue-next'
 import AppSidebar from '@/shared/components/AppSidebar.vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
 import VerticalSplitter from '@/shared/components/VerticalSplitter.vue'
-import { AiChat, WorkspacePane, CanvasPane } from '@/features/ai_chat'
-import { useAiChat, useWorkspace, useCanvas } from '@/features/ai_chat'
+import { AiChat } from '@/features/ai_chat'
+import { useAiChat } from '@/features/ai_chat'
 import { useBreakpoint } from '@/shared/composables/useBreakpoint'
 import { useUiStore } from '@/shared/stores/ui.store'
 
 const route = useRoute()
 const router = useRouter()
 const { chatOpen, closeChat } = useAiChat()
-const workspace = useWorkspace()
-const canvas = useCanvas()
 const { isCompact, isMedium, isExpanded, width: viewportWidth } = useBreakpoint()
 const uiStore = useUiStore()
 const isDragging = ref(false)
-const showCanvas = computed(() => canvas.hasCanvas.value)
-const showWorkspace = computed(() => !showCanvas.value && chatOpen.value && workspace.hasActivity.value)
+
+function onEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && chatOpen.value) closeChat()
+}
+onMounted(() => document.addEventListener('keydown', onEscape))
+onUnmounted(() => document.removeEventListener('keydown', onEscape))
 
 const sidebarWidth = computed(() => {
   if (isCompact.value) return 0
@@ -79,9 +81,7 @@ function isNavActive(url: string) {
     >
       <AppHeader />
       <main class="flex-1 overflow-auto p-4">
-        <CanvasPane v-if="showCanvas" />
-        <WorkspacePane v-else-if="showWorkspace" />
-        <RouterView v-else />
+        <RouterView />
       </main>
     </div>
     <template v-if="chatOpen">

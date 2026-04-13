@@ -8,7 +8,7 @@ from jinja2 import Environment
 
 TEMPLATE_DIR = (
     Path(__file__).resolve().parent.parent
-    / "forge" / "templates" / "python-service-template" / "template"
+    / "forge" / "templates" / "services" / "python-service-template" / "template"
 )
 PYPROJECT_JINJA = TEMPLATE_DIR / "pyproject.toml.jinja"
 

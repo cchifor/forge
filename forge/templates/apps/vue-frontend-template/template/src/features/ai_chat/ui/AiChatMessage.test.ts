@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
-vi.mock('@/shared/composables/useAuth', () => ({
-  useAuth: () => ({
-    user: { firstName: 'Alice', lastName: 'Smith', email: 'alice@test.com' },
-  }),
+vi.mock('marked', () => ({
+  marked: {
+    setOptions: vi.fn(),
+    parse: (text: string) => `<p>${text}</p>`,
+  },
+}))
+
+vi.mock('dompurify', () => ({
+  default: { sanitize: (html: string) => html },
 }))
 
 import AiChatMessage from './AiChatMessage.vue'
@@ -14,24 +19,25 @@ function makeMessage(role: string, content: string, id = 'msg-1') {
 }
 
 describe('AiChatMessage', () => {
-  it('user role renders right-aligned', () => {
+  it('user role renders right-aligned bubble', () => {
     const wrapper = mount(AiChatMessage, {
       props: { message: makeMessage('user', 'Hello world') },
     })
 
-    expect(wrapper.find('.flex-row-reverse').exists()).toBe(true)
+    expect(wrapper.find('.justify-end').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Hello world')
   })
 
-  it('assistant role renders left-aligned', () => {
+  it('assistant role renders with sparkles icon', () => {
     const wrapper = mount(AiChatMessage, {
       props: { message: makeMessage('assistant', 'Hi there') },
     })
 
-    expect(wrapper.find('.ai-gradient').exists()).toBe(true)
-    expect(wrapper.find('.flex-row-reverse').exists()).toBe(false)
+    expect(wrapper.find('.justify-end').exists()).toBe(false)
+    expect(wrapper.find('[role="article"]').exists()).toBe(true)
   })
 
-  it('tool role renders compact card', () => {
+  it('tool role renders compact card with label', () => {
     const wrapper = mount(AiChatMessage, {
       props: { message: makeMessage('tool', 'file read result') },
     })
@@ -40,7 +46,7 @@ describe('AiChatMessage', () => {
     expect(wrapper.text()).toContain('Tool')
   })
 
-  it('streaming prop shows cursor animation', () => {
+  it('streaming prop shows pulse animation', () => {
     const wrapper = mount(AiChatMessage, {
       props: {
         message: makeMessage('assistant', 'Generating...'),
@@ -59,12 +65,14 @@ describe('AiChatMessage', () => {
     expect(wrapper.text()).toContain('My important question')
   })
 
-  it('user name from auth shown for user role', () => {
+  it('user message shows copy and edit buttons on hover', () => {
     const wrapper = mount(AiChatMessage, {
       props: { message: makeMessage('user', 'Hello') },
     })
 
-    expect(wrapper.text()).toContain('Alice')
+    // Buttons exist but hidden (opacity-0 until hover)
+    const buttons = wrapper.findAll('button')
+    expect(buttons.length).toBeGreaterThanOrEqual(2)
   })
 
   it('default role renders generic layout', () => {
@@ -72,18 +80,18 @@ describe('AiChatMessage', () => {
       props: { message: makeMessage('system', 'System info') },
     })
 
-    // No flex-row-reverse (user), no ai-gradient (assistant), no bg-muted (tool)
-    expect(wrapper.find('.flex-row-reverse').exists()).toBe(false)
-    expect(wrapper.find('.ai-gradient').exists()).toBe(false)
+    expect(wrapper.find('.justify-end').exists()).toBe(false)
     expect(wrapper.text()).toContain('System info')
   })
 
-  it('empty content handled', () => {
+  it('empty content with streaming shows Thinking...', () => {
     const wrapper = mount(AiChatMessage, {
-      props: { message: makeMessage('assistant', '') },
+      props: {
+        message: makeMessage('assistant', ''),
+        isStreaming: true,
+      },
     })
 
-    // When assistant content is empty, shows "Thinking..."
     expect(wrapper.text()).toContain('Thinking...')
   })
 })

@@ -19,6 +19,12 @@ const resolved = computed(() => {
 function handleAction(action: WorkspaceAction) {
   if (action.type === 'hitl_response') {
     respondToPrompt(action.data.answer)
+  } else if (action.type === 'form_submit') {
+    respondToPrompt(JSON.stringify(action.data.values))
+    clearCanvas()
+  } else if (action.type === 'form_cancel') {
+    respondToPrompt('[cancelled]')
+    clearCanvas()
   } else if (action.type === 'mcp_tool_call') {
     sendMessage(`[MCP Tool Call] ${action.data.toolName}: ${JSON.stringify(action.data.args)}`)
   } else {

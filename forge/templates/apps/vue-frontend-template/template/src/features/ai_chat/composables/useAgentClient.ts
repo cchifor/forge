@@ -198,6 +198,26 @@ export function useAgentClient() {
     runAgent({ hitlResponse })
   }
 
+  function editAndResend(
+    messageId: string,
+    newContent: string,
+    options?: { model?: string; approval?: string },
+  ) {
+    const idx = messages.value.findIndex((m) => m.id === messageId)
+    if (idx === -1) return
+    messages.value = messages.value.slice(0, idx)
+    currentThreadId = crypto.randomUUID()
+    state.value = {}
+    customState.value = {}
+    pendingPrompt.value = null
+    canvasActivity.value = null
+    workspaceActivity.value = null
+    activeToolCalls.value = []
+    error.value = null
+    addUserMessage(newContent)
+    runAgent(options)
+  }
+
   function resetThread() {
     currentThreadId = crypto.randomUUID()
     messages.value = []
@@ -238,6 +258,7 @@ export function useAgentClient() {
     setCanvasActivity,
     clearCanvas,
     clearWorkspaceActivity,
+    editAndResend,
     resetThread,
   }
 }

@@ -32,7 +32,7 @@ def _jinja_env() -> Environment:
 def render_compose(config: ProjectConfig, project_root: Path) -> Path:
     """Render docker-compose.yml into the project root."""
     env = _jinja_env()
-    template = env.get_template("docker-compose.yml.j2")
+    template = env.get_template("deploy/docker-compose.yml.j2")
 
     has_frontend = (
         config.frontend is not None
@@ -92,10 +92,10 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
     fc = config.frontend
 
     if fc.framework == FrontendFramework.FLUTTER:
-        template = env.get_template("Dockerfile.flutter.j2")
+        template = env.get_template("deploy/Dockerfile.flutter.j2")
         context = {}
     else:
-        template = env.get_template("Dockerfile.node.j2")
+        template = env.get_template("deploy/Dockerfile.node.j2")
         context = {
             "package_manager": fc.package_manager if fc else "npm",
             "build_dir": BUILD_DIR.get(fc.framework, "dist"),
@@ -110,7 +110,7 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
 def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
     """Render keycloak-realm.json into the project root."""
     env = _jinja_env()
-    template = env.get_template("keycloak-realm.json.j2")
+    template = env.get_template("infra/keycloak-realm.json.j2")
 
     fc = config.frontend
     context = {
@@ -137,7 +137,7 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
 def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
     """Render init-db.sh that creates databases for all backends + keycloak."""
     env = _jinja_env()
-    template = env.get_template("init-db.sh.j2")
+    template = env.get_template("deploy/init-db.sh.j2")
 
     # Collect all databases that need creating beyond the default POSTGRES_DB
     extra_dbs = set()
@@ -160,7 +160,7 @@ def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
 def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:
     """Render nginx.conf into the frontend directory (static files + SPA fallback only)."""
     env = _jinja_env()
-    template = env.get_template("nginx.conf.j2")
+    template = env.get_template("deploy/nginx.conf.j2")
     output = template.render({})
     nginx_path = frontend_dir / "nginx.conf"
     nginx_path.write_text(output, encoding="utf-8")
