@@ -190,7 +190,7 @@ class TestGenerateE2eTests:
 
         mock_copy.assert_called_once()
         call_kwargs = mock_copy.call_args.kwargs
-        assert "e2e-testing-template" in call_kwargs["src_path"]
+        assert "e2e-testing-template" in call_kwargs["src_path"]  # tests/e2e-testing-template
         assert call_kwargs["dst_path"] == str(project_root / "test_app-e2e")
         assert call_kwargs["data"]["project_name"] == "Test App"
         assert call_kwargs["data"]["features"] == "items"

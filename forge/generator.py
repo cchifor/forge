@@ -17,11 +17,11 @@ from forge.docker_manager import render_compose, render_frontend_dockerfile, ren
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 TEMPLATE_DIRS = {
-    "backend": "python-service-template",
-    "e2e": "e2e-testing-template",
-    FrontendFramework.VUE: "vue-frontend-template",
-    FrontendFramework.SVELTE: "svelte-frontend-template",
-    FrontendFramework.FLUTTER: "flutter-frontend-template",
+    "backend": "services/python-service-template",
+    "e2e": "tests/e2e-testing-template",
+    FrontendFramework.VUE: "apps/vue-frontend-template",
+    FrontendFramework.SVELTE: "apps/svelte-frontend-template",
+    FrontendFramework.FLUTTER: "apps/flutter-frontend-template",
 }
 
 
@@ -39,19 +39,19 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         backend_dir = project_root / "services" / bc.name
         if bc.language == BackendLanguage.NODE:
             _log(f"  Generating Node.js backend '{bc.name}' ...")
-            _generate_single_backend(bc, "node-service-template", backend_dir, quiet)
+            _generate_single_backend(bc, "services/node-service-template", backend_dir, quiet)
             # Always install deps to create lockfile (needed for Docker builds)
             _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies")
             if not quiet:
                 _setup_node_backend(backend_dir)
         elif bc.language == BackendLanguage.RUST:
             _log(f"  Generating Rust backend '{bc.name}' ...")
-            _generate_single_backend(bc, "rust-service-template", backend_dir, quiet)
+            _generate_single_backend(bc, "services/rust-service-template", backend_dir, quiet)
             if not quiet:
                 _setup_rust_backend(backend_dir)
         else:
             _log(f"  Generating Python backend '{bc.name}' ...")
-            _generate_single_backend(bc, "python-service-template", backend_dir, quiet)
+            _generate_single_backend(bc, "services/python-service-template", backend_dir, quiet)
             if not quiet:
                 _setup_backend(backend_dir)
 
@@ -75,18 +75,18 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
             render_keycloak_realm(config, project_root)
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
-            gatekeeper_src = TEMPLATES_DIR / "gatekeeper"
+            gatekeeper_src = TEMPLATES_DIR / "infra" / "gatekeeper"
             gatekeeper_dst = project_root / "infra" / "gatekeeper"
             if gatekeeper_src.exists():
                 shutil.copytree(str(gatekeeper_src), str(gatekeeper_dst), dirs_exist_ok=True)
             # Copy keycloak (Dockerfile + themes)
             _log("  Copying keycloak ...")
-            keycloak_src = TEMPLATES_DIR / "keycloak"
+            keycloak_src = TEMPLATES_DIR / "infra" / "keycloak"
             keycloak_dst = project_root / "infra" / "keycloak"
             if keycloak_src.exists():
                 shutil.copytree(str(keycloak_src), str(keycloak_dst), dirs_exist_ok=True)
             # Copy validate.sh (LF line endings for Linux containers)
-            validate_src = (TEMPLATES_DIR / "validate.sh").read_text(encoding="utf-8")
+            validate_src = (TEMPLATES_DIR / "infra" / "validate.sh").read_text(encoding="utf-8")
             validate_dst = project_root / "validate.sh"
             validate_dst.write_bytes(validate_src.replace("\r\n", "\n").encode("utf-8"))
 
@@ -119,7 +119,7 @@ def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool =
     ctx = variable_mapper.e2e_context(config)
     dst = project_root / "tests" / "e2e"
     dst.mkdir(parents=True, exist_ok=True)
-    template_path = TEMPLATES_DIR / "e2e-testing-template"
+    template_path = TEMPLATES_DIR / "tests" / "e2e-testing-template"
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
     run_copy(

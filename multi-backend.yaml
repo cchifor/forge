@@ -1,0 +1,30 @@
+project_name: "Multi Backend Demo"
+
+backends:
+  - name: "py-svc"
+    language: "python"
+    features: ["invoices"]
+    server_port: 5000
+    python_version: "3.13"
+  - name: "node-svc"
+    language: "node"
+    features: ["products"]
+    server_port: 5001
+    node_version: "22"
+  - name: "rust-svc"
+    language: "rust"
+    features: ["tickets"]
+    server_port: 5002
+    rust_edition: "2024"
+
+frontend:
+  framework: "vue"
+  include_auth: true
+  include_chat: false
+  package_manager: "npm"
+  server_port: 5173
+
+keycloak:
+  port: 18080
+  realm: "app"
+  client_id: "multi-backend-demo"

@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/shared/ui/tooltip'
+import { AlertCircle } from 'lucide-vue-next'
 import { useAiChat } from '../composables/useAiChat'
 import AiChatMessage from './AiChatMessage.vue'
 import UserPromptCard from './UserPromptCard.vue'
@@ -34,11 +35,17 @@ const {
   isGenerating,
   chatContext,
   pendingPrompt,
+  runError,
   closeChat,
   sendMessage,
   respondToPrompt,
+  editAndResend,
   clearMessages,
 } = useAiChat()
+
+function dismissError() {
+  runError.value = null
+}
 
 const inputText = ref('')
 const selectedModel = ref('openai:gpt-4.1')
@@ -167,6 +174,8 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
     <!-- Messages -->
     <div
       ref="messagesContainer"
+      role="log"
+      aria-label="Chat messages"
       class="flex flex-1 flex-col gap-4 overflow-y-auto scrollbar-thin p-4"
     >
       <div
@@ -184,6 +193,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
         :key="msg.id"
         :message="msg"
         :is-streaming="isGenerating && msg.role === 'assistant' && idx === messages.length - 1"
+        @edit="(payload) => editAndResend(payload.id, payload.content, { model: selectedModel, approval: approvalMode })"
       />
 
       <!-- Thinking indicator -->
@@ -206,6 +216,13 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
       />
     </div>
 
+    <!-- Error banner -->
+    <div v-if="runError" class="flex items-center gap-2 border-t bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <AlertCircle class="h-4 w-4 shrink-0" />
+      <span class="flex-1 truncate">{{ runError.message }}</span>
+      <button class="shrink-0 text-xs underline" @click="dismissError">Dismiss</button>
+    </div>
+
     <!-- Input area -->
     <div class="border-t p-3">
       <div
@@ -216,6 +233,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
           ref="textareaEl"
           v-model="inputText"
           placeholder="Describe what to build"
+          aria-label="Chat message input"
           rows="2"
           class="resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-muted-foreground scrollbar-thin"
           @keydown="handleKeydown"
@@ -247,7 +265,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
                 <ChevronDown class="h-3 w-3" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" side="top">
               <DropdownMenuItem
                 v-for="opt in MODEL_OPTIONS"
                 :key="opt.value"
@@ -298,7 +316,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
               <ChevronDown class="h-2.5 w-2.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" side="top">
             <DropdownMenuItem @click="approvalMode = 'default'">
               Default Approvals
             </DropdownMenuItem>

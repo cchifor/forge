@@ -51,6 +51,10 @@ export function useAiChat() {
     agentClient.respondToPrompt(answer)
   }
 
+  function editAndResend(messageId: string, newContent: string, options?: { model?: string; approval?: string }) {
+    agentClient.editAndResend(messageId, newContent, options)
+  }
+
   function clearMessages() {
     agentClient.resetThread()
   }
@@ -71,6 +75,7 @@ export function useAiChat() {
     closeChat,
     sendMessage,
     respondToPrompt,
+    editAndResend,
     clearMessages,
   }
 }
