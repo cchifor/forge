@@ -6,7 +6,6 @@ import keyword
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class BackendLanguage(Enum):
@@ -22,11 +21,63 @@ class FrontendFramework(Enum):
     NONE = "none"
 
 
+@dataclass(frozen=True)
+class BackendSpec:
+    """Static metadata for a backend language: template, prompts, version field.
+
+    Adding a 4th backend means adding one entry here plus one Copier template
+    directory under `forge/templates/services/`. The CLI prompt loop, generator
+    dispatch, and variable-mapper context builder all read from this registry.
+    """
+
+    template_dir: str  # path under forge/templates/, e.g. "services/python-service-template"
+    display_label: str  # shown in CLI prompts and log messages
+    version_field: str  # name of the BackendConfig attribute holding the version
+    version_choices: tuple[str, ...]  # interactive prompt choices, first is default
+
+
+BACKEND_REGISTRY: dict[BackendLanguage, BackendSpec] = {
+    BackendLanguage.PYTHON: BackendSpec(
+        template_dir="services/python-service-template",
+        display_label="Python (FastAPI)",
+        version_field="python_version",
+        version_choices=("3.13", "3.12", "3.11"),
+    ),
+    BackendLanguage.NODE: BackendSpec(
+        template_dir="services/node-service-template",
+        display_label="Node.js (Fastify)",
+        version_field="node_version",
+        version_choices=("22", "20", "18"),
+    ),
+    BackendLanguage.RUST: BackendSpec(
+        template_dir="services/rust-service-template",
+        display_label="Rust (Axum)",
+        version_field="rust_edition",
+        version_choices=("2024", "2021"),
+    ),
+}
+
+
 # Reserved feature names for frontend templates
-FRONTEND_RESERVED = frozenset({
-    "auth", "home", "profile", "settings", "chat", "core", "shared",
-    "shell", "dashboard", "tasks", "app", "test", "lib", "routes", "api",
-})
+FRONTEND_RESERVED = frozenset(
+    {
+        "auth",
+        "home",
+        "profile",
+        "settings",
+        "chat",
+        "core",
+        "shared",
+        "shell",
+        "dashboard",
+        "tasks",
+        "app",
+        "test",
+        "lib",
+        "routes",
+        "api",
+    }
+)
 
 
 def validate_port(port: int, name: str = "Port") -> None:
@@ -55,6 +106,7 @@ def validate_features(features: list[str]) -> None:
 @dataclass
 class BackendConfig:
     """Backend service configuration."""
+
     name: str = "backend"
     project_name: str = ""
     language: BackendLanguage = BackendLanguage.PYTHON
@@ -68,9 +120,7 @@ class BackendConfig:
     def validate(self) -> None:
         validate_port(self.server_port, f"Backend '{self.name}' port")
         if not re.match(r"^[a-z][a-z0-9_-]*$", self.name):
-            raise ValueError(
-                f"Backend name '{self.name}' must be lowercase kebab/snake case."
-            )
+            raise ValueError(f"Backend name '{self.name}' must be lowercase kebab/snake case.")
         if self.features:
             validate_features(self.features)
 
@@ -104,9 +154,7 @@ class FrontendConfig:
         validate_features(self.features)
         for f in self.features:
             if f in FRONTEND_RESERVED:
-                raise ValueError(
-                    f"Feature '{f}' is reserved in the frontend template."
-                )
+                raise ValueError(f"Feature '{f}' is reserved in the frontend template.")
         valid_managers = {
             FrontendFramework.VUE: ("npm", "pnpm", "yarn"),
             FrontendFramework.SVELTE: ("npm", "pnpm", "bun"),
@@ -125,18 +173,18 @@ class ProjectConfig:
     project_name: str
     output_dir: str = "."
     backends: list[BackendConfig] = field(default_factory=list)
-    frontend: Optional[FrontendConfig] = None
+    frontend: FrontendConfig | None = None
     include_keycloak: bool = False
     keycloak_port: int = 18080
 
     # Backward compatibility: single backend access
     @property
-    def backend(self) -> Optional[BackendConfig]:
+    def backend(self) -> BackendConfig | None:
         """Return the first backend, or None. For backward compatibility."""
         return self.backends[0] if self.backends else None
 
     @backend.setter
-    def backend(self, value: Optional[BackendConfig]) -> None:
+    def backend(self, value: BackendConfig | None) -> None:
         """Set a single backend. For backward compatibility."""
         if value is None:
             self.backends = []
@@ -150,60 +198,73 @@ class ProjectConfig:
             raise ValueError("Project name cannot be empty.")
         for bc in self.backends:
             bc.validate()
-        # Cross-validate: backend features must not collide with frontend reserved names
-        if self.frontend and self.frontend.framework != FrontendFramework.NONE:
-            for bc in self.backends:
-                for f in bc.features:
-                    if f in FRONTEND_RESERVED:
-                        raise ValueError(
-                            f"Feature '{f}' on backend '{bc.name}' is reserved "
-                            f"in the frontend template."
-                        )
         if self.frontend:
             self.frontend.validate()
+        self._validate_backend_uniqueness()
+        self._validate_features_against_reserved()
+        ports = self._validate_ports()
         if self.include_keycloak:
-            validate_port(self.keycloak_port, "Keycloak port")
+            self._validate_keycloak_ports(ports)
 
-        # Check for port collisions on host-mapped ports
+    def _validate_backend_uniqueness(self) -> None:
+        names = [bc.name for bc in self.backends]
+        if len(names) != len(set(names)):
+            raise ValueError("Backend names must be unique.")
+
+    def _validate_features_against_reserved(self) -> None:
+        """Backend feature names must not collide with frontend's reserved page names."""
+        if not (self.frontend and self.frontend.framework != FrontendFramework.NONE):
+            return
+        for bc in self.backends:
+            for f in bc.features:
+                if f in FRONTEND_RESERVED:
+                    raise ValueError(
+                        f"Feature '{f}' on backend '{bc.name}' is reserved "
+                        f"in the frontend template."
+                    )
+
+    def _validate_ports(self) -> dict[int, str]:
+        """Detect host-port collisions across backends, frontend, and Postgres.
+
+        Returns the populated ports map so keycloak validation can extend it.
+        """
         ports: dict[int, str] = {}
         for bc in self.backends:
             if bc.server_port in ports:
                 raise ValueError(
-                    f"Port {bc.server_port} is used by both '{bc.name}' and '{ports[bc.server_port]}'."
+                    f"Port {bc.server_port} is used by both '{bc.name}' "
+                    f"and '{ports[bc.server_port]}'."
                 )
             ports[bc.server_port] = bc.name
-        if self.frontend and self.frontend.framework != FrontendFramework.NONE:
-            if self.frontend.framework != FrontendFramework.FLUTTER:
-                p = self.frontend.server_port
-                if p in ports:
-                    raise ValueError(
-                        f"Port {p} is used by both frontend and {ports[p]}."
-                    )
-                ports[p] = "frontend"
+        if (
+            self.frontend
+            and self.frontend.framework != FrontendFramework.NONE
+            and self.frontend.framework != FrontendFramework.FLUTTER
+        ):
+            p = self.frontend.server_port
+            if p in ports:
+                raise ValueError(f"Port {p} is used by both frontend and {ports[p]}.")
+            ports[p] = "frontend"
         db_port = 5432
         if db_port in ports:
-            raise ValueError(
-                f"Port {db_port} (PostgreSQL) conflicts with {ports[db_port]}."
-            )
+            raise ValueError(f"Port {db_port} (PostgreSQL) conflicts with {ports[db_port]}.")
         ports[db_port] = "postgres"
-        if self.include_keycloak:
-            traefik_dashboard_port = 8888
-            if traefik_dashboard_port in ports:
-                raise ValueError(
-                    f"Port {traefik_dashboard_port} (Traefik dashboard) "
-                    f"conflicts with {ports[traefik_dashboard_port]}."
-                )
-            ports[traefik_dashboard_port] = "Traefik dashboard"
-            if self.keycloak_port in ports:
-                raise ValueError(
-                    f"Port {self.keycloak_port} (Keycloak) conflicts "
-                    f"with {ports[self.keycloak_port]}."
-                )
+        return ports
 
-    # Check for duplicate backend names
-        names = [bc.name for bc in self.backends]
-        if len(names) != len(set(names)):
-            raise ValueError("Backend names must be unique.")
+    def _validate_keycloak_ports(self, ports: dict[int, str]) -> None:
+        validate_port(self.keycloak_port, "Keycloak port")
+        traefik_dashboard_port = 8888
+        if traefik_dashboard_port in ports:
+            raise ValueError(
+                f"Port {traefik_dashboard_port} (Traefik dashboard) "
+                f"conflicts with {ports[traefik_dashboard_port]}."
+            )
+        ports[traefik_dashboard_port] = "Traefik dashboard"
+        if self.keycloak_port in ports:
+            raise ValueError(
+                f"Port {self.keycloak_port} (Keycloak) conflicts with {ports[self.keycloak_port]}."
+            )
+        ports[self.keycloak_port] = "Keycloak"
 
     @property
     def all_features(self) -> list[str]:

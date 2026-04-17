@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from forge.config import BackendConfig, FrontendFramework, ProjectConfig
+from forge.config import BACKEND_REGISTRY, BackendConfig, FrontendFramework, ProjectConfig
 
 
 def _primary_feature(bc: BackendConfig) -> str:
@@ -13,44 +13,33 @@ def _primary_feature(bc: BackendConfig) -> str:
 
 
 def backend_context(bc: BackendConfig) -> dict[str, Any]:
-    """Build data dict for the python-service-template (Copier)."""
+    """Build a Copier data dict for any backend template.
+
+    Shared keys go to every backend; the language-specific version field
+    (`python_version` / `node_version` / `rust_edition`) is read from
+    BACKEND_REGISTRY so adding a 4th backend doesn't require editing here.
+    """
+    spec = BACKEND_REGISTRY[bc.language]
     return {
         "project_name": bc.name,
         "project_description": bc.description,
         "server_port": bc.server_port,
         "db_name": bc.name.replace("-", "_"),
-        "python_version": bc.python_version,
+        spec.version_field: getattr(bc, spec.version_field),
         "entity_plural": _primary_feature(bc),
     }
 
 
-def rust_backend_context(bc: BackendConfig) -> dict[str, Any]:
-    """Build data dict for the rust-service-template (Copier)."""
-    return {
-        "project_name": bc.name,
-        "project_description": bc.description,
-        "server_port": bc.server_port,
-        "db_name": bc.name.replace("-", "_"),
-        "rust_edition": bc.rust_edition,
-        "entity_plural": _primary_feature(bc),
-    }
-
-
-def node_backend_context(bc: BackendConfig) -> dict[str, Any]:
-    """Build data dict for the node-service-template (Copier)."""
-    return {
-        "project_name": bc.name,
-        "project_description": bc.description,
-        "server_port": bc.server_port,
-        "db_name": bc.name.replace("-", "_"),
-        "node_version": bc.node_version,
-        "entity_plural": _primary_feature(bc),
-    }
+# Backward-compatible aliases — the unified function handles all three languages,
+# but generator.py and existing tests still reference these names.
+node_backend_context = backend_context
+rust_backend_context = backend_context
 
 
 def _build_backend_features_json(config: ProjectConfig) -> str:
     """Build JSON mapping of backend name → {port, features} for frontend templates."""
     import json
+
     mapping = {}
     for bc in config.backends:
         mapping[bc.name] = {
@@ -63,10 +52,8 @@ def _build_backend_features_json(config: ProjectConfig) -> str:
 def _build_proxy_targets_json(config: ProjectConfig) -> str:
     """Build JSON array of {name, port} for post_generate.py."""
     import json
-    return json.dumps([
-        {"name": bc.name, "port": bc.server_port}
-        for bc in config.backends
-    ])
+
+    return json.dumps([{"name": bc.name, "port": bc.server_port} for bc in config.backends])
 
 
 def _build_vite_proxy_config(config: ProjectConfig) -> str:
@@ -126,20 +113,25 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
+        "app_title": fc.project_name,
         "description": fc.description,
         "features": ", ".join(config.all_features),
         "author_name": fc.author_name,
         "version": fc.version,
         "include_auth": fc.include_auth,
         "include_chat": fc.include_chat,
+        "include_openapi": fc.include_openapi,
         "package_manager": fc.package_manager,
         "api_base_url": f"http://{backend_name}:{backend_port}",
+        "api_proxy_target": f"http://{backend_name}:{backend_port}",
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
         "keycloak_client_id": fc.keycloak_client_id or config.frontend_slug,
+        "default_color_scheme": fc.default_color_scheme,
         "backend_features": _build_backend_features_json(config),
         "proxy_targets": _build_proxy_targets_json(config),
+        "vite_proxy_config": _build_vite_proxy_config(config),
     }
 
 
@@ -153,6 +145,7 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
+        "app_title": fc.project_name,
         "org_name": fc.org_name,
         "description": fc.description,
         "features": ", ".join(config.all_features),
@@ -165,6 +158,8 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
         "keycloak_client_id": fc.keycloak_client_id or config.frontend_slug,
+        "default_color_scheme": fc.default_color_scheme,
+        "backend_features": _build_backend_features_json(config),
         "author_name": fc.author_name,
     }
 

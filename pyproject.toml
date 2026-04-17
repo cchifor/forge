@@ -19,7 +19,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0",
     "pyyaml>=6.0",
+    "ruff>=0.7.0",
     "ty>=0.0.1a7",
+    "pre-commit>=3.7.0",
 ]
 
 [project.scripts]
@@ -35,6 +37,9 @@ include = ["forge*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing"
+markers = [
+    "e2e: end-to-end tests that scaffold a project and run its native test suite (slow, opt-in via -m e2e)",
+]
 
 [tool.coverage.run]
 source = ["forge"]
@@ -44,7 +49,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 65
+fail_under = 75
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
@@ -57,3 +62,36 @@ directory = "htmlcov"
 
 [tool.ty.environment]
 python-version = "3.13"
+
+[tool.ty.src]
+include = ["forge"]
+exclude = ["forge/templates", "**/__pycache__", "**/.venv"]
+
+[tool.ty.rules]
+unresolved-import = "error"
+invalid-argument-type = "error"
+invalid-return-type = "error"
+missing-argument = "error"
+unknown-argument = "error"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    "forge/templates",
+    ".venv",
+    "build",
+    "dist",
+    "htmlcov",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # function call in argument default — common in argparse helpers
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

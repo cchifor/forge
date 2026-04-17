@@ -1,103 +1,94 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../theme/design_tokens.dart';
-import '../../../theme/ai_theme_extension.dart';
-import '../domain/chat_message.dart';
+import 'chat_providers.dart';
+import 'widgets/chat_message_bubble.dart';
+import 'widgets/user_prompt_card.dart';
 
-class ChatMessageList extends StatelessWidget {
+class ChatMessageList extends ConsumerWidget {
   const ChatMessageList({super.key});
 
-  static final _stubMessages = [
-    ChatMessage(
-      id: '1',
-      content:
-          'Hello! I\'m your AI assistant. I can help you with tasks, answer questions about your workspace, or assist with data analysis. How can I help you today?',
-      role: ChatRole.assistant,
-      timestamp: DateTime.now(),
-    ),
-  ];
-
   @override
-  Widget build(BuildContext context) {
-    final messages = _stubMessages;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final messages = ref.watch(chatMessagesProvider);
+    final pendingPrompt = ref.watch(chatPendingPromptProvider);
+    final isRunning = ref.watch(chatIsRunningProvider);
+    final error = ref.watch(chatErrorProvider);
+    final activeToolCalls =
+        ref.watch(chatProvider.select((s) => s.activeToolCalls));
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(DesignTokens.p16),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final msg = messages[index];
-        return _ChatBubble(message: msg);
-      },
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message});
-
-  final ChatMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final aiColors = theme.extension<AiThemeColors>()!;
-    final isAssistant = message.role == ChatRole.assistant;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: DesignTokens.p16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Avatar
-          CircleAvatar(
-            radius: DesignTokens.avatarSM,
-            backgroundColor: isAssistant
-                ? aiColors.gradientStart.withValues(alpha: 0.15)
-                : theme.colorScheme.primaryContainer,
-            child: isAssistant
-                ? ShaderMask(
-                    shaderCallback: (bounds) =>
-                        aiColors.gradient.createShader(bounds),
-                    child: const Icon(
-                      Icons.auto_awesome,
-                      size: DesignTokens.iconXS,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(
-                    Icons.person,
-                    size: DesignTokens.iconXS,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-          ),
-          const SizedBox(width: DesignTokens.p12),
-
-          // Message content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isAssistant ? 'AI Assistant' : 'You',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: isAssistant
-                        ? aiColors.gradientStart
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: DesignTokens.p4),
-                Text(
-                  message.content,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.6,
-                  ),
-                ),
-              ],
+    if (messages.isEmpty && pendingPrompt == null && error == null) {
+      return Center(
+        key: const ValueKey('chat-empty-state'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: 32,
+              color: Theme.of(context).colorScheme.primary,
             ),
+            const SizedBox(height: 12),
+            const Text('How can I help?', style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 4),
+            Text(
+              'Ask a question or describe what you need.',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final children = <Widget>[
+      for (var i = 0; i < messages.length; i++)
+        ChatMessageBubble(
+          message: messages[i],
+          toolCalls: i == messages.length - 1 ? activeToolCalls : const [],
+        ),
+      if (pendingPrompt != null)
+        UserPromptCard(
+          prompt: pendingPrompt,
+          onRespond: (answer) =>
+              ref.read(chatProvider.notifier).respondToPrompt(answer),
+        ),
+      if (error != null)
+        Container(
+          key: const ValueKey('chat-error-banner'),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color:
+                Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(6),
           ),
-        ],
-      ),
+          child: Text(
+            error,
+            style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+          ),
+        ),
+      if (isRunning)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+              SizedBox(width: 8),
+              Text('Thinking…', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(DesignTokens.p16),
+      children: children,
     );
   }
 }

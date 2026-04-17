@@ -6,13 +6,27 @@ import os
 import shutil
 import stat
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from copier import run_copy
 
 from forge import variable_mapper
-from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
-from forge.docker_manager import render_compose, render_frontend_dockerfile, render_init_db, render_keycloak_realm, render_nginx_conf
+from forge.config import (
+    BACKEND_REGISTRY,
+    BackendConfig,
+    BackendLanguage,
+    FrontendFramework,
+    ProjectConfig,
+)
+from forge.docker_manager import (
+    render_compose,
+    render_frontend_dockerfile,
+    render_init_db,
+    render_keycloak_realm,
+    render_nginx_conf,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -25,6 +39,14 @@ TEMPLATE_DIRS = {
 }
 
 
+class GeneratorError(RuntimeError):
+    """Raised when a step required to produce a usable project fails.
+
+    Callers (CLI main) catch this and surface it as a clean error message
+    or a JSON error envelope, instead of leaking a stack trace.
+    """
+
+
 def generate(config: ProjectConfig, quiet: bool = False) -> Path:
     """Generate all project components and return the project root path."""
     project_root = Path(config.output_dir).resolve() / config.project_slug
@@ -34,26 +56,22 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         if not quiet:
             print(msg)
 
-    # 1. Generate backends
+    # 1. Generate backends — dispatch driven by config.BACKEND_REGISTRY.
+    backend_setup: dict[BackendLanguage, Callable[[Path], None]] = {
+        BackendLanguage.PYTHON: _setup_backend,
+        BackendLanguage.NODE: _setup_node_backend,
+        BackendLanguage.RUST: _setup_rust_backend,
+    }
     for bc in config.backends:
+        spec = BACKEND_REGISTRY[bc.language]
         backend_dir = project_root / "services" / bc.name
+        _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
+        _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
+        # Node always installs deps to create the lockfile Docker builds depend on.
         if bc.language == BackendLanguage.NODE:
-            _log(f"  Generating Node.js backend '{bc.name}' ...")
-            _generate_single_backend(bc, "services/node-service-template", backend_dir, quiet)
-            # Always install deps to create lockfile (needed for Docker builds)
-            _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies")
-            if not quiet:
-                _setup_node_backend(backend_dir)
-        elif bc.language == BackendLanguage.RUST:
-            _log(f"  Generating Rust backend '{bc.name}' ...")
-            _generate_single_backend(bc, "services/rust-service-template", backend_dir, quiet)
-            if not quiet:
-                _setup_rust_backend(backend_dir)
-        else:
-            _log(f"  Generating Python backend '{bc.name}' ...")
-            _generate_single_backend(bc, "services/python-service-template", backend_dir, quiet)
-            if not quiet:
-                _setup_backend(backend_dir)
+            _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies", required=True)
+        if not quiet:
+            backend_setup[bc.language](backend_dir)
 
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
@@ -106,7 +124,10 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         render_frontend_dockerfile(config, frontend_dir)
         render_nginx_conf(config, frontend_dir)
 
-    # 6. Clean up per-template .git repos and create unified one
+    # 6. Stamp forge metadata so the project can be re-generated / updated later.
+    _write_forge_toml(config, project_root)
+
+    # 7. Clean up per-template .git repos and create unified one
     _log("  Initializing git repository ...")
     _cleanup_sub_git_repos(project_root)
     _git_init(project_root)
@@ -114,48 +135,83 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
     return project_root
 
 
+def _write_forge_toml(config: ProjectConfig, project_root: Path) -> None:
+    """Write a forge.toml manifest at the project root.
+
+    Captures the forge version that scaffolded the project plus per-template paths.
+    Lets `copier update` (or a future `forge update` subcommand) figure out what to
+    re-render after a template change.
+    """
+    from importlib import metadata
+
+    try:
+        forge_version = metadata.version("forge")
+    except metadata.PackageNotFoundError:
+        forge_version = "0.0.0+unknown"
+
+    languages_used = sorted({bc.language.value for bc in config.backends})
+    template_lines = [
+        f'  {lang} = "{BACKEND_REGISTRY[BackendLanguage(lang)].template_dir}"'
+        for lang in languages_used
+    ]
+    if config.frontend and config.frontend.framework != FrontendFramework.NONE:
+        fw = config.frontend.framework
+        template_dir = TEMPLATE_DIRS.get(fw)
+        if template_dir:
+            template_lines.append(f'  {fw.value} = "{template_dir}"')
+
+    content = (
+        "# Generated by forge — do not edit by hand.\n"
+        "# Re-render any subdirectory with `copier update` using its `.copier-answers.yml`.\n"
+        "[forge]\n"
+        f'version = "{forge_version}"\n'
+        f'project_name = "{config.project_name}"\n'
+        "\n"
+        "[forge.templates]\n" + "\n".join(template_lines) + "\n"
+    )
+    (project_root / "forge.toml").write_text(content, encoding="utf-8")
+
+
+def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet: bool) -> None:
+    """Invoke Copier and translate its failures into GeneratorError.
+
+    Raised errors include the template path so JSON-mode callers see a useful envelope
+    instead of a raw Copier traceback.
+    """
+    if not template_path.exists():
+        raise GeneratorError(f"Template not found: {template_path}")
+    try:
+        run_copy(
+            src_path=str(template_path),
+            dst_path=str(dst_path),
+            data=data,
+            unsafe=True,
+            defaults=True,
+            overwrite=True,
+            quiet=quiet,
+        )
+    except GeneratorError:
+        raise
+    except Exception as e:  # Copier raises a variety of internal exception types
+        raise GeneratorError(f"Copier failed for template '{template_path.name}': {e}") from e
+
+
 def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
     """Generate E2E testing platform using Copier template."""
     ctx = variable_mapper.e2e_context(config)
     dst = project_root / "tests" / "e2e"
     dst.mkdir(parents=True, exist_ok=True)
-    template_path = TEMPLATES_DIR / "tests" / "e2e-testing-template"
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template not found: {template_path}")
-    run_copy(
-        src_path=str(template_path),
-        dst_path=str(dst),
-        data=ctx,
-        unsafe=True,
-        defaults=True,
-        overwrite=True,
-        quiet=quiet,
-    )
+    _run_copier(TEMPLATES_DIR / "tests" / "e2e-testing-template", dst, ctx, quiet)
     return dst
 
 
-def _generate_single_backend(bc: BackendConfig, template_name: str, dst: Path, quiet: bool = False) -> Path:
+def _generate_single_backend(
+    bc: BackendConfig, template_name: str, dst: Path, quiet: bool = False
+) -> Path:
     """Generate a single backend using Copier."""
-    from forge.config import BackendLanguage
-    ctx_fn = {
-        BackendLanguage.PYTHON: variable_mapper.backend_context,
-        BackendLanguage.NODE: variable_mapper.node_backend_context,
-        BackendLanguage.RUST: variable_mapper.rust_backend_context,
-    }
-    ctx = ctx_fn[bc.language](bc)
+    ctx = variable_mapper.backend_context(bc)
     dst.mkdir(parents=True, exist_ok=True)
-    template_path = TEMPLATES_DIR / template_name
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template not found: {template_path}")
-    run_copy(
-        src_path=str(template_path),
-        dst_path=str(dst),
-        data=ctx,
-        unsafe=True,
-        defaults=True,
-        overwrite=True,
-        quiet=quiet,
-    )
+    _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
     return dst
 
 
@@ -163,7 +219,9 @@ def _setup_rust_backend(backend_dir: Path) -> None:
     """Build, lint, and test the generated Rust backend."""
     _run_backend_cmd(backend_dir, ["cargo", "build"], "Build")
     _run_backend_cmd(backend_dir, ["cargo", "fmt", "--check"], "Format check")
-    _run_backend_cmd(backend_dir, ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"], "Lint")
+    _run_backend_cmd(
+        backend_dir, ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"], "Lint"
+    )
     _run_backend_cmd(backend_dir, ["cargo", "test"], "Tests")
 
 
@@ -178,46 +236,41 @@ def _setup_node_backend(backend_dir: Path) -> None:
 
 def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
     """Generate frontend using Copier."""
+    if config.frontend is None:
+        raise GeneratorError("_generate_frontend called without a frontend configured")
     fw = config.frontend.framework
     template_dir = TEMPLATE_DIRS.get(fw)
     if template_dir is None:
-        raise ValueError(f"No template for framework: {fw}")
+        raise GeneratorError(f"No template for framework: {fw}")
 
     ctx = variable_mapper.frontend_context(config)
 
     if fw == FrontendFramework.FLUTTER:
         # Flutter template has no _subdirectory; it creates {{project_slug}}/
         # inside dst_path, so pass the apps directory.
-        apps_dir = project_root / "apps"
-        apps_dir.mkdir(parents=True, exist_ok=True)
-        run_copy(
-            src_path=str(TEMPLATES_DIR / template_dir),
-            dst_path=str(apps_dir),
-            data=ctx,
-            unsafe=True,
-            defaults=True,
-            overwrite=True,
-            quiet=quiet,
-        )
+        dst = project_root / "apps"
     else:
         # Vue/Svelte use _subdirectory: template, generating INTO dst_path.
         dst = project_root / "apps" / config.frontend_slug
-        dst.mkdir(parents=True, exist_ok=True)
-        run_copy(
-            src_path=str(TEMPLATES_DIR / template_dir),
-            dst_path=str(dst),
-            data=ctx,
-            unsafe=True,
-            defaults=True,
-            overwrite=True,
-            quiet=quiet,
-        )
-
+    dst.mkdir(parents=True, exist_ok=True)
+    _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet)
     return project_root / "apps" / config.frontend_slug
 
 
-def _run_backend_cmd(backend_dir: Path, cmd: list[str], description: str) -> bool:
-    """Run a command in the backend directory, printing status."""
+def _run_backend_cmd(
+    backend_dir: Path,
+    cmd: list[str],
+    description: str,
+    *,
+    required: bool = False,
+) -> bool:
+    """Run a command in the backend directory, printing status.
+
+    When `required=True`, any failure (timeout, missing tool, non-zero exit) raises
+    GeneratorError so the project isn't left in a half-built state. When
+    `required=False` (default), failures are logged and skipped — appropriate for
+    best-effort interactive setup steps like `cargo fmt --check` or `vitest run`.
+    """
     try:
         result = subprocess.run(
             cmd,
@@ -228,27 +281,43 @@ def _run_backend_cmd(backend_dir: Path, cmd: list[str], description: str) -> boo
             errors="replace",
             timeout=300,
         )
-    except subprocess.TimeoutExpired:
-        print(f"  [!!] {description} timed out (5m)")
+    except subprocess.TimeoutExpired as e:
+        msg = f"{description} timed out (5m)"
+        if required:
+            raise GeneratorError(f"{msg} while running: {' '.join(cmd)}") from e
+        print(f"  [!!] {msg}")
         return False
-    except FileNotFoundError:
-        print(f"  [!!] {description} skipped ({cmd[0]} not found)")
+    except FileNotFoundError as e:
+        msg = f"{description} skipped ({cmd[0]} not found)"
+        if required:
+            raise GeneratorError(
+                f"required tool '{cmd[0]}' not found on PATH (needed for: {description})"
+            ) from e
+        print(f"  [!!] {msg}")
         return False
     if result.returncode == 0:
         print(f"  [ok] {description}")
         return True
-    else:
-        print(f"  [!!] {description} failed")
-        if result.stderr:
-            for line in result.stderr.strip().splitlines()[-5:]:
-                print(f"       {line}")
-        return False
+    print(f"  [!!] {description} failed")
+    stderr_tail = ""
+    if result.stderr:
+        stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
+        for line in stderr_tail.splitlines():
+            print(f"       {line}")
+    if required:
+        suffix = f"\n{stderr_tail}" if stderr_tail else ""
+        raise GeneratorError(
+            f"{description} failed (exit {result.returncode}): {' '.join(cmd)}{suffix}"
+        )
+    return False
 
 
 def _setup_backend(backend_dir: Path) -> None:
     """Install deps, run linting, and run tests for the generated backend."""
     _run_backend_cmd(backend_dir, ["uv", "sync"], "Install dependencies")
-    _run_backend_cmd(backend_dir, ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"], "Lint fix")
+    _run_backend_cmd(
+        backend_dir, ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"], "Lint fix"
+    )
     _run_backend_cmd(backend_dir, ["uv", "run", "ruff", "format", "src/", "tests/"], "Format")
     _run_backend_cmd(backend_dir, ["uv", "run", "ty", "check", "src/"], "Type check")
     _run_backend_cmd(backend_dir, ["uv", "run", "pytest", "-v"], "Tests")
@@ -268,8 +337,12 @@ def _cleanup_sub_git_repos(project_root: Path) -> None:
 
 
 def _git_init(project_root: Path) -> None:
-    """Initialize a single git repo at the project root."""
-    # Provide author identity via env so git commit never prompts.
+    """Initialize a single git repo at the project root.
+
+    Each git step (init, add, commit) is checked; a failure on any step raises
+    GeneratorError so callers don't end up with a half-initialized repo or, worse,
+    a 'success' return with no commit at all.
+    """
     env = {
         **os.environ,
         "GIT_AUTHOR_NAME": "forge",
@@ -277,22 +350,32 @@ def _git_init(project_root: Path) -> None:
         "GIT_COMMITTER_NAME": "forge",
         "GIT_COMMITTER_EMAIL": "forge@localhost",
     }
-    subprocess.run(
-        ["git", "init"],
-        cwd=str(project_root),
-        capture_output=True,
-        timeout=30,
-    )
-    subprocess.run(
-        ["git", "add", "."],
-        cwd=str(project_root),
-        capture_output=True,
-        timeout=30,
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "Initial commit from forge"],
-        cwd=str(project_root),
-        capture_output=True,
-        timeout=30,
-        env=env,
-    )
+    for step, cmd, step_env in (
+        ("init", ["git", "init"], None),
+        ("add", ["git", "add", "."], None),
+        ("commit", ["git", "commit", "-m", "Initial commit from forge"], env),
+    ):
+        try:
+            subprocess.run(
+                cmd,
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+                check=True,
+                env=step_env,
+            )
+        except FileNotFoundError as e:
+            raise GeneratorError(
+                "git executable not found on PATH; install git to scaffold a project"
+            ) from e
+        except subprocess.TimeoutExpired as e:
+            raise GeneratorError(f"git {step} timed out after 30s") from e
+        except subprocess.CalledProcessError as e:
+            stderr_tail = ""
+            if e.stderr:
+                stderr_tail = "\n".join(str(e.stderr).strip().splitlines()[-5:])
+            suffix = f"\n{stderr_tail}" if stderr_tail else ""
+            raise GeneratorError(f"git {step} failed (exit {e.returncode}){suffix}") from e

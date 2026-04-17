@@ -1,60 +1,78 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock crypto.randomUUID before importing the store
-vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2) });
+vi.stubGlobal('crypto', {
+	randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2)
+});
+
+// Stub the AG-UI HttpAgent so the test never makes a real HTTP request.
+const runAgent = vi.fn().mockResolvedValue(undefined);
+vi.mock('@ag-ui/client', () => ({
+	HttpAgent: class {
+		headers: Record<string, string> = {};
+		setMessages = vi.fn();
+		setState = vi.fn();
+		runAgent = runAgent;
+	}
+}));
+
+// Auth is a soft dep — return no token so the chat works in any auth mode.
+vi.mock('$lib/core/auth/auth.svelte', () => ({
+	getAuth: () => ({ getToken: async () => null })
+}));
 
 const { getChatStore } = await import('$lib/features/chat/model/chat.svelte');
 
-describe('getChatStore', () => {
+describe('getChatStore (AG-UI agent client)', () => {
 	let store: ReturnType<typeof getChatStore>;
 
 	beforeEach(() => {
 		store = getChatStore();
 		store.clearMessages();
-		vi.useFakeTimers();
+		runAgent.mockClear();
 	});
 
-	it('returns a store object with expected properties', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('exposes the documented surface', () => {
 		expect(store).toBeDefined();
 		expect(store).toHaveProperty('messages');
 		expect(store).toHaveProperty('isGenerating');
 		expect(store).toHaveProperty('contextLabel');
+		expect(store).toHaveProperty('model');
+		expect(store).toHaveProperty('approvalMode');
+		expect(store).toHaveProperty('activeToolCalls');
+		expect(store).toHaveProperty('pendingPrompt');
 		expect(typeof store.addUserMessage).toBe('function');
-		expect(typeof store.clearMessages).toBe('function');
+		expect(typeof store.respondToPrompt).toBe('function');
+		expect(typeof store.setModel).toBe('function');
+		expect(typeof store.setApprovalMode).toBe('function');
 		expect(typeof store.setContext).toBe('function');
+		expect(typeof store.clearMessages).toBe('function');
 	});
 
-	it('starts with an empty messages array', () => {
+	it('starts with empty messages and isGenerating=false', () => {
 		expect(store.messages).toEqual([]);
-	});
-
-	it('starts with isGenerating false', () => {
 		expect(store.isGenerating).toBe(false);
 	});
 
-	it('starts with contextLabel "General"', () => {
-		expect(store.contextLabel).toBe('General');
-	});
-
-	it('addUserMessage adds a message with role "user"', () => {
+	it('addUserMessage appends a user message and triggers an agent run', () => {
 		store.addUserMessage('Hello');
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
 		expect(store.messages[0].content).toBe('Hello');
-		expect(store.messages[0].id).toBeDefined();
-		expect(store.messages[0].timestamp).toBeInstanceOf(Date);
+		expect(runAgent).toHaveBeenCalledTimes(1);
 	});
 
-	it('messages array grows with each addUserMessage call', () => {
-		store.addUserMessage('First');
-		store.addUserMessage('Second');
-		// Two user messages (plus simulated responses are pending in timers)
-		const userMessages = store.messages.filter((m) => m.role === 'user');
-		expect(userMessages).toHaveLength(2);
+	it('ignores empty/whitespace-only input', () => {
+		store.addUserMessage('   ');
+		expect(store.messages).toHaveLength(0);
+		expect(runAgent).not.toHaveBeenCalled();
 	});
 
-	it('clearMessages empties the messages array', () => {
-		store.addUserMessage('Hello');
+	it('clearMessages resets the thread', () => {
+		store.addUserMessage('Hi');
 		expect(store.messages.length).toBeGreaterThan(0);
 		store.clearMessages();
 		expect(store.messages).toEqual([]);
@@ -63,7 +81,15 @@ describe('getChatStore', () => {
 	it('setContext updates the contextLabel', () => {
 		store.setContext('Dashboard');
 		expect(store.contextLabel).toBe('Dashboard');
-		store.setContext('Settings');
-		expect(store.contextLabel).toBe('Settings');
+	});
+
+	it('setModel updates the selected model', () => {
+		store.setModel('gpt-4.1');
+		expect(store.model).toBe('gpt-4.1');
+	});
+
+	it('setApprovalMode updates the approval mode', () => {
+		store.setApprovalMode('bypass');
+		expect(store.approvalMode).toBe('bypass');
 	});
 });

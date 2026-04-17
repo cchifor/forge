@@ -21,6 +21,11 @@ project_slug:
   default: "{{ project_name | lower | replace(' ', '_') | replace('-', '_') }}"
   validator: "{% if not project_slug | regex_search('^[a-z][a-z0-9_]+$') %}Must be lowercase snake_case (letters, digits, underscores){% endif %}"
 
+app_title:
+  type: str
+  help: "Display title for the application"
+  default: "{{ project_name }}"
+
 org_name:
   type: str
   help: "Organization identifier"
@@ -55,6 +60,25 @@ include_openapi:
   type: bool
   help: "Include OpenAPI client generation (swagger_parser)?"
   default: true
+
+default_color_scheme:
+  type: str
+  help: "Initial FlexColorScheme name"
+  default: blue
+  choices:
+    - blue
+    - indigo
+    - teal
+    - green
+    - deepPurple
+    - red
+    - amber
+    - cyan
+
+backend_features:
+  type: str
+  when: false
+  default: "{}"
 
 api_base_url:
   type: str
@@ -96,6 +120,7 @@ _tasks:
     python {{ _copier_conf.src_path }}/_tasks/post_generate.py
     --project-slug={{ project_slug }}
     --project-name="{{ project_name }}"
+    --app-title="{{ app_title }}"
     --org-name={{ org_name }}
     --features="{{ features }}"
     --include-auth={{ include_auth }}
@@ -104,3 +129,5 @@ _tasks:
     --description="{{ description }}"
     --version={{ version }}
     --api-base-url={{ api_base_url }}
+    --default-color-scheme={{ default_color_scheme }}
+    --backend-features='{{ backend_features }}'

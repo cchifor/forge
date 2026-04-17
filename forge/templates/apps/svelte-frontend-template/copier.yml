@@ -17,6 +17,11 @@ project_slug:
     {% if not project_slug | regex_search('^[a-z][a-z0-9-]*$') %}Must be lowercase kebab-case (letters, digits, hyphens).{% endif %}
     {% if project_slug | length < 2 %}Must be at least 2 characters.{% endif %}
 
+app_title:
+  type: str
+  help: Display title for the application
+  default: "{{ project_name }}"
+
 description:
   type: str
   help: Project description
@@ -54,6 +59,25 @@ include_chat:
   help: Include AI chat panel?
   default: true
 
+include_openapi:
+  type: bool
+  help: Include OpenAPI TypeScript codegen?
+  default: true
+
+default_color_scheme:
+  type: str
+  help: Initial color scheme
+  default: blue
+  choices:
+    - blue
+    - indigo
+    - teal
+    - green
+    - deepPurple
+    - red
+    - amber
+    - cyan
+
 package_manager:
   type: str
   help: Package manager
@@ -67,6 +91,26 @@ api_base_url:
   type: str
   help: Backend API base URL
   default: "http://localhost:5000"
+
+api_proxy_target:
+  type: str
+  help: Vite dev-server proxy target
+  default: "http://localhost:5000"
+
+backend_features:
+  type: str
+  when: false
+  default: "{}"
+
+proxy_targets:
+  type: str
+  when: false
+  default: "[]"
+
+vite_proxy_config:
+  type: str
+  when: false
+  default: ""
 
 server_port:
   type: int
