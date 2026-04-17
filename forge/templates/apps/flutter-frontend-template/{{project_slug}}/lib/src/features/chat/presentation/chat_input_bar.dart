@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../theme/design_tokens.dart';
 import '../../../theme/ai_theme_extension.dart';
+import 'chat_providers.dart';
 
 class ChatInputBar extends HookConsumerWidget {
   const ChatInputBar({super.key});
@@ -14,8 +15,14 @@ class ChatInputBar extends HookConsumerWidget {
     final focusNode = useFocusNode();
     final theme = Theme.of(context);
     final aiColors = theme.extension<AiThemeColors>()!;
+    final isGenerating = ref.watch(chatIsRunningProvider);
 
-    // TODO(chat): Wire isGenerating state for pulsing glow effect.
+    void send() {
+      final text = controller.text.trim();
+      if (text.isEmpty || isGenerating) return;
+      ref.read(chatProvider.notifier).sendMessage(text);
+      controller.clear();
+    }
 
     return Container(
       padding: const EdgeInsets.all(DesignTokens.p12),
@@ -30,7 +37,9 @@ class ChatInputBar extends HookConsumerWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(DesignTokens.radiusLarge),
           border: Border.all(
-            color: theme.colorScheme.outlineVariant,
+            color: isGenerating
+                ? aiColors.gradientStart.withValues(alpha: 0.5)
+                : theme.colorScheme.outlineVariant,
           ),
         ),
         child: Row(
@@ -42,6 +51,8 @@ class ChatInputBar extends HookConsumerWidget {
                 focusNode: focusNode,
                 maxLines: 4,
                 minLines: 1,
+                enabled: !isGenerating,
+                onSubmitted: (_) => send(),
                 decoration: const InputDecoration(
                   hintText: 'Ask anything...',
                   border: InputBorder.none,
@@ -50,25 +61,20 @@ class ChatInputBar extends HookConsumerWidget {
                     vertical: DesignTokens.p12,
                   ),
                 ),
-                textInputAction: TextInputAction.newline,
+                textInputAction: TextInputAction.send,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(right: DesignTokens.p4, bottom: DesignTokens.p4),
+              padding: const EdgeInsets.only(
+                right: DesignTokens.p4,
+                bottom: DesignTokens.p4,
+              ),
               child: IconButton(
-                onPressed: () {
-                  if (controller.text.trim().isNotEmpty) {
-                    controller.clear();
-                    // Stub: no send action yet
-                  }
-                },
+                key: const ValueKey('chat-send-button'),
+                onPressed: isGenerating ? null : send,
                 icon: ShaderMask(
-                  shaderCallback: (bounds) =>
-                      aiColors.gradient.createShader(bounds),
-                  child: const Icon(
-                    Icons.send_rounded,
-                    color: Colors.white,
-                  ),
+                  shaderCallback: (bounds) => aiColors.gradient.createShader(bounds),
+                  child: const Icon(Icons.send_rounded, color: Colors.white),
                 ),
                 tooltip: 'Send',
               ),

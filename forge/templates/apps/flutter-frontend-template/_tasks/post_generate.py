@@ -25,6 +25,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-slug", default="my_app")
     parser.add_argument("--project-name", default="My App")
+    parser.add_argument("--app-title", default="")
     parser.add_argument("--org-name", default="com.example")
     parser.add_argument("--features", default="items")
     parser.add_argument("--include-auth", default="True")
@@ -33,13 +34,18 @@ def parse_args():
     parser.add_argument("--description", default="A Flutter application")
     parser.add_argument("--version", default="0.1.0")
     parser.add_argument("--api-base-url", default="http://localhost:5000/api/v1")
+    parser.add_argument("--default-color-scheme", default="blue")
+    parser.add_argument("--backend-features", default="{}")
     return parser.parse_args()
+
+import json as _json  # noqa: E402
 
 _args = parse_args()
 PROJECT_SLUG = _args.project_slug
 PROJECT_DIR = Path.cwd() / PROJECT_SLUG
 PACKAGE_NAME = _args.project_slug
 PROJECT_NAME = _args.project_name
+APP_TITLE = _args.app_title or PROJECT_NAME
 ORG_NAME = _args.org_name
 FEATURES = _args.features
 INCLUDE_AUTH = _args.include_auth.lower() == "true"
@@ -48,6 +54,19 @@ INCLUDE_OPENAPI = _args.include_openapi.lower() == "true"
 DESCRIPTION = _args.description
 VERSION = _args.version
 API_BASE_URL = _args.api_base_url
+DEFAULT_COLOR_SCHEME = _args.default_color_scheme
+
+# WS2: per-feature backend routing for multi-backend deployments.
+try:
+    BACKEND_FEATURES = _json.loads(_args.backend_features or "{}")
+except (ValueError, TypeError):
+    BACKEND_FEATURES = {}
+FEATURE_TO_BACKEND: dict = {}
+for _bname, _binfo in BACKEND_FEATURES.items():
+    for _f in (_binfo.get("features") or []):
+        FEATURE_TO_BACKEND[_f] = _bname
+DEFAULT_BACKEND = next(iter(BACKEND_FEATURES), "backend")
+IS_MULTI_BACKEND = len(BACKEND_FEATURES) > 1
 
 # Load feature templates from _tasks directory (alongside this script)
 TASKS_DIR = Path(__file__).parent
@@ -284,7 +303,7 @@ def generate_readme(features):
     feature_rows += "| **Profile** | User profile from JWT claims | Built-in |\n"
     feature_rows += "| **Settings** | Theme mode, color scheme, OLED dark mode | Built-in |\n"
     if INCLUDE_CHAT:
-        feature_rows += "| **Chat** | AI chat sidebar with split-screen | Built-in |\n"
+        feature_rows += "| **Chat** | AG-UI streaming chat + workspace + canvas | Built-in |\n"
     for f in features:
         ctx = make_feature_context(f, PACKAGE_NAME)
         feature_rows += "| **%s** | CRUD operations for %s | Generated |\n" % (ctx["Plural"], ctx["plural"])
@@ -296,9 +315,31 @@ def generate_readme(features):
             ctx["Plural"], ctx["plural"], ctx["plural"], ctx["plural"], ctx["plural"], ctx["plural"],
             ctx["plural"], ctx["plural"], ctx["singular"], ctx["singular"], ctx["singular"], ctx["singular"])
 
-    readme = "# %s\n\n%s\n\n## Quick Start\n\n```bash\ncd %s\nflutter run --dart-define=AUTH_DISABLED=true --dart-define=API_BASE_URL=%s\n```\n\n## Features\n\n| Feature | Description | Source |\n|---------|-------------|--------|\n%s\n## Feature Modules\n%s\n## Testing\n\n```bash\nflutter test\n```\n\n## Project Info\n\n- **Version**: %s\n- **Package**: `%s`\n" % (
+    chat_section = ""
+    if INCLUDE_CHAT:
+        chat_section = (
+            "\n## Chat & agentic UI\n\n"
+            "When generated with `--include-chat`, `lib/src/features/chat/` ships a\n"
+            "Dart-native AG-UI client (Dio SSE + JSON-Patch reducer + Riverpod state):\n\n"
+            "- **Streaming responses** via `AgUiClient` consuming `text/event-stream`.\n"
+            "- **Tool call status** chips (`ToolCallStatusChip`).\n"
+            "- **HITL prompts** rendered inline via `UserPromptCard`.\n"
+            "- **Workspace pane** (`WorkspacePane`) for file explorer, credential\n"
+            "  forms, approval reviews, user-prompt reviews.\n"
+            "- **Canvas pane** (`CanvasPane`) for dynamic forms, data tables,\n"
+            "  reports, code viewers, workflow diagrams.\n\n"
+            "Configure the agent endpoint via `--dart-define=AGENT_BASE_URL=...`\n"
+            "(defaults to `/agent/`). Add a custom workspace activity:\n\n"
+            "```dart\n"
+            "WorkspaceRegistry.register('my_activity', WorkspaceRegistryEntry(\n"
+            "  label: 'My Activity',\n"
+            "  builder: (ctx, activity, onAction) => MyActivity(activity: activity),\n"
+            "));\n"
+            "```\n"
+        )
+    readme = "# %s\n\n%s\n\n## Quick Start\n\n```bash\ncd %s\nflutter run --dart-define=AUTH_DISABLED=true --dart-define=API_BASE_URL=%s\n```\n\n## Features\n\n| Feature | Description | Source |\n|---------|-------------|--------|\n%s\n## Feature Modules\n%s%s\n## Testing\n\n```bash\nflutter test\n```\n\n## Project Info\n\n- **Version**: %s\n- **Package**: `%s`\n" % (
         PROJECT_NAME, DESCRIPTION, PROJECT_SLUG, API_BASE_URL,
-        feature_rows, feature_tree, VERSION, PACKAGE_NAME)
+        feature_rows, feature_tree, chat_section, VERSION, PACKAGE_NAME)
 
     write_file(PROJECT_DIR / "README.md", readme)
     print("  Generated README.md")
@@ -324,6 +365,67 @@ def remove_optional_files():
         print("  All components enabled")
 
 
+# -- WS2: multi-backend awareness ---------------------------------------------
+
+def patch_feature_repository_paths(features) -> None:
+    """Prefix repository HTTP paths per backend for multi-backend deployments.
+
+    Each generated `lib/src/features/{name}/data/{name}_repository.dart` emits
+    paths like `/items`. For multi-backend deployments routed through Traefik,
+    rewrite to `/api/{backend}/v1/items` so requests reach the right service.
+    Single-backend projects (the common case) skip this and keep the existing
+    `api_base_url`-relative paths.
+    """
+    if not IS_MULTI_BACKEND:
+        return
+    for feat in features:
+        backend = FEATURE_TO_BACKEND.get(feat, DEFAULT_BACKEND)
+        repo_path = (
+            PROJECT_DIR / "lib" / "src" / "features" / feat / "data"
+            / ("%s_repository.dart" % feat)
+        )
+        if not repo_path.exists():
+            continue
+        text = repo_path.read_text(encoding="utf-8")
+        # Rewrite the literal '/{plural}' path strings the repo template emits.
+        replacements = [
+            ("'/%s'" % feat, "'/api/%s/v1/%s'" % (backend, feat)),
+            ("'/%s/$id'" % feat, "'/api/%s/v1/%s/$id'" % (backend, feat)),
+        ]
+        for old, new in replacements:
+            text = text.replace(old, new)
+        repo_path.write_text(text, encoding="utf-8")
+        print("  Patched %s -> /api/%s/v1/%s" % (repo_path.relative_to(PROJECT_DIR), backend, feat))
+
+
+def write_backend_routes_constant(features) -> None:
+    """Write a `lib/src/core/config/backend_routes.dart` constant for runtime use.
+
+    Always emitted (even single-backend) so application code has a single source of
+    truth for which backend each entity routes through, instead of hardcoding strings.
+    """
+    if not features:
+        return
+    config_dir = PROJECT_DIR / "lib" / "src" / "core" / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for feat in features:
+        backend = FEATURE_TO_BACKEND.get(feat, DEFAULT_BACKEND)
+        entries.append("  '%s': '%s'," % (feat, backend))
+    content = (
+        "// Generated by forge — do not edit by hand.\n"
+        "//\n"
+        "// Maps each scaffolded feature to its owning backend service. Repositories\n"
+        "// can read this map to construct routes like `/api/${backend}/v1/${entity}`\n"
+        "// for multi-backend deployments behind a Traefik-style reverse proxy.\n"
+        "const Map<String, String> backendRoutes = {\n"
+        + "\n".join(entries)
+        + "\n};\n"
+    )
+    (config_dir / "backend_routes.dart").write_text(content, encoding="utf-8")
+    print("  Generated lib/src/core/config/backend_routes.dart (%d entries)" % len(features))
+
+
 # -- Main ----------------------------------------------------------------------
 
 def main():
@@ -345,6 +447,8 @@ def main():
     generate_import_lint(features)
     generate_readme(features)
     patch_web_files()
+    patch_feature_repository_paths(features)
+    write_backend_routes_constant(features)
     remove_optional_files()
     print()
 

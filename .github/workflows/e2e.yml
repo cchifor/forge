@@ -1,0 +1,58 @@
+name: E2E
+
+on:
+  schedule:
+    - cron: "0 5 * * *"  # 05:00 UTC daily
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "forge/templates/**"
+      - "forge/generator.py"
+      - "forge/docker_manager.py"
+      - "tests/e2e/**"
+      - ".github/workflows/e2e.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.13
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            /tmp/forge-e2e-*/target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('forge/templates/services/rust-service-template/template/Cargo.toml.jinja') }}
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+
+      - name: Install forge
+        run: uv sync --all-extras --dev
+
+      - name: Run e2e suite
+        run: uv run pytest -m e2e -v --no-cov

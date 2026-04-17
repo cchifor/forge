@@ -53,15 +53,40 @@ ANSWERS = load_answers()
 
 PROJECT_NAME = ANSWERS.get("project_name", "My App")
 PROJECT_SLUG = ANSWERS.get("project_slug", "my-app")
+APP_TITLE = ANSWERS.get("app_title", PROJECT_NAME)
 DESCRIPTION = ANSWERS.get("description", "A Svelte 5 SPA application")
 VERSION = ANSWERS.get("version", "0.1.0")
 FEATURES = ANSWERS.get("features", "items")
 INCLUDE_AUTH = ANSWERS.get("include_auth", True)
 INCLUDE_CHAT = ANSWERS.get("include_chat", True)
+INCLUDE_OPENAPI = ANSWERS.get("include_openapi", True)
 PACKAGE_MANAGER = ANSWERS.get("package_manager", "npm")
 API_BASE_URL = ANSWERS.get("api_base_url", "http://localhost:5000")
+API_PROXY_TARGET = ANSWERS.get("api_proxy_target", API_BASE_URL)
 SERVER_PORT = str(ANSWERS.get("server_port", 5173))
 KEYCLOAK_URL = ANSWERS.get("keycloak_url", "http://localhost:8080")
+DEFAULT_COLOR_SCHEME = ANSWERS.get("default_color_scheme", "blue")
+
+# WS2 multi-backend awareness — these come from forge.variable_mapper.svelte_context.
+import json as _json  # noqa: E402
+
+try:
+    BACKEND_FEATURES = _json.loads(ANSWERS.get("backend_features") or "{}")
+except (ValueError, TypeError):
+    BACKEND_FEATURES = {}
+try:
+    PROXY_TARGETS = _json.loads(ANSWERS.get("proxy_targets") or "[]")
+except (ValueError, TypeError):
+    PROXY_TARGETS = []
+VITE_PROXY_CONFIG = ANSWERS.get("vite_proxy_config", "") or ""
+
+# Build entity → backend lookup so per-feature API files prefix correctly.
+FEATURE_TO_BACKEND: dict = {}
+for _bname, _binfo in BACKEND_FEATURES.items():
+    for _f in (_binfo.get("features") or []):
+        FEATURE_TO_BACKEND[_f] = _bname
+
+DEFAULT_BACKEND = next(iter(BACKEND_FEATURES), "backend")
 
 PROJECT_DIR = Path.cwd()
 
@@ -231,16 +256,63 @@ def patch_home_api_paths(first_backend: str) -> None:
             fpath.write_text(text, encoding="utf-8")
 
 
+def patch_feature_api_paths() -> None:
+    """Per-feature API path prefixing.
+
+    For multi-backend deployments, each entity routes through its owning backend's
+    Traefik prefix. The mapping comes from `backend_features` (built by
+    forge.variable_mapper). Falls back to the default backend if no mapping exists.
+    """
+    if not FEATURE_TO_BACKEND:
+        return
+    features_dir = PROJECT_DIR / "src" / "lib" / "features"
+    for feature_name, backend in FEATURE_TO_BACKEND.items():
+        api_file = features_dir / feature_name / "api" / f"{feature_name}.ts"
+        if not api_file.exists():
+            continue
+        text = api_file.read_text(encoding="utf-8")
+        # The feature template emits `api/v1/{plural}` paths; patch them.
+        new_text = text.replace("api/v1/", f"api/{backend}/v1/")
+        if new_text != text:
+            api_file.write_text(new_text, encoding="utf-8")
+            print(f"  Patched {api_file.relative_to(PROJECT_DIR)} -> /api/{backend}/v1/")
+
+
 # -- Config patching ----------------------------------------------------------
 
 def patch_config_files():
     vite_config = PROJECT_DIR / "vite.config.ts"
-    if vite_config.exists():
-        content = read_file(vite_config)
-        content = content.replace("port: 5173", "port: %s" % SERVER_PORT)
-        content = content.replace("target: 'http://localhost:5000'", "target: '%s'" % API_BASE_URL)
-        vite_config.write_text(content, encoding="utf-8")
-        print("  Patched vite.config.ts (port=%s, proxy=%s)" % (SERVER_PORT, API_BASE_URL))
+    if not vite_config.exists():
+        return
+    content = read_file(vite_config)
+    content = content.replace("port: 5173", "port: %s" % SERVER_PORT)
+    if VITE_PROXY_CONFIG.strip():
+        # Multi-backend project: replace the default single-target /api proxy with
+        # the per-backend block built by forge.variable_mapper._build_vite_proxy_config.
+        new_proxy = "proxy: {\n%s\n\t\t}" % VITE_PROXY_CONFIG
+        content = content.replace(
+            "proxy: {\n\t\t\t'/api': {\n"
+            "\t\t\t\ttarget: 'http://localhost:5000',\n"
+            "\t\t\t\tchangeOrigin: true\n"
+            "\t\t\t}\n"
+            "\t\t}",
+            new_proxy,
+        )
+        # Fallback: if exact match didn't hit, just substitute the default target.
+        content = content.replace("target: 'http://localhost:5000'", "target: '%s'" % API_PROXY_TARGET)
+        print(
+            "  Patched vite.config.ts (port=%s, multi-backend proxy with %d targets)"
+            % (SERVER_PORT, len(PROXY_TARGETS))
+        )
+    else:
+        content = content.replace(
+            "target: 'http://localhost:5000'",
+            "target: '%s'" % API_PROXY_TARGET,
+        )
+        print(
+            "  Patched vite.config.ts (port=%s, proxy=%s)" % (SERVER_PORT, API_PROXY_TARGET)
+        )
+    vite_config.write_text(content, encoding="utf-8")
 
 
 # -- README generation ---------------------------------------------------------
@@ -253,7 +325,7 @@ def generate_readme(features):
     feature_rows += "| **Profile** | User profile from JWT claims | Built-in |\n"
     feature_rows += "| **Settings** | Theme mode, color scheme, OLED dark mode | Built-in |\n"
     if INCLUDE_CHAT:
-        feature_rows += "| **Chat** | AI chat sidebar with split-screen | Built-in |\n"
+        feature_rows += "| **Chat** | AG-UI streaming chat + workspace + canvas | Built-in |\n"
     for f in features:
         ctx = make_feature_context(f)
         feature_rows += "| **%s** | CRUD operations for %s | Generated |\n" % (ctx["Plural"], ctx["plural"])
@@ -293,6 +365,37 @@ Feature-First with Svelte 5 runes, TanStack Query, Ky HTTP client, Zod validatio
 - **Medium** (640-1024px): Collapsed sidebar + drawer chat
 - **Compact** (<640px): Bottom navigation + modal chat
 %s
+""" + ("""
+## Chat & agentic UI
+
+When generated with `--include-chat`, the chat module under
+`src/lib/features/chat/` provides a full AG-UI client:
+
+- **Streaming responses** via `@ag-ui/client` HttpAgent (text-delta events).
+- **Tool call status** (`ToolCallStatus.svelte`) shows running/completed/error.
+- **HITL (Human-in-the-Loop)** prompts via `UserPromptCard.svelte`.
+- **Workspace pane** (`WorkspacePane.svelte`) renders agent-opened activities:
+  file explorer, credential form, approval review, user-prompt review.
+- **Canvas pane** (`CanvasPane.svelte`) renders agent outputs: dynamic form,
+  data table, report (markdown), code viewer, workflow diagram.
+- **Model selector** + **approval mode** toggle in the chat header.
+
+Mount `<WorkspacePane />` and `<CanvasPane />` next to your chat panel — they
+render conditionally when the agent emits `activity_snapshot` events. Set the
+agent endpoint via `VITE_AGENT_BASE_URL` (defaults to `${origin}/agent/`).
+
+Add a custom workspace activity:
+
+```ts
+import { registerWorkspaceComponent } from '$lib/features/chat';
+import MyActivity from './MyActivity.svelte';
+
+registerWorkspaceComponent('my_activity_type', {
+  component: MyActivity,
+  label: 'My Activity'
+});
+```
+""" if INCLUDE_CHAT else "") + """
 ## Running
 
 ```bash
@@ -374,7 +477,9 @@ def main():
     print()
 
     # 1b. Patch home page API paths to use the backend route prefix
-    patch_home_api_paths("backend")
+    patch_home_api_paths(DEFAULT_BACKEND)
+    # 1c. Per-feature API prefixing for multi-backend projects
+    patch_feature_api_paths()
 
     # 2. Configure
     print("> Configuring project")

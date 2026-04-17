@@ -20,6 +20,7 @@ BUILD_DIR = {
 
 # -- Rendering ----------------------------------------------------------------
 
+
 def _jinja_env() -> Environment:
     return Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -35,19 +36,20 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
     template = env.get_template("deploy/docker-compose.yml.j2")
 
     has_frontend = (
-        config.frontend is not None
-        and config.frontend.framework != FrontendFramework.NONE
+        config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
     )
 
     # Build per-backend context list for the template loop
     backends_ctx = []
     for bc in config.backends:
-        backends_ctx.append({
-            "name": bc.name,
-            "language": bc.language.value,
-            "port": bc.server_port,
-            "db_name": bc.name.replace("-", "_"),
-        })
+        backends_ctx.append(
+            {
+                "name": bc.name,
+                "language": bc.language.value,
+                "port": bc.server_port,
+                "db_name": bc.name.replace("-", "_"),
+            }
+        )
 
     # Primary backend (first) for backward-compat references
     primary = config.backend
@@ -69,7 +71,8 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
         "traefik_dashboard_port": 19090,
         "keycloak_realm": (
             config.frontend.keycloak_realm
-            if config.frontend and config.include_keycloak
+            if config.frontend
+            and config.include_keycloak
             and config.frontend.keycloak_realm != "master"
             else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
         ),
@@ -90,14 +93,16 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
     """Render a two-stage production Dockerfile into the frontend directory."""
     env = _jinja_env()
     fc = config.frontend
+    if fc is None:
+        raise ValueError("render_frontend_dockerfile called without a frontend configured")
 
     if fc.framework == FrontendFramework.FLUTTER:
         template = env.get_template("deploy/Dockerfile.flutter.j2")
-        context = {}
+        context: dict[str, object] = {}
     else:
         template = env.get_template("deploy/Dockerfile.node.j2")
         context = {
-            "package_manager": fc.package_manager if fc else "npm",
+            "package_manager": fc.package_manager,
             "build_dir": BUILD_DIR.get(fc.framework, "dist"),
         }
 
@@ -108,7 +113,17 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
 
 
 def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
-    """Render keycloak-realm.json into the project root."""
+    """Render keycloak-realm.json into the project root.
+
+    The rendered JSON is parsed before being written so a Jinja typo or quoting bug
+    fails generation immediately rather than producing a realm Keycloak will reject
+    at boot. A few essential keys are checked too — these catch the common
+    template-edit mistake of dropping a top-level field.
+    """
+    import json
+
+    from forge.generator import GeneratorError
+
     env = _jinja_env()
     template = env.get_template("infra/keycloak-realm.json.j2")
 
@@ -121,12 +136,24 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
             else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
         ),
         "keycloak_client_id": (
-            fc.keycloak_client_id if fc and fc.keycloak_client_id
-            else config.project_slug
+            fc.keycloak_client_id if fc and fc.keycloak_client_id else config.project_slug
         ),
     }
 
     output = template.render(context)
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError as e:
+        raise GeneratorError(
+            f"Rendered Keycloak realm JSON is invalid (line {e.lineno} col {e.colno}): {e.msg}. "
+            "Check forge/templates/infra/keycloak-realm.json.j2 for an unbalanced quote, "
+            "trailing comma, or unrendered Jinja expression."
+        ) from e
+    for required in ("realm", "clients"):
+        if required not in parsed:
+            raise GeneratorError(
+                f"Rendered Keycloak realm JSON is missing required top-level key '{required}'."
+            )
     infra_dir = project_root / "infra"
     infra_dir.mkdir(parents=True, exist_ok=True)
     realm_path = infra_dir / "keycloak-realm.json"
@@ -168,6 +195,7 @@ def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:
 
 
 # -- Lifecycle ----------------------------------------------------------------
+
 
 def _docker_running() -> bool:
     """Check if the Docker daemon is reachable."""

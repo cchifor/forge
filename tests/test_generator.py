@@ -191,7 +191,7 @@ class TestGenerateE2eTests:
         mock_copy.assert_called_once()
         call_kwargs = mock_copy.call_args.kwargs
         assert "e2e-testing-template" in call_kwargs["src_path"]  # tests/e2e-testing-template
-        assert call_kwargs["dst_path"] == str(project_root / "test_app-e2e")
+        assert call_kwargs["dst_path"] == str(project_root / "tests" / "e2e")
         assert call_kwargs["data"]["project_name"] == "Test App"
         assert call_kwargs["data"]["features"] == "items"
         assert call_kwargs["data"]["include_auth"] is False
@@ -206,7 +206,7 @@ class TestGenerateE2eTests:
         with patch("forge.generator.run_copy"):
             result = _generate_e2e_tests(config, project_root)
 
-        assert result == project_root / "test_app-e2e"
+        assert result == project_root / "tests" / "e2e"
 
     def test_creates_output_directory(self, tmp_path):
         config = self._make_config()
@@ -216,4 +216,4 @@ class TestGenerateE2eTests:
         with patch("forge.generator.run_copy"):
             _generate_e2e_tests(config, project_root)
 
-        assert (project_root / "test_app-e2e").is_dir()
+        assert (project_root / "tests" / "e2e").is_dir()

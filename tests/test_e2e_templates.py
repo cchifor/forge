@@ -72,9 +72,10 @@ class TestSpecTemplates:
 
         ctx = {"plural": "items", "singular": "item", "Plural": "Items", "Singular": "Item"}
         output = mod.FEATURE_SPEC_TEMPLATE.format(**ctx)
-        assert "Items List" in output
-        assert "Item Create" in output
-        assert "Item Detail" in output
+        assert "test.describe('Items'" in output
+        assert "test.describe('List'" in output
+        assert "test.describe('Create'" in output
+        assert "test.describe('Detail'" in output
         assert "items-list" in output
         assert "item-name-input" in output
         assert "item-submit-btn" in output
@@ -88,7 +89,6 @@ class TestSpecTemplates:
         spec.loader.exec_module(mod)
 
         output = mod.AUTH_SPEC_TEMPLATE
-        assert "Login" in output
-        assert "Protected Access" in output
-        assert "Logout" in output
+        assert "test.describe('Authentication'" in output
+        assert "logout" in output.lower()
         assert "from '../e2e-platform/fixtures/app'" in output

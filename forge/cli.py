@@ -6,11 +6,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import questionary
 
 from forge.config import (
+    BACKEND_REGISTRY,
     BackendConfig,
     BackendLanguage,
     FrontendConfig,
@@ -19,8 +20,7 @@ from forge.config import (
     validate_features,
 )
 from forge.docker_manager import boot
-from forge.generator import generate
-
+from forge.generator import GeneratorError, generate
 
 # -- Argument parsing ---------------------------------------------------------
 
@@ -38,8 +38,9 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="forge", description="Project Generator")
 
     # Config file (YAML or JSON, use - for stdin)
-    p.add_argument("--config", "-c", type=str, metavar="FILE",
-                    help="YAML/JSON config file (use - for stdin)")
+    p.add_argument(
+        "--config", "-c", type=str, metavar="FILE", help="YAML/JSON config file (use - for stdin)"
+    )
 
     # Project
     p.add_argument("--project-name", metavar="NAME")
@@ -47,35 +48,40 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", metavar="DIR", default=".")
 
     # Backend
-    p.add_argument("--backend-language", choices=["python", "node", "rust"],
-                    help="Backend language: python (FastAPI), node (Fastify), or rust (Axum)")
-    p.add_argument("--backend-name", metavar="NAME",
-                    help="Backend service name (default: backend)")
+    p.add_argument(
+        "--backend-language",
+        choices=["python", "node", "rust"],
+        help="Backend language: python (FastAPI), node (Fastify), or rust (Axum)",
+    )
+    p.add_argument("--backend-name", metavar="NAME", help="Backend service name (default: backend)")
     p.add_argument("--backend-port", type=int, metavar="PORT")
     p.add_argument("--python-version", choices=["3.13", "3.12", "3.11"])
     p.add_argument("--node-version", choices=["22", "24"])
     p.add_argument("--rust-edition", choices=["2021", "2024"])
 
     # Frontend
-    p.add_argument("--frontend", choices=list(FRAMEWORK_MAP.keys()),
-                    metavar="FRAMEWORK")
-    p.add_argument("--features", metavar="LIST",
-                    help="Comma-separated CRUD entities")
+    p.add_argument("--frontend", choices=list(FRAMEWORK_MAP.keys()), metavar="FRAMEWORK")
+    p.add_argument("--features", metavar="LIST", help="Comma-separated CRUD entities")
     p.add_argument("--author-name", metavar="NAME")
     p.add_argument("--package-manager", choices=["npm", "pnpm", "yarn", "bun"])
     p.add_argument("--frontend-port", type=int, metavar="PORT")
     p.add_argument("--color-scheme", choices=COLOR_SCHEMES)
-    p.add_argument("--org-name", metavar="ORG",
-                    help="Flutter org in reverse domain (e.g. com.example)")
+    p.add_argument(
+        "--org-name", metavar="ORG", help="Flutter org in reverse domain (e.g. com.example)"
+    )
 
     # Feature toggles
     p.add_argument("--include-auth", action="store_true", default=None)
     p.add_argument("--no-auth", dest="include_auth", action="store_false")
     p.add_argument("--include-chat", action="store_true", default=None)
     p.add_argument("--include-openapi", action="store_true", default=None)
-    p.add_argument("--no-e2e-tests", dest="generate_e2e_tests",
-                    action="store_false", default=None,
-                    help="Skip Playwright e2e test generation")
+    p.add_argument(
+        "--no-e2e-tests",
+        dest="generate_e2e_tests",
+        action="store_false",
+        default=None,
+        help="Skip Playwright e2e test generation",
+    )
 
     # Keycloak
     p.add_argument("--keycloak-port", type=int, metavar="PORT")
@@ -83,16 +89,103 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--keycloak-client-id", metavar="ID")
 
     # Behavior
-    p.add_argument("--yes", "-y", action="store_true",
-                    help="Skip confirmation prompts")
-    p.add_argument("--no-docker", action="store_true",
-                    help="Skip Docker Compose boot")
-    p.add_argument("--quiet", "-q", action="store_true",
-                    help="Suppress progress output (implies quiet Copier)")
-    p.add_argument("--json", dest="json_output", action="store_true",
-                    help="Print machine-readable JSON result to stdout")
+    p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
+    p.add_argument("--no-docker", action="store_true", help="Skip Docker Compose boot")
+    p.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress progress output (implies quiet Copier)"
+    )
+    p.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show full Copier and subprocess output (overrides --quiet for diagnostics)",
+    )
+    p.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Print machine-readable JSON result to stdout",
+    )
+    p.add_argument(
+        "--completion",
+        choices=["bash", "zsh", "fish"],
+        metavar="SHELL",
+        help="Print a shell completion script to stdout and exit",
+    )
 
     return p.parse_args()
+
+
+# -- Completion scripts -------------------------------------------------------
+
+_BASH_COMPLETION = """\
+_forge_completions() {
+  local cur prev opts
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  opts="--config --project-name --description --output-dir --backend-language \\
+        --backend-name --backend-port --python-version --node-version --rust-edition \\
+        --frontend --features --author-name --package-manager --frontend-port \\
+        --color-scheme --org-name --include-auth --no-auth --include-chat \\
+        --include-openapi --no-e2e-tests --keycloak-port --keycloak-realm \\
+        --keycloak-client-id --yes --no-docker --quiet --verbose --json --completion --help"
+  case "$prev" in
+    --backend-language) COMPREPLY=( $(compgen -W "python node rust" -- "$cur") ); return 0 ;;
+    --frontend) COMPREPLY=( $(compgen -W "vue svelte flutter none" -- "$cur") ); return 0 ;;
+    --package-manager) COMPREPLY=( $(compgen -W "npm pnpm yarn bun" -- "$cur") ); return 0 ;;
+    --completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ); return 0 ;;
+    --config|--output-dir) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
+  esac
+  COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+}
+complete -F _forge_completions forge
+"""
+
+_ZSH_COMPLETION = """\
+#compdef forge
+_forge() {
+  local -a opts
+  opts=(
+    '--config[YAML/JSON config file]:file:_files'
+    '--project-name[Project name]:name:'
+    '--output-dir[Output directory]:dir:_files -/'
+    '--backend-language[Backend language]:lang:(python node rust)'
+    '--frontend[Frontend framework]:framework:(vue svelte flutter none)'
+    '--package-manager[Package manager]:pm:(npm pnpm yarn bun)'
+    '--yes[Skip confirmations]'
+    '--no-docker[Skip Docker boot]'
+    '--quiet[Suppress output]'
+    '--verbose[Show full output]'
+    '--json[Print JSON result]'
+    '--completion[Print completion script]:shell:(bash zsh fish)'
+  )
+  _arguments $opts
+}
+_forge "$@"
+"""
+
+_FISH_COMPLETION = """\
+complete -c forge -l config -d "YAML/JSON config file" -r
+complete -c forge -l project-name -d "Project name" -x
+complete -c forge -l output-dir -d "Output directory" -r
+complete -c forge -l backend-language -d "Backend language" -xa "python node rust"
+complete -c forge -l frontend -d "Frontend framework" -xa "vue svelte flutter none"
+complete -c forge -l package-manager -d "Package manager" -xa "npm pnpm yarn bun"
+complete -c forge -l yes -d "Skip confirmations"
+complete -c forge -l no-docker -d "Skip Docker boot"
+complete -c forge -l quiet -d "Suppress output"
+complete -c forge -l verbose -d "Show full output"
+complete -c forge -l json -d "Print JSON result"
+complete -c forge -l completion -d "Print completion script" -xa "bash zsh fish"
+"""
+
+_COMPLETIONS = {"bash": _BASH_COMPLETION, "zsh": _ZSH_COMPLETION, "fish": _FISH_COMPLETION}
+
+
+def _print_completion(shell: str) -> None:
+    sys.stdout.write(_COMPLETIONS[shell])
+    sys.exit(0)
 
 
 def _is_headless(args: argparse.Namespace) -> bool:
@@ -114,10 +207,12 @@ def _is_headless(args: argparse.Namespace) -> bool:
 
 # -- Config file loading ------------------------------------------------------
 
+
 def _load_config_file(path_str: str) -> dict[str, Any]:
     """Load YAML or JSON config. Use '-' for stdin."""
     try:
         import yaml
+
         has_yaml = True
     except ImportError:
         has_yaml = False
@@ -144,7 +239,14 @@ def _load_config_file(path_str: str) -> dict[str, Any]:
 
 # -- Build config from args/file ---------------------------------------------
 
-def _get(args: argparse.Namespace, flag: str, cfg: dict, *keys: str, default=None):
+
+def _get(
+    args: argparse.Namespace,
+    flag: str,
+    cfg: dict[str, Any],
+    *keys: str,
+    default: Any = None,
+) -> Any:
     """Resolve a value: CLI flag > config file > default."""
     val = getattr(args, flag, None)
     if val is not None:
@@ -158,95 +260,138 @@ def _get(args: argparse.Namespace, flag: str, cfg: dict, *keys: str, default=Non
     return d if d is not None else default
 
 
-def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
+def _normalize_features(raw: Any, default: list[str] | None = None) -> list[str]:
+    """Coerce CLI/config feature input (list or comma-string) to a clean list."""
+    if raw is None:
+        return list(default) if default else []
+    if isinstance(raw, list):
+        return [str(f).strip() for f in raw if str(f).strip()]
+    return [f.strip() for f in str(raw).split(",") if f.strip()]
+
+
+def _build_backends_from_cfg(
+    args: argparse.Namespace, cfg: dict[str, Any], project_name: str, description: str
+) -> list[BackendConfig]:
+    """Build backend list from CLI args + config file.
+
+    Supports both `backends:` (list) and `backend:` (single) for backward compatibility.
+    """
+    backends_raw = cfg.get("backends")
+    if isinstance(backends_raw, list) and backends_raw:
+        backends: list[BackendConfig] = []
+        for i, raw in enumerate(backends_raw):
+            if not isinstance(raw, dict):
+                continue
+            be_cfg = cast("dict[str, Any]", raw)
+            lang = be_cfg.get("language", "python")
+            language = (
+                BackendLanguage(lang)
+                if lang in ("python", "node", "rust")
+                else BackendLanguage.PYTHON
+            )
+            backends.append(
+                BackendConfig(
+                    name=be_cfg.get("name", f"backend-{i}"),
+                    project_name=project_name,
+                    language=language,
+                    description=be_cfg.get("description", description),
+                    features=_normalize_features(be_cfg.get("features"), default=["items"]),
+                    python_version=be_cfg.get("python_version", "3.13"),
+                    node_version=be_cfg.get("node_version", "22"),
+                    rust_edition=be_cfg.get("rust_edition", "2024"),
+                    server_port=be_cfg.get("server_port", 5000 + i),
+                )
+            )
+        return backends
+
+    # Single backend (backward compat for `backend:` shape and CLI-only invocations)
+    lang_str = _get(args, "backend_language", cfg, "backend", "language", default="python")
+    language = (
+        BackendLanguage(lang_str)
+        if lang_str in ("python", "node", "rust")
+        else BackendLanguage.PYTHON
+    )
+    return [
+        BackendConfig(
+            name=_get(args, "backend_name", cfg, "backend", "name", default="backend"),
+            project_name=project_name,
+            language=language,
+            description=description,
+            features=_normalize_features(
+                _get(args, "features", cfg, "backend", "features", default=None),
+                default=["items"],
+            ),
+            python_version=_get(
+                args, "python_version", cfg, "backend", "python_version", default="3.13"
+            ),
+            node_version=_get(args, "node_version", cfg, "backend", "node_version", default="22"),
+            rust_edition=_get(args, "rust_edition", cfg, "backend", "rust_edition", default="2024"),
+            server_port=_get(args, "backend_port", cfg, "backend", "server_port", default=5000),
+        )
+    ]
+
+
+def _build_frontend_from_cfg(
+    args: argparse.Namespace, cfg: dict[str, Any], project_name: str, description: str
+) -> tuple[FrontendConfig | None, bool]:
+    """Build optional frontend config; returns (frontend, include_auth)."""
+    fw_str = _get(args, "frontend", cfg, "frontend", "framework", default="none")
+    framework = FRAMEWORK_MAP.get(fw_str, FrontendFramework.NONE)
+    if framework == FrontendFramework.NONE:
+        return None, False
+
+    include_auth = _get(args, "include_auth", cfg, "frontend", "include_auth", default=True)
+    frontend = FrontendConfig(
+        framework=framework,
+        project_name=project_name,
+        description=description,
+        author_name=_get(args, "author_name", cfg, "frontend", "author_name", default="Your Name"),
+        package_manager=_get(
+            args, "package_manager", cfg, "frontend", "package_manager", default="npm"
+        ),
+        include_auth=include_auth,
+        include_chat=_get(args, "include_chat", cfg, "frontend", "include_chat", default=False),
+        include_openapi=_get(
+            args, "include_openapi", cfg, "frontend", "include_openapi", default=False
+        ),
+        server_port=_get(args, "frontend_port", cfg, "frontend", "server_port", default=5173),
+        default_color_scheme=_get(
+            args, "color_scheme", cfg, "frontend", "default_color_scheme", default="blue"
+        ),
+        org_name=_get(args, "org_name", cfg, "frontend", "org_name", default="com.example"),
+        generate_e2e_tests=_get(
+            args, "generate_e2e_tests", cfg, "frontend", "generate_e2e_tests", default=True
+        ),
+    )
+    return frontend, include_auth
+
+
+def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfig:
     """Build ProjectConfig from CLI args merged with config file."""
     project_name = _get(args, "project_name", cfg, "project_name", default="My Platform")
     description = _get(args, "description", cfg, "description", default="A full-stack application")
     output_dir = args.output_dir
 
-    # Backends — support both "backend:" (single) and "backends:" (list)
-    backends: list[BackendConfig] = []
-    backends_raw = cfg.get("backends") if isinstance(cfg, dict) else None
-
-    if backends_raw and isinstance(backends_raw, list):
-        # Multi-backend from config file
-        for i, be_cfg in enumerate(backends_raw):
-            lang = be_cfg.get("language", "python")
-            features_raw = be_cfg.get("features", "items")
-            if isinstance(features_raw, list):
-                features = features_raw
-            else:
-                features = [f.strip() for f in str(features_raw).split(",") if f.strip()]
-            backends.append(BackendConfig(
-                name=be_cfg.get("name", f"backend-{i}"),
-                project_name=project_name,
-                language=BackendLanguage(lang) if lang in ("python", "node", "rust") else BackendLanguage.PYTHON,
-                description=be_cfg.get("description", description),
-                features=features,
-                python_version=be_cfg.get("python_version", "3.13"),
-                node_version=be_cfg.get("node_version", "22"),
-                rust_edition=be_cfg.get("rust_edition", "2024"),
-                server_port=be_cfg.get("server_port", 5000 + i),
-            ))
-    else:
-        # Single backend (backward compat)
-        lang_str = _get(args, "backend_language", cfg, "backend", "language", default="python")
-        backend_language = BackendLanguage(lang_str) if lang_str in ("python", "node", "rust") else BackendLanguage.PYTHON
-        backend_name = _get(args, "backend_name", cfg, "backend", "name", default="backend")
-        features_raw = _get(args, "features", cfg, "backend", "features", default=None)
-        if features_raw:
-            if isinstance(features_raw, list):
-                backend_features = features_raw
-            else:
-                backend_features = [f.strip() for f in str(features_raw).split(",") if f.strip()]
-        else:
-            backend_features = ["items"]
-        backends.append(BackendConfig(
-            name=backend_name,
-            project_name=project_name,
-            language=backend_language,
-            description=description,
-            features=backend_features,
-            python_version=_get(args, "python_version", cfg, "backend", "python_version", default="3.13"),
-            node_version=_get(args, "node_version", cfg, "backend", "node_version", default="22"),
-            rust_edition=_get(args, "rust_edition", cfg, "backend", "rust_edition", default="2024"),
-            server_port=_get(args, "backend_port", cfg, "backend", "server_port", default=5000),
-        ))
-
-    # Frontend
-    fw_str = _get(args, "frontend", cfg, "frontend", "framework", default="none")
-    framework = FRAMEWORK_MAP.get(fw_str, FrontendFramework.NONE)
-
-    frontend = None
-    include_auth = False
-
-    if framework != FrontendFramework.NONE:
-        include_auth = _get(args, "include_auth", cfg, "frontend", "include_auth", default=True)
-
-        frontend = FrontendConfig(
-            framework=framework,
-            project_name=project_name,
-            description=description,
-            author_name=_get(args, "author_name", cfg, "frontend", "author_name", default="Your Name"),
-            package_manager=_get(args, "package_manager", cfg, "frontend", "package_manager", default="npm"),
-            include_auth=include_auth,
-            include_chat=_get(args, "include_chat", cfg, "frontend", "include_chat", default=False),
-            include_openapi=_get(args, "include_openapi", cfg, "frontend", "include_openapi", default=False),
-            server_port=_get(args, "frontend_port", cfg, "frontend", "server_port", default=5173),
-            default_color_scheme=_get(args, "color_scheme", cfg, "frontend", "default_color_scheme", default="blue"),
-            org_name=_get(args, "org_name", cfg, "frontend", "org_name", default="com.example"),
-            generate_e2e_tests=_get(args, "generate_e2e_tests", cfg, "frontend", "generate_e2e_tests", default=True),
-        )
+    backends = _build_backends_from_cfg(args, cfg, project_name, description)
+    frontend, include_auth = _build_frontend_from_cfg(args, cfg, project_name, description)
 
     # Keycloak
     include_keycloak = include_auth
     keycloak_port = _get(args, "keycloak_port", cfg, "keycloak", "port", default=18080)
     kc_realm = _get(
-        args, "keycloak_realm", cfg, "keycloak", "realm",
+        args,
+        "keycloak_realm",
+        cfg,
+        "keycloak",
+        "realm",
         default="app",  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
     )
     kc_client_id = _get(
-        args, "keycloak_client_id", cfg, "keycloak", "client_id",
+        args,
+        "keycloak_client_id",
+        cfg,
+        "keycloak",
+        "client_id",
         default=project_name.lower().replace(" ", "-").replace("_", "-"),
     )
 
@@ -266,6 +411,7 @@ def _build_config(args: argparse.Namespace, cfg: dict) -> ProjectConfig:
 
 
 # -- Interactive prompt helpers -----------------------------------------------
+
 
 def _ask_text(message: str, default: str = "") -> str:
     value = questionary.text(message, default=default).ask()
@@ -322,7 +468,41 @@ def _ask_port(message: str, default: str) -> int:
             print("  Port must be a number between 1024 and 65535.")
 
 
+def _prompt_backend(
+    index: int,
+    project_name: str,
+    description: str,
+    default_port: int,
+) -> BackendConfig:
+    """Prompt the user for one backend's configuration.
+
+    Drives language and version choices from BACKEND_REGISTRY so adding a 4th
+    backend doesn't require touching this function.
+    """
+    default_name = "backend" if index == 0 else f"backend-{index}"
+    name = _ask_text("Backend name:", default=default_name)
+    label_to_lang = {spec.display_label: lang for lang, spec in BACKEND_REGISTRY.items()}
+    chosen_label = _ask_select("Backend language:", choices=list(label_to_lang.keys()))
+    language = label_to_lang[chosen_label]
+    spec = BACKEND_REGISTRY[language]
+    port = _ask_port("Backend server port:", default=str(default_port))
+    version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
+    features = _ask_features()
+
+    bc = BackendConfig(
+        name=name,
+        project_name=project_name,
+        language=language,
+        description=description,
+        features=features,
+        server_port=port,
+    )
+    setattr(bc, spec.version_field, version)
+    return bc
+
+
 # -- Interactive flow ---------------------------------------------------------
+
 
 def _collect_inputs() -> ProjectConfig | None:
     # Fail fast if no terminal is available
@@ -344,78 +524,22 @@ def _collect_inputs() -> ProjectConfig | None:
     project_name = _ask_text("Project name:", default="My Platform")
     description = _ask_text("Description:", default="A full-stack application")
 
+    backends: list[BackendConfig] = []
     print()
     print("  -- Backend 1 --")
-    backend_name = _ask_text("Backend name:", default="backend")
-    backend_lang_choice = _ask_select(
-        "Backend language:",
-        choices=["Python (FastAPI)", "Node.js (Fastify)", "Rust (Axum)"],
-    )
-    if "Node" in backend_lang_choice:
-        backend_language = BackendLanguage.NODE
-    elif "Rust" in backend_lang_choice:
-        backend_language = BackendLanguage.RUST
-    else:
-        backend_language = BackendLanguage.PYTHON
+    backends.append(_prompt_backend(0, project_name, description, default_port=5000))
 
-    backend_port = _ask_port("Backend server port:", default="5000")
-
-    python_version = "3.13"
-    node_version = "22"
-    rust_edition = "2024"
-    if backend_language == BackendLanguage.PYTHON:
-        python_version = _ask_select(
-            "Python version:", choices=["3.13", "3.12", "3.11"]
-        )
-    elif backend_language == BackendLanguage.NODE:
-        node_version = _ask_select(
-            "Node.js version:", choices=["22", "24"]
-        )
-    elif backend_language == BackendLanguage.RUST:
-        rust_edition = _ask_select(
-            "Rust edition:", choices=["2024", "2021"]
-        )
-
-    features = _ask_features()
-
-    backends: list[BackendConfig] = []
-    backends.append(BackendConfig(
-        name=backend_name,
-        project_name=project_name,
-        language=backend_language,
-        description=description,
-        features=features,
-        python_version=python_version,
-        node_version=node_version,
-        rust_edition=rust_edition,
-        server_port=backend_port,
-    ))
-
-    # Ask for additional backends
     while _ask_confirm("Add another backend?", default=False):
         print()
         print(f"  -- Backend {len(backends) + 1} --")
-        be_name = _ask_text("Backend name:", default=f"backend-{len(backends)}")
-        be_lang_choice = _ask_select(
-            "Backend language:",
-            choices=["Python (FastAPI)", "Node.js (Fastify)", "Rust (Axum)"],
+        backends.append(
+            _prompt_backend(
+                len(backends),
+                project_name,
+                description,
+                default_port=5000 + len(backends),
+            )
         )
-        if "Node" in be_lang_choice:
-            be_lang = BackendLanguage.NODE
-        elif "Rust" in be_lang_choice:
-            be_lang = BackendLanguage.RUST
-        else:
-            be_lang = BackendLanguage.PYTHON
-        be_port = _ask_port("Server port:", default=str(5000 + len(backends)))
-        be_features = _ask_features()
-        backends.append(BackendConfig(
-            name=be_name,
-            project_name=project_name,
-            language=be_lang,
-            description=description,
-            features=be_features,
-            server_port=be_port,
-        ))
 
     print()
     print("  -- Frontend --")
@@ -455,21 +579,18 @@ def _collect_inputs() -> ProjectConfig | None:
         include_chat = _ask_confirm("Enable AI chat panel?", default=False)
         include_openapi = False
         if framework in (FrontendFramework.VUE, FrontendFramework.FLUTTER):
-            include_openapi = _ask_confirm(
-                "Enable OpenAPI code generation?", default=False
-            )
+            include_openapi = _ask_confirm("Enable OpenAPI code generation?", default=False)
 
         color_scheme = "blue"
         if framework == FrontendFramework.VUE:
             color_scheme = _ask_select(
-                "Default color scheme:", choices=COLOR_SCHEMES,
+                "Default color scheme:",
+                choices=COLOR_SCHEMES,
             )
 
         org_name = "com.example"
         if framework == FrontendFramework.FLUTTER:
-            org_name = _ask_text(
-                "Organization name (reverse domain):", default="com.example"
-            )
+            org_name = _ask_text("Organization name (reverse domain):", default="com.example")
 
         frontend = FrontendConfig(
             framework=framework,
@@ -534,12 +655,15 @@ def _collect_inputs() -> ProjectConfig | None:
 
 # -- Summary ------------------------------------------------------------------
 
+
 def _print_summary(config: ProjectConfig) -> None:
     print()
     print("  -- Summary --")
     print(f"  Project:    {config.project_name}")
     if config.backend:
-        print(f"  Backend:    Python {config.backend.python_version} on port {config.backend.server_port}")
+        print(
+            f"  Backend:    Python {config.backend.python_version} on port {config.backend.server_port}"
+        )
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         fw = config.frontend.framework.value.capitalize()
         if config.frontend.framework != FrontendFramework.FLUTTER:
@@ -556,6 +680,7 @@ def _print_summary(config: ProjectConfig) -> None:
 
 # -- Entry point --------------------------------------------------------------
 
+
 def _json_error(stdout_fd, message: str) -> None:
     """Write a JSON error object to the real stdout and exit."""
     stdout_fd.write(json.dumps({"error": message}) + "\n")
@@ -565,6 +690,9 @@ def _json_error(stdout_fd, message: str) -> None:
 
 def main() -> None:
     args = _parse_args()
+
+    if getattr(args, "completion", None):
+        _print_completion(args.completion)
 
     # When --json is set, redirect all print() to stderr so stdout is clean JSON
     _real_stdout = sys.stdout
@@ -593,10 +721,9 @@ def main() -> None:
         if not args.quiet and not getattr(args, "json_output", False):
             _print_summary(config)
 
-        if not args.yes:
-            if not _ask_confirm("Proceed with generation?"):
-                print("\n  Aborted.")
-                sys.exit(0)
+        if not args.yes and not _ask_confirm("Proceed with generation?"):
+            print("\n  Aborted.")
+            sys.exit(0)
     else:
         # Interactive mode
         config = _collect_inputs()
@@ -604,17 +731,31 @@ def main() -> None:
             print("\n  Aborted.")
             sys.exit(0)
 
-    quiet = args.quiet or getattr(args, "json_output", False)
+    # --verbose overrides --quiet so users can diagnose generator failures even in JSON mode.
+    quiet = (args.quiet or getattr(args, "json_output", False)) and not getattr(
+        args, "verbose", False
+    )
 
     if not quiet:
         print()
-    project_root = generate(config, quiet=quiet)
+    try:
+        project_root = generate(config, quiet=quiet)
+    except GeneratorError as e:
+        if getattr(args, "json_output", False):
+            _json_error(_real_stdout, str(e))
+        print(f"\n  Generation failed: {e}", file=sys.stderr)
+        sys.exit(2)
 
     if getattr(args, "json_output", False):
-        result = {"project_root": str(project_root)}
+        result: dict[str, Any] = {"project_root": str(project_root)}
         if config.backends:
             result["backends"] = [
-                {"name": bc.name, "dir": str(project_root / bc.name), "language": bc.language.value, "port": bc.server_port}
+                {
+                    "name": bc.name,
+                    "dir": str(project_root / bc.name),
+                    "language": bc.language.value,
+                    "port": bc.server_port,
+                }
                 for bc in config.backends
             ]
             # Backward compat: single backend_dir for first backend

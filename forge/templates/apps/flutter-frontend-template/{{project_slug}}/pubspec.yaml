@@ -27,6 +27,15 @@ dependencies:
   retrofit: ^4.9.2
 {%- endif %}
 
+{%- if include_chat %}
+
+  # AG-UI chat (Dart-native streaming client + markdown + JSON-patch state)
+  flutter_markdown: ^0.7.5
+  markdown: ^7.2.2
+  json_patch: ^3.0.1
+  shimmer: ^3.0.0
+{%- endif %}
+
   # Routing
   go_router: ^17.1.0
 

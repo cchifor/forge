@@ -4,13 +4,13 @@
 
 *Production-ready full-stack project generator with 3 backend languages, 3 frontend frameworks, and enterprise auth — from a single command.*
 
-[Quick Start](#quick-start) · [Features](#features) · [Usage](#usage-examples) · [Architecture](#architecture) · [Contributing](#contributing)
+[Quick Start](#quick-start) · [Features](#features) · [Usage](#usage-examples) · [Architecture](docs/architecture.md) · [Add a backend](docs/adding-a-backend.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge) [![tests](https://img.shields.io/badge/tests-137%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge)
+[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge) [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org) [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE) [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge) [![tests](https://img.shields.io/badge/tests-200%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge)
 
 **3 Backend Languages** *(Python/FastAPI, Node.js/Fastify, Rust/Axum — mix multiple per project)*
 **3 Frontend Frameworks** *(Vue 3, Svelte 5, Flutter)*
-**Agentic UI** *(AG-UI protocol, MCP ext-apps, dual-engine workspace)*
+**Agentic UI in every frontend** *(AG-UI streaming, tool calls, HITL, workspace + canvas panes)*
 **Enterprise Auth** *(Keycloak, Gatekeeper OIDC, Traefik, Redis)*
 
 <details>
@@ -39,15 +39,16 @@
 | Category | What you get |
 |----------|-------------|
 | **Backend Choice** | Python ([FastAPI](https://fastapi.tiangolo.com) + SQLAlchemy + Alembic), Node.js ([Fastify 5](https://fastify.dev) + Prisma 6 + Zod), or Rust ([Axum 0.8](https://github.com/tokio-rs/axum) + SQLx + serde). **Multi-backend**: generate multiple backends per project, each with its own name, language, port, features, database, migration container, and Traefik route. |
-| **Frontend Choice** | [Vue 3](https://vuejs.org), [Svelte 5](https://svelte.dev), [Flutter](https://flutter.dev) (web), or none. Each includes TanStack Query / Zod / Vite and a responsive dashboard with health checks. |
-| **Full CRUD Generation** | Name your entities (e.g., `products, orders`) and forge generates domain models, ORM models, repositories, services, REST endpoints, API clients, UI pages, schemas, MSW handlers, and tests — for every entity, in every layer. |
-| **Agentic UI** | Vue template includes a split-pane workspace with [AG-UI protocol](https://github.com/ag-ui-protocol/ag-ui) (SSE streaming) and [MCP ext-apps](https://github.com/anthropics/ext-apps) (sandboxed iframes). Dual-engine rendering for trusted Vue components and third-party extensions. |
+| **Frontend Choice** | [Vue 3](https://vuejs.org) (Vite + TanStack Query + Zod), [Svelte 5](https://svelte.dev) (SvelteKit + TanStack Svelte Query + Zod), or [Flutter](https://flutter.dev) (web; Riverpod + GoRouter + freezed). All three ship a responsive dashboard with health checks and the same `--include-chat`, `--include-openapi`, `--default-color-scheme` toggles. |
+| **Full CRUD Generation** | Name your entities (e.g., `products, orders`) and forge generates domain models, ORM models, repositories, services, REST endpoints, API clients, UI pages, schemas, MSW handlers, and tests — for every entity, in every layer. Multi-backend deployments transparently prefix per-feature API paths (`/api/{backend}/v1/{entity}`). |
+| **Agentic UI** | All three frontends ship the same [AG-UI](https://github.com/ag-ui-protocol/ag-ui) chat: streaming text deltas, tool-call status, HITL prompts, model selector, approval-mode toggle. Workspace pane (file explorer, credential form, approval review, user-prompt review) and canvas pane (dynamic form, data table, report, code viewer, workflow diagram) ship via a registry pattern in each framework. Vue/Svelte additionally embed [MCP ext-apps](https://github.com/anthropics/ext-apps) sandboxed iframes; Flutter renders MCP activities natively. |
 | **Production Docker** | Two-stage Dockerfiles for every backend and frontend. [Traefik v2.11](https://traefik.io) API gateway with per-backend path routing and auto-load-balancing. Dedicated migration containers for all languages (Alembic, Prisma Migrate, sqlx). nginx serves static files + SPA fallback only. PostgreSQL 16 with per-backend databases. |
-| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, [Gatekeeper](https://github.com/cchifor/forge) OIDC ForwardAuth proxy (cookie-based — no keycloak-js on the frontend), [Traefik v2.11](https://traefik.io) edge router, Redis session cache, route guards, and sample users. Gatekeeper provides `/auth/login`, `/auth/userinfo`, `/logout` endpoints. |
+| **Authentication** | Toggle `--include-auth` to get: [Keycloak 26](https://www.keycloak.org) identity provider with pre-configured realm, Gatekeeper OIDC ForwardAuth proxy (cookie-based — no keycloak-js on the frontend), [Traefik v2.11](https://traefik.io) edge router, Redis session cache, route guards, and sample users. Gatekeeper provides `/auth/login`, `/auth/userinfo`, `/logout` endpoints. The rendered `keycloak-realm.json` is JSON-validated before write so Jinja typos fail generation immediately. |
 | **Multi-Tenancy** | All three backends enforce tenant isolation. Gatekeeper injects `X-Gatekeeper-User-Id`, `X-Gatekeeper-Tenant`, `X-Gatekeeper-Roles` headers. Python uses repository-level `_apply_scopes()`, Node.js/Rust use tenant middleware. Service-to-service calls propagate tenant context via headers. |
-| **Headless / Agent Mode** | `--config`, `--json`, `--quiet` flags for CI/CD and AI agents. Pipe JSON from stdin, get structured output on stdout. No TTY required. Works with `uvx` for zero-install execution. |
-| **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. **28 Playwright E2E tests** per project (8 per feature + 4 auth) — run containerized via `docker compose --profile test run e2e`. Deterministic `data-test` selectors on all UI components. Docker testcontainers for real PostgreSQL integration tests. |
-| **Cross-Platform** | Windows (Git Bash), Linux, macOS. LF line endings enforced for Docker container scripts. |
+| **Headless / Agent Mode** | `--config`, `--json`, `--quiet`, `--verbose`, `--yes` flags for CI/CD and AI agents. Pipe JSON from stdin, get structured output on stdout, single-line `{"error": ...}` envelope + exit 2 on failure. Shell completion via `forge --completion bash|zsh|fish`. No TTY required. Works with `uvx` for zero-install execution. |
+| **Reliability** | Generator failures surface as `GeneratorError` — git init, npm install, and Copier failures all propagate to JSON envelope or stderr+exit 2 instead of leaving a half-built project. Generated projects are stamped with `forge.toml` (forge version + per-language template paths) so existing scaffolds can be `copier update`d. |
+| **Testing** | Pytest (Python), Vitest (Node.js), Cargo test (Rust), Vitest (Vue/Svelte), Flutter test. **Playwright E2E suite** per project (8 tests per feature + 4 auth) — run containerized via `docker compose --profile test run e2e`. Deterministic `data-test` / `data-testid` selectors on all UI components. Docker testcontainers for real PostgreSQL integration tests. |
+| **Cross-Platform** | Windows (Git Bash), Linux, macOS. LF line endings enforced for Docker container scripts. CI matrix runs on Linux + Windows × Python 3.11/3.12/3.13. |
 
 ---
 
@@ -94,7 +95,7 @@ Your app is now running at `http://app.localhost` (Traefik gateway). API health:
 docker compose --profile test run --rm e2e
 ```
 
-Runs 28 Playwright browser tests (8 per feature + 4 auth) in a containerized Chromium instance against the live stack.
+Runs Playwright browser tests (8 per feature + 4 auth) in a containerized Chromium instance against the live stack.
 
 ---
 
@@ -214,7 +215,7 @@ uvx --from git+https://github.com/cchifor/forge.git forge \
 
 ### Run E2E tests (after docker compose up)
 
-When a frontend is generated, forge creates a complete Playwright E2E testing suite in `{project}-e2e/`. Tests run in a containerized Chromium browser against the live stack:
+When a frontend is generated, forge creates a complete Playwright E2E testing suite in `tests/e2e/`. Tests run in a containerized Chromium browser against the live stack:
 
 ```bash
 cd my_shop/
@@ -290,23 +291,25 @@ Browser → http://app.localhost → Traefik :80
 
 nginx serves static files and SPA fallback only — all API routing is handled by Traefik. The URL `http://app.localhost` works identically with and without authentication. Scaling works out of the box: `docker compose up --scale users=3` and Traefik auto-load-balances.
 
-### Agentic UI (Vue template, `--include-chat`)
+### Agentic UI (every frontend, `--include-chat`)
+
+The same AG-UI streaming protocol is implemented in all three frameworks: Vue uses `@ag-ui/client`, Svelte uses the same TypeScript client driven by Svelte 5 runes, and Flutter ships a Dart-native client (Dio SSE + JSON-Patch reducer + Riverpod state).
 
 ```
-User message → useAiChat → useAgentClient → HTTP POST (SSE stream)
-                                                    |
+User message → chat store → agent client → HTTP POST (SSE stream)
+                                                  |
               SSE events ←──────────────────────────┘
-    ├── TEXT_MESSAGE_*    → Chat pane (streaming text)
-    ├── TOOL_CALL_*       → Chat pane (tool status card)
-    ├── ACTIVITY_*        → Workspace pane (dynamic component)
-    ├── STATE_*           → Shared agent state
-    └── CUSTOM            → Status bar (cost, context)
+    ├── TEXT_MESSAGE_*    → Chat pane (streaming text deltas)
+    ├── TOOL_CALL_*       → Chat pane (tool status chip)
+    ├── ACTIVITY_*        → Workspace or canvas pane (registry-resolved component)
+    ├── STATE_*           → Shared agent state (JSON-Patch deltas applied)
+    └── CUSTOM            → Status bar (cost, context, todos) and HITL prompts
 ```
 
 | Engine | Renders | Trust level | Communication |
 |--------|---------|-------------|---------------|
-| `ag-ui` | Vue component from registry | Trusted (direct Pinia/store access) | Props + emits |
-| `mcp-ext` | Sandboxed iframe via AppBridge | Untrusted (no store access) | postMessage only |
+| `ag-ui` | Framework-native component from registry | Trusted (direct store access) | Props + actions |
+| `mcp-ext` | Vue/Svelte: sandboxed iframe via AppBridge. Flutter: native widget (no DOM sandbox available). | Untrusted on web, native on Flutter | postMessage (web) / native callback (Flutter) |
 
 ---
 
@@ -325,19 +328,19 @@ User message → useAiChat → useAgentClient → HTTP POST (SSE stream)
 | `--backend-name NAME` | Service name for the backend | `backend` |
 | `--backend-port PORT` | Backend server port | `5000` |
 | `--python-version VER` | `3.13`, `3.12`, or `3.11` | `3.13` |
-| `--node-version VER` | `22` or `24` | `22` |
+| `--node-version VER` | `22`, `20`, or `18` | `22` |
 | `--rust-edition VER` | `2021` or `2024` | `2024` |
 | `--frontend FRAMEWORK` | `vue`, `svelte`, `flutter`, or `none` | `none` |
 | `--features LIST` | Comma-separated CRUD entities | `items` |
 | `--author-name NAME` | Author name | `Your Name` |
 | `--package-manager PM` | `npm`, `pnpm`, `yarn`, or `bun` | `npm` |
 | `--frontend-port PORT` | Frontend server port | `5173` |
-| `--color-scheme SCHEME` | Vue color scheme | `blue` |
+| `--color-scheme SCHEME` | Initial color scheme (Vue, Svelte, Flutter) | `blue` |
 | `--org-name ORG` | Flutter org (reverse domain) | `com.example` |
-| `--include-auth` | Enable Keycloak authentication | |
+| `--include-auth` | Enable Keycloak authentication | enabled |
 | `--no-auth` | Disable Keycloak authentication | |
-| `--include-chat` | Enable AI chat panel | |
-| `--include-openapi` | Enable OpenAPI code generation | |
+| `--include-chat` | Enable AG-UI chat panel | enabled |
+| `--include-openapi` | Enable OpenAPI code generation | enabled |
 | `--no-e2e-tests` | Skip Playwright E2E test generation | |
 | `--keycloak-port PORT` | Keycloak host port | `18080` |
 | `--keycloak-realm REALM` | Keycloak realm | derived from name |
@@ -345,11 +348,13 @@ User message → useAiChat → useAgentClient → HTTP POST (SSE stream)
 | `--yes`, `-y` | Skip confirmation prompts | |
 | `--no-docker` | Skip Docker Compose boot | |
 | `--quiet`, `-q` | Suppress all progress output | |
-| `--json` | Machine-readable JSON result on stdout | |
+| `--verbose`, `-v` | Show full Copier + subprocess output (overrides `--quiet`) | |
+| `--json` | Machine-readable JSON result on stdout; `{"error": ...}` envelope on failure | |
+| `--completion SHELL` | Print a `bash`, `zsh`, or `fish` completion script to stdout and exit | |
 
 **Precedence:** CLI flags > config file values > defaults.
 
-**Exit codes:** `0` success · `1` user cancelled · `2` config/validation error.
+**Exit codes:** `0` success · `1` user cancelled · `2` config/validation/generation error.
 
 </details>
 
@@ -371,9 +376,9 @@ All backends generate the same API contract: `GET /api/v1/health/live`, `GET /ap
 
 | Framework | Package Managers | Key Technologies |
 |-----------|------------------|-----------------|
-| Vue 3 | npm, pnpm, yarn | Vite, TanStack Query, Zod, Vue Router, AG-UI, MCP ext-apps |
-| Svelte 5 | npm, pnpm, bun | SvelteKit, Vite, OpenAPI TypeScript |
-| Flutter | N/A (Dart) | Riverpod, GoRouter, freezed |
+| Vue 3 | npm, pnpm, yarn | Vite, TanStack Vue Query, Zod, Vue Router, Pinia, Tailwind 4, AG-UI, MCP ext-apps, workspace + canvas panes |
+| Svelte 5 | npm, pnpm, bun | SvelteKit, Vite, TanStack Svelte Query, Zod, runes, Tailwind 4, AG-UI (`@ag-ui/client`), MCP ext-apps, workspace + canvas panes, OpenAPI TypeScript |
+| Flutter | N/A (Dart) | Riverpod, GoRouter, freezed, Material 3, FlexColorScheme, Dart-native AG-UI client (Dio SSE + JSON-Patch reducer), workspace + canvas panes |
 
 </details>
 
@@ -406,7 +411,11 @@ All services are accessed through `http://app.localhost` (Traefik on port 80). D
 
 **Vue frontend** — Vue Query composable, Zod schema, schema tests, list/create/detail pages (with `data-test` selectors), AlertDialog for delete confirmation, barrel export, MSW mock handlers.
 
-Svelte and Flutter generate analogous files for their respective frameworks.
+**Svelte frontend** — TanStack Svelte Query hooks, Zod schema, filter/form runes (`{singular}-filters.svelte.ts`, `{singular}-form.svelte.ts`), card component, list / detail / create routes under `(app)/{plural}/`, error boundary, MSW mock handlers, hub-injected sidebar/breadcrumb/dashboard chip.
+
+**Flutter frontend** — Riverpod `AsyncNotifier` controller, `freezed` query params, repository wrapping the OpenAPI-generated client (or Dio directly), list/detail/create pages with form validation, card and form widgets, GoRoute definitions injected into `app_router.dart`, repository unit tests with mocktail.
+
+For multi-backend projects, every per-feature API path is automatically prefixed with the owning backend (`/api/{backend}/v1/{entity}`) — Svelte injects the per-target Vite proxy block; Flutter writes `lib/src/core/config/backend_routes.dart` with the entity → backend lookup.
 
 </details>
 
@@ -439,16 +448,17 @@ We welcome contributions of all sizes — from typo fixes to new backend templat
 ```bash
 git clone https://github.com/cchifor/forge.git
 cd forge
-uv sync                         # install dependencies
-uv run pytest -v                # run tests (137 tests, 69%+ coverage)
+uv sync --all-extras --dev      # install dependencies (incl. ruff, ty, pre-commit)
+uv run pre-commit install       # optional: ruff + ty on every commit
+make check                      # lint + typecheck + tests (~10s, 200 tests, ~78% coverage)
 uv run forge                    # run locally
 ```
 
 ### Requirements
 
-- Python 3.11+
+- Python 3.11+ (CI matrix covers 3.11, 3.12, 3.13 on Linux + Windows)
 - `uv` package manager
-- Docker (for smoke tests)
+- Docker (for smoke tests and the e2e harness)
 
 ### Environment variables
 
@@ -458,18 +468,20 @@ None required for development. Tests use temporary directories and mock all exte
 
 | Command | Purpose |
 |---------|---------|
-| `uv run pytest -v` | Run all tests |
-| `uv run pytest tests/ -m "not docker"` | Skip Docker-dependent tests |
-| `uv run ruff check forge/` | Lint |
-| `uv run ruff format forge/` | Format |
-| `uv run ty check forge/` | Type check |
+| `make check` | Lint + typecheck + unit tests (one shot) |
+| `make test` | Run unit tests (excludes `-m e2e`) |
+| `make e2e` | Run end-to-end tests that scaffold a project and run its native suite |
+| `make lint` | `ruff check forge/` |
+| `make format` | `ruff format forge/` |
+| `make typecheck` | `ty check forge/` |
+| `pre-commit run --all-files` | Run all pre-commit hooks against the tree |
 
 ### Contribution workflow
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Make changes and ensure tests pass: `uv run pytest -v`
-4. Open a pull request against `main`
+3. Make changes and run `make check` (lint + typecheck + tests)
+4. Open a pull request against `main` — CI runs the full matrix on Linux + Windows
 
 ---
 

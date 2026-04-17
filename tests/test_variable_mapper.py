@@ -3,7 +3,9 @@
 import pytest
 
 from forge.config import (
+    BACKEND_REGISTRY,
     BackendConfig,
+    BackendLanguage,
     FrontendConfig,
     FrontendFramework,
     ProjectConfig,
@@ -16,6 +18,40 @@ from forge.variable_mapper import (
     svelte_context,
     vue_context,
 )
+
+# -- Unified backend_context across all languages (WS5) -----------------------
+
+
+@pytest.mark.parametrize(
+    ("language", "version_attr", "version_value"),
+    [
+        (BackendLanguage.PYTHON, "python_version", "3.13"),
+        (BackendLanguage.NODE, "node_version", "22"),
+        (BackendLanguage.RUST, "rust_edition", "2024"),
+    ],
+)
+def test_backend_context_unified_across_languages(language, version_attr, version_value):
+    """One function services every language; the registry decides which version field to emit."""
+    bc = BackendConfig(
+        name="api",
+        project_name="P",
+        language=language,
+        description="d",
+        features=["items"],
+        server_port=5000,
+        **{version_attr: version_value},
+    )
+    ctx = backend_context(bc)
+    spec = BACKEND_REGISTRY[language]
+    assert ctx[spec.version_field] == version_value
+    assert ctx["project_name"] == "api"
+    assert ctx["server_port"] == 5000
+    assert ctx["db_name"] == "api"
+    assert ctx["entity_plural"] == "items"
+    # No leakage of irrelevant version fields:
+    other_fields = {s.version_field for s in BACKEND_REGISTRY.values()} - {spec.version_field}
+    for f in other_fields:
+        assert f not in ctx
 
 
 def _make_config(framework=FrontendFramework.VUE, **fe_overrides):
@@ -113,8 +149,14 @@ class TestSvelteContext:
         assert ctx["include_auth"] is True
         assert ctx["include_chat"] is True
         assert isinstance(ctx["server_port"], int)
-        assert "include_openapi" not in ctx
-        assert "default_color_scheme" not in ctx
+        # WS1 parity additions:
+        assert ctx["include_openapi"] is False
+        assert ctx["default_color_scheme"] == "teal"
+        assert ctx["app_title"] == "Test App"
+        assert ctx["api_proxy_target"] == "http://backend:5000"
+        assert "backend_features" in ctx
+        assert "proxy_targets" in ctx
+        assert "vite_proxy_config" in ctx
 
     def test_wrong_framework_raises(self):
         config = _make_config(framework=FrontendFramework.VUE)
@@ -132,7 +174,10 @@ class TestFlutterContext:
         assert ctx["include_openapi"] is False
         assert ctx["api_base_url"] == "http://localhost:5000"
         assert "package_manager" not in ctx
-        assert "default_color_scheme" not in ctx
+        # WS1 parity additions:
+        assert ctx["default_color_scheme"] == "teal"
+        assert ctx["app_title"] == "Test App"
+        assert "backend_features" in ctx
 
 
 class TestFrontendContextDispatch:
@@ -144,7 +189,8 @@ class TestFrontendContextDispatch:
     def test_dispatches_svelte(self):
         config = _make_config(framework=FrontendFramework.SVELTE)
         ctx = frontend_context(config)
-        assert "default_color_scheme" not in ctx
+        # WS1 parity: Svelte now also receives default_color_scheme.
+        assert "default_color_scheme" in ctx
 
     def test_no_frontend_raises(self):
         config = _make_config()
