@@ -7,6 +7,7 @@ for per-tenant or per-document scoping.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -18,12 +19,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.data.models.rag_document import RagDocumentChunk
 from app.rag.embeddings import embed_one
 
+logger = logging.getLogger(__name__)
+
+_TOP_K_MIN = 1
+_TOP_K_MAX = 100
+_TOP_K_DEFAULT = 5
+
 
 def _default_top_k() -> int:
+    """Resolve `RAG_TOP_K`, clamped to [1, 100].
+
+    An invalid or out-of-range value logs a warning and falls back to 5,
+    rather than silently accepting a value that would later blow up as a
+    SQL LIMIT 0 (empty result) or a 1000-row scan.
+    """
+    raw = os.environ.get("RAG_TOP_K")
+    if raw is None:
+        return _TOP_K_DEFAULT
     try:
-        return int(os.environ.get("RAG_TOP_K", "5"))
+        value = int(raw)
     except ValueError:
-        return 5
+        logger.warning("RAG_TOP_K=%r is not an integer; using default %d", raw, _TOP_K_DEFAULT)
+        return _TOP_K_DEFAULT
+    if not (_TOP_K_MIN <= value <= _TOP_K_MAX):
+        logger.warning(
+            "RAG_TOP_K=%d out of range [%d, %d]; using default %d",
+            value, _TOP_K_MIN, _TOP_K_MAX, _TOP_K_DEFAULT,
+        )
+        return _TOP_K_DEFAULT
+    return value
 
 
 @dataclass(frozen=True)

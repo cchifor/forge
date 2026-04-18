@@ -36,6 +36,7 @@ FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
 
 @dataclass(frozen=True)
 class _Injection:
+    feature_key: str  # the owning FeatureSpec.key, used in BEGIN/END sentinels
     target: str  # path relative to backend_dir
     marker: str  # e.g. "FORGE:MIDDLEWARE_REGISTRATION"
     snippet: str
@@ -44,16 +45,61 @@ class _Injection:
     position: str = "after"
 
 
+# File-extension → single-line comment prefix. Only line-comment forms are
+# supported (never `/* */` or `<!-- -->`); in practice every injection
+# target in the forge registry is a .py / .ts / .rs file.
+_COMMENT_PREFIXES: dict[str, str] = {
+    ".py": "#",
+    ".pyi": "#",
+    ".yml": "#",
+    ".yaml": "#",
+    ".toml": "#",
+    ".env": "#",
+    ".sh": "#",
+    ".ts": "//",
+    ".tsx": "//",
+    ".js": "//",
+    ".jsx": "//",
+    ".mjs": "//",
+    ".cjs": "//",
+    ".rs": "//",
+    ".go": "//",
+}
+
+
+def _comment_prefix(file: Path) -> str:
+    """Comment-syntax prefix for BEGIN/END sentinels.
+
+    Unknown extensions fall back to ``#``. If you add a fragment that
+    injects into a new file type, register its prefix here rather than
+    relying on the fallback — sentinel mismatches break idempotency.
+    """
+    return _COMMENT_PREFIXES.get(file.suffix.lower(), "#")
+
+
+def _sentinel_tag(feature_key: str, marker: str) -> str:
+    """Tag identifying one injection. Unique per (file, feature, marker)."""
+    # Strip FORGE: prefix from marker so the tag reads naturally.
+    naked = marker[len(MARKER_PREFIX) :] if marker.startswith(MARKER_PREFIX) else marker
+    return f"{feature_key}:{naked}"
+
+
 def apply_features(
     bc: BackendConfig,
     backend_dir: Path,
     resolved: tuple[ResolvedFeature, ...],
     quiet: bool = False,
+    *,
+    skip_existing_files: bool = False,
 ) -> None:
     """Apply each enabled *backend-scoped* feature that supports this backend.
 
     Project-scoped features are emitted separately via `apply_project_features`
     after all backends are rendered.
+
+    When ``skip_existing_files=True`` (used by ``forge update``), a fragment's
+    ``files/`` copy-phase skips files that already exist instead of raising.
+    This lets repeated applies be idempotent without clobbering user edits.
     """
     for feature in resolved:
         if bc.language not in feature.target_backends:
@@ -63,19 +109,31 @@ def apply_features(
             continue
         if not quiet:
             print(f"  [feat] applying '{feature.spec.key}' to {bc.name} ({bc.language.value})")
-        _apply_fragment(bc, backend_dir, impl, feature.config.options)
+        _apply_fragment(
+            bc,
+            backend_dir,
+            impl,
+            feature.config.options,
+            feature.spec.key,
+            skip_existing_files=skip_existing_files,
+        )
 
 
 def apply_project_features(
     project_root: Path,
     resolved: tuple[ResolvedFeature, ...],
     quiet: bool = False,
+    *,
+    skip_existing_files: bool = False,
 ) -> None:
     """Apply project-scoped implementations at the project root.
 
     Chooses a canonical backend to use for per-language dep edits (the first
     target_backend for the feature). For pure-file fragments (like AGENTS.md)
     the backend choice is irrelevant.
+
+    ``skip_existing_files`` is forwarded to the ``_copy_files`` step so the
+    updater can re-run project-scope fragments without clobbering edits.
     """
     for feature in resolved:
         # Pick any supporting implementation with scope=project.
@@ -85,7 +143,14 @@ def apply_project_features(
                 if not quiet:
                     print(f"  [feat] applying '{feature.spec.key}' to project root")
                 proxy = BackendConfig(name="project", project_name="", language=lang)
-                _apply_fragment(proxy, project_root, impl, feature.config.options)
+                _apply_fragment(
+                    proxy,
+                    project_root,
+                    impl,
+                    feature.config.options,
+                    feature.spec.key,
+                    skip_existing_files=skip_existing_files,
+                )
                 break  # one emission only, even if multiple backends support it
 
 
@@ -94,6 +159,9 @@ def _apply_fragment(
     backend_dir: Path,
     impl: FragmentImplSpec,
     options: dict[str, Any],
+    feature_key: str,
+    *,
+    skip_existing_files: bool = False,
 ) -> None:
     fragment = FRAGMENTS_DIR / impl.fragment_dir
     if not fragment.is_dir():
@@ -104,12 +172,18 @@ def _apply_fragment(
 
     files_dir = fragment / "files"
     if files_dir.is_dir():
-        _copy_files(files_dir, backend_dir)
+        _copy_files(files_dir, backend_dir, skip_existing=skip_existing_files)
 
     inject_path = fragment / "inject.yaml"
     if inject_path.is_file():
-        for inj in _load_injections(inject_path):
-            _inject_snippet(backend_dir / inj.target, inj.marker, inj.snippet, inj.position)
+        for inj in _load_injections(inject_path, feature_key):
+            _inject_snippet(
+                backend_dir / inj.target,
+                inj.feature_key,
+                inj.marker,
+                inj.snippet,
+                inj.position,
+            )
 
     # Dependencies come from the FragmentImplSpec (static) OR from deps.yaml
     # (which can vary by option — kept simple in v1: static only).
@@ -125,11 +199,16 @@ def _apply_fragment(
 # -- File copy ---------------------------------------------------------------
 
 
-def _copy_files(src: Path, dst_root: Path) -> None:
+def _copy_files(src: Path, dst_root: Path, *, skip_existing: bool = False) -> None:
     """Copy every file under src/ into dst_root/, preserving structure.
 
-    Refuses to overwrite existing files — fragments must not clobber the base
-    template silently. If you need to modify an existing file, use inject.yaml.
+    On fresh generation (default), refuses to overwrite existing files —
+    fragments must not clobber the base template silently. If you need to
+    modify an existing file, use inject.yaml.
+
+    On ``forge update`` (``skip_existing=True``), pre-existing destination
+    paths are left alone and logged; this preserves user edits while still
+    letting newly-introduced fragment files land.
     """
     for src_path in src.rglob("*"):
         if not src_path.is_file():
@@ -137,6 +216,8 @@ def _copy_files(src: Path, dst_root: Path) -> None:
         rel = src_path.relative_to(src)
         dst_path = dst_root / rel
         if dst_path.exists():
+            if skip_existing:
+                continue
             raise GeneratorError(
                 f"Fragment '{src.parent.name}' tried to overwrite existing file "
                 f"'{dst_path}'. Use inject.yaml to modify existing files; "
@@ -149,7 +230,7 @@ def _copy_files(src: Path, dst_root: Path) -> None:
 # -- Snippet injection -------------------------------------------------------
 
 
-def _load_injections(path: Path) -> list[_Injection]:
+def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
     if not isinstance(data, list):
         raise GeneratorError(
@@ -168,48 +249,114 @@ def _load_injections(path: Path) -> list[_Injection]:
         position = str(entry.get("position", "after"))
         if position not in ("before", "after"):
             raise GeneratorError(f"{path}[{i}]: position must be 'before' or 'after'")
-        out.append(_Injection(target=target, marker=marker, snippet=snippet, position=position))
+        out.append(
+            _Injection(
+                feature_key=feature_key,
+                target=target,
+                marker=marker,
+                snippet=snippet,
+                position=position,
+            )
+        )
     return out
 
 
-def _inject_snippet(file: Path, marker: str, snippet: str, position: str) -> None:
-    """Insert `snippet` at a line containing `# FORGE:<marker>` or similar.
+def _inject_snippet(
+    file: Path,
+    feature_key: str,
+    marker: str,
+    snippet: str,
+    position: str,
+) -> None:
+    """Insert or replace ``snippet`` at a ``# FORGE:<marker>`` site.
 
-    The marker must appear *exactly once* in the file. The whole line containing
-    the marker is preserved; `snippet` lands as a new line immediately after
-    (or before) it. Indentation is copied from the marker line so the snippet
-    slots into the existing block shape.
+    The injection is wrapped in BEGIN / END sentinel comments keyed to
+    ``feature_key:marker_name``. Running this twice on the same file replaces
+    the existing block in place rather than duplicating — the foundation
+    of ``forge update`` idempotency (see B2.4 plan).
+
+    Rules:
+      - Marker (the ``# FORGE:<marker>`` line) must appear exactly once.
+      - If a BEGIN/END pair with this tag exists, replace the block (lines
+        between the two sentinels, inclusive).
+      - Otherwise, emit ``BEGIN, <snippet lines>, END`` at the marker
+        position (``before`` → above the marker; ``after`` → below).
+      - Indentation is inherited from the marker line and applied to the
+        sentinel + snippet lines so the block slots into the enclosing
+        scope cleanly.
     """
     if not file.is_file():
         raise GeneratorError(f"Injection target not found: {file}")
 
-    # Accept marker with or without the FORGE: prefix in the YAML.
     needle = marker if marker.startswith(MARKER_PREFIX) else f"{MARKER_PREFIX}{marker}"
+    prefix = _comment_prefix(file)
+    tag = _sentinel_tag(feature_key, marker)
+    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
+    end_needle = f"{MARKER_PREFIX}END {tag}"
+
     text = file.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
 
-    hits = [i for i, line in enumerate(lines) if needle in line]
-    if not hits:
+    # Path 1 — sentinel block already present → replace in place.
+    begin_idx = _find_unique_line(lines, begin_needle, file, needle=begin_needle)
+    if begin_idx is not None:
+        end_idx = _find_unique_line(lines, end_needle, file, needle=end_needle)
+        if end_idx is None or end_idx < begin_idx:
+            raise GeneratorError(
+                f"{file}: found BEGIN sentinel for '{tag}' but matching END "
+                f"is missing or out of order."
+            )
+        # Preserve the BEGIN line's indentation so a regenerated block keeps
+        # the same shape as the original marker-aligned one.
+        indent = _indent_of(lines[begin_idx])
+        fresh = _render_block(indent, prefix, tag, snippet)
+        lines = lines[:begin_idx] + [fresh] + lines[end_idx + 1 :]
+        file.write_text("".join(lines), encoding="utf-8")
+        return
+
+    # Path 2 — fresh injection: find the marker and insert a new block.
+    marker_idx = _find_unique_line(lines, needle, file, needle=needle)
+    if marker_idx is None:
         raise GeneratorError(
             f"Marker '{needle}' not found in {file}. "
             "Add the marker to the base template or check the fragment's inject.yaml."
         )
+    indent = _indent_of(lines[marker_idx])
+    block = _render_block(indent, prefix, tag, snippet)
+
+    insert_at = marker_idx + 1 if position == "after" else marker_idx
+    lines = lines[:insert_at] + [block] + lines[insert_at:]
+    file.write_text("".join(lines), encoding="utf-8")
+
+
+def _find_unique_line(
+    lines: list[str], substring: str, file: Path, *, needle: str
+) -> int | None:
+    """Return the unique line index containing ``substring`` or None.
+
+    Raises if the substring appears more than once — ambiguous sentinels
+    would silently corrupt re-injection.
+    """
+    hits = [i for i, line in enumerate(lines) if substring in line]
+    if not hits:
+        return None
     if len(hits) > 1:
         raise GeneratorError(
-            f"Marker '{needle}' appears {len(hits)} times in {file}; must be unique."
+            f"'{needle}' appears {len(hits)} times in {file}; must be unique."
         )
+    return hits[0]
 
-    idx = hits[0]
-    marker_line = lines[idx]
-    # Preserve the marker line's indentation for the injected snippet.
-    indent = marker_line[: len(marker_line) - len(marker_line.lstrip(" \t"))]
-    # Snippet may be multi-line; indent each line.
-    snippet_lines = snippet.splitlines()
-    indented = "".join(f"{indent}{line}\n" for line in snippet_lines)
 
-    insert_at = idx + 1 if position == "after" else idx
-    new_lines = lines[:insert_at] + [indented] + lines[insert_at:]
-    file.write_text("".join(new_lines), encoding="utf-8")
+def _indent_of(line: str) -> str:
+    return line[: len(line) - len(line.lstrip(" \t"))]
+
+
+def _render_block(indent: str, prefix: str, tag: str, snippet: str) -> str:
+    """Produce ``{indent}{prefix} BEGIN ...\\n<snippet>\\n{indent}{prefix} END ...\\n``."""
+    begin = f"{indent}{prefix} {MARKER_PREFIX}BEGIN {tag}\n"
+    end = f"{indent}{prefix} {MARKER_PREFIX}END {tag}\n"
+    body = "".join(f"{indent}{line}\n" for line in snippet.splitlines())
+    return begin + body + end
 
 
 # -- Dependency addition -----------------------------------------------------

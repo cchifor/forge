@@ -114,7 +114,12 @@ class AppLifecycle:
         # Start background task runner
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+        from app.core.db import set_session_factory
+
         session_factory = await container.get(async_sessionmaker[AsyncSession])
+        # Publish for code that runs outside request scope (agent tools,
+        # Taskiq workers, admin panel startup) — one engine, one pool.
+        set_session_factory(session_factory)
         runner = BackgroundTaskRunner(session_factory, poll_interval=5.0)
         AppLifecycle._task_runner = runner
         await runner.start()

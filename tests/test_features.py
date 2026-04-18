@@ -6,7 +6,9 @@ import pytest
 
 from forge.config import BackendLanguage
 from forge.features import (
+    CATEGORY_ORDER,
     FEATURE_REGISTRY,
+    FeatureCategory,
     FeatureConfig,
     FeatureSpec,
     FragmentImplSpec,
@@ -66,7 +68,10 @@ class TestRegistryIntegrity:
         assert BackendLanguage.PYTHON in spec.implementations
         assert BackendLanguage.NODE in spec.implementations
         # Node fragment declares @fastify/rate-limit as a dep.
-        assert any("@fastify/rate-limit" in d for d in spec.implementations[BackendLanguage.NODE].dependencies)
+        assert any(
+            "@fastify/rate-limit" in d
+            for d in spec.implementations[BackendLanguage.NODE].dependencies
+        )
 
     def test_observability_registered(self) -> None:
         spec = FEATURE_REGISTRY["observability"]
@@ -298,6 +303,33 @@ class TestRegistryIntegrity:
                     f"Feature '{key}' ({lang.value}) declares "
                     f"fragment_dir='{impl.fragment_dir}' but {path} does not exist"
                 )
+
+    def test_every_feature_has_category(self) -> None:
+        for key, spec in FEATURE_REGISTRY.items():
+            assert isinstance(spec.category, FeatureCategory), (
+                f"Feature '{key}' has no FeatureCategory set"
+            )
+            assert spec.category in CATEGORY_ORDER, (
+                f"Feature '{key}' category {spec.category!r} missing from CATEGORY_ORDER"
+            )
+
+    def test_every_feature_has_structured_description(self) -> None:
+        for key, spec in FEATURE_REGISTRY.items():
+            assert spec.description.strip(), f"Feature '{key}' has an empty description"
+            assert "BACKENDS:" in spec.description, (
+                f"Feature '{key}' description is missing the 'BACKENDS:' tag line"
+            )
+            assert "DEPENDS ON:" in spec.description, (
+                f"Feature '{key}' description is missing the 'DEPENDS ON:' tag line"
+            )
+
+    def test_display_labels_are_concise_and_unique(self) -> None:
+        labels = [spec.display_label for spec in FEATURE_REGISTRY.values()]
+        assert len(labels) == len(set(labels)), "duplicate display_label detected"
+        for spec in FEATURE_REGISTRY.values():
+            assert len(spec.display_label) <= 32, (
+                f"display_label {spec.display_label!r} exceeds the 32-char budget"
+            )
 
     def test_register_duplicate_raises(self) -> None:
         duplicate = FeatureSpec(

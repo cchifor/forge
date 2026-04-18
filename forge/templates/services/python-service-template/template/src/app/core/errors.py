@@ -111,6 +111,12 @@ class ReadOnlyError(ServiceError):
 
 
 # --- Domain Error -> HTTP Status Mapping ---
+#
+# Fragments that define their own `ServiceError` / `RepositoryError`
+# subclasses should register them at import time via `register_domain_error`
+# rather than swallowing the exception and raising `HTTPException` inline.
+# That way the central handler produces a uniform error envelope and the
+# observability plumbing (log shape, tags, tracing) stays consistent.
 
 _DOMAIN_ERROR_MAP: dict[type[ApplicationError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
@@ -123,6 +129,23 @@ _DOMAIN_ERROR_MAP: dict[type[ApplicationError], int] = {
     ReadOnlyError: status.HTTP_403_FORBIDDEN,
     DatabaseTimeoutError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
+
+
+def register_domain_error(exc_type: type[ApplicationError], status_code: int) -> None:
+    """Register a fragment-owned `ApplicationError` subclass with its HTTP
+    status. Call from the fragment's import-time setup (top of a
+    module that gets loaded during app bootstrap).
+
+    Re-registering with a different status code raises — this catches
+    two features accidentally claiming the same exception type.
+    """
+    existing = _DOMAIN_ERROR_MAP.get(exc_type)
+    if existing is not None and existing != status_code:
+        raise ValueError(
+            f"{exc_type.__name__} is already registered with status "
+            f"{existing}; refusing re-register as {status_code}."
+        )
+    _DOMAIN_ERROR_MAP[exc_type] = status_code
 
 
 def domain_exception_to_response(exc: ApplicationError) -> JSONResponse:

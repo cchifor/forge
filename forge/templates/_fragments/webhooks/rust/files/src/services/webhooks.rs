@@ -7,9 +7,11 @@
 //! Signature header format matches the Python/Node implementations so a
 //! receiver service verifies the same way across forge-generated
 //! publishers:
-//!     HMAC_SHA256(secret, "<timestamp>.<body>")
+//!     HMAC_SHA256(secret, "<timestamp>.<nonce>.<body>")
 //! sent as the hex digest in `X-Webhook-Signature`, with `X-Webhook-Timestamp`
-//! and `X-Webhook-Event` for replay-attack detection and event routing.
+//! and `X-Webhook-Nonce` (128-bit UUID hex) for replay-attack detection,
+//! and `X-Webhook-Event` for event routing. Receivers must reject stale
+//! timestamps (> ~5 min) and previously-seen nonces.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -83,9 +85,11 @@ fn generate_secret() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
-fn sign(secret: &str, timestamp: &str, body: &[u8]) -> String {
+fn sign(secret: &str, timestamp: &str, nonce: &str, body: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac key");
     mac.update(timestamp.as_bytes());
+    mac.update(b".");
+    mac.update(nonce.as_bytes());
     mac.update(b".");
     mac.update(body);
     let digest = mac.finalize().into_bytes();
@@ -139,7 +143,8 @@ pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> Deliver
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "0".to_string());
-    let signature = sign(&webhook.secret, &timestamp, &body);
+    let nonce = Uuid::new_v4().simple().to_string();
+    let signature = sign(&webhook.secret, &timestamp, &nonce, &body);
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -162,6 +167,7 @@ pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> Deliver
         .header("content-type", "application/json")
         .header("x-webhook-signature", &signature)
         .header("x-webhook-timestamp", &timestamp)
+        .header("x-webhook-nonce", &nonce)
         .header("x-webhook-event", event)
         .header("x-webhook-id", webhook.id.to_string())
         .body(body);

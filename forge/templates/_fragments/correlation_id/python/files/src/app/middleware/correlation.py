@@ -1,9 +1,15 @@
-"""Correlation ID middleware.
+"""Correlation ID middleware — ContextVar propagation layer.
 
-Extracts ``X-Request-ID`` from the incoming request (or generates one),
-stores it in a ContextVar, and echoes it back in the response header.
-All downstream logging and outbound HTTP calls can read it via
-``get_correlation_id()``.
+Base-template ``RequestLoggingMiddleware`` already generates + stashes
+``request.state.correlation_id`` and echoes the ``X-Request-ID`` response
+header unconditionally, so the id exists for every request whether this
+fragment is enabled or not.
+
+This middleware sits on top and mirrors the same id into a ``ContextVar``
+(``service.observability.correlation.set_correlation_id``) so asyncio
+tasks spawned off the request — outbound HTTP calls, Taskiq enqueues,
+downstream coroutines — can read the id via ``get_correlation_id()``
+without threading it through every signature.
 """
 
 from __future__ import annotations
@@ -13,26 +19,14 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from service.observability.correlation import (
-    CORRELATION_HEADER,
-    generate_correlation_id,
-    set_correlation_id,
-)
+from app.middleware.logging import _ensure_correlation_id
+from service.observability.correlation import set_correlation_id
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        # Extract from header or generate
-        correlation_id = request.headers.get(CORRELATION_HEADER) or generate_correlation_id()
+        correlation_id = _ensure_correlation_id(request)
         set_correlation_id(correlation_id)
-
-        # Stash on request.state so other middleware/endpoints can read it
-        request.state.correlation_id = correlation_id
-
-        response = await call_next(request)
-
-        # Echo back so callers can correlate
-        response.headers[CORRELATION_HEADER] = correlation_id
-        return response
+        return await call_next(request)

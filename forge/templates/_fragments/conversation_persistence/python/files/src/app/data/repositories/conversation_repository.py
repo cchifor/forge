@@ -11,7 +11,6 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.data.models.conversation import (
@@ -19,6 +18,7 @@ from app.data.models.conversation import (
     Message as MessageModel,
     ToolCall as ToolCallModel,
 )
+from app.data.repositories.base_tenant_aware import TenantScopedRepository
 from app.domain.conversation import (
     Conversation,
     Message,
@@ -27,11 +27,11 @@ from app.domain.conversation import (
 )
 
 
-class ConversationRepository:
-    def __init__(self, session: AsyncSession, customer_id: uuid.UUID, user_id: uuid.UUID):
-        self.session = session
-        self.customer_id = customer_id
-        self.user_id = user_id
+class ConversationRepository(TenantScopedRepository):
+    """Tenant-scoped. Every read/write is constrained by the caller's Account,
+    which must carry both `customer_id` and `user_id` — a PublicUnitOfWork
+    (account=None) cannot instantiate this repository.
+    """
 
     async def create_conversation(self, title: str = "New conversation") -> Conversation:
         model = ConversationModel(
