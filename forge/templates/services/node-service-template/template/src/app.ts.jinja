@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/error-handler.js";
 import { correlationHook } from "./middleware/correlation.js";
 import { tenantHook } from "./middleware/tenant.js";
 import { requestLogger } from "./middleware/logging.js";
+// FORGE:MIDDLEWARE_IMPORTS
 
 export async function buildApp() {
 	const app = Fastify({ logger: true });
@@ -17,10 +18,12 @@ export async function buildApp() {
 	app.addHook("onRequest", tenantHook);
 	app.addHook("onResponse", requestLogger);
 	app.setErrorHandler(errorHandler);
+	// FORGE:MIDDLEWARE_REGISTRATION
 
 	await app.register(homeRoutes, { prefix: "/api/v1" });
 	await app.register(healthRoutes, { prefix: "/api/v1/health" });
 	await app.register(itemRoutes, { prefix: "/api/v1/{{ entity_plural }}" });
+	// FORGE:ROUTER_REGISTRATION
 
 	return app;
 }

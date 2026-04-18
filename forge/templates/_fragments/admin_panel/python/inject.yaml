@@ -1,0 +1,14 @@
+# admin_panel: mount SQLAdmin at /admin after route configuration. The
+# mount_admin function itself is env-gated (ADMIN_PANEL_MODE), so this
+# injection is safe to run in every environment — production services
+# with ADMIN_PANEL_MODE=disabled see no mount.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.admin import mount_admin"
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: before
+  snippet: "mount_admin(app)"

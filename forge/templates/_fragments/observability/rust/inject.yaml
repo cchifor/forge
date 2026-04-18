@@ -1,0 +1,12 @@
+# observability/rust: register the telemetry module and attach an OTel
+# layer to the tracing_subscriber registry when the exporter is configured.
+
+- target: src/main.rs
+  marker: FORGE:MAIN_MOD_REGISTRATION
+  position: before
+  snippet: "mod telemetry;"
+
+- target: src/main.rs
+  marker: FORGE:TRACING_LAYERS
+  position: before
+  snippet: "let registry = registry.with(telemetry::build_otel_layer());"

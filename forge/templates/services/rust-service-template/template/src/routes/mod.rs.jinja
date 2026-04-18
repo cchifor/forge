@@ -1,6 +1,7 @@
 mod health;
 mod home;
 mod items;
+// FORGE:ROUTES_MOD_REGISTRATION
 
 use axum::Router;
 use sqlx::PgPool;
@@ -10,4 +11,5 @@ pub fn api_routes() -> Router<PgPool> {
         .merge(home::routes())
         .nest("/health", health::routes())
         .nest("/{{ entity_plural }}", items::routes())
+        // FORGE:ROUTES_NESTED_REGISTRATION
 }

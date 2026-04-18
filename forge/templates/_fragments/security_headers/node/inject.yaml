@@ -1,0 +1,13 @@
+# security_headers for Node/Fastify uses @fastify/helmet. Import at
+# MIDDLEWARE_IMPORTS; register at MIDDLEWARE_REGISTRATION with position=before
+# so helmet lands inside cors() (registered earlier) but before app-level hooks.
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: 'import helmet from "@fastify/helmet";'
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: "await app.register(helmet);"

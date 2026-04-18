@@ -1,0 +1,10 @@
+# PII-redaction filter installation. Called at the FORGE:LIFECYCLE_STARTUP
+# marker inside AppLifecycle._setup_logging so the filter is in place before
+# any module-level loggers start emitting records.
+
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFECYCLE_STARTUP
+  position: before
+  snippet: |-
+    from app.core.pii_redaction import install_pii_filter
+    install_pii_filter()

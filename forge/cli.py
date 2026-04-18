@@ -12,15 +12,19 @@ import questionary
 
 from forge.config import (
     BACKEND_REGISTRY,
+    DEFAULT_REALM,
     BackendConfig,
     BackendLanguage,
     FrontendConfig,
     FrontendFramework,
     ProjectConfig,
+    keycloak_client_id_from,
     validate_features,
 )
 from forge.docker_manager import boot
-from forge.generator import GeneratorError, generate
+from forge.errors import GeneratorError
+from forge.features import FEATURE_REGISTRY, FeatureConfig
+from forge.generator import generate
 
 # -- Argument parsing ---------------------------------------------------------
 
@@ -87,6 +91,29 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--keycloak-port", type=int, metavar="PORT")
     p.add_argument("--keycloak-realm", metavar="REALM")
     p.add_argument("--keycloak-client-id", metavar="ID")
+
+    # Features (repeatable)
+    p.add_argument(
+        "--enable-feature",
+        dest="enable_features",
+        action="append",
+        metavar="KEY",
+        default=[],
+        help="Enable a feature (repeatable). See `forge --list-features`.",
+    )
+    p.add_argument(
+        "--disable-feature",
+        dest="disable_features",
+        action="append",
+        metavar="KEY",
+        default=[],
+        help="Disable a feature (repeatable). Overrides defaults.",
+    )
+    p.add_argument(
+        "--list-features",
+        action="store_true",
+        help="Print the feature registry and exit.",
+    )
 
     # Behavior
     p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
@@ -202,6 +229,8 @@ def _is_headless(args: argparse.Namespace) -> bool:
         or args.python_version is not None
         or args.features is not None
         or args.description is not None
+        or bool(getattr(args, "enable_features", []))
+        or bool(getattr(args, "disable_features", []))
     )
 
 
@@ -240,24 +269,31 @@ def _load_config_file(path_str: str) -> dict[str, Any]:
 # -- Build config from args/file ---------------------------------------------
 
 
-def _get(
-    args: argparse.Namespace,
-    flag: str,
-    cfg: dict[str, Any],
-    *keys: str,
-    default: Any = None,
-) -> Any:
-    """Resolve a value: CLI flag > config file > default."""
-    val = getattr(args, flag, None)
-    if val is not None:
-        return val
-    d = cfg
-    for k in keys:
-        if isinstance(d, dict):
-            d = d.get(k)
-        else:
-            return default
-    return d if d is not None else default
+class _Resolver:
+    """Bundles `args` + parsed config file for the duration of _build_config.
+
+    Replaces threading `(args, cfg, ...)` through every helper and drops the
+    first two positional arguments from each lookup. Call-sites go from
+    `_get(args, "frontend_port", cfg, "frontend", "server_port", default=5173)`
+    to `r.get("frontend_port", "frontend", "server_port", default=5173)`.
+    """
+
+    def __init__(self, args: argparse.Namespace, cfg: dict[str, Any]) -> None:
+        self.args = args
+        self.cfg = cfg
+
+    def get(self, flag: str, *keys: str, default: Any = None) -> Any:
+        """Resolve a value: CLI flag > config file > default."""
+        val = getattr(self.args, flag, None)
+        if val is not None:
+            return val
+        node: Any = self.cfg
+        for k in keys:
+            if isinstance(node, dict):
+                node = node.get(k)
+            else:
+                return default
+        return node if node is not None else default
 
 
 def _normalize_features(raw: Any, default: list[str] | None = None) -> list[str]:
@@ -270,13 +306,13 @@ def _normalize_features(raw: Any, default: list[str] | None = None) -> list[str]
 
 
 def _build_backends_from_cfg(
-    args: argparse.Namespace, cfg: dict[str, Any], project_name: str, description: str
+    r: _Resolver, project_name: str, description: str
 ) -> list[BackendConfig]:
     """Build backend list from CLI args + config file.
 
     Supports both `backends:` (list) and `backend:` (single) for backward compatibility.
     """
-    backends_raw = cfg.get("backends")
+    backends_raw = r.cfg.get("backends")
     if isinstance(backends_raw, list) and backends_raw:
         backends: list[BackendConfig] = []
         for i, raw in enumerate(backends_raw):
@@ -305,7 +341,7 @@ def _build_backends_from_cfg(
         return backends
 
     # Single backend (backward compat for `backend:` shape and CLI-only invocations)
-    lang_str = _get(args, "backend_language", cfg, "backend", "language", default="python")
+    lang_str = r.get("backend_language", "backend", "language", default="python")
     language = (
         BackendLanguage(lang_str)
         if lang_str in ("python", "node", "rust")
@@ -313,86 +349,103 @@ def _build_backends_from_cfg(
     )
     return [
         BackendConfig(
-            name=_get(args, "backend_name", cfg, "backend", "name", default="backend"),
+            name=r.get("backend_name", "backend", "name", default="backend"),
             project_name=project_name,
             language=language,
             description=description,
             features=_normalize_features(
-                _get(args, "features", cfg, "backend", "features", default=None),
+                r.get("features", "backend", "features", default=None),
                 default=["items"],
             ),
-            python_version=_get(
-                args, "python_version", cfg, "backend", "python_version", default="3.13"
-            ),
-            node_version=_get(args, "node_version", cfg, "backend", "node_version", default="22"),
-            rust_edition=_get(args, "rust_edition", cfg, "backend", "rust_edition", default="2024"),
-            server_port=_get(args, "backend_port", cfg, "backend", "server_port", default=5000),
+            python_version=r.get("python_version", "backend", "python_version", default="3.13"),
+            node_version=r.get("node_version", "backend", "node_version", default="22"),
+            rust_edition=r.get("rust_edition", "backend", "rust_edition", default="2024"),
+            server_port=r.get("backend_port", "backend", "server_port", default=5000),
         )
     ]
 
 
 def _build_frontend_from_cfg(
-    args: argparse.Namespace, cfg: dict[str, Any], project_name: str, description: str
+    r: _Resolver, project_name: str, description: str
 ) -> tuple[FrontendConfig | None, bool]:
     """Build optional frontend config; returns (frontend, include_auth)."""
-    fw_str = _get(args, "frontend", cfg, "frontend", "framework", default="none")
+    fw_str = r.get("frontend", "frontend", "framework", default="none")
     framework = FRAMEWORK_MAP.get(fw_str, FrontendFramework.NONE)
     if framework == FrontendFramework.NONE:
         return None, False
 
-    include_auth = _get(args, "include_auth", cfg, "frontend", "include_auth", default=True)
+    include_auth = r.get("include_auth", "frontend", "include_auth", default=True)
     frontend = FrontendConfig(
         framework=framework,
         project_name=project_name,
         description=description,
-        author_name=_get(args, "author_name", cfg, "frontend", "author_name", default="Your Name"),
-        package_manager=_get(
-            args, "package_manager", cfg, "frontend", "package_manager", default="npm"
-        ),
+        author_name=r.get("author_name", "frontend", "author_name", default="Your Name"),
+        package_manager=r.get("package_manager", "frontend", "package_manager", default="npm"),
         include_auth=include_auth,
-        include_chat=_get(args, "include_chat", cfg, "frontend", "include_chat", default=False),
-        include_openapi=_get(
-            args, "include_openapi", cfg, "frontend", "include_openapi", default=False
+        include_chat=r.get("include_chat", "frontend", "include_chat", default=False),
+        include_openapi=r.get("include_openapi", "frontend", "include_openapi", default=False),
+        server_port=r.get("frontend_port", "frontend", "server_port", default=5173),
+        default_color_scheme=r.get(
+            "color_scheme", "frontend", "default_color_scheme", default="blue"
         ),
-        server_port=_get(args, "frontend_port", cfg, "frontend", "server_port", default=5173),
-        default_color_scheme=_get(
-            args, "color_scheme", cfg, "frontend", "default_color_scheme", default="blue"
-        ),
-        org_name=_get(args, "org_name", cfg, "frontend", "org_name", default="com.example"),
-        generate_e2e_tests=_get(
-            args, "generate_e2e_tests", cfg, "frontend", "generate_e2e_tests", default=True
+        org_name=r.get("org_name", "frontend", "org_name", default="com.example"),
+        generate_e2e_tests=r.get(
+            "generate_e2e_tests", "frontend", "generate_e2e_tests", default=True
         ),
     )
     return frontend, include_auth
 
 
+def _build_features(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, FeatureConfig]:
+    """Merge YAML `features:` block with CLI --enable-feature / --disable-feature flags.
+
+    YAML shape:
+        features:
+          rag_pipeline:
+            enabled: true
+            options: { vector_store: qdrant }
+          agent: true          # shorthand
+
+    CLI flags override whatever the YAML says. Unknown keys raise via
+    the capability resolver at validate() time.
+    """
+    features: dict[str, FeatureConfig] = {}
+    yaml_block = cfg.get("features")
+    if isinstance(yaml_block, dict):
+        for key, raw in yaml_block.items():
+            features[str(key)] = FeatureConfig.from_dict(raw)
+
+    for key in getattr(args, "enable_features", None) or []:
+        features[key] = FeatureConfig(
+            enabled=True, options=dict(features[key].options) if key in features else {}
+        )
+    for key in getattr(args, "disable_features", None) or []:
+        features[key] = FeatureConfig(
+            enabled=False, options=dict(features[key].options) if key in features else {}
+        )
+    return features
+
+
 def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfig:
     """Build ProjectConfig from CLI args merged with config file."""
-    project_name = _get(args, "project_name", cfg, "project_name", default="My Platform")
-    description = _get(args, "description", cfg, "description", default="A full-stack application")
+    r = _Resolver(args, cfg)
+    project_name = r.get("project_name", "project_name", default="My Platform")
+    description = r.get("description", "description", default="A full-stack application")
     output_dir = args.output_dir
 
-    backends = _build_backends_from_cfg(args, cfg, project_name, description)
-    frontend, include_auth = _build_frontend_from_cfg(args, cfg, project_name, description)
+    backends = _build_backends_from_cfg(r, project_name, description)
+    frontend, include_auth = _build_frontend_from_cfg(r, project_name, description)
+    features = _build_features(args, cfg)
 
     # Keycloak
     include_keycloak = include_auth
-    keycloak_port = _get(args, "keycloak_port", cfg, "keycloak", "port", default=18080)
-    kc_realm = _get(
-        args,
-        "keycloak_realm",
-        cfg,
-        "keycloak",
-        "realm",
-        default="app",  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
-    )
-    kc_client_id = _get(
-        args,
+    keycloak_port = r.get("keycloak_port", "keycloak", "port", default=18080)
+    kc_realm = r.get("keycloak_realm", "keycloak", "realm", default=DEFAULT_REALM)
+    kc_client_id = r.get(
         "keycloak_client_id",
-        cfg,
         "keycloak",
         "client_id",
-        default=project_name.lower().replace(" ", "-").replace("_", "-"),
+        default=keycloak_client_id_from(project_name),
     )
 
     if frontend and include_keycloak:
@@ -407,6 +460,7 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
         frontend=frontend,
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
+        features=features,
     )
 
 
@@ -489,16 +543,15 @@ def _prompt_backend(
     version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
     features = _ask_features()
 
-    bc = BackendConfig(
+    return BackendConfig(
         name=name,
         project_name=project_name,
         language=language,
         description=description,
         features=features,
         server_port=port,
+        **{spec.version_field: version},
     )
-    setattr(bc, spec.version_field, version)
-    return bc
 
 
 # -- Interactive flow ---------------------------------------------------------
@@ -617,13 +670,10 @@ def _collect_inputs() -> ProjectConfig | None:
         print("  -- Keycloak --")
         keycloak_port = _ask_port("Keycloak host port:", default="18080")
         kc_url = f"http://localhost:{keycloak_port}"
-        kc_realm = _ask_text(
-            "Keycloak realm:",
-            default="app",  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
-        )
+        kc_realm = _ask_text("Keycloak realm:", default=DEFAULT_REALM)
         kc_client_id = _ask_text(
             "Keycloak client ID:",
-            default=project_name.lower().replace(" ", "-").replace("_", "-"),
+            default=keycloak_client_id_from(project_name),
         )
 
     if frontend and include_keycloak:
@@ -688,8 +738,24 @@ def _json_error(stdout_fd, message: str) -> None:
     sys.exit(2)
 
 
+def _print_feature_list() -> None:
+    """Print registered features to stdout and exit."""
+    if not FEATURE_REGISTRY:
+        print("No features registered.")
+    else:
+        print(f"{'KEY':<24} {'STABILITY':<12} {'DEFAULT':<8} {'BACKENDS'}")
+        for key, spec in sorted(FEATURE_REGISTRY.items()):
+            backends = ",".join(sorted(lang.value for lang in spec.implementations))
+            default = "always-on" if spec.always_on else ("on" if spec.default_enabled else "off")
+            print(f"{key:<24} {spec.stability:<12} {default:<8} {backends}")
+    sys.exit(0)
+
+
 def main() -> None:
     args = _parse_args()
+
+    if getattr(args, "list_features", False):
+        _print_feature_list()
 
     if getattr(args, "completion", None):
         _print_completion(args.completion)
@@ -699,6 +765,7 @@ def main() -> None:
     if getattr(args, "json_output", False):
         sys.stdout = sys.stderr
 
+    config: ProjectConfig
     if _is_headless(args):
         # Headless mode: build config from file + flags
         try:
@@ -726,10 +793,11 @@ def main() -> None:
             sys.exit(0)
     else:
         # Interactive mode
-        config = _collect_inputs()
-        if config is None:
+        collected = _collect_inputs()
+        if collected is None:
             print("\n  Aborted.")
             sys.exit(0)
+        config = collected
 
     # --verbose overrides --quiet so users can diagnose generator failures even in JSON mode.
     quiet = (args.quiet or getattr(args, "json_output", False)) and not getattr(

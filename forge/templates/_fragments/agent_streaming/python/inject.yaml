@@ -1,0 +1,13 @@
+# agent_streaming: mount the WebSocket endpoint at /api/v1/ws/agent via the
+# existing api.py router. Clients connect with an optional ?conversation_id=
+# query; a fresh UUID is issued if absent.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import agent as agent_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(agent_endpoint.router, prefix="/ws", tags=["agent"])'

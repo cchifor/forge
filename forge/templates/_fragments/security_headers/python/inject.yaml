@@ -1,0 +1,14 @@
+# Security-headers middleware injections.
+# Registers the middleware at FORGE:MIDDLEWARE_REGISTRATION with position=before,
+# placing it inside the correlation-id outer envelope (correlation_id has a
+# higher `order` so it registers later and is outermost in Starlette's stack).
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.middleware.security_headers import SecurityHeadersMiddleware"
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: "app.add_middleware(SecurityHeadersMiddleware)"

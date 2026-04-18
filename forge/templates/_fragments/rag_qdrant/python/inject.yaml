@@ -1,0 +1,13 @@
+# rag_qdrant: mount /api/v1/rag/qdrant router alongside the pgvector
+# /api/v1/rag endpoints. Keeps the two backends cleanly separated so users
+# can migrate incrementally.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import rag_qdrant as rag_qdrant_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(rag_qdrant_endpoint.router, prefix="/rag/qdrant", tags=["rag"])'

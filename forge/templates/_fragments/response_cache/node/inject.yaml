@@ -1,0 +1,19 @@
+# response_cache/node: register @fastify/caching so route handlers can set
+# caching headers via reply.header() — the plugin handles ETag + Last-Modified.
+# When RESPONSE_CACHE_URL is set, the Redis-backed cache is enabled;
+# otherwise the plugin runs in memory.
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: 'import fastifyCaching from "@fastify/caching";'
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: |-
+    await app.register(fastifyCaching, {
+        privacy: fastifyCaching.privacy.PUBLIC,
+        expiresIn: 60,
+        serverExpiresIn: 60,
+    });

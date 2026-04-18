@@ -1,0 +1,14 @@
+- target: src/services/mod.rs
+  marker: FORGE:SERVICES_MOD_REGISTRATION
+  position: after
+  snippet: "pub mod webhooks;"
+
+- target: src/routes/mod.rs
+  marker: FORGE:ROUTES_MOD_REGISTRATION
+  position: before
+  snippet: "mod webhooks;"
+
+- target: src/routes/mod.rs
+  marker: FORGE:ROUTES_NESTED_REGISTRATION
+  position: before
+  snippet: '.nest("/webhooks", webhooks::routes())'

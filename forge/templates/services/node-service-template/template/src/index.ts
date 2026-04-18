@@ -1,3 +1,4 @@
+// FORGE:ENTRY_PRELOAD
 import "dotenv/config";
 import { buildApp } from "./app.js";
 

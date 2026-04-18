@@ -142,3 +142,4 @@ class AppLifecycle:
         except Exception as e:
             logging.basicConfig(level=logging.INFO)
             logging.error(f"Failed to apply logging config: {e}")
+        # FORGE:LIFECYCLE_STARTUP

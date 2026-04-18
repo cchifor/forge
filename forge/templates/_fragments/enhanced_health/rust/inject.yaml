@@ -1,0 +1,12 @@
+# enhanced_health Rust: register the health_deep module and nest its router
+# under /health so the rendered path is /api/v1/health/deep.
+
+- target: src/routes/mod.rs
+  marker: FORGE:ROUTES_MOD_REGISTRATION
+  position: before
+  snippet: "mod health_deep;"
+
+- target: src/routes/mod.rs
+  marker: FORGE:ROUTES_NESTED_REGISTRATION
+  position: before
+  snippet: ".nest(\"/health\", health_deep::deep_health_router())"

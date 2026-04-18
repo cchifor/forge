@@ -1,0 +1,12 @@
+# webhooks/node: mount /api/v1/webhooks. In-memory registry in v1; swap for
+# a Prisma-backed repo when you need multi-replica or durable delivery.
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: 'import { webhookRoutes } from "./routes/webhooks.js";'
+
+- target: src/app.ts
+  marker: FORGE:ROUTER_REGISTRATION
+  position: before
+  snippet: 'await app.register(webhookRoutes, { prefix: "/api/v1/webhooks" });'

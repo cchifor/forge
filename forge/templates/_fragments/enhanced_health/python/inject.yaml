@@ -1,0 +1,13 @@
+# enhanced_health: mounts /api/v1/health/deep that aggregates Redis and
+# Keycloak readiness checks. The base health router (/api/v1/health/live,
+# /api/v1/health/ready) already covers the database; this is additive.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import health_deep"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(health_deep.router, prefix="/health", tags=["health"])'

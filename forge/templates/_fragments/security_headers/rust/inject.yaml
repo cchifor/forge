@@ -1,0 +1,19 @@
+# security_headers for Rust/Axum. Adds a from_fn middleware layer that writes
+# the standard security headers onto every response. Registered via .layer()
+# in app.rs before the MIDDLEWARE_REGISTRATION marker so it sits inside the
+# correlation / request-id outer layers.
+
+- target: src/middleware/mod.rs
+  marker: FORGE:MOD_REGISTRATION
+  position: after
+  snippet: "pub mod security_headers;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "use crate::middleware::security_headers::security_headers_middleware;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: ".layer(axum::middleware::from_fn(security_headers_middleware))"
