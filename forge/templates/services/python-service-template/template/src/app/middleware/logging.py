@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 from collections.abc import AsyncGenerator, AsyncIterable, Awaitable, Callable
 
 from fastapi import Request, Response
@@ -8,6 +9,26 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 access_logger = logging.getLogger("api.access")
+
+CORRELATION_HEADER = "x-request-id"
+
+
+def _ensure_correlation_id(request: Request) -> str:
+    """Return the correlation id for this request, generating one if absent.
+
+    Base-level invariant: every request gets a correlation id in
+    ``request.state.correlation_id`` and echoed in the ``X-Request-ID``
+    response header — regardless of whether the ``correlation_id`` fragment
+    is enabled. The fragment (if present) additionally propagates the id
+    through async ``ContextVar``s so downstream tasks see the same value.
+    """
+    existing = getattr(request.state, "correlation_id", None)
+    if existing:
+        return str(existing)
+    incoming = request.headers.get(CORRELATION_HEADER)
+    cid = incoming or uuid.uuid4().hex
+    request.state.correlation_id = cid
+    return cid
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -24,13 +45,20 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
+        # Generate / read + stash before any log entry, so even the skip-path
+        # short-circuit and error paths carry a correlation id.
+        correlation_id = _ensure_correlation_id(request)
+
         if request.url.path in self.skip_paths:
-            return await call_next(request)
+            response = await call_next(request)
+            response.headers[CORRELATION_HEADER] = correlation_id
+            return response
 
         start_time = time.perf_counter()
 
         try:
             response = await call_next(request)
+            response.headers[CORRELATION_HEADER] = correlation_id
             if isinstance(response, StreamingResponse):
                 response.body_iterator = self._stream_response_wrapper(
                     response.body_iterator, request, response.status_code, start_time

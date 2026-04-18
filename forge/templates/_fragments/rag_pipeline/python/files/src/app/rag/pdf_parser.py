@@ -32,11 +32,17 @@ def extract_text_from_pdf(path: Path | str) -> str:
     doc = pymupdf.open(str(path))
     try:
         chunks: list[str] = []
-        for page in doc:
+        for page_no, page in enumerate(doc):
             try:
                 page_text = page.get_text("text")
-            except Exception as e:  # noqa: BLE001
-                logger.debug("page extract failed: %s", e)
+            except (ValueError, RuntimeError):
+                # pymupdf raises RuntimeError for corrupted page objects and
+                # ValueError for bad encodings — tolerate per-page so a single
+                # bad page can't sink the whole document. Log with traceback
+                # so the failure remains auditable rather than invisible.
+                logger.warning(
+                    "pdf page %d extraction failed for %s", page_no, path, exc_info=True
+                )
                 continue
             if page_text and page_text.strip():
                 chunks.append(page_text.strip())
@@ -55,11 +61,16 @@ def extract_text_from_bytes(data: bytes, filename: str | None = None) -> str:
     doc = pymupdf.open(stream=data, filetype="pdf")
     try:
         chunks: list[str] = []
-        for page in doc:
+        for page_no, page in enumerate(doc):
             try:
                 page_text = page.get_text("text")
-            except Exception as e:  # noqa: BLE001
-                logger.debug("page extract failed (%s): %s", filename or "?", e)
+            except (ValueError, RuntimeError):
+                logger.warning(
+                    "pdf page %d extraction failed (%s)",
+                    page_no,
+                    filename or "<unnamed>",
+                    exc_info=True,
+                )
                 continue
             if page_text and page_text.strip():
                 chunks.append(page_text.strip())

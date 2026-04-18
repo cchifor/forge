@@ -1,9 +1,17 @@
 """Outbound webhook delivery with HMAC-SHA256 signing.
 
-Payload is serialized as JSON and hashed with the webhook's secret; the
-hex digest goes in ``X-Webhook-Signature`` alongside a timestamp so
-receivers can detect replay attacks. Delivery is in-process, best-effort
-— pair with ``background_tasks`` for retry semantics.
+Each delivery carries three headers the receiver MUST verify:
+
+  * ``X-Webhook-Timestamp``  — RFC 3339 / Unix seconds; reject if older
+    than ~5 minutes to limit the replay window.
+  * ``X-Webhook-Nonce``      — 128-bit UUID; reject if seen before in the
+    freshness window (maintain a short-TTL cache keyed by nonce).
+  * ``X-Webhook-Signature``  — ``HMAC-SHA256(secret, timestamp "." nonce
+    "." body)``, hex digest.
+
+The nonce closes the within-same-second replay window that a
+timestamp-only HMAC leaves open. Delivery is in-process, best-effort —
+pair with ``background_tasks`` for retry semantics.
 """
 
 from __future__ import annotations
@@ -23,9 +31,14 @@ from app.domain.webhook import WebhookDeliveryResult
 logger = logging.getLogger(__name__)
 
 
-def _sign(secret: str, body: bytes, timestamp: str) -> str:
-    """Return the hex digest of ``HMAC-SHA256(secret, timestamp + body)``."""
-    message = timestamp.encode() + b"." + body
+def _sign(secret: str, body: bytes, timestamp: str, nonce: str) -> str:
+    """Return the hex digest of ``HMAC-SHA256(secret, timestamp.nonce.body)``.
+
+    Nonce is included in the signed message so receivers cannot accept a
+    replayed (timestamp, body) pair without also matching the nonce — and
+    the nonce is expected to be unique per delivery.
+    """
+    message = timestamp.encode() + b"." + nonce.encode() + b"." + body
     digest = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
     return digest
 
@@ -58,12 +71,14 @@ async def deliver(webhook: Webhook, event: str, payload: dict[str, Any]) -> Webh
 
     body = json.dumps({"event": event, "data": payload}, default=str).encode()
     timestamp = str(int(time.time()))
-    signature = _sign(webhook.secret, body, timestamp)
+    nonce = uuid.uuid4().hex
+    signature = _sign(webhook.secret, body, timestamp, nonce)
 
     headers = {
         "Content-Type": "application/json",
         "X-Webhook-Signature": signature,
         "X-Webhook-Timestamp": timestamp,
+        "X-Webhook-Nonce": nonce,
         "X-Webhook-Event": event,
         "X-Webhook-Id": str(webhook.id),
     }

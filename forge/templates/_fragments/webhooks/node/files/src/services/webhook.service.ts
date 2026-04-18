@@ -7,7 +7,7 @@
  * model shape).
  */
 
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 
 export interface Webhook {
 	id: string;
@@ -53,9 +53,16 @@ function matchesEvent(webhook: Webhook, event: string): boolean {
 	});
 }
 
-function sign(secret: string, timestamp: string, body: Buffer): string {
+function sign(
+	secret: string,
+	timestamp: string,
+	nonce: string,
+	body: Buffer,
+): string {
 	return createHmac("sha256", secret)
 		.update(timestamp)
+		.update(".")
+		.update(nonce)
 		.update(".")
 		.update(body)
 		.digest("hex");
@@ -98,16 +105,18 @@ export async function deliver(
 ): Promise<DeliveryResult> {
 	const start = performance.now();
 	const timestamp = Math.floor(Date.now() / 1000).toString();
+	const nonce = randomUUID().replace(/-/g, "");
 	const body = Buffer.from(
 		JSON.stringify({ event, data: payload }),
 		"utf-8",
 	);
-	const signature = sign(webhook.secret, timestamp, body);
+	const signature = sign(webhook.secret, timestamp, nonce, body);
 
 	const headers: Record<string, string> = {
 		"Content-Type": "application/json",
 		"X-Webhook-Signature": signature,
 		"X-Webhook-Timestamp": timestamp,
+		"X-Webhook-Nonce": nonce,
 		"X-Webhook-Event": event,
 		"X-Webhook-Id": webhook.id,
 		...(webhook.extra_headers ?? {}),

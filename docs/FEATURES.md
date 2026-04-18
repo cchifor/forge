@@ -150,37 +150,99 @@ CLI flags via `FeatureSpec.extra_flags`.
 
 ## Currently registered features
 
-| Key | Stability | Default | Scope | Backends | Purpose |
-|---|---|---|---|---|---|
-| `correlation_id` | stable | always-on | backend | python | X-Request-ID middleware |
-| `rate_limit` | stable | on | backend | python, node, rust | Token-bucket rate limiter (Py in-memory / `@fastify/rate-limit` / Axum tower middleware) |
-| `security_headers` | stable | on | backend | python, node, rust | CSP / XFO / HSTS response headers |
-| `pii_redaction` | stable | on | backend | python | Logging filter that scrubs emails, tokens, and API keys |
-| `observability` | stable | off | backend | python, node, rust | Logfire (Py) / OpenTelemetry SDK (Node) / OTLP gRPC via tracing-opentelemetry (Rust) |
-| `response_cache` | beta | off | backend | python, node | fastapi-cache2 + Redis (Py) / @fastify/caching (Node) |
-| `background_tasks` | beta | off | backend | python, node, rust | Taskiq (Py) / BullMQ + ioredis (Node) / Apalis + Redis (Rust) |
-| `enhanced_health` | beta | off | backend | python, node, rust | /api/v1/health/deep aggregates Redis + Keycloak checks |
-| `conversation_persistence` | beta | off | backend | python | SQLAlchemy Conversation/Message/ToolCall + Alembic migration 0002 |
-| `agent_tools` | experimental | off | backend | python | Tool base class + registry + pre-baked tools + /api/v1/tools endpoint |
-| `agent_streaming` | experimental | off | backend | python | /api/v1/ws/agent WebSocket with typed event protocol + runner dispatch |
-| `agent` | experimental | off | backend | python | pydantic-ai LLM loop (Anthropic/OpenAI/Google/OpenRouter), real streaming via agent.iter() |
-| `file_upload` | beta | off | backend | python | /api/v1/chat-files endpoint + ChatFile model + local storage |
-| `rag_pipeline` | experimental | off | backend | python | OpenAI embeddings + pgvector + /api/v1/rag ingest/search (text + PDF) + rag_search tool |
-| `rag_postgresql` | experimental | off | backend | python | Plain-PostgreSQL (no pgvector extension) alternative, /api/v1/rag/pg/*, JSONB embeddings + Python-side cosine |
-| `rag_qdrant` | experimental | off | backend | python | Qdrant vector-store alternative, /api/v1/rag/qdrant/* endpoints alongside pgvector |
-| `rag_chroma` | experimental | off | backend | python | Chroma vector-store alternative, /api/v1/rag/chroma/* |
-| `rag_milvus` | experimental | off | backend | python | Milvus vector-store alternative, /api/v1/rag/milvus/*, HNSW + COSINE, Zilliz Cloud compatible |
-| `rag_weaviate` | experimental | off | backend | python | Weaviate v4 vector-store alternative, /api/v1/rag/weaviate/*, async HNSW + COSINE |
-| `rag_pinecone` | experimental | off | backend | python | Pinecone (managed) vector-store, /api/v1/rag/pinecone/*, namespace-per-tenant isolation |
-| `rag_reranking` | experimental | off | backend | python | Cohere rerank (default) + local cross-encoder fallback, /api/v1/rag/rerank/search |
-| `rag_embeddings_voyage` | experimental | off | backend | python | Voyage AI embeddings as a drop-in replacement for the OpenAI embed module |
-| `rag_sync_tasks` | experimental | off | backend | python | Taskiq tasks for async RAG ingestion (requires background_tasks) |
-| `admin_panel` | beta | off | backend | python | SQLAdmin at /admin, env-gated, auto-registers views for shipped models |
-| `webhooks` | beta | off | backend | python, node, rust | /api/v1/webhooks CRUD + HMAC-signed outbound delivery (Py: migration 0005; Node/Rust: in-memory v1) |
-| `cli_commands` | beta | off | backend | python | `app info` / `app tools` / `app rag` typer subcommands on the existing CLI |
-| `agents_md` | stable | on | project | any | Drops AGENTS.md + CLAUDE.md at project root |
+Features are grouped by product category — the same order `forge --list-features`
+prints and `--describe <key>` narrates. Run `forge --describe <key>` for the
+full prose + tag lines (`BACKENDS:` / `ENDPOINTS:` / `REQUIRES:` /
+`DEPENDS ON:`) per feature.
 
-Run `forge --list-features` for the up-to-date list.
+### Observability — visibility into the running system
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Request Tracing | `correlation_id` | stable | always-on | python | X-Request-ID header + ContextVar propagation |
+| Deep Health Checks | `enhanced_health` | beta | off | python, node, rust | /health aggregates DB + Redis + Keycloak readiness |
+| Distributed Tracing | `observability` | stable | off | python, node, rust | Logfire (Py) / OTel SDK (Node) / OTLP gRPC via tracing-opentelemetry (Rust) |
+
+Enable these when you need to trace a request hop across services, gate
+rollouts on actual dependency health, or ship structured traces into an
+OTLP collector.
+
+### Reliability — protection + stability middleware
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Rate Limiting | `rate_limit` | stable | on | python, node, rust | Token-bucket limiter keyed by tenant / IP |
+| Security Headers | `security_headers` | stable | on | python, node, rust | CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy |
+| PII Scrubber | `pii_redaction` | stable | on | python | Logging.Filter that redacts emails / tokens / API keys |
+| Response Cache | `response_cache` | beta | off | python, node | fastapi-cache2 + Redis (Py) / @fastify/caching (Node) |
+
+The on-by-default entries are there for a reason; turn them off only for
+intentional insecure-demo scenarios. Response cache is opt-in — decorate
+specific handlers rather than blanket-enabling.
+
+### Async Work — off-thread job processing
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Task Queue | `background_tasks` | beta | off | python, node, rust | Taskiq (Py) / BullMQ + ioredis (Node) / Apalis + Redis (Rust) |
+| Knowledge Ingest Queue | `rag_sync_tasks` | experimental | off | python | Taskiq tasks that move RAG ingest off the request thread |
+
+Reach for these when you've got work a user shouldn't wait on —
+emails, webhooks retries, RAG ingestion, LLM fan-outs. Node and Rust
+variants share the `TASKIQ_BROKER_URL` env convention so docker-compose
+ops stay uniform across backends.
+
+### Conversational AI — chat, tools, and the agent loop
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Chat History | `conversation_persistence` | beta | off | python | SQLAlchemy Conversation/Message/ToolCall + migration 0002 |
+| Agent Stream | `agent_streaming` | experimental | off | python | /api/v1/ws/agent WebSocket with typed events + runner dispatch |
+| Tool Registry | `agent_tools` | experimental | off | python | Tool base class + process registry + /api/v1/tools |
+| LLM Agent | `agent` | experimental | off | python | pydantic-ai loop (Anthropic / OpenAI / Google / OpenRouter) |
+| Chat Attachments | `file_upload` | beta | off | python | /api/v1/chat-files + ChatFile model + local storage |
+
+Order of introduction: enable `conversation_persistence` first (storage),
+then `agent_streaming` (WebSocket + echo runner), then `agent_tools` +
+`agent` (LLM loop), then `file_upload` if you need attachments. The
+`rag_search` agent tool auto-registers when RAG is also on, so the LLM
+gets knowledge search with zero extra wiring.
+
+### Knowledge — vector storage + retrieval (RAG)
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Knowledge Search | `rag_pipeline` | experimental | off | python | OpenAI embeddings + pgvector + HNSW + PDF ingestion + `rag_search` tool |
+| Knowledge Reranker | `rag_reranking` | experimental | off | python | Cohere + local cross-encoder fallback for sharper top-K |
+| Knowledge — PostgreSQL | `rag_postgresql` | experimental | off | python | Plain-Postgres backend (no pgvector extension) |
+| Knowledge — Qdrant | `rag_qdrant` | experimental | off | python | Qdrant alternative with parallel /api/v1/rag/qdrant/* endpoints |
+| Knowledge — Chroma | `rag_chroma` | experimental | off | python | Chroma via AsyncHttpClient (container or Cloud) |
+| Knowledge — Milvus | `rag_milvus` | experimental | off | python | AsyncMilvusClient, HNSW + COSINE, Zilliz-Cloud compatible |
+| Knowledge — Weaviate | `rag_weaviate` | experimental | off | python | Weaviate v4 async backend with client-managed vectors |
+| Knowledge — Pinecone | `rag_pinecone` | experimental | off | python | Managed Pinecone with namespace-per-tenant isolation |
+| Knowledge — Voyage Embeddings | `rag_embeddings_voyage` | experimental | off | python | Drop-in embeddings provider (swap for OpenAI) |
+
+`rag_pipeline` is the base — every alternative vector store depends on it
+for the shared chunker, embeddings, and PDF parser, then adds its own
+parallel `/api/v1/rag/<backend>/*` endpoints so multiple backends coexist
+during a migration.
+
+### Platform — operator-facing tooling
+
+| Name | Key | Stability | Default | Backends | Summary |
+|---|---|---|---|---|---|
+| Admin Console | `admin_panel` | beta | off | python | SQLAdmin UI at /admin, env-gated, auto-registers views |
+| Outbound Webhooks | `webhooks` | beta | off | python, node, rust | Registry + HMAC-SHA256 signed delivery + /test endpoint |
+| Service CLI Extensions | `cli_commands` | beta | off | python | `app info` / `app tools` / `app rag` typer subcommands |
+| AI Agent Handbook | `agents_md` | stable | on | all (project-scoped) | Drops AGENTS.md + CLAUDE.md at project root |
+
+Operator UX — human admins browsing data, event fan-out for third-party
+integrators, SSH-in shell commands, and guidance docs for AI coding
+agents contributing to the generated repo.
+
+Run `forge --list-features` for the up-to-date list, or
+`forge --describe <key>` for the full prose + metadata of any single
+feature.
 
 ## Fragment scopes
 
@@ -193,167 +255,26 @@ A feature's `FragmentImplSpec.scope` decides where its fragment is applied:
   root-level CI workflows). Registered under every backend key but emits a
   single time.
 
-## Roadmap — not yet implemented
+## Roadmap — not yet shipped
 
-These tiers from the plan aren't in the registry yet. When added, they will
-follow the same `FeatureSpec` shape; configuration will be additive (users of
-earlier forge versions see no behavior change). Tracked in
-[ROADMAP](../README.md) of the generator repo.
-
-### Tier 2 (opt-in ops essentials)
-
-Shipped:
-
-- **`rate_limit`** — Python (in-memory token bucket, previously always-on in
-  the base template), Node (`@fastify/rate-limit`), and Rust (per-IP token
-  bucket via `axum::middleware::from_fn`). All `default_enabled=True`.
-- **`observability`** — Python Logfire, Node OpenTelemetry SDK
-  (auto-instrumentations for Fastify / HTTP / pg, OTLP HTTP exporter,
-  graceful no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` unset), Rust scaffold
-  (layered `tracing_subscriber::registry` + `telemetry::build_otel_layer`
-  stub — add `opentelemetry-otlp` with your transport feature to complete).
-- **`response_cache`** — Python (fastapi-cache2 + Redis) and Node
-  (@fastify/caching).
-- **`background_tasks`** — Python (Taskiq broker + example task; run via
-  `uv run taskiq worker`) and Node (BullMQ queue + worker script).
-- **`enhanced_health`** — Python + Node + Rust. Mounts
-  `/api/v1/health/deep` that aggregates Redis + Keycloak readiness checks
-  on top of the base router's DB check. Missing deps (`redis`, `httpx`)
-  return DOWN rather than crashing. Rust variant uses a TCP-reachability
-  probe for Redis (no `redis` crate dep) and reqwest for Keycloak.
-
-Not yet shipped:
+These backends/variants don't have a `FragmentImplSpec` yet. Configuration
+will be purely additive when they land, so existing projects see no
+behavior change.
 
 - **`response_cache/rust`** — no clear canonical library yet; roll your own
   with `moka` + a tower `Layer`.
-- **`background_tasks/rust`** — tokio task runner with a Redis-backed queue
-  (Faktory-style or custom).
-
-### Tier 3 (AI agent platform)
-
-Python-only in v1 (pydantic-ai); Node and Rust will arrive later if demand
-materializes.
-
-Shipped:
-
-- **`agent_tools`** — `Tool` base class, process-wide `ToolRegistry`, pre-baked
-  `current_datetime` + `web_search` (Tavily, gracefully disabled without key).
-  /api/v1/tools endpoint lists and invokes registered tools.
-  `stability="experimental"` until a full agent loop is wired.
-- **`conversation_persistence`** — `Conversation`, `Message`, `ToolCall`
-  SQLAlchemy models + Pydantic domain schemas + `ConversationRepository`
-  + Alembic migration `0002`. Pure-files fragment; `stability="beta"` until
-  dependency-injection wiring lands. Per-tenant, per-user scoped.
-- **`agent_streaming`** — `/api/v1/ws/agent` WebSocket with a typed event
-  protocol (`ConversationCreated`, `UserPromptReceived`, `TextDelta`,
-  `ToolCallStarted`, `ToolResult`, `AgentStatus`, `ErrorEvent`) + echo
-  runner + runner dispatch module. Prompt starting with `/tool <name>`
-  dispatches to the `agent_tools` registry for a real tool-call round-trip.
-  `stability="experimental"`; depends on `conversation_persistence`.
-- **`agent`** — pydantic-ai LLM loop that drops in as a replacement for
-  the echo runner (via `app.agents.runner` dispatch). Provider selected
-  from `LLM_PROVIDER` env: `anthropic` (default), `openai`, `google`, or
-  `openrouter`. Tools registered in the `agent_tools` registry are bridged
-  into pydantic-ai automatically. Graceful error event on missing API key.
-  Real per-delta streaming via `agent.iter()` with automatic fallback to
-  chunked `agent.run()` output if the installed pydantic-ai lacks the
-  required event classes. `stability="experimental"`; depends on
-  `agent_streaming` + `agent_tools`.
-- **`file_upload`** — `/api/v1/chat-files` endpoint with multipart upload,
-  MIME allowlist, size limit, path-traversal protection, and local-disk
-  storage under `UPLOAD_DIR`. Ships a `ChatFile` SQLAlchemy model + Alembic
-  migration `0003` (FK to `conversation_messages`) for users who want DB
-  persistence; endpoint itself stays storage-only to avoid wiring Dishka
-  DI. `stability="beta"`; depends on `conversation_persistence`.
-
-Not yet shipped:
-
-- (Tier 3 core complete.) Follow-ups include a DB-backed upload variant
-  that writes the `ChatFile` row inline, S3 storage, and a RAG-style
-  parsed-content pipeline that fills the `parsed_content` column.
-
-### Tier 4 (RAG)
-
-Shipped:
-
-- **`rag_pipeline`** — OpenAI embeddings (`text-embedding-3-small` by
-  default) + pgvector storage with an HNSW index (cosine distance) +
-  recursive chunker (800-char / 120-char overlap) + retriever that
-  enforces tenant isolation. `/api/v1/rag/ingest` accepts raw text and
-  writes chunks transactionally; `/api/v1/rag/search` returns the top-k
-  matches with their similarity scores. A `rag_search` tool auto-registers
-  into the `agent_tools` registry when both features are enabled, so the
-  LLM can call RAG without extra wiring. Migration `0004` creates the
-  `vector` extension and the HNSW index. `stability="experimental"`;
-  depends on `conversation_persistence`; adds the `postgres-pgvector`
-  capability.
-
-Also shipped:
-
-- **`rag_postgresql`** — Plain-PostgreSQL backend for teams who can't
-  install the `vector` extension (managed DBs, shared-tenant environments).
-  Stores embeddings as JSONB arrays and scores cosine similarity
-  Python-side after a candidate-limited fetch. Parallel
-  `/api/v1/rag/pg/*` endpoints; migration 0006.
-- **`rag_qdrant`** — Qdrant alternative to pgvector. Parallel
-  `/api/v1/rag/qdrant/*` endpoints (ingest / ingest-pdf / search) that
-  share the chunker + embeddings + pdf_parser from `rag_pipeline`.
-- **`rag_chroma`** — Chroma backend via the async HTTP client. Parallel
-  `/api/v1/rag/chroma/*` endpoints. Auto-creates the collection on first
-  write.
-- **`rag_reranking`** — Post-retrieval rerank pass. Cohere as default
-  (`rerank-v3.5`), local sentence-transformers cross-encoder as fallback.
-  Oversample factor 5 by default. Graceful no-op without provider config.
-- **`rag_embeddings_voyage`** — Voyage AI provider drop-in for the embed
-  module. Not wire-compatible with OpenAI (rebuild collections after
-  switching). Defaults to `voyage-3.5` (1024-dim).
-- **`rag_sync_tasks`** — Taskiq tasks (`ingest_text_task`,
-  `ingest_pdf_bytes_task`) that move embed + store off the request
-  thread. Requires `rag_pipeline` + `background_tasks`.
-- **PDF ingestion** — `pymupdf` lands in `rag_pipeline`; a new
-  `/api/v1/rag/ingest-pdf` multipart endpoint extracts text then runs the
-  standard chunk + embed + store path. Scanned PDFs (no text layer)
-  return 400 with an OCR hint rather than empty ingestion.
-
-Not yet shipped:
-
-- **Milvus / Weaviate / Pinecone vector stores** — same pattern as
-  `rag_qdrant` / `rag_chroma`; straightforward ports when demand appears.
-- **Alternative embeddings providers beyond OpenAI + Voyage** — Cohere
+- **`webhooks/rust` durable registry** — axum + sqlx-backed persistence.
+  (In-memory v1 is already shipped — this is the durability upgrade.)
+- **`cli_commands/node`** — npm scripts already cover the surface; explicit
+  subcommands planned once a CLI framework like `citty` lands as a first-
+  class dep.
+- **`cli_commands/rust`** — clap-based subcommand layer on top of the
+  existing `src/bin/migrate.rs` pattern.
+- **Additional embeddings providers** beyond OpenAI + Voyage — Cohere
   embed, local `sentence-transformers`. Same pattern as
   `rag_embeddings_voyage`.
-
-### Tier 5 (enterprise extras)
-
-Shipped:
-
-- **`admin_panel`** — Python. SQLAdmin UI at `/admin`. Env-gated via
-  `ADMIN_PANEL_MODE` (`disabled` / `dev` / `all`); in `dev` the UI only
-  mounts when `ENVIRONMENT` is `local` / `development`. Auto-registers
-  `ModelView` for whichever tables the enabled features have shipped
-  (items, audit_logs, conversations, webhooks, …) — missing imports are
-  caught and skipped.
-- **`webhooks`** — Python + Node. Python registry backed by SQLAlchemy
-  model + migration 0005; Node registry is in-memory (swap for Prisma when
-  multi-replica durability needed). Both ship HMAC-SHA256 signed delivery
-  + `/test` endpoint. Synchronous best-effort; pair with
-  `background_tasks` when retry queues are needed.
-- **`cli_commands`** — Python. Extends the base template's typer CLI with
-  `app info show`, `app tools list`, `app tools invoke`, `app rag ingest`.
-  Each subcommand degrades gracefully if its prerequisite feature isn't
-  present (prints a hint, exits non-zero).
-
-Not yet shipped:
-
-- **`webhooks/rust`** — axum endpoints + sqlx-backed registry + reqwest
-  delivery. Medium effort; deferred.
-- **`cli_commands/node`** — npm scripts already cover the equivalent
-  surface (`npm run db:migrate`, etc.); explicit subcommands planned once
-  a richer CLI framework like citty lands as a first-class dep.
-- **`cli_commands/rust`** — clap-based subcommand layer layered on the
-  existing `src/bin/migrate.rs` pattern.
-- **`security_ratelimit_strict`** — composite preset bundling `rate_limit` +
-  `security_headers` + tightened CORS.
+- **`security_ratelimit_strict`** — composite preset bundling
+  `rate_limit` + `security_headers` + tightened CORS.
 
 ## Design note — middleware ordering
 

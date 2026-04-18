@@ -27,52 +27,120 @@ from forge.features import FeatureConfig, FeatureSpec, FragmentImplSpec
 
 
 class TestInjectSnippet:
-    def _write(self, tmp_path: Path, content: str) -> Path:
-        file = tmp_path / "main.py"
+    def _write(self, tmp_path: Path, content: str, name: str = "main.py") -> Path:
+        file = tmp_path / name
         file.write_text(content, encoding="utf-8")
         return file
 
     def test_after_marker_inserts_below(self, tmp_path) -> None:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
-        _inject_snippet(file, "FORGE:X", "mid", "after")
-        assert file.read_text(encoding="utf-8") == "foo\n# FORGE:X\nmid\nbar\n"
+        _inject_snippet(file, "feat_a", "FORGE:X", "mid", "after")
+        text = file.read_text(encoding="utf-8")
+        assert text == (
+            "foo\n"
+            "# FORGE:X\n"
+            "# FORGE:BEGIN feat_a:X\n"
+            "mid\n"
+            "# FORGE:END feat_a:X\n"
+            "bar\n"
+        )
 
     def test_before_marker_inserts_above(self, tmp_path) -> None:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
-        _inject_snippet(file, "FORGE:X", "mid", "before")
-        assert file.read_text(encoding="utf-8") == "foo\nmid\n# FORGE:X\nbar\n"
+        _inject_snippet(file, "feat_a", "FORGE:X", "mid", "before")
+        text = file.read_text(encoding="utf-8")
+        assert text == (
+            "foo\n"
+            "# FORGE:BEGIN feat_a:X\n"
+            "mid\n"
+            "# FORGE:END feat_a:X\n"
+            "# FORGE:X\n"
+            "bar\n"
+        )
 
     def test_preserves_marker_indentation(self, tmp_path) -> None:
         file = self._write(tmp_path, "def f():\n    # FORGE:X\n    return 1\n")
-        _inject_snippet(file, "FORGE:X", "step()", "after")
-        # Snippet picks up the marker line's 4-space indent.
-        assert "    step()\n" in file.read_text(encoding="utf-8")
+        _inject_snippet(file, "feat_a", "FORGE:X", "step()", "after")
+        text = file.read_text(encoding="utf-8")
+        # Sentinels + snippet all inherit the marker's 4-space indent.
+        assert "    # FORGE:BEGIN feat_a:X\n" in text
+        assert "    step()\n" in text
+        assert "    # FORGE:END feat_a:X\n" in text
 
     def test_multi_line_snippet(self, tmp_path) -> None:
         file = self._write(tmp_path, "  # FORGE:A\n")
-        _inject_snippet(file, "FORGE:A", "line1\nline2", "after")
+        _inject_snippet(file, "feat_a", "FORGE:A", "line1\nline2", "after")
         text = file.read_text(encoding="utf-8")
         assert "  line1\n  line2\n" in text
 
     def test_missing_marker_raises(self, tmp_path) -> None:
         file = self._write(tmp_path, "nothing here\n")
         with pytest.raises(GeneratorError, match="not found"):
-            _inject_snippet(file, "FORGE:MISSING", "x", "after")
+            _inject_snippet(file, "feat_a", "FORGE:MISSING", "x", "after")
 
     def test_duplicate_marker_raises(self, tmp_path) -> None:
         file = self._write(tmp_path, "# FORGE:X\n# FORGE:X\n")
         with pytest.raises(GeneratorError, match="appears 2 times"):
-            _inject_snippet(file, "FORGE:X", "x", "after")
+            _inject_snippet(file, "feat_a", "FORGE:X", "x", "after")
 
     def test_auto_prepends_forge_prefix(self, tmp_path) -> None:
         file = self._write(tmp_path, "# FORGE:Y\n")
         # Marker passed without the FORGE: prefix should still resolve.
-        _inject_snippet(file, "Y", "ok", "after")
+        _inject_snippet(file, "feat_a", "Y", "ok", "after")
         assert "ok" in file.read_text(encoding="utf-8")
 
     def test_missing_target_file_raises(self, tmp_path) -> None:
         with pytest.raises(GeneratorError, match="not found"):
-            _inject_snippet(tmp_path / "ghost.py", "FORGE:X", "x", "after")
+            _inject_snippet(tmp_path / "ghost.py", "feat_a", "FORGE:X", "x", "after")
+
+    # --- Idempotency + re-injection -----------------------------------------
+
+    def test_rerun_same_feature_replaces_in_place(self, tmp_path) -> None:
+        """Re-running with the same feature_key/marker replaces the block,
+        not duplicate. This is the B2.3 unlock for `forge update`.
+        """
+        file = self._write(tmp_path, "pre\n# FORGE:X\npost\n")
+        _inject_snippet(file, "feat_a", "FORGE:X", "v1", "after")
+        _inject_snippet(file, "feat_a", "FORGE:X", "v2", "after")
+        text = file.read_text(encoding="utf-8")
+        # The new body replaces the old; only one BEGIN/END pair exists.
+        assert text.count("# FORGE:BEGIN feat_a:X") == 1
+        assert text.count("# FORGE:END feat_a:X") == 1
+        assert "v1" not in text
+        assert "v2\n" in text
+
+    def test_different_features_coexist(self, tmp_path) -> None:
+        """Two different features inject around the same marker without collision."""
+        file = self._write(tmp_path, "pre\n# FORGE:X\npost\n")
+        _inject_snippet(file, "feat_a", "FORGE:X", "from_a", "after")
+        _inject_snippet(file, "feat_b", "FORGE:X", "from_b", "after")
+        text = file.read_text(encoding="utf-8")
+        assert "# FORGE:BEGIN feat_a:X" in text
+        assert "# FORGE:BEGIN feat_b:X" in text
+        assert "from_a" in text
+        assert "from_b" in text
+
+    def test_typescript_uses_slash_comments(self, tmp_path) -> None:
+        file = self._write(tmp_path, "line\n// FORGE:X\nend\n", name="main.ts")
+        _inject_snippet(file, "feat_a", "FORGE:X", "console.log('ok');", "after")
+        text = file.read_text(encoding="utf-8")
+        assert "// FORGE:BEGIN feat_a:X\n" in text
+        assert "// FORGE:END feat_a:X\n" in text
+
+    def test_rust_uses_slash_comments(self, tmp_path) -> None:
+        file = self._write(tmp_path, "line\n// FORGE:X\nend\n", name="main.rs")
+        _inject_snippet(file, "feat_a", "FORGE:X", "println!(\"ok\");", "after")
+        text = file.read_text(encoding="utf-8")
+        assert "// FORGE:BEGIN feat_a:X\n" in text
+
+    def test_missing_end_sentinel_raises(self, tmp_path) -> None:
+        """A BEGIN without matching END signals a corrupt/hand-edited file."""
+        file = self._write(
+            tmp_path,
+            "pre\n# FORGE:X\n# FORGE:BEGIN feat_a:X\nold\n# no end here\npost\n",
+        )
+        with pytest.raises(GeneratorError, match="END.*missing"):
+            _inject_snippet(file, "feat_a", "FORGE:X", "new", "after")
 
 
 # -- _add_python_deps ---------------------------------------------------------

@@ -1,10 +1,9 @@
 # rag_pipeline injections.
 # 1. Mount /api/v1/rag router for ingest/search.
-# 2. Import rag_search_tool at lifecycle startup — the module's own
-#    _try_register() call decides whether to actually register into the
-#    ToolRegistry (no-op if agent_tools isn't enabled). This way users
-#    can enable rag_pipeline without agent_tools and still get the REST
-#    endpoints, just without LLM tool-access.
+# 2. At lifecycle startup, explicitly call `register_rag_search_tool()` to
+#    add the `rag_search` tool to the agent ToolRegistry when `agent_tools`
+#    is also enabled. The register function returns False (no-op) otherwise,
+#    so users can enable rag_pipeline alone and still get the REST endpoints.
 
 - target: src/app/api/v1/api.py
   marker: FORGE:API_ENDPOINT_IMPORTS
@@ -19,4 +18,6 @@
 - target: src/app/core/lifecycle.py
   marker: FORGE:LIFECYCLE_STARTUP
   position: before
-  snippet: "import app.rag.rag_search_tool  # noqa: F401 — side-effect: registers rag_search if agent_tools is enabled"
+  snippet: |-
+    from app.rag.rag_search_tool import register_rag_search_tool
+    register_rag_search_tool()

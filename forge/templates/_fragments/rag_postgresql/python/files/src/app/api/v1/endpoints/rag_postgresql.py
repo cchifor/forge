@@ -2,9 +2,9 @@
 /api/v1/rag/qdrant. Lives under /api/v1/rag/pg so all three backends can
 coexist while teams migrate between them.
 
-Uses the base template's async session (via Dishka) so the chunks table
-lives alongside your other domain tables and participates in the same
-tenant scoping.
+Auth-gated via `oauth2_scheme`; tenant identity is derived from the
+authenticated principal through `AuthUnitOfWork` — callers cannot act
+against another tenant's corpus.
 """
 
 from __future__ import annotations
@@ -12,28 +12,36 @@ from __future__ import annotations
 import uuid
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 
-from app.core.ioc import PublicUnitOfWork
+from app.core.ioc import AuthUnitOfWork
 from app.rag import postgresql_backend
 from app.rag.chunker import chunk_text
 from app.rag.embeddings import embed, embed_one
 from app.rag.pdf_parser import extract_text_from_bytes
+from service.security.auth import oauth2_scheme
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(oauth2_scheme)])
 
-_ANON = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+def _tenant_ids(uow: AuthUnitOfWork) -> tuple[uuid.UUID, uuid.UUID]:
+    account = uow._account
+    if account is None or account.customer_id is None or account.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated tenant required for RAG operations",
+        )
+    return account.customer_id, account.user_id
 
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 @inject
 async def ingest(
-    uow: FromDishka[PublicUnitOfWork],
+    uow: FromDishka[AuthUnitOfWork],
     name: str = Form(..., description="Document name / identifier"),
     content: str = Form(..., description="Raw text to ingest"),
-    customer_id: str | None = Form(default=None),
-    user_id: str | None = Form(default=None),
 ) -> dict:
+    cid, uid = _tenant_ids(uow)
     chunks = chunk_text(content)
     if not chunks:
         raise HTTPException(
@@ -41,12 +49,6 @@ async def ingest(
             detail="content produced zero chunks (too short?)",
         )
     embeddings = await embed(chunks)
-
-    try:
-        cid = uuid.UUID(customer_id) if customer_id else _ANON
-        uid = uuid.UUID(user_id) if user_id else _ANON
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     document_id = uuid.uuid4()
     async with uow:
@@ -70,12 +72,11 @@ async def ingest(
 @router.post("/ingest-pdf", status_code=status.HTTP_201_CREATED)
 @inject
 async def ingest_pdf(
-    uow: FromDishka[PublicUnitOfWork],
+    uow: FromDishka[AuthUnitOfWork],
     file: UploadFile,
     name: str | None = Form(default=None),
-    customer_id: str | None = Form(default=None),
-    user_id: str | None = Form(default=None),
 ) -> dict:
+    cid, uid = _tenant_ids(uow)
     if file.content_type and file.content_type != "application/pdf":
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -93,12 +94,6 @@ async def ingest_pdf(
         )
     chunks = chunk_text(text)
     embeddings = await embed(chunks)
-
-    try:
-        cid = uuid.UUID(customer_id) if customer_id else _ANON
-        uid = uuid.UUID(user_id) if user_id else _ANON
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     document_id = uuid.uuid4()
     async with uow:
@@ -123,15 +118,11 @@ async def ingest_pdf(
 @router.post("/search")
 @inject
 async def search(
-    uow: FromDishka[PublicUnitOfWork],
+    uow: FromDishka[AuthUnitOfWork],
     query: str = Form(..., description="Search query"),
     top_k: int = Form(5, ge=1, le=50),
-    customer_id: str | None = Form(default=None),
 ) -> dict:
-    try:
-        cid = uuid.UUID(customer_id) if customer_id else None
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    cid, _ = _tenant_ids(uow)
 
     vector = await embed_one(query)
     async with uow:

@@ -23,7 +23,12 @@ from forge.config import (
 )
 from forge.docker_manager import boot
 from forge.errors import GeneratorError
-from forge.features import FEATURE_REGISTRY, FeatureConfig
+from forge.features import (
+    CATEGORY_DISPLAY,
+    CATEGORY_ORDER,
+    FEATURE_REGISTRY,
+    FeatureConfig,
+)
 from forge.generator import generate
 
 # -- Argument parsing ---------------------------------------------------------
@@ -113,6 +118,26 @@ def _parse_args() -> argparse.Namespace:
         "--list-features",
         action="store_true",
         help="Print the feature registry and exit.",
+    )
+    p.add_argument(
+        "--describe",
+        metavar="KEY",
+        help="Print the full description for one feature and exit.",
+    )
+    p.add_argument(
+        "--update",
+        action="store_true",
+        help=(
+            "Update an existing forge-generated project in-place: re-apply "
+            "feature injections (idempotent) and re-stamp forge.toml. Run "
+            "from the project root or pass --project-path."
+        ),
+    )
+    p.add_argument(
+        "--project-path",
+        metavar="DIR",
+        default=".",
+        help="Target directory for --update. Defaults to the current directory.",
     )
 
     # Behavior
@@ -739,15 +764,89 @@ def _json_error(stdout_fd, message: str) -> None:
 
 
 def _print_feature_list() -> None:
-    """Print registered features to stdout and exit."""
+    """Print registered features grouped by category and exit."""
     if not FEATURE_REGISTRY:
         print("No features registered.")
-    else:
-        print(f"{'KEY':<24} {'STABILITY':<12} {'DEFAULT':<8} {'BACKENDS'}")
-        for key, spec in sorted(FEATURE_REGISTRY.items()):
+        sys.exit(0)
+
+    grouped: dict[Any, list[tuple[str, Any]]] = {cat: [] for cat in CATEGORY_ORDER}
+    for key, spec in FEATURE_REGISTRY.items():
+        grouped.setdefault(spec.category, []).append((key, spec))
+
+    header = f"{'NAME':<30} {'KEY':<28} {'STABILITY':<14} {'DEFAULT':<10} {'BACKENDS'}"
+    first = True
+    for cat in CATEGORY_ORDER:
+        entries = grouped.get(cat, [])
+        if not entries:
+            continue
+        if not first:
+            print()
+        first = False
+        print(f"# {CATEGORY_DISPLAY[cat]}")
+        print(header)
+        for key, spec in sorted(entries, key=lambda kv: kv[0]):
             backends = ",".join(sorted(lang.value for lang in spec.implementations))
             default = "always-on" if spec.always_on else ("on" if spec.default_enabled else "off")
-            print(f"{key:<24} {spec.stability:<12} {default:<8} {backends}")
+            print(
+                f"{spec.display_label:<30} {key:<28} {spec.stability:<14} {default:<10} {backends}"
+            )
+    sys.exit(0)
+
+
+def _run_update(args: argparse.Namespace) -> None:
+    """Run `forge update` against the given project and exit."""
+    from forge.errors import GeneratorError as _GeneratorError
+    from forge.updater import update_project
+
+    project_path = Path(getattr(args, "project_path", ".")).resolve()
+    quiet = bool(getattr(args, "quiet", False))
+
+    if not quiet:
+        print(f"forge update: {project_path}")
+    try:
+        summary = update_project(project_path, quiet=quiet)
+    except _GeneratorError as exc:
+        if getattr(args, "json_output", False):
+            print(json.dumps({"error": str(exc)}))
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    if getattr(args, "json_output", False):
+        print(json.dumps(summary, indent=2))
+    elif not quiet:
+        before = summary["forge_version_before"]
+        after = summary["forge_version_after"]
+        feats = ", ".join(summary["features_applied"]) or "(none)"
+        print(f"  forge {before} -> {after}")
+        print(f"  backends: {', '.join(summary['backends'])}")
+        print(f"  features: {feats}")
+        print("Update complete.")
+    sys.exit(0)
+
+
+def _describe_feature(key: str) -> None:
+    """Print the full description block for one feature and exit."""
+    spec = FEATURE_REGISTRY.get(key)
+    if spec is None:
+        import difflib
+
+        matches = difflib.get_close_matches(key, list(FEATURE_REGISTRY.keys()), n=3, cutoff=0.5)
+        suggestion = f" Did you mean: {', '.join(matches)}?" if matches else ""
+        print(f"Unknown feature '{key}'.{suggestion}", file=sys.stderr)
+        sys.exit(1)
+
+    backends = ", ".join(sorted(lang.value for lang in spec.implementations)) or "—"
+    default = "always-on" if spec.always_on else ("on" if spec.default_enabled else "off")
+    depends = ", ".join(spec.depends_on) if spec.depends_on else "—"
+
+    print(f"{spec.display_label}  ({spec.key})")
+    print(f"Category: {CATEGORY_DISPLAY[spec.category]}")
+    print(f"Stability: {spec.stability}    Default: {default}    Backends: {backends}")
+    print(f"Depends on: {depends}")
+    print(f"CLI flag: {spec.cli_flag}")
+    print()
+    print(spec.description or "(no description)")
     sys.exit(0)
 
 
@@ -756,6 +855,12 @@ def main() -> None:
 
     if getattr(args, "list_features", False):
         _print_feature_list()
+
+    if getattr(args, "describe", None):
+        _describe_feature(args.describe)
+
+    if getattr(args, "update", False):
+        _run_update(args)
 
     if getattr(args, "completion", None):
         _print_completion(args.completion)

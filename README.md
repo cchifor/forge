@@ -43,40 +43,40 @@
 
 Enable any feature below at generation time with `--enable-feature KEY` (repeatable) or declare it inside your YAML config. See [Usage Examples](#usage-examples).
 
-| Category | Feature / Capability | Status | Backends | What you get |
-|---|---|---|---|---|
-| **Foundation** | Polyglot backends | stable | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
-| **Foundation** | Frontends | stable | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
-| **Foundation** | Docker-compose + Traefik | stable | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
-| **Foundation** | Enterprise auth | stable | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
-| **Foundation** | `forge.toml` stamping | stable | all | Generated project records forge version + template paths + feature set; machine-readable for future `forge update`. |
-| **Middleware (Tier 1)** | `correlation_id` | stable, always-on | python | X-Request-ID ingress + ContextVar + response echo. |
-| **Middleware (Tier 1)** | `rate_limit` | stable, on by default | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
-| **Middleware (Tier 1)** | `security_headers` | stable, on by default | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
-| **Middleware (Tier 1)** | `pii_redaction` | stable, on by default | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
-| **Ops (Tier 2)** | `observability` | stable | python, node, rust | [Logfire](https://logfire.pydantic.dev/) auto-instrumentation (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
-| **Ops (Tier 2)** | `response_cache` | beta | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
-| **Ops (Tier 2)** | `background_tasks` | beta | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
-| **Ops (Tier 2)** | `enhanced_health` | beta | python, node, rust | `/api/v1/health/deep` aggregates Postgres + Redis + Keycloak readiness. |
-| **Agent (Tier 3)** | `conversation_persistence` | beta | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
-| **Agent (Tier 3)** | `agent_tools` | experimental | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
-| **Agent (Tier 3)** | `agent_streaming` | experimental | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
-| **Agent (Tier 3)** | `agent` | experimental | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. Real per-delta streaming via `agent.iter()`; graceful fallback if event classes change. |
-| **Agent (Tier 3)** | `file_upload` | beta | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage with path-traversal guard. |
-| **RAG (Tier 4)** | `rag_pipeline` | experimental | python | OpenAI embeddings + [pgvector](https://github.com/pgvector/pgvector) + HNSW index + recursive chunker + `/api/v1/rag/{ingest,ingest-pdf,search}` + auto-registered `rag_search` tool. |
-| **RAG (Tier 4)** | `rag_postgresql` | experimental | python | Plain-PostgreSQL backend — no `vector` extension required. JSONB embeddings + Python-side cosine. |
-| **RAG (Tier 4)** | `rag_qdrant` | experimental | python | [Qdrant](https://qdrant.tech/) async client, HNSW + COSINE. |
-| **RAG (Tier 4)** | `rag_chroma` | experimental | python | [Chroma](https://www.trychroma.com/) async HTTP client; auto-creates collection. |
-| **RAG (Tier 4)** | `rag_milvus` | experimental | python | [Milvus](https://milvus.io/) / Zilliz Cloud via `pymilvus.AsyncMilvusClient`. |
-| **RAG (Tier 4)** | `rag_weaviate` | experimental | python | [Weaviate](https://weaviate.io/) v4 async client; BYO vectors. |
-| **RAG (Tier 4)** | `rag_pinecone` | experimental | python | [Pinecone](https://www.pinecone.io/) managed service; namespace-per-tenant isolation. |
-| **RAG (Tier 4)** | `rag_reranking` | experimental | python | Cohere `rerank-v3.5` (default) + local sentence-transformers cross-encoder fallback. |
-| **RAG (Tier 4)** | `rag_embeddings_voyage` | experimental | python | [Voyage AI](https://www.voyageai.com/) embeddings drop-in replacement. |
-| **RAG (Tier 4)** | `rag_sync_tasks` | experimental | python | Taskiq tasks for off-thread RAG ingestion. |
-| **DX (Tier 5)** | `admin_panel` | beta | python | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI at `/admin`, env-gated (`dev`/`all`/`disabled`). |
-| **DX (Tier 5)** | `webhooks` | beta | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
-| **DX (Tier 5)** | `cli_commands` | beta | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
-| **DX (Tier 5)** | `agents_md` | stable, on by default | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
+| Category | Feature / Capability | Key | Status | Backends | What you get |
+|---|---|---|---|---|---|
+| **Foundation** | Polyglot backends | — | stable | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
+| **Foundation** | Frontends | — | stable | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
+| **Foundation** | Docker-compose + Traefik | — | stable | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
+| **Foundation** | Enterprise auth | — | stable | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
+| **Foundation** | `forge.toml` stamping | — | stable | all | Generated project records forge version + template paths + feature set; machine-readable for future `forge update`. |
+| **Observability** | Request Tracing | `correlation_id` | stable, always-on | python | X-Request-ID ingress + ContextVar + response echo. |
+| **Observability** | Deep Health Checks | `enhanced_health` | beta | python, node, rust | `/health` aggregates Postgres + Redis + Keycloak readiness. |
+| **Observability** | Distributed Tracing | `observability` | stable | python, node, rust | [Logfire](https://logfire.pydantic.dev/) (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
+| **Reliability** | Rate Limiting | `rate_limit` | stable, on by default | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
+| **Reliability** | Security Headers | `security_headers` | stable, on by default | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
+| **Reliability** | PII Scrubber | `pii_redaction` | stable, on by default | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
+| **Reliability** | Response Cache | `response_cache` | beta | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
+| **Async Work** | Task Queue | `background_tasks` | beta | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
+| **Async Work** | Knowledge Ingest Queue | `rag_sync_tasks` | experimental | python | Taskiq tasks for off-thread RAG ingestion. |
+| **Conversational AI** | Chat History | `conversation_persistence` | beta | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
+| **Conversational AI** | Tool Registry | `agent_tools` | experimental | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
+| **Conversational AI** | Agent Stream | `agent_streaming` | experimental | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
+| **Conversational AI** | LLM Agent | `agent` | experimental | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. Real per-delta streaming via `agent.iter()`; graceful fallback if event classes change. |
+| **Conversational AI** | Chat Attachments | `file_upload` | beta | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage with path-traversal guard. |
+| **Knowledge** | Knowledge Search | `rag_pipeline` | experimental | python | OpenAI embeddings + [pgvector](https://github.com/pgvector/pgvector) + HNSW index + recursive chunker + `/api/v1/rag/{ingest,ingest-pdf,search}` + auto-registered `rag_search` tool. |
+| **Knowledge** | Knowledge Reranker | `rag_reranking` | experimental | python | Cohere `rerank-v3.5` (default) + local sentence-transformers cross-encoder fallback. |
+| **Knowledge** | Knowledge — PostgreSQL | `rag_postgresql` | experimental | python | Plain-PostgreSQL backend — no `vector` extension required. JSONB embeddings + Python-side cosine. |
+| **Knowledge** | Knowledge — Qdrant | `rag_qdrant` | experimental | python | [Qdrant](https://qdrant.tech/) async client, HNSW + COSINE. |
+| **Knowledge** | Knowledge — Chroma | `rag_chroma` | experimental | python | [Chroma](https://www.trychroma.com/) async HTTP client; auto-creates collection. |
+| **Knowledge** | Knowledge — Milvus | `rag_milvus` | experimental | python | [Milvus](https://milvus.io/) / Zilliz Cloud via `pymilvus.AsyncMilvusClient`. |
+| **Knowledge** | Knowledge — Weaviate | `rag_weaviate` | experimental | python | [Weaviate](https://weaviate.io/) v4 async client; BYO vectors. |
+| **Knowledge** | Knowledge — Pinecone | `rag_pinecone` | experimental | python | [Pinecone](https://www.pinecone.io/) managed service; namespace-per-tenant isolation. |
+| **Knowledge** | Knowledge — Voyage Embeddings | `rag_embeddings_voyage` | experimental | python | [Voyage AI](https://www.voyageai.com/) embeddings drop-in replacement. |
+| **Platform** | Admin Console | `admin_panel` | beta | python | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI at `/admin`, env-gated (`dev`/`all`/`disabled`). |
+| **Platform** | Outbound Webhooks | `webhooks` | beta | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
+| **Platform** | Service CLI Extensions | `cli_commands` | beta | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
+| **Platform** | AI Agent Handbook | `agents_md` | stable, on by default | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
 
 ---
 
@@ -265,35 +265,55 @@ forge --list-features
 ```
 
 ```text forge-list-features
-KEY                      STABILITY    DEFAULT  BACKENDS
-admin_panel              beta         off      python
-agent                    experimental off      python
-agent_streaming          experimental off      python
-agent_tools              experimental off      python
-agents_md                stable       on       node,python,rust
-background_tasks         beta         off      node,python,rust
-cli_commands             beta         off      python
-conversation_persistence beta         off      python
-correlation_id           stable       always-on python
-enhanced_health          beta         off      node,python,rust
-file_upload              beta         off      python
-observability            stable       off      node,python,rust
-pii_redaction            stable       on       python
-rag_chroma               experimental off      python
-rag_embeddings_voyage    experimental off      python
-rag_milvus               experimental off      python
-rag_pinecone             experimental off      python
-rag_pipeline             experimental off      python
-rag_postgresql           experimental off      python
-rag_qdrant               experimental off      python
-rag_reranking            experimental off      python
-rag_sync_tasks           experimental off      python
-rag_weaviate             experimental off      python
-rate_limit               stable       on       node,python,rust
-response_cache           beta         off      node,python
-security_headers         stable       on       node,python,rust
-webhooks                 beta         off      node,python,rust
+# Observability
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+Request Tracing                correlation_id               stable         always-on  python
+Deep Health Checks             enhanced_health              beta           off        node,python,rust
+Distributed Tracing            observability                stable         off        node,python,rust
+
+# Reliability
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+PII Scrubber                   pii_redaction                stable         on         python
+Rate Limiting                  rate_limit                   stable         on         node,python,rust
+Response Cache                 response_cache               beta           off        node,python
+Security Headers               security_headers             stable         on         node,python,rust
+
+# Async Work
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+Task Queue                     background_tasks             beta           off        node,python,rust
+Knowledge Ingest Queue         rag_sync_tasks               experimental   off        python
+
+# Conversational AI
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+LLM Agent                      agent                        experimental   off        python
+Agent Stream                   agent_streaming              experimental   off        python
+Tool Registry                  agent_tools                  experimental   off        python
+Chat History                   conversation_persistence     beta           off        python
+Chat Attachments               file_upload                  beta           off        python
+
+# Knowledge
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+Knowledge — Chroma             rag_chroma                   experimental   off        python
+Knowledge — Voyage Embeddings  rag_embeddings_voyage        experimental   off        python
+Knowledge — Milvus             rag_milvus                   experimental   off        python
+Knowledge — Pinecone           rag_pinecone                 experimental   off        python
+Knowledge Search               rag_pipeline                 experimental   off        python
+Knowledge — PostgreSQL         rag_postgresql               experimental   off        python
+Knowledge — Qdrant             rag_qdrant                   experimental   off        python
+Knowledge Reranker             rag_reranking                experimental   off        python
+Knowledge — Weaviate           rag_weaviate                 experimental   off        python
+
+# Platform
+NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
+Admin Console                  admin_panel                  beta           off        python
+AI Agent Handbook              agents_md                    stable         on         node,python,rust
+Service CLI Extensions         cli_commands                 beta           off        python
+Outbound Webhooks              webhooks                     beta           off        node,python,rust
 ```
+
+Run `forge --describe <key>` to see the full prose + metadata for a
+specific feature — category, stability, endpoints, required env vars,
+and dependency chain.
 
 ### Polyglot stack (Python + Rust behind one gateway)
 
