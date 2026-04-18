@@ -1,6 +1,8 @@
 use dotenvy::dotenv;
 use std::net::SocketAddr;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter};
 
 mod app;
 mod client;
@@ -11,14 +13,19 @@ mod middleware;
 mod models;
 mod routes;
 mod services;
+// FORGE:MAIN_MOD_REGISTRATION
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse().unwrap()))
-        .json()
-        .init();
+
+    let env_filter =
+        EnvFilter::from_default_env().add_directive("info".parse().unwrap());
+    let registry = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt::layer().json());
+    // FORGE:TRACING_LAYERS
+    registry.init();
 
     let pool = db::create_pool().await;
     let app = app::create_app(pool);

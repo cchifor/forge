@@ -1,0 +1,13 @@
+# rag_postgresql: mount /api/v1/rag/pg alongside /rag (pgvector) and
+# /rag/qdrant. All three share the chunker + embeddings + pdf_parser
+# modules shipped by rag_pipeline.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import rag_postgresql as rag_pg_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(rag_pg_endpoint.router, prefix="/rag/pg", tags=["rag"])'

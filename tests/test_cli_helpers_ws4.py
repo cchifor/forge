@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from forge.cli import (
+    _Resolver,
     _build_backends_from_cfg,
     _build_config,
     _build_frontend_from_cfg,
@@ -94,7 +95,7 @@ class TestBuildBackendsFromCfg:
                 {"name": "core", "language": "rust"},
             ]
         }
-        backends = _build_backends_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        backends = _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert [b.name for b in backends] == ["api", "queue", "core"]
         assert [b.language for b in backends] == [
             BackendLanguage.PYTHON,
@@ -110,19 +111,19 @@ class TestBuildBackendsFromCfg:
 
     def test_invalid_backend_entry_skipped(self) -> None:
         cfg = {"backends": [{"name": "ok"}, "garbage", 42, {"name": "also-ok"}]}
-        backends = _build_backends_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        backends = _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert [b.name for b in backends] == ["ok", "also-ok"]
 
     def test_falls_back_to_single_backend(self) -> None:
         cfg: dict = {}
-        backends = _build_backends_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        backends = _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert len(backends) == 1
         assert backends[0].name == "backend"
         assert backends[0].language == BackendLanguage.PYTHON
 
     def test_single_backend_from_cfg_block(self) -> None:
         cfg = {"backend": {"name": "svc", "language": "rust"}}
-        backends = _build_backends_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        backends = _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert len(backends) == 1
         assert backends[0].name == "svc"
         assert backends[0].language == BackendLanguage.RUST
@@ -134,13 +135,13 @@ class TestBuildBackendsFromCfg:
 class TestBuildFrontendFromCfg:
     def test_no_frontend(self) -> None:
         cfg = {"frontend": {"framework": "none"}}
-        fe, include_auth = _build_frontend_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        fe, include_auth = _build_frontend_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert fe is None
         assert include_auth is False
 
     def test_vue_with_auth_default(self) -> None:
         cfg = {"frontend": {"framework": "vue"}}
-        fe, include_auth = _build_frontend_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        fe, include_auth = _build_frontend_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert fe is not None
         assert fe.framework == FrontendFramework.VUE
         assert include_auth is True
@@ -148,7 +149,7 @@ class TestBuildFrontendFromCfg:
 
     def test_svelte_explicit_no_auth(self) -> None:
         cfg = {"frontend": {"framework": "svelte", "include_auth": False}}
-        fe, include_auth = _build_frontend_from_cfg(_empty_args(), cfg, "Proj", "desc")
+        fe, include_auth = _build_frontend_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
         assert fe is not None
         assert fe.framework == FrontendFramework.SVELTE
         assert include_auth is False

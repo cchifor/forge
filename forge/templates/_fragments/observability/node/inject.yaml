@@ -1,0 +1,8 @@
+# observability/node: load the OTel SDK bootstrap as the very first import
+# in src/index.ts so auto-instrumentations can patch modules (fastify, http,
+# pg) before they're loaded.
+
+- target: src/index.ts
+  marker: FORGE:ENTRY_PRELOAD
+  position: before
+  snippet: 'import "./telemetry.js";'

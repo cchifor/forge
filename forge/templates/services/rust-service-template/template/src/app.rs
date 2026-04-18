@@ -4,6 +4,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::middleware::correlation::{propagate_request_id_layer, set_request_id_layer};
 use crate::routes;
+// FORGE:MIDDLEWARE_IMPORTS
 
 pub fn create_app(pool: PgPool) -> Router {
     Router::new()
@@ -12,4 +13,5 @@ pub fn create_app(pool: PgPool) -> Router {
         .layer(propagate_request_id_layer())
         .layer(set_request_id_layer())
         .layer(CorsLayer::permissive())
+        // FORGE:MIDDLEWARE_REGISTRATION
 }

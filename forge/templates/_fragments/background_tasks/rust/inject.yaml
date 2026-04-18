@@ -1,0 +1,4 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: before
+  snippet: "pub mod worker;"

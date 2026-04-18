@@ -1,0 +1,19 @@
+# cli_commands: register info/tools/rag subcommands under the existing
+# `app` typer tree. Users invoke via: `uv run app info show`,
+# `uv run app tools list`, `uv run app rag ingest file.txt`, etc.
+
+- target: src/app/cli/__init__.py
+  marker: FORGE:CLI_IMPORTS
+  position: before
+  snippet: |-
+    from app.cli.info import info_app
+    from app.cli.rag import rag_app
+    from app.cli.tools import tools_app
+
+- target: src/app/cli/__init__.py
+  marker: FORGE:CLI_REGISTRATION
+  position: before
+  snippet: |-
+    cli.add_typer(info_app, name="info", help="Service info")
+    cli.add_typer(tools_app, name="tools", help="Agent tool registry")
+    cli.add_typer(rag_app, name="rag", help="RAG ingestion")

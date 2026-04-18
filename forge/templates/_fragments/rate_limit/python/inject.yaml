@@ -1,0 +1,19 @@
+# rate_limit for Python — restores the middleware that used to be hardcoded
+# in the base template. order=50 lands it between Audit (hardcoded) and
+# SecurityHeaders (order=80) so the resulting file matches the pre-fragment
+# layout exactly.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.middleware.rate_limit import RateLimitMiddleware"
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: |-
+    app.add_middleware(
+        RateLimitMiddleware,
+        requests_per_minute=120,
+        skip_paths=["/health", "/metrics", "/docs", "/openapi.json"],
+    )

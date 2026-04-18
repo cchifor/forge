@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 import pytest
 
-from forge.generator import GeneratorError, _git_init, _run_backend_cmd, _run_copier
+from forge.errors import GeneratorError
+from forge.generator import _git_init, _run_backend_cmd, _run_copier
 
 # -- _run_backend_cmd: required=True raises GeneratorError --------------------
 

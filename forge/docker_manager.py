@@ -8,7 +8,13 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from forge.config import FrontendFramework, ProjectConfig
+from forge.config import (
+    DEFAULT_REALM,
+    TRAEFIK_DASHBOARD_PORT,
+    FrontendFramework,
+    ProjectConfig,
+)
+from forge.errors import GeneratorError
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -68,13 +74,13 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
         ),
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
-        "traefik_dashboard_port": 19090,
+        "traefik_dashboard_port": TRAEFIK_DASHBOARD_PORT,
         "keycloak_realm": (
             config.frontend.keycloak_realm
             if config.frontend
             and config.include_keycloak
             and config.frontend.keycloak_realm != "master"
-            else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
+            else DEFAULT_REALM
         ),
         "keycloak_client_id": (
             config.frontend.keycloak_client_id
@@ -122,8 +128,6 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
     """
     import json
 
-    from forge.generator import GeneratorError
-
     env = _jinja_env()
     template = env.get_template("infra/keycloak-realm.json.j2")
 
@@ -133,7 +137,7 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
         "keycloak_realm": (
             fc.keycloak_realm
             if fc and fc.keycloak_realm and fc.keycloak_realm != "master"
-            else "app"  # matches Host(`app.localhost`) for Gatekeeper tenant extraction
+            else DEFAULT_REALM
         ),
         "keycloak_client_id": (
             fc.keycloak_client_id if fc and fc.keycloak_client_id else config.project_slug

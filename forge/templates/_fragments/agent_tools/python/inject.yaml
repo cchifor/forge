@@ -1,0 +1,20 @@
+# agent_tools: install built-in tools at lifecycle startup so they're
+# registered before any route handler can reach the registry. Mount the
+# /api/v1/tools router for listing and invocation.
+
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFECYCLE_STARTUP
+  position: before
+  snippet: |-
+    from app.agents.tool import install_default_tools
+    install_default_tools()
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import tools as agent_tools_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(agent_tools_endpoint.router, prefix="/tools", tags=["tools"])'

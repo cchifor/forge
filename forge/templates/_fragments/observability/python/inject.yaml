@@ -1,0 +1,11 @@
+# Observability wiring: call setup_observability() during logging setup so
+# Logfire is configured before the first log record is emitted. instrument_fastapi
+# is a no-op at this point (app not yet constructed) but the other instrumentations
+# run here.
+
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFECYCLE_STARTUP
+  position: before
+  snippet: |-
+    from app.core.logfire_setup import setup_observability
+    setup_observability()

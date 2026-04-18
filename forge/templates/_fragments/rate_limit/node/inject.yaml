@@ -1,0 +1,19 @@
+# rate_limit for Node/Fastify using @fastify/rate-limit. Opt-in only — users
+# must --enable-feature rate_limit or set features.rate_limit.enabled=true.
+# Skips /health and /metrics by default; tune via the register options.
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: 'import rateLimit from "@fastify/rate-limit";'
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: |-
+    await app.register(rateLimit, {
+        max: 120,
+        timeWindow: "1 minute",
+        allowList: (req) =>
+            req.url.startsWith("/health") || req.url.startsWith("/metrics"),
+    });

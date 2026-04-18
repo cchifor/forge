@@ -1,0 +1,13 @@
+# file_upload: mount the /api/v1/chat-files router. Namespaced under
+# chat-files (plural, kebab) so it sits alongside the conversation-related
+# resources without clashing with any "files" in user-domain code.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import chat_files"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(chat_files.router, prefix="/chat-files", tags=["chat-files"])'

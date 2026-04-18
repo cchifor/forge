@@ -16,7 +16,8 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.docker_manager import render_keycloak_realm
-from forge.generator import GeneratorError, _write_forge_toml
+from forge.errors import GeneratorError
+from forge.generator import _write_forge_toml
 
 
 def _config_with_keycloak() -> ProjectConfig:

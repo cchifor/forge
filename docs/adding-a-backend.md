@@ -80,3 +80,7 @@ Add a parametrized case in `tests/e2e/test_full_generation.py` that scaffolds yo
 ## CLI flags (no work required)
 
 The interactive prompt picks up the new language automatically via `BACKEND_REGISTRY`. Headless callers can already pass `--backend-language=go` because the CLI argparse `choices=` is generated from `BackendLanguage` values — extend that list if you used a constant instead of generating from the enum.
+
+## Next step: opt-in features
+
+A new backend also needs fragment implementations for any Tier 1 middleware and opt-in features your users will expect (correlation_id, rate limiting, observability, …). See [FEATURES.md](FEATURES.md) for the fragment format and how to register a `FragmentImplSpec` under an existing `FeatureSpec` for your language.

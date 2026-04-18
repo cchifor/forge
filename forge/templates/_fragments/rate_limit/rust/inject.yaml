@@ -1,0 +1,18 @@
+# rate_limit for Rust/Axum: per-IP token-bucket middleware. Registers inside
+# the correlation/security_headers layers so rate-limited requests still
+# carry a request ID in their logs.
+
+- target: src/middleware/mod.rs
+  marker: FORGE:MOD_REGISTRATION
+  position: after
+  snippet: "pub mod rate_limit;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "use crate::middleware::rate_limit::rate_limit_middleware;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: ".layer(axum::middleware::from_fn(rate_limit_middleware))"

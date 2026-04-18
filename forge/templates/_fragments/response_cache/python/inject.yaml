@@ -1,0 +1,9 @@
+# response_cache: initialize the cache backend at lifecycle startup so route
+# handlers' @cache(expire=N) decorators resolve without extra setup.
+
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFECYCLE_STARTUP
+  position: before
+  snippet: |-
+    from app.core.response_cache import setup_response_cache
+    setup_response_cache()

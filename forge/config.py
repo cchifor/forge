@@ -6,6 +6,22 @@ import keyword
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from forge.features import FeatureConfig
+
+# Keycloak realm that maps to Host(`app.localhost`) for Gatekeeper tenant extraction.
+# Used as both the default user-facing realm name and the template fallback.
+DEFAULT_REALM = "app"
+
+# Traefik dashboard host port. Kept in sync with `deploy/docker-compose.yml.j2`.
+TRAEFIK_DASHBOARD_PORT = 19090
+
+
+def keycloak_client_id_from(project_name: str) -> str:
+    """Normalize a project name into a Keycloak client ID (hyphen-separated, lowercase)."""
+    return project_name.lower().replace(" ", "-").replace("_", "-")
 
 
 class BackendLanguage(Enum):
@@ -176,6 +192,9 @@ class ProjectConfig:
     frontend: FrontendConfig | None = None
     include_keycloak: bool = False
     keycloak_port: int = 18080
+    # Opt-in features. Always-on features (correlation_id, etc.) are enabled
+    # by the capability resolver even when this dict is empty.
+    features: dict[str, FeatureConfig] = field(default_factory=dict)
 
     # Backward compatibility: single backend access
     @property
@@ -205,6 +224,22 @@ class ProjectConfig:
         ports = self._validate_ports()
         if self.include_keycloak:
             self._validate_keycloak_ports(ports)
+        self._validate_features()
+
+    def _validate_features(self) -> None:
+        """Resolve features to catch bad combinations early.
+
+        Imported inline to avoid a config → resolver → config import cycle.
+        """
+        from forge.capability_resolver import resolve  # noqa: PLC0415
+        from forge.errors import GeneratorError  # noqa: PLC0415
+
+        try:
+            resolve(self)
+        except GeneratorError as e:
+            # Surface resolver errors as ValueError so cli.main's config-error
+            # path handles them uniformly with the other validations above.
+            raise ValueError(str(e)) from e
 
     def _validate_backend_uniqueness(self) -> None:
         names = [bc.name for bc in self.backends]
@@ -253,13 +288,12 @@ class ProjectConfig:
 
     def _validate_keycloak_ports(self, ports: dict[int, str]) -> None:
         validate_port(self.keycloak_port, "Keycloak port")
-        traefik_dashboard_port = 8888
-        if traefik_dashboard_port in ports:
+        if TRAEFIK_DASHBOARD_PORT in ports:
             raise ValueError(
-                f"Port {traefik_dashboard_port} (Traefik dashboard) "
-                f"conflicts with {ports[traefik_dashboard_port]}."
+                f"Port {TRAEFIK_DASHBOARD_PORT} (Traefik dashboard) "
+                f"conflicts with {ports[TRAEFIK_DASHBOARD_PORT]}."
             )
-        ports[traefik_dashboard_port] = "Traefik dashboard"
+        ports[TRAEFIK_DASHBOARD_PORT] = "Traefik dashboard"
         if self.keycloak_port in ports:
             raise ValueError(
                 f"Port {self.keycloak_port} (Keycloak) conflicts with {ports[self.keycloak_port]}."

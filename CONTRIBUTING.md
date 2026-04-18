@@ -29,7 +29,7 @@ CI runs `make check` on Linux + Windows for Python 3.11/3.12/3.13. The `e2e` wor
 - **New backend language**: see [docs/adding-a-backend.md](docs/adding-a-backend.md). The `BACKEND_REGISTRY` is the single source of truth.
 - **New CLI flag**: add to `_parse_args` in `forge/cli.py` and read via `_get(args, "flag", cfg, "block", "key", default=...)` in `_build_config`.
 - **Template change**: bump nothing — versioning is by git commit (recorded in `forge.toml` of generated projects via the `_commit:` Copier directive). Add an e2e case if behaviour changes.
-- **New error path**: raise `GeneratorError` from `forge.generator`; `cli.main()` already routes it to JSON envelope or stderr+exit(2).
+- **New error path**: raise `GeneratorError` from `forge.errors`; `cli.main()` already routes it to JSON envelope or stderr+exit(2).
 
 ## Code style
 

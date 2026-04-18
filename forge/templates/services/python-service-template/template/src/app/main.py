@@ -16,9 +16,8 @@ from app.core.errors import (
 )
 from app.core.lifecycle import AppLifecycle
 from app.middleware.audit import AuditMiddleware
-from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.logging import RequestLoggingMiddleware
-from app.middleware.rate_limit import RateLimitMiddleware
+# FORGE:MIDDLEWARE_IMPORTS
 from service.utils.fastapiutils import Error
 
 logger = logging.getLogger(__name__)
@@ -41,18 +40,12 @@ def _configure_middleware(app: FastAPI, settings: Settings) -> None:
     if settings.audit.enabled:
         app.add_middleware(AuditMiddleware)
 
-    app.add_middleware(
-        RateLimitMiddleware,
-        requests_per_minute=120,
-        skip_paths=["/health", "/metrics", "/docs", "/openapi.json"],
-    )
-
-    # Correlation ID (outermost — runs first, sets context for all inner middleware)
-    app.add_middleware(CorrelationIdMiddleware)
+    # FORGE:MIDDLEWARE_REGISTRATION
 
 
 def _configure_routers(app: FastAPI) -> None:
     app.include_router(api_v1_router, prefix="/api/v1")
+    # FORGE:ROUTER_REGISTRATION
 
 
 def _configure_exceptions(app: FastAPI) -> None:
@@ -60,6 +53,7 @@ def _configure_exceptions(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ApplicationError, domain_exception_handler)
     app.add_exception_handler(Exception, global_exception_handler)
+    # FORGE:EXCEPTION_HANDLERS
 
 
 def create_app() -> FastAPI:
@@ -77,6 +71,7 @@ def create_app() -> FastAPI:
     _configure_middleware(app, settings)
     _configure_exceptions(app)
     _configure_routers(app)
+    # FORGE:APP_POST_CONFIGURE
     AppLifecycle.bootstrap(app, settings)
 
     logger.info("Application factory completed successfully.")

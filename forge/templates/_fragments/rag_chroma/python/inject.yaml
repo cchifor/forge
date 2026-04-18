@@ -1,0 +1,9 @@
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import rag_chroma as rag_chroma_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(rag_chroma_endpoint.router, prefix="/rag/chroma", tags=["rag"])'

@@ -1,0 +1,17 @@
+# Correlation ID middleware injections for the Python backend.
+# Adds the import at the FORGE:MIDDLEWARE_IMPORTS marker and the registration
+# at the FORGE:MIDDLEWARE_REGISTRATION marker — the latter placed just before
+# the marker so this middleware registers last (and is therefore outermost
+# in the Starlette stack, seeing every request first).
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.middleware.correlation import CorrelationIdMiddleware"
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: |-
+    # Correlation ID (outermost — runs first, sets context for all inner middleware)
+    app.add_middleware(CorrelationIdMiddleware)
