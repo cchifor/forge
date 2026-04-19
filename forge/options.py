@@ -539,7 +539,7 @@ register_option(
         path="observability.tracing",
         type=OptionType.BOOL,
         default=False,
-        summary="Distributed tracing — Logfire / OTel SDK / OTLP gRPC.",
+        summary="Distributed tracing -- Logfire / OTel SDK / OTLP gRPC.",
         description="""\
 Distributed tracing + structured logs wired out of the box. Python uses
 Logfire (which exports OTLP under the hood); Node uses @opentelemetry
@@ -703,7 +703,7 @@ register_option(
         path="agent.llm",
         type=OptionType.BOOL,
         default=False,
-        summary="pydantic-ai loop — Anthropic / OpenAI / Google / OpenRouter.",
+        summary="pydantic-ai loop -- Anthropic / OpenAI / Google / OpenRouter.",
         description="""\
 A pydantic-ai LLM loop that swaps in for the echo runner shipped by
 agent.streaming — no endpoint or WebSocket-contract change needed.
@@ -864,7 +864,7 @@ register_option(
         path="platform.admin",
         type=OptionType.BOOL,
         default=False,
-        summary="SQLAdmin UI at /admin — tenant-scoped ModelViews.",
+        summary="SQLAdmin UI at /admin -- tenant-scoped ModelViews.",
         description="""\
 A browser-facing admin UI mounted at /admin, built on SQLAdmin. It
 auto-registers ModelViews for whichever tables the enabled options
@@ -909,7 +909,7 @@ register_option(
         path="platform.cli_extensions",
         type=OptionType.BOOL,
         default=False,
-        summary="Typer subcommands — `app info`, `app tools`, `app rag`.",
+        summary="Typer subcommands -- `app info`, `app tools`, `app rag`.",
         description="""\
 Extends the generated service's ``app`` typer CLI with operational
 subcommands: ``app info show`` (environment dump), ``app tools

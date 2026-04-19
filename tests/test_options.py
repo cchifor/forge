@@ -501,3 +501,103 @@ class TestYamlRoundTrip:
         names = {rf.fragment.name for rf in plan.ordered}
         assert "rag_qdrant" in names
         assert plan.option_values["rag.top_k"] == 10
+
+
+# -- Fragment materialization -------------------------------------------------
+#
+# One parametric case per registered Option, derived from OPTION_REGISTRY
+# itself. For BOOL Options we check default=False toggled on via explicit
+# True; for ENUM Options we walk every value. The multi-backend project
+# means fragment-filtering branches execute for all three language
+# registrations, and any Option whose enables map is silently broken
+# shows up here instead of hiding behind registry-shape invariants.
+
+
+def _multi_backend_project(options: dict[str, object] | None = None) -> ProjectConfig:
+    """Project with python + node + rust backends so fragment-per-backend
+    resolution exercises all three language branches."""
+    return ProjectConfig(
+        project_name="p",
+        backends=[
+            BackendConfig(
+                name="api-py", project_name="p", language=BackendLanguage.PYTHON, server_port=5001
+            ),
+            BackendConfig(
+                name="api-js", project_name="p", language=BackendLanguage.NODE, server_port=5002
+            ),
+            BackendConfig(
+                name="api-rs", project_name="p", language=BackendLanguage.RUST, server_port=5003
+            ),
+        ],
+        options=options or {},
+    )
+
+
+def _bool_materialization_cases() -> list[tuple[str, tuple[str, ...]]]:
+    """(path, expected_fragments) for every BOOL Option that enables fragments.
+
+    Skips BOOL Options whose ``True`` key is absent from ``enables`` (none
+    today, but harmless if one appears later).
+    """
+    cases: list[tuple[str, tuple[str, ...]]] = []
+    for path, opt in OPTION_REGISTRY.items():
+        if opt.type is not OptionType.BOOL:
+            continue
+        expected = opt.enables.get(True, ())
+        if not expected:
+            continue
+        cases.append((path, expected))
+    return cases
+
+
+def _enum_materialization_cases() -> list[tuple[str, object, tuple[str, ...]]]:
+    """(path, value, expected_fragments) for every ENUM value with fragments."""
+    cases: list[tuple[str, object, tuple[str, ...]]] = []
+    for path, opt in OPTION_REGISTRY.items():
+        if opt.type is not OptionType.ENUM:
+            continue
+        for value in opt.options:
+            expected = opt.enables.get(value, ())
+            if not expected:
+                continue
+            cases.append((path, value, expected))
+    return cases
+
+
+class TestFragmentMaterialization:
+    """Every Option's ``enables`` entry resolves to the declared fragments."""
+
+    @pytest.mark.parametrize(
+        "path,expected",
+        _bool_materialization_cases(),
+        ids=lambda v: v if isinstance(v, str) else "",
+    )
+    def test_bool_option_enables_expected_fragments(
+        self, path: str, expected: tuple[str, ...]
+    ) -> None:
+        plan = resolve(_multi_backend_project({path: True}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        missing = [f for f in expected if f not in names]
+        assert not missing, f"Setting {path}=True should enable {expected}; missing: {missing}"
+
+    @pytest.mark.parametrize(
+        "path,value,expected",
+        _enum_materialization_cases(),
+        ids=lambda v: v if isinstance(v, str) else repr(v),
+    )
+    def test_enum_option_value_enables_expected_fragments(
+        self, path: str, value: object, expected: tuple[str, ...]
+    ) -> None:
+        plan = resolve(_multi_backend_project({path: value}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        missing = [f for f in expected if f not in names]
+        assert not missing, f"Setting {path}={value!r} should enable {expected}; missing: {missing}"
+
+    def test_bool_option_set_false_does_not_enable(self) -> None:
+        """A BOOL Option with default=True, set explicitly to False, must
+        NOT pull in its fragments. Guards against a resolver bug where the
+        user's False silently loses to the default True."""
+        # rate_limit defaults to True and enables the 'rate_limit' fragment.
+        plan = resolve(_multi_backend_project({"middleware.rate_limit": False}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert "rate_limit" not in names
