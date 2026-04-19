@@ -151,9 +151,7 @@ def test_node_svelte_scaffolds_and_vitest_passes(
 # -----------------------------------------------------------------------------
 
 
-def test_rust_no_frontend_compiles(
-    tmp_path: Path, require_cargo: None, require_git: None
-) -> None:
+def test_rust_no_frontend_compiles(tmp_path: Path, require_cargo: None, require_git: None) -> None:
     config = ProjectConfig(
         project_name="E2E Project",
         output_dir=str(tmp_path),

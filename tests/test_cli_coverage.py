@@ -190,15 +190,17 @@ class TestPromptBackend:
         text_responses = iter(["rusty", "5001", "items"])
         select_responses = iter(["Rust (Axum)", "2024"])
 
-        with patch(
-            "forge.cli._ask_text",
-            side_effect=lambda *a, **kw: next(text_responses),
-        ):
-            with patch(
+        with (
+            patch(
+                "forge.cli._ask_text",
+                side_effect=lambda *a, **kw: next(text_responses),
+            ),
+            patch(
                 "forge.cli._ask_select",
                 side_effect=lambda *a, **kw: next(select_responses),
-            ):
-                bc = cli._prompt_backend(1, "Demo", "desc", default_port=5001)
+            ),
+        ):
+            bc = cli._prompt_backend(1, "Demo", "desc", default_port=5001)
 
         assert bc.language.value == "rust"
         assert bc.rust_edition == "2024"

@@ -1,7 +1,6 @@
 """Tests for forge.docker_manager compose rendering."""
 
 import yaml
-import pytest
 
 from forge.config import (
     BackendConfig,

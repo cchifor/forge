@@ -8,16 +8,16 @@
 [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge)
-[![tests](https://img.shields.io/badge/tests-316%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
-[![coverage](https://img.shields.io/badge/coverage-92%25-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
+[![tests](https://img.shields.io/badge/tests-367%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
+[![coverage](https://img.shields.io/badge/coverage-90%25-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
 [![backends](https://img.shields.io/badge/backends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![frontends](https://img.shields.io/badge/frontends-3-informational?style=flat-square)](docs/FEATURES.md)
-[![features](https://img.shields.io/badge/features-27-informational?style=flat-square)](docs/FEATURES.md)
+[![options](https://img.shields.io/badge/options-22-informational?style=flat-square)](docs/FEATURES.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 </div>
 
-`forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a pluggable 27-feature registry — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
+`forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed 22-option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
 
 ---
 
@@ -34,49 +34,46 @@
 ![Generated Vue app with agentic chat](docs/assets/generated-vue.png)
 *Screenshot of a generated Vue + Keycloak app displaying the AG-UI chat panel streaming from the `/ws/agent` endpoint.*
 
-![forge --list-features output](docs/assets/feature-list.png)
-*Screenshot of `forge --list-features` showing the 27-feature catalogue, stability tiers, and per-backend coverage.*
+![forge --list output](docs/assets/feature-list.png)
+*Screenshot of `forge --list` showing the 22-option catalogue, per-option types, stability tiers, and per-backend coverage.*
 
 ---
 
-## Features
+## Options
 
-Enable any feature below at generation time with `--enable-feature KEY` (repeatable) or declare it inside your YAML config. See [Usage Examples](#usage-examples).
+Everything configurable is an `Option` with a dotted path, a type (`bool` / `enum` / `int` / `str`), and a default. Set one at generation time with `--set PATH=VALUE` (repeatable) or in the `options:` block of your YAML config. See [Usage Examples](#usage-examples).
 
-| Category | Feature / Capability | Key | Status | Backends | What you get |
-|---|---|---|---|---|---|
-| **Foundation** | Polyglot backends | — | stable | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
-| **Foundation** | Frontends | — | stable | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
-| **Foundation** | Docker-compose + Traefik | — | stable | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
-| **Foundation** | Enterprise auth | — | stable | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
-| **Foundation** | `forge.toml` stamping | — | stable | all | Generated project records forge version + template paths + feature set; machine-readable for future `forge update`. |
-| **Observability** | Request Tracing | `correlation_id` | stable, always-on | python | X-Request-ID ingress + ContextVar + response echo. |
-| **Observability** | Deep Health Checks | `enhanced_health` | beta | python, node, rust | `/health` aggregates Postgres + Redis + Keycloak readiness. |
-| **Observability** | Distributed Tracing | `observability` | stable | python, node, rust | [Logfire](https://logfire.pydantic.dev/) (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
-| **Reliability** | Rate Limiting | `rate_limit` | stable, on by default | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
-| **Reliability** | Security Headers | `security_headers` | stable, on by default | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
-| **Reliability** | PII Scrubber | `pii_redaction` | stable, on by default | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
-| **Reliability** | Response Cache | `response_cache` | beta | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
-| **Async Work** | Task Queue | `background_tasks` | beta | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
-| **Async Work** | Knowledge Ingest Queue | `rag_sync_tasks` | experimental | python | Taskiq tasks for off-thread RAG ingestion. |
-| **Conversational AI** | Chat History | `conversation_persistence` | beta | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
-| **Conversational AI** | Tool Registry | `agent_tools` | experimental | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
-| **Conversational AI** | Agent Stream | `agent_streaming` | experimental | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
-| **Conversational AI** | LLM Agent | `agent` | experimental | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. Real per-delta streaming via `agent.iter()`; graceful fallback if event classes change. |
-| **Conversational AI** | Chat Attachments | `file_upload` | beta | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage with path-traversal guard. |
-| **Knowledge** | Knowledge Search | `rag_pipeline` | experimental | python | OpenAI embeddings + [pgvector](https://github.com/pgvector/pgvector) + HNSW index + recursive chunker + `/api/v1/rag/{ingest,ingest-pdf,search}` + auto-registered `rag_search` tool. |
-| **Knowledge** | Knowledge Reranker | `rag_reranking` | experimental | python | Cohere `rerank-v3.5` (default) + local sentence-transformers cross-encoder fallback. |
-| **Knowledge** | Knowledge — PostgreSQL | `rag_postgresql` | experimental | python | Plain-PostgreSQL backend — no `vector` extension required. JSONB embeddings + Python-side cosine. |
-| **Knowledge** | Knowledge — Qdrant | `rag_qdrant` | experimental | python | [Qdrant](https://qdrant.tech/) async client, HNSW + COSINE. |
-| **Knowledge** | Knowledge — Chroma | `rag_chroma` | experimental | python | [Chroma](https://www.trychroma.com/) async HTTP client; auto-creates collection. |
-| **Knowledge** | Knowledge — Milvus | `rag_milvus` | experimental | python | [Milvus](https://milvus.io/) / Zilliz Cloud via `pymilvus.AsyncMilvusClient`. |
-| **Knowledge** | Knowledge — Weaviate | `rag_weaviate` | experimental | python | [Weaviate](https://weaviate.io/) v4 async client; BYO vectors. |
-| **Knowledge** | Knowledge — Pinecone | `rag_pinecone` | experimental | python | [Pinecone](https://www.pinecone.io/) managed service; namespace-per-tenant isolation. |
-| **Knowledge** | Knowledge — Voyage Embeddings | `rag_embeddings_voyage` | experimental | python | [Voyage AI](https://www.voyageai.com/) embeddings drop-in replacement. |
-| **Platform** | Admin Console | `admin_panel` | beta | python | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI at `/admin`, env-gated (`dev`/`all`/`disabled`). |
-| **Platform** | Outbound Webhooks | `webhooks` | beta | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
-| **Platform** | Service CLI Extensions | `cli_commands` | beta | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
-| **Platform** | AI Agent Handbook | `agents_md` | stable, on by default | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
+| Category | Capability | Option path | Type | Default | Backends | What you get |
+|---|---|---|---|---|---|---|
+| **Foundation** | Polyglot backends | — | — | — | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
+| **Foundation** | Frontends | — | — | — | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
+| **Foundation** | Docker-compose + Traefik | — | — | — | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
+| **Foundation** | Enterprise auth | — | — | — | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
+| **Foundation** | `forge.toml` stamping | — | — | — | all | Project records forge version + template paths + fully-resolved option map; machine-readable for `forge --update`. |
+| **Observability** | Request Tracing | `middleware.correlation_id` | enum | `always-on` | python | X-Request-ID ingress + ContextVar + response echo. |
+| **Observability** | Deep Health Checks | `observability.health` | bool | `false` | python, node, rust | `/health` aggregates Postgres + Redis + Keycloak readiness. |
+| **Observability** | Distributed Tracing | `observability.tracing` | bool | `false` | python, node, rust | [Logfire](https://logfire.pydantic.dev/) (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
+| **Reliability** | Rate Limiting | `middleware.rate_limit` | bool | `true` | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
+| **Reliability** | Security Headers | `middleware.security_headers` | bool | `true` | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
+| **Reliability** | PII Scrubber | `middleware.pii_redaction` | bool | `true` | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
+| **Reliability** | Response Cache | `middleware.response_cache` | bool | `false` | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
+| **Async Work** | Task Queue | `async.task_queue` | bool | `false` | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
+| **Async Work** | Knowledge Ingest Queue | `async.rag_ingest_queue` | bool | `false` | python | Taskiq tasks for off-thread RAG ingestion. |
+| **Conversational AI** | Chat History | `conversation.persistence` | bool | `false` | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
+| **Conversational AI** | Tool Registry | `agent.tools` | bool | `false` | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
+| **Conversational AI** | Agent Stream | `agent.streaming` | bool | `false` | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
+| **Conversational AI** | LLM Agent | `agent.llm` | bool | `false` | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. |
+| **Conversational AI** | Chat Attachments | `chat.attachments` | bool | `false` | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage. |
+| **Knowledge** | Vector-store backend | `rag.backend` | enum | `none` | python | Pick one of: `none`, `pgvector`, `qdrant`, `chroma`, `milvus`, `weaviate`, `pinecone`, `postgresql`. Bundles the matching fragment + `rag_pipeline` + `conversation.persistence`. |
+| **Knowledge** | Embeddings provider | `rag.embeddings` | enum | `openai` | python | `openai` (text-embedding-3-small) or `voyage` (voyage-3.5). |
+| **Knowledge** | Reranker | `rag.reranker` | bool | `false` | python | Cohere `rerank-v3.5` + local sentence-transformers cross-encoder fallback. |
+| **Knowledge** | Top-K chunks | `rag.top_k` | int (1–100) | `5` | python | Default number of chunks returned per RAG query. |
+| **Platform** | Admin Console | `platform.admin` | bool | `false` | python | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI at `/admin`, env-gated (`dev`/`all`/`disabled`). |
+| **Platform** | Outbound Webhooks | `platform.webhooks` | bool | `false` | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
+| **Platform** | Service CLI Extensions | `platform.cli_extensions` | bool | `false` | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
+| **Platform** | AI Agent Handbook | `platform.agents_md` | bool | `true` | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
+
+Introspect the live registry anytime with `forge --list`, `forge --describe <path>`, or `forge --schema` (JSON Schema 2020-12).
 
 ---
 
@@ -189,13 +186,10 @@ keycloak:
   realm: my-shop
   client_id: my-shop
 
-features:
-  observability:
-    enabled: true
-  enhanced_health:
-    enabled: true
-  webhooks:
-    enabled: true
+options:
+  observability.tracing: true
+  observability.health: true
+  platform.webhooks: true
 ```
 
 ```bash forge-headless-yaml
@@ -226,7 +220,7 @@ echo '{
   "project_name": "api-gateway",
   "backend": {"language": "rust", "server_port": 5001},
   "frontend": {"framework": "none"},
-  "features": {"webhooks": {"enabled": true}, "observability": {"enabled": true}}
+  "options": {"platform.webhooks": true, "observability.tracing": true}
 }' | forge --config - --yes --no-docker --json
 ```
 
@@ -241,79 +235,107 @@ Exit codes are strict and machine-friendly:
 On failure you'll see:
 
 ```json forge-json-error
-{"error": "Feature 'agent_streaming' requires 'conversation_persistence' but 'conversation_persistence' is not enabled."}
+{"error": "Unknown option 'rag.backendz'. Did you mean: rag.backend?"}
 ```
 
-### Enabling optional features
+### Setting options
 
-Stack your flags. The `capability_resolver` validates transitive dependencies (e.g. `agent` implies `agent_streaming` + `agent_tools` + `conversation_persistence`) and refuses to proceed with a clear error instead of half-generating.
+Every knob forge exposes is an `Option` with a dotted path — `middleware.rate_limit`, `rag.backend`, `rag.top_k`. Set any of them with `--set PATH=VALUE` (repeatable). Values are coerced to the Option's native type (`true`/`false` → bool, `10` → int, `qdrant` → enum), then validated against the registry.
 
-```bash forge-feature-flags
+```bash forge-set-flags
 forge --config stack.yaml --yes --no-docker \
-  --enable-feature conversation_persistence \
-  --enable-feature agent_streaming \
-  --enable-feature agent_tools \
-  --enable-feature agent \
-  --enable-feature rag_pipeline \
-  --enable-feature observability
+  --set rag.backend=qdrant \
+  --set rag.embeddings=voyage \
+  --set rag.top_k=10 \
+  --set agent.llm=true \
+  --set observability.tracing=true
 ```
 
-### Inspect the full feature registry
+The `capability_resolver` expands each option into the fragments it enables, topologically sorts them by `depends_on`, and refuses to proceed on an unknown path or bad value — no half-generated projects. Picking `rag.backend=qdrant`, for example, bundles `rag_pipeline`, `rag_qdrant`, and the required `conversation_persistence` fragment automatically.
 
-```bash forge-list-features-cmd
-forge --list-features
+### Inspect the option registry
+
+```bash forge-list-cmd
+forge --list
 ```
 
-```text forge-list-features
-# Observability
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-Request Tracing                correlation_id               stable         always-on  python
-Deep Health Checks             enhanced_health              beta           off        node,python,rust
-Distributed Tracing            observability                stable         off        node,python,rust
-
-# Reliability
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-PII Scrubber                   pii_redaction                stable         on         python
-Rate Limiting                  rate_limit                   stable         on         node,python,rust
-Response Cache                 response_cache               beta           off        node,python
-Security Headers               security_headers             stable         on         node,python,rust
-
-# Async Work
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-Task Queue                     background_tasks             beta           off        node,python,rust
-Knowledge Ingest Queue         rag_sync_tasks               experimental   off        python
-
-# Conversational AI
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-LLM Agent                      agent                        experimental   off        python
-Agent Stream                   agent_streaming              experimental   off        python
-Tool Registry                  agent_tools                  experimental   off        python
-Chat History                   conversation_persistence     beta           off        python
-Chat Attachments               file_upload                  beta           off        python
-
-# Knowledge
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-Knowledge — Chroma             rag_chroma                   experimental   off        python
-Knowledge — Voyage Embeddings  rag_embeddings_voyage        experimental   off        python
-Knowledge — Milvus             rag_milvus                   experimental   off        python
-Knowledge — Pinecone           rag_pinecone                 experimental   off        python
-Knowledge Search               rag_pipeline                 experimental   off        python
-Knowledge — PostgreSQL         rag_postgresql               experimental   off        python
-Knowledge — Qdrant             rag_qdrant                   experimental   off        python
-Knowledge Reranker             rag_reranking                experimental   off        python
-Knowledge — Weaviate           rag_weaviate                 experimental   off        python
-
-# Platform
-NAME                           KEY                          STABILITY      DEFAULT    BACKENDS
-Admin Console                  admin_panel                  beta           off        python
-AI Agent Handbook              agents_md                    stable         on         node,python,rust
-Service CLI Extensions         cli_commands                 beta           off        python
-Outbound Webhooks              webhooks                     beta           off        node,python,rust
+```text forge-list
+NAME                            DESCRIPTION
+middleware.correlation_id       X-Request-ID ingress + ContextVar propagation.
+observability.health            /health aggregates Postgres + Redis + Keycloak readiness.
+observability.tracing           Distributed tracing — Logfire / OTel SDK / OTLP gRPC.
+middleware.pii_redaction        Logging filter that scrubs emails / tokens / API keys.
+middleware.rate_limit           Token-bucket limiter keyed by tenant or IP.
+middleware.response_cache       Opt-in HTTP response caching (Redis or in-memory).
+middleware.security_headers     CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy.
+async.rag_ingest_queue          Taskiq tasks that move RAG ingest off the request thread.
+async.task_queue                Redis-backed job queue (Taskiq / BullMQ / Apalis).
+agent.llm                       pydantic-ai loop — Anthropic / OpenAI / Google / OpenRouter.
+agent.streaming                 /ws/agent with typed event protocol + runner dispatch.
+agent.tools                     Tool registry + pre-baked `current_datetime`, `web_search`.
+chat.attachments                /chat-files multipart + ChatFile model + local storage.
+conversation.persistence        SQLAlchemy Conversation / Message / ToolCall + migration.
+rag.backend                     Select the vector-store backend for RAG ingest + search. [none, pgvector, qdrant, chroma, milvus, weaviate, pinecone, postgresql]
+rag.embeddings                  Embeddings provider for RAG ingest + query. [openai, voyage]
+rag.reranker                    Cohere rerank (+ local cross-encoder fallback) for sharper top-K.
+rag.top_k                       Default number of chunks returned per RAG query.
+platform.admin                  SQLAdmin UI at /admin — tenant-scoped ModelViews.
+platform.agents_md              Drops AGENTS.md + CLAUDE.md for AI-coding-agent orientation.
+platform.cli_extensions         Typer subcommands — `app info`, `app tools`, `app rag`.
+platform.webhooks               Outbound registry + HMAC-signed delivery (ts + nonce + body).
 ```
 
-Run `forge --describe <key>` to see the full prose + metadata for a
-specific feature — category, stability, endpoints, required env vars,
-and dependency chain.
+The default output is a two-column table — `NAME DESCRIPTION` — one row per registered Option. Enum options fold their allowed values into the description as a `[a, b, c]` suffix. Use `--format {text,json,yaml}` to pick the output shape; JSON / YAML emit every field (`type`, `category`, `default`, `options`, `tech`, `stability`, `min`, `max`, `pattern`).
+
+On narrow terminals the DESCRIPTION column wraps onto continuation lines. Piped output (`forge --list | less`, `| grep`, or redirected to a file) keeps the one-row-per-option shape so downstream tools see byte-stable rows — wrapping is only applied when stdout is a real TTY.
+
+For agent pipelines, the JSON output is a bare flat array — parseable with `json.loads()` straight off `stdout`:
+
+```bash forge-list-json-cmd
+forge --list --format json
+```
+
+```json forge-list-json
+[
+  {
+    "name": "middleware.correlation_id",
+    "type": "enum",
+    "category": "observability",
+    "default": "always-on",
+    "options": ["always-on"],
+    "tech": ["python"],
+    "description": "X-Request-ID ingress + ContextVar propagation.",
+    "stability": "stable",
+    "min": null,
+    "max": null,
+    "pattern": null
+  },
+  {
+    "name": "rag.backend",
+    "type": "enum",
+    "category": "knowledge",
+    "default": "none",
+    "options": ["none", "pgvector", "qdrant", "chroma", "milvus", "weaviate", "pinecone", "postgresql"],
+    "tech": ["python"],
+    "description": "Select the vector-store backend for RAG ingest + search.",
+    "stability": "experimental",
+    "min": null,
+    "max": null,
+    "pattern": null
+  },
+  …
+]
+```
+
+YAML is also available for human-readable structured pipelines (`forge --list --format yaml`).
+
+Run `forge --describe <path>` to see the full prose + metadata for a specific option — type, default, category, stability, allowed values, per-value fragment enables, and the rich description.
+
+For agents that want to validate a proposed config locally before invoking forge, `forge --schema` emits the JSON Schema 2020-12 document for the whole registry. Any JSON-Schema library can validate user-authored YAML against it without custom logic.
+
+```bash forge-schema
+forge --schema > forge-options.schema.json
+```
 
 ### Polyglot stack (Python + Rust behind one gateway)
 
@@ -341,13 +363,10 @@ keycloak:
   realm: app
   client_id: multi-stack
 
-features:
-  observability:
-    enabled: true
-  enhanced_health:
-    enabled: true
-  webhooks:
-    enabled: true
+options:
+  observability.tracing: true
+  observability.health: true
+  platform.webhooks: true
 ```
 
 Traefik routes `/api/api-py/...` to FastAPI and `/api/api-rs/...` to Axum, each with its own Postgres database, its own migration container, and the same Keycloak realm enforcing auth.
@@ -376,13 +395,16 @@ my_platform/
 
 ### Regenerating later (including new features)
 
-forge stamps every generated project with `forge.toml` recording the forge version, per-template paths, and the enabled feature set. Today the workflow is:
+forge stamps every generated project with `forge.toml` (forge version, per-template paths, fully-resolved `[forge.options]` map) and writes a `.copier-answers.yml` inside every rendered subtree — enough to reconstruct the original generation intent. Upgrading an existing project is one command:
 
-1. Update your `stack.yaml` (add features, change backends, adjust entities).
-2. Regenerate into a scratch directory: `forge --config stack.yaml --yes --no-docker --output-dir ./tmp`.
-3. Diff against your existing project and cherry-pick the changes.
+```bash forge-update
+cd my_platform
+forge --update        # re-apply fragment injections, re-stamp forge.toml
+```
 
-A first-class `forge update` subcommand that does this merge automatically is on the [Roadmap](#roadmap).
+`forge --update` is idempotent by design. Every snippet it injects is wrapped in `# FORGE:BEGIN <fragment>:<marker>` / `# FORGE:END` sentinels, so a re-run is either a no-op (nothing changed upstream) or an in-place replacement of the sentineled block (a fragment was updated) — your hand-edits outside the sentinels are preserved. Files that already exist in the project are left alone; newly-introduced fragment files get added.
+
+For template-level changes (base-template Jinja rewrites rather than fragment updates), `cd services/<backend> && copier update` re-renders that subtree from its saved `.copier-answers.yml`.
 
 Looking for more sophisticated examples? See [`examples/`](examples/) for curated sample configs and [`docs/FEATURES.md`](docs/FEATURES.md) for the deep feature catalogue.
 
@@ -401,15 +423,20 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 
 | Horizon | Item | Why it matters |
 |---|---|---|
-| **Next up** | `forge update` subcommand | Apply a changed `stack.yaml` to an existing project as a clean diff, no scratch directory required. |
 | **Next up** | `security_ratelimit_strict` composite preset | One flag that bundles `rate_limit` + `security_headers` + tightened CORS for regulated deployments. |
 | **Next up** | Go backend (`go-service-template`) | Fourth backend language — Echo + pgx + sqlc pattern mirrors the other three. |
 | **Next up** | React 19 frontend | TanStack Start + React Query + Zod; lives alongside Vue / Svelte / Flutter. |
+| **Next up** | Option-rename aliases | `Option.aliases` so `forge --update` can carry projects across path renames without hand-editing `forge.toml`. |
 | **Considered** | `cli_commands` ports to Node + Rust | npm scripts cover much of Node's surface; clap layered on `src/bin/migrate.rs` for Rust. |
 | **Considered** | `response_cache/rust` | `moka` + tower layer once a canonical idiom emerges. |
 | **Considered** | Alternative embeddings providers | Cohere, local `sentence-transformers`; same pattern as `rag_embeddings_voyage`. |
+| **Considered** | Fragment provenance manifest | `.forge/manifest.json` records which files came from which fragment so `forge --update` can remove files when a fragment is disabled. |
 | **Considered** | Kubernetes manifests | Helm chart or Kustomize bundle generated alongside `docker-compose.yml`. |
-| **Considered** | Third-party fragment plugin API | Let external crates / packages register `FeatureSpec` entries so downstream teams can ship their own opt-in features. |
+| **Considered** | Third-party fragment plugin API | Let external crates / packages register `Option` + `Fragment` entries so downstream teams can ship their own opt-in features. |
+| **Shipped** | Unified `Option` registry | Single typed abstraction (bool / enum / int / str) with dotted paths (`rag.backend`, `middleware.rate_limit`), YAML + `--set` + JSON Schema — replaced the old feature / parameter split. |
+| **Shipped** | `forge --update` | Idempotent re-apply of fragments against an existing project. Snippet injections carry BEGIN/END sentinels; `.copier-answers.yml` stamped per subtree. |
+| **Shipped** | `forge --list --format {text,json,yaml}` | Three output formats off one flat data model for humans and agent pipelines. |
+| **Shipped** | Tenant-isolation hardening | RAG / admin / conversation / webhook fragments all derive tenant from the authenticated principal, no more anonymous-UUID fallback. |
 
 File or upvote items on the [issue tracker](https://github.com/cchifor/forge/issues).
 
@@ -439,7 +466,7 @@ make check      # ruff lint + ruff format --check + ty typecheck + pytest (~10s)
 - **Typechecker:** `uv run ty check forge/` (forge's typechecker of choice — not mypy).
 - **Test runner:** `uv run pytest -m "not e2e"` must be green. Full e2e with `make e2e` (requires `uv`, `npm`, `cargo`, `git` on PATH). Generated projects ship a [Playwright](https://playwright.dev/) suite; forge itself has no browser tests.
 - **Commit style:** [Conventional Commits](https://www.conventionalcommits.org/), imperative mood, subject line ≤ 50 chars, no AI co-author trailer. One logical change per PR.
-- **Adding a feature fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md) — pick a `key`, declare a `FragmentImplSpec`, drop files under `forge/templates/_fragments/<key>/<backend>/`, add a test row in `tests/test_features.py`, document the feature.
+- **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md) — register the `Option` in `forge/options.py`, register the matching `Fragment` in `forge/fragments.py` (with its `FragmentImplSpec`), drop files under `forge/templates/_fragments/<name>/<backend>/`, and extend the registry invariants test in `tests/test_options.py`.
 
 CI runs the full matrix — Ubuntu + Windows, Python 3.11 / 3.12 / 3.13 — on every push and PR. Nightly e2e runs on Ubuntu against Python 3.13.
 
@@ -463,8 +490,9 @@ MIT — see [`LICENSE`](LICENSE).
 
 Active development, weekly cadence.
 
-- **Today:** 27 features registered, **316 tests** passing, **92 % coverage**, CI green on Linux + Windows against Python 3.11 / 3.12 / 3.13.
-- **API stability:** 0.1.x is stabilising. Breaking changes are possible between minor releases; every such change is called out in [`CHANGELOG.md`](CHANGELOG.md).
-- **Production-ready today:** the foundation, Tier 1 middleware, Tier 2 ops (observability / caching / background tasks / health), and most of Tier 5 DX.
-- **Use with awareness:** Tier 3 agent platform and Tier 4 RAG are marked `experimental` — the interfaces work, but expect minor adjustments as pydantic-ai and the vector-store clients evolve.
-- **v1.0 gates:** `forge update` subcommand, complete cargo-feature wiring for observability Rust, documented extension API for third-party fragments, a curated `examples/` directory.
+- **Today:** 22 Options registered across six product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform), backed by 27 template fragments. Tests passing, CI green on Linux + Windows against Python 3.11 / 3.12 / 3.13.
+- **API stability:** 0.2.x introduces the unified `Option` surface. Breaking changes are possible between minor releases; every such change is called out in [`CHANGELOG.md`](CHANGELOG.md).
+- **Production-ready today:** the Foundation, Observability, and Reliability categories (`middleware.correlation_id` / `middleware.rate_limit` / `middleware.security_headers` / `middleware.pii_redaction` / `observability.tracing`); Async Work task queue; most of the Platform category (`platform.admin`, `platform.webhooks`, `platform.cli_extensions`, `platform.agents_md`).
+- **Use with awareness:** Conversational AI (agent platform) and Knowledge (RAG) are marked `experimental` — the interfaces work, but expect minor adjustments as pydantic-ai and the vector-store clients evolve.
+- **Upgrade pathway:** `forge --update` re-applies fragments idempotently against an existing project. `forge.toml` records the fully-resolved `[forge.options]` map; `.copier-answers.yml` is preserved per subtree for template-level `copier update` when needed.
+- **v1.0 gates:** documented extension API for third-party fragments, `Option.aliases` for safe path renames, `.forge/manifest.json` provenance for file-level uninstall on update, curated `examples/` directory.

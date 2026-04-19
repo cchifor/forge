@@ -100,7 +100,7 @@ class TestKeycloakRealmValidation:
 
     def test_malformed_template_raises(self, tmp_path: Path) -> None:
         # Fake the rendered output to be invalid JSON.
-        bad = "{ \"realm\": \"x\","  # unterminated
+        bad = '{ "realm": "x",'  # unterminated
         with patch("forge.docker_manager._jinja_env") as mock_env:
             mock_env.return_value.get_template.return_value.render.return_value = bad
             with pytest.raises(GeneratorError) as exc_info:

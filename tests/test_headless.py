@@ -1,9 +1,9 @@
 """Tests for headless mode config building."""
 
 import json
-import pytest
 from argparse import Namespace
-from pathlib import Path
+
+import pytest
 
 from forge.cli import _build_config, _is_headless, _load_config_file
 from forge.config import FrontendFramework
@@ -12,13 +12,29 @@ from forge.config import FrontendFramework
 def _default_args(**overrides):
     """Create an args namespace with all defaults set to None."""
     defaults = dict(
-        config=None, project_name=None, description=None, output_dir=".",
-        backend_port=None, python_version=None, frontend=None, features=None,
-        author_name=None, package_manager=None, frontend_port=None,
-        color_scheme=None, org_name=None, include_auth=None, include_chat=None,
-        include_openapi=None, keycloak_port=None, keycloak_realm=None,
-        keycloak_client_id=None, yes=False, no_docker=False,
-        quiet=False, json_output=False,
+        config=None,
+        project_name=None,
+        description=None,
+        output_dir=".",
+        backend_port=None,
+        python_version=None,
+        frontend=None,
+        features=None,
+        author_name=None,
+        package_manager=None,
+        frontend_port=None,
+        color_scheme=None,
+        org_name=None,
+        include_auth=None,
+        include_chat=None,
+        include_openapi=None,
+        keycloak_port=None,
+        keycloak_realm=None,
+        keycloak_client_id=None,
+        yes=False,
+        no_docker=False,
+        quiet=False,
+        json_output=False,
     )
     defaults.update(overrides)
     return Namespace(**defaults)
@@ -113,7 +129,12 @@ class TestBuildConfig:
         cfg = {
             "backends": [
                 {"name": "svc-a", "language": "python", "features": ["items", "orders"]},
-                {"name": "svc-b", "language": "node", "features": ["products"], "server_port": 5001},
+                {
+                    "name": "svc-b",
+                    "language": "node",
+                    "features": ["products"],
+                    "server_port": 5001,
+                },
             ],
             "frontend": {"framework": "vue"},
         }

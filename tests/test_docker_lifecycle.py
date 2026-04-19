@@ -1,28 +1,33 @@
 """Tests for docker_manager lifecycle functions: _docker_running, boot, teardown."""
 
 import subprocess
-from pathlib import Path
-from unittest.mock import patch, call
+from unittest.mock import patch
 
 import pytest
 
 from forge.docker_manager import _docker_running, boot, teardown
 
-
 # -- _docker_running ----------------------------------------------------------
+
 
 class TestDockerRunning:
     def test_returns_true_when_docker_responds(self):
         with patch("forge.docker_manager.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["docker", "info"], returncode=0, stdout="", stderr="",
+                args=["docker", "info"],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             assert _docker_running() is True
 
     def test_returns_false_on_nonzero_exit(self):
         with patch("forge.docker_manager.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["docker", "info"], returncode=1, stdout="", stderr="",
+                args=["docker", "info"],
+                returncode=1,
+                stdout="",
+                stderr="",
             )
             assert _docker_running() is False
 
@@ -39,6 +44,7 @@ class TestDockerRunning:
 
 
 # -- boot ---------------------------------------------------------------------
+
 
 class TestBoot:
     def test_no_compose_file(self, tmp_path, capsys):
@@ -59,7 +65,10 @@ class TestBoot:
             patch("forge.docker_manager.subprocess.run") as mock_run,
         ):
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             boot(tmp_path)
         out = capsys.readouterr().out
@@ -95,11 +104,15 @@ class TestBoot:
 
 # -- teardown -----------------------------------------------------------------
 
+
 class TestTeardown:
     def test_runs_compose_down(self, tmp_path, capsys):
         with patch("forge.docker_manager.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             teardown(tmp_path)
 

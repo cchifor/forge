@@ -1,4 +1,4 @@
-"""Tests for forge/updater.py — the engine behind `forge update`."""
+"""Tests for forge/updater.py — the engine behind `forge --update`."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.errors import GeneratorError
-from forge.features import FeatureConfig
 from forge.forge_toml import read_forge_toml, write_forge_toml
 from forge.updater import _infer_backends, update_project
 
@@ -24,16 +23,17 @@ from forge.updater import _infer_backends, update_project
 def fake_project(tmp_path: Path) -> Path:
     """Build a stub forge-generated project without running Copier.
 
-    Includes all markers the default-enabled features (correlation_id,
-    pii_redaction, security_headers, rate_limit) target, so the resolver
-    can expand defaults without the injector raising on missing files.
+    Includes every marker the default-enabled Options target
+    (correlation_id, pii_redaction, security_headers, rate_limit), so
+    the resolver can expand defaults without the injector raising on
+    missing files.
     """
     root = tmp_path / "proj"
     backend = root / "services" / "backend"
     (backend / "src" / "app" / "core").mkdir(parents=True)
     (backend / "src" / "app" / "middleware").mkdir(parents=True)
     (backend / "pyproject.toml").write_text(
-        "[project]\nname=\"x\"\nversion=\"0.1\"\ndependencies = []\n",
+        '[project]\nname="x"\nversion="0.1"\ndependencies = []\n',
         encoding="utf-8",
     )
     (backend / ".env.example").write_text("", encoding="utf-8")
@@ -92,24 +92,25 @@ class TestUpdateProject:
         with pytest.raises(GeneratorError, match="No forge.toml"):
             update_project(tmp_path)
 
-    def test_restamps_version_and_feature_table(self, fake_project: Path) -> None:
+    def test_restamps_version_and_option_table(self, fake_project: Path) -> None:
         write_forge_toml(
             fake_project / "forge.toml",
             version="0.0.1",  # intentionally stale
             project_name="proj",
             templates={"python": "services/python-service-template"},
-            features={
-                "correlation_id": {"enabled": True, "options": {}},
-            },
+            options={"middleware.correlation_id": "always-on"},
         )
 
         summary = update_project(fake_project, quiet=True)
 
         after = read_forge_toml(fake_project / "forge.toml")
         assert after.version != "0.0.1"  # re-stamped to current forge version
-        assert "correlation_id" in after.features
+        # Re-stamp writes every registered option's resolved value, so the
+        # user's value is preserved and any default the registry carries
+        # is added.
+        assert after.options["middleware.correlation_id"] == "always-on"
         assert summary["backends"] == ["backend"]
-        assert "correlation_id" in summary["features_applied"]
+        assert "correlation_id" in summary["fragments_applied"]
 
     def test_injection_is_idempotent_across_runs(self, fake_project: Path) -> None:
         """Calling update_project twice produces byte-identical files."""
@@ -118,7 +119,7 @@ class TestUpdateProject:
             version="0.1.0",
             project_name="proj",
             templates={"python": "services/python-service-template"},
-            features={"correlation_id": {"enabled": True, "options": {}}},
+            options={"middleware.correlation_id": "always-on"},
         )
 
         update_project(fake_project, quiet=True)
@@ -128,9 +129,9 @@ class TestUpdateProject:
         update_project(fake_project, quiet=True)
         assert main_py.read_text(encoding="utf-8") == snapshot
 
-    def test_legacy_forge_toml_gets_upgraded(self, fake_project: Path) -> None:
-        """A project written with the pre-B2.2 flat-list shape is readable
-        and gets rewritten in the canonical shape on update.
+    def test_legacy_forge_toml_rejected(self, fake_project: Path) -> None:
+        """A pre-Option forge.toml (``[forge.features]``) is a hard error —
+        the refactor is a hard cutover, no silent auto-migration.
         """
         manifest = fake_project / "forge.toml"
         manifest.write_text(
@@ -149,35 +150,27 @@ class TestUpdateProject:
             encoding="utf-8",
         )
 
-        assert read_forge_toml(manifest).legacy_features_format is True
-
-        update_project(fake_project, quiet=True)
-
-        upgraded = read_forge_toml(manifest)
-        assert upgraded.legacy_features_format is False
-        assert "correlation_id" in upgraded.features
-        assert upgraded.features["correlation_id"]["enabled"] is True
+        with pytest.raises(ValueError, match="legacy"):
+            read_forge_toml(manifest)
 
 
 class TestIntegrationAgainstGenerator:
     """End-to-end: use the real generator, then run update on the output."""
 
-    def test_full_generate_then_update(self, tmp_path: Path, monkeypatch) -> None:
+    def test_full_generate_then_update(self, tmp_path: Path) -> None:
         from forge.generator import generate
 
         cfg = ProjectConfig(
             project_name="updatable",
-            backends=(
+            backends=[
                 BackendConfig(
                     name="backend",
                     project_name="updatable",
                     language=BackendLanguage.PYTHON,
                 ),
-            ),
-            frontend=FrontendConfig(
-                framework=FrontendFramework.NONE, project_name="updatable"
-            ),
-            features={"rate_limit": FeatureConfig(enabled=True)},
+            ],
+            frontend=FrontendConfig(framework=FrontendFramework.NONE, project_name="updatable"),
+            options={"middleware.rate_limit": True},
             output_dir=str(tmp_path),
         )
         project_root = generate(cfg, quiet=True)
@@ -190,7 +183,7 @@ class TestIntegrationAgainstGenerator:
         after = main_py.read_text(encoding="utf-8")
         # Byte-identical: sentinels let re-injection be a no-op.
         assert before == after
-        assert "rate_limit" in summary["features_applied"]
+        assert "rate_limit" in summary["fragments_applied"]
 
         # Cleanup (some Windows filesystems hold locks on the venv, so
         # shutil.rmtree may need ignore_errors).

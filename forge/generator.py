@@ -145,10 +145,10 @@ def _write_forge_toml(
 ) -> None:
     """Write a forge.toml manifest at the project root.
 
-    Captures the forge version that scaffolded the project, per-template
-    paths, and the full feature state (enabled flag + options dict per
-    feature). ``forge update`` reads this back to reconstruct the
-    original generation intent.
+    Records the forge version, template paths, and the fully-resolved
+    ``options`` mapping (user-set values plus defaults). ``forge
+    update`` reads this back to reconstruct the original generation
+    intent.
     """
     from importlib import metadata
 
@@ -168,20 +168,18 @@ def _write_forge_toml(
         if template_dir:
             templates[fw.value] = template_dir
 
-    features: dict[str, dict[str, Any]] = {}
-    if plan is not None:
-        for rf in plan.ordered:
-            features[rf.spec.key] = {
-                "enabled": rf.config.enabled,
-                "options": dict(rf.config.options),
-            }
+    # Prefer the resolver's fully-defaulted option map so forge.toml
+    # captures every registered option (not just the ones the user set).
+    # `forge update` can then diff defaults against the current registry
+    # and surface new Options transparently.
+    options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
 
     write_forge_toml(
         project_root / "forge.toml",
         version=forge_version,
         project_name=config.project_name,
         templates=templates,
-        features=features,
+        options=options,
     )
 
 

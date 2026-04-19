@@ -25,10 +25,10 @@ from typing import Any
 import tomlkit
 import yaml
 
-from forge.capability_resolver import ResolvedFeature
+from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
 from forge.errors import GeneratorError
-from forge.features import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
+from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
@@ -87,68 +87,69 @@ def _sentinel_tag(feature_key: str, marker: str) -> str:
 def apply_features(
     bc: BackendConfig,
     backend_dir: Path,
-    resolved: tuple[ResolvedFeature, ...],
+    resolved: tuple[ResolvedFragment, ...],
     quiet: bool = False,
     *,
     skip_existing_files: bool = False,
 ) -> None:
-    """Apply each enabled *backend-scoped* feature that supports this backend.
+    """Apply each backend-scoped fragment that supports this backend.
 
-    Project-scoped features are emitted separately via `apply_project_features`
-    after all backends are rendered.
+    Project-scoped fragments are emitted separately via
+    ``apply_project_features`` after all backends are rendered.
 
-    When ``skip_existing_files=True`` (used by ``forge update``), a fragment's
-    ``files/`` copy-phase skips files that already exist instead of raising.
-    This lets repeated applies be idempotent without clobbering user edits.
+    When ``skip_existing_files=True`` (used by ``forge --update``), a
+    fragment's ``files/`` copy-phase skips files that already exist
+    instead of raising. Lets repeated applies be idempotent without
+    clobbering user edits.
     """
-    for feature in resolved:
-        if bc.language not in feature.target_backends:
+    for rf in resolved:
+        if bc.language not in rf.target_backends:
             continue
-        impl = feature.spec.implementations[bc.language]
+        impl = rf.fragment.implementations[bc.language]
         if impl.scope != "backend":
             continue
         if not quiet:
-            print(f"  [feat] applying '{feature.spec.key}' to {bc.name} ({bc.language.value})")
+            print(f"  [frag] applying '{rf.fragment.name}' to {bc.name} ({bc.language.value})")
         _apply_fragment(
             bc,
             backend_dir,
             impl,
-            feature.config.options,
-            feature.spec.key,
+            {},
+            rf.fragment.name,
             skip_existing_files=skip_existing_files,
         )
 
 
 def apply_project_features(
     project_root: Path,
-    resolved: tuple[ResolvedFeature, ...],
+    resolved: tuple[ResolvedFragment, ...],
     quiet: bool = False,
     *,
     skip_existing_files: bool = False,
 ) -> None:
-    """Apply project-scoped implementations at the project root.
+    """Apply project-scoped fragment implementations at the project root.
 
-    Chooses a canonical backend to use for per-language dep edits (the first
-    target_backend for the feature). For pure-file fragments (like AGENTS.md)
-    the backend choice is irrelevant.
+    Chooses a canonical backend to use for per-language dep edits (the
+    first target_backend for the fragment). For pure-file fragments
+    (like AGENTS.md) the backend choice is irrelevant.
 
-    ``skip_existing_files`` is forwarded to the ``_copy_files`` step so the
+    ``skip_existing_files`` is forwarded to ``_copy_files`` so the
     updater can re-run project-scope fragments without clobbering edits.
     """
-    for feature in resolved:
+    for rf in resolved:
         # Pick any supporting implementation with scope=project.
-        for lang in feature.target_backends:
-            impl = feature.spec.implementations[lang]
+        for lang in rf.target_backends:
+            impl = rf.fragment.implementations[lang]
             if impl.scope == "project":
                 if not quiet:
-                    print(f"  [feat] applying '{feature.spec.key}' to project root")
+                    print(f"  [frag] applying '{rf.fragment.name}' to project root")
                 proxy = BackendConfig(name="project", project_name="", language=lang)
                 _apply_fragment(
                     proxy,
                     project_root,
                     impl,
-                    feature.config.options,
-                    feature.spec.key,
+                    {},
+                    rf.fragment.name,
                     skip_existing_files=skip_existing_files,
                 )
                 break  # one emission only, even if multiple backends support it
@@ -167,7 +168,7 @@ def _apply_fragment(
     if not fragment.is_dir():
         raise GeneratorError(
             f"Fragment directory not found: {fragment}. "
-            "Check FragmentImplSpec.fragment_dir in features.py."
+            "Check FragmentImplSpec.fragment_dir in fragments.py."
         )
 
     files_dir = fragment / "files"
@@ -329,9 +330,7 @@ def _inject_snippet(
     file.write_text("".join(lines), encoding="utf-8")
 
 
-def _find_unique_line(
-    lines: list[str], substring: str, file: Path, *, needle: str
-) -> int | None:
+def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: str) -> int | None:
     """Return the unique line index containing ``substring`` or None.
 
     Raises if the substring appears more than once — ambiguous sentinels
@@ -341,9 +340,7 @@ def _find_unique_line(
     if not hits:
         return None
     if len(hits) > 1:
-        raise GeneratorError(
-            f"'{needle}' appears {len(hits)} times in {file}; must be unique."
-        )
+        raise GeneratorError(f"'{needle}' appears {len(hits)} times in {file}; must be unique.")
     return hits[0]
 
 

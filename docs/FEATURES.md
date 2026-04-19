@@ -1,53 +1,106 @@
-# Feature Registry
+# Option Registry
 
-Forge's feature system lets opt-in capabilities — rate limiting, observability,
-the agent platform, RAG — compose onto any base project without bloating the
-underlying templates. This document is for contributors adding a new feature.
-End users configure features via YAML or the `--enable-feature` / `--disable-feature`
-CLI flags.
+Forge's configuration surface is a single typed `Option` registry
+(NixOS / Terraform style) that compiles into a set of template
+**fragments**. This document is for contributors adding a new knob.
+End users configure options via YAML (`options:` block), the `--set
+PATH=VALUE` CLI flag, or the interactive prompt; machine users can
+export the whole schema with `forge --schema` (JSON Schema 2020-12).
 
-## What a feature is
-
-A `FeatureSpec` (in `forge/features.py`) describes one opt-in (or always-on)
-capability. It declares:
-
-- A unique `key` (e.g. `"rate_limit"`).
-- A CLI flag name (e.g. `--include-rate-limit`).
-- A per-backend `FragmentImplSpec` telling the injector *how* to apply the
-  feature to each supported language. A missing entry means "unsupported."
-- Optional `depends_on` (feature keys) and `conflicts_with` lists.
-- `capabilities` — strings like `"redis"` or `"postgres-pgvector"` that the
-  docker-compose renderer uses to emit shared infrastructure services.
-- Optional `extra_flags` (sub-flags like `--vector-store qdrant`).
-- `default_enabled` / `always_on` policy.
-
-The registry is the single source of truth. `cli.py`, `generator.py`, and
-`docker_manager.py` read from it; nothing hardcodes feature logic.
-
-## Fragment layout
-
-Every implementation lives under
-`forge/templates/_fragments/<feature_key>/<backend_lang>/`:
+## The two layers
 
 ```
-forge/templates/_fragments/correlation_id/python/
-    files/                  # verbatim files to add (must not exist in base)
+┌───────────────────────────────────────────────┐
+│  Option (user-facing)                         │  forge/options.py
+│    path: "rag.backend"                        │
+│    type: ENUM, default: "none"                │
+│    options: ("none", "pgvector", "qdrant", …) │
+│    enables: { "qdrant": ("rag_pipeline",      │
+│                          "rag_qdrant",        │
+│                          "conversation_…") }  │
+└──────────────────────┬────────────────────────┘
+                       │ (compiled by capability_resolver)
+                       ▼
+┌───────────────────────────────────────────────┐
+│  Fragment (internal)                          │  forge/fragments.py
+│    name: "rag_qdrant"                         │
+│    implementations: { PYTHON: ImplSpec(…) }   │
+│    depends_on: ("rag_pipeline",)              │
+│    capabilities: ("qdrant",)                  │
+└───────────────────────────────────────────────┘
+```
+
+- **Options** are the human / agent surface. Dotted paths, typed
+  leaves (`bool` / `enum` / `int` / `str` / `list`), JSON-Schema
+  emitter.
+- **Fragments** are the implementation detail. Each fragment is a
+  directory under `forge/templates/_fragments/<name>/<backend>/` plus a
+  `Fragment` entry in `forge/fragments.py`.
+
+Options enumerate fragments. Fragments never surface to the user.
+
+## What an Option is
+
+An `Option` (in `forge/options.py`) describes one configurable knob.
+It declares:
+
+- A unique dotted `path` (e.g. `"rag.backend"`, `"middleware.rate_limit"`).
+- A `type` (`BOOL`, `ENUM`, `INT`, `STR`, `LIST`).
+- A `default` matching the type.
+- A `summary` (one-line, shown in `forge --list`) and `description`
+  (multi-line, shown in `forge --describe <path>`).
+- A `category` (`FeatureCategory.OBSERVABILITY`, etc. — see the
+  category map in `options.py`).
+- For ENUM: an `options` tuple of allowed values.
+- An `enables` map — `value → (fragment_name, …)` — that compiles to
+  the set of fragments to add to the plan.
+- Optional JSON-Schema-style constraints: `min` / `max` (INT),
+  `pattern` (STR), `hidden` (suppress from default `--list` view).
+
+The registry (`OPTION_REGISTRY`) is the single source of truth for
+`cli.py`, `capability_resolver.py`, `forge_toml.py`, and the JSON
+Schema emitter.
+
+## What a Fragment is
+
+A `Fragment` (in `forge/fragments.py`) describes the template
+realisation of zero-or-more Options' `enables` entries. It declares:
+
+- A unique `name` (e.g. `"rag_qdrant"`).
+- Per-backend `FragmentImplSpec` entries — a mapping
+  `BackendLanguage → FragmentImplSpec`. A missing entry means
+  "unsupported on this backend."
+- Optional `depends_on` (fragment names that must be in the plan too).
+- Optional `conflicts_with` (mutual exclusion).
+- Optional `capabilities` (`"redis"`, `"postgres-pgvector"`, …). The
+  docker-compose renderer reads these to provision shared infra.
+- Optional `order` (middleware layering within a topological tier).
+
+The `capability_resolver` produces an ordered `ResolvedPlan` — each
+fragment in topological order, tied to the backends it supports in the
+current project.
+
+## Fragment layout on disk
+
+```
+forge/templates/_fragments/<fragment_name>/<backend_lang>/
+    files/                  # verbatim files to add (must not already exist)
     inject.yaml             # list of (target, marker, snippet) injections
-    deps.yaml   (optional)  # dependencies — v1 uses FragmentImplSpec.dependencies
-    env.yaml    (optional)  # env vars   — v1 uses FragmentImplSpec.env_vars
+    deps.yaml   (optional)  # v1 uses FragmentImplSpec.dependencies
+    env.yaml    (optional)  # v1 uses FragmentImplSpec.env_vars
 ```
 
 ### Files
 
-Everything under `files/` is copied into the generated backend verbatim,
-preserving the relative path. The injector *refuses* to overwrite an existing
-file — if you need to modify a file that the base template already ships,
-use `inject.yaml` instead.
+Everything under `files/` is copied verbatim into the generated
+backend, preserving the relative path. The injector *refuses* to
+overwrite an existing file — if you need to modify a file that the
+base template already ships, use `inject.yaml` instead.
 
 ### Injections
 
-`inject.yaml` is a list of mappings. Each one says: "find this marker in that
-file, put this snippet there."
+`inject.yaml` is a list of mappings. Each one says: "find this marker
+in that file, put this snippet there."
 
 ```yaml
 - target: src/app/main.py
@@ -58,27 +111,31 @@ file, put this snippet there."
 
 Rules:
 
-- **Markers are strict.** A marker that isn't found raises `GeneratorError`.
-  A marker that appears more than once also raises. Write templates that
-  place each marker on its own line.
-- **Indentation is inherited.** The snippet is indented to match the marker
-  line. For a marker inside a function body at 4-space indent, the snippet
-  lands at 4-space indent.
+- **Markers are strict.** A marker that isn't found raises
+  `GeneratorError`. A duplicate marker also raises. Each marker must
+  appear exactly once per file.
+- **Indentation is inherited.** The snippet is indented to match the
+  marker line.
 - **Multi-line snippets** keep their relative indentation and gain the
   marker's absolute indentation.
-- **`position: before`** pushes the snippet above the marker line; `after`
-  (default) below. The marker itself is always preserved so future
-  regenerations (eventually `forge update`) can find it again.
+- **`position: before`** pushes the snippet above the marker line;
+  `after` (default) below. The marker itself is always preserved so
+  `forge --update` can find it again.
+- **Injections are wrapped in BEGIN/END sentinels** so `forge --update`
+  can replace a block in-place instead of duplicating.
 
 ### Dependencies
 
 Declared on `FragmentImplSpec.dependencies`. Format is per-language:
 
-- **Python**: PEP 508 specs (`"slowapi>=0.1.9"`). Injected into `pyproject.toml`
-  `[project].dependencies` via `tomlkit`, preserving existing comments.
+- **Python**: PEP 508 specs (`"slowapi>=0.1.9"`). Injected into
+  `pyproject.toml` `[project].dependencies` via `tomlkit`, preserving
+  existing comments.
 - **Node**: `"name@version"` or `"@scope/name@version"`. Merged into
   `package.json`'s `dependencies` dict.
-- **Rust**: `"name@version"`. Merged into `Cargo.toml`'s `[dependencies]` table.
+- **Rust**: `"name@version"` or the full-TOML form (`"sha2 = { version
+  = \"0.10\", default-features = false }"`). Merged into
+  `Cargo.toml`'s `[dependencies]` table.
 
 All three editors are idempotent — re-running is safe.
 
@@ -88,8 +145,9 @@ Tuples of `(KEY, "value")`. Appended to `.env.example`, once per key.
 
 ## Standard markers
 
-Base templates ship these marker comments. Adding a new marker requires
-updating every base template that claims to support the feature.
+Base templates ship these marker comments. Adding a new marker
+requires updating every base template that claims to support the
+fragment.
 
 | Marker | Where | What goes here |
 |---|---|---|
@@ -97,196 +155,230 @@ updating every base template that claims to support the feature.
 | `FORGE:MIDDLEWARE_REGISTRATION` | inside `_configure_middleware()` | `app.add_middleware(...)` calls |
 | `FORGE:ROUTER_REGISTRATION` | inside `_configure_routers()` | `app.include_router(...)` calls |
 | `FORGE:EXCEPTION_HANDLERS` | inside `_configure_exceptions()` | `app.add_exception_handler(...)` calls |
-| `FORGE:SETTINGS_FIELDS` | (future) `Settings` dataclass | Per-feature settings |
-| `FORGE:LIFECYCLE_STARTUP` / `FORGE:LIFECYCLE_SHUTDOWN` | (future) `AppLifecycle` | Startup/shutdown hooks |
+| `FORGE:LIFECYCLE_STARTUP` / `FORGE:LIFECYCLE_SHUTDOWN` | `core/lifecycle.py` | Startup/shutdown hooks |
 
-## Adding a feature in seven steps
+## Adding an option + fragment in seven steps
 
-1. Decide `key`, display label, CLI flag, stability, and whether it's
-   `always_on` or `default_enabled`.
-2. Write the fragment directory at
-   `forge/templates/_fragments/<key>/<language>/`. Start with `files/` for
-   anything new and `inject.yaml` for modifications.
-3. Register a `FeatureSpec` in `forge/features.py` via `register(...)`. Declare
-   `depends_on`, `capabilities`, `conflicts_with` as needed.
-4. If you introduce a new marker, add it to every base template that your
-   feature supports *before* your fragment tries to use it.
-5. If the feature brings new infrastructure (`redis`, a vector store...), add
-   a `capabilities` entry and wire the capability string into
-   `forge/docker_manager.py`'s compose renderer.
-6. Write tests: at minimum, a unit test for any new logic plus one end-to-end
-   apply-to-stub test (see `tests/test_feature_injector.py` —
-   `test_correlation_id_fragment_end_to_end` as a pattern).
-7. Document the feature: add a row to this file's feature list and a short
-   blurb in the project `README.md`.
+1. **Register the Option** in `forge/options.py`. Pick a dotted path
+   under the right namespace (`middleware.*`, `observability.*`,
+   `async.*`, `conversation.*`, `agent.*`, `chat.*`, `rag.*`,
+   `platform.*`), a type, a default, summary / description,
+   `FeatureCategory`, and the `enables` map that ties values to
+   fragment names.
 
-## User config
+2. **Register the Fragment** in `forge/fragments.py`. Declare the
+   per-backend `FragmentImplSpec` entries, any `depends_on` /
+   `conflicts_with` / `capabilities`.
 
-End users can enable features either in a YAML config:
+3. **Author the fragment directory** at
+   `forge/templates/_fragments/<name>/<backend>/`. Start with `files/`
+   for anything new and `inject.yaml` for modifications to base-template
+   files.
+
+4. **Add any new markers** to every base template that supports the
+   fragment, *before* your injector tries to use them.
+
+5. **Wire new infrastructure.** If the fragment brings new infra
+   (Redis, a vector store, …), add the `capabilities` entry and make
+   sure `forge/docker_manager.py`'s compose renderer knows what to
+   provision for it.
+
+6. **Write tests.** The registry invariants in `tests/test_options.py`
+   automatically pick up the new Option. Add a resolver test that your
+   Option's values map to the expected fragment set, plus an injector
+   test if the fragment does anything non-obvious.
+
+7. **Document it.** Add a row to this file's [registered options](#registered-options)
+   list and a short blurb in `README.md`.
+
+## User configuration
+
+End users set options three ways:
+
+**1. YAML config** — `options:` block, dotted or nested.
 
 ```yaml
-features:
-  rate_limit:
-    enabled: true
-    options:
-      requests_per_minute: 120
-  agent:
-    enabled: true
-    options:
-      provider: anthropic
-      default_model: claude-opus-4-7-1m
+options:
+  middleware.rate_limit: false
+  rag.backend: qdrant
+  rag.top_k: 10
+
+# Nested form also accepted (normalised on load):
+options:
+  middleware:
+    rate_limit: false
+  rag:
+    backend: qdrant
+    top_k: 10
 ```
 
-…or via repeatable CLI flags:
+**2. `--set` CLI flag** — repeatable, highest precedence.
 
 ```bash
-forge --enable-feature rate_limit --enable-feature agent --yes --no-docker \
-      --project-name My-App --backend-language python --frontend vue
+forge --set rag.backend=qdrant \
+      --set rag.embeddings=voyage \
+      --set rag.top_k=10 \
+      --set agent.llm=true
 ```
 
-CLI flags override YAML. Sub-flag-shaped options (e.g. vector store choice)
-live under `options:` in YAML; a future release will expose them as top-level
-CLI flags via `FeatureSpec.extra_flags`.
+Values are coerced to the Option's native type (`true` → bool, `10` →
+int) before validation.
 
-## Currently registered features
+**3. Interactive mode** — `forge` with no args walks the user through
+project-level prompts. Option toggles live in YAML / CLI flags only
+(no prompt-per-option bloat).
 
-Features are grouped by product category — the same order `forge --list-features`
-prints and `--describe <key>` narrates. Run `forge --describe <key>` for the
-full prose + tag lines (`BACKENDS:` / `ENDPOINTS:` / `REQUIRES:` /
-`DEPENDS ON:`) per feature.
+## Registered options
+
+Options are grouped by `FeatureCategory` — same order
+`forge --list` prints and `forge --describe` narrates. Run
+`forge --describe <path>` for the full prose + tag lines
+(`BACKENDS:` / `ENDPOINTS:` / `REQUIRES:`) per option.
 
 ### Observability — visibility into the running system
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Request Tracing | `correlation_id` | stable | always-on | python | X-Request-ID header + ContextVar propagation |
-| Deep Health Checks | `enhanced_health` | beta | off | python, node, rust | /health aggregates DB + Redis + Keycloak readiness |
-| Distributed Tracing | `observability` | stable | off | python, node, rust | Logfire (Py) / OTel SDK (Node) / OTLP gRPC via tracing-opentelemetry (Rust) |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `middleware.correlation_id` | enum | `always-on` | python | X-Request-ID header + ContextVar propagation |
+| `observability.health` | bool | `false` | python, node, rust | /health aggregates DB + Redis + Keycloak readiness |
+| `observability.tracing` | bool | `false` | python, node, rust | Logfire (Py) / OTel SDK (Node) / OTLP gRPC (Rust) |
 
-Enable these when you need to trace a request hop across services, gate
-rollouts on actual dependency health, or ship structured traces into an
-OTLP collector.
+Enable these when you need to trace a request hop across services,
+gate rollouts on actual dependency health, or ship structured traces
+into an OTLP collector.
 
 ### Reliability — protection + stability middleware
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Rate Limiting | `rate_limit` | stable | on | python, node, rust | Token-bucket limiter keyed by tenant / IP |
-| Security Headers | `security_headers` | stable | on | python, node, rust | CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy |
-| PII Scrubber | `pii_redaction` | stable | on | python | Logging.Filter that redacts emails / tokens / API keys |
-| Response Cache | `response_cache` | beta | off | python, node | fastapi-cache2 + Redis (Py) / @fastify/caching (Node) |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `middleware.rate_limit` | bool | `true` | python, node, rust | Token-bucket limiter keyed by tenant / IP |
+| `middleware.security_headers` | bool | `true` | python, node, rust | CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy |
+| `middleware.pii_redaction` | bool | `true` | python | logging.Filter that redacts emails / tokens / API keys |
+| `middleware.response_cache` | bool | `false` | python, node | fastapi-cache2 + Redis (Py) / @fastify/caching (Node) |
 
-The on-by-default entries are there for a reason; turn them off only for
-intentional insecure-demo scenarios. Response cache is opt-in — decorate
-specific handlers rather than blanket-enabling.
+The on-by-default entries are there for a reason; turn them off only
+for intentional insecure-demo scenarios. Response cache is opt-in —
+decorate specific handlers rather than blanket-enabling.
 
 ### Async Work — off-thread job processing
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Task Queue | `background_tasks` | beta | off | python, node, rust | Taskiq (Py) / BullMQ + ioredis (Node) / Apalis + Redis (Rust) |
-| Knowledge Ingest Queue | `rag_sync_tasks` | experimental | off | python | Taskiq tasks that move RAG ingest off the request thread |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `async.task_queue` | bool | `false` | python, node, rust | Taskiq (Py) / BullMQ + ioredis (Node) / Apalis + Redis (Rust) |
+| `async.rag_ingest_queue` | bool | `false` | python | Taskiq tasks that move RAG ingest off the request thread |
 
 Reach for these when you've got work a user shouldn't wait on —
-emails, webhooks retries, RAG ingestion, LLM fan-outs. Node and Rust
+emails, webhook retries, RAG ingestion, LLM fan-outs. Node and Rust
 variants share the `TASKIQ_BROKER_URL` env convention so docker-compose
 ops stay uniform across backends.
 
 ### Conversational AI — chat, tools, and the agent loop
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Chat History | `conversation_persistence` | beta | off | python | SQLAlchemy Conversation/Message/ToolCall + migration 0002 |
-| Agent Stream | `agent_streaming` | experimental | off | python | /api/v1/ws/agent WebSocket with typed events + runner dispatch |
-| Tool Registry | `agent_tools` | experimental | off | python | Tool base class + process registry + /api/v1/tools |
-| LLM Agent | `agent` | experimental | off | python | pydantic-ai loop (Anthropic / OpenAI / Google / OpenRouter) |
-| Chat Attachments | `file_upload` | beta | off | python | /api/v1/chat-files + ChatFile model + local storage |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `conversation.persistence` | bool | `false` | python | SQLAlchemy Conversation/Message/ToolCall + migration |
+| `agent.streaming` | bool | `false` | python | /api/v1/ws/agent WebSocket with typed events + runner dispatch |
+| `agent.tools` | bool | `false` | python | Tool base class + process registry + /api/v1/tools |
+| `agent.llm` | bool | `false` | python | pydantic-ai loop (Anthropic / OpenAI / Google / OpenRouter) |
+| `chat.attachments` | bool | `false` | python | /api/v1/chat-files + ChatFile model + local storage |
 
-Order of introduction: enable `conversation_persistence` first (storage),
-then `agent_streaming` (WebSocket + echo runner), then `agent_tools` +
-`agent` (LLM loop), then `file_upload` if you need attachments. The
-`rag_search` agent tool auto-registers when RAG is also on, so the LLM
-gets knowledge search with zero extra wiring.
+Order of introduction: enable `conversation.persistence` first
+(storage), then `agent.streaming` (WebSocket + echo runner), then
+`agent.tools` + `agent.llm` (LLM loop), then `chat.attachments` if you
+need attachments. The `rag_search` agent tool auto-registers when RAG
+is also on.
 
 ### Knowledge — vector storage + retrieval (RAG)
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Knowledge Search | `rag_pipeline` | experimental | off | python | OpenAI embeddings + pgvector + HNSW + PDF ingestion + `rag_search` tool |
-| Knowledge Reranker | `rag_reranking` | experimental | off | python | Cohere + local cross-encoder fallback for sharper top-K |
-| Knowledge — PostgreSQL | `rag_postgresql` | experimental | off | python | Plain-Postgres backend (no pgvector extension) |
-| Knowledge — Qdrant | `rag_qdrant` | experimental | off | python | Qdrant alternative with parallel /api/v1/rag/qdrant/* endpoints |
-| Knowledge — Chroma | `rag_chroma` | experimental | off | python | Chroma via AsyncHttpClient (container or Cloud) |
-| Knowledge — Milvus | `rag_milvus` | experimental | off | python | AsyncMilvusClient, HNSW + COSINE, Zilliz-Cloud compatible |
-| Knowledge — Weaviate | `rag_weaviate` | experimental | off | python | Weaviate v4 async backend with client-managed vectors |
-| Knowledge — Pinecone | `rag_pinecone` | experimental | off | python | Managed Pinecone with namespace-per-tenant isolation |
-| Knowledge — Voyage Embeddings | `rag_embeddings_voyage` | experimental | off | python | Drop-in embeddings provider (swap for OpenAI) |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `rag.backend` | enum | `none` | python | Pick one: `none` / `pgvector` / `qdrant` / `chroma` / `milvus` / `weaviate` / `pinecone` / `postgresql` |
+| `rag.embeddings` | enum | `openai` | python | `openai` (text-embedding-3-small) or `voyage` (voyage-3.5) |
+| `rag.reranker` | bool | `false` | python | Cohere rerank + local cross-encoder fallback for sharper top-K |
+| `rag.top_k` | int (1–100) | `5` | python | Default chunks returned per RAG query |
 
-`rag_pipeline` is the base — every alternative vector store depends on it
-for the shared chunker, embeddings, and PDF parser, then adds its own
-parallel `/api/v1/rag/<backend>/*` endpoints so multiple backends coexist
-during a migration.
+`rag.backend` is a single enum with eight values — each value bundles
+the matching fragment (`rag_qdrant`, `rag_chroma`, …) alongside the
+shared `rag_pipeline` + required `conversation_persistence`. No need
+to hand-pick the transitive dependency chain.
 
 ### Platform — operator-facing tooling
 
-| Name | Key | Stability | Default | Backends | Summary |
-|---|---|---|---|---|---|
-| Admin Console | `admin_panel` | beta | off | python | SQLAdmin UI at /admin, env-gated, auto-registers views |
-| Outbound Webhooks | `webhooks` | beta | off | python, node, rust | Registry + HMAC-SHA256 signed delivery + /test endpoint |
-| Service CLI Extensions | `cli_commands` | beta | off | python | `app info` / `app tools` / `app rag` typer subcommands |
-| AI Agent Handbook | `agents_md` | stable | on | all (project-scoped) | Drops AGENTS.md + CLAUDE.md at project root |
+| Path | Type | Default | Backends | Summary |
+|---|---|---|---|---|
+| `platform.admin` | bool | `false` | python | SQLAdmin UI at /admin, env-gated, auto-registers views |
+| `platform.webhooks` | bool | `false` | python, node, rust | Registry + HMAC-SHA256 signed delivery + /test endpoint |
+| `platform.cli_extensions` | bool | `false` | python | `app info` / `app tools` / `app rag` typer subcommands |
+| `platform.agents_md` | bool | `true` | all (project-scoped) | Drops AGENTS.md + CLAUDE.md at project root |
 
-Operator UX — human admins browsing data, event fan-out for third-party
-integrators, SSH-in shell commands, and guidance docs for AI coding
-agents contributing to the generated repo.
+Operator UX — human admins browsing data, event fan-out for
+third-party integrators, SSH-in shell commands, and guidance docs for
+AI coding agents contributing to the generated repo.
 
-Run `forge --list-features` for the up-to-date list, or
-`forge --describe <key>` for the full prose + metadata of any single
-feature.
+Run `forge --list` for the up-to-date list (flat columnar table by
+default; pair with `--format json` / `--format yaml` for
+machine-readable output), or `forge --describe <path>` for the full
+prose + metadata of any single option.
+
+## JSON Schema export
+
+`forge --schema` emits the JSON Schema 2020-12 document for the whole
+registry. Agents (and humans) can validate a proposed config locally
+before invoking forge:
+
+```bash
+forge --schema > forge-options.schema.json
+python -c 'import json, jsonschema; jsonschema.Draft202012Validator.check_schema(json.load(open("forge-options.schema.json")))'
+```
+
+Every registered Option becomes a property on the top-level object.
+Enums carry their value list, ints carry `minimum`/`maximum`, strings
+carry `pattern` — standard JSON-Schema vocabulary.
 
 ## Fragment scopes
 
-A feature's `FragmentImplSpec.scope` decides where its fragment is applied:
+A fragment's `FragmentImplSpec.scope` decides where it's applied:
 
-- **`backend`** (default) — applied once per supporting backend directory.
-  Use for per-service middleware, route additions, dependency edits.
-- **`project`** — applied once to the project root after all backends are
-  generated. Use for cross-cutting files (AGENTS.md, shared Makefile,
-  root-level CI workflows). Registered under every backend key but emits a
-  single time.
+- **`backend`** (default) — applied once per supporting backend
+  directory. Use for per-service middleware, route additions,
+  dependency edits.
+- **`project`** — applied once to the project root after all backends
+  are generated. Use for cross-cutting files (`AGENTS.md`, shared
+  Makefile, root-level CI workflows). Registered under every backend
+  key but emits a single time.
 
 ## Roadmap — not yet shipped
 
-These backends/variants don't have a `FragmentImplSpec` yet. Configuration
-will be purely additive when they land, so existing projects see no
-behavior change.
+These backends/variants don't have a `FragmentImplSpec` yet.
+Configuration will be purely additive when they land, so existing
+projects see no behavior change.
 
-- **`response_cache/rust`** — no clear canonical library yet; roll your own
-  with `moka` + a tower `Layer`.
-- **`webhooks/rust` durable registry** — axum + sqlx-backed persistence.
-  (In-memory v1 is already shipped — this is the durability upgrade.)
-- **`cli_commands/node`** — npm scripts already cover the surface; explicit
-  subcommands planned once a CLI framework like `citty` lands as a first-
-  class dep.
+- **`response_cache/rust`** — no clear canonical library yet; roll
+  your own with `moka` + a tower `Layer`.
+- **`webhooks/rust` durable registry** — axum + sqlx-backed
+  persistence (in-memory v1 already shipped).
+- **`cli_commands/node`** — npm scripts already cover the surface;
+  explicit subcommands planned once a CLI framework like `citty` lands.
 - **`cli_commands/rust`** — clap-based subcommand layer on top of the
   existing `src/bin/migrate.rs` pattern.
 - **Additional embeddings providers** beyond OpenAI + Voyage — Cohere
-  embed, local `sentence-transformers`. Same pattern as
-  `rag_embeddings_voyage`.
+  embed, local `sentence-transformers`. Same pattern as the existing
+  `rag_embeddings_voyage` fragment.
 - **`security_ratelimit_strict`** — composite preset bundling
-  `rate_limit` + `security_headers` + tightened CORS.
+  `middleware.rate_limit` + `middleware.security_headers` +
+  tightened CORS.
 
 ## Design note — middleware ordering
 
-`FeatureSpec.order` controls layering within a topological dependency tier.
-Convention for Starlette/Axum-family middleware stacks where **later-added =
-outer**:
+`Fragment.order` controls layering within a topological dependency
+tier. Convention for Starlette/Axum-family middleware stacks where
+**later-added = outer**:
 
 - Assign numeric `order` ascending from *innermost* to *outermost*.
-- Fragments use `position: before` on the `MIDDLEWARE_REGISTRATION` marker so
-  earlier-resolved features land higher in the file (innermost) and
-  later-resolved (higher `order`) features land just above the marker
-  (outermost).
+- Fragments use `position: before` on the `MIDDLEWARE_REGISTRATION`
+  marker so earlier-resolved fragments land higher in the file
+  (innermost) and later-resolved (higher `order`) fragments land just
+  above the marker (outermost).
 
 Current Python stack, innermost → outermost:
 

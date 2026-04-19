@@ -4,7 +4,13 @@ from pathlib import Path
 
 import yaml
 
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "forge" / "templates" / "tests" / "e2e-testing-template"
+TEMPLATE_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "forge"
+    / "templates"
+    / "tests"
+    / "e2e-testing-template"
+)
 
 
 class TestCopierConfig:
@@ -65,6 +71,7 @@ class TestTemplateStructure:
 class TestSpecTemplates:
     def test_feature_spec_has_test_sections(self):
         import importlib.util
+
         spec_path = TEMPLATE_DIR / "template" / "_tasks" / "spec_templates.py"
         spec = importlib.util.spec_from_file_location("spec_templates", spec_path)
         mod = importlib.util.module_from_spec(spec)
@@ -83,6 +90,7 @@ class TestSpecTemplates:
 
     def test_auth_spec_has_test_sections(self):
         import importlib.util
+
         spec_path = TEMPLATE_DIR / "template" / "_tasks" / "spec_templates.py"
         spec = importlib.util.spec_from_file_location("spec_templates", spec_path)
         mod = importlib.util.module_from_spec(spec)

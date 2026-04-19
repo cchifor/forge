@@ -3,19 +3,18 @@ _build_frontend_from_cfg, _prompt_backend (smoke), and the validate() splits."""
 
 from __future__ import annotations
 
-import sys
 from argparse import Namespace
 from unittest.mock import patch
 
 import pytest
 
 from forge.cli import (
-    _Resolver,
     _build_backends_from_cfg,
     _build_config,
     _build_frontend_from_cfg,
     _normalize_features,
     _prompt_backend,
+    _Resolver,
 )
 from forge.config import (
     BackendConfig,
@@ -23,7 +22,6 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
 )
-
 
 # -- _normalize_features ------------------------------------------------------
 

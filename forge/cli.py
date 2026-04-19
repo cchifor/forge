@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any, cast
 
@@ -23,13 +25,15 @@ from forge.config import (
 )
 from forge.docker_manager import boot
 from forge.errors import GeneratorError
-from forge.features import (
-    CATEGORY_DISPLAY,
-    CATEGORY_ORDER,
-    FEATURE_REGISTRY,
-    FeatureConfig,
-)
 from forge.generator import generate
+from forge.options import (
+    CATEGORY_DISPLAY,
+    OPTION_REGISTRY,
+    Option,
+    OptionType,
+    ordered_options,
+    to_json_schema,
+)
 
 # -- Argument parsing ---------------------------------------------------------
 
@@ -79,7 +83,7 @@ def _parse_args() -> argparse.Namespace:
         "--org-name", metavar="ORG", help="Flutter org in reverse domain (e.g. com.example)"
     )
 
-    # Feature toggles
+    # Frontend toggles
     p.add_argument("--include-auth", action="store_true", default=None)
     p.add_argument("--no-auth", dest="include_auth", action="store_false")
     p.add_argument("--include-chat", action="store_true", default=None)
@@ -97,39 +101,48 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--keycloak-realm", metavar="REALM")
     p.add_argument("--keycloak-client-id", metavar="ID")
 
-    # Features (repeatable)
+    # Options — the unified config surface.
     p.add_argument(
-        "--enable-feature",
-        dest="enable_features",
+        "--set",
+        dest="set_options",
         action="append",
-        metavar="KEY",
+        metavar="PATH=VALUE",
         default=[],
-        help="Enable a feature (repeatable). See `forge --list-features`.",
+        help="Set an option (repeatable). Example: --set rag.backend=qdrant.",
     )
     p.add_argument(
-        "--disable-feature",
-        dest="disable_features",
-        action="append",
-        metavar="KEY",
-        default=[],
-        help="Disable a feature (repeatable). Overrides defaults.",
-    )
-    p.add_argument(
-        "--list-features",
+        "--list",
         action="store_true",
-        help="Print the feature registry and exit.",
+        help=(
+            "Print the option registry and exit. Pair with --format "
+            "{text,json,yaml} to pick the output shape."
+        ),
     )
     p.add_argument(
         "--describe",
-        metavar="KEY",
-        help="Print the full description for one feature and exit.",
+        metavar="PATH",
+        help="Print the full description for one option path and exit.",
     )
+    p.add_argument(
+        "--schema",
+        action="store_true",
+        help="Print the JSON Schema 2020-12 document for the option registry and exit.",
+    )
+    p.add_argument(
+        "--format",
+        dest="format",
+        choices=["text", "json", "yaml"],
+        default=None,
+        help="Output format for --list. Defaults to text.",
+    )
+
+    # Update
     p.add_argument(
         "--update",
         action="store_true",
         help=(
             "Update an existing forge-generated project in-place: re-apply "
-            "feature injections (idempotent) and re-stamp forge.toml. Run "
+            "option fragments (idempotent) and re-stamp forge.toml. Run "
             "from the project root or pass --project-path."
         ),
     )
@@ -181,13 +194,15 @@ _forge_completions() {
         --frontend --features --author-name --package-manager --frontend-port \\
         --color-scheme --org-name --include-auth --no-auth --include-chat \\
         --include-openapi --no-e2e-tests --keycloak-port --keycloak-realm \\
-        --keycloak-client-id --yes --no-docker --quiet --verbose --json --completion --help"
+        --keycloak-client-id --set --list --describe --schema --format \\
+        --update --project-path --yes --no-docker --quiet --verbose --json --completion --help"
   case "$prev" in
     --backend-language) COMPREPLY=( $(compgen -W "python node rust" -- "$cur") ); return 0 ;;
     --frontend) COMPREPLY=( $(compgen -W "vue svelte flutter none" -- "$cur") ); return 0 ;;
     --package-manager) COMPREPLY=( $(compgen -W "npm pnpm yarn bun" -- "$cur") ); return 0 ;;
+    --format) COMPREPLY=( $(compgen -W "text json yaml" -- "$cur") ); return 0 ;;
     --completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ); return 0 ;;
-    --config|--output-dir) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
+    --config|--output-dir|--project-path) COMPREPLY=( $(compgen -f -- "$cur") ); return 0 ;;
   esac
   COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
 }
@@ -205,6 +220,12 @@ _forge() {
     '--backend-language[Backend language]:lang:(python node rust)'
     '--frontend[Frontend framework]:framework:(vue svelte flutter none)'
     '--package-manager[Package manager]:pm:(npm pnpm yarn bun)'
+    '--set[Set an option PATH=VALUE]:assignment:'
+    '--list[List the option registry]'
+    '--describe[Describe one option path]:path:'
+    '--schema[Emit JSON Schema for the option registry]'
+    '--format[Output format for --list]:fmt:(text json yaml)'
+    '--update[Update a forge-generated project in place]'
     '--yes[Skip confirmations]'
     '--no-docker[Skip Docker boot]'
     '--quiet[Suppress output]'
@@ -224,6 +245,12 @@ complete -c forge -l output-dir -d "Output directory" -r
 complete -c forge -l backend-language -d "Backend language" -xa "python node rust"
 complete -c forge -l frontend -d "Frontend framework" -xa "vue svelte flutter none"
 complete -c forge -l package-manager -d "Package manager" -xa "npm pnpm yarn bun"
+complete -c forge -l set -d "Set an option PATH=VALUE"
+complete -c forge -l list -d "List the option registry"
+complete -c forge -l describe -d "Describe one option path"
+complete -c forge -l schema -d "Emit JSON Schema for the option registry"
+complete -c forge -l format -d "Output format for --list" -xa "text json yaml"
+complete -c forge -l update -d "Re-apply options to an existing forge project"
 complete -c forge -l yes -d "Skip confirmations"
 complete -c forge -l no-docker -d "Skip Docker boot"
 complete -c forge -l quiet -d "Suppress output"
@@ -254,8 +281,7 @@ def _is_headless(args: argparse.Namespace) -> bool:
         or args.python_version is not None
         or args.features is not None
         or args.description is not None
-        or bool(getattr(args, "enable_features", []))
-        or bool(getattr(args, "disable_features", []))
+        or bool(getattr(args, "set_options", []))
     )
 
 
@@ -421,34 +447,106 @@ def _build_frontend_from_cfg(
     return frontend, include_auth
 
 
-def _build_features(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, FeatureConfig]:
-    """Merge YAML `features:` block with CLI --enable-feature / --disable-feature flags.
+# -- Options parsing ---------------------------------------------------------
 
-    YAML shape:
-        features:
-          rag_pipeline:
-            enabled: true
-            options: { vector_store: qdrant }
-          agent: true          # shorthand
 
-    CLI flags override whatever the YAML says. Unknown keys raise via
-    the capability resolver at validate() time.
+def _flatten_nested(raw: Any, prefix: str = "") -> dict[str, Any]:
+    """Turn nested dict form into dotted-key form.
+
+    YAML users can write
+        options:
+          middleware:
+            rate_limit: false
+    which parses to ``{"middleware": {"rate_limit": False}}``. This
+    function flattens it into ``{"middleware.rate_limit": False}`` so the
+    rest of the pipeline only ever sees dotted keys. Values that are
+    already scalars / lists pass through unchanged.
     """
-    features: dict[str, FeatureConfig] = {}
-    yaml_block = cfg.get("features")
-    if isinstance(yaml_block, dict):
-        for key, raw in yaml_block.items():
-            features[str(key)] = FeatureConfig.from_dict(raw)
+    out: dict[str, Any] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict):
+            out.update(_flatten_nested(value, prefix=path))
+        else:
+            out[path] = value
+    return out
 
-    for key in getattr(args, "enable_features", None) or []:
-        features[key] = FeatureConfig(
-            enabled=True, options=dict(features[key].options) if key in features else {}
-        )
-    for key in getattr(args, "disable_features", None) or []:
-        features[key] = FeatureConfig(
-            enabled=False, options=dict(features[key].options) if key in features else {}
-        )
-    return features
+
+def _coerce_set_value(path: str, raw: str) -> Any:
+    """Convert a ``--set PATH=VALUE`` string to the Option's native type.
+
+    Unknown paths pass through as strings; ``ProjectConfig._validate_options``
+    surfaces the typo. For known paths, bool / int / enum values are
+    coerced here so ``--set rag.top_k=5`` reaches the resolver as ``5``
+    (int), not ``"5"``. Enums with non-string underlying types (rare)
+    best-effort-coerce to int.
+    """
+    opt = OPTION_REGISTRY.get(path)
+    if opt is None:
+        return raw
+    if opt.type is OptionType.BOOL:
+        lower = raw.strip().lower()
+        if lower in ("true", "1", "yes", "on"):
+            return True
+        if lower in ("false", "0", "no", "off"):
+            return False
+        raise ValueError(f"--set {path}=<value>: expected true/false, got {raw!r}")
+    if opt.type is OptionType.INT:
+        try:
+            return int(raw)
+        except ValueError as e:
+            raise ValueError(f"--set {path}=<value>: expected integer, got {raw!r}") from e
+    if opt.type is OptionType.ENUM and opt.options:
+        sample = opt.options[0]
+        if isinstance(sample, bool):
+            # No registered bool-valued enums today; keep the branch for safety.
+            lower = raw.strip().lower()
+            if lower in ("true", "false"):
+                return lower == "true"
+        if isinstance(sample, int) and not isinstance(sample, bool):
+            try:
+                return int(raw)
+            except ValueError:
+                return raw  # let the validator surface the error
+    if opt.type is OptionType.LIST:
+        return [v.strip() for v in raw.split(",") if v.strip()]
+    return raw
+
+
+def _build_options(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, Any]:
+    """Merge YAML ``options:`` block with ``--set`` repeats.
+
+    YAML accepts both dotted and nested forms:
+
+        options:
+          middleware.rate_limit: false
+          rag.backend: qdrant
+
+        options:
+          middleware:
+            rate_limit: false
+          rag:
+            backend: qdrant
+
+    ``--set`` always wins over YAML. Unknown paths and out-of-range
+    values are rejected in ``ProjectConfig._validate_options`` so every
+    entry point funnels through the same error path.
+    """
+    options: dict[str, Any] = {}
+
+    yaml_block = cfg.get("options")
+    if isinstance(yaml_block, dict):
+        options.update(_flatten_nested(yaml_block))
+
+    for entry in getattr(args, "set_options", None) or []:
+        if "=" not in entry:
+            raise ValueError(f"--set expects PATH=VALUE, got {entry!r}")
+        path, raw_value = entry.split("=", 1)
+        options[path.strip()] = _coerce_set_value(path.strip(), raw_value.strip())
+
+    return options
 
 
 def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfig:
@@ -460,7 +558,7 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
 
     backends = _build_backends_from_cfg(r, project_name, description)
     frontend, include_auth = _build_frontend_from_cfg(r, project_name, description)
-    features = _build_features(args, cfg)
+    options = _build_options(args, cfg)
 
     # Keycloak
     include_keycloak = include_auth
@@ -485,7 +583,7 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
         frontend=frontend,
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
-        features=features,
+        options=options,
     )
 
 
@@ -763,33 +861,268 @@ def _json_error(stdout_fd, message: str) -> None:
     sys.exit(2)
 
 
-def _print_feature_list() -> None:
-    """Print registered features grouped by category and exit."""
-    if not FEATURE_REGISTRY:
-        print("No features registered.")
-        sys.exit(0)
+# -- Option catalogue rendering ----------------------------------------------
+#
+# Unified rows for the whole OPTION_REGISTRY feed three formatters:
+#   - `_format_text` — two-column table with TTY-adaptive wrap.
+#   - `_format_json` — bare flat JSON array for agent pipelines.
+#   - `_format_yaml` — flat YAML list.
+# Every row has the same keys so callers that filter / sort / render do
+# not care which OptionType produced it. Diagnostics go to stderr; stdout
+# is purely the serialized payload.
 
-    grouped: dict[Any, list[tuple[str, Any]]] = {cat: [] for cat in CATEGORY_ORDER}
-    for key, spec in FEATURE_REGISTRY.items():
-        grouped.setdefault(spec.category, []).append((key, spec))
 
-    header = f"{'NAME':<30} {'KEY':<28} {'STABILITY':<14} {'DEFAULT':<10} {'BACKENDS'}"
-    first = True
-    for cat in CATEGORY_ORDER:
-        entries = grouped.get(cat, [])
-        if not entries:
+def _option_backends(_opt: Option) -> list[str]:
+    """Backend languages this option's fragments target.
+
+    Walks every fragment key in ``opt.enables`` and aggregates the
+    implementations' backend languages. For simple Options this is
+    usually ``["python"]``; middleware and observability Options span
+    all three backends.
+    """
+    from forge.fragments import FRAGMENT_REGISTRY  # noqa: PLC0415
+
+    langs: set[str] = set()
+    for frag_keys in _opt.enables.values():
+        for fkey in frag_keys:
+            frag = FRAGMENT_REGISTRY.get(fkey)
+            if frag is None:
+                continue
+            langs.update(lang.value for lang in frag.implementations)
+    return sorted(langs)
+
+
+def _build_option_rows() -> list[dict[str, Any]]:
+    """Unified option catalogue.
+
+    One row per registered Option, ordered by (category, path). Rows
+    include enough metadata for both the text table and the JSON / YAML
+    payloads; callers pick the subset that makes sense for their format.
+    """
+    rows: list[dict[str, Any]] = []
+    for opt in ordered_options():
+        if opt.hidden:
             continue
-        if not first:
-            print()
-        first = False
-        print(f"# {CATEGORY_DISPLAY[cat]}")
-        print(header)
-        for key, spec in sorted(entries, key=lambda kv: kv[0]):
-            backends = ",".join(sorted(lang.value for lang in spec.implementations))
-            default = "always-on" if spec.always_on else ("on" if spec.default_enabled else "off")
-            print(
-                f"{spec.display_label:<30} {key:<28} {spec.stability:<14} {default:<10} {backends}"
-            )
+        rows.append(
+            {
+                "name": opt.path,
+                "type": opt.type.value,
+                "category": opt.category.value,
+                "default": opt.default,
+                "options": list(opt.options),
+                "tech": _option_backends(opt),
+                "description": opt.summary,
+                "stability": opt.stability,
+                "min": opt.min,
+                "max": opt.max,
+                "pattern": opt.pattern,
+            }
+        )
+    return rows
+
+
+_DEFAULT_TEXT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("NAME", "name"),
+    ("DESCRIPTION", "description"),
+)
+_TEXT_COLUMN_PAD = 3
+
+
+def _description_cell(row: dict[str, Any]) -> str:
+    """DESCRIPTION column text.
+
+    Enum rows get their option list appended in ``[a, b, c]`` form so
+    the allowed values are visible without needing ``--format json``.
+    Bool rows render their summary unchanged.
+    """
+    summary = row.get("description") or ""
+    if row.get("type") == OptionType.ENUM.value:
+        options = row.get("options") or []
+        if options and len(options) > 1:  # skip degenerate always-on enums
+            return f"{summary} [{', '.join(str(v) for v in options)}]"
+    return str(summary)
+
+
+def _wrap_cols() -> int | None:
+    """Return terminal width for wrapping the DESCRIPTION column, or None.
+
+    Returns ``None`` when wrapping must be disabled:
+      * stdout isn't a TTY (piped / redirected / pytest capsys) —
+        downstream tools and tests expect byte-stable rows.
+      * ``shutil.get_terminal_size`` fails or reports 0 cols (no
+        controlling terminal, or a headless CI runner).
+    """
+    try:
+        if not sys.stdout.isatty():
+            return None
+    except (ValueError, OSError):
+        return None
+    try:
+        cols, _rows = shutil.get_terminal_size(fallback=(0, 0))
+    except OSError:
+        return None
+    return cols if cols > 0 else None
+
+
+def _format_text(
+    rows: list[dict[str, Any]],
+    columns: tuple[tuple[str, str], ...] = _DEFAULT_TEXT_COLUMNS,
+) -> str:
+    """Columnar table with a header row; last column runs to end of line.
+
+    Column widths are computed from the actual rows so narrow catalogues
+    align tightly and wider ones expand. List fields (when exposed as a
+    column) render as ``[a, b, c]``.
+    """
+
+    def cell(row: dict[str, Any], field: str) -> str:
+        if field == "description":
+            return _description_cell(row)
+        value = row.get(field)
+        if isinstance(value, list):
+            return "[" + ", ".join(str(v) for v in value) + "]"
+        return "" if value is None else str(value)
+
+    widths: dict[str, int] = {}
+    for header, field in columns[:-1]:
+        widest = max((len(cell(r, field)) for r in rows), default=0)
+        widths[field] = max(widest, len(header)) + _TEXT_COLUMN_PAD
+
+    lines: list[str] = []
+    header_parts: list[str] = []
+    for header, field in columns[:-1]:
+        header_parts.append(header.ljust(widths[field]))
+    header_parts.append(columns[-1][0])
+    lines.append("".join(header_parts))
+
+    prefix_len = sum(widths[f] for _, f in columns[:-1])
+    wrap_cols = _wrap_cols()
+    last_field = columns[-1][1]
+    tail_width: int | None = None
+    if wrap_cols is not None:
+        candidate = max(wrap_cols - prefix_len, 20)
+        longest = max((len(cell(r, last_field)) for r in rows), default=0)
+        if longest > candidate:
+            tail_width = candidate
+
+    continuation_indent = " " * prefix_len
+
+    for row in rows:
+        parts: list[str] = []
+        for _header, field in columns[:-1]:
+            parts.append(cell(row, field).ljust(widths[field]))
+        head = "".join(parts)
+        tail = cell(row, last_field)
+
+        if tail_width is None or len(tail) <= tail_width:
+            lines.append(head + tail)
+            continue
+
+        chunks = textwrap.wrap(
+            tail,
+            width=tail_width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        if not chunks:
+            lines.append(head + tail)
+            continue
+        lines.append(head + chunks[0])
+        for cont in chunks[1:]:
+            lines.append(continuation_indent + cont)
+
+    return "\n".join(lines) + "\n"
+
+
+def _format_json(rows: list[dict[str, Any]]) -> str:
+    """Bare flat JSON array. Every field from the catalogue is emitted —
+    agents filter to what they need."""
+    return json.dumps(rows, indent=2, default=str) + "\n"
+
+
+def _format_yaml(rows: list[dict[str, Any]]) -> str:
+    """Flat YAML list using the same field order the builder set."""
+    import yaml
+
+    return yaml.safe_dump(rows, sort_keys=False, default_flow_style=False, allow_unicode=True)
+
+
+def _dispatch_list(fmt: str) -> None:
+    """Build the option catalogue once; format; print to stdout; exit."""
+    rows = _build_option_rows()
+    if not rows:
+        print("No options registered.", file=sys.stderr)
+
+    try:
+        if fmt == "json":
+            payload = _format_json(rows)
+        elif fmt == "yaml":
+            payload = _format_yaml(rows)
+        else:
+            payload = _format_text(rows, columns=_DEFAULT_TEXT_COLUMNS)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: failed to render catalogue: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.stdout.write(payload)
+    sys.exit(0)
+
+
+def _dispatch_schema() -> None:
+    """Print the JSON Schema 2020-12 document for the registry and exit."""
+    sys.stdout.write(json.dumps(to_json_schema(), indent=2) + "\n")
+    sys.exit(0)
+
+
+def _describe_option(path: str) -> None:
+    """Print the full description block for one Option path and exit.
+
+    Close-match suggestion covers typos ("rag_backend" -> "rag.backend").
+    """
+    opt = OPTION_REGISTRY.get(path)
+    if opt is None:
+        import difflib
+
+        matches = difflib.get_close_matches(path, list(OPTION_REGISTRY), n=3, cutoff=0.5)
+        suggestion = f" Did you mean: {', '.join(matches)}?" if matches else ""
+        print(f"Unknown option {path!r}.{suggestion}", file=sys.stderr)
+        sys.exit(1)
+
+    backends = ", ".join(_option_backends(opt)) or "—"
+    category = CATEGORY_DISPLAY[opt.category]
+
+    print(f"{opt.path}  [{opt.type.value}]")
+    print(f"Category: {category}")
+    parts = [f"Default: {opt.default}", f"Stability: {opt.stability}", f"Backends: {backends}"]
+    print("    ".join(parts))
+    if opt.options:
+        print(f"Allowed:  {', '.join(str(v) for v in opt.options)}")
+    if opt.min is not None or opt.max is not None:
+        bounds = []
+        if opt.min is not None:
+            bounds.append(f"min={opt.min}")
+        if opt.max is not None:
+            bounds.append(f"max={opt.max}")
+        print(f"Bounds:   {', '.join(bounds)}")
+    if opt.pattern is not None:
+        print(f"Pattern:  {opt.pattern}")
+    if opt.enables:
+        print()
+        print("Per-value fragment enables:")
+        if opt.type is OptionType.BOOL:
+            for val in (True, False):
+                fragments = opt.enables.get(val, ())
+                if fragments:
+                    print(f"  {str(val):<12} -> {', '.join(fragments)}")
+        else:
+            for val in opt.options:
+                fragments = opt.enables.get(val, ())
+                if fragments:
+                    print(f"  {str(val):<12} -> {', '.join(fragments)}")
+                else:
+                    print(f"  {str(val):<12} -> (no fragments)")
+    print()
+    print(opt.description or "(no description)")
     sys.exit(0)
 
 
@@ -817,47 +1150,28 @@ def _run_update(args: argparse.Namespace) -> None:
     elif not quiet:
         before = summary["forge_version_before"]
         after = summary["forge_version_after"]
-        feats = ", ".join(summary["features_applied"]) or "(none)"
+        backends = cast("list[str]", summary["backends"])
+        fragments_applied = cast("list[str]", summary["fragments_applied"])
+        frags = ", ".join(fragments_applied) or "(none)"
         print(f"  forge {before} -> {after}")
-        print(f"  backends: {', '.join(summary['backends'])}")
-        print(f"  features: {feats}")
+        print(f"  backends: {', '.join(backends)}")
+        print(f"  fragments: {frags}")
         print("Update complete.")
-    sys.exit(0)
-
-
-def _describe_feature(key: str) -> None:
-    """Print the full description block for one feature and exit."""
-    spec = FEATURE_REGISTRY.get(key)
-    if spec is None:
-        import difflib
-
-        matches = difflib.get_close_matches(key, list(FEATURE_REGISTRY.keys()), n=3, cutoff=0.5)
-        suggestion = f" Did you mean: {', '.join(matches)}?" if matches else ""
-        print(f"Unknown feature '{key}'.{suggestion}", file=sys.stderr)
-        sys.exit(1)
-
-    backends = ", ".join(sorted(lang.value for lang in spec.implementations)) or "—"
-    default = "always-on" if spec.always_on else ("on" if spec.default_enabled else "off")
-    depends = ", ".join(spec.depends_on) if spec.depends_on else "—"
-
-    print(f"{spec.display_label}  ({spec.key})")
-    print(f"Category: {CATEGORY_DISPLAY[spec.category]}")
-    print(f"Stability: {spec.stability}    Default: {default}    Backends: {backends}")
-    print(f"Depends on: {depends}")
-    print(f"CLI flag: {spec.cli_flag}")
-    print()
-    print(spec.description or "(no description)")
     sys.exit(0)
 
 
 def main() -> None:
     args = _parse_args()
 
-    if getattr(args, "list_features", False):
-        _print_feature_list()
+    if getattr(args, "list", False):
+        fmt = getattr(args, "format", None) or "text"
+        _dispatch_list(fmt)
+
+    if getattr(args, "schema", False):
+        _dispatch_schema()
 
     if getattr(args, "describe", None):
-        _describe_feature(args.describe)
+        _describe_option(args.describe)
 
     if getattr(args, "update", False):
         _run_update(args)
@@ -880,6 +1194,21 @@ def main() -> None:
                 _json_error(_real_stdout, str(e))
             print(f"  Configuration error: {e}", file=sys.stderr)
             sys.exit(2)
+
+        # Reject legacy YAML sections (features:, parameters:) up front so
+        # users get a clean "regenerate your stack.yaml" message instead
+        # of a silent pass through.
+        for legacy in ("features", "parameters"):
+            if legacy in cfg:
+                msg = (
+                    f"Legacy `{legacy}:` block in config. The current forge uses "
+                    "`options:` with dotted paths (e.g. rag.backend). "
+                    "See `forge --list` for the new shape."
+                )
+                if getattr(args, "json_output", False):
+                    _json_error(_real_stdout, msg)
+                print(f"  Configuration error: {msg}", file=sys.stderr)
+                sys.exit(2)
 
         try:
             config = _build_config(args, cfg)

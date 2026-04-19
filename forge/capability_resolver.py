@@ -1,14 +1,19 @@
-"""Resolve a user's feature selections into an ordered, validated plan.
+"""Compile a ``ProjectConfig.options`` mapping into an ordered plan of
+template fragments.
 
 The resolver does four things:
-    1. Apply `always_on` + `default_enabled` defaults to the user's selections.
-    2. Topologically sort by `depends_on`, rejecting cycles.
-    3. Reject conflicting features (two vector stores, two task queues, ...).
-    4. Assert every enabled feature has an implementation for at least one
-       backend in the project.
+    1. Apply Option defaults for every path the user didn't set.
+    2. Translate each (path, value) into the fragment set via
+       ``Option.enables[value]``.
+    3. Topologically sort the fragments by ``Fragment.depends_on``.
+    4. Reject conflicting fragments (two vector stores declared
+       directly, for example — rare because Options usually ensure
+       mutual exclusion by construction).
 
-Output is consumed by `generator.generate` (ordered feature list for injection)
-and `docker_manager.render_compose` (capability set for extra services).
+Output is a ``ResolvedPlan`` that downstream code (``generator``,
+``feature_injector``, ``docker_manager``) already knows how to consume.
+The plan's ``ordered`` sequence is stable across runs for a given config
+so generation + re-application produce identical output.
 """
 
 from __future__ import annotations
@@ -17,145 +22,224 @@ from dataclasses import dataclass
 
 from forge.config import BackendLanguage, ProjectConfig
 from forge.errors import GeneratorError
-from forge.features import FEATURE_REGISTRY, FeatureConfig, FeatureSpec
+from forge.fragments import FRAGMENT_REGISTRY, Fragment
+from forge.options import OPTION_REGISTRY
 
 
 @dataclass(frozen=True)
-class ResolvedFeature:
-    """A single feature, resolved to a concrete backend choice."""
+class ResolvedFragment:
+    """A single fragment, resolved to a concrete set of target backends."""
 
-    spec: FeatureSpec
-    config: FeatureConfig
-    # Backends (in project order) on which this feature will be applied.
+    fragment: Fragment
+    # Backends (in project order) on which this fragment will be applied.
     target_backends: tuple[BackendLanguage, ...]
 
 
 @dataclass(frozen=True)
 class ResolvedPlan:
-    """Everything generator.py + docker_manager.py need to act on features."""
+    """The compiled output of ``resolve()``.
 
-    ordered: tuple[ResolvedFeature, ...]
-    capabilities: frozenset[str]
-
-
-def _apply_defaults(
-    selections: dict[str, FeatureConfig],
-) -> dict[str, FeatureConfig]:
-    """Merge registry defaults with user selections.
-
-    - `always_on` features force `enabled=True` (user cannot turn them off here;
-      that requires --disable-feature which mutates the dict *before* resolution).
-    - `default_enabled` features turn on if the user hasn't touched them.
-    - Unknown keys raise a clear error (typo catcher).
+    ``ordered`` is the topologically-sorted list of fragments to apply.
+    ``capabilities`` is the union of ``Fragment.capabilities`` across
+    the plan — ``docker_manager.render_compose`` uses it to decide
+    which extra services to provision (redis, qdrant, etc.).
+    ``option_values`` is the fully-defaulted mapping of option path →
+    value, useful for template context variables (e.g. rag.top_k).
     """
-    resolved: dict[str, FeatureConfig] = {}
 
-    for key in selections:
-        if key not in FEATURE_REGISTRY:
-            known = ", ".join(sorted(FEATURE_REGISTRY)) or "(none registered)"
-            raise GeneratorError(f"Unknown feature '{key}'. Known features: {known}")
+    ordered: tuple[ResolvedFragment, ...]
+    capabilities: frozenset[str]
+    option_values: dict[str, object]
 
-    for key, spec in FEATURE_REGISTRY.items():
-        user_cfg = selections.get(key)
-        if spec.always_on:
-            # always_on wins unless the caller explicitly disabled before us.
-            enabled = True if user_cfg is None else user_cfg.enabled
-        elif user_cfg is None:
-            enabled = spec.default_enabled
-        else:
-            enabled = user_cfg.enabled
-        options = dict(user_cfg.options) if user_cfg else {}
-        resolved[key] = FeatureConfig(enabled=enabled, options=options)
 
+# -----------------------------------------------------------------------------
+# Back-compat alias: many downstream modules still iterate `plan.ordered`
+# and access `rf.spec` / `rf.config` / `rf.target_backends`. Provide a
+# shim so the feature_injector and generator keep working during the
+# migration.
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ResolvedFeature:
+    """Legacy shim. Mirrors the ResolvedFragment shape with the field names
+    downstream code used to expect.
+    """
+
+    spec: Fragment  # historically FeatureSpec; Fragment has the fields the
+    # injector actually reads (key→name, implementations, depends_on)
+    target_backends: tuple[BackendLanguage, ...]
+
+    @property
+    def config(self) -> dict[str, object]:
+        """Empty placeholder — previously carried FeatureConfig.options.
+        Nothing in the codebase reads it post-refactor, but keeping the
+        property lets existing test fixtures parse without attribute
+        errors."""
+        return {}
+
+
+# -----------------------------------------------------------------------------
+# Core resolve
+# -----------------------------------------------------------------------------
+
+
+def _apply_option_defaults(user_options: dict[str, object]) -> dict[str, object]:
+    """Return a fully-defaulted option mapping.
+
+    Every registered Option appears in the output; user values override
+    defaults. Unknown keys in ``user_options`` raise — ProjectConfig's
+    validator should have caught them earlier, but failing loudly here
+    too keeps the pipeline safe.
+    """
+    for path in user_options:
+        if path not in OPTION_REGISTRY:
+            known = ", ".join(sorted(OPTION_REGISTRY)) or "(none registered)"
+            raise GeneratorError(f"Unknown option '{path}'. Known options: {known}")
+
+    resolved: dict[str, object] = {}
+    for path, opt in OPTION_REGISTRY.items():
+        resolved[path] = user_options.get(path, opt.default)
     return resolved
 
 
-def _topo_sort(enabled: dict[str, FeatureConfig]) -> list[str]:
-    """Kahn's algorithm; raises on cycle or missing dependency."""
-    remaining = set(enabled)
+def _collect_fragments(option_values: dict[str, object]) -> set[str]:
+    """Compile options' ``enables`` maps into a flat set of fragment names."""
+    fragments: set[str] = set()
+    for path, value in option_values.items():
+        spec = OPTION_REGISTRY[path]
+        fragments.update(spec.enables.get(value, ()))
+    return fragments
+
+
+def _expand_deps(fragment_set: set[str]) -> set[str]:
+    """Pull every transitive dep into the fragment set.
+
+    ``Fragment.depends_on`` is a tuple of fragment names. If a fragment
+    is in the plan, so must its deps be — users never see these, so
+    we auto-include transparently (no error).
+    """
+    added = True
+    while added:
+        added = False
+        for name in list(fragment_set):
+            spec = FRAGMENT_REGISTRY.get(name)
+            if spec is None:
+                raise GeneratorError(
+                    f"Option references unknown fragment '{name}'. Registry "
+                    "out of sync — did you rename a fragment directory without "
+                    "updating options.py?"
+                )
+            for dep in spec.depends_on:
+                if dep not in fragment_set:
+                    fragment_set.add(dep)
+                    added = True
+    return fragment_set
+
+
+def _topo_sort(fragment_names: set[str]) -> list[str]:
+    """Kahn's algorithm over Fragment.depends_on.
+
+    Sorts ``ready`` sets by (Fragment.order, name) so middleware
+    layering is deterministic across runs.
+    """
+    remaining = set(fragment_names)
     order: list[str] = []
 
-    # Validate dependencies up front for a better error message.
-    for key in enabled:
-        for dep in FEATURE_REGISTRY[key].depends_on:
-            if dep not in enabled:
-                raise GeneratorError(
-                    f"Feature '{key}' requires '{dep}' but '{dep}' is not enabled. "
-                    f"Enable it in the features: section or drop '{key}'."
-                )
-
     while remaining:
-        # Pick any feature whose deps are already in `order`.
-        ready = [k for k in remaining if all(d in order for d in FEATURE_REGISTRY[k].depends_on)]
+        ready = [
+            name
+            for name in remaining
+            if all(dep in order for dep in FRAGMENT_REGISTRY[name].depends_on)
+        ]
         if not ready:
             cyclic = ", ".join(sorted(remaining))
             raise GeneratorError(
-                f"Cyclic feature dependency detected among: {cyclic}. "
-                "Inspect `depends_on` entries in features.py."
+                f"Cyclic fragment dependency detected among: {cyclic}. "
+                "Inspect `depends_on` entries in fragments.py."
             )
-        # Sort by (FeatureSpec.order, key) for deterministic, priority-aware layering.
-        ready.sort(key=lambda k: (FEATURE_REGISTRY[k].order, k))
+        ready.sort(key=lambda n: (FRAGMENT_REGISTRY[n].order, n))
         order.extend(ready)
         remaining.difference_update(ready)
-
     return order
 
 
-def _check_conflicts(enabled_keys: set[str]) -> None:
-    """Raise on any pair of enabled features with a conflicts_with relation."""
-    for key in enabled_keys:
-        spec = FEATURE_REGISTRY[key]
+def _check_conflicts(fragment_names: set[str]) -> None:
+    for name in fragment_names:
+        spec = FRAGMENT_REGISTRY[name]
         for other in spec.conflicts_with:
-            if other in enabled_keys:
-                # Sort for a stable error message.
-                a, b = sorted([key, other])
+            if other in fragment_names:
+                a, b = sorted([name, other])
                 raise GeneratorError(
-                    f"Features '{a}' and '{b}' conflict and cannot both be enabled."
+                    f"Fragments '{a}' and '{b}' conflict and cannot both be enabled."
                 )
 
 
 def _target_backends(
-    spec: FeatureSpec, project_backends: tuple[BackendLanguage, ...]
+    frag: Fragment, project_backends: tuple[BackendLanguage, ...]
 ) -> tuple[BackendLanguage, ...]:
-    """Backends in the project that this feature supports; preserves project order."""
-    return tuple(lang for lang in project_backends if spec.supports(lang))
+    """Backends in the project that this fragment supports; project order."""
+    return tuple(lang for lang in project_backends if frag.supports(lang))
 
 
 def resolve(config: ProjectConfig) -> ResolvedPlan:
-    """Produce an ordered ResolvedPlan from `config.features`.
+    """Produce an ordered ResolvedPlan from ``config.options``.
 
-    Called from `ProjectConfig.validate()` and again (for the canonical instance)
-    from `generator.generate`.
+    Called from ``ProjectConfig.validate()`` (eager validation) and
+    again from ``generator.generate`` (canonical instance consumed by
+    the injector).
     """
     project_backends = tuple(bc.language for bc in config.backends)
-    with_defaults = _apply_defaults(config.features)
 
-    # Filter to the enabled set; always_on entries are already True.
-    enabled = {k: cfg for k, cfg in with_defaults.items() if cfg.enabled}
+    option_values = _apply_option_defaults(config.options)
+    fragment_set = _collect_fragments(option_values)
+    fragment_set = _expand_deps(fragment_set)
+    _check_conflicts(fragment_set)
+    order = _topo_sort(fragment_set)
 
-    _check_conflicts(set(enabled))
-    order = _topo_sort(enabled)
-
-    resolved: list[ResolvedFeature] = []
+    resolved: list[ResolvedFragment] = []
     capabilities: set[str] = set()
 
-    for key in order:
-        spec = FEATURE_REGISTRY[key]
-        targets = _target_backends(spec, project_backends)
+    for name in order:
+        frag = FRAGMENT_REGISTRY[name]
+        targets = _target_backends(frag, project_backends)
         if not targets:
-            # Silently skip a feature with no matching backend when it was
-            # defaulted (always_on or default_enabled without user opt-in).
-            # Only raise when the user *explicitly* enabled something that can't
-            # apply anywhere — that's the misconfiguration worth surfacing.
-            if spec.always_on or key not in config.features:
-                continue
-            supported = ", ".join(sorted(lang.value for lang in spec.implementations)) or "(none)"
-            present = ", ".join(lang.value for lang in project_backends) or "(none)"
-            raise GeneratorError(
-                f"Feature '{key}' is enabled but none of its supported backends "
-                f"({supported}) are present in this project (backends: {present})."
-            )
-        resolved.append(ResolvedFeature(spec=spec, config=enabled[key], target_backends=targets))
-        capabilities.update(spec.capabilities)
+            # A fragment was pulled in (via option value or transitive
+            # dep) but none of the project's backends support it. If the
+            # user explicitly asked for the fragment (via an option
+            # whose value maps to it), that's a hard error — they wanted
+            # something that can't apply. If the fragment was pulled in
+            # by a default Option value (they didn't touch it), skip
+            # silently — that's just "this default isn't relevant here".
+            if _is_user_selected(config.options, name):
+                supported = ", ".join(sorted(lg.value for lg in frag.implementations)) or "(none)"
+                present = ", ".join(lang.value for lang in project_backends) or "(none)"
+                raise GeneratorError(
+                    f"Fragment '{name}' is requested but none of its supported "
+                    f"backends ({supported}) are present in this project "
+                    f"(backends: {present})."
+                )
+            continue
+        resolved.append(ResolvedFragment(fragment=frag, target_backends=targets))
+        capabilities.update(frag.capabilities)
 
-    return ResolvedPlan(ordered=tuple(resolved), capabilities=frozenset(capabilities))
+    return ResolvedPlan(
+        ordered=tuple(resolved),
+        capabilities=frozenset(capabilities),
+        option_values=option_values,
+    )
+
+
+def _is_user_selected(user_options: dict[str, object], fragment_name: str) -> bool:
+    """True if any option the user explicitly set enables this fragment.
+
+    Used to distinguish "silent skip — default didn't apply here" from
+    "hard error — user requested something impossible."
+    """
+    for path, value in user_options.items():
+        spec = OPTION_REGISTRY.get(path)
+        if spec is None:
+            continue
+        if fragment_name in spec.enables.get(value, ()):
+            return True
+    return False

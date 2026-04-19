@@ -37,10 +37,13 @@ class TestRunBackendCmdRequired:
         assert "not found" in str(exc_info.value)
 
     def test_required_timeout_raises(self, tmp_path):
-        with patch(
-            "forge.generator.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd=["npm"], timeout=300),
-        ), pytest.raises(GeneratorError) as exc_info:
+        with (
+            patch(
+                "forge.generator.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd=["npm"], timeout=300),
+            ),
+            pytest.raises(GeneratorError) as exc_info,
+        ):
             _run_backend_cmd(tmp_path, ["npm", "install"], "Install deps", required=True)
         assert "timed out" in str(exc_info.value)
 

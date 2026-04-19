@@ -1,0 +1,503 @@
+"""Tests for the unified Option registry, JSON-Schema emitter, and CLI
+surface that ride on top of it."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+
+from forge.capability_resolver import resolve
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.options import (
+    CATEGORY_ORDER,
+    OPTION_REGISTRY,
+    FeatureCategory,
+    Option,
+    OptionType,
+    ordered_options,
+    to_json_schema,
+)
+
+# -- Registry shape -----------------------------------------------------------
+
+
+class TestRegistryInvariants:
+    def test_registry_non_empty(self) -> None:
+        assert OPTION_REGISTRY, "OPTION_REGISTRY must not be empty"
+
+    def test_every_path_is_dotted_or_valid_identifier(self) -> None:
+        import re
+
+        pattern = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*$")
+        for path in OPTION_REGISTRY:
+            assert pattern.fullmatch(path), f"Bad option path: {path!r}"
+
+    def test_every_option_has_summary_and_description(self) -> None:
+        for path, opt in OPTION_REGISTRY.items():
+            assert opt.summary.strip(), f"{path}: empty summary"
+            assert opt.description.strip(), f"{path}: empty description"
+
+    def test_every_category_used_is_registered(self) -> None:
+        known = set(CATEGORY_ORDER)
+        for opt in OPTION_REGISTRY.values():
+            assert opt.category in known, f"{opt.path}: unknown category {opt.category}"
+
+    def test_every_enum_option_has_non_empty_options(self) -> None:
+        for opt in OPTION_REGISTRY.values():
+            if opt.type is OptionType.ENUM:
+                assert opt.options, f"{opt.path}: ENUM must have options"
+                assert opt.default in opt.options, f"{opt.path}: default not in options"
+
+    def test_every_bool_option_default_is_bool(self) -> None:
+        for opt in OPTION_REGISTRY.values():
+            if opt.type is OptionType.BOOL:
+                assert isinstance(opt.default, bool)
+
+    def test_enables_keys_match_option_shape(self) -> None:
+        for opt in OPTION_REGISTRY.values():
+            if opt.type is OptionType.BOOL:
+                for key in opt.enables:
+                    assert key in (True, False), f"{opt.path}: bool key {key!r}"
+            elif opt.type is OptionType.ENUM:
+                for key in opt.enables:
+                    assert key in opt.options, f"{opt.path}: enables key {key!r} not in options"
+
+    def test_fragment_references_all_exist(self) -> None:
+        """Every fragment key referenced by an Option must be registered."""
+        from forge.fragments import FRAGMENT_REGISTRY
+
+        for opt in OPTION_REGISTRY.values():
+            for _value, fragments in opt.enables.items():
+                for fkey in fragments:
+                    assert fkey in FRAGMENT_REGISTRY, (
+                        f"Option {opt.path}: enables unknown fragment {fkey!r}"
+                    )
+
+
+# -- Option.validate_value ----------------------------------------------------
+
+
+class TestValidateValue:
+    def test_bool_accepts_true_false(self) -> None:
+        opt = Option(
+            path="x.on",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        opt.validate_value(True)
+        opt.validate_value(False)
+
+    def test_bool_rejects_string(self) -> None:
+        opt = Option(
+            path="x.on",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        with pytest.raises(ValueError, match="bool"):
+            opt.validate_value("true")
+
+    def test_enum_rejects_unknown_value(self) -> None:
+        opt = Option(
+            path="x.pick",
+            type=OptionType.ENUM,
+            default="a",
+            options=("a", "b"),
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        with pytest.raises(ValueError, match="invalid value"):
+            opt.validate_value("c")
+
+    def test_int_bounds_enforced(self) -> None:
+        opt = Option(
+            path="x.k",
+            type=OptionType.INT,
+            default=5,
+            min=1,
+            max=10,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        opt.validate_value(1)
+        opt.validate_value(10)
+        with pytest.raises(ValueError, match="min"):
+            opt.validate_value(0)
+        with pytest.raises(ValueError, match="max"):
+            opt.validate_value(11)
+
+    def test_str_pattern_enforced(self) -> None:
+        opt = Option(
+            path="x.s",
+            type=OptionType.STR,
+            default="abc",
+            pattern=r"[a-z]+",
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        opt.validate_value("hello")
+        with pytest.raises(ValueError, match="pattern"):
+            opt.validate_value("HELLO")
+
+
+class TestOptionConstruction:
+    def test_invalid_path_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Invalid option path"):
+            Option(
+                path="bad path",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+            )
+
+    def test_bool_default_wrong_type_rejected(self) -> None:
+        with pytest.raises(ValueError, match="BOOL default"):
+            Option(
+                path="x.y",
+                type=OptionType.BOOL,
+                default="not-bool",
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+            )
+
+    def test_enum_without_options_rejected(self) -> None:
+        with pytest.raises(ValueError, match="ENUM requires"):
+            Option(
+                path="x.y",
+                type=OptionType.ENUM,
+                default="a",
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+            )
+
+    def test_min_on_non_int_rejected(self) -> None:
+        with pytest.raises(ValueError, match="min.*INT"):
+            Option(
+                path="x.s",
+                type=OptionType.STR,
+                default="abc",
+                min=1,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+            )
+
+
+# -- Resolver semantics (using the real registry) -----------------------------
+
+
+class TestResolverAgainstRealRegistry:
+    def _project(self, options: dict[str, object]) -> ProjectConfig:
+        return ProjectConfig(
+            project_name="p",
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="p",
+                    language=BackendLanguage.PYTHON,
+                ),
+            ],
+            options=options,
+        )
+
+    def test_default_always_on_option_produces_correlation_id(self) -> None:
+        plan = resolve(self._project({}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert "correlation_id" in names
+
+    def test_rag_backend_qdrant_pulls_rag_stack(self) -> None:
+        plan = resolve(self._project({"rag.backend": "qdrant"}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"rag_pipeline", "rag_qdrant", "conversation_persistence"}.issubset(names)
+
+    def test_rag_backend_none_includes_no_rag_fragments(self) -> None:
+        plan = resolve(self._project({"rag.backend": "none"}))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert not any(n.startswith("rag_") for n in names)
+
+    def test_unknown_option_path_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown option"):
+            self._project({"not.a.real.option": True}).validate()
+
+    def test_option_values_carries_defaults(self) -> None:
+        plan = resolve(self._project({"middleware.rate_limit": False}))
+        # User value persists, other options populated with defaults.
+        assert plan.option_values["middleware.rate_limit"] is False
+        assert plan.option_values["rag.backend"] == "none"
+
+
+# -- JSON Schema emitter ------------------------------------------------------
+
+
+class TestJsonSchemaEmitter:
+    def test_schema_is_draft_2020_12(self) -> None:
+        schema = to_json_schema()
+        assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+
+    def test_every_registered_option_appears_in_schema(self) -> None:
+        schema = to_json_schema()
+        for path in OPTION_REGISTRY:
+            assert path in schema["properties"], f"missing from schema: {path}"
+
+    def test_bool_options_rendered_as_boolean(self) -> None:
+        schema = to_json_schema()
+        prop = schema["properties"]["middleware.rate_limit"]
+        assert prop["type"] == "boolean"
+
+    def test_enum_options_carry_enum_list(self) -> None:
+        schema = to_json_schema()
+        prop = schema["properties"]["rag.backend"]
+        assert prop["type"] == "string"
+        assert "qdrant" in prop["enum"]
+
+    def test_int_options_carry_bounds(self) -> None:
+        schema = to_json_schema()
+        prop = schema["properties"]["rag.top_k"]
+        assert prop["type"] == "integer"
+        assert prop["minimum"] == 1
+        assert prop["maximum"] == 100
+
+    def test_schema_is_valid_json_schema(self) -> None:
+        """Self-check: the emitted schema must itself validate against
+        Draft 2020-12 meta-schema."""
+        try:
+            import jsonschema  # noqa: PLC0415
+        except ImportError:
+            pytest.skip("jsonschema not installed")
+
+        schema = to_json_schema()
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+
+# -- ordered_options sequence -------------------------------------------------
+
+
+class TestOrderedOptions:
+    def test_ordered_walks_categories_in_registry_order(self) -> None:
+        seen_categories: list[FeatureCategory] = []
+        for opt in ordered_options():
+            if not seen_categories or seen_categories[-1] != opt.category:
+                seen_categories.append(opt.category)
+        # Categories appear in the CATEGORY_ORDER sequence (no skipping
+        # back), though some categories may be absent if they're empty.
+        indices = [CATEGORY_ORDER.index(c) for c in seen_categories]
+        assert indices == sorted(indices)
+
+
+# -- CLI integration ----------------------------------------------------------
+
+
+class TestCliBuildOptions:
+    def test_dotted_yaml_keys_flattened(self) -> None:
+        from forge.cli import _build_options
+
+        class _Args:
+            set_options: list[str] = []
+
+        cfg = {"options": {"middleware.rate_limit": False, "rag.backend": "qdrant"}}
+        opts = _build_options(_Args(), cfg)
+        assert opts == {"middleware.rate_limit": False, "rag.backend": "qdrant"}
+
+    def test_nested_yaml_flattened_to_dotted(self) -> None:
+        from forge.cli import _build_options
+
+        class _Args:
+            set_options: list[str] = []
+
+        cfg = {
+            "options": {
+                "middleware": {"rate_limit": False},
+                "rag": {"backend": "qdrant", "top_k": 10},
+            }
+        }
+        opts = _build_options(_Args(), cfg)
+        assert opts == {
+            "middleware.rate_limit": False,
+            "rag.backend": "qdrant",
+            "rag.top_k": 10,
+        }
+
+    def test_set_flag_overrides_yaml(self) -> None:
+        from forge.cli import _build_options
+
+        class _Args:
+            set_options = ["middleware.rate_limit=true"]
+
+        cfg = {"options": {"middleware.rate_limit": False}}
+        opts = _build_options(_Args(), cfg)
+        assert opts["middleware.rate_limit"] is True
+
+    def test_set_coerces_bool_and_int(self) -> None:
+        from forge.cli import _build_options
+
+        class _Args:
+            set_options = [
+                "middleware.rate_limit=false",
+                "rag.backend=qdrant",
+                "rag.top_k=7",
+            ]
+
+        opts = _build_options(_Args(), {})
+        assert opts["middleware.rate_limit"] is False
+        assert opts["rag.backend"] == "qdrant"
+        assert opts["rag.top_k"] == 7
+
+    def test_set_without_equals_raises(self) -> None:
+        from forge.cli import _build_options
+
+        class _Args:
+            set_options = ["no-equals-here"]
+
+        with pytest.raises(ValueError, match="PATH=VALUE"):
+            _build_options(_Args(), {})
+
+
+class TestCliListDispatch:
+    def test_json_format_valid(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from forge.cli import _dispatch_list
+
+        with pytest.raises(SystemExit) as excinfo:
+            _dispatch_list("json")
+        assert excinfo.value.code == 0
+        out = capsys.readouterr().out
+        rows = json.loads(out)
+        assert isinstance(rows, list)
+        names = {r["name"] for r in rows}
+        assert "middleware.rate_limit" in names
+        assert "rag.backend" in names
+
+    def test_yaml_format_valid(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from forge.cli import _dispatch_list
+
+        with pytest.raises(SystemExit) as excinfo:
+            _dispatch_list("yaml")
+        assert excinfo.value.code == 0
+        out = capsys.readouterr().out
+        rows = yaml.safe_load(out)
+        assert isinstance(rows, list)
+        names = {r["name"] for r in rows}
+        assert "rag.backend" in names
+
+    def test_text_format_two_columns(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from forge.cli import _dispatch_list
+
+        with pytest.raises(SystemExit):
+            _dispatch_list("text")
+        out = capsys.readouterr().out
+        assert out.splitlines()[0].startswith("NAME")
+        # At least one known path shows up in the body.
+        assert "rag.backend" in out
+
+
+class TestCliSchemaDispatch:
+    def test_schema_prints_valid_json(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from forge.cli import _dispatch_schema
+
+        with pytest.raises(SystemExit) as excinfo:
+            _dispatch_schema()
+        assert excinfo.value.code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+        assert "rag.backend" in payload["properties"]
+
+
+class TestCliDescribe:
+    def test_known_path_prints_description(self, capsys: pytest.CaptureFixture[str]) -> None:
+        from forge.cli import _describe_option
+
+        with pytest.raises(SystemExit) as excinfo:
+            _describe_option("rag.backend")
+        assert excinfo.value.code == 0
+        out = capsys.readouterr().out
+        assert "rag.backend" in out
+        assert "enum" in out.lower()
+        assert "qdrant" in out
+
+    def test_unknown_path_exits_nonzero_with_suggestion(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from forge.cli import _describe_option
+
+        with pytest.raises(SystemExit) as excinfo:
+            _describe_option("rag.backends")  # typo: trailing s
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "Unknown option" in err
+        assert "rag.backend" in err  # close-match suggestion
+
+
+# -- Integration: YAML → ProjectConfig → resolve ------------------------------
+
+
+class TestYamlRoundTrip:
+    def test_full_stack_yaml_resolves(self, tmp_path: Path) -> None:
+        """A realistic stack.yaml with options: should produce a working plan."""
+        from forge.cli import _build_config, _load_config_file
+
+        cfg_path = tmp_path / "stack.yaml"
+        cfg_path.write_text(
+            "\n".join(
+                [
+                    "project_name: my_platform",
+                    "backends:",
+                    "  - name: backend",
+                    "    language: python",
+                    "options:",
+                    "  middleware.rate_limit: false",
+                    "  rag.backend: qdrant",
+                    "  rag.top_k: 10",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        class _Args:
+            config: str = str(cfg_path)
+            project_name = None
+            description = None
+            output_dir = str(tmp_path)
+            backend_language = None
+            backend_name = None
+            backend_port = None
+            python_version = None
+            node_version = None
+            rust_edition = None
+            frontend = None
+            features = None
+            author_name = None
+            package_manager = None
+            frontend_port = None
+            color_scheme = None
+            org_name = None
+            include_auth = None
+            include_chat = None
+            include_openapi = None
+            generate_e2e_tests = None
+            keycloak_port = None
+            keycloak_realm = None
+            keycloak_client_id = None
+            set_options: list[str] = []
+
+        cfg = _load_config_file(str(cfg_path))
+        config = _build_config(_Args(), cfg)
+        config.validate()
+        plan = resolve(config)
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert "rag_qdrant" in names
+        assert plan.option_values["rag.top_k"] == 10

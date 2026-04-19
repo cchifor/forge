@@ -6,10 +6,7 @@ import keyword
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from forge.features import FeatureConfig
+from typing import Any
 
 # Keycloak realm that maps to Host(`app.localhost`) for Gatekeeper tenant extraction.
 # Used as both the default user-facing realm name and the template fallback.
@@ -192,9 +189,11 @@ class ProjectConfig:
     frontend: FrontendConfig | None = None
     include_keycloak: bool = False
     keycloak_port: int = 18080
-    # Opt-in features. Always-on features (correlation_id, etc.) are enabled
-    # by the capability resolver even when this dict is empty.
-    features: dict[str, FeatureConfig] = field(default_factory=dict)
+    # Typed configuration options. Path → value (dotted key like
+    # "rag.backend" or "middleware.rate_limit"). Only paths that are
+    # explicitly set appear here; defaults are applied by the resolver
+    # in `capability_resolver.resolve`.
+    options: dict[str, Any] = field(default_factory=dict)
 
     # Backward compatibility: single backend access
     @property
@@ -224,10 +223,37 @@ class ProjectConfig:
         ports = self._validate_ports()
         if self.include_keycloak:
             self._validate_keycloak_ports(ports)
-        self._validate_features()
+        self._validate_options()
+        self._resolve_once()
 
-    def _validate_features(self) -> None:
-        """Resolve features to catch bad combinations early.
+    def _validate_options(self) -> None:
+        """Check every option path is registered and each value is valid.
+
+        Same close-match suggestion pattern the CLI uses for typos.
+        Delegates shape checks (type matching, enum bounds, min/max) to
+        ``Option.validate_value``.
+        """
+        import difflib  # noqa: PLC0415
+
+        from forge.options import OPTION_REGISTRY  # noqa: PLC0415
+
+        for path, value in self.options.items():
+            spec = OPTION_REGISTRY.get(path)
+            if spec is None:
+                matches = difflib.get_close_matches(path, list(OPTION_REGISTRY), n=1, cutoff=0.5)
+                hint = f" Did you mean: {matches[0]}?" if matches else ""
+                raise ValueError(
+                    f"Unknown option {path!r}.{hint} "
+                    f"Known options: {sorted(OPTION_REGISTRY) or '(none)'}"
+                )
+            try:
+                spec.validate_value(value)
+            except ValueError as exc:
+                # Surface with the same shape config-layer errors use.
+                raise ValueError(str(exc)) from exc
+
+    def _resolve_once(self) -> None:
+        """Resolve options to catch bad combinations early.
 
         Imported inline to avoid a config → resolver → config import cycle.
         """

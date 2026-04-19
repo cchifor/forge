@@ -11,8 +11,8 @@ from forge.config import (
     validate_port,
 )
 
-
 # -- validate_port ------------------------------------------------------------
+
 
 class TestValidatePort:
     def test_valid_ports(self):
@@ -30,6 +30,7 @@ class TestValidatePort:
 
 
 # -- validate_features --------------------------------------------------------
+
 
 class TestValidateFeatures:
     def test_valid_features(self):
@@ -57,6 +58,7 @@ class TestValidateFeatures:
 
 # -- BackendConfig ------------------------------------------------------------
 
+
 class TestBackendConfig:
     def test_valid(self):
         bc = BackendConfig(project_name="Test")
@@ -75,6 +77,7 @@ class TestBackendConfig:
 
 
 # -- FrontendConfig -----------------------------------------------------------
+
 
 class TestFrontendConfig:
     def test_valid_vue(self):
@@ -122,6 +125,7 @@ class TestFrontendConfig:
 
 
 # -- ProjectConfig ------------------------------------------------------------
+
 
 class TestProjectConfig:
     def _make_config(self, **overrides):
@@ -179,8 +183,18 @@ class TestProjectConfig:
         """Multi-backend with overlapping features should deduplicate."""
         cfg = self._make_config(
             backends=[
-                BackendConfig(project_name="Test", name="svc-a", features=["items", "orders"], server_port=5000),
-                BackendConfig(project_name="Test", name="svc-b", features=["orders", "products"], server_port=5001),
+                BackendConfig(
+                    project_name="Test",
+                    name="svc-a",
+                    features=["items", "orders"],
+                    server_port=5000,
+                ),
+                BackendConfig(
+                    project_name="Test",
+                    name="svc-b",
+                    features=["orders", "products"],
+                    server_port=5001,
+                ),
             ],
         )
         assert cfg.all_features == ["items", "orders", "products"]

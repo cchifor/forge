@@ -105,8 +105,12 @@ class TestBackendContext:
         config = _make_config()
         ctx = backend_context(config.backend)
         assert set(ctx.keys()) == {
-            "project_name", "project_description", "server_port",
-            "db_name", "python_version", "entity_plural",
+            "project_name",
+            "project_description",
+            "server_port",
+            "db_name",
+            "python_version",
+            "entity_plural",
         }
 
 
@@ -229,13 +233,16 @@ class TestE2eContext:
 
     def test_multi_backend_features(self):
         config = _make_config(framework=FrontendFramework.VUE)
-        config.backends.append(BackendConfig(
-            name="orders-svc",
-            features=["orders"],
-            server_port=5001,
-        ))
+        config.backends.append(
+            BackendConfig(
+                name="orders-svc",
+                features=["orders"],
+                server_port=5001,
+            )
+        )
         ctx = e2e_context(config)
         import json
+
         bf = json.loads(ctx["backend_features"])
         assert "backend" in bf
         assert "orders-svc" in bf

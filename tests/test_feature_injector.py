@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from forge.capability_resolver import ResolvedFeature
+from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
 from forge.errors import GeneratorError
 from forge.feature_injector import (
@@ -20,8 +20,7 @@ from forge.feature_injector import (
     _inject_snippet,
     apply_features,
 )
-from forge.features import FeatureConfig, FeatureSpec, FragmentImplSpec
-
+from forge.fragments import Fragment, FragmentImplSpec
 
 # -- _inject_snippet ----------------------------------------------------------
 
@@ -36,27 +35,13 @@ class TestInjectSnippet:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
         _inject_snippet(file, "feat_a", "FORGE:X", "mid", "after")
         text = file.read_text(encoding="utf-8")
-        assert text == (
-            "foo\n"
-            "# FORGE:X\n"
-            "# FORGE:BEGIN feat_a:X\n"
-            "mid\n"
-            "# FORGE:END feat_a:X\n"
-            "bar\n"
-        )
+        assert text == ("foo\n# FORGE:X\n# FORGE:BEGIN feat_a:X\nmid\n# FORGE:END feat_a:X\nbar\n")
 
     def test_before_marker_inserts_above(self, tmp_path) -> None:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
         _inject_snippet(file, "feat_a", "FORGE:X", "mid", "before")
         text = file.read_text(encoding="utf-8")
-        assert text == (
-            "foo\n"
-            "# FORGE:BEGIN feat_a:X\n"
-            "mid\n"
-            "# FORGE:END feat_a:X\n"
-            "# FORGE:X\n"
-            "bar\n"
-        )
+        assert text == ("foo\n# FORGE:BEGIN feat_a:X\nmid\n# FORGE:END feat_a:X\n# FORGE:X\nbar\n")
 
     def test_preserves_marker_indentation(self, tmp_path) -> None:
         file = self._write(tmp_path, "def f():\n    # FORGE:X\n    return 1\n")
@@ -129,7 +114,7 @@ class TestInjectSnippet:
 
     def test_rust_uses_slash_comments(self, tmp_path) -> None:
         file = self._write(tmp_path, "line\n// FORGE:X\nend\n", name="main.rs")
-        _inject_snippet(file, "feat_a", "FORGE:X", "println!(\"ok\");", "after")
+        _inject_snippet(file, "feat_a", "FORGE:X", 'println!("ok");', "after")
         text = file.read_text(encoding="utf-8")
         assert "// FORGE:BEGIN feat_a:X\n" in text
 
@@ -149,7 +134,7 @@ class TestInjectSnippet:
 class TestAddPythonDeps:
     def _pyproject(self, tmp_path: Path, deps: list[str]) -> Path:
         file = tmp_path / "pyproject.toml"
-        content = "[project]\nname = \"x\"\nversion = \"0.1\"\ndependencies = [\n"
+        content = '[project]\nname = "x"\nversion = "0.1"\ndependencies = [\n'
         for d in deps:
             content += f'    "{d}",\n'
         content += "]\n"
@@ -229,7 +214,9 @@ class TestAddRustDeps:
 
     def test_full_toml_with_features(self, tmp_path) -> None:
         cargo = tmp_path / "Cargo.toml"
-        cargo.write_text('[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8")
+        cargo.write_text(
+            '[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8"
+        )
         _add_rust_deps(
             cargo,
             ('opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"] }',),
@@ -240,7 +227,9 @@ class TestAddRustDeps:
 
     def test_mixed_shorthand_and_full(self, tmp_path) -> None:
         cargo = tmp_path / "Cargo.toml"
-        cargo.write_text('[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8")
+        cargo.write_text(
+            '[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8"
+        )
         _add_rust_deps(
             cargo,
             (
@@ -259,7 +248,9 @@ class TestAddRustDeps:
 
     def test_bad_toml_value_raises(self, tmp_path) -> None:
         cargo = tmp_path / "Cargo.toml"
-        cargo.write_text('[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8")
+        cargo.write_text(
+            '[package]\nname = "x"\nversion = "0.1"\n\n[dependencies]\n', encoding="utf-8"
+        )
         with pytest.raises(GeneratorError, match="bad Rust dep value"):
             _add_rust_deps(cargo, ("broken = { version = }",))
 
@@ -322,19 +313,13 @@ class TestCopyFiles:
 
 
 class TestApplyFeatures:
-    def test_skips_feature_for_unsupported_backend(self, tmp_path) -> None:
-        # Construct a fake feature that only supports Rust, then try to apply to a Python backend.
-        spec = FeatureSpec(
-            key="rust_only",
-            display_label="rust only",
-            cli_flag="--x",
+    def test_skips_fragment_for_unsupported_backend(self, tmp_path) -> None:
+        # Construct a fake fragment that only supports Rust, then try to apply to a Python backend.
+        frag = Fragment(
+            name="rust_only",
             implementations={BackendLanguage.RUST: FragmentImplSpec(fragment_dir="rust_only/rust")},
         )
-        resolved = (
-            ResolvedFeature(
-                spec=spec, config=FeatureConfig(enabled=True), target_backends=(BackendLanguage.RUST,)
-            ),
-        )
+        resolved = (ResolvedFragment(fragment=frag, target_backends=(BackendLanguage.RUST,)),)
         bc = BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)
         # Should be a no-op — no exception raised.
         apply_features(bc, tmp_path, resolved, quiet=True)
@@ -347,7 +332,7 @@ class TestApplyFeatures:
         both the import and the registration were injected, plus the middleware
         file was copied into place.
         """
-        from forge.features import FEATURE_REGISTRY
+        from forge.fragments import FRAGMENT_REGISTRY
 
         # Stub out a minimal src/app/main.py that mimics the base template's markers.
         app_dir = tmp_path / "src" / "app"
@@ -362,11 +347,10 @@ class TestApplyFeatures:
             encoding="utf-8",
         )
 
-        spec = FEATURE_REGISTRY["correlation_id"]
+        frag = FRAGMENT_REGISTRY["correlation_id"]
         resolved = (
-            ResolvedFeature(
-                spec=spec,
-                config=FeatureConfig(enabled=True),
+            ResolvedFragment(
+                fragment=frag,
                 target_backends=(BackendLanguage.PYTHON,),
             ),
         )

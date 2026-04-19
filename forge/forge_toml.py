@@ -1,10 +1,10 @@
 """Read and write the project-root ``forge.toml`` manifest.
 
-``forge.toml`` is the source of truth for ``forge update``: it records
+``forge.toml`` is the source of truth for ``forge --update``: it records
 which forge version generated the project, where the templates live, and
-the full feature state (enabled flag + options dict per feature).
+every Option value the user set.
 
-Format:
+Canonical format:
 
     [forge]
     version = "0.2.0"
@@ -12,20 +12,17 @@ Format:
 
     [forge.templates]
     python = "services/python-service-template"
-    vue    = "apps/vue-frontend-template"
 
-    [forge.features.rate_limit]
-    enabled = true
-    options = {}
+    [forge.options]
+    "middleware.rate_limit" = true
+    "middleware.security_headers" = true
+    "rag.backend" = "qdrant"
+    "rag.embeddings" = "voyage"
+    "rag.top_k" = 10
 
-    [forge.features.rag_pipeline]
-    enabled = true
-    options = { vector_store = "pgvector" }
-
-Older forge versions emitted a flat ``[forge.features] enabled = [keys]``
-list without options. The reader accepts that shape too (with a
-deprecation warning) so existing projects can run ``forge update``
-without manual migration; the writer always emits the per-key table form.
+Pre-Option shapes (legacy ``[forge.features.*]`` /
+``[forge.parameters]`` tables) are rejected with a clear error pointing
+to ``forge.toml`` re-generation — the refactor is a hard cutover.
 """
 
 from __future__ import annotations
@@ -47,18 +44,16 @@ class ForgeTomlData:
     version: str
     project_name: str
     templates: dict[str, str] = field(default_factory=dict)
-    features: dict[str, dict[str, Any]] = field(default_factory=dict)
-    # When True, the file was loaded from the legacy flat-list feature shape
-    # and needs a writer pass to upgrade. ``forge update`` should set this as
-    # a migration signal.
-    legacy_features_format: bool = False
+    # Dotted option path → value. Only paths the user explicitly set
+    # appear here (the resolver fills in defaults).
+    options: dict[str, Any] = field(default_factory=dict)
 
 
 def read_forge_toml(path: Path) -> ForgeTomlData:
     """Parse ``forge.toml`` into a structured object.
 
     Raises ``FileNotFoundError`` if the file is missing and ``ValueError``
-    on malformed content. Missing sections default to empty dicts.
+    on malformed content or legacy-shape tables.
     """
     if not path.is_file():
         raise FileNotFoundError(f"forge.toml not found at {path}")
@@ -68,51 +63,66 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
     if forge is None:
         raise ValueError(f"{path}: missing [forge] section")
 
+    # Reject legacy tables up front — do not silently auto-migrate.
+    if "features" in forge:
+        raise ValueError(
+            f"{path}: found legacy [forge.features] table. This forge.toml "
+            "was written by a pre-Option forge; the current forge uses "
+            "[forge.options] exclusively. Regenerate the project with the "
+            "current forge to migrate."
+        )
+    if "parameters" in forge:
+        raise ValueError(
+            f"{path}: found legacy [forge.parameters] table. This forge.toml "
+            "was written by a pre-Option forge; the current forge uses "
+            "[forge.options] exclusively. Regenerate the project with the "
+            "current forge to migrate."
+        )
+
     version = str(forge.get("version", "0.0.0+unknown"))
     project_name = str(forge.get("project_name", ""))
 
     templates_tbl = forge.get("templates") or {}
     templates: dict[str, str] = {k: str(v) for k, v in dict(templates_tbl).items()}
 
-    features_tbl = forge.get("features") or {}
-    features: dict[str, dict[str, Any]] = {}
-    legacy = False
-
-    # Legacy shape: [forge.features] with `enabled = [...]` list of keys.
-    if "enabled" in features_tbl and isinstance(features_tbl["enabled"], list):
-        legacy = True
-        logger.warning(
-            "%s: legacy [forge.features] flat-list shape detected; "
-            "options will be lost. Re-run forge update to upgrade the file.",
-            path,
-        )
-        for key in features_tbl["enabled"]:
-            features[str(key)] = {"enabled": True, "options": {}}
-    else:
-        # New shape: each feature is its own sub-table
-        # ``[forge.features.<key>]`` with ``enabled`` + ``options``.
-        for key, sub in dict(features_tbl).items():
-            if not isinstance(sub, dict):
-                # A scalar under [forge.features] is malformed; skip with a warning.
-                logger.warning(
-                    "%s: [forge.features.%s] expected a table, got %s; ignored.",
-                    path,
-                    key,
-                    type(sub).__name__,
-                )
-                continue
-            enabled = bool(sub.get("enabled", False))
-            options_raw = sub.get("options", {})
-            options: dict[str, Any] = dict(options_raw) if isinstance(options_raw, dict) else {}
-            features[str(key)] = {"enabled": enabled, "options": options}
+    options_tbl = forge.get("options") or {}
+    options: dict[str, Any] = _coerce_options(dict(options_tbl))
 
     return ForgeTomlData(
         version=version,
         project_name=project_name,
         templates=templates,
-        features=features,
-        legacy_features_format=legacy,
+        options=options,
     )
+
+
+def _coerce_options(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the ``[forge.options]`` table into a plain dict.
+
+    tomlkit returns its own wrappers (``Bool``, ``Integer``, ``String``,
+    ``Array``); unwrap to native Python so downstream comparisons work.
+    """
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        out[str(key)] = _unwrap(value)
+    return out
+
+
+def _unwrap(value: Any) -> Any:
+    """Convert a tomlkit value to its native Python equivalent."""
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
+    if isinstance(value, str):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return [_unwrap(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _unwrap(v) for k, v in value.items()}
+    return value
 
 
 def write_forge_toml(
@@ -121,9 +131,9 @@ def write_forge_toml(
     version: str,
     project_name: str,
     templates: dict[str, str],
-    features: dict[str, dict[str, Any]],
+    options: dict[str, Any],
 ) -> None:
-    """Emit ``forge.toml`` in the canonical (non-legacy) shape."""
+    """Emit ``forge.toml`` with the canonical ``[forge.options]`` shape."""
     doc = tomlkit.document()
     doc.add(tomlkit.comment("Generated by forge — do not edit by hand."))
     doc.add(
@@ -141,18 +151,10 @@ def write_forge_toml(
         tpl_tbl.add(key, templates[key])
     forge_tbl.add("templates", tpl_tbl)
 
-    features_tbl = tomlkit.table()
-    for key in sorted(features):
-        spec = features[key]
-        sub = tomlkit.table()
-        sub.add("enabled", bool(spec.get("enabled", False)))
-        opts = spec.get("options", {}) or {}
-        inline_opts = tomlkit.inline_table()
-        for opt_key in sorted(opts):
-            inline_opts[opt_key] = opts[opt_key]
-        sub.add("options", inline_opts)
-        features_tbl.add(key, sub)
-    forge_tbl.add("features", features_tbl)
+    options_tbl = tomlkit.table()
+    for key in sorted(options):
+        options_tbl.add(key, options[key])
+    forge_tbl.add("options", options_tbl)
 
     doc.add("forge", forge_tbl)
     path.write_text(tomlkit.dumps(doc), encoding="utf-8")

@@ -3,10 +3,7 @@
 import os
 import stat
 import subprocess
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from forge.config import BackendConfig, FrontendConfig, FrontendFramework, ProjectConfig
 from forge.generator import (
@@ -18,14 +15,17 @@ from forge.generator import (
     _setup_backend,
 )
 
-
 # -- _run_backend_cmd ---------------------------------------------------------
+
 
 class TestRunBackendCmd:
     def test_success(self, tmp_path, capsys):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["uv", "sync"], returncode=0, stdout="", stderr="",
+                args=["uv", "sync"],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             result = _run_backend_cmd(tmp_path, ["uv", "sync"], "Install deps")
 
@@ -35,7 +35,9 @@ class TestRunBackendCmd:
     def test_failure_prints_stderr(self, tmp_path, capsys):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["pytest"], returncode=1, stdout="",
+                args=["pytest"],
+                returncode=1,
+                stdout="",
                 stderr="FAILED test_foo.py\nAssertionError\n",
             )
             result = _run_backend_cmd(tmp_path, ["pytest"], "Tests")
@@ -48,7 +50,10 @@ class TestRunBackendCmd:
     def test_failure_no_stderr(self, tmp_path, capsys):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["ruff"], returncode=1, stdout="", stderr="",
+                args=["ruff"],
+                returncode=1,
+                stdout="",
+                stderr="",
             )
             result = _run_backend_cmd(tmp_path, ["ruff"], "Lint")
 
@@ -61,7 +66,10 @@ class TestRunBackendCmd:
     def test_passes_cwd(self, tmp_path):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             _run_backend_cmd(tmp_path, ["echo"], "test")
             mock_run.assert_called_once()
@@ -69,6 +77,7 @@ class TestRunBackendCmd:
 
 
 # -- _setup_backend -----------------------------------------------------------
+
 
 class TestSetupBackend:
     def test_calls_five_commands(self, tmp_path):
@@ -79,11 +88,16 @@ class TestSetupBackend:
         assert mock_cmd.call_count == 5
         descriptions = [call.args[2] for call in mock_cmd.call_args_list]
         assert descriptions == [
-            "Install dependencies", "Lint fix", "Format", "Type check", "Tests",
+            "Install dependencies",
+            "Lint fix",
+            "Format",
+            "Type check",
+            "Tests",
         ]
 
 
 # -- _force_remove_readonly ---------------------------------------------------
+
 
 class TestForceRemoveReadonly:
     def test_clears_readonly_and_retries(self, tmp_path):
@@ -96,6 +110,7 @@ class TestForceRemoveReadonly:
 
 
 # -- _cleanup_sub_git_repos ---------------------------------------------------
+
 
 class TestCleanupSubGitRepos:
     def test_removes_nested_git_dirs(self, tmp_path):
@@ -133,11 +148,15 @@ class TestCleanupSubGitRepos:
 
 # -- _git_init ----------------------------------------------------------------
 
+
 class TestGitInit:
     def test_runs_init_add_commit(self, tmp_path):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             _git_init(tmp_path)
 
@@ -150,7 +169,10 @@ class TestGitInit:
     def test_passes_project_root_as_cwd(self, tmp_path):
         with patch("forge.generator.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="", stderr="",
+                args=[],
+                returncode=0,
+                stdout="",
+                stderr="",
             )
             _git_init(tmp_path)
 
@@ -159,6 +181,7 @@ class TestGitInit:
 
 
 # -- _generate_e2e_tests -------------------------------------------------------
+
 
 class TestGenerateE2eTests:
     def _make_config(self):

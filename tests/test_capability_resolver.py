@@ -10,10 +10,13 @@ import pytest
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import GeneratorError
-from forge.features import FeatureConfig, FeatureSpec, FragmentImplSpec
+from forge.fragments import Fragment, FragmentImplSpec
+from forge.options import FeatureCategory, Option, OptionType
 
 
-def _project(langs: list[BackendLanguage], features: dict[str, FeatureConfig] | None = None) -> ProjectConfig:
+def _project(
+    langs: list[BackendLanguage], options: dict[str, object] | None = None
+) -> ProjectConfig:
     backends = [
         BackendConfig(name=f"svc-{i}", project_name="P", language=lang, server_port=5000 + i)
         for i, lang in enumerate(langs)
@@ -22,164 +25,167 @@ def _project(langs: list[BackendLanguage], features: dict[str, FeatureConfig] | 
         project_name="P",
         backends=backends,
         frontend=None,
-        features=features or {},
+        options=options or {},
     )
 
 
-def _mk_spec(key: str, **kw) -> FeatureSpec:
+def _mk_fragment(name: str, **kw) -> Fragment:
     defaults = dict(
-        key=key,
-        display_label=key,
-        cli_flag=f"--include-{key}",
-        implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir=f"{key}/python")},
+        name=name,
+        implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir=f"{name}/python")},
     )
     defaults.update(kw)
-    return FeatureSpec(**defaults)
+    return Fragment(**defaults)
+
+
+def _mk_option(path: str, *, fragments: tuple[str, ...], default: bool = False) -> Option:
+    return Option(
+        path=path,
+        type=OptionType.BOOL,
+        default=default,
+        summary=path,
+        description=path,
+        category=FeatureCategory.PLATFORM,
+        enables={True: fragments},
+    )
 
 
 @pytest.fixture
-def empty_registry() -> Iterator[dict]:
-    """Swap FEATURE_REGISTRY for a clean dict so tests can register fake features."""
-    fake: dict = {}
-    with patch("forge.capability_resolver.FEATURE_REGISTRY", fake), patch(
-        "forge.features.FEATURE_REGISTRY", fake
+def isolated_registries() -> Iterator[tuple[dict, dict]]:
+    """Swap both OPTION_REGISTRY and FRAGMENT_REGISTRY for empty dicts.
+
+    Tests can register their own fakes without touching the real
+    catalogue. Patched at every import site so the resolver sees the
+    same empty dict the test populated.
+    """
+    options: dict = {}
+    fragments: dict = {}
+    with (
+        patch("forge.capability_resolver.OPTION_REGISTRY", options),
+        patch("forge.options.OPTION_REGISTRY", options),
+        patch("forge.capability_resolver.FRAGMENT_REGISTRY", fragments),
+        patch("forge.fragments.FRAGMENT_REGISTRY", fragments),
+        patch("forge.config.OPTION_REGISTRY", options, create=True),
     ):
-        yield fake
+        yield options, fragments
 
 
-class TestAlwaysOnDefaults:
-    def test_always_on_feature_enabled_with_no_user_input(self, empty_registry) -> None:
-        empty_registry["corr"] = _mk_spec("corr", always_on=True)
+class TestDefaults:
+    def test_default_true_option_enables_fragment_without_user_input(
+        self, isolated_registries
+    ) -> None:
+        options, fragments = isolated_registries
+        fragments["corr"] = _mk_fragment("corr")
+        options["corr.always_on"] = _mk_option("corr.always_on", fragments=("corr",), default=True)
         plan = resolve(_project([BackendLanguage.PYTHON]))
-        assert [f.spec.key for f in plan.ordered] == ["corr"]
+        assert [rf.fragment.name for rf in plan.ordered] == ["corr"]
 
-    def test_default_enabled_feature_enabled_by_default(self, empty_registry) -> None:
-        empty_registry["def"] = _mk_spec("def", default_enabled=True)
-        plan = resolve(_project([BackendLanguage.PYTHON]))
-        assert [f.spec.key for f in plan.ordered] == ["def"]
-
-    def test_default_disabled_feature_stays_off(self, empty_registry) -> None:
-        empty_registry["off"] = _mk_spec("off")
+    def test_default_false_option_stays_off(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["off"] = _mk_fragment("off")
+        options["off.toggle"] = _mk_option("off.toggle", fragments=("off",), default=False)
         plan = resolve(_project([BackendLanguage.PYTHON]))
         assert plan.ordered == ()
 
+    def test_user_set_true_enables_fragment(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["x"] = _mk_fragment("x")
+        options["x.on"] = _mk_option("x.on", fragments=("x",), default=False)
+        plan = resolve(_project([BackendLanguage.PYTHON], {"x.on": True}))
+        assert [rf.fragment.name for rf in plan.ordered] == ["x"]
+
 
 class TestTopoSort:
-    def test_dependency_ordered_before_dependent(self, empty_registry) -> None:
-        empty_registry["base"] = _mk_spec("base")
-        empty_registry["built_on_base"] = _mk_spec("built_on_base", depends_on=("base",))
-        plan = resolve(
-            _project(
-                [BackendLanguage.PYTHON],
-                {"base": FeatureConfig(enabled=True), "built_on_base": FeatureConfig(enabled=True)},
-            )
-        )
-        keys = [f.spec.key for f in plan.ordered]
-        assert keys.index("base") < keys.index("built_on_base")
+    def test_dependency_ordered_before_dependent(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["base"] = _mk_fragment("base")
+        fragments["built_on_base"] = _mk_fragment("built_on_base", depends_on=("base",))
+        options["a.base"] = _mk_option("a.base", fragments=("base",), default=True)
+        options["a.built"] = _mk_option("a.built", fragments=("built_on_base",), default=True)
+        plan = resolve(_project([BackendLanguage.PYTHON]))
+        names = [rf.fragment.name for rf in plan.ordered]
+        assert names.index("base") < names.index("built_on_base")
 
-    def test_missing_dependency_raises(self, empty_registry) -> None:
-        empty_registry["needs_x"] = _mk_spec("needs_x", depends_on=("x",))
-        with pytest.raises(GeneratorError, match="requires 'x'"):
-            resolve(
-                _project(
-                    [BackendLanguage.PYTHON],
-                    {"needs_x": FeatureConfig(enabled=True)},
-                )
-            )
+    def test_transitive_dependency_auto_included(self, isolated_registries) -> None:
+        """A fragment's depends_on is auto-pulled; user doesn't opt in explicitly."""
+        options, fragments = isolated_registries
+        fragments["base"] = _mk_fragment("base")
+        fragments["dependent"] = _mk_fragment("dependent", depends_on=("base",))
+        options["a.on"] = _mk_option("a.on", fragments=("dependent",), default=True)
+        plan = resolve(_project([BackendLanguage.PYTHON]))
+        names = [rf.fragment.name for rf in plan.ordered]
+        assert "base" in names
+        assert "dependent" in names
+        assert names.index("base") < names.index("dependent")
 
-    def test_cycle_detected(self, empty_registry) -> None:
-        empty_registry["a"] = _mk_spec("a", depends_on=("b",))
-        empty_registry["b"] = _mk_spec("b", depends_on=("a",))
+    def test_cycle_detected(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["a"] = _mk_fragment("a", depends_on=("b",))
+        fragments["b"] = _mk_fragment("b", depends_on=("a",))
+        options["t.on"] = _mk_option("t.on", fragments=("a", "b"), default=True)
         with pytest.raises(GeneratorError, match="[Cc]yclic"):
-            resolve(
-                _project(
-                    [BackendLanguage.PYTHON],
-                    {"a": FeatureConfig(enabled=True), "b": FeatureConfig(enabled=True)},
-                )
-            )
+            resolve(_project([BackendLanguage.PYTHON]))
 
 
 class TestConflicts:
-    def test_two_conflicting_raises(self, empty_registry) -> None:
-        empty_registry["x"] = _mk_spec("x", conflicts_with=("y",))
-        empty_registry["y"] = _mk_spec("y", conflicts_with=("x",))
+    def test_two_conflicting_raises(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["x"] = _mk_fragment("x", conflicts_with=("y",))
+        fragments["y"] = _mk_fragment("y", conflicts_with=("x",))
+        options["a.on"] = _mk_option("a.on", fragments=("x", "y"), default=True)
         with pytest.raises(GeneratorError, match="conflict"):
-            resolve(
-                _project(
-                    [BackendLanguage.PYTHON],
-                    {"x": FeatureConfig(enabled=True), "y": FeatureConfig(enabled=True)},
-                )
-            )
+            resolve(_project([BackendLanguage.PYTHON]))
 
 
 class TestCapabilities:
-    def test_capabilities_deduped(self, empty_registry) -> None:
-        empty_registry["a"] = _mk_spec("a", capabilities=("redis",))
-        empty_registry["b"] = _mk_spec("b", capabilities=("redis", "postgres-pgvector"))
-        plan = resolve(
-            _project(
-                [BackendLanguage.PYTHON],
-                {"a": FeatureConfig(enabled=True), "b": FeatureConfig(enabled=True)},
-            )
-        )
+    def test_capabilities_deduped(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["a"] = _mk_fragment("a", capabilities=("redis",))
+        fragments["b"] = _mk_fragment("b", capabilities=("redis", "postgres-pgvector"))
+        options["p.a"] = _mk_option("p.a", fragments=("a",), default=True)
+        options["p.b"] = _mk_option("p.b", fragments=("b",), default=True)
+        plan = resolve(_project([BackendLanguage.PYTHON]))
         assert plan.capabilities == frozenset({"redis", "postgres-pgvector"})
 
 
 class TestBackendCompatibility:
-    def test_unsupported_backend_raises_when_user_requested(self, empty_registry) -> None:
-        empty_registry["rust_only"] = _mk_spec(
+    def test_unsupported_backend_raises_when_user_requested(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["rust_only"] = _mk_fragment(
             "rust_only",
             implementations={BackendLanguage.RUST: FragmentImplSpec(fragment_dir="r")},
         )
+        options["p.on"] = _mk_option("p.on", fragments=("rust_only",), default=False)
         with pytest.raises(GeneratorError, match="supported backends"):
-            resolve(
-                _project(
-                    [BackendLanguage.PYTHON],
-                    {"rust_only": FeatureConfig(enabled=True)},
-                )
-            )
+            resolve(_project([BackendLanguage.PYTHON], {"p.on": True}))
 
-    def test_always_on_with_no_matching_backend_skips_silently(self, empty_registry) -> None:
-        # A Python-only always_on feature should not block a Rust-only project.
-        empty_registry["py_only"] = _mk_spec(
+    def test_default_with_no_matching_backend_skips_silently(self, isolated_registries) -> None:
+        """A Python-only fragment selected by a default value must skip on a Rust project."""
+        options, fragments = isolated_registries
+        fragments["py_only"] = _mk_fragment(
             "py_only",
-            always_on=True,
             implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
         )
+        options["p.on"] = _mk_option("p.on", fragments=("py_only",), default=True)
         plan = resolve(_project([BackendLanguage.RUST]))
         assert plan.ordered == ()
 
-    def test_default_enabled_without_matching_backend_skips_silently(self, empty_registry) -> None:
-        # default_enabled without user opt-in also skips when backend missing.
-        empty_registry["py_only"] = _mk_spec(
-            "py_only",
-            default_enabled=True,
-            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
-        )
-        plan = resolve(_project([BackendLanguage.RUST]))
-        assert plan.ordered == ()
+    def test_unknown_option_path_raises(self, isolated_registries) -> None:
+        """Unknown paths in config.options are caught by the resolver."""
+        # Fixture keeps OPTION_REGISTRY empty — any path is "unknown".
+        _ = isolated_registries
+        with pytest.raises(GeneratorError, match="Unknown option"):
+            resolve(_project([BackendLanguage.PYTHON], {"nope.nada": True}))
 
-    def test_unknown_feature_key_raises(self, empty_registry) -> None:
-        with pytest.raises(GeneratorError, match="Unknown feature 'nope'"):
-            resolve(
-                _project(
-                    [BackendLanguage.PYTHON],
-                    {"nope": FeatureConfig(enabled=True)},
-                )
-            )
-
-    def test_target_backends_preserves_project_order(self, empty_registry) -> None:
-        empty_registry["poly"] = _mk_spec(
+    def test_target_backends_preserves_project_order(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        fragments["poly"] = _mk_fragment(
             "poly",
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p"),
                 BackendLanguage.RUST: FragmentImplSpec(fragment_dir="r"),
             },
         )
-        plan = resolve(
-            _project(
-                [BackendLanguage.RUST, BackendLanguage.PYTHON],
-                {"poly": FeatureConfig(enabled=True)},
-            )
-        )
+        options["p.on"] = _mk_option("p.on", fragments=("poly",), default=True)
+        plan = resolve(_project([BackendLanguage.RUST, BackendLanguage.PYTHON]))
         assert plan.ordered[0].target_backends == (BackendLanguage.RUST, BackendLanguage.PYTHON)

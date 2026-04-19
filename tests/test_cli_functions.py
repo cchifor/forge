@@ -15,8 +15,8 @@ from forge.config import (
     ProjectConfig,
 )
 
-
 # -- _parse_args --------------------------------------------------------------
+
 
 class TestParseArgs:
     """Verify argument parser produces correct namespaces."""
@@ -79,9 +79,12 @@ class TestParseArgs:
 
     def test_keycloak_flags(self):
         args = self._parse(
-            "--keycloak-port", "9090",
-            "--keycloak-realm", "dev",
-            "--keycloak-client-id", "myapp",
+            "--keycloak-port",
+            "9090",
+            "--keycloak-realm",
+            "dev",
+            "--keycloak-client-id",
+            "myapp",
         )
         assert args.keycloak_port == 9090
         assert args.keycloak_realm == "dev"
@@ -119,6 +122,7 @@ class TestParseArgs:
 
 # -- _parse_features ----------------------------------------------------------
 
+
 class TestParseFeatures:
     def test_simple(self):
         assert _parse_features("items, orders") == ["items", "orders"]
@@ -134,6 +138,7 @@ class TestParseFeatures:
 
 
 # -- _print_summary -----------------------------------------------------------
+
 
 class TestPrintSummary:
     def _capture(self, config: ProjectConfig) -> str:
@@ -157,7 +162,11 @@ class TestPrintSummary:
     def test_with_vue_frontend(self):
         config = ProjectConfig(
             project_name="Shop",
-            backends=[BackendConfig(project_name="Shop", server_port=8000, features=["products", "orders"])],
+            backends=[
+                BackendConfig(
+                    project_name="Shop", server_port=8000, features=["products", "orders"]
+                )
+            ],
             frontend=FrontendConfig(
                 framework=FrontendFramework.VUE,
                 project_name="Shop",
