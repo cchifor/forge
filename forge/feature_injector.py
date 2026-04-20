@@ -293,7 +293,13 @@ def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
     return out
 
 
-def _apply_zoned_injection(target: Path, inj: _Injection) -> bool:
+def _apply_zoned_injection(
+    target: Path,
+    inj: _Injection,
+    *,
+    project_root: Path | None = None,
+    collector: ProvenanceCollector | None = None,
+) -> bool:
     """Dispatch an injection according to its zone.
 
     Returns ``True`` when the injection was applied (the target file's
@@ -301,28 +307,150 @@ def _apply_zoned_injection(target: Path, inj: _Injection) -> bool:
     existing content. Callers use the return value to decide whether to
     record a provenance update.
 
-    Zone semantics:
+    Zone semantics (1.0.0a3+):
       * ``generated`` — always apply; replace any existing sentinel block.
       * ``user``      — apply only if no sentinel block for this tag
                         already exists. If a block is present, leave it
                         alone (the user may have customized its body).
-      * ``merge``     — ⚠️  **CAVEAT**: in 1.0.0a1 this zone behaves
-                        identically to ``generated``. True three-way
-                        merge against the provenance baseline lands in
-                        1.0.0a3 once the merge primitive reads the
-                        baseline sha from `forge.toml`. Declaring the
-                        zone now is fine — the semantic intent is
-                        recorded and re-applying won't overwrite
-                        changes unexpectedly in 1.0.0a3 — but it does
-                        NOT currently emit ``.forge-merge`` conflict
-                        markers. Users who need guaranteed preservation
-                        today should use ``user`` instead.
+      * ``merge``     — three-way merge against the provenance baseline
+                        in ``forge.toml``'s ``[forge.merge_blocks]``
+                        table. Emits ``.forge-merge`` sidecar on
+                        conflict; leaves the target untouched. See
+                        ``forge/merge.py``.
     """
     if inj.zone == "user":
         if _has_sentinel_block(target, inj.feature_key, inj.marker):
             return False
+
+    if inj.zone == "merge" and project_root is not None:
+        return _apply_merge_zone(
+            target, inj, project_root=project_root, collector=collector
+        )
+
     _dispatch_injector(target, inj)
+    # For merge-zone on first apply (no baseline), record the block so
+    # the next re-apply can three-way-merge. This also covers the
+    # project_root-is-None fallback path when merge can't run.
+    if inj.zone == "merge" and collector is not None and project_root is not None:
+        _record_merge_baseline(
+            target, inj, project_root=project_root, collector=collector
+        )
     return True
+
+
+def _apply_merge_zone(
+    target: Path,
+    inj: _Injection,
+    *,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+) -> bool:
+    """Three-way merge path for ``merge``-zone injections."""
+    from forge.merge import MergeBlockCollector, three_way_decide, write_sidecar  # noqa: PLC0415
+
+    try:
+        rel_path = target.relative_to(project_root).as_posix()
+    except ValueError:
+        rel_path = target.as_posix()
+
+    key = MergeBlockCollector.key_for(rel_path, inj.feature_key, inj.marker)
+    baseline_sha = _load_merge_baseline(project_root, key)
+
+    if not _has_sentinel_block(target, inj.feature_key, inj.marker):
+        # First apply — no sentinel block yet. Behave like generated and
+        # record the baseline.
+        _dispatch_injector(target, inj)
+        if collector is not None:
+            _record_merge_baseline(
+                target, inj, project_root=project_root, collector=collector
+            )
+        return True
+
+    current_body = _read_block_body(target, inj.feature_key, inj.marker) or ""
+    new_body = inj.snippet
+
+    decision = three_way_decide(
+        baseline_sha=baseline_sha,
+        current_body=current_body,
+        new_body=new_body,
+    )
+
+    if decision in ("no-baseline", "applied"):
+        _dispatch_injector(target, inj)
+        if collector is not None:
+            _record_merge_baseline(
+                target, inj, project_root=project_root, collector=collector
+            )
+        return True
+
+    if decision in ("skipped-no-change", "skipped-idempotent"):
+        return False
+
+    # decision == "conflict"
+    tag = _sentinel_tag(inj.feature_key, inj.marker)
+    write_sidecar(target, new_body, tag)
+    return False
+
+
+def _read_block_body(file: Path, feature_key: str, marker: str) -> str | None:
+    """Return the lines between BEGIN/END sentinels for this tag, exclusive."""
+    if not file.is_file():
+        return None
+    tag = _sentinel_tag(feature_key, marker)
+    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
+    end_needle = f"{MARKER_PREFIX}END {tag}"
+    text = file.read_text(encoding="utf-8")
+    if begin_needle not in text or end_needle not in text:
+        return None
+    lines = text.splitlines(keepends=True)
+    begin_idx = next((i for i, line in enumerate(lines) if begin_needle in line), None)
+    end_idx = next((i for i, line in enumerate(lines) if end_needle in line), None)
+    if begin_idx is None or end_idx is None or end_idx <= begin_idx:
+        return None
+    return "".join(lines[begin_idx + 1 : end_idx])
+
+
+def _record_merge_baseline(
+    target: Path,
+    inj: _Injection,
+    *,
+    project_root: Path,
+    collector: ProvenanceCollector,
+) -> None:
+    """Record the SHA of the block we just wrote — baseline for next compare."""
+    from forge.merge import sha256_of_text  # noqa: PLC0415
+
+    body = _read_block_body(target, inj.feature_key, inj.marker)
+    if body is None:
+        return
+    try:
+        rel = target.relative_to(project_root).as_posix()
+    except ValueError:
+        rel = target.as_posix()
+    collector.record_merge_block(
+        rel_posix_path=rel,
+        feature_key=inj.feature_key,
+        marker=inj.marker,
+        block_sha=sha256_of_text(body),
+    )
+
+
+def _load_merge_baseline(project_root: Path, key: str) -> str | None:
+    """Read a baseline sha from ``forge.toml`` if present."""
+    manifest = project_root / "forge.toml"
+    if not manifest.is_file():
+        return None
+    try:
+        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+
+        data = read_forge_toml(manifest)
+    except Exception:  # noqa: BLE001
+        return None
+    entry = data.merge_blocks.get(key)
+    if not entry:
+        return None
+    sha = entry.get("sha256")
+    return str(sha) if sha else None
 
 
 def _dispatch_injector(target: Path, inj: _Injection) -> None:

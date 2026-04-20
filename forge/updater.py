@@ -147,6 +147,7 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
         option_values=plan.option_values,
         current_version=current_version,
         provenance=collector.as_dict(),
+        merge_blocks=collector.merge_blocks_as_dict(),
     )
 
     return {
@@ -222,8 +223,9 @@ def _restamp_forge_toml(
     option_values: dict[str, Any],
     current_version: str,
     provenance: dict[str, dict[str, str]] | None = None,
+    merge_blocks: dict[str, dict[str, str]] | None = None,
 ) -> None:
-    """Write forge.toml with the current version + fully-defaulted options + provenance."""
+    """Write forge.toml with the current version + options + provenance + merge blocks."""
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
         templates[lang.value] = BACKEND_REGISTRY[lang].template_dir
@@ -235,4 +237,5 @@ def _restamp_forge_toml(
         templates=templates,
         options=dict(option_values),
         provenance=provenance,
+        merge_blocks=merge_blocks,
     )

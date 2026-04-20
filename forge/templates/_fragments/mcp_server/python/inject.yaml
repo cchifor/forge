@@ -9,3 +9,15 @@
   position: after
   zone: generated
   snippet: "app.include_router(mcp_router)"
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # MCP registry shutdown hook — terminates subprocesses on graceful stop.
+    @app.on_event("shutdown")
+    async def _forge_mcp_shutdown() -> None:
+        registry = getattr(app.state, "mcp_registry", None)
+        if registry is not None:
+            await registry.stop_all()

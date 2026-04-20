@@ -60,10 +60,15 @@ class ProvenanceCollector:
     Passed through generator + feature_injector to record every write.
     Paths are stored relative to the project root (as POSIX strings) so
     the manifest is portable across OSes.
+
+    ``merge_blocks`` holds per-block SHAs for merge-zone injections
+    (see ``forge/merge.py``). Keyed by
+    ``{rel_path}::{feature_key}:{marker}``.
     """
 
     project_root: Path
     records: dict[str, ProvenanceRecord] = field(default_factory=dict)
+    merge_blocks: dict[str, str] = field(default_factory=dict)
 
     def record(
         self,
@@ -92,6 +97,20 @@ class ProvenanceCollector:
             fragment_version=fragment_version,
         )
 
+    def record_merge_block(
+        self,
+        *,
+        rel_posix_path: str,
+        feature_key: str,
+        marker: str,
+        block_sha: str,
+    ) -> None:
+        """Record a merge-zone baseline SHA for three-way compare on re-apply."""
+        from forge.merge import MergeBlockCollector  # noqa: PLC0415
+
+        key = MergeBlockCollector.key_for(rel_posix_path, feature_key, marker)
+        self.merge_blocks[key] = block_sha
+
     def as_dict(self) -> dict[str, dict[str, str]]:
         """Return the collector's state in a TOML-serializable shape.
 
@@ -108,6 +127,10 @@ class ProvenanceCollector:
                 entry["fragment_version"] = rec.fragment_version
             out[key] = entry
         return out
+
+    def merge_blocks_as_dict(self) -> dict[str, dict[str, str]]:
+        """Return merge-block baselines in the TOML-serializable shape."""
+        return {k: {"sha256": v} for k, v in sorted(self.merge_blocks.items())}
 
 
 def sha256_of(path: Path) -> str:

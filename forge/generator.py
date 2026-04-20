@@ -260,6 +260,7 @@ def _write_forge_toml(
 
     options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
     provenance = collector.as_dict() if collector is not None else None
+    merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
 
     write_forge_toml(
         project_root / "forge.toml",
@@ -268,6 +269,7 @@ def _write_forge_toml(
         templates=templates,
         options=options,
         provenance=provenance,
+        merge_blocks=merge_blocks,
     )
 
 

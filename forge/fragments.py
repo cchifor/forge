@@ -633,6 +633,32 @@ register_fragment(
 )
 
 
+register_fragment(
+    Fragment(
+        name="mcp_ui_svelte",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="mcp_ui_svelte",
+                scope="project",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="mcp_ui_flutter",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="mcp_ui_flutter",
+                scope="project",
+            ),
+        },
+    )
+)
+
+
 # -- Ports-and-adapters (ADR-002, Phase 2.3) ----------------------------------
 # Reference implementation of the port+adapter pattern. The full refactor
 # of rag_* fragments into this shape lands in 1.0.0a2. For the alpha, we

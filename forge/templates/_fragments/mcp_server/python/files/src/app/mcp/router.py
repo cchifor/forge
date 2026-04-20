@@ -1,23 +1,40 @@
-"""FastAPI router for MCP tool discovery + invocation."""
+"""FastAPI router for MCP tool discovery + invocation.
+
+Backed by ``mcp/client.py``'s stdio JSON-RPC client. The router owns a
+process-wide ``McpRegistry`` spun up at app startup (via the lifespan
+hook injected by this fragment's inject.yaml) and torn down at shutdown.
+
+Endpoints:
+    GET  /mcp/tools    — aggregated list of tools across every
+                         successfully-started MCP server
+    POST /mcp/invoke   — proxy a tool call; the ``approval_token`` field
+                         is reserved for the Phase 3.4 approval UI
+                         integration and is passed through verbatim for
+                         now (auditable but unenforced)
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+
+from app.mcp.client import McpRegistry, load_registry_from_config
+
+logger = logging.getLogger(__name__)
 
 
 class McpTool(BaseModel):
-    """One tool surfaced by an MCP server."""
-
     server: str
     name: str
     description: str
     input_schema: dict[str, Any]
+    approval_mode: str
 
 
 class McpInvokeRequest(BaseModel):
@@ -29,14 +46,11 @@ class McpInvokeRequest(BaseModel):
 
 class McpInvokeResponse(BaseModel):
     ok: bool
-    output: Any
+    output: Any = None
     error: str | None = None
 
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
-
-
-_registry_cache: list[McpTool] | None = None
 
 
 def _config_path() -> Path:
@@ -50,51 +64,69 @@ def _load_config() -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-@router.get("/tools", response_model=list[McpTool])
-async def list_tools() -> list[McpTool]:
-    """Return every tool advertised by every connected MCP server.
+def _get_registry(request: Request) -> McpRegistry:
+    """Fetch (or lazily build) the registry attached to app.state."""
+    registry = getattr(request.app.state, "mcp_registry", None)
+    if registry is None:
+        registry = load_registry_from_config(_load_config())
+        request.app.state.mcp_registry = registry
+    return registry
 
-    Alpha (1.0.0a1): returns an empty list when no servers are configured.
-    Real tool discovery (spawning MCP stdio/websocket clients) lands in
-    1.0.0a3 alongside the approval UI.
-    """
-    global _registry_cache
-    if _registry_cache is not None:
-        return _registry_cache
+
+@router.get("/tools", response_model=list[McpTool])
+async def list_tools(request: Request) -> list[McpTool]:
+    """Aggregate tools from every started MCP server."""
+    registry = _get_registry(request)
+    await registry.start_all()
     config = _load_config()
-    # Spawning MCP clients is non-trivial — placeholder for now.
-    servers = config.get("servers") or {}
-    _registry_cache = []
-    for server_name in sorted(servers):
-        _registry_cache.append(
-            McpTool(
-                server=server_name,
-                name=f"{server_name}:placeholder",
-                description=f"Placeholder tool — real discovery lands in 1.0.0a3.",
-                input_schema={"type": "object", "additionalProperties": True},
-            )
+    default_mode = str(config.get("defaultApprovalMode") or "prompt-once")
+    server_configs = config.get("servers") or {}
+
+    out: list[McpTool] = []
+    for server_name in registry.live_servers():
+        client = registry.get(server_name)
+        if client is None:
+            continue
+        try:
+            tools = await client.list_tools()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("tools/list failed for %s: %s", server_name, exc)
+            continue
+        srv_mode = str(
+            (server_configs.get(server_name) or {}).get("approvalMode")
+            or default_mode
         )
-    return _registry_cache
+        for tool in tools:
+            out.append(
+                McpTool(
+                    server=server_name,
+                    name=str(tool.get("name", "")),
+                    description=str(tool.get("description", "")),
+                    input_schema=tool.get("inputSchema") or {"type": "object"},
+                    approval_mode=srv_mode,
+                )
+            )
+    return out
 
 
 @router.post("/invoke", response_model=McpInvokeResponse)
-async def invoke_tool(req: McpInvokeRequest) -> McpInvokeResponse:
-    """Proxy a tool call to the named server with approval-mode enforcement.
+async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeResponse:
+    """Proxy a tool call to the named server.
 
-    Alpha behavior: returns an error payload explaining that real MCP
-    invocation requires the 1.0.0a3 spawn-and-proxy implementation.
-    Exists so the frontend ApprovalDialog has a stable endpoint to
-    integrate against today.
+    Approval-token enforcement belongs to the frontend's ApprovalDialog
+    plus an audit-log middleware (1.0.0a4). This endpoint validates only
+    the routing + argument shape for 1.0.0a3.
     """
-    config = _load_config()
-    servers = config.get("servers") or {}
-    if req.server not in servers:
+    registry = _get_registry(request)
+    await registry.start_all()
+    client = registry.get(req.server)
+    if client is None:
         raise HTTPException(
             status_code=404,
-            detail=f"MCP server {req.server!r} is not configured (check mcp.config.json).",
+            detail=f"MCP server {req.server!r} is not started (check mcp.config.json + server logs).",
         )
-    return McpInvokeResponse(
-        ok=False,
-        output=None,
-        error="MCP invocation not yet wired (1.0.0a1 stub). Tool registry is available at /mcp/tools.",
-    )
+    try:
+        result = await client.call_tool(req.tool, req.input)
+    except Exception as exc:  # noqa: BLE001
+        return McpInvokeResponse(ok=False, error=str(exc))
+    return McpInvokeResponse(ok=True, output=result)
