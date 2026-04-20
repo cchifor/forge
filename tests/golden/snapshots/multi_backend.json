@@ -29,8 +29,8 @@
       "sha256": "4806eee641a7f11b"
     },
     "forge.toml": {
-      "size": 38549,
-      "sha256": "a551a4da16f243eb"
+      "size": 38546,
+      "sha256": "41af75ba463c587c"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
@@ -42,7 +42,7 @@
     },
     "services/api-node/.copier-answers.yml": {
       "size": 449,
-      "sha256": "16488fde54f68d57"
+      "sha256": "aa78e30dc1f5d586"
     },
     "services/api-node/.env.example": {
       "size": 154,
@@ -206,7 +206,7 @@
     },
     "services/api-py/.copier-answers.yml": {
       "size": 450,
-      "sha256": "228a3d9271b23a89"
+      "sha256": "90d6d6acfe653d28"
     },
     "services/api-py/.env.example": {
       "size": 271,

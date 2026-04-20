@@ -3,7 +3,35 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0rc1] - unreleased
+## [1.0.0] - 2026-04-20
+
+> **forge 1.0 — stable.** First stable release of the clean-break 1.0 series. Every capability shipped across the five alphas (a1–a5) + beta (b1) + release candidate (rc1) is now under the normal SemVer contract: breaking changes require a major bump, minor bumps add features, patches fix bugs. See `RELEASING.md` for the post-1.0 deprecation policy.
+
+### Summary of the 1.0 series
+
+- **Schema-first core** — single YAML or TypeSpec source drives every language's domain models + OpenAPI + enums.
+- **AST-aware injection** — LibCST for Python, regex (or ts-morph subprocess) for TypeScript, with three-zone (generated / user / merge) semantics and `.forge-merge` conflict sidecars.
+- **Provenance manifest** — `forge.toml` records SHA-256 + origin per file; `forge --update` classifies user-modified vs unchanged vs fragment-modified.
+- **Ports-and-adapters** — vector store (6 providers), LLM (4 providers), queue (2 providers), object store (2 providers) — swappable via env, no regeneration.
+- **Plugin SDK** — third parties ship `forge-plugin-*` packages that add options, fragments, backends, frontends, commands, or emitters via entry points.
+- **Canvas packages** — `@forge/canvas-vue`, `@forge/canvas-svelte`, `forge_canvas` publish 5 canvas components + AG-UI streaming client + runtime prop lint.
+- **Real MCP integration** — stdio JSON-RPC subprocess client, tool discovery + invoke endpoints, HMAC-signed approval tokens, append-only audit log.
+- **30 options × 51 fragments × 662 tests** — full coverage across the registry.
+
+### Version
+
+- `pyproject.toml` version `1.0.0`.
+- Canvas packages held at `1.0.0-alpha.5` until the first post-1.0 bump (their own lifecycle; see RFC-003).
+
+### Post-1.0 policy
+
+- Breaking changes require a major bump and a deprecation cycle (one minor release warning → removal in the next).
+- Dropping a Python / Node / Rust / Flutter version is breaking; backport fixes to the last minor that supported it for one year.
+- RFC-002's codemod contract remains in force — every breaking change ships with a `forge migrate-<name>` codemod or a documented manual step.
+
+---
+
+## [1.0.0rc1] - 2026-04-20
 
 > First release candidate. Feature-frozen since 1.0.0b1 with no new changes — this RC exists to exercise the full release-rehearsal pipeline (RFC-004) against every registry (TestPyPI, npm `alpha` tag, pub.dev `--dry-run`) before the v1.0.0 tag push. Promoted to stable 1.0.0 if the rehearsal completes without rollbacks.
 

@@ -194,7 +194,7 @@ wheels = [
 
 [[package]]
 name = "forge"
-version = "1.0.0rc1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "copier" },
