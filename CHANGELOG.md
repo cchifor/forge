@@ -5,29 +5,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [1.0.0a1] - unreleased
 
-> First alpha of the **1.0 clean-break** series. See `RELEASING.md` for the release process and `UPGRADING.md` for migration guidance. Phase 0 of the 1.0 roadmap (foundations: CLI decomposition, provenance manifest, plugin host, --plan/--dry-run).
+> First alpha of the **1.0 clean-break** series. See `RELEASING.md` for the release process and `UPGRADING.md` for migration guidance.
 
 ### Breaking
 
-- **CLI entry point moved** — `forge.cli:main` → `forge.cli.main:main`. The `forge` console script is unchanged; only direct Python imports of private helpers need to update. Migration: see `UPGRADING.md` § "1.0.0a1".
-- **`forge.toml` gains `[forge.provenance]`** — per-file origin + SHA-256 + fragment version. Old projects receive a one-time backfill on first `forge --update` in 1.0 with a warning.
+- **CLI entry point moved** — `forge.cli:main` → `forge.cli.main:main`. The `forge` console script is unchanged; only direct Python imports of private helpers need to update.
+- **`forge.toml` gains `[forge.provenance]`** — per-file origin + SHA-256 + fragment version. Old projects receive a one-time backfill on first `forge --update` in 1.0.
 
 ### Added
 
-- `docs/rfcs/` — RFC process and RFC-001/002/003.
-- `RELEASING.md` — branching, versioning, and release cadence policy.
-- `UPGRADING.md` — per-version migration guide.
-- `forge --plan` — prints the resolved fragment order and every planned mutation as a tree.
-- `forge --dry-run` — executes generation to completion without writing to disk.
-- `forge plugins list` — shows loaded third-party plugins (from `importlib.metadata` entry points under group `forge.plugins`).
-- `forge.plugins` — public API (`ForgeAPI`) for third-party plugins to register options, fragments, backends, frontends, commands, and emitters.
-- `forge.provenance` — per-path provenance tracking (origin, SHA-256, fragment version) written on generate, consumed on update.
+**Phase 0 — foundations:**
+- `forge/cli/` package (decomposed from the 1,361-line cli.py) with command-object dispatch.
+- `forge/provenance.py` — CRLF-normalized SHA-256 + classify/record primitives; written to `[forge.provenance]` on every generate, consumed by `forge --update`.
+- `forge/api.py` + `forge/plugins.py` — entry-point plugin host (group `forge.plugins`), `ForgeAPI` facade, `forge plugins list` command.
+- `forge --plan` (ordered fragment plan + mutation tree, ASCII-safe on Windows) and `forge --dry-run`.
+
+**Phase 1 — schema-first core:**
+- `forge/codegen/ui_protocol.py` emits TS + Dart + Pydantic from 7 JSON schemas under `forge/templates/_shared/ui-protocol/`.
+- `forge/codegen/canvas_contract.py` + 5 canvas component props schemas; `forge --canvas lint` validates payloads.
+- `forge/domain/` — YAML entity DSL with Pydantic / Zod / sqlx / OpenAPI emitters (TypeSpec adoption: 1.0.0a2).
+- `forge/codegen/enums.py` — Python / TS / Zod / Rust / Dart emitters for shared enums.
+- `forge/codegen/pipeline.py` — integration point: runs every emitter during `forge new` so each project ships with regenerated types per-frontend and per-backend.
+
+**Phase 2 — extensibility:**
+- `forge/injectors/python_ast.py` — LibCST-anchored Python injection that survives Ruff / Black reformatting; falls back to text markers on syntax errors.
+- `forge/injectors/ts_ast.py` — regex-anchor + sentinel injector for `.ts/.tsx/.js/.jsx/.mjs`; dispatched automatically by extension.
+- Three-zone merge — `generated`, `user`, and `merge` semantics on every `inject.yaml` entry.
+- Reference port+adapter pair: `vector_store_port` + `vector_store_qdrant` (rest of RAG refactor: 1.0.0a2).
+- `docs/architecture-decisions/ADR-001-pragmatic-hexagonal.md`, `ADR-002-ports-and-adapters.md`.
+- `docs/plugin-development.md` + `examples/forge-plugin-example/` reference plugin.
+
+**Phase 3 — agentic UI:**
+- Published package scaffolds: `@forge/canvas-vue`, `@forge/canvas-svelte`, `forge_canvas` (pub.dev), each with Vite library build / tsconfig / svelte.config / analysis_options so they can actually `npm publish` / `flutter pub publish`.
+- Dart `AgUiClient` — exponential-backoff reconnect + `Last-Event-ID` resume + SSE chunk parsing.
+- `ForgeTheme` — shadcn-flavored Material 3 matching the web design language.
+- MCP scaffolds: `mcp_server` (FastAPI router for `/mcp/tools` + `/mcp/invoke`) + `mcp_ui` (Vue ToolRegistry + ApprovalDialog).
+- `docs/mcp.md` + `mcp.config.example.json` + JSON Schema at `forge/templates/_shared/mcp/mcp_config_schema.json`.
+
+**Phase 4 — production polish:**
+- Reliability fragments across **Python / Node / Rust**: `reliability_connection_pool`, `reliability_circuit_breaker`, with auto-wire injections.
+- `observability_otel` fragment across **Python / Node / Rust** (OTLP exporter + FastAPI / `@opentelemetry/sdk-node` / `tracing-opentelemetry` bridges).
+- Security fragments: `security_csp` (strict CSP nginx include), `security_sbom` (CycloneDX workflow).
+- `forge/common_files.py` drops `.editorconfig`, `.gitignore`, `.pre-commit-config.yaml`, and per-backend CI workflows into every project.
+- `forge/doctor.py` — toolchain / Docker / port / `forge.toml` integrity diagnostics via `forge --doctor [--json]`.
+- New CLI verbs: `forge --new-entity-name`, `--add-backend-language`, `--preview`, `--migrate [--migrate-only] [--migrate-skip]`.
+- `forge/migrations/` — three codemods (`migrate-ui-protocol`, `migrate-entities`, `migrate-adapters`) + umbrella runner.
+- Golden snapshot test suite (`UPDATE_GOLDEN=1` regenerates).
+- `.github/workflows/release.yml` — coordinated PyPI + npm + pub.dev publish on tag push (TestPyPI for pre-releases, PyPI for stable).
 
 ### Changed
 
-- `forge/cli.py` (1,361 lines) decomposed into `forge/cli/` package: `parser`, `loader`, `builder`, `interactive`, `commands/*`, `main`. Command-object pattern for each subcommand. Re-exports preserved at `forge.cli.main` so existing test imports continue to work.
-- `capability_resolver.resolve()` now returns a `ResolutionReport` dataclass (in addition to the old behavior on the happy path), exposing the ordered fragment list, conflicts, and applied options.
-- `updater.update_project()` consumes the provenance manifest to distinguish unchanged / user-modified / fragment-modified files.
+- `forge/cli.py` (1,361 lines) decomposed into `forge/cli/` package.
+- `capability_resolver.resolve()` returns a richer plan consumed by `forge --plan` and `forge --dry-run`.
+- `updater.update_project()` classifies each tracked file as unchanged / user-modified / missing using the provenance manifest.
+- Fragment registry grows from 27 → 35 entries (vector-store ports, reliability / observability / security, MCP).
+- Option registry grows from 22 → 27 with `reliability.connection_pool`, `reliability.circuit_breaker`, `observability.otel`, `security.csp`, `security.sbom`, `platform.mcp`.
+
+### Tests
+
+571 passing, 1 skipped (up from 367). 13 new test files covering provenance, plugins, --plan/--dry-run, codegen pipeline, canvas contract, domain DSL, enum codegen, UI-protocol codegen, Python + TS AST injection, three-zone merge, doctor, migrations, new CLI verbs, common files, golden snapshots, and end-to-end generation with reliability + observability options enabled.
 
 ---
 

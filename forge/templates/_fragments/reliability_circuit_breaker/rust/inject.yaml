@@ -1,0 +1,11 @@
+# reliability_circuit_breaker — Rust.
+#
+# Registers the circuit_breaker module so handlers can wrap outbound
+# calls with `CircuitBreaker::call(...)`. Sits alongside other lib-level
+# modules in src/lib.rs.
+
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: "pub mod circuit_breaker;"

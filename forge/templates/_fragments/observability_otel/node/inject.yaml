@@ -1,0 +1,14 @@
+# observability_otel — Node.
+#
+# Calls `configureOtel(serviceName)` at process start, before Fastify
+# boots, so auto-instrumentations patch `http` and `fastify` early.
+# Targets `src/index.ts` at the `FORGE:ENTRY_PRELOAD` marker (always
+# the first line of the generated entry-point file).
+
+- target: src/index.ts
+  marker: FORGE:ENTRY_PRELOAD
+  position: after
+  zone: generated
+  snippet: |-
+    import { configureOtel } from './lib/otel';
+    configureOtel(process.env.OTEL_SERVICE_NAME ?? 'forge-service');

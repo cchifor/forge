@@ -1,0 +1,10 @@
+# reliability_circuit_breaker — Node.
+#
+# Makes the `breaker` factory discoverable as an app-wide import. The
+# Node base template doesn't yet ship a module-level `FORGE:LIB_IMPORTS`
+# marker; users import explicitly at the call site:
+#
+#     import { breaker } from './lib/circuit-breaker'
+#
+# 1.0.0a2 adds the top-level anchor so this becomes an auto-wire.
+[]
