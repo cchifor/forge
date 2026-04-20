@@ -106,6 +106,16 @@ def main() -> None:
     if getattr(args, "completion", None):
         _print_completion(args.completion)
 
+    # Plugin-registered commands — walk the registry and invoke any flag
+    # the user set. Handlers return an int exit code we pass to sys.exit.
+    from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
+
+    for name, handler in COMMAND_REGISTRY.items():
+        dest = f"plugin_cmd_{name.replace('-', '_')}"
+        if getattr(args, dest, False):
+            code = handler(args)
+            sys.exit(int(code) if isinstance(code, int) else 0)
+
     # When --json is set, redirect all print() to stderr so stdout is clean JSON
     _real_stdout = sys.stdout
     if getattr(args, "json_output", False):

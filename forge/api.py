@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from forge.config import BackendSpec
+    from forge.config import BackendSpec, FrontendSpec
     from forge.fragments import Fragment
     from forge.options import Option
 
@@ -173,15 +173,69 @@ class ForgeAPI:
             BACKEND_REGISTRY[sentinel] = spec
         self._registration.backends_added += 1
 
-    # -- Command registration (hook for Phase 2) ---------------------------
+    # -- Frontend registration (1.0.0a4+) -----------------------------------
+
+    def add_frontend(self, value: str, spec: "FrontendSpec") -> None:
+        """Register a new frontend framework.
+
+        Mirrors ``add_backend``: plugins can ship their own frontend
+        templates (e.g. Solid, Qwik, Remix) without forking forge.
+        The sentinel is resolvable via
+        ``forge.config.resolve_frontend_framework(value)``; the
+        generator's per-framework dispatch treats it as a Copier-only
+        render (no template-specific hooks until a plugin SDK upgrade
+        lands).
+        """
+        from forge.config import (  # noqa: PLC0415
+            FRONTEND_SPECS,
+            FrontendFramework,
+            PLUGIN_FRAMEWORKS,
+            register_frontend_framework,
+        )
+
+        builtin: FrontendFramework | None = None
+        for member in FrontendFramework:
+            if member.value == value:
+                builtin = member
+                break
+
+        if builtin is not None:
+            raise ValueError(
+                f"Plugin '{self._registration.name}' tried to register frontend "
+                f"'{value}', but that framework is a built-in."
+            )
+
+        if value in PLUGIN_FRAMEWORKS and value in FRONTEND_SPECS:
+            raise ValueError(
+                f"Plugin '{self._registration.name}' tried to register frontend "
+                f"'{value}', but a plugin already claimed that name."
+            )
+
+        register_frontend_framework(value)
+        FRONTEND_SPECS[value] = spec
+
+    # -- Command registration ------------------------------------------------
 
     def add_command(self, name: str, handler: Callable[..., Any]) -> None:
-        """Register a new CLI subcommand. Handler signature: ``(args) -> int``.
+        """Register a new CLI subcommand.
 
-        In 1.0.0a1 the hook records the command for ``forge --plugins list``
-        introspection; wiring it into the argparse dispatcher lands with
-        the Phase 2 command-object polish.
+        Handler signature: ``(args: argparse.Namespace) -> int``. The
+        dispatcher exposes the command as ``forge --<name>`` (hyphen-
+        separated), calls the handler when the user sets that flag, and
+        exits with the handler's integer return code.
+
+        1.0.0a4+ wires this into the real argparse parser (earlier alphas
+        captured the handler for ``forge --plugins list`` introspection
+        only). See ``forge.plugins.COMMAND_REGISTRY``.
         """
+        from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
+
+        if name in COMMAND_REGISTRY:
+            raise ValueError(
+                f"Plugin '{self._registration.name}' tried to register command "
+                f"'{name}', but a plugin already claimed that name."
+            )
+        COMMAND_REGISTRY[name] = handler
         self._commands.append(handler)
         self._registration.commands_added += 1
 

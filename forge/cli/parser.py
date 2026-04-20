@@ -253,7 +253,40 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print a shell completion script to stdout and exit",
     )
 
+    # Plugin-registered commands. Each is exposed as ``--<name>`` with
+    # dest ``plugin_cmd_<name>`` (hyphens → underscores). Dispatch in
+    # ``forge.cli.main`` walks the same registry and calls the handler
+    # if the flag is set. Adding commands after parser construction
+    # would require rebuilding every completion script, so we inject at
+    # build time: ``forge.plugins.load_all()`` must have run first.
+    _add_plugin_commands(p)
+
     return p
+
+
+def _add_plugin_commands(parser: argparse.ArgumentParser) -> None:
+    """Inject plugin-registered commands as ``--<name>`` flags."""
+    try:
+        from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
+    except ImportError:
+        return
+    for name in sorted(COMMAND_REGISTRY):
+        flag = f"--{name}"
+        dest = f"plugin_cmd_{name.replace('-', '_')}"
+        # Only register if the flag isn't already claimed (avoid collisions
+        # with core forge flags). Plugins should use namespaced names
+        # like ``mycompany-audit`` to be safe.
+        existing = {
+            opt for action in parser._actions for opt in action.option_strings
+        }
+        if flag in existing:
+            continue
+        parser.add_argument(
+            flag,
+            dest=dest,
+            action="store_true",
+            help=f"[plugin command: {name}]",
+        )
 
 
 def _parse_args() -> argparse.Namespace:
