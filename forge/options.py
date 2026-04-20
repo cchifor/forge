@@ -929,6 +929,30 @@ ENDPOINTS: none — CLI surface only.""",
 
 register_option(
     Option(
+        path="platform.mcp",
+        type=OptionType.BOOL,
+        default=False,
+        summary="Model Context Protocol router + UI scaffolds for tool discovery and approval.",
+        description="""\
+Scaffolds a backend ``/mcp/tools`` + ``/mcp/invoke`` router (Python,
+FastAPI) plus Vue ToolRegistry + ApprovalDialog components. Config
+lives at project-root ``mcp.config.json`` (schema at
+``forge/templates/_shared/mcp/mcp_config_schema.json``). Real MCP
+subprocess spawning and tool-call proxying land in 1.0.0a3 — this alpha
+ships the stable endpoints + UI surface so integrators can start
+wiring today.
+
+BACKENDS: python
+FRONTENDS: vue (svelte + flutter in 1.0.0a3)
+DOCS: docs/mcp.md.""",
+        category=FeatureCategory.CONVERSATIONAL_AI,
+        enables={True: ("mcp_server", "mcp_ui")},
+    )
+)
+
+
+register_option(
+    Option(
         path="platform.agents_md",
         type=OptionType.BOOL,
         default=True,

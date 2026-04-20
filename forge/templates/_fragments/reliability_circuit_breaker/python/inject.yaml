@@ -1,0 +1,13 @@
+# reliability_circuit_breaker — make the breaker registry import-available.
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Circuit-breaker registry — share this singleton across outbound clients
+    # (LLM, vector store, auth). Each client wraps its calls with:
+    #
+    #     async with breaker_registry.get_breaker("provider-name"):
+    #         await client.call(...)
+    from app.core.circuit_breaker import breaker_registry  # noqa: F401

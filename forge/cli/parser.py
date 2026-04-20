@@ -179,6 +179,55 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run environment diagnostics (Python/Node/Rust/Flutter toolchains, Docker, ports, forge.toml).",
     )
 
+    # new-entity — add a CRUD entity YAML to the project.
+    p.add_argument(
+        "--new-entity-name",
+        metavar="NAME",
+        help="PascalCase entity name for `forge --new-entity-name Foo --new-entity-fields ...`",
+    )
+    p.add_argument(
+        "--new-entity-fields",
+        metavar="SPEC",
+        help="Comma-separated field spec: 'name:string,qty:integer,status:enum:ItemStatus'",
+    )
+
+    # add-backend — scaffold an additional backend in an existing project.
+    p.add_argument(
+        "--add-backend-language",
+        choices=["python", "node", "rust"],
+        metavar="LANG",
+        help="Language for the new backend with `forge --add-backend-language python --add-backend-name <name>`",
+    )
+    p.add_argument(
+        "--add-backend-name",
+        metavar="NAME",
+        help="Service name for the new backend (ends up under `services/<name>/`)",
+    )
+
+    # preview — dry-run + diff against the configured output dir.
+    p.add_argument(
+        "--preview",
+        action="store_true",
+        help="Dry-run generation and print a unified diff against --output-dir. No files written.",
+    )
+
+    # migrate — umbrella codemod runner.
+    p.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Run every applicable forge migration on the project at --project-path.",
+    )
+    p.add_argument(
+        "--migrate-only",
+        metavar="NAMES",
+        help="Comma-separated migration names to run (skip the rest).",
+    )
+    p.add_argument(
+        "--migrate-skip",
+        metavar="NAMES",
+        help="Comma-separated migration names to skip (run the rest).",
+    )
+
     # Behavior
     p.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
     p.add_argument("--no-docker", action="store_true", help="Skip Docker Compose boot")

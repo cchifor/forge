@@ -317,8 +317,30 @@ def _apply_zoned_injection(target: Path, inj: _Injection) -> bool:
     if inj.zone == "user":
         if _has_sentinel_block(target, inj.feature_key, inj.marker):
             return False
-    _inject_snippet(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
+    _dispatch_injector(target, inj)
     return True
+
+
+def _dispatch_injector(target: Path, inj: _Injection) -> None:
+    """Route an injection to the right backend based on the target's extension.
+
+    Python (``.py``) goes through the LibCST-backed injector; TypeScript /
+    JavaScript (``.ts`` / ``.tsx`` / ``.js`` / ``.jsx`` / ``.mjs``) through
+    the regex-based TS injector. Everything else (``.rs``, ``.toml``,
+    ``.yaml``) falls back to the legacy text-marker injector.
+    """
+    suffix = target.suffix.lower()
+    if suffix in (".py", ".pyi"):
+        from forge.injectors.python_ast import inject_python  # noqa: PLC0415
+
+        inject_python(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
+        return
+    if suffix in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
+        from forge.injectors.ts_ast import inject_ts  # noqa: PLC0415
+
+        inject_ts(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
+        return
+    _inject_snippet(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
 
 
 def _has_sentinel_block(file: Path, feature_key: str, marker: str) -> bool:

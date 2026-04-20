@@ -161,6 +161,18 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
 
     apply_common_files(config, project_root, collector=collector)
 
+    # Schema-first codegen: UI protocol types, canvas manifest, shared enums.
+    # Runs last so per-template and fragment outputs don't clobber the
+    # authoritative generated files. Failures are warnings — codegen
+    # errors shouldn't take down a generation that's otherwise complete.
+    from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
+
+    try:
+        run_codegen(config, project_root, collector=collector)
+    except Exception as exc:  # noqa: BLE001
+        if not quiet:
+            print(f"  [warn] codegen pipeline emitted an error: {exc}")
+
     _write_forge_toml(config, project_root, plan, collector=collector)
 
     if not dry_run:

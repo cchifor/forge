@@ -1,0 +1,5 @@
+- target: src/db.rs
+  marker: FORGE:DB_MODULES
+  position: after
+  zone: generated
+  snippet: "mod db_pool;"

@@ -1,0 +1,11 @@
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: "from app.mcp.router import router as mcp_router"
+
+- target: src/app/main.py
+  marker: FORGE:ROUTER_REGISTRATION
+  position: after
+  zone: generated
+  snippet: "app.include_router(mcp_router)"

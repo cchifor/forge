@@ -1,0 +1,12 @@
+# reliability_connection_pool — wire the pool helper into the DB engine.
+#
+# Inserts into the project's db bootstrap so SQLAlchemy picks up the
+# ``pool_kwargs()`` helper without the user having to edit anything.
+# User-customized pool settings survive via env vars (SQLALCHEMY_POOL_SIZE,
+# etc.) — the injected block only sets defaults.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: "from app.core.db_pool import pool_kwargs  # noqa: F401 — used by core/db.py"

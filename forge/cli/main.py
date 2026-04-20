@@ -75,6 +75,26 @@ def main() -> None:
             json_output=getattr(args, "json_output", False),
         )
 
+    if getattr(args, "new_entity_name", None):
+        from forge.cli.commands.new_entity import _dispatch_new_entity  # noqa: PLC0415
+
+        _dispatch_new_entity(args)
+
+    if getattr(args, "add_backend_language", None):
+        from forge.cli.commands.add_backend import _dispatch_add_backend  # noqa: PLC0415
+
+        _dispatch_add_backend(args)
+
+    if getattr(args, "preview", False):
+        from forge.cli.commands.preview import _dispatch_preview  # noqa: PLC0415
+
+        _dispatch_preview(args)
+
+    if getattr(args, "migrate", False):
+        from forge.cli.commands.migrate import _dispatch_migrate  # noqa: PLC0415
+
+        _dispatch_migrate(args)
+
     if getattr(args, "plan", False):
         from forge.cli.commands.plan import _dispatch_plan  # noqa: PLC0415
 

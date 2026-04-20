@@ -607,6 +607,32 @@ register_fragment(
 )
 
 
+register_fragment(
+    Fragment(
+        name="mcp_server",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="mcp_server/python",
+                env_vars=(("MCP_CONFIG_PATH", "mcp.config.json"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="mcp_ui",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="mcp_ui",
+                scope="project",
+            ),
+        },
+    )
+)
+
+
 # -- Ports-and-adapters (ADR-002, Phase 2.3) ----------------------------------
 # Reference implementation of the port+adapter pattern. The full refactor
 # of rag_* fragments into this shape lands in 1.0.0a2. For the alpha, we
@@ -676,6 +702,32 @@ register_fragment(
                     ("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev"),
                 ),
             ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir="observability_otel/node",
+                dependencies=(
+                    "@opentelemetry/sdk-node@^0.55.0",
+                    "@opentelemetry/resources@^1.28.0",
+                    "@opentelemetry/exporter-trace-otlp-grpc@^0.55.0",
+                    "@opentelemetry/auto-instrumentations-node@^0.51.0",
+                ),
+                env_vars=(
+                    ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+                    ("OTEL_SERVICE_NAME", ""),
+                ),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir="observability_otel/rust",
+                dependencies=(
+                    "opentelemetry@0.27",
+                    "opentelemetry_sdk@0.27",
+                    "opentelemetry-otlp@0.27",
+                    "tracing-opentelemetry@0.28",
+                ),
+                env_vars=(
+                    ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+                    ("OTEL_SERVICE_NAME", ""),
+                ),
+            ),
         },
     )
 )
@@ -694,6 +746,22 @@ register_fragment(
                     ("SQLALCHEMY_POOL_RECYCLE", "1800"),
                 ),
             ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir="reliability_connection_pool/node",
+                env_vars=(
+                    ("PRISMA_CONNECTION_LIMIT", "20"),
+                    ("PRISMA_POOL_TIMEOUT", "10"),
+                ),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir="reliability_connection_pool/rust",
+                env_vars=(
+                    ("SQLX_MAX_CONNECTIONS", "20"),
+                    ("SQLX_MIN_CONNECTIONS", "2"),
+                    ("SQLX_ACQUIRE_TIMEOUT_SECS", "10"),
+                    ("SQLX_IDLE_TIMEOUT_SECS", "600"),
+                ),
+            ),
         },
     )
 )
@@ -706,6 +774,22 @@ register_fragment(
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir="reliability_circuit_breaker/python",
                 dependencies=("purgatory>=3.0.0",),
+                env_vars=(
+                    ("CIRCUIT_BREAKER_THRESHOLD", "5"),
+                    ("CIRCUIT_BREAKER_RESET_TIMEOUT", "30"),
+                ),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir="reliability_circuit_breaker/node",
+                dependencies=("opossum@9.0.0",),
+                env_vars=(
+                    ("CIRCUIT_BREAKER_TIMEOUT_MS", "10000"),
+                    ("CIRCUIT_BREAKER_ERROR_THRESHOLD_PCT", "50"),
+                    ("CIRCUIT_BREAKER_RESET_TIMEOUT_MS", "30000"),
+                ),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir="reliability_circuit_breaker/rust",
                 env_vars=(
                     ("CIRCUIT_BREAKER_THRESHOLD", "5"),
                     ("CIRCUIT_BREAKER_RESET_TIMEOUT", "30"),

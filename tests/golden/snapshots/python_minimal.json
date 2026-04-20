@@ -29,8 +29,8 @@
       "sha256": "78f4d29ff4f5c60f"
     },
     "forge.toml": {
-      "size": 30382,
-      "sha256": "e62b31b279345b0a"
+      "size": 30930,
+      "sha256": "ed14741a6fd430d9"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
@@ -38,7 +38,7 @@
     },
     "services/api/.copier-answers.yml": {
       "size": 444,
-      "sha256": "238e4f6c60af3af6"
+      "sha256": "a0e4796d58606ef2"
     },
     "services/api/.env.example": {
       "size": 271,
@@ -248,6 +248,14 @@
       "size": 320,
       "sha256": "6d9f0baa22b327ac"
     },
+    "services/api/src/app/domain/enums/approval_mode.py": {
+      "size": 312,
+      "sha256": "75b8cc0b045630d0"
+    },
+    "services/api/src/app/domain/enums/item_status.py": {
+      "size": 266,
+      "sha256": "5a50fddc893ab51b"
+    },
     "services/api/src/app/domain/health.py": {
       "size": 795,
       "sha256": "b75dc1a901e00734"
@@ -256,9 +264,13 @@
       "size": 1218,
       "sha256": "97481958e01caaf6"
     },
+    "services/api/src/app/domain/ui_protocol.py": {
+      "size": 2123,
+      "sha256": "ba31916479c1ea6c"
+    },
     "services/api/src/app/main.py": {
-      "size": 3887,
-      "sha256": "05a3a357371c5fec"
+      "size": 4085,
+      "sha256": "e2c28846c1bfd575"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,

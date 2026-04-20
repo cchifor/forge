@@ -1,0 +1,22 @@
+# observability_otel — call configure_otel() on app creation.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: "from app.core.otel import configure_otel"
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # OpenTelemetry: initialize the tracer + metrics providers and wire up
+    # FastAPI + HTTPX instrumentations. No-ops when OTEL_EXPORTER_OTLP_ENDPOINT
+    # is unset, so local dev without a collector "just works".
+    configure_otel(service_name=settings.service_name if hasattr(settings, "service_name") else "forge-service")
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: PLC0415
+        FastAPIInstrumentor.instrument_app(app)
+    except ImportError:
+        pass

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://forge.dev/schemas/mcp-config-v1.json",
+  "version": 1,
+  "defaultApprovalMode": "prompt-once",
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/sandbox"],
+      "approvalMode": "auto"
+    }
+  }
+}
