@@ -63,3 +63,4 @@ Things the reviewers should weigh in on.
 | 001 | Versioning and branching policy | Accepted | — |
 | 002 | Breaking-change contract for 1.0 alpha | Accepted | 1.0.0a1 |
 | 003 | Published-package naming and ownership | Draft | 1.0.0a4 |
+| 004 | Release rehearsal before 1.0.0 | Accepted | 1.0.0rc1 |
