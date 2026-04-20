@@ -1,8 +1,4 @@
 // @forge/canvas-svelte — public entry point.
-//
-// Phase 3.1 scaffold. Matches @forge/canvas-vue's surface with Svelte 5
-// runes internals. The extraction PR will lift existing components out
-// of the svelte-frontend-template into this package.
 
 export { createCanvasRegistry } from './canvas-registry'
 export type {
@@ -13,5 +9,9 @@ export type {
 export { lintProps, warnOnLintIssues } from './lint'
 export type { LintIssue } from './lint'
 
-// Base components — Report is the 1.0.0a4 extraction reference.
+// Base components
 export { default as Report } from './components/Report.svelte'
+export { default as CodeViewer } from './components/CodeViewer.svelte'
+export { default as DataTable } from './components/DataTable.svelte'
+export { default as DynamicForm } from './components/DynamicForm.svelte'
+export { default as WorkflowDiagram } from './components/WorkflowDiagram.svelte'

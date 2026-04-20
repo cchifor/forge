@@ -1,0 +1,200 @@
+{
+  "files": {
+    ".editorconfig": {
+      "size": 580,
+      "sha256": "2ac15b8600196a9b"
+    },
+    ".gitignore": {
+      "size": 491,
+      "sha256": "3f1ced030f22fea7"
+    },
+    ".pre-commit-config.yaml": {
+      "size": 471,
+      "sha256": "52e8e600cab57fa5"
+    },
+    "AGENTS.md": {
+      "size": 2577,
+      "sha256": "27cb9957eec7caf9"
+    },
+    "CLAUDE.md": {
+      "size": 1912,
+      "sha256": "ae83d48b4638adaf"
+    },
+    "docker-compose.yml": {
+      "size": 2414,
+      "sha256": "99563df8c159d5ac"
+    },
+    "forge.toml": {
+      "size": 8837,
+      "sha256": "537869c9f4e70aa9"
+    },
+    "infra/nginx-csp.conf": {
+      "size": 1654,
+      "sha256": "045bea9db1cb85bd"
+    },
+    "services/api/.copier-answers.yml": {
+      "size": 438,
+      "sha256": "97ef0718fff2ea24"
+    },
+    "services/api/.env.example": {
+      "size": 154,
+      "sha256": "f49991fada5d317b"
+    },
+    "services/api/.gitignore": {
+      "size": 50,
+      "sha256": "1e5b3e6f3b0203aa"
+    },
+    "services/api/biome.json": {
+      "size": 250,
+      "sha256": "1f4c61daa8a1c6e1"
+    },
+    "services/api/docker-compose.yaml": {
+      "size": 843,
+      "sha256": "1a530bf3ab0e8ae8"
+    },
+    "services/api/Dockerfile": {
+      "size": 551,
+      "sha256": "30f63535be5e67f6"
+    },
+    "services/api/package.json": {
+      "size": 1070,
+      "sha256": "e59ade6719e4c7f7"
+    },
+    "services/api/prisma/migrations/0001_initial/migration.sql": {
+      "size": 2078,
+      "sha256": "1ba94fc7eaa00e36"
+    },
+    "services/api/prisma/migrations/migration_lock.toml": {
+      "size": 127,
+      "sha256": "d6bae7899f05da95"
+    },
+    "services/api/prisma/schema.prisma": {
+      "size": 1783,
+      "sha256": "b5433a4d15df6078"
+    },
+    "services/api/README.md": {
+      "size": 1402,
+      "sha256": "b0f050ca11dee675"
+    },
+    "services/api/src/app.ts": {
+      "size": 1698,
+      "sha256": "ee0b6334ccac2286"
+    },
+    "services/api/src/index.ts": {
+      "size": 352,
+      "sha256": "4e678c85b5362784"
+    },
+    "services/api/src/lib/errors.ts": {
+      "size": 568,
+      "sha256": "13b89f4293545138"
+    },
+    "services/api/src/lib/http-client.ts": {
+      "size": 1836,
+      "sha256": "a44f0b0878cc7679"
+    },
+    "services/api/src/lib/logger.ts": {
+      "size": 228,
+      "sha256": "a9d9ed0f911809f5"
+    },
+    "services/api/src/lib/prisma-pool.ts": {
+      "size": 991,
+      "sha256": "648c5e000d6764c1"
+    },
+    "services/api/src/lib/prisma.ts": {
+      "size": 596,
+      "sha256": "8ac5798ade209426"
+    },
+    "services/api/src/middleware/correlation.ts": {
+      "size": 394,
+      "sha256": "1130d8a9a12c2118"
+    },
+    "services/api/src/middleware/error-handler.ts": {
+      "size": 845,
+      "sha256": "7d2eaf86de8f1e45"
+    },
+    "services/api/src/middleware/logging.ts": {
+      "size": 416,
+      "sha256": "068346e2234c7c96"
+    },
+    "services/api/src/middleware/tenant.ts": {
+      "size": 1196,
+      "sha256": "8b3d2c0f7bad0ad6"
+    },
+    "services/api/src/routes/health.ts": {
+      "size": 639,
+      "sha256": "b6465b71b7e184cc"
+    },
+    "services/api/src/routes/home.ts": {
+      "size": 473,
+      "sha256": "e073f521486d5865"
+    },
+    "services/api/src/routes/items.ts": {
+      "size": 1799,
+      "sha256": "fdd44aab931b6f72"
+    },
+    "services/api/src/schemas/common.schema.ts": {
+      "size": 633,
+      "sha256": "88dec435fd2a5b5c"
+    },
+    "services/api/src/schemas/enums/approval_mode.ts": {
+      "size": 234,
+      "sha256": "2d8fd703dc382858"
+    },
+    "services/api/src/schemas/enums/item_status.ts": {
+      "size": 218,
+      "sha256": "d488646da60bba86"
+    },
+    "services/api/src/schemas/health.schema.ts": {
+      "size": 689,
+      "sha256": "113c015e978f84d2"
+    },
+    "services/api/src/schemas/item.schema.ts": {
+      "size": 1121,
+      "sha256": "2e0435785570f53b"
+    },
+    "services/api/src/services/health.service.ts": {
+      "size": 396,
+      "sha256": "889ff3f81da91263"
+    },
+    "services/api/src/services/item.service.ts": {
+      "size": 2332,
+      "sha256": "73f537e8be9eea4e"
+    },
+    "services/api/tests/integration/health.test.ts": {
+      "size": 1330,
+      "sha256": "ba1123115bb6f211"
+    },
+    "services/api/tests/integration/items.test.ts": {
+      "size": 5681,
+      "sha256": "3d5280fbad0efb06"
+    },
+    "services/api/tests/setup.ts": {
+      "size": 339,
+      "sha256": "dc034e13846f29fb"
+    },
+    "services/api/tests/unit/errors.test.ts": {
+      "size": 1111,
+      "sha256": "666ea97d4142f2c3"
+    },
+    "services/api/tests/unit/http-client.test.ts": {
+      "size": 3131,
+      "sha256": "3f55e41cf4ee5ed0"
+    },
+    "services/api/tests/unit/item.service.test.ts": {
+      "size": 5305,
+      "sha256": "6eda7fdefbbbe121"
+    },
+    "services/api/tests/unit/tenant.test.ts": {
+      "size": 1945,
+      "sha256": "dcd7e55eb68f1581"
+    },
+    "services/api/tsconfig.json": {
+      "size": 463,
+      "sha256": "7aed9f41bf232c59"
+    },
+    "services/api/vitest.config.ts": {
+      "size": 170,
+      "sha256": "14c3e0b72b4a82ce"
+    }
+  }
+}

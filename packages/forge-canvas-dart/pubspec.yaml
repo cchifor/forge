@@ -1,6 +1,6 @@
 name: forge_canvas
 description: Canvas registry + AG-UI SSE client for forge-generated Flutter applications.
-version: 1.0.0-alpha.4
+version: 1.0.0-alpha.5
 repository: https://github.com/forge-project/forge
 
 environment:
@@ -11,8 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
   dio: ^5.7.0
+  http: ^1.2.0
   json_annotation: ^4.9.0
   flutter_markdown: ^0.7.4
+  flutter_highlight: ^0.7.0
   json_patch: ^3.0.1
 
 dev_dependencies:

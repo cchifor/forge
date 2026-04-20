@@ -1,0 +1,896 @@
+{
+  "files": {
+    ".editorconfig": {
+      "size": 580,
+      "sha256": "2ac15b8600196a9b"
+    },
+    ".github/workflows/ci.yml": {
+      "size": 1170,
+      "sha256": "d2449537de9472c9"
+    },
+    ".gitignore": {
+      "size": 491,
+      "sha256": "3f1ced030f22fea7"
+    },
+    ".pre-commit-config.yaml": {
+      "size": 471,
+      "sha256": "52e8e600cab57fa5"
+    },
+    "AGENTS.md": {
+      "size": 2577,
+      "sha256": "27cb9957eec7caf9"
+    },
+    "CLAUDE.md": {
+      "size": 1912,
+      "sha256": "ae83d48b4638adaf"
+    },
+    "docker-compose.yml": {
+      "size": 3875,
+      "sha256": "4806eee641a7f11b"
+    },
+    "forge.toml": {
+      "size": 38553,
+      "sha256": "0461d5854c4d0683"
+    },
+    "infra/nginx-csp.conf": {
+      "size": 1654,
+      "sha256": "045bea9db1cb85bd"
+    },
+    "init-db.sh": {
+      "size": 229,
+      "sha256": "2a71ce1aabb8d6e0"
+    },
+    "services/api-node/.copier-answers.yml": {
+      "size": 449,
+      "sha256": "ab363b118e8ec4c3"
+    },
+    "services/api-node/.env.example": {
+      "size": 154,
+      "sha256": "f49991fada5d317b"
+    },
+    "services/api-node/.gitignore": {
+      "size": 50,
+      "sha256": "1e5b3e6f3b0203aa"
+    },
+    "services/api-node/biome.json": {
+      "size": 250,
+      "sha256": "1f4c61daa8a1c6e1"
+    },
+    "services/api-node/docker-compose.yaml": {
+      "size": 853,
+      "sha256": "f06c0e04ecc8de65"
+    },
+    "services/api-node/Dockerfile": {
+      "size": 551,
+      "sha256": "fd20c98cd8fd4448"
+    },
+    "services/api-node/package.json": {
+      "size": 1075,
+      "sha256": "c3dbb99983d14911"
+    },
+    "services/api-node/prisma/migrations/0001_initial/migration.sql": {
+      "size": 2078,
+      "sha256": "1ba94fc7eaa00e36"
+    },
+    "services/api-node/prisma/migrations/migration_lock.toml": {
+      "size": 127,
+      "sha256": "d6bae7899f05da95"
+    },
+    "services/api-node/prisma/schema.prisma": {
+      "size": 1783,
+      "sha256": "b5433a4d15df6078"
+    },
+    "services/api-node/README.md": {
+      "size": 1412,
+      "sha256": "389f88b89941827e"
+    },
+    "services/api-node/src/app.ts": {
+      "size": 1699,
+      "sha256": "cf83b380f6054c3c"
+    },
+    "services/api-node/src/index.ts": {
+      "size": 352,
+      "sha256": "4e678c85b5362784"
+    },
+    "services/api-node/src/lib/errors.ts": {
+      "size": 568,
+      "sha256": "13b89f4293545138"
+    },
+    "services/api-node/src/lib/http-client.ts": {
+      "size": 1836,
+      "sha256": "a44f0b0878cc7679"
+    },
+    "services/api-node/src/lib/logger.ts": {
+      "size": 228,
+      "sha256": "a9d9ed0f911809f5"
+    },
+    "services/api-node/src/lib/prisma-pool.ts": {
+      "size": 991,
+      "sha256": "648c5e000d6764c1"
+    },
+    "services/api-node/src/lib/prisma.ts": {
+      "size": 596,
+      "sha256": "8ac5798ade209426"
+    },
+    "services/api-node/src/middleware/correlation.ts": {
+      "size": 394,
+      "sha256": "1130d8a9a12c2118"
+    },
+    "services/api-node/src/middleware/error-handler.ts": {
+      "size": 845,
+      "sha256": "7d2eaf86de8f1e45"
+    },
+    "services/api-node/src/middleware/logging.ts": {
+      "size": 416,
+      "sha256": "068346e2234c7c96"
+    },
+    "services/api-node/src/middleware/tenant.ts": {
+      "size": 1196,
+      "sha256": "8b3d2c0f7bad0ad6"
+    },
+    "services/api-node/src/routes/health.ts": {
+      "size": 639,
+      "sha256": "b6465b71b7e184cc"
+    },
+    "services/api-node/src/routes/home.ts": {
+      "size": 473,
+      "sha256": "e073f521486d5865"
+    },
+    "services/api-node/src/routes/items.ts": {
+      "size": 1799,
+      "sha256": "fdd44aab931b6f72"
+    },
+    "services/api-node/src/schemas/common.schema.ts": {
+      "size": 633,
+      "sha256": "88dec435fd2a5b5c"
+    },
+    "services/api-node/src/schemas/enums/approval_mode.ts": {
+      "size": 234,
+      "sha256": "2d8fd703dc382858"
+    },
+    "services/api-node/src/schemas/enums/item_status.ts": {
+      "size": 218,
+      "sha256": "d488646da60bba86"
+    },
+    "services/api-node/src/schemas/health.schema.ts": {
+      "size": 689,
+      "sha256": "113c015e978f84d2"
+    },
+    "services/api-node/src/schemas/item.schema.ts": {
+      "size": 1121,
+      "sha256": "2e0435785570f53b"
+    },
+    "services/api-node/src/services/health.service.ts": {
+      "size": 396,
+      "sha256": "889ff3f81da91263"
+    },
+    "services/api-node/src/services/item.service.ts": {
+      "size": 2332,
+      "sha256": "73f537e8be9eea4e"
+    },
+    "services/api-node/tests/integration/health.test.ts": {
+      "size": 1330,
+      "sha256": "ba1123115bb6f211"
+    },
+    "services/api-node/tests/integration/items.test.ts": {
+      "size": 5696,
+      "sha256": "dee0d51cb7e642d2"
+    },
+    "services/api-node/tests/setup.ts": {
+      "size": 339,
+      "sha256": "dc034e13846f29fb"
+    },
+    "services/api-node/tests/unit/errors.test.ts": {
+      "size": 1111,
+      "sha256": "666ea97d4142f2c3"
+    },
+    "services/api-node/tests/unit/http-client.test.ts": {
+      "size": 3131,
+      "sha256": "3f55e41cf4ee5ed0"
+    },
+    "services/api-node/tests/unit/item.service.test.ts": {
+      "size": 5305,
+      "sha256": "6eda7fdefbbbe121"
+    },
+    "services/api-node/tests/unit/tenant.test.ts": {
+      "size": 1945,
+      "sha256": "dcd7e55eb68f1581"
+    },
+    "services/api-node/tsconfig.json": {
+      "size": 463,
+      "sha256": "7aed9f41bf232c59"
+    },
+    "services/api-node/vitest.config.ts": {
+      "size": 170,
+      "sha256": "14c3e0b72b4a82ce"
+    },
+    "services/api-py/.copier-answers.yml": {
+      "size": 450,
+      "sha256": "654b3df7be07f959"
+    },
+    "services/api-py/.env.example": {
+      "size": 271,
+      "sha256": "82f99ba6485f8ba9"
+    },
+    "services/api-py/.gitignore": {
+      "size": 174,
+      "sha256": "31910a941b109f81"
+    },
+    "services/api-py/alembic/env.py": {
+      "size": 1699,
+      "sha256": "db090a8edbb9389c"
+    },
+    "services/api-py/alembic/script.py.mako": {
+      "size": 634,
+      "sha256": "0dd9fc884e17a48a"
+    },
+    "services/api-py/alembic/versions/0001_initial.py": {
+      "size": 4069,
+      "sha256": "1fffa083caa7f77c"
+    },
+    "services/api-py/alembic.ini": {
+      "size": 621,
+      "sha256": "fc4635dcb0b2a6d1"
+    },
+    "services/api-py/config/default.yaml": {
+      "size": 2015,
+      "sha256": "f24b14a7afa04b5f"
+    },
+    "services/api-py/config/development.yaml": {
+      "size": 129,
+      "sha256": "03aaca310beae07a"
+    },
+    "services/api-py/config/production.yaml": {
+      "size": 258,
+      "sha256": "9043413c9c096b3b"
+    },
+    "services/api-py/config/testing.yaml": {
+      "size": 148,
+      "sha256": "c0859dec5b712b9b"
+    },
+    "services/api-py/docker-compose.yaml": {
+      "size": 877,
+      "sha256": "7228bb9b2e539a51"
+    },
+    "services/api-py/Dockerfile": {
+      "size": 974,
+      "sha256": "f5e52961e8a59df3"
+    },
+    "services/api-py/pyproject.toml": {
+      "size": 2164,
+      "sha256": "0a219dcf7546d258"
+    },
+    "services/api-py/README.md": {
+      "size": 33689,
+      "sha256": "7a5a2d7522c4a366"
+    },
+    "services/api-py/src/app/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/__main__.py": {
+      "size": 62,
+      "sha256": "27e9f1d08fa86704"
+    },
+    "services/api-py/src/app/api/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/api/v1/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/api/v1/api.py": {
+      "size": 535,
+      "sha256": "9ac448f67c0244a3"
+    },
+    "services/api-py/src/app/api/v1/endpoints/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/api/v1/endpoints/admin.py": {
+      "size": 1361,
+      "sha256": "6e33ca61761d70f8"
+    },
+    "services/api-py/src/app/api/v1/endpoints/health.py": {
+      "size": 1048,
+      "sha256": "0040db44f11f6b54"
+    },
+    "services/api-py/src/app/api/v1/endpoints/home.py": {
+      "size": 444,
+      "sha256": "bfb0586626078b40"
+    },
+    "services/api-py/src/app/api/v1/endpoints/items.py": {
+      "size": 3366,
+      "sha256": "b56da4ca9b457b48"
+    },
+    "services/api-py/src/app/api/v1/endpoints/tasks.py": {
+      "size": 3314,
+      "sha256": "7a0804ddd5e8036e"
+    },
+    "services/api-py/src/app/cli/__init__.py": {
+      "size": 306,
+      "sha256": "3477cf9420b43306"
+    },
+    "services/api-py/src/app/cli/db.py": {
+      "size": 1016,
+      "sha256": "89af57fa1664e95c"
+    },
+    "services/api-py/src/app/cli/server.py": {
+      "size": 1092,
+      "sha256": "6085d3657bbd30d9"
+    },
+    "services/api-py/src/app/core/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/core/config/__init__.py": {
+      "size": 605,
+      "sha256": "d9795309dc89bd45"
+    },
+    "services/api-py/src/app/core/config/domain.py": {
+      "size": 2993,
+      "sha256": "f4d9c16a17b7ca89"
+    },
+    "services/api-py/src/app/core/config/loader.py": {
+      "size": 3530,
+      "sha256": "a7449363dcc21662"
+    },
+    "services/api-py/src/app/core/config/sources.py": {
+      "size": 4299,
+      "sha256": "c091a2ba6a85a277"
+    },
+    "services/api-py/src/app/core/db.py": {
+      "size": 1793,
+      "sha256": "112704f0cb4111ea"
+    },
+    "services/api-py/src/app/core/db_pool.py": {
+      "size": 1399,
+      "sha256": "fc4828a16e0ccc77"
+    },
+    "services/api-py/src/app/core/errors.py": {
+      "size": 7574,
+      "sha256": "bdf96b3a5a4bd333"
+    },
+    "services/api-py/src/app/core/ioc/__init__.py": {
+      "size": 437,
+      "sha256": "e1e94703a680e8c6"
+    },
+    "services/api-py/src/app/core/ioc/infra.py": {
+      "size": 1817,
+      "sha256": "5d0e904f27903f20"
+    },
+    "services/api-py/src/app/core/ioc/security.py": {
+      "size": 1706,
+      "sha256": "9444f0fa3ff27de2"
+    },
+    "services/api-py/src/app/core/ioc/services.py": {
+      "size": 902,
+      "sha256": "1744f5d64be0678f"
+    },
+    "services/api-py/src/app/core/lifecycle.py": {
+      "size": 5737,
+      "sha256": "456d31226b93e591"
+    },
+    "services/api-py/src/app/core/pii_redaction.py": {
+      "size": 2600,
+      "sha256": "7bfef1845e66c09d"
+    },
+    "services/api-py/src/app/data/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/data/models/__init__.py": {
+      "size": 235,
+      "sha256": "504fa6f636ffd225"
+    },
+    "services/api-py/src/app/data/models/audit.py": {
+      "size": 1493,
+      "sha256": "db7223f3001722f7"
+    },
+    "services/api-py/src/app/data/models/base.py": {
+      "size": 216,
+      "sha256": "f5597f6c68472bed"
+    },
+    "services/api-py/src/app/data/models/item.py": {
+      "size": 1039,
+      "sha256": "4beb54ad3394325a"
+    },
+    "services/api-py/src/app/data/repositories/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/data/repositories/base_tenant_aware.py": {
+      "size": 2337,
+      "sha256": "934e7f5f186e0098"
+    },
+    "services/api-py/src/app/data/repositories/item_repository.py": {
+      "size": 2563,
+      "sha256": "c2af04a94973c534"
+    },
+    "services/api-py/src/app/domain/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/domain/base.py": {
+      "size": 320,
+      "sha256": "6d9f0baa22b327ac"
+    },
+    "services/api-py/src/app/domain/enums/approval_mode.py": {
+      "size": 312,
+      "sha256": "75b8cc0b045630d0"
+    },
+    "services/api-py/src/app/domain/enums/item_status.py": {
+      "size": 266,
+      "sha256": "5a50fddc893ab51b"
+    },
+    "services/api-py/src/app/domain/health.py": {
+      "size": 795,
+      "sha256": "b75dc1a901e00734"
+    },
+    "services/api-py/src/app/domain/item.py": {
+      "size": 1218,
+      "sha256": "97481958e01caaf6"
+    },
+    "services/api-py/src/app/domain/ui_protocol.py": {
+      "size": 2123,
+      "sha256": "ba31916479c1ea6c"
+    },
+    "services/api-py/src/app/main.py": {
+      "size": 4085,
+      "sha256": "e2c28846c1bfd575"
+    },
+    "services/api-py/src/app/middleware/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/middleware/audit.py": {
+      "size": 1541,
+      "sha256": "239e47e157cbde86"
+    },
+    "services/api-py/src/app/middleware/correlation.py": {
+      "size": 1272,
+      "sha256": "3fd729ed9e584c39"
+    },
+    "services/api-py/src/app/middleware/logging.py": {
+      "size": 4371,
+      "sha256": "77e236bb92beb676"
+    },
+    "services/api-py/src/app/middleware/rate_limit.py": {
+      "size": 2443,
+      "sha256": "cf7dd049864a6203"
+    },
+    "services/api-py/src/app/middleware/security_headers.py": {
+      "size": 1923,
+      "sha256": "1f6de5b47a67894c"
+    },
+    "services/api-py/src/app/services/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/app/services/health_service.py": {
+      "size": 1102,
+      "sha256": "33164fd9b97da430"
+    },
+    "services/api-py/src/app/services/item_service.py": {
+      "size": 2526,
+      "sha256": "6c42302e138d8fc7"
+    },
+    "services/api-py/src/service/__init__.py": {
+      "size": 109,
+      "sha256": "e1fe920c8d5a0774"
+    },
+    "services/api-py/src/service/api/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/api/filtering.py": {
+      "size": 2116,
+      "sha256": "014d8c0dc15b6f00"
+    },
+    "services/api-py/src/service/api/pagination.py": {
+      "size": 2909,
+      "sha256": "6985279deb1b952c"
+    },
+    "services/api-py/src/service/client/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/client/auth.py": {
+      "size": 2305,
+      "sha256": "ecd6e0b353befaf6"
+    },
+    "services/api-py/src/service/client/base.py": {
+      "size": 5693,
+      "sha256": "73c0de84a226a9a9"
+    },
+    "services/api-py/src/service/client/circuit_breaker.py": {
+      "size": 2348,
+      "sha256": "fb0b70c74307786c"
+    },
+    "services/api-py/src/service/client/errors.py": {
+      "size": 1315,
+      "sha256": "67d8f452ffd678dc"
+    },
+    "services/api-py/src/service/client/retry.py": {
+      "size": 2657,
+      "sha256": "1c3704c9e5aa62e1"
+    },
+    "services/api-py/src/service/core/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/core/context.py": {
+      "size": 889,
+      "sha256": "5667d36eb9d86bbf"
+    },
+    "services/api-py/src/service/core/errors.py": {
+      "size": 730,
+      "sha256": "ae36ae0a34a28d93"
+    },
+    "services/api-py/src/service/db/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/db/aio.py": {
+      "size": 2333,
+      "sha256": "cb5dfa6f5ba083eb"
+    },
+    "services/api-py/src/service/db/config.py": {
+      "size": 1690,
+      "sha256": "9617c30555194735"
+    },
+    "services/api-py/src/service/discovery.py": {
+      "size": 1859,
+      "sha256": "b1180668b4a19be1"
+    },
+    "services/api-py/src/service/domain/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/domain/account.py": {
+      "size": 778,
+      "sha256": "2b0a16e5c82489a7"
+    },
+    "services/api-py/src/service/domain/auth_schema.py": {
+      "size": 583,
+      "sha256": "a0cdebb4f69889db"
+    },
+    "services/api-py/src/service/domain/config.py": {
+      "size": 1003,
+      "sha256": "e04d05390c284b0d"
+    },
+    "services/api-py/src/service/domain/user.py": {
+      "size": 262,
+      "sha256": "07d9a7a9fcb66740"
+    },
+    "services/api-py/src/service/observability/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/observability/correlation.py": {
+      "size": 637,
+      "sha256": "df0347cf7d16eda9"
+    },
+    "services/api-py/src/service/observability/json_logging.py": {
+      "size": 2242,
+      "sha256": "e789fc3c21573a5b"
+    },
+    "services/api-py/src/service/repository/__init__.py": {
+      "size": 72,
+      "sha256": "da81df18ed794f0a"
+    },
+    "services/api-py/src/service/repository/aio.py": {
+      "size": 7169,
+      "sha256": "657cc8be8887729a"
+    },
+    "services/api-py/src/service/repository/base.py": {
+      "size": 4894,
+      "sha256": "a3572735e37a58de"
+    },
+    "services/api-py/src/service/repository/errors.py": {
+      "size": 1141,
+      "sha256": "a1438be9eedc227d"
+    },
+    "services/api-py/src/service/repository/mixins.py": {
+      "size": 1564,
+      "sha256": "d07daff0ac2d241c"
+    },
+    "services/api-py/src/service/security/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/security/auth.py": {
+      "size": 5057,
+      "sha256": "4ab4914cb3b902bc"
+    },
+    "services/api-py/src/service/security/base.py": {
+      "size": 467,
+      "sha256": "6b19e3b9bff21662"
+    },
+    "services/api-py/src/service/security/providers/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/security/providers/dev.py": {
+      "size": 1057,
+      "sha256": "6d65d95a4c75ed96"
+    },
+    "services/api-py/src/service/security/providers/keycloak.py": {
+      "size": 1454,
+      "sha256": "32aaffa6cc52ba47"
+    },
+    "services/api-py/src/service/tasks/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/tasks/models.py": {
+      "size": 1902,
+      "sha256": "cc484da6e2644b7f"
+    },
+    "services/api-py/src/service/tasks/registry.py": {
+      "size": 1327,
+      "sha256": "ac55205b82691f10"
+    },
+    "services/api-py/src/service/tasks/runner.py": {
+      "size": 7138,
+      "sha256": "b8c2fb315c3c0689"
+    },
+    "services/api-py/src/service/tasks/service.py": {
+      "size": 2385,
+      "sha256": "1eb127344a863e58"
+    },
+    "services/api-py/src/service/uow/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/uow/aio.py": {
+      "size": 3958,
+      "sha256": "cd7e406a2af81888"
+    },
+    "services/api-py/src/service/utils/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/src/service/utils/fastapiutils.py": {
+      "size": 604,
+      "sha256": "03b789e597e68c4c"
+    },
+    "services/api-py/tests/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/tests/conftest.py": {
+      "size": 587,
+      "sha256": "48dac8b69543cab8"
+    },
+    "services/api-py/tests/docker/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/tests/docker/conftest.py": {
+      "size": 1245,
+      "sha256": "01373451f7aef79d"
+    },
+    "services/api-py/tests/docker/test_health_docker.py": {
+      "size": 1207,
+      "sha256": "8bfa3124311ab665"
+    },
+    "services/api-py/tests/docker/test_items_docker.py": {
+      "size": 3845,
+      "sha256": "1bb9fd616ddffa61"
+    },
+    "services/api-py/tests/docker/test_migrations.py": {
+      "size": 2189,
+      "sha256": "8fc0c6b1750e0e3d"
+    },
+    "services/api-py/tests/docker/test_tasks_docker.py": {
+      "size": 2309,
+      "sha256": "6d6a7cadfe79c966"
+    },
+    "services/api-py/tests/integration/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/tests/integration/conftest.py": {
+      "size": 4601,
+      "sha256": "c15d5325a82fb489"
+    },
+    "services/api-py/tests/integration/test_admin_api.py": {
+      "size": 649,
+      "sha256": "96576d90665c76fb"
+    },
+    "services/api-py/tests/integration/test_db_aio.py": {
+      "size": 1043,
+      "sha256": "e29a15110a98fddc"
+    },
+    "services/api-py/tests/integration/test_health_api.py": {
+      "size": 528,
+      "sha256": "098e49ffb60137ff"
+    },
+    "services/api-py/tests/integration/test_home_api.py": {
+      "size": 423,
+      "sha256": "17c5386efafa7fc2"
+    },
+    "services/api-py/tests/integration/test_item_repository_integration.py": {
+      "size": 3905,
+      "sha256": "05931a563400b30f"
+    },
+    "services/api-py/tests/integration/test_items_api.py": {
+      "size": 4379,
+      "sha256": "400875fc05df398c"
+    },
+    "services/api-py/tests/integration/test_middleware.py": {
+      "size": 4820,
+      "sha256": "6c7309825611eab4"
+    },
+    "services/api-py/tests/integration/test_tasks_api.py": {
+      "size": 3341,
+      "sha256": "c90dc1604bb7f49b"
+    },
+    "services/api-py/tests/integration/test_uow.py": {
+      "size": 3179,
+      "sha256": "a4cfa46ce7b641b5"
+    },
+    "services/api-py/tests/unit/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/tests/unit/conftest.py": {
+      "size": 1104,
+      "sha256": "0667082bdaf3cf68"
+    },
+    "services/api-py/tests/unit/test_app_errors.py": {
+      "size": 1993,
+      "sha256": "89b8b6b087e00d6d"
+    },
+    "services/api-py/tests/unit/test_app_main.py": {
+      "size": 1796,
+      "sha256": "ffb377d5c15b6d0f"
+    },
+    "services/api-py/tests/unit/test_circuit_breaker.py": {
+      "size": 2164,
+      "sha256": "c723fa655ac71c3b"
+    },
+    "services/api-py/tests/unit/test_client_auth.py": {
+      "size": 3530,
+      "sha256": "03d9b4d96faa27d1"
+    },
+    "services/api-py/tests/unit/test_client_errors.py": {
+      "size": 1541,
+      "sha256": "30cd3a5731ec203d"
+    },
+    "services/api-py/tests/unit/test_config.py": {
+      "size": 1494,
+      "sha256": "7698911ed45d1d0d"
+    },
+    "services/api-py/tests/unit/test_config_sources.py": {
+      "size": 3335,
+      "sha256": "9f6b4525a92bdece"
+    },
+    "services/api-py/tests/unit/test_context.py": {
+      "size": 1102,
+      "sha256": "5716ec42f244bcb5"
+    },
+    "services/api-py/tests/unit/test_correlation.py": {
+      "size": 619,
+      "sha256": "f9456c366a732ba9"
+    },
+    "services/api-py/tests/unit/test_db_config.py": {
+      "size": 3167,
+      "sha256": "d91fad0946189013"
+    },
+    "services/api-py/tests/unit/test_dev_provider.py": {
+      "size": 1106,
+      "sha256": "73ec2abf914f6fe7"
+    },
+    "services/api-py/tests/unit/test_domain_models.py": {
+      "size": 5807,
+      "sha256": "f5c53b0342e24eda"
+    },
+    "services/api-py/tests/unit/test_errors.py": {
+      "size": 2696,
+      "sha256": "e8966da1a06b559d"
+    },
+    "services/api-py/tests/unit/test_fastapi_utils.py": {
+      "size": 1147,
+      "sha256": "cb3ae45850a158be"
+    },
+    "services/api-py/tests/unit/test_filtering.py": {
+      "size": 1545,
+      "sha256": "1d9ec3133252d745"
+    },
+    "services/api-py/tests/unit/test_health_service.py": {
+      "size": 1294,
+      "sha256": "e2fb712da9e6456e"
+    },
+    "services/api-py/tests/unit/test_item_repository.py": {
+      "size": 4163,
+      "sha256": "ad44b2157d331365"
+    },
+    "services/api-py/tests/unit/test_item_service.py": {
+      "size": 4175,
+      "sha256": "563726c53a3c031d"
+    },
+    "services/api-py/tests/unit/test_json_logging.py": {
+      "size": 2466,
+      "sha256": "816e1666716aaa2f"
+    },
+    "services/api-py/tests/unit/test_keycloak_provider.py": {
+      "size": 5386,
+      "sha256": "771d279b1d7ad948"
+    },
+    "services/api-py/tests/unit/test_lifecycle.py": {
+      "size": 3082,
+      "sha256": "24c2a79053ee0705"
+    },
+    "services/api-py/tests/unit/test_middleware_unit.py": {
+      "size": 10086,
+      "sha256": "7adc27dbf2b80440"
+    },
+    "services/api-py/tests/unit/test_orm_models.py": {
+      "size": 3155,
+      "sha256": "16ce90a72edf7425"
+    },
+    "services/api-py/tests/unit/test_pagination.py": {
+      "size": 1591,
+      "sha256": "cbaac6b3bf9335d2"
+    },
+    "services/api-py/tests/unit/test_repository_aio.py": {
+      "size": 5825,
+      "sha256": "49bb8717a72dcf0c"
+    },
+    "services/api-py/tests/unit/test_repository_errors.py": {
+      "size": 1174,
+      "sha256": "61090cfd37f30d22"
+    },
+    "services/api-py/tests/unit/test_retry.py": {
+      "size": 2002,
+      "sha256": "b3d62a93d6dbfcaa"
+    },
+    "services/api-py/tests/unit/test_s2s_tenant_propagation.py": {
+      "size": 3998,
+      "sha256": "30d1167a157e25c8"
+    },
+    "services/api-py/tests/unit/test_security_auth.py": {
+      "size": 3732,
+      "sha256": "9e67375951a74aa9"
+    },
+    "services/api-py/tests/unit/test_service_client.py": {
+      "size": 4313,
+      "sha256": "fbc02baf774fbc11"
+    },
+    "services/api-py/tests/unit/test_service_domain.py": {
+      "size": 4279,
+      "sha256": "a9691ed8fd5829f3"
+    },
+    "services/api-py/tests/unit/test_service_errors.py": {
+      "size": 1988,
+      "sha256": "90523bfec560958a"
+    },
+    "services/api-py/tests/unit/test_task_models.py": {
+      "size": 1616,
+      "sha256": "7befd5b9699e9529"
+    },
+    "services/api-py/tests/unit/test_task_registry.py": {
+      "size": 1303,
+      "sha256": "6fe8ba79195d2bf2"
+    },
+    "services/api-py/tests/unit/test_task_runner.py": {
+      "size": 6210,
+      "sha256": "b15699b32ffffd98"
+    },
+    "services/api-py/tests/unit/test_task_service.py": {
+      "size": 2645,
+      "sha256": "26b5fc39676b8835"
+    },
+    "services/api-py/tests/unit/test_tenant_isolation.py": {
+      "size": 4327,
+      "sha256": "de590e00e9604609"
+    },
+    "services/api-py/uv.lock": {
+      "size": 201791,
+      "sha256": "56f7ae592dc80128"
+    }
+  }
+}

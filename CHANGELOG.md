@@ -3,7 +3,34 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0a4] - unreleased
+## [1.0.0a5] - unreleased
+
+> Fifth alpha — **feature-complete**. Lifts the remaining 4 canvas components (CodeViewer, DataTable, DynamicForm, WorkflowDiagram) into the published `@forge/canvas-vue`, `@forge/canvas-svelte`, and `forge_canvas` packages. Ships beta-gate testing infrastructure: 4 golden-snapshot presets (python/node/rust/multi-backend), OpenAPI contract tests for the domain DSL, and mutation testing scoped to the fragment-injector critical path.
+
+### Added
+
+- **4 canvas components extracted** across all three frameworks (A5-1 through A5-4):
+  - `CodeViewer` — syntax-highlighted code with filename header + line numbers. highlight.js (web) / flutter_highlight (mobile).
+  - `DataTable` — sortable columns + client-side pagination.
+  - `DynamicForm` — JSON-schema-driven form dispatching by field type (text/number/password/email/select/checkbox/textarea).
+  - `WorkflowDiagram` — DAG layout with topological-depth row assignment, status badges (pending/running/completed/error/skipped), straight-line edge routing.
+- **Golden-snapshot presets** extended from 1 to 4: `python_minimal`, `node_minimal`, `rust_minimal`, `multi_backend`. Regenerate with `UPDATE_GOLDEN=1`.
+- **OpenAPI contract tests** (`tests/test_openapi_contract.py`): every entity's emitted OpenAPI has typed properties, correct required-vs-optional split, format declarations for uuid/date-time, `$ref` for enums. 13 tests.
+- **Mutation testing configuration** — `[tool.mutmut]` in pyproject.toml scoped to `feature_injector`, `merge`, `provenance`, `injectors/*`, `updater`. New `docs/mutation-testing.md` documents the kill-rate baseline + the "run locally on breaking-change PRs" policy.
+- **Vue / Svelte dependencies** — `highlight.js@^11.10.0` for CodeViewer.
+- **Dart dependencies** — `flutter_highlight@^0.7.0` for CodeViewer, `http@^1.2.0` for MCP client.
+
+### Changed
+
+- Published packages bumped to `1.0.0-alpha.5`. `@forge/canvas-vue` + `@forge/canvas-svelte` + `forge_canvas` now export all 5 canvas components.
+
+### Tests
+
+662 passing, 1 skipped (up from 646).
+
+---
+
+## [1.0.0a4] - 2026-04-20
 
 > Fourth alpha. Closes the plugin SDK story (command dispatcher wired, frontends pluggable, fragments shippable from plugin packages), adds runtime canvas-prop lint across Vue / Svelte / Flutter, ships the MCP approval-token + audit-log middleware, and lifts the first canvas component (`Report`) into the published packages as the extraction reference.
 

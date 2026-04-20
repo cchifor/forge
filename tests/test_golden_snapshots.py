@@ -91,6 +91,50 @@ PRESETS = {
         ],
         frontend=None,
     ),
+    "node_minimal": ProjectConfig(
+        project_name="snap_node",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="snap_node",
+                language=BackendLanguage.NODE,
+                features=["items"],
+            )
+        ],
+        frontend=None,
+    ),
+    "rust_minimal": ProjectConfig(
+        project_name="snap_rust",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="snap_rust",
+                language=BackendLanguage.RUST,
+                features=["items"],
+            )
+        ],
+        frontend=None,
+    ),
+    "multi_backend": ProjectConfig(
+        project_name="snap_multi",
+        backends=[
+            BackendConfig(
+                name="api-py",
+                project_name="snap_multi",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                server_port=5001,
+            ),
+            BackendConfig(
+                name="api-node",
+                project_name="snap_multi",
+                language=BackendLanguage.NODE,
+                features=["orders"],
+                server_port=5002,
+            ),
+        ],
+        frontend=None,
+    ),
 }
 
 

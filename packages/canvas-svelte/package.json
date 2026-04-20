@@ -1,6 +1,6 @@
 {
   "name": "@forge/canvas-svelte",
-  "version": "1.0.0-alpha.4",
+  "version": "1.0.0-alpha.5",
   "description": "Canvas registry + AG-UI streaming for forge-generated Svelte 5 applications.",
   "license": "MIT",
   "type": "module",
@@ -24,7 +24,8 @@
     "@ag-ui/client": "^0.1.0",
     "@ag-ui/core": "^0.1.0",
     "marked": "^15.0.0",
-    "dompurify": "^3.2.0"
+    "dompurify": "^3.2.0",
+    "highlight.js": "^11.10.0"
   },
   "devDependencies": {
     "svelte": "^5.0.0",

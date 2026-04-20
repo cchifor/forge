@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge"
-version = "1.0.0a4.dev0"
+version = "1.0.0a5.dev0"
 description = "CLI tool to generate and orchestrate full-stack projects."
 requires-python = ">=3.11"
 dependencies = [
@@ -61,6 +61,26 @@ exclude_lines = [
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+
+# Mutation testing via mutmut. Scoped to the fragment-injection critical
+# path (feature_injector, merge, provenance, injectors/) where silent
+# regressions would bite generated projects on every `forge --update`.
+# Run with `uvx mutmut run` and inspect with `uvx mutmut results`.
+[tool.mutmut]
+paths_to_mutate = [
+    "forge/feature_injector.py",
+    "forge/merge.py",
+    "forge/provenance.py",
+    "forge/injectors/python_ast.py",
+    "forge/injectors/ts_ast.py",
+    "forge/updater.py",
+]
+tests_dir = "tests/"
+runner = "uv run pytest -x --no-cov -q"
+# Skip mutations inside lexical strings — template snippets / error
+# messages / docstrings changing doesn't change behavior forge depends on.
+also_copy = ["tests/"]
 
 [tool.ty.environment]
 python-version = "3.13"
