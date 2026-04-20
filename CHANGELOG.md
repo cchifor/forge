@@ -3,7 +3,29 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0a5] - unreleased
+## [1.0.0b1] - unreleased
+
+> First beta — **feature freeze**. No new features accepted from this point; only bug fixes, doc polish, and release-rehearsal hardening.
+
+### Added
+
+- **Expanded CI matrix** (`.github/workflows/e2e.yml`): forge's own tests run on Python 3.11 / 3.12 / 3.13; generated-project suites (python-vue, node-svelte, rust-none, multi-backend-keycloak) run on every template-touching PR; canvas-packages build + typecheck for `@forge/canvas-vue`, `@forge/canvas-svelte`, `forge_canvas` on every commit.
+- **`docs/ARCHITECTURE.md`** — rewritten to document the post-1.0 design: registry triad, generation pipeline, injector backends, provenance + merge blocks, codegen layer, canvas packages, plugin architecture, testing surface.
+- **`docs/GETTING_STARTED.md`** — 10-minute tour from install to a running project, including headless YAML invocation, incremental-change verbs, codemods, and agent-friendly stdin/json patterns.
+- **`docs/rfcs/RFC-004-release-rehearsal.md`** — pre-1.0 rehearsal policy, dry-run mechanics, lockstep version check, rollback asymmetries per registry.
+- **`release.yml` dry-run trigger** — `workflow_dispatch` inputs `dry_run` (default true) and `target` so maintainers can rehearse the full PyPI + npm + pub.dev pipeline without tagging.
+
+### Changed
+
+- **README visuals** — placeholder image slots removed; replaced with a real Mermaid architecture diagram + links to `ARCHITECTURE.md` and `GETTING_STARTED.md`.
+
+### Tests
+
+662 passing, 1 skipped (no change from a5 — feature freeze).
+
+---
+
+## [1.0.0a5] - 2026-04-20
 
 > Fifth alpha — **feature-complete**. Lifts the remaining 4 canvas components (CodeViewer, DataTable, DynamicForm, WorkflowDiagram) into the published `@forge/canvas-vue`, `@forge/canvas-svelte`, and `forge_canvas` packages. Ships beta-gate testing infrastructure: 4 golden-snapshot presets (python/node/rust/multi-backend), OpenAPI contract tests for the domain DSL, and mutation testing scoped to the fragment-injector critical path.
 
