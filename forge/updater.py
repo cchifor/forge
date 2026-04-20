@@ -8,12 +8,22 @@ sentinels), so running this repeatedly is a no-op when nothing changed
 and a clean in-place update when a fragment snippet was modified or a
 new Option was added.
 
-Out of scope:
+Provenance classification (1.0.0a1+):
+  Before re-applying, ``classify_project_state`` compares each recorded
+  file's SHA to the on-disk content and returns a per-path state:
+    * ``unchanged`` — safe to re-emit
+    * ``user-modified`` — preserve; skip fragment files, warn on injection targets
+    * ``missing`` — user deleted; re-emit
+
+The classification is exposed in the summary dict and used to guide
+``skip_existing_files`` decisions. Full three-way merge lands in Phase 2.2.
+
+Out of scope (still):
   - Template-level Copier updates (base template changes). Users who want
     those can ``cd <backend>/`` and run ``copier update`` directly —
     ``.copier-answers.yml`` is the input.
   - Deleting files from Options that were turned off. Needs the provenance
-    manifest follow-up first.
+    manifest follow-up — partial in this alpha; full in 1.0.0a3.
 """
 
 from __future__ import annotations
@@ -28,6 +38,7 @@ from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, Proje
 from forge.errors import GeneratorError
 from forge.feature_injector import apply_features, apply_project_features
 from forge.forge_toml import read_forge_toml, write_forge_toml
+from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify, sha256_of
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +83,33 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
             "was generated."
         ) from e
 
+    # Classify every provenance-tracked file BEFORE re-applying. The
+    # classification feeds the summary (user visibility) and warns about
+    # user-modified files that are about to be left alone by the
+    # skip_existing_files=True apply path.
+    classification = classify_project_state(project_root, data.provenance)
+    user_modified = [p for p, s in classification.items() if s == "user-modified"]
+    if user_modified and not quiet:
+        print(f"  [update] {len(user_modified)} file(s) modified since last generate:")
+        for p in user_modified[:10]:
+            print(f"    * {p}")
+        if len(user_modified) > 10:
+            print(f"    ... and {len(user_modified) - 10} more")
+        print(
+            "  [update] skip_existing_files=True — these files are preserved. "
+            "Three-zone merge lands in 1.0.0a3."
+        )
+
+    # Fresh collector for the post-update provenance re-stamp. Carries over
+    # any prior records we can't re-derive (user-labeled files).
+    collector = ProvenanceCollector(project_root=project_root)
+    for rel, entry in data.provenance.items():
+        if entry.get("origin") == "user":
+            collector.records[rel] = ProvenanceRecord(
+                origin="user",
+                sha256=str(entry.get("sha256", "")),
+            )
+
     fragments_applied: list[str] = []
     for bc in config.backends:
         backend_dir = project_root / "services" / bc.name
@@ -79,11 +117,24 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
             continue
         if not quiet:
             print(f"  [update] re-applying fragments to {bc.name} ({bc.language.value}) ...")
-        apply_features(bc, backend_dir, plan.ordered, quiet=quiet, skip_existing_files=True)
+        apply_features(
+            bc,
+            backend_dir,
+            plan.ordered,
+            quiet=quiet,
+            skip_existing_files=True,
+            collector=collector,
+        )
 
     if not quiet:
         print("  [update] re-applying project-scope fragments ...")
-    apply_project_features(project_root, plan.ordered, quiet=quiet, skip_existing_files=True)
+    apply_project_features(
+        project_root,
+        plan.ordered,
+        quiet=quiet,
+        skip_existing_files=True,
+        collector=collector,
+    )
 
     for rf in plan.ordered:
         if rf.fragment.name not in fragments_applied:
@@ -95,6 +146,7 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
         backends=tuple(config.backends),
         option_values=plan.option_values,
         current_version=current_version,
+        provenance=collector.as_dict(),
     )
 
     return {
@@ -102,7 +154,30 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
         "fragments_applied": fragments_applied,
         "forge_version_before": data.version,
         "forge_version_after": current_version,
+        "classification": {p: s for p, s in classification.items()},
+        "user_modified_count": len(user_modified),
     }
+
+
+def classify_project_state(
+    project_root: Path, provenance_tbl: dict[str, dict[str, str]]
+) -> dict[str, FileState]:
+    """Classify every recorded file as unchanged / user-modified / missing.
+
+    Files not in the provenance table are invisible to this pass — the
+    updater assumes the user created them on purpose. When the provenance
+    table is empty (old pre-1.0 project), returns an empty classification
+    and the updater falls back to its legacy skip_existing behavior.
+    """
+    out: dict[str, FileState] = {}
+    for rel, entry in provenance_tbl.items():
+        sha = str(entry.get("sha256", ""))
+        if not sha:
+            continue
+        path = project_root / rel
+        rec = ProvenanceRecord(origin="base-template", sha256=sha)
+        out[rel] = classify(path, rec)
+    return out
 
 
 def _infer_backends(project_root: Path) -> list[BackendConfig]:
@@ -146,8 +221,9 @@ def _restamp_forge_toml(
     backends: tuple[BackendConfig, ...],
     option_values: dict[str, Any],
     current_version: str,
+    provenance: dict[str, dict[str, str]] | None = None,
 ) -> None:
-    """Write forge.toml with the current version + fully-defaulted options."""
+    """Write forge.toml with the current version + fully-defaulted options + provenance."""
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
         templates[lang.value] = BACKEND_REGISTRY[lang].template_dir
@@ -158,4 +234,5 @@ def _restamp_forge_toml(
         project_name=project_name,
         templates=templates,
         options=dict(option_values),
+        provenance=provenance,
     )

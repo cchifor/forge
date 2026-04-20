@@ -1,0 +1,6 @@
+name: ItemStatus
+description: Lifecycle state of a catalog item.
+values:
+  - DRAFT
+  - ACTIVE
+  - ARCHIVED

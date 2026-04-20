@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/canvas-components/CodeViewer.props.json",
+  "title": "CodeViewerProps",
+  "description": "Props for the CodeViewer canvas component — renders syntax-highlighted code with optional filename header.",
+  "type": "object",
+  "properties": {
+    "code": {"type": "string"},
+    "language": {"type": "string"},
+    "filename": {"type": "string"},
+    "showLineNumbers": {"type": "boolean"}
+  },
+  "required": ["code", "language"],
+  "additionalProperties": false
+}

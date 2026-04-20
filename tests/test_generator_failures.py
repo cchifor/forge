@@ -149,7 +149,7 @@ class TestCliErrorRouting:
             ],
         )
 
-        with patch("forge.cli.generate", side_effect=GeneratorError("synthetic boom")):
+        with patch("forge.cli.main.generate", side_effect=GeneratorError("synthetic boom")):
             with pytest.raises(SystemExit) as exc_info:
                 cli.main()
         assert exc_info.value.code == 2
@@ -180,7 +180,7 @@ class TestCliErrorRouting:
             ],
         )
 
-        with patch("forge.cli.generate", side_effect=GeneratorError("synthetic boom")):
+        with patch("forge.cli.main.generate", side_effect=GeneratorError("synthetic boom")):
             with pytest.raises(SystemExit) as exc_info:
                 cli.main()
         assert exc_info.value.code == 2

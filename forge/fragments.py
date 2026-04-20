@@ -605,3 +605,132 @@ register_fragment(
         },
     )
 )
+
+
+# -- Ports-and-adapters (ADR-002, Phase 2.3) ----------------------------------
+# Reference implementation of the port+adapter pattern. The full refactor
+# of rag_* fragments into this shape lands in 1.0.0a2. For the alpha, we
+# ship the port module and the Qdrant adapter so plugin authors have a
+# concrete reference to model new adapters on.
+
+register_fragment(
+    Fragment(
+        name="vector_store_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_port/python"
+            ),
+        },
+    )
+)
+
+register_fragment(
+    Fragment(
+        name="security_csp",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="security_csp",
+                scope="project",
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir="security_csp",
+                scope="project",
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir="security_csp",
+                scope="project",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="security_sbom",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="security_sbom/python",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="observability_otel",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="observability_otel/python",
+                dependencies=(
+                    "opentelemetry-api>=1.28.0",
+                    "opentelemetry-sdk>=1.28.0",
+                    "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
+                    "opentelemetry-instrumentation-fastapi>=0.49b0",
+                    "opentelemetry-instrumentation-httpx>=0.49b0",
+                ),
+                env_vars=(
+                    ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+                    ("OTEL_SERVICE_NAME", ""),
+                    ("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="reliability_connection_pool",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="reliability_connection_pool/python",
+                env_vars=(
+                    ("SQLALCHEMY_POOL_SIZE", "20"),
+                    ("SQLALCHEMY_MAX_OVERFLOW", "10"),
+                    ("SQLALCHEMY_POOL_PRE_PING", "true"),
+                    ("SQLALCHEMY_POOL_RECYCLE", "1800"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="reliability_circuit_breaker",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="reliability_circuit_breaker/python",
+                dependencies=("purgatory>=3.0.0",),
+                env_vars=(
+                    ("CIRCUIT_BREAKER_THRESHOLD", "5"),
+                    ("CIRCUIT_BREAKER_RESET_TIMEOUT", "30"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_qdrant",
+        depends_on=("vector_store_port",),
+        capabilities=("qdrant",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_qdrant/python",
+                dependencies=("qdrant-client>=1.12.0",),
+                env_vars=(
+                    ("QDRANT_URL", "http://qdrant:6333"),
+                    ("QDRANT_API_KEY", ""),
+                    ("QDRANT_COLLECTION", "forge_rag"),
+                ),
+            ),
+        },
+    )
+)

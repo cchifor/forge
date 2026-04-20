@@ -1,0 +1,5 @@
+- target: src/app/main.py
+  marker: FORGE:STARTUP_HOOKS
+  snippet: |
+    from .hello import print_banner
+    print_banner()

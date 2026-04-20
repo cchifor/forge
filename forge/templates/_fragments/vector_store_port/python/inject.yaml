@@ -1,0 +1,16 @@
+# Vector-store port — reference implementation of ADR-002 (ports-and-adapters).
+# This fragment emits the Protocol only. Per-provider adapters live in
+# sibling vector_store_<name> fragments and register themselves with the
+# dependency container.
+#
+# Zone: "generated" — the port is forge-owned and should not drift.
+
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store port wiring — the chosen adapter is registered by its
+    # own fragment. The port stays always-imported so adapter-less dev
+    # mode raises a clear error at first use rather than at import.
+    from app.ports.vector_store import VectorStorePort  # noqa: F401

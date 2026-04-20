@@ -1,0 +1,42 @@
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# --- Dependencies / build output ---
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+.svelte-kit/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.pyc
+target/
+Cargo.lock.bak
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# --- Docker / local dev ---
+*.log
+docker-volumes/
+postgres-data/
+
+# --- Forge ---
+.forge-merge/

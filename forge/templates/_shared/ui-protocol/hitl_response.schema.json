@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/hitl_response.json",
+  "title": "HitlResponse",
+  "description": "The client's answer to a UserPromptPayload. Routed back to the agent via tool_call_id.",
+  "type": "object",
+  "properties": {
+    "tool_call_id": {"type": "string"},
+    "answer": {"type": "string"}
+  },
+  "required": ["tool_call_id", "answer"],
+  "additionalProperties": false
+}

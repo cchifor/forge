@@ -3,7 +3,35 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0a1] - unreleased
+
+> First alpha of the **1.0 clean-break** series. See `RELEASING.md` for the release process and `UPGRADING.md` for migration guidance. Phase 0 of the 1.0 roadmap (foundations: CLI decomposition, provenance manifest, plugin host, --plan/--dry-run).
+
+### Breaking
+
+- **CLI entry point moved** — `forge.cli:main` → `forge.cli.main:main`. The `forge` console script is unchanged; only direct Python imports of private helpers need to update. Migration: see `UPGRADING.md` § "1.0.0a1".
+- **`forge.toml` gains `[forge.provenance]`** — per-file origin + SHA-256 + fragment version. Old projects receive a one-time backfill on first `forge --update` in 1.0 with a warning.
+
+### Added
+
+- `docs/rfcs/` — RFC process and RFC-001/002/003.
+- `RELEASING.md` — branching, versioning, and release cadence policy.
+- `UPGRADING.md` — per-version migration guide.
+- `forge --plan` — prints the resolved fragment order and every planned mutation as a tree.
+- `forge --dry-run` — executes generation to completion without writing to disk.
+- `forge plugins list` — shows loaded third-party plugins (from `importlib.metadata` entry points under group `forge.plugins`).
+- `forge.plugins` — public API (`ForgeAPI`) for third-party plugins to register options, fragments, backends, frontends, commands, and emitters.
+- `forge.provenance` — per-path provenance tracking (origin, SHA-256, fragment version) written on generate, consumed on update.
+
+### Changed
+
+- `forge/cli.py` (1,361 lines) decomposed into `forge/cli/` package: `parser`, `loader`, `builder`, `interactive`, `commands/*`, `main`. Command-object pattern for each subcommand. Re-exports preserved at `forge.cli.main` so existing test imports continue to work.
+- `capability_resolver.resolve()` now returns a `ResolutionReport` dataclass (in addition to the old behavior on the happy path), exposing the ordered fragment list, conflicts, and applied options.
+- `updater.update_project()` consumes the provenance manifest to distinguish unchanged / user-modified / fragment-modified files.
+
+---
+
+## [Unreleased — 0.x maintenance]
 
 ### Added — Svelte + Flutter frontend parity
 

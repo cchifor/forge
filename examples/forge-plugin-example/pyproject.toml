@@ -1,0 +1,20 @@
+[project]
+name = "forge-plugin-example"
+version = "0.1.0"
+description = "Reference forge plugin demonstrating the forge.plugins entry point."
+requires-python = ">=3.11"
+dependencies = [
+    "forge>=1.0.0a1",
+]
+readme = "README.md"
+authors = [{ name = "forge team" }]
+
+[project.entry-points."forge.plugins"]
+example = "forge_plugin_example:register"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

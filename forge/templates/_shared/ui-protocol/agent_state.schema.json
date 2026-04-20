@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/agent_state.json",
+  "title": "AgentState",
+  "description": "Custom state blob merged into every agent event. Tracks in-flight todos, uploads, cost, context usage, and the active model.",
+  "type": "object",
+  "properties": {
+    "todos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {"type": "string"},
+          "status": {"type": "string"}
+        },
+        "required": ["content", "status"]
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "uploads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"type": "string"},
+          "size": {"type": "integer"}
+        },
+        "required": ["name", "path", "size"]
+      }
+    },
+    "cost": {
+      "type": "object",
+      "properties": {
+        "total_usd": {"type": "number"},
+        "total_tokens": {"type": "integer"},
+        "run_usd": {"type": "number"},
+        "run_tokens": {"type": "integer"}
+      },
+      "required": ["total_usd", "total_tokens", "run_usd", "run_tokens"]
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "usage_pct": {"type": "number"},
+        "current_tokens": {"type": "integer"},
+        "max_tokens": {"type": "integer"}
+      },
+      "required": ["usage_pct", "current_tokens", "max_tokens"]
+    },
+    "model": {"type": "string"}
+  },
+  "additionalProperties": true
+}

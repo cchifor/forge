@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/mcp-config-v1.json",
+  "title": "McpConfig",
+  "description": "Schema for mcp.config.json — lists MCP servers the project connects to.",
+  "type": "object",
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "defaultApprovalMode": {
+      "type": "string",
+      "enum": ["auto", "prompt-once", "prompt-every"]
+    },
+    "servers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string"},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "env": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          },
+          "approvalMode": {
+            "type": "string",
+            "enum": ["auto", "prompt-once", "prompt-every"]
+          }
+        },
+        "required": ["command"]
+      }
+    }
+  },
+  "required": ["version", "servers"]
+}

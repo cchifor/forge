@@ -220,12 +220,12 @@ class TestValidateSplits:
 class TestPromptBackendSmoke:
     def test_python_path(self) -> None:
         with (
-            patch("forge.cli._ask_text", side_effect=["api", "items"]),
+            patch("forge.cli.interactive._ask_text", side_effect=["api", "items"]),
             patch(
-                "forge.cli._ask_select",
+                "forge.cli.interactive._ask_select",
                 side_effect=["Python (FastAPI)", "3.13"],
             ),
-            patch("forge.cli._ask_port", return_value=5000),
+            patch("forge.cli.interactive._ask_port", return_value=5000),
         ):
             bc = _prompt_backend(0, "Proj", "desc", default_port=5000)
         assert bc.name == "api"
@@ -236,12 +236,12 @@ class TestPromptBackendSmoke:
 
     def test_rust_path(self) -> None:
         with (
-            patch("forge.cli._ask_text", side_effect=["core", "items"]),
+            patch("forge.cli.interactive._ask_text", side_effect=["core", "items"]),
             patch(
-                "forge.cli._ask_select",
+                "forge.cli.interactive._ask_select",
                 side_effect=["Rust (Axum)", "2024"],
             ),
-            patch("forge.cli._ask_port", return_value=5002),
+            patch("forge.cli.interactive._ask_port", return_value=5002),
         ):
             bc = _prompt_backend(2, "Proj", "desc", default_port=5002)
         assert bc.name == "core"

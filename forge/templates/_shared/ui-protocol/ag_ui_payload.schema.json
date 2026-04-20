@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/ag_ui_payload.json",
+  "title": "AgUiPayload",
+  "description": "An AG-UI canvas activity — names a component from the canvas registry and the props to render with.",
+  "type": "object",
+  "properties": {
+    "engine": {"type": "string", "const": "ag-ui"},
+    "component_name": {"type": "string"},
+    "props": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["engine", "component_name", "props"],
+  "additionalProperties": false
+}

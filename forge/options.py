@@ -946,3 +946,108 @@ BACKENDS: python, node, rust (same content, project-scoped)""",
         enables={True: ("agents_md",)},
     )
 )
+
+
+# -- Reliability defaults (Phase 4.1, 1.0.0a1) ------------------------------
+
+register_option(
+    Option(
+        path="security.csp",
+        type=OptionType.BOOL,
+        default=True,
+        summary="Strict Content-Security-Policy + HSTS + X-Content-Type-Options via nginx.",
+        description="""\
+Drops ``infra/nginx-csp.conf`` with production-ready strict CSP (no
+unsafe-inline, strict-dynamic, nonce-based script tags), HSTS, and
+related defence-in-depth headers. ``include infra/nginx-csp.conf;`` from
+any nginx server{} block.
+
+BACKENDS: all (project-scoped)
+DEV NOTE: relax the ``connect-src`` directive during local development
+if your dev server streams from a non-default origin.""",
+        category=FeatureCategory.PLATFORM,
+        enables={True: ("security_csp",)},
+    )
+)
+
+
+register_option(
+    Option(
+        path="security.sbom",
+        type=OptionType.BOOL,
+        default=False,
+        summary="GitHub Actions workflow emitting a CycloneDX SBOM + pip-audit report.",
+        description="""\
+Adds ``.github/workflows/sbom.yml`` that generates a CycloneDX SBOM on
+every push and runs pip-audit weekly. Artifacts are uploaded so SBOM
+attestation and vulnerability disclosure happens as part of normal CI.
+
+BACKENDS: python
+DEPENDENCY: none runtime; CI installs cyclonedx-bom + pip-audit.""",
+        category=FeatureCategory.OBSERVABILITY,
+        enables={True: ("security_sbom",)},
+    )
+)
+
+
+register_option(
+    Option(
+        path="observability.otel",
+        type=OptionType.BOOL,
+        default=False,
+        summary="OpenTelemetry traces + metrics via OTLP exporter (agent.run, tool.call spans).",
+        description="""\
+Emits ``app/core/otel.py`` wiring FastAPI + HTTPX instrumentations and an
+OTLP exporter to whatever ``OTEL_EXPORTER_OTLP_ENDPOINT`` points at.
+Spans of interest for agentic workloads: ``agent.run`` (per agent
+invocation), ``tool.call`` (per tool invocation). Token / cost counters
+from AG-UI RUN_FINISHED are attached as span attributes.
+
+BACKENDS: python
+DEPENDENCIES: opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi / instrumentation-httpx
+ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.""",
+        category=FeatureCategory.OBSERVABILITY,
+        enables={True: ("observability_otel",)},
+    )
+)
+
+
+register_option(
+    Option(
+        path="reliability.connection_pool",
+        type=OptionType.BOOL,
+        default=True,
+        summary="Sane SQLAlchemy async pool defaults (size=20, overflow=10, pre_ping, recycle=30m).",
+        description="""\
+Emits ``app/core/db_pool.py`` with production-ready SQLAlchemy pool
+settings and env-var overrides. Without this fragment, generated
+projects run on SQLAlchemy's default pool_size=5, which saturates under
+moderate burst traffic and produces mysterious 99p tail latency.
+
+BACKENDS: python
+TUNABLE VIA ENV: SQLALCHEMY_POOL_SIZE, SQLALCHEMY_MAX_OVERFLOW,
+SQLALCHEMY_POOL_PRE_PING, SQLALCHEMY_POOL_RECYCLE.""",
+        category=FeatureCategory.RELIABILITY,
+        enables={True: ("reliability_connection_pool",)},
+    )
+)
+
+
+register_option(
+    Option(
+        path="reliability.circuit_breaker",
+        type=OptionType.BOOL,
+        default=False,
+        summary="Circuit breaker for outbound HTTP calls (LLM, vector store, auth).",
+        description="""\
+Emits ``app/core/circuit_breaker.py`` backed by the purgatory library.
+Wraps downstream dependencies so a flaky provider doesn't cascade
+failures into every request.
+
+BACKENDS: python
+DEPENDENCY: purgatory>=3.0.0
+TUNABLE VIA ENV: CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT.""",
+        category=FeatureCategory.RELIABILITY,
+        enables={True: ("reliability_circuit_breaker",)},
+    )
+)

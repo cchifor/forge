@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/tool_call_info.json",
+  "title": "ToolCallInfo",
+  "description": "Client-side record of one in-flight or completed tool call.",
+  "type": "object",
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "status": {"type": "string", "enum": ["running", "completed", "error"]},
+    "args": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["id", "name", "status"],
+  "additionalProperties": false
+}

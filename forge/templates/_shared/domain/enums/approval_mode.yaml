@@ -1,0 +1,9 @@
+name: ApprovalMode
+description: How tool calls are approved by the user during an agent run.
+values:
+  - value: auto
+    label: "Auto-approve everything"
+  - value: prompt-once
+    label: "Prompt once per session"
+  - value: prompt-every
+    label: "Prompt on every tool call"

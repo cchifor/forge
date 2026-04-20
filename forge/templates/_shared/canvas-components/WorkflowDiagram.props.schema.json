@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/canvas-components/WorkflowDiagram.props.json",
+  "title": "WorkflowDiagramProps",
+  "description": "Props for the WorkflowDiagram canvas component — renders a DAG of steps with status indicators.",
+  "type": "object",
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "running", "completed", "error", "skipped"]}
+        },
+        "required": ["id", "label", "status"]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"}
+        },
+        "required": ["from", "to"]
+      }
+    }
+  },
+  "required": ["nodes", "edges"],
+  "additionalProperties": false
+}

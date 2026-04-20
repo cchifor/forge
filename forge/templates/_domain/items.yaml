@@ -1,0 +1,32 @@
+name: Item
+plural: items
+description: A catalog item — the baseline CRUD entity forge projects ship with.
+fields:
+  - name: id
+    type: uuid
+    primary_key: true
+  - name: name
+    type: string
+    min_length: 1
+    max_length: 255
+  - name: description
+    type: string
+    optional: true
+  - name: status
+    type: enum
+    enum: ItemStatus
+    default: DRAFT
+  - name: tags
+    type: array
+    of: string
+  - name: customer_id
+    type: uuid
+  - name: user_id
+    type: uuid
+  - name: created_at
+    type: datetime
+  - name: updated_at
+    type: datetime
+indices:
+  - [customer_id, name]
+  - [customer_id, status]

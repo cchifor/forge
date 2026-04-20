@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/canvas-components/DataTable.props.json",
+  "title": "DataTableProps",
+  "description": "Props for the DataTable canvas component — renders tabular data with optional sorting and pagination.",
+  "type": "object",
+  "properties": {
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string"},
+          "label": {"type": "string"},
+          "sortable": {"type": "boolean"}
+        },
+        "required": ["key", "label"]
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "pageSize": {"type": "integer"}
+  },
+  "required": ["columns", "rows"],
+  "additionalProperties": false
+}

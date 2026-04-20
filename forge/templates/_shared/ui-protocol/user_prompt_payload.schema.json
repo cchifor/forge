@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/user_prompt_payload.json",
+  "title": "UserPromptPayload",
+  "description": "A human-in-the-loop (HITL) prompt emitted by the agent. The client renders the options and sends back a HitlResponse keyed to the same tool_call_id.",
+  "type": "object",
+  "properties": {
+    "tool_call_id": {"type": "string"},
+    "question": {"type": "string"},
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {"type": "string"},
+          "description": {"type": "string"},
+          "recommended": {"type": "string"}
+        },
+        "required": ["label"]
+      }
+    }
+  },
+  "required": ["tool_call_id", "question", "options"],
+  "additionalProperties": false
+}

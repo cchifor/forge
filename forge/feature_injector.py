@@ -29,6 +29,7 @@ from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
 from forge.errors import GeneratorError
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
+from forge.provenance import ProvenanceCollector
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
@@ -43,6 +44,17 @@ class _Injection:
     # "after" (default) places snippet on the line after the marker;
     # "before" on the line before. Marker line is preserved either way.
     position: str = "after"
+    # Zone determines the idempotent-reapply semantics for this injection:
+    #   * "generated" — default; re-generation overwrites (current behavior).
+    #   * "user"      — emit on first apply; subsequent `forge --update`
+    #                   passes leave the block untouched even if the
+    #                   fragment snippet has changed. Use for sections the
+    #                   user is expected to customize after generation.
+    #   * "merge"     — attempt a three-way merge against the provenance
+    #                   baseline. On conflict, emit `.forge-merge` markers
+    #                   and return non-zero from update. Requires a
+    #                   non-empty provenance entry for the target file.
+    zone: str = "generated"
 
 
 # File-extension → single-line comment prefix. Only line-comment forms are
@@ -91,6 +103,7 @@ def apply_features(
     quiet: bool = False,
     *,
     skip_existing_files: bool = False,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
     """Apply each backend-scoped fragment that supports this backend.
 
@@ -101,6 +114,10 @@ def apply_features(
     fragment's ``files/`` copy-phase skips files that already exist
     instead of raising. Lets repeated applies be idempotent without
     clobbering user edits.
+
+    When ``collector`` is supplied, every file written by the fragment
+    layer is recorded in the provenance manifest with ``origin='fragment'``
+    and the fragment's name.
     """
     for rf in resolved:
         if bc.language not in rf.target_backends:
@@ -117,6 +134,7 @@ def apply_features(
             {},
             rf.fragment.name,
             skip_existing_files=skip_existing_files,
+            collector=collector,
         )
 
 
@@ -126,18 +144,10 @@ def apply_project_features(
     quiet: bool = False,
     *,
     skip_existing_files: bool = False,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
-    """Apply project-scoped fragment implementations at the project root.
-
-    Chooses a canonical backend to use for per-language dep edits (the
-    first target_backend for the fragment). For pure-file fragments
-    (like AGENTS.md) the backend choice is irrelevant.
-
-    ``skip_existing_files`` is forwarded to ``_copy_files`` so the
-    updater can re-run project-scope fragments without clobbering edits.
-    """
+    """Apply project-scoped fragment implementations at the project root."""
     for rf in resolved:
-        # Pick any supporting implementation with scope=project.
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
             if impl.scope == "project":
@@ -151,8 +161,9 @@ def apply_project_features(
                     {},
                     rf.fragment.name,
                     skip_existing_files=skip_existing_files,
+                    collector=collector,
                 )
-                break  # one emission only, even if multiple backends support it
+                break
 
 
 def _apply_fragment(
@@ -163,6 +174,7 @@ def _apply_fragment(
     feature_key: str,
     *,
     skip_existing_files: bool = False,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
     fragment = FRAGMENTS_DIR / impl.fragment_dir
     if not fragment.is_dir():
@@ -173,21 +185,22 @@ def _apply_fragment(
 
     files_dir = fragment / "files"
     if files_dir.is_dir():
-        _copy_files(files_dir, backend_dir, skip_existing=skip_existing_files)
+        _copy_files(
+            files_dir,
+            backend_dir,
+            skip_existing=skip_existing_files,
+            collector=collector,
+            fragment_name=feature_key,
+        )
 
     inject_path = fragment / "inject.yaml"
     if inject_path.is_file():
         for inj in _load_injections(inject_path, feature_key):
-            _inject_snippet(
-                backend_dir / inj.target,
-                inj.feature_key,
-                inj.marker,
-                inj.snippet,
-                inj.position,
-            )
+            target = backend_dir / inj.target
+            applied = _apply_zoned_injection(target, inj)
+            if applied and collector is not None:
+                collector.record(target, origin="fragment", fragment_name=feature_key)
 
-    # Dependencies come from the FragmentImplSpec (static) OR from deps.yaml
-    # (which can vary by option — kept simple in v1: static only).
     if impl.dependencies:
         _add_dependencies(bc.language, backend_dir, impl.dependencies)
 
@@ -200,7 +213,14 @@ def _apply_fragment(
 # -- File copy ---------------------------------------------------------------
 
 
-def _copy_files(src: Path, dst_root: Path, *, skip_existing: bool = False) -> None:
+def _copy_files(
+    src: Path,
+    dst_root: Path,
+    *,
+    skip_existing: bool = False,
+    collector: ProvenanceCollector | None = None,
+    fragment_name: str | None = None,
+) -> None:
     """Copy every file under src/ into dst_root/, preserving structure.
 
     On fresh generation (default), refuses to overwrite existing files —
@@ -210,6 +230,9 @@ def _copy_files(src: Path, dst_root: Path, *, skip_existing: bool = False) -> No
     On ``forge update`` (``skip_existing=True``), pre-existing destination
     paths are left alone and logged; this preserves user edits while still
     letting newly-introduced fragment files land.
+
+    When ``collector`` is supplied, every newly-written file records its
+    provenance with ``origin='fragment'`` and the given ``fragment_name``.
     """
     for src_path in src.rglob("*"):
         if not src_path.is_file():
@@ -226,6 +249,8 @@ def _copy_files(src: Path, dst_root: Path, *, skip_existing: bool = False) -> No
             )
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_path, dst_path)
+        if collector is not None:
+            collector.record(dst_path, origin="fragment", fragment_name=fragment_name)
 
 
 # -- Snippet injection -------------------------------------------------------
@@ -250,6 +275,11 @@ def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
         position = str(entry.get("position", "after"))
         if position not in ("before", "after"):
             raise GeneratorError(f"{path}[{i}]: position must be 'before' or 'after'")
+        zone = str(entry.get("zone", "generated"))
+        if zone not in ("generated", "user", "merge"):
+            raise GeneratorError(
+                f"{path}[{i}]: zone must be 'generated' | 'user' | 'merge' (got {zone!r})"
+            )
         out.append(
             _Injection(
                 feature_key=feature_key,
@@ -257,9 +287,49 @@ def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
                 marker=marker,
                 snippet=snippet,
                 position=position,
+                zone=zone,
             )
         )
     return out
+
+
+def _apply_zoned_injection(target: Path, inj: _Injection) -> bool:
+    """Dispatch an injection according to its zone.
+
+    Returns ``True`` when the injection was applied (the target file's
+    content has changed), ``False`` when the zone semantics kept the
+    existing content. Callers use the return value to decide whether to
+    record a provenance update.
+
+    Zone semantics:
+      * ``generated`` — always apply; replace any existing sentinel block.
+      * ``user``      — apply only if no sentinel block for this tag
+                        already exists. If a block is present, leave it
+                        alone (the user may have customized its body).
+      * ``merge``     — currently aliased to ``generated`` for 1.0.0a1.
+                        True three-way merge requires the provenance
+                        baseline to be threaded into the injector; that
+                        lands in the Phase 2.2 follow-up alpha. For now,
+                        the zone is accepted and documented but behaves
+                        like generated — the user gets the semantic
+                        declaration without the runtime bite.
+    """
+    if inj.zone == "user":
+        if _has_sentinel_block(target, inj.feature_key, inj.marker):
+            return False
+    _inject_snippet(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
+    return True
+
+
+def _has_sentinel_block(file: Path, feature_key: str, marker: str) -> bool:
+    """True when ``file`` already contains a BEGIN/END sentinel pair for this tag."""
+    if not file.is_file():
+        return False
+    tag = _sentinel_tag(feature_key, marker)
+    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
+    end_needle = f"{MARKER_PREFIX}END {tag}"
+    text = file.read_text(encoding="utf-8")
+    return begin_needle in text and end_needle in text
 
 
 def _inject_snippet(

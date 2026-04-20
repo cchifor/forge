@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/canvas-components/Report.props.json",
+  "title": "ReportProps",
+  "description": "Props for the Report canvas component — renders a Markdown document with optional title.",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "markdown": {"type": "string"}
+  },
+  "required": ["markdown"],
+  "additionalProperties": false
+}

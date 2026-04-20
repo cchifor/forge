@@ -31,6 +31,7 @@ from forge.docker_manager import (
 )
 from forge.errors import GeneratorError
 from forge.feature_injector import apply_features, apply_project_features
+from forge.provenance import ProvenanceCollector
 
 __all__ = ["GeneratorError", "generate"]
 
@@ -45,19 +46,33 @@ TEMPLATE_DIRS = {
 }
 
 
-def generate(config: ProjectConfig, quiet: bool = False) -> Path:
-    """Generate all project components and return the project root path."""
-    project_root = Path(config.output_dir).resolve() / config.project_slug
+def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) -> Path:
+    """Generate all project components and return the project root path.
+
+    When ``dry_run=True``, generation runs into a fresh temporary directory
+    (never touching ``config.output_dir``) and the temp path is returned
+    for inspection. The caller is responsible for cleanup.
+    """
+    if dry_run:
+        import tempfile  # noqa: PLC0415
+
+        tmp_dir = Path(tempfile.mkdtemp(prefix="forge-dry-"))
+        project_root = tmp_dir / config.project_slug
+    else:
+        project_root = Path(config.output_dir).resolve() / config.project_slug
     project_root.mkdir(parents=True, exist_ok=True)
 
     def _log(msg: str) -> None:
         if not quiet:
             print(msg)
 
-    # Resolve features once; generator + docker_manager + forge.toml all read it.
+    # Per-file provenance for every write this run. Stamped into forge.toml
+    # at the end; the updater uses it to distinguish user-modified from
+    # fragment-modified files on subsequent `forge --update` runs.
+    collector = ProvenanceCollector(project_root=project_root)
+
     plan = resolve(config)
 
-    # 1. Generate backends — dispatch driven by config.BACKEND_REGISTRY.
     backend_setup: dict[BackendLanguage, Callable[[Path], None]] = {
         BackendLanguage.PYTHON: _setup_backend,
         BackendLanguage.NODE: _setup_node_backend,
@@ -68,11 +83,11 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         backend_dir = project_root / "services" / bc.name
         _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
         _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
-        apply_features(bc, backend_dir, plan.ordered, quiet=quiet)
-        # Node always installs deps to create the lockfile Docker builds depend on.
-        if bc.language == BackendLanguage.NODE:
+        _record_tree(backend_dir, collector, origin="base-template")
+        apply_features(bc, backend_dir, plan.ordered, quiet=quiet, collector=collector)
+        if bc.language == BackendLanguage.NODE and not dry_run:
             _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies", required=True)
-        if not quiet:
+        if not quiet and not dry_run:
             backend_setup[bc.language](backend_dir)
 
     # 2. Generate frontend
@@ -126,33 +141,96 @@ def generate(config: ProjectConfig, quiet: bool = False) -> Path:
         render_frontend_dockerfile(config, frontend_dir)
         render_nginx_conf(config, frontend_dir)
 
-    # 6. Apply any project-scoped feature fragments (AGENTS.md, root-level files).
-    apply_project_features(project_root, plan.ordered, quiet=quiet)
+    # Record any non-backend base-template writes (frontend, e2e, infra) so
+    # the provenance manifest covers the full project tree, not just
+    # backends. We scan everything outside services/ to avoid double-recording
+    # backend files already tagged per-backend above.
+    _record_tree(
+        project_root,
+        collector,
+        origin="base-template",
+        skip_dirs=("services",),
+        skip_if_recorded=True,
+    )
 
-    # 7. Stamp forge metadata so the project can be re-generated / updated later.
-    _write_forge_toml(config, project_root, plan)
+    apply_project_features(project_root, plan.ordered, quiet=quiet, collector=collector)
 
-    # 7. Clean up per-template .git repos and create unified one
-    _log("  Initializing git repository ...")
-    _cleanup_sub_git_repos(project_root)
-    _git_init(project_root)
+    # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)
+    # if the per-template generators haven't already provided them.
+    from forge.common_files import apply_common_files  # noqa: PLC0415
+
+    apply_common_files(config, project_root, collector=collector)
+
+    _write_forge_toml(config, project_root, plan, collector=collector)
+
+    if not dry_run:
+        _log("  Initializing git repository ...")
+        _cleanup_sub_git_repos(project_root)
+        _git_init(project_root)
 
     return project_root
 
 
+def _record_tree(
+    root: Path,
+    collector: ProvenanceCollector,
+    *,
+    origin: str,
+    skip_dirs: tuple[str, ...] = (),
+    skip_if_recorded: bool = False,
+) -> None:
+    """Walk ``root`` and record every file as ``origin`` in the collector.
+
+    ``skip_dirs`` names immediate children of ``root`` whose subtrees are
+    excluded (e.g. ``services`` when recording top-level non-backend
+    writes, since backends are recorded per-backend).
+
+    When ``skip_if_recorded=True``, paths already in the collector are
+    not overwritten — useful for idempotent top-up scans after an earlier
+    per-subtree pass already tagged some files with more specific origins.
+    """
+    from forge.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
+
+    origin_typed: _PO = origin  # type: ignore[assignment]
+    if not root.is_dir():
+        return
+    for p in root.rglob("*"):
+        if not p.is_file():
+            continue
+        # Never record forge.toml itself — the provenance table references it.
+        try:
+            rel = p.relative_to(root)
+        except ValueError:
+            continue
+        parts = rel.parts
+        if parts and parts[0] in skip_dirs:
+            continue
+        if parts and parts[-1] == "forge.toml" and len(parts) == 1:
+            continue
+        if skip_if_recorded:
+            key = p.relative_to(collector.project_root).as_posix()
+            if key in collector.records:
+                continue
+        collector.record(p, origin=origin_typed)
+
+
 def _write_forge_toml(
-    config: ProjectConfig, project_root: Path, plan: ResolvedPlan | None = None
+    config: ProjectConfig,
+    project_root: Path,
+    plan: ResolvedPlan | None = None,
+    *,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
     """Write a forge.toml manifest at the project root.
 
     Records the forge version, template paths, and the fully-resolved
-    ``options`` mapping (user-set values plus defaults). ``forge
-    update`` reads this back to reconstruct the original generation
-    intent.
+    ``options`` mapping (user-set values plus defaults). When a
+    provenance ``collector`` is supplied, its records are emitted as the
+    ``[forge.provenance]`` sub-tables.
     """
-    from importlib import metadata
+    from importlib import metadata  # noqa: PLC0415
 
-    from forge.forge_toml import write_forge_toml
+    from forge.forge_toml import write_forge_toml  # noqa: PLC0415
 
     try:
         forge_version = metadata.version("forge")
@@ -168,11 +246,8 @@ def _write_forge_toml(
         if template_dir:
             templates[fw.value] = template_dir
 
-    # Prefer the resolver's fully-defaulted option map so forge.toml
-    # captures every registered option (not just the ones the user set).
-    # `forge update` can then diff defaults against the current registry
-    # and surface new Options transparently.
     options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
+    provenance = collector.as_dict() if collector is not None else None
 
     write_forge_toml(
         project_root / "forge.toml",
@@ -180,6 +255,7 @@ def _write_forge_toml(
         project_name=config.project_name,
         templates=templates,
         options=options,
+        provenance=provenance,
     )
 
 

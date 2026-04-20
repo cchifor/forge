@@ -137,14 +137,14 @@ class TestAskHelpersCancel:
 
 class TestAskFeaturesLoop:
     def test_empty_then_valid(self, capsys) -> None:
-        with patch("forge.cli._ask_text", side_effect=["  ", "items, orders"]):
+        with patch("forge.cli.interactive._ask_text", side_effect=["  ", "items, orders"]):
             result = cli._ask_features()
         assert result == ["items", "orders"]
         assert "at least one feature" in capsys.readouterr().out
 
     def test_invalid_then_valid(self, capsys) -> None:
         # "2bad" fails validate_features (must start with letter), then valid input succeeds.
-        with patch("forge.cli._ask_text", side_effect=["2bad", "widgets"]):
+        with patch("forge.cli.interactive._ask_text", side_effect=["2bad", "widgets"]):
             result = cli._ask_features()
         assert result == ["widgets"]
         assert "Invalid" in capsys.readouterr().out
@@ -152,12 +152,12 @@ class TestAskFeaturesLoop:
 
 class TestAskPortLoop:
     def test_out_of_range_then_valid(self, capsys) -> None:
-        with patch("forge.cli._ask_text", side_effect=["1", "5000"]):
+        with patch("forge.cli.interactive._ask_text", side_effect=["1", "5000"]):
             assert cli._ask_port("port:", default="5000") == 5000
         assert "between 1024 and 65535" in capsys.readouterr().out
 
     def test_non_numeric_then_valid(self, capsys) -> None:
-        with patch("forge.cli._ask_text", side_effect=["abc", "5000"]):
+        with patch("forge.cli.interactive._ask_text", side_effect=["abc", "5000"]):
             assert cli._ask_port("port:", default="5000") == 5000
 
 
@@ -176,8 +176,8 @@ class TestPromptBackend:
         def fake_select(prompt, choices, **_):
             return next(select_responses)
 
-        with patch("forge.cli._ask_text", side_effect=fake_text):
-            with patch("forge.cli._ask_select", side_effect=fake_select):
+        with patch("forge.cli.interactive._ask_text", side_effect=fake_text):
+            with patch("forge.cli.interactive._ask_select", side_effect=fake_select):
                 bc = cli._prompt_backend(0, "Demo", "desc", default_port=5000)
 
         assert bc.name == "api"
@@ -192,11 +192,11 @@ class TestPromptBackend:
 
         with (
             patch(
-                "forge.cli._ask_text",
+                "forge.cli.interactive._ask_text",
                 side_effect=lambda *a, **kw: next(text_responses),
             ),
             patch(
-                "forge.cli._ask_select",
+                "forge.cli.interactive._ask_select",
                 side_effect=lambda *a, **kw: next(select_responses),
             ),
         ):
@@ -261,7 +261,7 @@ class TestMainIntegration:
 
         fake_root = tmp_path / "jsonok"
         fake_root.mkdir()
-        with patch("forge.cli.generate", return_value=fake_root):
+        with patch("forge.cli.main.generate", return_value=fake_root):
             cli.main()
 
         out = capsys.readouterr().out
@@ -359,7 +359,7 @@ class TestMainIntegration:
                 "--no-auth",
             ],
         )
-        with patch("forge.cli._ask_confirm", return_value=False):
+        with patch("forge.cli.interactive._ask_confirm", return_value=False):
             with pytest.raises(SystemExit) as exc:
                 cli.main()
         assert exc.value.code == 0
@@ -451,9 +451,9 @@ class TestCollectInputs:
         def fake_text(msg, default="", **_):
             return next(text_order)
 
-        with patch("forge.cli._ask_text", side_effect=fake_text):
-            with patch("forge.cli._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+        with patch("forge.cli.interactive._ask_text", side_effect=fake_text):
+            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
+                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
                     config = cli._collect_inputs()
 
         assert config is not None
@@ -491,9 +491,9 @@ class TestCollectInputs:
             ]
         )
 
-        with patch("forge.cli._ask_text", side_effect=lambda *a, **kw: next(text_order)):
-            with patch("forge.cli._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+        with patch("forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)):
+            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
+                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
                     result = cli._collect_inputs()
 
         assert result is None
@@ -529,9 +529,9 @@ class TestCollectInputs:
             ]
         )
 
-        with patch("forge.cli._ask_text", side_effect=lambda *a, **kw: next(text_order)):
-            with patch("forge.cli._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+        with patch("forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)):
+            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
+                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
                     config = cli._collect_inputs()
 
         assert config is not None

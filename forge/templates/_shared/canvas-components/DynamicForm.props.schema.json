@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/canvas-components/DynamicForm.props.json",
+  "title": "DynamicFormProps",
+  "description": "Props for the DynamicForm canvas component — renders a form declared by a JSON Schema-like field list.",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string"},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "label": {"type": "string"},
+          "type": {"type": "string", "enum": ["text", "number", "password", "email", "select", "checkbox", "textarea"]},
+          "required": {"type": "boolean"},
+          "default": {},
+          "options": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "description": {"type": "string"}
+        },
+        "required": ["name", "label", "type"]
+      }
+    },
+    "submitLabel": {"type": "string"},
+    "cancelLabel": {"type": "string"}
+  },
+  "required": ["fields"],
+  "additionalProperties": false
+}

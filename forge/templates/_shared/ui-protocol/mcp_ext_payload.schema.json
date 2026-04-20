@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forge.dev/schemas/ui-protocol/mcp_ext_payload.json",
+  "title": "McpExtPayload",
+  "description": "An MCP-extension activity rendered inside a sandboxed iframe. Carries the HTML body and an initial context the iframe can read on load.",
+  "type": "object",
+  "properties": {
+    "engine": {"type": "string", "const": "mcp-ext"},
+    "html": {"type": "string"},
+    "initialContext": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["engine", "html"],
+  "additionalProperties": false
+}
