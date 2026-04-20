@@ -25,8 +25,8 @@
       "sha256": "99563df8c159d5ac"
     },
     "forge.toml": {
-      "size": 8833,
-      "sha256": "a5650c80f255c89f"
+      "size": 8830,
+      "sha256": "87a888163b116657"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
@@ -34,7 +34,7 @@
     },
     "services/api/.copier-answers.yml": {
       "size": 438,
-      "sha256": "6876b64f3c969310"
+      "sha256": "379261d0f1f26b7d"
     },
     "services/api/.env.example": {
       "size": 154,
