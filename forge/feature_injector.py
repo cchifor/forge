@@ -35,6 +35,28 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
 
 
+def _resolve_fragment_dir(fragment_dir: str) -> Path:
+    """Resolve a fragment's directory path.
+
+    Relative paths are interpreted relative to forge's ``_fragments/``
+    directory (the canonical location for built-in fragments). Absolute
+    paths are used verbatim — this is the path plugins take: they ship
+    fragments inside their own package tree and pass
+    ``str(Path(__file__).parent / "fragments" / "my_thing")``.
+
+    Plugin authors who want the automatic resolution can wrap their
+    fragment directory in a helper like:
+
+        from pathlib import Path
+        MY_FRAGMENT_ROOT = Path(__file__).resolve().parent / "fragments"
+        spec = FragmentImplSpec(fragment_dir=str(MY_FRAGMENT_ROOT / "audit_log/python"))
+    """
+    path = Path(fragment_dir)
+    if path.is_absolute():
+        return path
+    return FRAGMENTS_DIR / fragment_dir
+
+
 @dataclass(frozen=True)
 class _Injection:
     feature_key: str  # the owning FeatureSpec.key, used in BEGIN/END sentinels
@@ -176,7 +198,7 @@ def _apply_fragment(
     skip_existing_files: bool = False,
     collector: ProvenanceCollector | None = None,
 ) -> None:
-    fragment = FRAGMENTS_DIR / impl.fragment_dir
+    fragment = _resolve_fragment_dir(impl.fragment_dir)
     if not fragment.is_dir():
         raise GeneratorError(
             f"Fragment directory not found: {fragment}. "

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from importlib import metadata
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 from forge.api import ForgeAPI, PluginRegistration
 
@@ -33,6 +33,13 @@ LOADED_PLUGINS: list[PluginRegistration] = []
 # Plugins that failed to load. Reported by ``forge --plugins list``
 # alongside LOADED_PLUGINS so discovery bugs are visible.
 FAILED_PLUGINS: list[tuple[str, str]] = []
+
+# Plugin-registered CLI commands. Keyed by the flag name (hyphen-separated
+# string the user types as ``forge --<name>``); value is the handler
+# ``(args: argparse.Namespace) -> int``. Populated by
+# ``ForgeAPI.add_command``; consumed by ``forge.cli.parser._build_parser``
+# to inject plugin flags and by ``forge.cli.main`` to dispatch them.
+COMMAND_REGISTRY: dict[str, Callable[..., Any]] = {}
 
 
 def load_all() -> list[PluginRegistration]:
@@ -109,6 +116,7 @@ def _plugin_version(ep: "metadata.EntryPoint") -> str | None:
 
 
 def reset_for_tests() -> None:
-    """Clear LOADED_PLUGINS / FAILED_PLUGINS — use ONLY from tests."""
+    """Clear LOADED_PLUGINS / FAILED_PLUGINS / COMMAND_REGISTRY — use ONLY from tests."""
     LOADED_PLUGINS.clear()
     FAILED_PLUGINS.clear()
+    COMMAND_REGISTRY.clear()

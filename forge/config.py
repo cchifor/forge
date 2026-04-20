@@ -95,6 +95,73 @@ class FrontendFramework(Enum):
 
 
 @dataclass(frozen=True)
+class FrontendSpec:
+    """Static metadata for a plugin-defined frontend framework.
+
+    Built-in frontends (Vue, Svelte, Flutter) are handled specially by
+    the generator's per-framework code paths. This spec exists so
+    plugins can register new frontends without forking; the generator
+    uses the spec's ``template_dir`` to locate the Copier template.
+    """
+
+    template_dir: str  # path under forge/templates/, e.g. "apps/solid-frontend-template"
+    display_label: str  # shown in CLI prompts and log messages
+
+
+# Plugin-registered frontends. Keyed by the wire value (``"solid"``,
+# ``"qwik"``), value is a ``_PluginFramework`` sentinel. Looked up
+# via ``resolve_frontend_framework``.
+PLUGIN_FRAMEWORKS: dict[str, "_PluginFramework"] = {}
+
+# Specs for plugin frontends — not a dict-keyed-by-enum like
+# ``BACKEND_REGISTRY`` because the built-in frameworks don't have
+# specs (they use template mappings in ``generator.py``). Instead,
+# ``FRONTEND_SPECS`` maps wire-value → FrontendSpec and is consulted
+# by the generator when it encounters a plugin framework.
+FRONTEND_SPECS: dict[str, FrontendSpec] = {}
+
+
+class _PluginFramework:
+    """Sentinel for plugin-registered FrontendFramework values."""
+
+    __slots__ = ("value", "name")
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+        self.name = value.upper()
+
+    def __repr__(self) -> str:
+        return f"<FrontendFramework.{self.name} (plugin)>"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _PluginFramework):
+            return self.value == other.value
+        if isinstance(other, FrontendFramework):
+            return self.value == other.value
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(("FrontendFramework", self.value))
+
+
+def register_frontend_framework(value: str) -> "_PluginFramework":
+    """Register a plugin frontend. Returns the sentinel member."""
+    if value not in PLUGIN_FRAMEWORKS:
+        PLUGIN_FRAMEWORKS[value] = _PluginFramework(value)
+    return PLUGIN_FRAMEWORKS[value]
+
+
+def resolve_frontend_framework(value: str) -> "FrontendFramework | _PluginFramework":
+    """Look up a frontend framework by wire value (built-in or plugin)."""
+    for member in FrontendFramework:
+        if member.value == value:
+            return member
+    if value in PLUGIN_FRAMEWORKS:
+        return PLUGIN_FRAMEWORKS[value]
+    raise ValueError(f"Unknown frontend framework: {value!r}")
+
+
+@dataclass(frozen=True)
 class BackendSpec:
     """Static metadata for a backend language: template, prompts, version field.
 

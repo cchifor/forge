@@ -18,12 +18,20 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from app.mcp.audit import (
+    AuditEntry,
+    hash_input,
+    mint_approval_token,
+    record_invocation,
+    verify_approval_token,
+)
 from app.mcp.client import McpRegistry, load_registry_from_config
 
 logger = logging.getLogger(__name__)
@@ -109,13 +117,43 @@ async def list_tools(request: Request) -> list[McpTool]:
     return out
 
 
+class McpMintRequest(BaseModel):
+    """Request to mint an approval token after the user clicks Approve."""
+
+    server: str
+    tool: str
+    input: dict[str, Any]
+
+
+class McpMintResponse(BaseModel):
+    token: str
+
+
+@router.post("/approval/mint", response_model=McpMintResponse)
+async def mint_approval(req: McpMintRequest) -> McpMintResponse:
+    """Issue a signed approval token tied to (server, tool, input-hash).
+
+    The frontend's ApprovalDialog calls this after the user approves and
+    then includes the returned token in the subsequent ``/mcp/invoke``
+    request. Tokens expire after an hour; the signature binds the
+    decision to the specific tool + payload so a token granted for one
+    call cannot be replayed against a different input.
+    """
+    token = mint_approval_token(server=req.server, tool=req.tool, input_payload=req.input)
+    return McpMintResponse(token=token)
+
+
 @router.post("/invoke", response_model=McpInvokeResponse)
 async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeResponse:
-    """Proxy a tool call to the named server.
+    """Proxy a tool call to the named server (audit + approval enforced).
 
-    Approval-token enforcement belongs to the frontend's ApprovalDialog
-    plus an audit-log middleware (1.0.0a4). This endpoint validates only
-    the routing + argument shape for 1.0.0a3.
+    Pipeline:
+      1. Resolve the tool's approval mode from the live tool list.
+      2. If the mode is not ``auto``, verify the approval_token against
+         (server, tool, input) — reject + audit on failure.
+      3. Forward to the MCP client and relay the result.
+      4. Record one audit entry per invocation (approved / denied /
+         rejected-bad-token / auto / error).
     """
     registry = _get_registry(request)
     await registry.start_all()
@@ -125,8 +163,62 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
             status_code=404,
             detail=f"MCP server {req.server!r} is not started (check mcp.config.json + server logs).",
         )
+
+    config = _load_config()
+    default_mode = str(config.get("defaultApprovalMode") or "prompt-once")
+    server_config = (config.get("servers") or {}).get(req.server) or {}
+    approval_mode = str(server_config.get("approvalMode") or default_mode)
+
+    user_id = request.headers.get("x-gatekeeper-user-id")
+    audit_ts = time.time()
+    audit_hash = hash_input(req.input)
+
+    if approval_mode != "auto":
+        token = req.approval_token or ""
+        if not verify_approval_token(
+            token, server=req.server, tool=req.tool, input_payload=req.input
+        ):
+            record_invocation(
+                AuditEntry(
+                    timestamp=audit_ts,
+                    user_id=user_id,
+                    server=req.server,
+                    tool=req.tool,
+                    input_hash=audit_hash,
+                    decision="rejected-bad-token",
+                    error="approval_token missing or invalid",
+                )
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Approval token missing or invalid. Call /mcp/approval/mint first.",
+            )
+
+    decision = "approved" if approval_mode != "auto" else "auto"
     try:
         result = await client.call_tool(req.tool, req.input)
     except Exception as exc:  # noqa: BLE001
+        record_invocation(
+            AuditEntry(
+                timestamp=audit_ts,
+                user_id=user_id,
+                server=req.server,
+                tool=req.tool,
+                input_hash=audit_hash,
+                decision=decision,
+                error=str(exc),
+            )
+        )
         return McpInvokeResponse(ok=False, error=str(exc))
+
+    record_invocation(
+        AuditEntry(
+            timestamp=audit_ts,
+            user_id=user_id,
+            server=req.server,
+            tool=req.tool,
+            input_hash=audit_hash,
+            decision=decision,
+        )
+    )
     return McpInvokeResponse(ok=True, output=result)
