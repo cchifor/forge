@@ -1,0 +1,7 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Object-store port — adapter-less startup raises at first use.
+    from app.ports.object_store import ObjectStorePort  # noqa: F401

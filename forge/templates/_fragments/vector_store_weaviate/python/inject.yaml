@@ -1,0 +1,14 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store adapter: Weaviate
+    from app.adapters.vector_store.weaviate import WeaviateAdapter
+    from app.core.config import settings as _settings
+
+    _weaviate_adapter = WeaviateAdapter(
+        url=_settings.weaviate_url,
+        api_key=_settings.weaviate_api_key,
+        class_prefix=_settings.weaviate_collection,
+    )

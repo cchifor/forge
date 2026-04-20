@@ -34,6 +34,12 @@ _LEGACY_TARGETS = [
         "apps/*/lib/src/features/chat/domain/agent_state.dart",
         "Flutter hand-written protocol types",
     ),
+    # 1.0.0a2: retire the hand-rolled Flutter AgUiClient in favor of
+    # the forge_canvas package version (reconnect + Last-Event-ID).
+    (
+        "apps/*/lib/src/features/chat/data/ag_ui_client.dart",
+        "Flutter hand-rolled SSE client (superseded by forge_canvas)",
+    ),
 ]
 
 

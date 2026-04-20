@@ -29,7 +29,13 @@ dependencies:
 
 {%- if include_chat %}
 
-  # AG-UI chat (Dart-native streaming client + markdown + JSON-patch state)
+  # AG-UI chat — forge_canvas ships the production SSE client
+  # (exponential-backoff reconnect + Last-Event-ID resume) + canvas
+  # registry + shadcn-flavored theme. See packages/forge-canvas-dart/
+  # in the forge repo. Replace with `path:` for local development.
+  forge_canvas: ^1.0.0-alpha.1
+
+  # Chat-specific extras still needed alongside forge_canvas:
   flutter_markdown: ^0.7.5
   markdown: ^7.2.2
   json_patch: ^3.0.1

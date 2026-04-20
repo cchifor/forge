@@ -33,9 +33,23 @@ def inject_ts(
     snippet: str,
     position: str = "after",
 ) -> None:
-    """Insert (or replace) ``snippet`` at the named TS anchor."""
+    """Insert (or replace) ``snippet`` at the named TS anchor.
+
+    When ``FORGE_TS_AST=1`` and node + ts-morph are available, dispatches
+    to the AST-aware sidecar. Falls back to the regex path when the
+    sidecar can't run — the regex injector is robust enough for every
+    shipped forge fragment.
+    """
+    from forge.injectors.ts_morph_sidecar import (  # noqa: PLC0415
+        inject_ts_via_morph,
+        is_enabled,
+    )
+
     if not file.is_file():
         raise FileNotFoundError(file)
+
+    if is_enabled() and inject_ts_via_morph(file, feature_key, marker, snippet, position):
+        return
 
     source = file.read_text(encoding="utf-8")
     marker_name = marker.removeprefix("FORGE:")

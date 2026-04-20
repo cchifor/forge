@@ -87,11 +87,29 @@ class TestForgeAPI:
         assert reg.emitters_added == 1
         assert api._emitters["dart"] is fn
 
-    def test_add_backend_rejects_unknown_language(self) -> None:
+    def test_add_backend_accepts_plugin_language_in_a2(self) -> None:
+        # 1.0.0a2: add_backend now supports plugin-defined languages.
+        # See tests/test_plugin_backend_language.py for the full suite.
+        from forge.config import BACKEND_REGISTRY, BackendSpec, resolve_backend_language
+
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)
-        with pytest.raises(NotImplementedError, match="1.0.0a2"):
-            api.add_backend("go", MagicMock())
+        spec = BackendSpec(
+            template_dir="services/go-svc",
+            display_label="Go",
+            version_field="go_version",
+            version_choices=("1.23",),
+        )
+        try:
+            api.add_backend("go_plugin_test", spec)
+            go = resolve_backend_language("go_plugin_test")
+            assert BACKEND_REGISTRY[go] is spec
+        finally:
+            from forge.config import PLUGIN_LANGUAGES
+
+            sentinel = PLUGIN_LANGUAGES.pop("go_plugin_test", None)
+            if sentinel is not None:
+                BACKEND_REGISTRY.pop(sentinel, None)
 
 
 class TestLoadAll:

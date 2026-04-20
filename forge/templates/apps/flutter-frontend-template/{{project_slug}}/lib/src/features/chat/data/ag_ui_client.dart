@@ -5,6 +5,22 @@ import 'package:dio/dio.dart';
 
 import 'ag_ui_event.dart';
 
+// ⚠️  DEPRECATED (1.0.0a2): the ``forge_canvas`` package ships a
+// production-grade AG-UI client (``AgUiClient`` in
+// ``package:forge_canvas/forge_canvas.dart``) with exponential-backoff
+// reconnect + Last-Event-ID resume + SSE heartbeat detection. This
+// hand-rolled client remains for backward compat with pre-1.0.0a2
+// generated projects.
+//
+// To migrate:
+//   1. Ensure ``forge_canvas`` is in pubspec.yaml dependencies.
+//   2. Replace ``import '.../data/ag_ui_client.dart'`` with
+//      ``import 'package:forge_canvas/forge_canvas.dart' as fc;``
+//   3. Replace ``AgUiClient`` references with ``fc.AgUiClient``.
+//   4. Delete this file.
+//
+// ``forge --migrate`` will do the steps above mechanically in a future alpha.
+
 /// Connects to an AG-UI agent endpoint over Server-Sent Events.
 ///
 /// The deepagent backend exposes `POST /agent/run` which returns an

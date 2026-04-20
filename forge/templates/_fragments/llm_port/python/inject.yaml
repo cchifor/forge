@@ -1,0 +1,9 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # LLM provider port — the chosen adapter registers itself via its
+    # own fragment. Always import the port so adapter-less startup
+    # raises a clear error at first use rather than at import.
+    from app.ports.llm import LlmProviderPort  # noqa: F401

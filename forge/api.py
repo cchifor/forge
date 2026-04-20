@@ -129,26 +129,48 @@ class ForgeAPI:
     def add_backend(self, language_value: str, spec: "BackendSpec") -> None:
         """Register a new backend language in BACKEND_REGISTRY.
 
-        Phase 0.3 ships the hook; plugins that add backends also need
-        matching ``BackendLanguage`` enum members — 1.0.0a2 promotes
-        ``BackendLanguage`` to a plugin-extensible enum. Until then,
-        calling this with an unknown language value raises.
-        """
-        from forge.config import BACKEND_REGISTRY, BackendLanguage  # noqa: PLC0415
+        1.0.0a2+ lets plugins extend ``BackendLanguage`` via a sentinel
+        (``_PluginLanguage``) so a plugin can ship a brand-new backend
+        (e.g. ``go``, ``java``) without forking forge. The sentinel is
+        accepted by ``BackendLanguage(value)`` via the ``_missing_``
+        hook, so every downstream call that looks up a backend by its
+        string value works transparently.
 
-        try:
-            lang = BackendLanguage(language_value)
-        except ValueError as e:
-            raise NotImplementedError(
-                "Plugin-defined backend languages require 1.0.0a2. "
-                f"BackendLanguage doesn't have a '{language_value}' member."
-            ) from e
-        if lang in BACKEND_REGISTRY:
+        Raises ``ValueError`` if ``language_value`` is already a built-in
+        or already registered by another plugin.
+        """
+        from forge.config import (  # noqa: PLC0415
+            BACKEND_REGISTRY,
+            BackendLanguage,
+            PLUGIN_LANGUAGES,
+            register_backend_language,
+        )
+
+        # Check built-in first (enum members have fixed _value2member_map_).
+        builtin: BackendLanguage | None = None
+        for member in BackendLanguage:
+            if member.value == language_value:
+                builtin = member
+                break
+
+        if builtin is not None and builtin in BACKEND_REGISTRY:
             raise ValueError(
                 f"Plugin '{self._registration.name}' tried to register backend "
                 f"'{language_value}', but that language is already registered."
             )
-        BACKEND_REGISTRY[lang] = spec
+
+        if builtin is not None:
+            BACKEND_REGISTRY[builtin] = spec
+        else:
+            if language_value in PLUGIN_LANGUAGES:
+                sentinel = PLUGIN_LANGUAGES[language_value]
+                if sentinel in BACKEND_REGISTRY:
+                    raise ValueError(
+                        f"Plugin '{self._registration.name}' tried to register backend "
+                        f"'{language_value}', but a plugin already claimed that name."
+                    )
+            sentinel = register_backend_language(language_value)
+            BACKEND_REGISTRY[sentinel] = spec
         self._registration.backends_added += 1
 
     # -- Command registration (hook for Phase 2) ---------------------------

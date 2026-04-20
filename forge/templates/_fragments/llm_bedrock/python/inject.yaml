@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # LLM adapter: AWS Bedrock
+    from app.adapters.llm.bedrock import BedrockAdapter
+    from app.core.config import settings as _settings
+
+    _bedrock_adapter = BedrockAdapter(region=_settings.aws_region)

@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # LLM adapter: Anthropic
+    from app.adapters.llm.anthropic import AnthropicAdapter
+    from app.core.config import settings as _settings
+
+    _anthropic_adapter = AnthropicAdapter(api_key=_settings.anthropic_api_key)

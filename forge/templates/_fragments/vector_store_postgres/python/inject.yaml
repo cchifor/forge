@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store adapter: Postgres + pgvector
+    from app.adapters.vector_store.postgres import PostgresAdapter
+    from app.core.db import engine as _db_engine
+
+    _postgres_vector_adapter = PostgresAdapter(engine=_db_engine)

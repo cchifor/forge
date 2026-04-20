@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # LLM adapter: Ollama (local)
+    from app.adapters.llm.ollama import OllamaAdapter
+    from app.core.config import settings as _settings
+
+    _ollama_adapter = OllamaAdapter(host=_settings.ollama_host)

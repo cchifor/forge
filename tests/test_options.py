@@ -221,14 +221,21 @@ class TestResolverAgainstRealRegistry:
         assert "correlation_id" in names
 
     def test_rag_backend_qdrant_pulls_rag_stack(self) -> None:
+        # 1.0.0a2: rag.backend now uses the port+adapter pattern (ADR-002).
         plan = resolve(self._project({"rag.backend": "qdrant"}))
         names = {rf.fragment.name for rf in plan.ordered}
-        assert {"rag_pipeline", "rag_qdrant", "conversation_persistence"}.issubset(names)
+        assert {
+            "rag_pipeline",
+            "conversation_persistence",
+            "vector_store_port",
+            "vector_store_qdrant",
+        }.issubset(names)
 
     def test_rag_backend_none_includes_no_rag_fragments(self) -> None:
         plan = resolve(self._project({"rag.backend": "none"}))
         names = {rf.fragment.name for rf in plan.ordered}
         assert not any(n.startswith("rag_") for n in names)
+        assert not any(n.startswith("vector_store_") for n in names)
 
     def test_unknown_option_path_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown option"):
@@ -499,7 +506,9 @@ class TestYamlRoundTrip:
         config.validate()
         plan = resolve(config)
         names = {rf.fragment.name for rf in plan.ordered}
-        assert "rag_qdrant" in names
+        # 1.0.0a2: rag.backend=qdrant now enables the port+adapter pair.
+        assert "vector_store_qdrant" in names
+        assert "vector_store_port" in names
         assert plan.option_values["rag.top_k"] == 10
 
 

@@ -1,0 +1,15 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store adapter: Chroma
+    from app.adapters.vector_store.chroma import ChromaAdapter
+    from app.core.config import settings as _settings
+
+    _chroma_adapter = ChromaAdapter(
+        url=_settings.chroma_url,
+        collection_prefix=_settings.chroma_collection,
+        tenant=_settings.chroma_tenant,
+        database=_settings.chroma_database,
+    )
