@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Queue adapter: AWS SQS
+    from app.adapters.queue.sqs import SqsQueueAdapter
+    from app.core.config import settings as _settings
+
+    _sqs_queue_adapter = SqsQueueAdapter(region=_settings.aws_region)

@@ -1,0 +1,10 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Queue adapter: Redis
+    from app.adapters.queue.redis import RedisQueueAdapter
+    from app.core.config import settings as _settings
+
+    _redis_queue_adapter = RedisQueueAdapter(url=_settings.redis_url)

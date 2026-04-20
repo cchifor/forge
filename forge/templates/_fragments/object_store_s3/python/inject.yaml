@@ -1,0 +1,15 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Object-store adapter: AWS S3 (or S3-compatible via endpoint_url).
+    from app.adapters.object_store.s3 import S3ObjectStoreAdapter
+    from app.core.config import settings as _settings
+
+    _s3_object_store = S3ObjectStoreAdapter(
+        region=_settings.aws_region,
+        access_key=getattr(_settings, "aws_access_key_id", None),
+        secret_key=getattr(_settings, "aws_secret_access_key", None),
+        endpoint_url=getattr(_settings, "s3_endpoint_url", None),
+    )

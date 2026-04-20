@@ -818,3 +818,267 @@ register_fragment(
         },
     )
 )
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_chroma",
+        depends_on=("vector_store_port",),
+        capabilities=("chroma",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_chroma/python",
+                dependencies=("chromadb>=0.5.0",),
+                env_vars=(
+                    ("CHROMA_URL", "http://chroma:8000"),
+                    ("CHROMA_COLLECTION", "forge_rag"),
+                    ("CHROMA_TENANT", "default_tenant"),
+                    ("CHROMA_DATABASE", "default_database"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_pinecone",
+        depends_on=("vector_store_port",),
+        capabilities=("pinecone",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_pinecone/python",
+                dependencies=("pinecone>=5.4.0",),
+                env_vars=(
+                    ("PINECONE_API_KEY", ""),
+                    ("PINECONE_INDEX", "forge-rag"),
+                    ("PINECONE_ENVIRONMENT", ""),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_milvus",
+        depends_on=("vector_store_port",),
+        capabilities=("milvus",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_milvus/python",
+                dependencies=("pymilvus>=2.5.0",),
+                env_vars=(
+                    ("MILVUS_URI", "http://milvus:19530"),
+                    ("MILVUS_TOKEN", ""),
+                    ("MILVUS_COLLECTION", "forge_rag"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_weaviate",
+        depends_on=("vector_store_port",),
+        capabilities=("weaviate",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_weaviate/python",
+                dependencies=("weaviate-client>=4.9.0",),
+                env_vars=(
+                    ("WEAVIATE_URL", "http://weaviate:8080"),
+                    ("WEAVIATE_API_KEY", ""),
+                    ("WEAVIATE_COLLECTION", "ForgeRag"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_postgres",
+        depends_on=("vector_store_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="vector_store_postgres/python",
+            ),
+        },
+    )
+)
+
+
+# -- LLM provider port + adapters (1.0.0a2) ---------------------------------
+
+register_fragment(
+    Fragment(
+        name="llm_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="llm_port/python",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="llm_openai",
+        depends_on=("llm_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="llm_openai/python",
+                dependencies=("openai>=1.54.0",),
+                env_vars=(
+                    ("OPENAI_API_KEY", ""),
+                    ("OPENAI_BASE_URL", ""),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="llm_anthropic",
+        depends_on=("llm_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="llm_anthropic/python",
+                dependencies=("anthropic>=0.40.0",),
+                env_vars=(("ANTHROPIC_API_KEY", ""),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="llm_ollama",
+        depends_on=("llm_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="llm_ollama/python",
+                dependencies=("ollama>=0.4.0",),
+                env_vars=(("OLLAMA_HOST", "http://localhost:11434"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="llm_bedrock",
+        depends_on=("llm_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="llm_bedrock/python",
+                dependencies=("aioboto3>=13.2.0",),
+                env_vars=(("AWS_REGION", "us-east-1"),),
+            ),
+        },
+    )
+)
+
+
+# -- Queue port + adapters (1.0.0a2) ----------------------------------------
+
+register_fragment(
+    Fragment(
+        name="queue_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="queue_port/python",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="queue_redis",
+        depends_on=("queue_port",),
+        capabilities=("redis",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="queue_redis/python",
+                dependencies=("redis>=5.2.0",),
+                env_vars=(("REDIS_URL", "redis://redis:6379/0"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="queue_sqs",
+        depends_on=("queue_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="queue_sqs/python",
+                dependencies=("aioboto3>=13.2.0",),
+                env_vars=(("AWS_REGION", "us-east-1"),),
+            ),
+        },
+    )
+)
+
+
+# -- Object-store port + adapters (1.0.0a2) ---------------------------------
+
+register_fragment(
+    Fragment(
+        name="object_store_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="object_store_port/python",
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="object_store_s3",
+        depends_on=("object_store_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="object_store_s3/python",
+                dependencies=("aioboto3>=13.2.0",),
+                env_vars=(
+                    ("AWS_REGION", "us-east-1"),
+                    ("S3_ENDPOINT_URL", ""),
+                    ("AWS_ACCESS_KEY_ID", ""),
+                    ("AWS_SECRET_ACCESS_KEY", ""),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="object_store_local",
+        depends_on=("object_store_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir="object_store_local/python",
+                env_vars=(("OBJECT_STORE_ROOT", "/var/lib/forge/objects"),),
+            ),
+        },
+    )
+)

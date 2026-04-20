@@ -776,14 +776,20 @@ OPTIONS: none | pgvector | qdrant | chroma | milvus | weaviate | pinecone | post
         # conversation_persistence is a transitive dep of rag_pipeline;
         # bundling it means a single `rag.backend=<x>` spin is
         # self-contained (the resolver won't error on a missing dep).
+        # 1.0.0a2: rag.backend now drives the port+adapter pattern
+        # (ADR-002). The vector_store_port fragment is always applied
+        # alongside the chosen adapter, so a generated project can swap
+        # providers via env config without regeneration. Legacy rag_*
+        # fragments are deprecated but still resolvable for
+        # pre-1.0.0a2 projects invoking `forge --update`.
         enables={
-            "pgvector": ("conversation_persistence", "rag_pipeline"),
-            "qdrant": ("conversation_persistence", "rag_pipeline", "rag_qdrant"),
-            "chroma": ("conversation_persistence", "rag_pipeline", "rag_chroma"),
-            "milvus": ("conversation_persistence", "rag_pipeline", "rag_milvus"),
-            "weaviate": ("conversation_persistence", "rag_pipeline", "rag_weaviate"),
-            "pinecone": ("conversation_persistence", "rag_pipeline", "rag_pinecone"),
-            "postgresql": ("conversation_persistence", "rag_pipeline", "rag_postgresql"),
+            "pgvector": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_postgres"),
+            "qdrant": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_qdrant"),
+            "chroma": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_chroma"),
+            "milvus": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_milvus"),
+            "weaviate": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_weaviate"),
+            "pinecone": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_pinecone"),
+            "postgresql": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_postgres"),
         },
     )
 )
@@ -973,6 +979,85 @@ BACKENDS: python, node, rust (same content, project-scoped)""",
 
 
 # -- Reliability defaults (Phase 4.1, 1.0.0a1) ------------------------------
+
+register_option(
+    Option(
+        path="queue.backend",
+        type=OptionType.ENUM,
+        default="none",
+        options=("none", "redis", "sqs"),
+        summary="Background-work queue — Redis lists or AWS SQS, behind the QueuePort.",
+        description="""\
+Selects which queue implementation the ``QueuePort`` resolves to.
+Redis is the simple-and-cheap default for self-hosted setups; SQS
+covers AWS-native deployments with delayed delivery + FIFO.
+
+OPTIONS: none | redis | sqs
+BACKENDS: python
+DEPENDENCY: redis-py (redis) or aioboto3 (sqs)
+ENV: REDIS_URL / AWS_REGION""",
+        category=FeatureCategory.ASYNC_WORK,
+        enables={
+            "redis": ("queue_port", "queue_redis"),
+            "sqs": ("queue_port", "queue_sqs"),
+        },
+    )
+)
+
+
+register_option(
+    Option(
+        path="object_store.backend",
+        type=OptionType.ENUM,
+        default="none",
+        options=("none", "s3", "local"),
+        summary="Blob storage — AWS S3 / S3-compatible / local filesystem, behind ObjectStorePort.",
+        description="""\
+Selects which object-store implementation backs the ``ObjectStorePort``.
+The ``s3`` adapter also handles MinIO / R2 / Wasabi (set S3_ENDPOINT_URL).
+The ``local`` adapter writes under a filesystem root — dev / test only.
+
+OPTIONS: none | s3 | local
+BACKENDS: python
+DEPENDENCY: aioboto3 (s3) | none (local)
+ENV: AWS_REGION / S3_ENDPOINT_URL / OBJECT_STORE_ROOT""",
+        category=FeatureCategory.PLATFORM,
+        enables={
+            "s3": ("object_store_port", "object_store_s3"),
+            "local": ("object_store_port", "object_store_local"),
+        },
+    )
+)
+
+
+register_option(
+    Option(
+        path="llm.provider",
+        type=OptionType.ENUM,
+        default="none",
+        options=("none", "openai", "anthropic", "ollama", "bedrock"),
+        summary="LLM provider for the agent loop (OpenAI, Anthropic, Ollama, or AWS Bedrock).",
+        description="""\
+Selects which LLM provider the generated service talks to via the
+``LlmProviderPort`` (see ``docs/architecture-decisions/ADR-002-ports-and-adapters.md``).
+The chosen adapter registers with the dependency container; the rest
+of the app imports the Protocol. Swap providers in production by
+changing one env var — no regeneration.
+
+OPTIONS: none | openai | anthropic | ollama | bedrock
+BACKENDS: python
+DEPENDENCY: provider-specific SDK (openai / anthropic / ollama / aioboto3)
+ENV: provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)""",
+        category=FeatureCategory.CONVERSATIONAL_AI,
+        enables={
+            "openai": ("llm_port", "llm_openai"),
+            "anthropic": ("llm_port", "llm_anthropic"),
+            "ollama": ("llm_port", "llm_ollama"),
+            "bedrock": ("llm_port", "llm_bedrock"),
+        },
+    )
+)
+
 
 register_option(
     Option(

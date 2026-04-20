@@ -1,13 +1,11 @@
 # reliability_connection_pool — Node.
 #
-# Ships a `databaseUrlWithPool` helper. Injecting it into the user's
-# Prisma bootstrap requires choosing a marker that exists in the base
-# Node template; the current base template only ships markers in
-# `src/app.ts` (not in `src/lib/prisma.ts`), so this fragment is
-# files-only. Users wire it in by replacing their Prisma client's
-# `datasource.url` with `databaseUrlWithPool(process.env.DATABASE_URL)`.
-#
-# A future alpha (1.0.0a2) adds a `FORGE:PRISMA_CLIENT_INIT` marker in
-# the base template so the wiring auto-applies. For now the empty list
-# keeps the injector from failing; the file-copy still lands the helper.
-[]
+# Injects the pool helper import above the Prisma client initialisation
+# block. The base template ships `FORGE:PRISMA_CLIENT_INIT` in
+# `src/lib/prisma.ts` (1.0.0a2+).
+
+- target: src/lib/prisma.ts
+  marker: FORGE:PRISMA_CLIENT_INIT
+  position: before
+  zone: generated
+  snippet: "import { databaseUrlWithPool } from './prisma-pool';"

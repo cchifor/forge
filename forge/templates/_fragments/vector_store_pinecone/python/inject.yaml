@@ -1,0 +1,14 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store adapter: Pinecone
+    from app.adapters.vector_store.pinecone import PineconeAdapter
+    from app.core.config import settings as _settings
+
+    _pinecone_adapter = PineconeAdapter(
+        api_key=_settings.pinecone_api_key,
+        index_name=_settings.pinecone_index,
+        environment=_settings.pinecone_environment or "",
+    )

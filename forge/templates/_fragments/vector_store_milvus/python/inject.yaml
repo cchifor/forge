@@ -1,0 +1,14 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Vector-store adapter: Milvus
+    from app.adapters.vector_store.milvus import MilvusAdapter
+    from app.core.config import settings as _settings
+
+    _milvus_adapter = MilvusAdapter(
+        uri=_settings.milvus_uri,
+        token=_settings.milvus_token,
+        collection_prefix=_settings.milvus_collection,
+    )

@@ -1,0 +1,13 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # LLM adapter: OpenAI
+    from app.adapters.llm.openai import OpenAIAdapter
+    from app.core.config import settings as _settings
+
+    _openai_adapter = OpenAIAdapter(
+        api_key=_settings.openai_api_key,
+        base_url=getattr(_settings, "openai_base_url", None),
+    )

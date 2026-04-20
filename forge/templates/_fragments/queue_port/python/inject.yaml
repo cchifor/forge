@@ -1,0 +1,7 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Queue port — adapter-less startup raises a clear error at first use.
+    from app.ports.queue import QueuePort  # noqa: F401

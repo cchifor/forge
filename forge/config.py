@@ -27,6 +27,66 @@ class BackendLanguage(Enum):
     RUST = "rust"
 
 
+# Plugin-registered backend language values. Keyed by the wire value
+# (``"go"``, ``"java"``), value is a sentinel object (_PluginLanguage)
+# that mimics a BackendLanguage member well enough for the generator
+# dispatch + fragment lookup. Look up via ``resolve_backend_language``.
+PLUGIN_LANGUAGES: dict[str, "_PluginLanguage"] = {}
+
+
+class _PluginLanguage:
+    """Synthetic BackendLanguage member for plugin-registered languages.
+
+    Behaves like a frozen enum member: has ``.value``, ``.name``, and
+    hashes consistently so it works as a dict key in BACKEND_REGISTRY.
+    The Python enum machinery refuses to return non-Enum values from
+    ``_missing_``, so we expose a separate resolution function instead
+    of pretending this is a real member.
+    """
+
+    __slots__ = ("value", "name")
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+        self.name = value.upper()
+
+    def __repr__(self) -> str:
+        return f"<BackendLanguage.{self.name} (plugin)>"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _PluginLanguage):
+            return self.value == other.value
+        if isinstance(other, BackendLanguage):
+            return self.value == other.value
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(("BackendLanguage", self.value))
+
+
+def register_backend_language(value: str) -> "_PluginLanguage":
+    """Register a plugin language value. Returns the sentinel member."""
+    if value not in PLUGIN_LANGUAGES:
+        PLUGIN_LANGUAGES[value] = _PluginLanguage(value)
+    return PLUGIN_LANGUAGES[value]
+
+
+def resolve_backend_language(value: str) -> "BackendLanguage | _PluginLanguage":
+    """Look up a language by string value. Checks built-in enum first,
+    then plugin-registered sentinels. Raises ValueError if neither
+    matches — callers treat that as "unknown language".
+
+    Used by fragment/generator code that deals with language strings
+    from YAML configs or plugin metadata.
+    """
+    for member in BackendLanguage:
+        if member.value == value:
+            return member
+    if value in PLUGIN_LANGUAGES:
+        return PLUGIN_LANGUAGES[value]
+    raise ValueError(f"Unknown backend language: {value!r}")
+
+
 class FrontendFramework(Enum):
     VUE = "vue"
     SVELTE = "svelte"
@@ -49,7 +109,10 @@ class BackendSpec:
     version_choices: tuple[str, ...]  # interactive prompt choices, first is default
 
 
-BACKEND_REGISTRY: dict[BackendLanguage, BackendSpec] = {
+# BACKEND_REGISTRY keys are either real ``BackendLanguage`` members or
+# ``_PluginLanguage`` sentinels — both share the ``.value`` attribute so
+# downstream code can treat them uniformly.
+BACKEND_REGISTRY: dict["BackendLanguage | _PluginLanguage", BackendSpec] = {
     BackendLanguage.PYTHON: BackendSpec(
         template_dir="services/python-service-template",
         display_label="Python (FastAPI)",

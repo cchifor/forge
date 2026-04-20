@@ -1,0 +1,12 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Object-store adapter: Local filesystem (dev / test).
+    from app.adapters.object_store.local import LocalObjectStoreAdapter
+    from app.core.config import settings as _settings
+
+    _local_object_store = LocalObjectStoreAdapter(
+        root=getattr(_settings, "object_store_root", "/var/lib/forge/objects"),
+    )
