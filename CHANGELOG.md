@@ -3,7 +3,21 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0b1] - unreleased
+## [1.0.0rc1] - unreleased
+
+> First release candidate. Feature-frozen since 1.0.0b1 with no new changes — this RC exists to exercise the full release-rehearsal pipeline (RFC-004) against every registry (TestPyPI, npm `alpha` tag, pub.dev `--dry-run`) before the v1.0.0 tag push. Promoted to stable 1.0.0 if the rehearsal completes without rollbacks.
+
+### Changed
+
+- `pyproject.toml` version pinned to the RC identifier (no `.dev0` suffix) so `uv build` emits installable `forge-1.0.0rc1` artefacts for the rehearsal.
+
+### Tests
+
+662 passing, 1 skipped (no change from b1).
+
+---
+
+## [1.0.0b1] - 2026-04-20
 
 > First beta — **feature freeze**. No new features accepted from this point; only bug fixes, doc polish, and release-rehearsal hardening.
 
