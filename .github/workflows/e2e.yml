@@ -1,5 +1,11 @@
 name: E2E
 
+# Runs the slow, toolchain-heavy end-to-end suite: generates full
+# projects for every backend + frontend matrix and runs each
+# generated project's native test suite (pytest / vitest / cargo /
+# flutter test). Scheduled nightly + on PRs touching templates /
+# generator.
+
 on:
   schedule:
     - cron: "0 5 * * *"  # 05:00 UTC daily
@@ -9,6 +15,10 @@ on:
       - "forge/templates/**"
       - "forge/generator.py"
       - "forge/docker_manager.py"
+      - "forge/codegen/**"
+      - "forge/feature_injector.py"
+      - "forge/merge.py"
+      - "forge/injectors/**"
       - "tests/e2e/**"
       - ".github/workflows/e2e.yml"
 
@@ -17,17 +27,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
+  e2e-core:
+    name: forge-own-tests (python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Sync dependencies
+        run: uv sync --all-groups
+      - name: Run forge's own test suite (non-e2e)
+        run: uv run pytest --no-cov --ignore=tests/e2e
+
+  e2e-generated:
+    name: generated-project suites (${{ matrix.preset }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: e2e-core
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - python-vue
+          - node-svelte
+          - rust-none
+          - multi-backend-keycloak
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-
-      - name: Install Python
+      - name: Install Python 3.13
         run: uv python install 3.13
 
       - uses: actions/setup-node@v4
@@ -36,6 +75,13 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Flutter (only for flutter presets)
+        if: startsWith(matrix.preset, 'flutter-') || matrix.preset == 'multi-backend-keycloak'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          cache: true
 
       - name: Cache cargo registry & target
         uses: actions/cache@v4
@@ -52,7 +98,50 @@ jobs:
           git config --global user.name "Forge CI"
 
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --all-groups
 
-      - name: Run e2e suite
-        run: uv run pytest -m e2e -v --no-cov
+      - name: Run e2e suite (preset ${{ matrix.preset }})
+        env:
+          FORGE_E2E_PRESET: ${{ matrix.preset }}
+        run: uv run pytest -m e2e -v --no-cov -k "${{ matrix.preset }}"
+
+  e2e-canvas-packages:
+    name: canvas packages build + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: canvas-vue — install + typecheck + build
+        working-directory: packages/canvas-vue
+        run: |
+          npm install --no-fund --no-audit
+          npm run typecheck
+          npm run build
+
+      - name: canvas-svelte — install + build
+        working-directory: packages/canvas-svelte
+        run: |
+          npm install --no-fund --no-audit
+          npx vite build
+
+      - name: Install Flutter for forge_canvas
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          cache: true
+
+      - name: forge_canvas — analyze
+        working-directory: packages/forge-canvas-dart
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+
+      - name: forge_canvas — test (if tests exist)
+        working-directory: packages/forge-canvas-dart
+        run: |
+          if [ -d test ]; then flutter test; else echo "no tests yet"; fi
