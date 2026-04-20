@@ -1,5 +1,12 @@
-- target: src/db.rs
-  marker: FORGE:DB_MODULES
+# reliability_connection_pool — Rust.
+#
+# Declares the `db_pool` module in lib.rs so `forge_db_pool::build_pool`
+# becomes importable. The base template ships a `FORGE:LIB_MOD_REGISTRATION`
+# marker at the top of src/lib.rs — wiring there keeps the registration
+# alongside other top-level modules.
+
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
   position: after
   zone: generated
-  snippet: "mod db_pool;"
+  snippet: "pub mod db_pool;"

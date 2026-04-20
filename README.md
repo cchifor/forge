@@ -4,18 +4,19 @@
 
 *The single-command, polyglot full-stack generator for production services, agent platforms, and RAG apps.*
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue?style=flat-square)](https://github.com/cchifor/forge)
+[![version](https://img.shields.io/badge/version-1.0.0a1-blue?style=flat-square)](https://github.com/cchifor/forge)
 [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge)
-[![tests](https://img.shields.io/badge/tests-367%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
-[![coverage](https://img.shields.io/badge/coverage-90%25-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
+[![tests](https://img.shields.io/badge/tests-571%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
 [![backends](https://img.shields.io/badge/backends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![frontends](https://img.shields.io/badge/frontends-3-informational?style=flat-square)](docs/FEATURES.md)
-[![options](https://img.shields.io/badge/options-22-informational?style=flat-square)](docs/FEATURES.md)
+[![options](https://img.shields.io/badge/options-27-informational?style=flat-square)](docs/FEATURES.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 </div>
+
+> **1.0.0a1 alpha is live.** Schema-first core (UI protocol JSON Schemas + entity YAML DSL), provenance manifest for safe `--update`, entry-point plugin SDK, LibCST Python AST injection, three-zone merge, reliability / observability / security fragments, published canvas packages (Vue / Svelte / Dart), and seven new CLI verbs (`--doctor`, `--plan`, `--dry-run`, `--preview`, `--canvas lint`, `--plugins list`, `--migrate`, `--new-entity-name`, `--add-backend-language`). See [`RELEASING.md`](RELEASING.md), [`UPGRADING.md`](UPGRADING.md), and the [RFCs](docs/rfcs/).
 
 `forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed 22-option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
 

@@ -306,13 +306,17 @@ def _apply_zoned_injection(target: Path, inj: _Injection) -> bool:
       * ``user``      — apply only if no sentinel block for this tag
                         already exists. If a block is present, leave it
                         alone (the user may have customized its body).
-      * ``merge``     — currently aliased to ``generated`` for 1.0.0a1.
-                        True three-way merge requires the provenance
-                        baseline to be threaded into the injector; that
-                        lands in the Phase 2.2 follow-up alpha. For now,
-                        the zone is accepted and documented but behaves
-                        like generated — the user gets the semantic
-                        declaration without the runtime bite.
+      * ``merge``     — ⚠️  **CAVEAT**: in 1.0.0a1 this zone behaves
+                        identically to ``generated``. True three-way
+                        merge against the provenance baseline lands in
+                        1.0.0a3 once the merge primitive reads the
+                        baseline sha from `forge.toml`. Declaring the
+                        zone now is fine — the semantic intent is
+                        recorded and re-applying won't overwrite
+                        changes unexpectedly in 1.0.0a3 — but it does
+                        NOT currently emit ``.forge-merge`` conflict
+                        markers. Users who need guaranteed preservation
+                        today should use ``user`` instead.
     """
     if inj.zone == "user":
         if _has_sentinel_block(target, inj.feature_key, inj.marker):

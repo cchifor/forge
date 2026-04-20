@@ -1,0 +1,20 @@
+# observability_otel — Rust.
+#
+# Registers the `otel` module and calls `configure_otel` before the
+# tracing subscriber layers are assembled so traces flow through the
+# bridge on every subsequent log line.
+
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: "pub mod otel;"
+
+- target: src/main.rs
+  marker: FORGE:TRACING_LAYERS
+  position: before
+  zone: generated
+  snippet: |-
+    let service_name = std::env::var("OTEL_SERVICE_NAME")
+        .unwrap_or_else(|_| "forge-service".to_string());
+    let _ = crate::otel::configure_otel(&service_name);
