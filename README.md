@@ -22,21 +22,48 @@
 
 ---
 
-## Visuals
+## Architecture
 
-> The four slots below are placeholders awaiting contributor PRs. Each link notes the intended asset and tag contributors should produce.
+```mermaid
+flowchart LR
+    User([Human / AI agent]) -->|forge new<br/>or forge.yaml| CLI[forge CLI]
 
-![Interactive run (asciinema)](docs/assets/forge-interactive.svg)
-*Terminal cast of the interactive generator asking for backend, frontend, entities, and producing a runnable stack. Capture via `asciinema rec` → `svg-term`.*
+    subgraph Gen[Generation]
+        CLI --> Resolver[Option → Fragment<br/>plan resolver]
+        Resolver --> Injector[Fragment pipeline<br/>AST-aware injection]
+        Resolver --> Codegen[Schema-first codegen<br/>UI proto + enums + canvas manifest]
+        Injector --> Project[Generated project]
+        Codegen --> Project
+        Project --> Toml[forge.toml<br/>provenance + merge blocks]
+    end
 
-![Architecture diagram](docs/assets/architecture.svg)
-*Mermaid diagram: browser → Traefik → (Vue \| Svelte \| Flutter) + (FastAPI \| Fastify \| Axum) + Postgres + Redis + Keycloak/Gatekeeper.*
+    subgraph Proj[Generated stack]
+        Traefik[Traefik]
+        Vue[Vue / Svelte / Flutter]
+        API1[FastAPI / Fastify / Axum]
+        API2[...nth backend]
+        PG[Postgres + pgvector]
+        Redis[Redis]
+        KC[Keycloak + Gatekeeper]
+        VS[Vector store<br/>qdrant / chroma / pinecone / ...]
+        LLM[LLM provider<br/>OpenAI / Anthropic / Ollama / Bedrock]
+        MCP[MCP servers]
+        User -->|HTTPS| Traefik
+        Traefik --> Vue
+        Traefik --> API1
+        Traefik --> API2
+        API1 --> PG
+        API1 --> Redis
+        Traefik --> KC
+        API1 -.port.-> VS
+        API1 -.port.-> LLM
+        API1 -.subprocess.-> MCP
+    end
 
-![Generated Vue app with agentic chat](docs/assets/generated-vue.png)
-*Screenshot of a generated Vue + Keycloak app displaying the AG-UI chat panel streaming from the `/ws/agent` endpoint.*
+    Project ==>|docker compose up| Proj
+```
 
-![forge --list output](docs/assets/feature-list.png)
-*Screenshot of `forge --list` showing the 22-option catalogue, per-option types, stability tiers, and per-backend coverage.*
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour.
 
 ---
 
