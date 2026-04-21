@@ -18,6 +18,8 @@ from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
 from forge.api import ForgeAPI, PluginRegistration
+from forge.errors import FragmentError
+from forge.fragments import FRAGMENT_REGISTRY
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -86,6 +88,23 @@ def load_all() -> list[PluginRegistration]:
 
         LOADED_PLUGINS.append(registration)
 
+    # Epic I (1.1.0-alpha.1) — lock the fragment registry after every
+    # plugin has had its turn to register. A broken plugin graph (orphan
+    # depends_on, cycle) surfaces here with a clear error rather than
+    # deep inside generation. Late registration — e.g. a plugin that
+    # tries to add a fragment during a CLI verb rather than at load —
+    # now hits `PluginError(PLUGIN_REGISTRY_FROZEN)`.
+    try:
+        FRAGMENT_REGISTRY.freeze()
+    except FragmentError as exc:
+        # The registry is in an internally-inconsistent state because
+        # something in the built-in + plugin union is broken. Record
+        # it as a plugin-load failure rather than crashing — forge should
+        # still be able to run introspection verbs (`--list`, `--plugins`)
+        # so the operator can diagnose.
+        FAILED_PLUGINS.append(("<registry audit>", f"{type(exc).__name__}: {exc}"))
+        logger.error("FRAGMENT_REGISTRY audit failed: %s", exc)
+
     return LOADED_PLUGINS
 
 
@@ -117,7 +136,12 @@ def _plugin_version(ep: metadata.EntryPoint) -> str | None:
 
 
 def reset_for_tests() -> None:
-    """Clear LOADED_PLUGINS / FAILED_PLUGINS / COMMAND_REGISTRY — use ONLY from tests."""
+    """Clear LOADED_PLUGINS / FAILED_PLUGINS / COMMAND_REGISTRY — use ONLY from tests.
+
+    Also thaws ``FRAGMENT_REGISTRY`` so a subsequent ``load_all()`` call can
+    register plugin fragments + re-freeze cleanly.
+    """
     LOADED_PLUGINS.clear()
     FAILED_PLUGINS.clear()
     COMMAND_REGISTRY.clear()
+    FRAGMENT_REGISTRY.frozen = False
