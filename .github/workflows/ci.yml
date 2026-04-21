@@ -106,6 +106,12 @@ jobs:
         # failure surfaces *which* module dropped rather than just "coverage
         # low". pytest exits non-zero when any parametrized case fails.
         run: uv run pytest tests/test_coverage_gates.py -v --no-cov
+      - name: Refresh coverage badge
+        # Epic S — keeps docs/coverage-policy.md's header and
+        # .forge-coverage.json in sync with the actual measured coverage.
+        # Stops stale numbers (like the stale "21%" this epic opened with)
+        # from lingering in docs after coverage improves.
+        run: uv run python scripts/coverage_badge.py
       - name: Upload coverage to Codecov
         # Public repo: Codecov's OIDC flow uploads without a token. If we
         # switch to a private repo later, set CODECOV_TOKEN in repo secrets
@@ -137,3 +143,77 @@ jobs:
         run: uv sync --all-extras --dev
       - name: pytest -m package_integrity
         run: uv run pytest -m package_integrity -v --no-cov
+
+  # Epic S (1.1.0-alpha.1) — config-matrix validation (lane A: generate).
+  # `matrix-setup` reads tests/matrix/scenarios.yaml and emits the scenario
+  # list as a GitHub Actions matrix so each scenario runs on its own runner.
+  # Parallelism means wall-clock is bounded by the slowest scenario (~1min
+  # for lane A) rather than the sum. Lanes B and C arrive in sprint 2.
+  matrix-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.load.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - id: load
+        name: Emit scenario list as JSON
+        # ``yq`` isn't on the default runner image; use the Python parser
+        # we already depend on (pyyaml) to keep the dependency surface
+        # minimal. The printed JSON populates the downstream strategy
+        # matrix via ``fromJSON``.
+        run: |
+          uv run python -c '
+          import json, yaml
+          data = yaml.safe_load(open("tests/matrix/scenarios.yaml"))
+          names = [s["name"] for s in data["scenarios"]]
+          print(f"scenarios={json.dumps(names)}")
+          ' >> "$GITHUB_OUTPUT"
+
+  matrix-generate:
+    needs: matrix-setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - name: Run lane A (generate) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane generate
+
+  # Lane B — toolchain verify. Runs per-scenario in parallel. Each
+  # scenario's config may depend on a different backend toolchain (uv,
+  # node/npm, cargo), so we preinstall all three before dispatching.
+  matrix-verify:
+    needs: matrix-setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install rustup stable
+        # The setup-rust actions add churn; one-liner is stable + cached
+        # implicitly by the runner image on ubuntu-latest.
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane B (verify) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane verify

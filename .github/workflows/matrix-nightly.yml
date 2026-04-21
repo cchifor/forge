@@ -1,0 +1,156 @@
+name: Matrix nightly (lane C — compose-up smoke)
+
+# Runs the RFC-006 HTTP smoke contract against every scenario nightly.
+# Each scenario spins up its own docker-compose stack, hits the contract
+# endpoints, and tears down. Lane C is excluded from PR runs because
+# per-scenario wall-clock runs ~10 min (Docker pull + compose up + tests
+# + teardown); nightly budget is ~2 hours max total.
+#
+# Also triggerable manually (workflow_dispatch) or when a PR is labeled
+# ``ci:matrix-smoke`` so contributors can exercise lane C on demand for
+# changes that touch fragment templates or docker-compose rendering.
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC nightly
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: matrix-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Gate the label-triggered variant so random labels don't fire this.
+  gate:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'ci:matrix-smoke'
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.load.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - id: load
+        name: Emit scenario list as JSON
+        run: |
+          uv run python -c '
+          import json, yaml
+          data = yaml.safe_load(open("tests/matrix/scenarios.yaml"))
+          # Lane C only — skip scenarios that opt out via ``lanes``.
+          names = [s["name"] for s in data["scenarios"] if "smoke" in s.get("lanes", [])]
+          print(f"scenarios={json.dumps(names)}")
+          ' >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: gate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.gate.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install rustup stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
+      - name: Upload per-scenario JSON status artifact
+        # Each smoke job emits a one-row JSON file; the aggregator job
+        # below stitches them into the final dashboard. Using artifacts
+        # avoids a fan-in via git, which would require a serialized
+        # commit step that conflicts across parallel runners.
+        if: always()
+        run: |
+          mkdir -p matrix-status
+          uv run python tests/matrix/runner.py \
+            --scenario ${{ matrix.scenario }} --lane smoke --json > \
+            matrix-status/${{ matrix.scenario }}.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-status-${{ matrix.scenario }}
+          path: matrix-status/
+          if-no-files-found: ignore
+      - name: Dump docker compose logs on failure
+        if: failure()
+        run: |
+          for f in /tmp/forge-matrix-*/${{ matrix.scenario }}*/docker-compose.yml; do
+            if [ -f "$f" ]; then
+              echo "=== docker compose logs for $f ==="
+              docker compose -f "$f" logs --tail 200 || true
+              docker compose -f "$f" down -v --remove-orphans || true
+            fi
+          done
+
+  # Aggregate per-scenario JSON artifacts into a single markdown grid
+  # and publish it to the workflow summary page (no auto-commit to the
+  # repo). Runs after every scenario has finished (success or failure)
+  # so a partial dashboard is still posted. Maintainers update
+  # ``docs/matrix-status.md`` manually if they want to lock a specific
+  # snapshot.
+  publish-dashboard:
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - uses: actions/download-artifact@v4
+        with:
+          path: matrix-status-raw
+          pattern: matrix-status-*
+          merge-multiple: true
+      - name: Render markdown grid to job summary
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from tests.matrix.runner import load_scenarios, _format_markdown_grid, LaneResult
+          raw_dir = Path("matrix-status-raw")
+          scenarios = load_scenarios()
+          results = []
+          for f in raw_dir.glob("*.json"):
+              try:
+                  rows = json.loads(f.read_text())
+              except json.JSONDecodeError:
+                  continue
+              for row in rows:
+                  results.append(LaneResult(
+                      scenario=row["scenario"],
+                      lane=row["lane"],
+                      status=row["status"],
+                      duration_ms=int(row.get("duration_ms") or 0),
+                      details=row.get("details") or "",
+                      missing_files=list(row.get("missing_files") or []),
+                  ))
+          grid = _format_markdown_grid(results, scenarios)
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as fh:
+              fh.write("## Matrix lane C — nightly smoke contract\n\n")
+              fh.write(grid)
+              fh.write("\nSee individual scenario logs above for details.\n")
+          Path("matrix-status.md").write_text(grid, encoding="utf-8")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: matrix-status-grid
+          path: matrix-status.md

@@ -7,7 +7,6 @@ import shutil
 import stat
 import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +31,7 @@ from forge.config import (
     BackendLanguage,
     FrontendFramework,
     ProjectConfig,
+    frontend_uses_subdirectory,
 )
 from forge.docker_manager import (
     render_compose,
@@ -40,7 +40,16 @@ from forge.docker_manager import (
     render_keycloak_realm,
     render_nginx_conf,
 )
-from forge.errors import GeneratorError
+from forge.errors import (
+    FILESYSTEM_IO_ERROR,
+    TEMPLATE_JINJA_ERROR,
+    TEMPLATE_NOT_FOUND,
+    TEMPLATE_RENDER_FAILED,
+    FilesystemError,
+    ForgeError,
+    GeneratorError,
+    TemplateError,
+)
 from forge.feature_injector import apply_features, apply_project_features
 from forge.provenance import ProvenanceCollector
 
@@ -84,11 +93,6 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
 
     plan = resolve(config)
 
-    backend_setup: dict[BackendLanguage, Callable[[Path], None]] = {
-        BackendLanguage.PYTHON: _setup_backend,
-        BackendLanguage.NODE: _setup_node_backend,
-        BackendLanguage.RUST: _setup_rust_backend,
-    }
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
         backend_dir = project_root / "services" / bc.name
@@ -104,10 +108,17 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             option_values=plan.option_values,
             project_root=project_root,
         )
-        if bc.language == BackendLanguage.NODE and not dry_run:
-            _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies", required=True)
+        # Toolchain dispatch: install() runs whenever we're writing to
+        # disk (it's the step that produces lockfiles Docker needs),
+        # verify() runs only in interactive mode (not quiet, not dry-run)
+        # because it invokes lint + test suites that the headless path
+        # shouldn't spend time on. Both are plugin-overridable via
+        # ``BackendSpec.toolchain`` — see forge.toolchains.
+        if not dry_run:
+            spec.toolchain.install(backend_dir, quiet=quiet)
         if not quiet and not dry_run:
-            backend_setup[bc.language](backend_dir)
+            spec.toolchain.verify(backend_dir, quiet=quiet)
+            spec.toolchain.post_generate(backend_dir, quiet=quiet)
 
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
@@ -313,7 +324,11 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
     envelope instead of a raw Copier traceback.
     """
     if not template_path.exists():
-        raise GeneratorError(f"Template not found: {template_path}")
+        raise TemplateError(
+            f"Template not found: {template_path}",
+            code=TEMPLATE_NOT_FOUND,
+            context={"template": template_path.name, "template_path": str(template_path)},
+        )
     try:
         run_copy(
             src_path=str(template_path),
@@ -324,13 +339,37 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
             overwrite=True,
             quiet=quiet,
         )
-    except GeneratorError:
+    except ForgeError:
         raise
-    # Copier raises CopierError for template/user issues; filesystem problems surface
-    # as OSError; Jinja/parser issues bubble as RuntimeError subclasses. Anything else
-    # is a programming bug and should propagate unwrapped.
-    except (CopierError, OSError, RuntimeError) as e:
-        raise GeneratorError(f"Copier failed for template '{template_path.name}': {e}") from e
+    # Split fidelity so --json consumers can branch on code rather than regex
+    # the message. CopierError covers template authoring bugs (bad copier.yml,
+    # rejected validator, invalid Jinja inside the template). OSError covers
+    # real filesystem failures (permission denied, disk full). RuntimeError
+    # catches Jinja bubble-ups that Copier doesn't wrap (strict-undefined
+    # access, filter exceptions). Anything else is a programming bug and
+    # propagates unwrapped.
+    except CopierError as e:
+        raise TemplateError(
+            f"Copier failed to render template '{template_path.name}': {e}",
+            code=TEMPLATE_RENDER_FAILED,
+            context={"template": template_path.name, "copier_type": type(e).__name__},
+        ) from e
+    except OSError as e:
+        raise FilesystemError(
+            f"Filesystem error while rendering template '{template_path.name}': {e}",
+            code=FILESYSTEM_IO_ERROR,
+            context={
+                "template": template_path.name,
+                "errno": getattr(e, "errno", None),
+                "strerror": getattr(e, "strerror", None),
+            },
+        ) from e
+    except RuntimeError as e:
+        raise TemplateError(
+            f"Template rendering failed (Jinja) for '{template_path.name}': {e}",
+            code=TEMPLATE_JINJA_ERROR,
+            context={"template": template_path.name, "runtime_type": type(e).__name__},
+        ) from e
 
     _write_copier_answers(template_path, dst_path, data)
 
@@ -413,25 +452,6 @@ def _generate_single_backend(
     return dst
 
 
-def _setup_rust_backend(backend_dir: Path) -> None:
-    """Build, lint, and test the generated Rust backend."""
-    _run_backend_cmd(backend_dir, ["cargo", "build"], "Build")
-    _run_backend_cmd(backend_dir, ["cargo", "fmt", "--check"], "Format check")
-    _run_backend_cmd(
-        backend_dir, ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"], "Lint"
-    )
-    _run_backend_cmd(backend_dir, ["cargo", "test"], "Tests")
-
-
-def _setup_node_backend(backend_dir: Path) -> None:
-    """Lint, type check, and test the generated Node.js backend.
-    Note: npm install already ran (always runs to create lockfile for Docker).
-    """
-    _run_backend_cmd(backend_dir, ["npx", "biome", "check", "src/"], "Lint check")
-    _run_backend_cmd(backend_dir, ["npx", "tsc", "--noEmit"], "Type check")
-    _run_backend_cmd(backend_dir, ["npx", "vitest", "run"], "Tests")
-
-
 def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
     """Generate frontend using Copier."""
     if config.frontend is None:
@@ -443,13 +463,14 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
 
     ctx = variable_mapper.frontend_context(config)
 
-    if fw == FrontendFramework.FLUTTER:
-        # Flutter template has no _subdirectory; it creates {{project_slug}}/
-        # inside dst_path, so pass the apps directory.
-        dst = project_root / "apps"
-    else:
-        # Vue/Svelte use _subdirectory: template, generating INTO dst_path.
+    # Templates that declare ``_subdirectory:`` render INTO dst_path
+    # (Vue/Svelte + most plugin templates); templates without it own the
+    # inner directory name (Flutter's ``{{project_slug}}/``) and need
+    # dst_path set to the parent.
+    if frontend_uses_subdirectory(fw):
         dst = project_root / "apps" / config.frontend_slug
+    else:
+        dst = project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
     _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet)
     return project_root / "apps" / config.frontend_slug
@@ -517,17 +538,6 @@ def _run_backend_cmd(
             f"{description} failed (exit {result.returncode}): {' '.join(cmd)}{suffix}"
         )
     return False
-
-
-def _setup_backend(backend_dir: Path) -> None:
-    """Install deps, run linting, and run tests for the generated backend."""
-    _run_backend_cmd(backend_dir, ["uv", "sync"], "Install dependencies")
-    _run_backend_cmd(
-        backend_dir, ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"], "Lint fix"
-    )
-    _run_backend_cmd(backend_dir, ["uv", "run", "ruff", "format", "src/", "tests/"], "Format")
-    _run_backend_cmd(backend_dir, ["uv", "run", "ty", "check", "src/"], "Type check")
-    _run_backend_cmd(backend_dir, ["uv", "run", "pytest", "-v"], "Tests")
 
 
 def _force_remove_readonly(func, path, _exc_info):

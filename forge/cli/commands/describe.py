@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from forge.cli.commands.list import _option_backends
+from forge.cli.commands.list import _option_backends, _option_parity_tier
 from forge.options import CATEGORY_DISPLAY, OPTION_REGISTRY, OptionType
 
 
@@ -24,10 +24,21 @@ def _describe_option(path: str) -> None:
 
     backends = ", ".join(_option_backends(opt)) or "—"
     category = CATEGORY_DISPLAY[opt.category]
+    tier = _option_parity_tier(opt)
+    tier_label = {
+        1: "1 (all built-in backends)",
+        2: "2 (best-effort)",
+        3: "3 (python-only)",
+    }.get(tier, str(tier))
 
     print(f"{opt.path}  [{opt.type.value}]")
     print(f"Category: {category}")
-    parts = [f"Default: {opt.default}", f"Stability: {opt.stability}", f"Backends: {backends}"]
+    parts = [
+        f"Default: {opt.default}",
+        f"Stability: {opt.stability}",
+        f"Parity: {tier_label}",
+        f"Backends: {backends}",
+    ]
     print("    ".join(parts))
     if opt.options:
         print(f"Allowed:  {', '.join(str(v) for v in opt.options)}")

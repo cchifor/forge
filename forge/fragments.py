@@ -74,6 +74,26 @@ class FragmentImplSpec:
     reads_options: tuple[str, ...] = ()
 
 
+ParityTier = Literal[1, 2, 3]
+"""RFC-006 cross-backend parity tiers.
+
+Tier 1: must land on every registered backend (Python, Node, Rust, plus
+    any plugin-registered backends that forge ships support for). A new
+    tier-1 fragment can't merge without an implementation for each.
+Tier 2: best-effort — may land on a subset, with a documented migration
+    path in RFC-006 for the backends that don't yet have it.
+Tier 3: Python-only, explicitly scoped. Used for AI / RAG / LLM features
+    whose Python SDK ecosystem has no Node / Rust equivalent. The CLI
+    surfaces this so users picking a non-Python backend know upfront.
+
+The parity tier is authoritative metadata — the tier must match the
+keys of ``implementations``. ``tests/test_fragment_parity.py`` enforces
+that: a tier-1 fragment missing a built-in backend implementation is
+a hard CI failure; a tier-3 fragment shipping a Node implementation is
+a tier bump, not a silent success.
+"""
+
+
 @dataclass(frozen=True)
 class Fragment:
     """A named template fragment with per-backend implementations.
@@ -97,6 +117,15 @@ class Fragment:
     # Controls middleware registration ordering on before-marker
     # injections.
     order: int = 100
+    # RFC-006 (Epic S, 1.1.0-alpha.1) — cross-backend parity tier. See
+    # ``ParityTier`` above. Default ``None`` means "auto-derive from
+    # ``implementations``": 1 if every built-in backend is covered, 3 if
+    # only Python is covered, 2 otherwise. Authors override explicitly
+    # when the auto-derivation would mis-label semantics (e.g. a Python-
+    # only fragment that's a committed tier-2 migration target, not
+    # permanent tier-3). After ``__post_init__`` the attribute is
+    # guaranteed non-None so callers can treat it as a concrete tier.
+    parity_tier: ParityTier | None = None
     # Epic K (1.1.0-alpha.1) — declarative middleware registrations. Each
     # spec targets one backend; a fragment that supports all three backends
     # ships three specs. At apply time, the applier expands every spec
@@ -118,6 +147,13 @@ class Fragment:
         legitimate authoring mistakes; surfacing them at Fragment()
         construction beats surfacing them at resolve time in a generated
         project where the error context is thinner.
+
+        Epic S (1.1.0-alpha.1) also auto-derives ``parity_tier`` when
+        not explicitly set, so the vast majority of existing fragments
+        don't need an edit. A tier that was explicitly declared is left
+        alone — authors use that to assert "this is intentionally tier-
+        2 pending migration" rather than the naive count-backends
+        heuristic.
         """
         if self.name in self.conflicts_with:
             raise FragmentError(
@@ -136,6 +172,35 @@ class Fragment:
                     "overlap": sorted(overlap),
                 },
             )
+        if self.parity_tier is None:
+            object.__setattr__(self, "parity_tier", _auto_parity_tier(self.implementations))
+
+
+def _auto_parity_tier(
+    implementations: dict[BackendLanguage, FragmentImplSpec],
+) -> ParityTier:
+    """Derive a :data:`ParityTier` from the implementations dict.
+
+    - All three built-in backends present ⇒ **tier 1** (cross-backend
+      parity target met).
+    - Only Python present ⇒ **tier 3** (Python-only — honest scope for
+      AI/RAG/LLM features whose ecosystem has no Node/Rust equivalent).
+    - Any other mixture (Python + Node, Python + Rust, Node + Rust,
+      etc.) ⇒ **tier 2** (best-effort — some backends are pending).
+
+    Plugin-registered backends do not bump the tier: parity is measured
+    against the three built-ins. A plugin fragment that supplies both
+    a Python and a Go implementation (but no Node/Rust) is still tier
+    2 — the built-in parity target is not yet met. This is a conscious
+    choice so the tier's meaning stays stable across plugin registries.
+    """
+    built_ins = {BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST}
+    present = {k for k in implementations if k in built_ins}
+    if present == built_ins:
+        return 1
+    if present == {BackendLanguage.PYTHON}:
+        return 3
+    return 2
 
 
 class _FragmentRegistry(dict[str, Fragment]):
@@ -1241,6 +1306,11 @@ register_fragment(
 register_fragment(
     Fragment(
         name="queue_port",
+        # Explicit tier=2 override: this is a committed migration target
+        # to tier 1 (Rust adapter pending — see RFC-006). Auto-derive
+        # would tag it as tier 3 (Python-only), which understates the
+        # intent.
+        parity_tier=2,
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir="queue_port/python",
@@ -1255,6 +1325,9 @@ register_fragment(
         name="queue_redis",
         depends_on=("queue_port",),
         capabilities=("redis",),
+        # See queue_port — tier=2 migration target. The Rust adapter
+        # will layer on top of queue_port/rust once it lands.
+        parity_tier=2,
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir="queue_redis/python",
@@ -1270,6 +1343,9 @@ register_fragment(
     Fragment(
         name="queue_sqs",
         depends_on=("queue_port",),
+        # SQS from Rust is possible via aws-sdk-sqs but not prioritized
+        # — keep tier=3 (auto). Staying explicit here documents that
+        # we *considered* bumping to tier 2 and chose not to.
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir="queue_sqs/python",
