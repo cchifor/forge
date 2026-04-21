@@ -25,6 +25,27 @@ def _option_backends(_opt: Option) -> list[str]:
     return sorted(langs)
 
 
+def _option_parity_tier(opt: Option) -> int:
+    """RFC-006 parity tier for an Option — the worst (highest number)
+    among the fragments the option can enable.
+
+    An option that enables a tier-1 middleware and a tier-3 AI helper
+    is surfaced as tier 3, because picking a non-Python backend would
+    silently skip the AI helper. Options with no fragments (rare —
+    display-only knobs) default to tier 1 (the most permissive label).
+    """
+    from forge.fragments import FRAGMENT_REGISTRY  # noqa: PLC0415
+
+    tiers: list[int] = []
+    for frag_keys in opt.enables.values():
+        for fkey in frag_keys:
+            frag = FRAGMENT_REGISTRY.get(fkey)
+            if frag is None or frag.parity_tier is None:
+                continue
+            tiers.append(frag.parity_tier)
+    return max(tiers) if tiers else 1
+
+
 def _build_option_rows() -> list[dict[str, Any]]:
     """Unified option catalogue — one row per registered Option."""
     rows: list[dict[str, Any]] = []
@@ -41,6 +62,7 @@ def _build_option_rows() -> list[dict[str, Any]]:
                 "tech": _option_backends(opt),
                 "description": opt.summary,
                 "stability": opt.stability,
+                "parity_tier": _option_parity_tier(opt),
                 "min": opt.min,
                 "max": opt.max,
                 "pattern": opt.pattern,

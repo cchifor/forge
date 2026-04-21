@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from forge.errors import (
+    FILESYSTEM_IO_ERROR,
     FRAGMENT_DIR_MISSING,
     INJECTION_ANCHOR_NOT_FOUND,
     INJECTION_MARKER_AMBIGUOUS,
@@ -12,6 +13,10 @@ from forge.errors import (
     OPTIONS_UNKNOWN_PATH,
     PLUGIN_COLLISION,
     PROVENANCE_MANIFEST_MISSING,
+    TEMPLATE_JINJA_ERROR,
+    TEMPLATE_NOT_FOUND,
+    TEMPLATE_RENDER_FAILED,
+    FilesystemError,
     ForgeError,
     FragmentError,
     GeneratorError,
@@ -20,6 +25,7 @@ from forge.errors import (
     OptionsError,
     PluginError,
     ProvenanceError,
+    TemplateError,
 )
 
 # ---------------------------------------------------------------------------
@@ -80,6 +86,8 @@ def test_context_is_copied_not_referenced() -> None:
         (MergeError, "MERGE_ERROR"),
         (ProvenanceError, "PROVENANCE_ERROR"),
         (PluginError, "PLUGIN_ERROR"),
+        (TemplateError, "TEMPLATE_ERROR"),
+        (FilesystemError, "FILESYSTEM_ERROR"),
     ],
 )
 def test_subclass_default_codes(cls: type[ForgeError], expected_default: str) -> None:
@@ -106,6 +114,8 @@ def test_every_subclass_is_a_forge_error() -> None:
         MergeError,
         ProvenanceError,
         PluginError,
+        TemplateError,
+        FilesystemError,
     ):
         assert issubclass(cls, ForgeError)
         assert issubclass(cls, RuntimeError)
@@ -127,6 +137,40 @@ def test_except_generator_error_still_catches_subclasses() -> None:
         raise InjectionError("no anchor", code=INJECTION_ANCHOR_NOT_FOUND)
 
 
+class TestDeprecatedGeneratorError:
+    """Epic S (1.1.0-alpha.1) — reading ``GeneratorError`` from
+    ``forge.errors`` now emits a DeprecationWarning. The suite
+    as a whole silences this via ``pyproject.toml`` so noise doesn't
+    drown out real signal; this class explicitly unsilences it to
+    assert the warning still fires for third-party callers.
+    """
+
+    def test_getattr_emits_deprecation_warning(self) -> None:
+        import importlib
+        import warnings
+
+        # Re-import to get a fresh module-attribute access path. Without
+        # the reload, the already-resolved module attribute in this
+        # test module's namespace doesn't re-trigger __getattr__.
+        mod = importlib.import_module("forge.errors")
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            val = mod.GeneratorError
+        assert val is mod.ForgeError
+        dep_warnings = [w for w in captured if issubclass(w.category, DeprecationWarning)]
+        assert dep_warnings, (
+            "expected a DeprecationWarning when reading "
+            "forge.errors.GeneratorError; got none"
+        )
+        assert "GeneratorError is deprecated" in str(dep_warnings[0].message)
+
+    def test_unknown_attribute_still_raises_attribute_error(self) -> None:
+        import forge.errors
+
+        with pytest.raises(AttributeError, match="no attribute"):
+            forge.errors.ThisNameDoesNotExist  # noqa: B018
+
+
 # ---------------------------------------------------------------------------
 # Exit-code mapping via _exit_code_for
 # ---------------------------------------------------------------------------
@@ -141,6 +185,8 @@ def test_exit_code_mapping() -> None:
     assert _exit_code_for(MergeError("x", code=MERGE_CONFLICT)) == 4
     assert _exit_code_for(ProvenanceError("x", code=PROVENANCE_MANIFEST_MISSING)) == 5
     assert _exit_code_for(PluginError("x", code=PLUGIN_COLLISION)) == 6
+    assert _exit_code_for(TemplateError("x", code=TEMPLATE_RENDER_FAILED)) == 7
+    assert _exit_code_for(FilesystemError("x", code=FILESYSTEM_IO_ERROR)) == 8
     # Base class falls back to generic 2
     assert _exit_code_for(ForgeError("generic")) == 2
 
@@ -191,3 +237,109 @@ def test_json_error_envelope_for_plain_string() -> None:
 
     payload = json.loads(out.getvalue())
     assert payload == {"error": "raw string message"}
+
+
+# ---------------------------------------------------------------------------
+# _run_copier error-path fidelity (Sprint 1 / change #3)
+# ---------------------------------------------------------------------------
+
+
+class TestRunCopierErrorFidelity:
+    """``_run_copier`` used to collapse CopierError / OSError / RuntimeError
+    into one ``GeneratorError(code="FORGE_ERROR")``. These cases pin the
+    post-Epic-S three-way split so ``--json`` consumers can tell template
+    authoring bugs from Jinja crashes from filesystem failures.
+    """
+
+    def test_missing_template_raises_template_not_found(self, tmp_path) -> None:
+        from pathlib import Path
+
+        from forge.generator import _run_copier
+
+        missing = tmp_path / "does_not_exist"
+        with pytest.raises(TemplateError) as exc_info:
+            _run_copier(missing, Path(tmp_path) / "dst", {}, quiet=True)
+        err = exc_info.value
+        assert err.code == TEMPLATE_NOT_FOUND
+        assert err.context["template"] == "does_not_exist"
+
+    def test_copier_error_maps_to_template_render_failed(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        from copier.errors import CopierError
+
+        from forge.generator import _run_copier
+
+        template = tmp_path / "t"
+        template.mkdir()
+
+        def boom(*_args, **_kwargs):
+            raise CopierError("copier blew up")
+
+        monkeypatch.setattr("forge.generator.run_copy", boom)
+
+        with pytest.raises(TemplateError) as exc_info:
+            _run_copier(template, tmp_path / "dst", {}, quiet=True)
+        err = exc_info.value
+        assert err.code == TEMPLATE_RENDER_FAILED
+        assert err.context["template"] == "t"
+        assert err.context["copier_type"] == "CopierError"
+        assert isinstance(err.__cause__, CopierError)
+
+    def test_os_error_maps_to_filesystem_error(self, tmp_path, monkeypatch) -> None:
+        from forge.generator import _run_copier
+
+        template = tmp_path / "t"
+        template.mkdir()
+
+        def boom(*_args, **_kwargs):
+            raise OSError(13, "Permission denied")
+
+        monkeypatch.setattr("forge.generator.run_copy", boom)
+
+        with pytest.raises(FilesystemError) as exc_info:
+            _run_copier(template, tmp_path / "dst", {}, quiet=True)
+        err = exc_info.value
+        assert err.code == FILESYSTEM_IO_ERROR
+        assert err.context["errno"] == 13
+        assert err.context["strerror"] == "Permission denied"
+
+    def test_runtime_error_maps_to_template_jinja_error(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        from forge.generator import _run_copier
+
+        template = tmp_path / "t"
+        template.mkdir()
+
+        class CustomJinjaBoom(RuntimeError):
+            pass
+
+        def boom(*_args, **_kwargs):
+            raise CustomJinjaBoom("undefined variable 'xyz'")
+
+        monkeypatch.setattr("forge.generator.run_copy", boom)
+
+        with pytest.raises(TemplateError) as exc_info:
+            _run_copier(template, tmp_path / "dst", {}, quiet=True)
+        err = exc_info.value
+        assert err.code == TEMPLATE_JINJA_ERROR
+        assert err.context["runtime_type"] == "CustomJinjaBoom"
+
+    def test_forge_error_re_raise_preserves_subclass(self, tmp_path, monkeypatch) -> None:
+        """``ForgeError`` already has the envelope it needs — re-raise
+        untouched so callers don't see a double-wrapped TemplateError."""
+        from forge.errors import InjectionError
+        from forge.generator import _run_copier
+
+        template = tmp_path / "t"
+        template.mkdir()
+
+        def boom(*_args, **_kwargs):
+            raise InjectionError("inner", code="INNER_CODE")
+
+        monkeypatch.setattr("forge.generator.run_copy", boom)
+
+        with pytest.raises(InjectionError) as exc_info:
+            _run_copier(template, tmp_path / "dst", {}, quiet=True)
+        assert exc_info.value.code == "INNER_CODE"

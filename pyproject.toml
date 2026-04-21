@@ -70,6 +70,13 @@ markers = [
     "e2e: end-to-end tests that scaffold a project and run its native test suite (slow, opt-in via -m e2e)",
     "package_integrity: assert the uv-built sdist + wheel contain every template file and no cache contamination (slow, opt-in via -m package_integrity; CI runs as a separate job)",
 ]
+filterwarnings = [
+    # Epic S (1.1.0-alpha.1): internal modules still import GeneratorError
+    # while the rename to ForgeError migrates through. Silencing here keeps
+    # the test suite quiet without masking external callers — third-party
+    # code still sees the deprecation when they import.
+    "ignore:forge\\.errors\\.GeneratorError is deprecated:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["forge"]

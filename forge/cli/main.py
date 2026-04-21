@@ -25,11 +25,13 @@ from forge.cli.parser import _is_headless, _parse_args
 from forge.config import FrontendFramework, ProjectConfig
 from forge.docker_manager import boot
 from forge.errors import (
+    FilesystemError,
     ForgeError,
     InjectionError,
     MergeError,
     PluginError,
     ProvenanceError,
+    TemplateError,
 )
 from forge.generator import generate
 
@@ -42,6 +44,8 @@ def _exit_code_for(err: ForgeError) -> int:
     4 — merge conflict (non-recoverable)
     5 — provenance / manifest IO failure
     6 — plugin load / registration failure
+    7 — template render / jinja / not-found failure
+    8 — filesystem IO failure
     """
     if isinstance(err, InjectionError):
         return 3
@@ -51,6 +55,10 @@ def _exit_code_for(err: ForgeError) -> int:
         return 5
     if isinstance(err, PluginError):
         return 6
+    if isinstance(err, TemplateError):
+        return 7
+    if isinstance(err, FilesystemError):
+        return 8
     return 2
 
 

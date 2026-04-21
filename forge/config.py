@@ -102,10 +102,43 @@ class FrontendSpec:
     the generator's per-framework code paths. This spec exists so
     plugins can register new frontends without forking; the generator
     uses the spec's ``template_dir`` to locate the Copier template.
+
+    ``uses_subdirectory`` records whether the Copier template declares
+    a ``_subdirectory:`` key in its ``copier.yml``. True (the common
+    case) means the template renders **into** the destination passed to
+    Copier, so the generator creates ``apps/<frontend_slug>/`` up-front
+    and points Copier at it. False means the template itself owns the
+    directory name (Flutter's ``{{project_slug}}/`` layer), so the
+    generator points Copier at ``apps/`` and lets the template create
+    the inner directory. Defaults to True because that's the Copier
+    default and the majority of plugin templates follow it.
     """
 
     template_dir: str  # path under forge/templates/, e.g. "apps/solid-frontend-template"
     display_label: str  # shown in CLI prompts and log messages
+    uses_subdirectory: bool = True
+
+
+def frontend_uses_subdirectory(
+    framework: FrontendFramework | _PluginFramework,
+) -> bool:
+    """Return whether ``framework``'s template uses Copier's _subdirectory.
+
+    Built-ins: Vue and Svelte declare ``_subdirectory:`` so render into
+    their destination; Flutter's template does not and owns its inner
+    directory. Plugin frameworks consult :data:`FRONTEND_SPECS`; an
+    unregistered plugin framework defaults to True (the Copier
+    convention) rather than raising, so the generator can keep the
+    failure mode local to Copier if the template is genuinely broken.
+    """
+    if framework == FrontendFramework.FLUTTER:
+        return False
+    if isinstance(framework, FrontendFramework):
+        return True
+    spec = FRONTEND_SPECS.get(framework.value)
+    if spec is None:
+        return True
+    return spec.uses_subdirectory
 
 
 # Plugin-registered frontends. Keyed by the wire value (``"solid"``,
@@ -161,6 +194,18 @@ def resolve_frontend_framework(value: str) -> FrontendFramework | _PluginFramewo
     raise ValueError(f"Unknown frontend framework: {value!r}")
 
 
+def _default_toolchain_factory() -> Any:
+    """Lazy import to break the config → toolchains cycle.
+
+    ``forge.toolchains`` depends only on ``forge.errors``, not ``forge.config``,
+    so this factory runs at ``BackendSpec(...)`` instantiation time (well
+    after import) without creating an import cycle.
+    """
+    from forge.toolchains import NOOP_TOOLCHAIN  # noqa: PLC0415
+
+    return NOOP_TOOLCHAIN
+
+
 @dataclass(frozen=True)
 class BackendSpec:
     """Static metadata for a backend language: template, prompts, version field.
@@ -168,12 +213,38 @@ class BackendSpec:
     Adding a 4th backend means adding one entry here plus one Copier template
     directory under `forge/templates/services/`. The CLI prompt loop, generator
     dispatch, and variable-mapper context builder all read from this registry.
+
+    ``toolchain`` carries the per-language install / verify / post-generate
+    hooks previously hardcoded in ``generator.py``'s language dispatch.
+    Plugin-registered backends attach their own implementation — see
+    ``forge.toolchains.BackendToolchain`` Protocol. Typed as ``Any`` to keep
+    ``forge.config`` free of the ``forge.toolchains`` import (the factory
+    resolves it lazily).
     """
 
     template_dir: str  # path under forge/templates/, e.g. "services/python-service-template"
     display_label: str  # shown in CLI prompts and log messages
     version_field: str  # name of the BackendConfig attribute holding the version
     version_choices: tuple[str, ...]  # interactive prompt choices, first is default
+    toolchain: Any = field(default_factory=_default_toolchain_factory)
+
+
+def _python_toolchain_factory() -> Any:
+    from forge.toolchains.python import PYTHON_TOOLCHAIN  # noqa: PLC0415
+
+    return PYTHON_TOOLCHAIN
+
+
+def _node_toolchain_factory() -> Any:
+    from forge.toolchains.node import NODE_TOOLCHAIN  # noqa: PLC0415
+
+    return NODE_TOOLCHAIN
+
+
+def _rust_toolchain_factory() -> Any:
+    from forge.toolchains.rust import RUST_TOOLCHAIN  # noqa: PLC0415
+
+    return RUST_TOOLCHAIN
 
 
 # BACKEND_REGISTRY keys are either real ``BackendLanguage`` members or
@@ -185,18 +256,21 @@ BACKEND_REGISTRY: dict[BackendLanguage | _PluginLanguage, BackendSpec] = {
         display_label="Python (FastAPI)",
         version_field="python_version",
         version_choices=("3.13", "3.12", "3.11"),
+        toolchain=_python_toolchain_factory(),
     ),
     BackendLanguage.NODE: BackendSpec(
         template_dir="services/node-service-template",
         display_label="Node.js (Fastify)",
         version_field="node_version",
         version_choices=("22", "20", "18"),
+        toolchain=_node_toolchain_factory(),
     ),
     BackendLanguage.RUST: BackendSpec(
         template_dir="services/rust-service-template",
         display_label="Rust (Axum)",
         version_field="rust_edition",
         version_choices=("2024", "2021"),
+        toolchain=_rust_toolchain_factory(),
     ),
 }
 

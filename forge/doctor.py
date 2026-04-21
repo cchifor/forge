@@ -154,6 +154,53 @@ def check_port_free(port: int, *, host: str = "127.0.0.1") -> CheckResult:
     )
 
 
+def check_registered_backends() -> list[CheckResult]:
+    """Surface every backend in :data:`BACKEND_REGISTRY` as a doctor row.
+
+    Built-ins emit three rows (Python / Node / Rust); each
+    plugin-registered backend adds one. Each row reports the toolchain
+    attached to the spec — which is how Epic S's plugin SDK guarantees
+    that a plugin backend's install/verify steps are wired in.
+
+    A plugin backend registered without attaching a toolchain (i.e.
+    ``BackendSpec(...)`` with no ``toolchain`` argument) falls back to
+    the :class:`NoopToolchain`, surfaced here as a ``warn`` so the user
+    knows the plugin shipped with degraded support.
+    """
+    from forge.config import BACKEND_REGISTRY  # noqa: PLC0415
+    from forge.toolchains import NoopToolchain  # noqa: PLC0415
+
+    results: list[CheckResult] = []
+    for lang, spec in BACKEND_REGISTRY.items():
+        toolchain = spec.toolchain
+        tc_name = getattr(toolchain, "name", "?")
+        if isinstance(toolchain, NoopToolchain):
+            results.append(
+                CheckResult(
+                    name=f"backend:{lang.value}",
+                    status="warn",
+                    detail=(
+                        f"{spec.display_label} registered but its BackendSpec carries "
+                        "the NoopToolchain — install/verify hooks will be skipped"
+                    ),
+                    fix=(
+                        "If this is a plugin backend, attach a BackendToolchain to the "
+                        "spec (see docs/adding-a-backend.md). Built-ins should never "
+                        "land on Noop; file a bug at github.com/cchifor/forge."
+                    ),
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    name=f"backend:{lang.value}",
+                    status="ok",
+                    detail=f"{spec.display_label} — toolchain: {tc_name}",
+                )
+            )
+    return results
+
+
 def check_forge_toml(project_path: Path) -> CheckResult:
     """If ``project_path/forge.toml`` exists, parse it and verify integrity."""
     manifest = project_path / "forge.toml"
@@ -205,6 +252,10 @@ def run(project_path: Path | None = None) -> DoctorReport:
     report.results.append(check_tool_on_path("cargo", kind="tool"))
     report.results.append(check_tool_on_path("flutter", kind="tool"))
     report.results.append(check_docker_reachable())
+
+    # Surface every registered backend + its toolchain. Built-ins always
+    # land in BACKEND_REGISTRY; plugin backends land here once loaded.
+    report.results.extend(check_registered_backends())
 
     # Commonly used ports. Warnings, not failures — users can always pick
     # other ports via flags.

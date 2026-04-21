@@ -12,8 +12,8 @@ from forge.generator import (
     _generate_e2e_tests,
     _git_init,
     _run_backend_cmd,
-    _setup_backend,
 )
+from forge.toolchains.python import PYTHON_TOOLCHAIN
 
 # -- _run_backend_cmd ---------------------------------------------------------
 
@@ -76,16 +76,23 @@ class TestRunBackendCmd:
             assert mock_run.call_args.kwargs["cwd"] == str(tmp_path)
 
 
-# -- _setup_backend -----------------------------------------------------------
+# -- PythonToolchain (post-Epic-S replacement for _setup_backend) -------------
 
 
-class TestSetupBackend:
-    def test_calls_five_commands(self, tmp_path):
-        with patch("forge.generator._run_backend_cmd") as mock_cmd:
-            mock_cmd.return_value = True
-            _setup_backend(tmp_path)
+class TestPythonToolchain:
+    def test_verify_runs_five_commands(self, tmp_path):
+        """Mirror of the old ``_setup_backend`` coverage — the toolchain
+        protocol replaced the free function but the command list is
+        preserved byte-for-byte (uv sync + ruff check/format + ty check
+        + pytest), so the count-and-names assertion carries over."""
+        from forge.toolchains import Check
+
+        with patch("forge.toolchains.python.run_backend_cmd") as mock_cmd:
+            mock_cmd.return_value = Check(name="x", status="ok")
+            checks = PYTHON_TOOLCHAIN.verify(tmp_path)
 
         assert mock_cmd.call_count == 5
+        assert len(checks) == 5
         descriptions = [call.args[2] for call in mock_cmd.call_args_list]
         assert descriptions == [
             "Install dependencies",

@@ -131,6 +131,42 @@ class PluginError(ForgeError):
     DEFAULT_CODE: ClassVar[str] = "PLUGIN_ERROR"
 
 
+class TemplateError(ForgeError):
+    """Raised when a Copier template fails to render.
+
+    Split from :class:`ForgeError` so ``--json`` consumers can
+    distinguish template problems (user-authored Copier template bugs,
+    Jinja errors) from filesystem / plugin / option problems. The
+    three common raise sites are wrapped around ``copier.run_copy``:
+
+    - :data:`TEMPLATE_RENDER_FAILED` — Copier itself raised
+      ``CopierError`` (invalid copier.yml, bad template syntax,
+      validator rejection, etc.).
+    - :data:`TEMPLATE_JINJA_ERROR` — Jinja bubbled a ``RuntimeError``
+      subclass out of the render (undefined variable in strict mode,
+      recursive macro, filter crash).
+    - :data:`TEMPLATE_NOT_FOUND` — the template path doesn't exist on
+      disk (wheel-packaging regression, plugin shipping a missing
+      ``template_dir``).
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "TEMPLATE_ERROR"
+
+
+class FilesystemError(ForgeError):
+    """Raised when a filesystem operation fails during generation.
+
+    Split from :class:`ForgeError` so ``--json`` consumers can tell a
+    genuine IO failure (permission denied, disk full, read-only root)
+    from a template bug. Currently raised from the Copier wrapper in
+    :func:`forge.generator._run_copier` when the underlying ``OSError``
+    surfaces; expect more sites to adopt this as other generator
+    filesystem paths get the same treatment.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "FILESYSTEM_ERROR"
+
+
 # ----------------------------------------------------------------------------
 # Error code constants (machine-readable identifiers surfaced in --json)
 # ----------------------------------------------------------------------------
@@ -176,15 +212,49 @@ PLUGIN_REGISTRATION_FAILED = "PLUGIN_REGISTRATION_FAILED"
 PLUGIN_COLLISION = "PLUGIN_COLLISION"
 PLUGIN_REGISTRY_FROZEN = "PLUGIN_REGISTRY_FROZEN"
 
+# TemplateError codes
+TEMPLATE_RENDER_FAILED = "TEMPLATE_RENDER_FAILED"
+TEMPLATE_JINJA_ERROR = "TEMPLATE_JINJA_ERROR"
+TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND"
+
+# FilesystemError codes
+FILESYSTEM_IO_ERROR = "FILESYSTEM_IO_ERROR"
+
 
 # ----------------------------------------------------------------------------
 # Backward-compatibility alias — deprecated since 1.1.0, scheduled removal 2.0
 # ----------------------------------------------------------------------------
+#
+# Historical note: ``GeneratorError = ForgeError`` was a module-level
+# alias so ``except GeneratorError:`` callers kept catching every forge
+# failure through the 1.x series. Epic S (1.1.0-alpha.1) flips it to a
+# lazy ``__getattr__`` so reading the name emits a DeprecationWarning
+# without changing the runtime semantics — it's still ``ForgeError``.
+# Removal is scheduled for 2.0. New code should use ``ForgeError`` or
+# one of its subclasses (``TemplateError``, ``FilesystemError``, …).
 
-#: Deprecated alias for :class:`ForgeError` retained so code that does
-#: ``except GeneratorError:`` continues to catch every forge failure.
-#: New code should use :class:`ForgeError` or one of its subclasses.
-GeneratorError = ForgeError
+
+def __getattr__(name: str):
+    """Lazy module-level alias for :class:`ForgeError`.
+
+    Emits a :class:`DeprecationWarning` on read so lingering
+    ``from forge.errors import GeneratorError`` sites surface as
+    visible warnings in developer builds. ``tests/conftest.py``
+    silences the warning for the test suite itself (the alias is
+    still intentional in ``tests/test_errors.py`` regression cases).
+    """
+    if name == "GeneratorError":
+        import warnings  # noqa: PLC0415
+
+        warnings.warn(
+            "forge.errors.GeneratorError is deprecated (since 1.1.0). "
+            "Use ForgeError or a specific subclass (TemplateError, "
+            "FilesystemError, InjectionError, etc.). Scheduled removal: 2.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return ForgeError
+    raise AttributeError(f"module 'forge.errors' has no attribute {name!r}")
 
 __all__ = [
     # Base + subclasses
@@ -195,6 +265,8 @@ __all__ = [
     "MergeError",
     "ProvenanceError",
     "PluginError",
+    "TemplateError",
+    "FilesystemError",
     # Deprecated alias
     "GeneratorError",
     # OptionsError codes
@@ -232,4 +304,10 @@ __all__ = [
     "PLUGIN_REGISTRATION_FAILED",
     "PLUGIN_COLLISION",
     "PLUGIN_REGISTRY_FROZEN",
+    # TemplateError codes
+    "TEMPLATE_RENDER_FAILED",
+    "TEMPLATE_JINJA_ERROR",
+    "TEMPLATE_NOT_FOUND",
+    # FilesystemError codes
+    "FILESYSTEM_IO_ERROR",
 ]
