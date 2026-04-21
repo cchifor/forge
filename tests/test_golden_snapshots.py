@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.config import BackendConfig, BackendLanguage, FrontendConfig, FrontendFramework, ProjectConfig
 from forge.generator import generate
 
 
@@ -69,7 +69,21 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
         if not p.is_file():
             continue
         rel = p.relative_to(project_root).as_posix()
-        if rel.startswith(".git/"):
+        # Generator noise at any depth — not part of the shape we want to
+        # regression-test:
+        #   .git/        — frontend templates run their own git init,
+        #                  producing non-deterministic object SHAs.
+        #   __pycache__/ — frontend post-generate scripts are Python;
+        #                  running them bytes-compiles their modules.
+        #   .pyc files   — as above.
+        if (
+            rel == ".git"
+            or rel.startswith(".git/")
+            or "/.git/" in rel
+            or "/__pycache__/" in rel
+            or rel.startswith("__pycache__/")
+            or rel.endswith(".pyc")
+        ):
             continue
         data = p.read_bytes().replace(b"\r\n", b"\n")
         files[rel] = {
@@ -164,6 +178,52 @@ PRESETS = {
         ],
         frontend=None,
     ),
+    # Epic AA (1.1.0-alpha.1) — "kitchen sink" snapshot exercising the
+    # conversational AI + RAG + observability + platform surfaces the 4
+    # minimal presets don't touch. Regressions in agent_streaming,
+    # rag_pipeline, chat.attachments, platform.webhooks, platform.admin,
+    # async.task_queue — all of which compose into a Python-service
+    # generated tree — fire here first. A Vue frontend lands alongside
+    # so the codegen pipeline's per-frontend emit paths also get
+    # exercised against the full feature union.
+    "full_feature": ProjectConfig(
+        project_name="snap_full",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="snap_full",
+                language=BackendLanguage.PYTHON,
+                features=["items", "orders"],
+            )
+        ],
+        frontend=FrontendConfig(
+            project_name="snap_full",
+            framework=FrontendFramework.VUE,
+            include_auth=True,
+            include_chat=True,
+            include_openapi=True,
+        ),
+        # A calibrated "rich" set — bigger than minimal, exercises the
+        # conversational AI + reliability + observability + platform
+        # surfaces. Options that require cross-fragment wiring (agent.llm
+        # needs provider creds, platform.admin needs a DI container that
+        # another fragment creates, rag.reranker pulls a heavy dep) are
+        # deliberately off so the preset generates cleanly on a fresh
+        # checkout. Those combinations have their own narrower tests.
+        options={
+            "observability.tracing": True,
+            "observability.health": True,
+            "middleware.rate_limit": True,
+            "middleware.security_headers": True,
+            "middleware.pii_redaction": True,
+            "conversation.persistence": True,
+            "agent.tools": True,
+            "chat.attachments": True,
+            "platform.webhooks": True,
+            "platform.cli_extensions": True,
+            "platform.agents_md": True,
+        },
+    ),
 }
 
 
@@ -181,6 +241,7 @@ def test_golden_snapshot(preset_name: str, tmp_path: Path) -> None:
         output_dir=str(tmp_path),
         backends=list(config.backends),
         frontend=config.frontend,
+        options=dict(config.options),
     )
 
     project_root = generate(config_copy, quiet=True, dry_run=True)

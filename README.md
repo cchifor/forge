@@ -442,6 +442,8 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 
 - **Issue tracker:** [github.com/cchifor/forge/issues](https://github.com/cchifor/forge/issues) — bug reports, feature requests, roadmap suggestions.
 - **Discussions:** [github.com/cchifor/forge/discussions](https://github.com/cchifor/forge/discussions) — questions, show-and-tell, architectural back-and-forth.
+- **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md) — common install / generation / update / packaging gotchas with step-by-step fixes.
+- **Known issues:** [`docs/known-issues.md`](docs/known-issues.md) — tracked limitations with workarounds.
 - **Changelog:** release-to-release deltas live in [`CHANGELOG.md`](CHANGELOG.md).
 - **Security reports:** please email the maintainer before opening a public issue.
 
