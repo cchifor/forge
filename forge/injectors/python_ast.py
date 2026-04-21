@@ -24,6 +24,14 @@ import logging
 import re
 from pathlib import Path
 
+from forge.errors import (
+    INJECTION_ANCHOR_AMBIGUOUS,
+    INJECTION_ANCHOR_NOT_FOUND,
+    INJECTION_MARKER_MISSING,
+    INJECTION_TARGET_MISSING,
+    InjectionError,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +62,11 @@ def inject_python(
     text-marker injection so the fragment layer stays unblocked.
     """
     if not file.is_file():
-        raise FileNotFoundError(file)
+        raise InjectionError(
+            f"Injection target not found: {file}",
+            code=INJECTION_TARGET_MISSING,
+            context={"file": str(file)},
+        )
 
     source = file.read_text(encoding="utf-8")
     marker_name = marker.removeprefix("FORGE:")
@@ -85,11 +97,13 @@ def inject_python(
         return
 
     # Fresh injection — find the anchor and insert there.
-    anchor_idx = _find_anchor(lines, marker_name)
+    anchor_idx = _find_anchor(lines, marker_name, file)
     if anchor_idx is None:
-        raise ValueError(
+        raise InjectionError(
             f"Anchor for {marker_name!r} not found in {file}. "
-            "Add `# forge:anchor <name>` or the legacy `# FORGE:<NAME>` marker to the template."
+            "Add `# forge:anchor <name>` or the legacy `# FORGE:<NAME>` marker to the template.",
+            code=INJECTION_ANCHOR_NOT_FOUND,
+            context={"file": str(file), "marker": marker_name},
         )
 
     indent = _leading_indent(lines[anchor_idx])
@@ -99,7 +113,7 @@ def inject_python(
     file.write_text("".join(lines), encoding="utf-8")
 
 
-def _find_anchor(lines: list[str], marker_name: str) -> int | None:
+def _find_anchor(lines: list[str], marker_name: str, file: Path | None = None) -> int | None:
     """Locate the first line matching either anchor comment form.
 
     Accepts:
@@ -107,8 +121,8 @@ def _find_anchor(lines: list[str], marker_name: str) -> int | None:
       * ``# forge:anchor MIDDLEWARE_IMPORTS`` (case-insensitive alt)
       * ``# FORGE:MIDDLEWARE_IMPORTS`` (legacy)
 
-    Returns the first unique match; raises ``ValueError`` if multiple
-    non-sentinel matches exist (ambiguous).
+    Returns the first unique match; raises :class:`InjectionError` if
+    multiple non-sentinel matches exist (ambiguous).
     """
     hits: list[int] = []
     normalized = marker_name.lower().strip(":").strip()
@@ -128,9 +142,11 @@ def _find_anchor(lines: list[str], marker_name: str) -> int | None:
     if not hits:
         return None
     if len(hits) > 1:
-        raise ValueError(
+        raise InjectionError(
             f"Anchor {marker_name!r} appears on multiple lines ({hits}). "
-            "Anchors must be unique per file."
+            "Anchors must be unique per file.",
+            code=INJECTION_ANCHOR_AMBIGUOUS,
+            context={"file": str(file) if file else None, "marker": marker_name, "lines": hits},
         )
     return hits[0]
 
@@ -181,8 +197,10 @@ def _text_inject(
         and not END_RE.search(line)
     ]
     if not hits:
-        raise ValueError(
-            f"Marker FORGE:{marker_name} not found in {file} (text-fallback mode)."
+        raise InjectionError(
+            f"Marker FORGE:{marker_name} not found in {file} (text-fallback mode).",
+            code=INJECTION_MARKER_MISSING,
+            context={"file": str(file), "marker": marker_name},
         )
     marker_idx = hits[0]
     indent = _leading_indent(lines[marker_idx])

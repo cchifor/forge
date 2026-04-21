@@ -21,7 +21,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from forge.config import BackendLanguage, ProjectConfig
-from forge.errors import GeneratorError
+from forge.errors import (
+    OPTIONS_DEP_CYCLE,
+    OPTIONS_FRAGMENT_CONFLICT,
+    OPTIONS_INVALID_VALUE,
+    OPTIONS_MISSING_FRAGMENT,
+    OPTIONS_UNKNOWN_PATH,
+    OptionsError,
+)
 from forge.fragments import FRAGMENT_REGISTRY, Fragment
 from forge.options import OPTION_REGISTRY
 
@@ -95,7 +102,11 @@ def _apply_option_defaults(user_options: dict[str, object]) -> dict[str, object]
     for path in user_options:
         if path not in OPTION_REGISTRY:
             known = ", ".join(sorted(OPTION_REGISTRY)) or "(none registered)"
-            raise GeneratorError(f"Unknown option '{path}'. Known options: {known}")
+            raise OptionsError(
+                f"Unknown option '{path}'. Known options: {known}",
+                code=OPTIONS_UNKNOWN_PATH,
+                context={"path": path},
+            )
 
     resolved: dict[str, object] = {}
     for path, opt in OPTION_REGISTRY.items():
@@ -125,10 +136,12 @@ def _expand_deps(fragment_set: set[str]) -> set[str]:
         for name in list(fragment_set):
             spec = FRAGMENT_REGISTRY.get(name)
             if spec is None:
-                raise GeneratorError(
+                raise OptionsError(
                     f"Option references unknown fragment '{name}'. Registry "
                     "out of sync — did you rename a fragment directory without "
-                    "updating options.py?"
+                    "updating options.py?",
+                    code=OPTIONS_MISSING_FRAGMENT,
+                    context={"fragment": name},
                 )
             for dep in spec.depends_on:
                 if dep not in fragment_set:
@@ -154,9 +167,11 @@ def _topo_sort(fragment_names: set[str]) -> list[str]:
         ]
         if not ready:
             cyclic = ", ".join(sorted(remaining))
-            raise GeneratorError(
+            raise OptionsError(
                 f"Cyclic fragment dependency detected among: {cyclic}. "
-                "Inspect `depends_on` entries in fragments.py."
+                "Inspect `depends_on` entries in fragments.py.",
+                code=OPTIONS_DEP_CYCLE,
+                context={"fragments": sorted(remaining)},
             )
         ready.sort(key=lambda n: (FRAGMENT_REGISTRY[n].order, n))
         order.extend(ready)
@@ -170,8 +185,10 @@ def _check_conflicts(fragment_names: set[str]) -> None:
         for other in spec.conflicts_with:
             if other in fragment_names:
                 a, b = sorted([name, other])
-                raise GeneratorError(
-                    f"Fragments '{a}' and '{b}' conflict and cannot both be enabled."
+                raise OptionsError(
+                    f"Fragments '{a}' and '{b}' conflict and cannot both be enabled.",
+                    code=OPTIONS_FRAGMENT_CONFLICT,
+                    context={"fragments": [a, b]},
                 )
 
 
@@ -214,10 +231,16 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
             if _is_user_selected(config.options, name):
                 supported = ", ".join(sorted(lg.value for lg in frag.implementations)) or "(none)"
                 present = ", ".join(lang.value for lang in project_backends) or "(none)"
-                raise GeneratorError(
+                raise OptionsError(
                     f"Fragment '{name}' is requested but none of its supported "
                     f"backends ({supported}) are present in this project "
-                    f"(backends: {present})."
+                    f"(backends: {present}).",
+                    code=OPTIONS_INVALID_VALUE,
+                    context={
+                        "fragment": name,
+                        "supported_backends": sorted(lg.value for lg in frag.implementations),
+                        "project_backends": [lang.value for lang in project_backends],
+                    },
                 )
             continue
         resolved.append(ResolvedFragment(fragment=frag, target_backends=targets))

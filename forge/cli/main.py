@@ -24,15 +24,53 @@ from forge.cli.loader import _load_config_file
 from forge.cli.parser import _is_headless, _parse_args
 from forge.config import FrontendFramework, ProjectConfig
 from forge.docker_manager import boot
-from forge.errors import GeneratorError
+from forge.errors import (
+    ForgeError,
+    InjectionError,
+    MergeError,
+    PluginError,
+    ProvenanceError,
+)
 from forge.generator import generate
 
 
-def _json_error(stdout_fd, message: str) -> None:
-    """Write a JSON error object to the real stdout and exit."""
-    stdout_fd.write(json.dumps({"error": message}) + "\n")
+def _exit_code_for(err: ForgeError) -> int:
+    """Map a :class:`ForgeError` subclass to a CLI exit code.
+
+    2 — generic failure (options / fragment / generator)
+    3 — injection failure
+    4 — merge conflict (non-recoverable)
+    5 — provenance / manifest IO failure
+    6 — plugin load / registration failure
+    """
+    if isinstance(err, InjectionError):
+        return 3
+    if isinstance(err, MergeError):
+        return 4
+    if isinstance(err, ProvenanceError):
+        return 5
+    if isinstance(err, PluginError):
+        return 6
+    return 2
+
+
+def _json_error(stdout_fd, err: object) -> None:
+    """Write a JSON error envelope to the real stdout and exit.
+
+    Accepts either a :class:`ForgeError` (emits full ``{error, code, hint,
+    context}``) or a plain string / exception (emits ``{error: str(msg)}``
+    for backward compat with legacy callers that hit ``ValueError`` /
+    ``KeyError`` on config parsing).
+    """
+    if isinstance(err, ForgeError):
+        payload = err.as_envelope()
+        exit_code = _exit_code_for(err)
+    else:
+        payload = {"error": str(err)}
+        exit_code = 2
+    stdout_fd.write(json.dumps(payload) + "\n")
     stdout_fd.flush()
-    sys.exit(2)
+    sys.exit(exit_code)
 
 
 def main() -> None:
@@ -177,11 +215,13 @@ def main() -> None:
     except TypeError:
         # generate() older signature (no dry_run kwarg) — fall back.
         project_root = generate(config, quiet=quiet)
-    except GeneratorError as e:
+    except ForgeError as e:
         if getattr(args, "json_output", False):
-            _json_error(_real_stdout, str(e))
+            _json_error(_real_stdout, e)
         print(f"\n  Generation failed: {e}", file=sys.stderr)
-        sys.exit(2)
+        if e.hint:
+            print(f"  Hint: {e.hint}", file=sys.stderr)
+        sys.exit(_exit_code_for(e))
 
     if getattr(args, "json_output", False):
         result: dict[str, Any] = {"project_root": str(project_root)}

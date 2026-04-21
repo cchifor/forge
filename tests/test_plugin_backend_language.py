@@ -13,6 +13,7 @@ from forge.config import (
     register_backend_language,
     resolve_backend_language,
 )
+from forge.errors import PluginError
 
 
 @pytest.fixture(autouse=True)
@@ -86,7 +87,7 @@ class TestAddBackendPluginPath:
             version_choices=("1.23",),
         )
         api.add_backend("myfirstlang", spec)
-        with pytest.raises(ValueError, match="already"):
+        with pytest.raises(PluginError, match="already"):
             reg2 = PluginRegistration(name="p2", module="m2")
             api2 = ForgeAPI(reg2)
             api2.add_backend("myfirstlang", spec)
@@ -100,5 +101,5 @@ class TestAddBackendPluginPath:
             version_field="python_version",
             version_choices=("3.13",),
         )
-        with pytest.raises(ValueError, match="already"):
+        with pytest.raises(PluginError, match="already"):
             api.add_backend("python", spec)

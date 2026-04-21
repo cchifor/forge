@@ -2,6 +2,52 @@
 
 This document lists breaking changes per version and the migration steps for each.
 
+## 1.0 → 1.1
+
+The 1.1 series opens the 12-month post-1.0 roadmap. Early alphas are additive except where called out below.
+
+### 1.1.0-alpha.1 — structured error hierarchy (Epic D)
+
+`GeneratorError` is no longer a distinct class. It is now an **alias** for the new `ForgeError` base, and every internal raise site has been promoted to one of six typed subclasses:
+
+| Subclass | When it's raised | Exit code |
+|---|---|---|
+| `OptionsError` | Unknown option path, dep cycle, fragment conflict | 2 |
+| `FragmentError` | Fragment dir missing, malformed `inject.yaml`, missing `deps.yaml` | 2 |
+| `InjectionError` | Missing anchor, ambiguous marker, corrupt sentinel | 3 |
+| `MergeError` | Three-way merge conflict (reserved for Epic F/H) | 4 |
+| `ProvenanceError` | Missing `forge.toml`, manifest corruption | 5 |
+| `PluginError` | Plugin load or registration collision | 6 |
+
+Each error carries `code: str`, `hint: str | None`, and `context: dict[str, Any]`. The CLI's `--json` envelope emits all four fields.
+
+**Impact on your code:**
+
+- `except GeneratorError:` continues to catch every forge failure — the alias makes this safe. You don't need to change anything if you only catch the base class.
+- `except ValueError:` around `inject_python` / `inject_ts` **breaks** — those injectors used to raise `ValueError` / `FileNotFoundError` and now raise `InjectionError`. Change your handler to `except forge.errors.InjectionError:` (or `except forge.errors.ForgeError:` to catch all forge failures).
+- `type(err).__name__ == "GeneratorError"` **breaks** — use `isinstance(err, forge.errors.ForgeError)` or the specific subclass.
+- `pytest.raises(GeneratorError, match="...")` continues to work because the subclass is-a `GeneratorError`, and the matched text is unchanged. Tests that want tighter coverage should migrate to `pytest.raises(forge.errors.OptionsError)` (or whichever fits) and `assert err.value.code == OPTIONS_UNKNOWN_PATH`.
+
+**Machine-readable codes.** If you consume forge's `--json` error envelope, the new `code` field lets you switch on specific failure kinds without string matching:
+
+```python
+import json, subprocess
+result = subprocess.run(["forge", "--config", "stack.yaml", "--json"], capture_output=True)
+if result.returncode != 0:
+    envelope = json.loads(result.stdout)
+    match envelope.get("code"):
+        case "OPTIONS_UNKNOWN_PATH":
+            ...   # user typo — suggest forge --list
+        case "INJECTION_ANCHOR_NOT_FOUND":
+            ...   # base template needs an anchor comment
+        case "PROVENANCE_MANIFEST_MISSING":
+            ...   # wrong directory; not a forge project
+```
+
+No codemod ships for this migration — the changes are too coupled to local test style to mechanise safely. Grep your code for `GeneratorError`, decide whether each site wants the base class or a specific subclass, and update in place.
+
+---
+
 ## 0.x → 1.0
 
 forge 1.0 is a clean-break release. The high-level shifts:

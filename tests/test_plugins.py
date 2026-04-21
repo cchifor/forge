@@ -8,6 +8,7 @@ import pytest
 
 from forge import plugins
 from forge.api import ForgeAPI, PluginRegistration
+from forge.errors import PluginError
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +68,7 @@ class TestForgeAPI:
             summary="collision",
             description="collision",
         )
-        with pytest.raises(ValueError, match="already registered"):
+        with pytest.raises(PluginError, match="already registered"):
             api.add_option(opt)
         assert reg.options_added == 0
 

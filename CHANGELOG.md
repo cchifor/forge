@@ -3,6 +3,29 @@
 All notable changes to forge are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — targeting 1.1.0-alpha.1
+
+> First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate reset (S), ty pin + canary (X), release dry-run workflow (Z).
+
+### Breaking
+
+- **Epic D — Error hierarchy.** `GeneratorError` is now an alias for the new `ForgeError` base class; six typed subclasses (`OptionsError`, `FragmentError`, `InjectionError`, `MergeError`, `ProvenanceError`, `PluginError`) replace the single flat error type. `except GeneratorError:` keeps catching every forge failure so call sites outside the project are unaffected. Assertions that compare `type(err).__name__ == "GeneratorError"` or rely on exact-type equality break — migrate to `isinstance(err, ForgeError)` or the specific subclass. No codemod; the search-and-replace is too coupled to the local test style to mechanise safely. See `UPGRADING.md`.
+
+### Added
+
+- **`forge.errors.ForgeError`** with fields `message`, `code`, `hint`, `context` and an `as_envelope()` helper the CLI uses for the `--json` error envelope.
+- **Machine-readable error codes** (`OPTIONS_UNKNOWN_PATH`, `FRAGMENT_DIR_MISSING`, `INJECTION_ANCHOR_NOT_FOUND`, `MERGE_CONFLICT`, `PROVENANCE_MANIFEST_MISSING`, `PLUGIN_COLLISION`, etc.) exported from `forge.errors` so plugins + tests can branch on `err.code` without regex-matching message strings.
+- **Subclass-aware exit codes** in the CLI: injection failures exit 3, merge 4, provenance 5, plugin 6; options/fragment/generator stay at 2. 0 remains success.
+- **`--json` envelope extension.** The error envelope now includes `code`, `hint` (when present), and `context` (when non-empty). The legacy `{"error": "<message>"}` shape is preserved for config-parse errors that surface as raw `ValueError` / `KeyError`.
+- **`tests/test_errors.py`** — 18 new tests covering the hierarchy, alias identity, envelope serialisation, and exit-code mapping.
+
+### Changed
+
+- Every `raise GeneratorError(...)` in the core control plane (`capability_resolver`, `feature_injector`, `injectors/python_ast`, `injectors/ts_ast`, `updater`, `api`) now raises the most specific subclass with a named `code`. Generator-orchestration raises in `forge/generator.py` continue to raise via the `GeneratorError` alias (= `ForgeError`) — they'll migrate to a future `GenerationError` subclass in a follow-up.
+- Bare `ValueError` / `FileNotFoundError` raises in the AST injectors are promoted to `InjectionError` with codes (`INJECTION_TARGET_MISSING`, `INJECTION_ANCHOR_NOT_FOUND`, `INJECTION_ANCHOR_AMBIGUOUS`, `INJECTION_MARKER_MISSING`) so CLI + tests see a uniform error surface.
+
+---
+
 ## [1.0.0] - 2026-04-20
 
 > **forge 1.0 — stable.** First stable release of the clean-break 1.0 series. Every capability shipped across the five alphas (a1–a5) + beta (b1) + release candidate (rc1) is now under the normal SemVer contract: breaking changes require a major bump, minor bumps add features, patches fix bugs. See `RELEASING.md` for the post-1.0 deprecation policy.
