@@ -18,6 +18,7 @@ so generation + re-application produce identical output.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from forge.config import BackendLanguage, ProjectConfig
@@ -30,7 +31,9 @@ from forge.errors import (
     OptionsError,
 )
 from forge.fragments import FRAGMENT_REGISTRY, Fragment
-from forge.options import OPTION_REGISTRY
+from forge.options import OPTION_REGISTRY, resolve_alias
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -98,9 +101,40 @@ def _apply_option_defaults(user_options: dict[str, object]) -> dict[str, object]
     defaults. Unknown keys in ``user_options`` raise — ProjectConfig's
     validator should have caught them earlier, but failing loudly here
     too keeps the pipeline safe.
+
+    Epic G (1.1.0-alpha.1) — alias rewrites. If a user-supplied path is
+    a declared alias on some Option, the value transparently maps to the
+    canonical path and a deprecation warning is logged. The
+    ``forge migrate-rename-options`` codemod rewrites the user's
+    forge.toml so the warning stops firing.
     """
-    for path in user_options:
-        if path not in OPTION_REGISTRY:
+    rewritten: dict[str, object] = {}
+    for path, value in user_options.items():
+        canonical = resolve_alias(path)
+        if canonical is not None:
+            if canonical in rewritten or canonical in user_options:
+                # User set both the alias and the canonical path. The
+                # canonical wins — silently dropping the alias would mask
+                # the shadowing, but promoting the alias would shadow the
+                # user's explicit canonical value. Raise so the user
+                # notices + picks one.
+                raise OptionsError(
+                    f"Option path {path!r} is a deprecated alias for "
+                    f"{canonical!r}, but {canonical!r} is also set. "
+                    f"Keep only one.",
+                    code=OPTIONS_UNKNOWN_PATH,
+                    context={"alias": path, "canonical": canonical},
+                )
+            logger.warning(
+                "Option path %r is a deprecated alias for %r. Run "
+                "`forge migrate-rename-options` to rewrite forge.toml.",
+                path,
+                canonical,
+            )
+            rewritten[canonical] = value
+        elif path in OPTION_REGISTRY:
+            rewritten[path] = value
+        else:
             known = ", ".join(sorted(OPTION_REGISTRY)) or "(none registered)"
             raise OptionsError(
                 f"Unknown option '{path}'. Known options: {known}",
@@ -110,7 +144,7 @@ def _apply_option_defaults(user_options: dict[str, object]) -> dict[str, object]
 
     resolved: dict[str, object] = {}
     for path, opt in OPTION_REGISTRY.items():
-        resolved[path] = user_options.get(path, opt.default)
+        resolved[path] = rewritten.get(path, opt.default)
     return resolved
 
 

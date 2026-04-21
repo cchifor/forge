@@ -147,6 +147,18 @@ class Option:
     min: int | None = None
     max: int | None = None
     pattern: str | None = None
+    # Epic G (1.1.0-alpha.1) — option aliases + deprecation.
+    # ``aliases`` is a tuple of deprecated paths that should resolve to this
+    # Option. When a user's forge.toml / YAML / --set uses an alias, the
+    # resolver transparently rewrites to the canonical path and emits a
+    # deprecation warning pointing at the ``forge migrate-rename-options``
+    # codemod. Aliases must pass the same path-shape regex as ``path`` and
+    # must not collide with any other registered Option's path or alias.
+    aliases: tuple[str, ...] = ()
+    # Version the canonical path replaced the first alias. Populates the
+    # warning message and the codemod's output so users see when each
+    # rename landed.
+    deprecated_since: str | None = None
 
     def __post_init__(self) -> None:
         _validate_path(self.path)
@@ -154,6 +166,7 @@ class Option:
         self._validate_options_shape()
         self._validate_enables_shape()
         self._validate_constraints()
+        self._validate_aliases()
 
     # -- validators ----------------------------------------------------------
 
@@ -209,6 +222,27 @@ class Option:
             raise ValueError(
                 f"Option {self.path}: `enables` is only meaningful for "
                 f"BOOL and ENUM options, not {self.type.value}."
+            )
+
+    def _validate_aliases(self) -> None:
+        """Epic G — structural checks on declared aliases.
+
+        Cross-option collision checks run in ``register_option`` since they
+        depend on registry state that doesn't exist at Option construction.
+        """
+        for alias in self.aliases:
+            _validate_path(alias)
+            if alias == self.path:
+                raise ValueError(
+                    f"Option {self.path}: alias {alias!r} equals the canonical path"
+                )
+        if len(set(self.aliases)) != len(self.aliases):
+            raise ValueError(
+                f"Option {self.path}: duplicate entries in aliases {list(self.aliases)}"
+            )
+        if self.deprecated_since is not None and not self.aliases:
+            raise ValueError(
+                f"Option {self.path}: deprecated_since set but no aliases declared"
             )
 
     def _validate_constraints(self) -> None:
@@ -269,21 +303,63 @@ class Option:
 
 OPTION_REGISTRY: dict[str, Option] = {}
 
+# Epic G (1.1.0-alpha.1) — alias → canonical path index. Populated by
+# ``register_option`` every time an Option declares ``aliases=(...,)``.
+# ``capability_resolver._apply_option_defaults`` consults this to rewrite
+# user-supplied alias paths before validation. Keeping the index separate
+# from OPTION_REGISTRY means the main registry stays keyed by canonical
+# paths only — get_option by alias is an explicit opt-in via
+# ``resolve_alias``.
+OPTION_ALIAS_INDEX: dict[str, str] = {}
+
 
 def register_option(opt: Option) -> None:
-    """Register an Option. Raises on duplicate path.
+    """Register an Option. Raises on duplicate path or alias collision.
 
     Fragment-key references in ``opt.enables`` are not validated here —
     fragments may be registered after options. ``capability_resolver``
     validates the full graph once everything has loaded.
+
+    Alias collision checks (Epic G): an alias must not equal any
+    existing canonical path or any previously-registered alias. The
+    error message names the other Option so operators can find the
+    conflict quickly.
     """
     if opt.path in OPTION_REGISTRY:
         raise ValueError(f"Option {opt.path!r} is already registered")
+    if opt.path in OPTION_ALIAS_INDEX:
+        raise ValueError(
+            f"Option {opt.path!r}: path collides with an existing alias "
+            f"(rename the alias on {OPTION_ALIAS_INDEX[opt.path]!r})"
+        )
+    for alias in opt.aliases:
+        if alias in OPTION_REGISTRY:
+            raise ValueError(
+                f"Option {opt.path!r}: alias {alias!r} already registered as "
+                f"a canonical Option path"
+            )
+        if alias in OPTION_ALIAS_INDEX:
+            raise ValueError(
+                f"Option {opt.path!r}: alias {alias!r} already aliased to "
+                f"{OPTION_ALIAS_INDEX[alias]!r}"
+            )
     OPTION_REGISTRY[opt.path] = opt
+    for alias in opt.aliases:
+        OPTION_ALIAS_INDEX[alias] = opt.path
+
+
+def resolve_alias(path: str) -> str | None:
+    """Return the canonical path for an alias, or ``None`` if not aliased.
+
+    Part of Epic G's alias machinery. Called by the resolver before it
+    walks the user's option dict so a rename doesn't silently drop the
+    user's value to the default.
+    """
+    return OPTION_ALIAS_INDEX.get(path)
 
 
 def get_option(path: str) -> Option | None:
-    """Lookup by path (exact match)."""
+    """Lookup by canonical path (exact match, no alias resolution)."""
     return OPTION_REGISTRY.get(path)
 
 
