@@ -20,6 +20,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from forge.errors import (
+    INJECTION_ANCHOR_AMBIGUOUS,
+    INJECTION_ANCHOR_NOT_FOUND,
+    INJECTION_TARGET_MISSING,
+    InjectionError,
+)
+
 ANCHOR_RE = re.compile(r"//\s*forge:anchor\s+(\S+)")
 LEGACY_RE = re.compile(r"//\s*FORGE:([A-Z_]+)")
 BEGIN_RE = re.compile(r"//\s*FORGE:BEGIN\s+(\S+)")
@@ -46,7 +53,11 @@ def inject_ts(
     )
 
     if not file.is_file():
-        raise FileNotFoundError(file)
+        raise InjectionError(
+            f"Injection target not found: {file}",
+            code=INJECTION_TARGET_MISSING,
+            context={"file": str(file)},
+        )
 
     if is_enabled() and inject_ts_via_morph(file, feature_key, marker, snippet, position):
         return
@@ -64,11 +75,13 @@ def inject_ts(
         file.write_text("".join(lines), encoding="utf-8")
         return
 
-    anchor_idx = _find_anchor(lines, marker_name)
+    anchor_idx = _find_anchor(lines, marker_name, file)
     if anchor_idx is None:
-        raise ValueError(
+        raise InjectionError(
             f"Anchor for {marker_name!r} not found in {file}. "
-            "Add `// forge:anchor <name>` or the legacy `// FORGE:<NAME>` marker."
+            "Add `// forge:anchor <name>` or the legacy `// FORGE:<NAME>` marker.",
+            code=INJECTION_ANCHOR_NOT_FOUND,
+            context={"file": str(file), "marker": marker_name},
         )
 
     indent = _leading_indent(lines[anchor_idx])
@@ -78,7 +91,7 @@ def inject_ts(
     file.write_text("".join(lines), encoding="utf-8")
 
 
-def _find_anchor(lines: list[str], marker_name: str) -> int | None:
+def _find_anchor(lines: list[str], marker_name: str, file: Path | None = None) -> int | None:
     hits: list[int] = []
     normalized = marker_name.lower().strip(":").strip()
     for i, line in enumerate(lines):
@@ -94,8 +107,10 @@ def _find_anchor(lines: list[str], marker_name: str) -> int | None:
     if not hits:
         return None
     if len(hits) > 1:
-        raise ValueError(
-            f"Anchor {marker_name!r} appears on multiple lines ({hits}); must be unique."
+        raise InjectionError(
+            f"Anchor {marker_name!r} appears on multiple lines ({hits}); must be unique.",
+            code=INJECTION_ANCHOR_AMBIGUOUS,
+            context={"file": str(file) if file else None, "marker": marker_name, "lines": hits},
         )
     return hits[0]
 

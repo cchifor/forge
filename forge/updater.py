@@ -35,10 +35,15 @@ from typing import Any
 
 from forge.capability_resolver import resolve
 from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
-from forge.errors import GeneratorError
+from forge.errors import (
+    PROVENANCE_MANIFEST_MISSING,
+    ForgeError,
+    OptionsError,
+    ProvenanceError,
+)
 from forge.feature_injector import apply_features, apply_project_features
 from forge.forge_toml import read_forge_toml, write_forge_toml
-from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify, sha256_of
+from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +53,17 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
 
     Returns a summary dict with ``backends``, ``fragments_applied``, and
     ``forge_version_before`` / ``forge_version_after`` keys. Raises
-    ``GeneratorError`` if ``project_root`` isn't a forge-generated
+    :class:`ProvenanceError` if ``project_root`` isn't a forge-generated
     project (no ``forge.toml``) or if the registry no longer recognises
     a recorded option path.
     """
     manifest = project_root / "forge.toml"
     if not manifest.is_file():
-        raise GeneratorError(f"No forge.toml at {project_root}. Is this a forge-generated project?")
+        raise ProvenanceError(
+            f"No forge.toml at {project_root}. Is this a forge-generated project?",
+            code=PROVENANCE_MANIFEST_MISSING,
+            context={"project_root": str(project_root)},
+        )
 
     data = read_forge_toml(manifest)
     try:
@@ -64,8 +73,9 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
 
     backends = _infer_backends(project_root)
     if not backends:
-        raise GeneratorError(
-            f"No services/<backend>/ directories found under {project_root}. Nothing to update."
+        raise ProvenanceError(
+            f"No services/<backend>/ directories found under {project_root}. Nothing to update.",
+            context={"project_root": str(project_root)},
         )
 
     config = ProjectConfig(
@@ -76,11 +86,16 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
 
     try:
         plan = resolve(config)
-    except GeneratorError as e:
-        raise GeneratorError(
-            f"Cannot resolve option plan from forge.toml: {e}. "
+    except ForgeError as e:
+        # Preserve the underlying error's code/context when re-raising so the
+        # CLI envelope stays informative about which option path was at fault.
+        raise OptionsError(
+            f"Cannot resolve option plan from forge.toml: {e.message}. "
             "An option path or fragment may have been removed since this project "
-            "was generated."
+            "was generated.",
+            code=e.code,
+            hint=e.hint,
+            context={**e.context, "project_root": str(project_root)},
         ) from e
 
     # Classify every provenance-tracked file BEFORE re-applying. The

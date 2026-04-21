@@ -2,14 +2,234 @@
 
 Lives in its own module (rather than generator.py) so docker_manager.py, cli.py,
 and tests can all import it without pulling in generator's Copier dependency.
+
+The hierarchy is intentionally narrow:
+
+- :class:`ForgeError` — the base. Every failure forge recognises is a subclass.
+- :class:`OptionsError` — option-registry and resolver-path issues
+  (unknown paths, dep cycles, invalid values).
+- :class:`FragmentError` — fragment layout issues (missing dirs, malformed
+  ``inject.yaml``, missing dependency files).
+- :class:`InjectionError` — failed AST/text injection (missing marker,
+  ambiguous anchor, corrupt sentinels).
+- :class:`MergeError` — three-way merge conflicts that can't be auto-resolved.
+- :class:`ProvenanceError` — provenance recording / classification failures.
+- :class:`PluginError` — plugin load / registration failures.
+
+Each subclass carries a machine-readable ``code`` (e.g. ``OPTIONS_UNKNOWN_PATH``),
+an optional ``hint``, and a free-form ``context`` dict. The CLI's ``--json``
+envelope emits these fields verbatim so downstream agents can branch on
+``code`` without regex-matching ``message``.
+
+For backward compatibility through the 1.1 series, ``GeneratorError`` is
+re-exported as an alias of :class:`ForgeError`; existing callers that do
+``except GeneratorError:`` keep catching every forge failure. The alias is
+scheduled for removal in 2.0.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
-class GeneratorError(RuntimeError):
-    """Raised when a step required to produce a usable project fails.
 
-    Callers (CLI main) catch this and surface it as a clean error message
-    or a JSON error envelope, instead of leaking a stack trace.
+class ForgeError(RuntimeError):
+    """Base class for every failure forge raises deliberately.
+
+    Subclasses set :attr:`DEFAULT_CODE` and any raise site may override with
+    ``code=...``. ``context`` is a small dict of machine-friendly fields the
+    CLI emits into the ``--json`` envelope; keep entries JSON-serialisable.
     """
+
+    DEFAULT_CODE: ClassVar[str] = "FORGE_ERROR"
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        hint: str | None = None,
+        context: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message: str = message
+        self.code: str = code if code is not None else self.DEFAULT_CODE
+        self.hint: str | None = hint
+        self.context: dict[str, Any] = dict(context) if context is not None else {}
+
+    def as_envelope(self) -> dict[str, Any]:
+        """Serialise to the CLI ``--json`` error envelope shape."""
+        envelope: dict[str, Any] = {
+            "error": self.message,
+            "code": self.code,
+        }
+        if self.hint is not None:
+            envelope["hint"] = self.hint
+        if self.context:
+            envelope["context"] = self.context
+        return envelope
+
+
+class OptionsError(ForgeError):
+    """Raised when option registration or resolution fails.
+
+    Typical sites: unknown option paths, dependency cycles, invalid value
+    types, conflicts between enables-maps.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "OPTIONS_ERROR"
+
+
+class FragmentError(ForgeError):
+    """Raised when a fragment's on-disk layout or registration is malformed.
+
+    Typical sites: missing fragment directory, malformed ``inject.yaml``,
+    missing ``deps.yaml`` / ``env.yaml`` entries, orphan ``depends_on``,
+    fragment-registration collisions.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "FRAGMENT_ERROR"
+
+
+class InjectionError(ForgeError):
+    """Raised when the AST/text injection step fails.
+
+    Typical sites: missing anchor/marker in target file, ambiguous anchor,
+    corrupt ``FORGE:BEGIN``/``FORGE:END`` sentinel pairs.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "INJECTION_ERROR"
+
+
+class MergeError(ForgeError):
+    """Raised when three-way merge cannot be auto-resolved.
+
+    Typical sites: user edited a block that the fragment also changed
+    upstream; emitted ``.forge-merge`` sidecar awaiting manual resolution.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "MERGE_ERROR"
+
+
+class ProvenanceError(ForgeError):
+    """Raised when provenance classification or manifest IO fails.
+
+    Typical sites: missing ``.forge/manifest.json``, corrupt provenance
+    records, SHA mismatch on read-back, uninstall classification failure.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "PROVENANCE_ERROR"
+
+
+class PluginError(ForgeError):
+    """Raised when plugin loading or registration fails.
+
+    Typical sites: broken entry point, plugin collides with a registered
+    option/fragment, registry frozen when plugin tries to register.
+    """
+
+    DEFAULT_CODE: ClassVar[str] = "PLUGIN_ERROR"
+
+
+# ----------------------------------------------------------------------------
+# Error code constants (machine-readable identifiers surfaced in --json)
+# ----------------------------------------------------------------------------
+
+# OptionsError codes
+OPTIONS_UNKNOWN_PATH = "OPTIONS_UNKNOWN_PATH"
+OPTIONS_INVALID_VALUE = "OPTIONS_INVALID_VALUE"
+OPTIONS_DEP_CYCLE = "OPTIONS_DEP_CYCLE"
+OPTIONS_MISSING_FRAGMENT = "OPTIONS_MISSING_FRAGMENT"
+OPTIONS_FRAGMENT_CONFLICT = "OPTIONS_FRAGMENT_CONFLICT"
+
+# FragmentError codes
+FRAGMENT_DIR_MISSING = "FRAGMENT_DIR_MISSING"
+FRAGMENT_FILES_OVERLAP = "FRAGMENT_FILES_OVERLAP"
+FRAGMENT_INJECT_YAML_BAD_SHAPE = "FRAGMENT_INJECT_YAML_BAD_SHAPE"
+FRAGMENT_INJECT_YAML_MISSING_KEY = "FRAGMENT_INJECT_YAML_MISSING_KEY"
+FRAGMENT_INJECT_YAML_BAD_POSITION = "FRAGMENT_INJECT_YAML_BAD_POSITION"
+FRAGMENT_INJECT_YAML_BAD_ZONE = "FRAGMENT_INJECT_YAML_BAD_ZONE"
+FRAGMENT_DEPS_FILE_MISSING = "FRAGMENT_DEPS_FILE_MISSING"
+FRAGMENT_DEPS_SECTION_MISSING = "FRAGMENT_DEPS_SECTION_MISSING"
+FRAGMENT_DEP_SPEC_INVALID = "FRAGMENT_DEP_SPEC_INVALID"
+FRAGMENT_ENV_INVALID = "FRAGMENT_ENV_INVALID"
+
+# InjectionError codes
+INJECTION_TARGET_MISSING = "INJECTION_TARGET_MISSING"
+INJECTION_MARKER_MISSING = "INJECTION_MARKER_MISSING"
+INJECTION_MARKER_AMBIGUOUS = "INJECTION_MARKER_AMBIGUOUS"
+INJECTION_ANCHOR_NOT_FOUND = "INJECTION_ANCHOR_NOT_FOUND"
+INJECTION_ANCHOR_AMBIGUOUS = "INJECTION_ANCHOR_AMBIGUOUS"
+INJECTION_SENTINEL_CORRUPT = "INJECTION_SENTINEL_CORRUPT"
+
+# MergeError codes
+MERGE_CONFLICT = "MERGE_CONFLICT"
+
+# ProvenanceError codes
+PROVENANCE_MANIFEST_MISSING = "PROVENANCE_MANIFEST_MISSING"
+PROVENANCE_MANIFEST_MALFORMED = "PROVENANCE_MANIFEST_MALFORMED"
+PROVENANCE_UPDATE_LOCK_HELD = "PROVENANCE_UPDATE_LOCK_HELD"
+
+# PluginError codes
+PLUGIN_LOAD_FAILED = "PLUGIN_LOAD_FAILED"
+PLUGIN_REGISTRATION_FAILED = "PLUGIN_REGISTRATION_FAILED"
+PLUGIN_COLLISION = "PLUGIN_COLLISION"
+PLUGIN_REGISTRY_FROZEN = "PLUGIN_REGISTRY_FROZEN"
+
+
+# ----------------------------------------------------------------------------
+# Backward-compatibility alias — deprecated since 1.1.0, scheduled removal 2.0
+# ----------------------------------------------------------------------------
+
+#: Deprecated alias for :class:`ForgeError` retained so code that does
+#: ``except GeneratorError:`` continues to catch every forge failure.
+#: New code should use :class:`ForgeError` or one of its subclasses.
+GeneratorError = ForgeError
+
+__all__ = [
+    # Base + subclasses
+    "ForgeError",
+    "OptionsError",
+    "FragmentError",
+    "InjectionError",
+    "MergeError",
+    "ProvenanceError",
+    "PluginError",
+    # Deprecated alias
+    "GeneratorError",
+    # OptionsError codes
+    "OPTIONS_UNKNOWN_PATH",
+    "OPTIONS_INVALID_VALUE",
+    "OPTIONS_DEP_CYCLE",
+    "OPTIONS_MISSING_FRAGMENT",
+    "OPTIONS_FRAGMENT_CONFLICT",
+    # FragmentError codes
+    "FRAGMENT_DIR_MISSING",
+    "FRAGMENT_FILES_OVERLAP",
+    "FRAGMENT_INJECT_YAML_BAD_SHAPE",
+    "FRAGMENT_INJECT_YAML_MISSING_KEY",
+    "FRAGMENT_INJECT_YAML_BAD_POSITION",
+    "FRAGMENT_INJECT_YAML_BAD_ZONE",
+    "FRAGMENT_DEPS_FILE_MISSING",
+    "FRAGMENT_DEPS_SECTION_MISSING",
+    "FRAGMENT_DEP_SPEC_INVALID",
+    "FRAGMENT_ENV_INVALID",
+    # InjectionError codes
+    "INJECTION_TARGET_MISSING",
+    "INJECTION_MARKER_MISSING",
+    "INJECTION_MARKER_AMBIGUOUS",
+    "INJECTION_ANCHOR_NOT_FOUND",
+    "INJECTION_ANCHOR_AMBIGUOUS",
+    "INJECTION_SENTINEL_CORRUPT",
+    # MergeError codes
+    "MERGE_CONFLICT",
+    # ProvenanceError codes
+    "PROVENANCE_MANIFEST_MISSING",
+    "PROVENANCE_MANIFEST_MALFORMED",
+    "PROVENANCE_UPDATE_LOCK_HELD",
+    # PluginError codes
+    "PLUGIN_LOAD_FAILED",
+    "PLUGIN_REGISTRATION_FAILED",
+    "PLUGIN_COLLISION",
+    "PLUGIN_REGISTRY_FROZEN",
+]

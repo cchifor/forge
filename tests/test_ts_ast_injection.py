@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from forge.errors import InjectionError
 from forge.injectors.ts_ast import inject_ts
 
 
@@ -79,13 +80,13 @@ class TestInjectTs:
             "const b = 2;\n",
             encoding="utf-8",
         )
-        with pytest.raises(ValueError, match="multiple lines"):
+        with pytest.raises(InjectionError, match="multiple lines"):
             inject_ts(src, "f", "dup", "const x = 0;", "after")
 
     def test_missing_anchor_raises(self, tmp_path: Path) -> None:
         src = tmp_path / "app.ts"
         src.write_text("export const x = 1;\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(InjectionError, match="not found"):
             inject_ts(src, "f", "NO_SUCH", "const y = 2;", "after")
 
     def test_position_before(self, tmp_path: Path) -> None:

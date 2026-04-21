@@ -13,6 +13,7 @@ from forge.config import (
     register_frontend_framework,
     resolve_frontend_framework,
 )
+from forge.errors import PluginError
 
 
 @pytest.fixture(autouse=True)
@@ -60,7 +61,7 @@ class TestAddFrontend:
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)
         spec = FrontendSpec(template_dir="x", display_label="y")
-        with pytest.raises(ValueError, match="built-in"):
+        with pytest.raises(PluginError, match="built-in"):
             api.add_frontend("vue", spec)
 
     def test_cannot_shadow_another_plugin(self) -> None:
@@ -71,7 +72,7 @@ class TestAddFrontend:
 
         reg2 = PluginRegistration(name="p2", module="m")
         api2 = ForgeAPI(reg2)
-        with pytest.raises(ValueError, match="already claimed"):
+        with pytest.raises(PluginError, match="already claimed"):
             api2.add_frontend("remix", spec)
 
 

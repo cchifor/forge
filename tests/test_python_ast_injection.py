@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from forge.errors import InjectionError
 from forge.injectors.python_ast import inject_python
 
 
@@ -79,13 +80,13 @@ class TestInjectPython:
             "pass\n",
             encoding="utf-8",
         )
-        with pytest.raises(ValueError, match="multiple lines"):
+        with pytest.raises(InjectionError, match="multiple lines"):
             inject_python(src, "f", "dup", "x", "after")
 
     def test_missing_anchor_raises(self, tmp_path: Path) -> None:
         src = tmp_path / "main.py"
         src.write_text("def app():\n    return None\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(InjectionError, match="not found"):
             inject_python(src, "f", "NO_SUCH", "x", "after")
 
     def test_reformat_surviving_anchor(self, tmp_path: Path) -> None:

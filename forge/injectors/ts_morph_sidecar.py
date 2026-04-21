@@ -17,7 +17,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 _HELPER_PATH = Path(__file__).with_name("ts-morph-helper.mjs")
 
 

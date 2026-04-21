@@ -157,7 +157,13 @@ class TestCliErrorRouting:
         out = capsys.readouterr().out
         # JSON mode redirects print() to stderr, so stdout should contain only the envelope.
         envelope = json.loads(out.strip().splitlines()[-1])
-        assert envelope == {"error": "synthetic boom"}
+        # Post-Epic D, the envelope always carries the error's code (FORGE_ERROR
+        # is the default when no subclass is chosen). `hint` and `context` keys
+        # are only present when the error sets them.
+        assert envelope["error"] == "synthetic boom"
+        assert envelope["code"] == "FORGE_ERROR"
+        assert "hint" not in envelope
+        assert "context" not in envelope
 
     def test_text_mode_exits_2_with_message(self, tmp_path, monkeypatch, capsys):
         from forge import cli

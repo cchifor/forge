@@ -10,6 +10,7 @@ import pytest
 from forge import plugins
 from forge.api import ForgeAPI, PluginRegistration
 from forge.cli.parser import _build_parser
+from forge.errors import PluginError
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +35,7 @@ class TestAddCommand:
         api = ForgeAPI(reg)
         api.add_command("mycmd", lambda args: 0)
         api2 = ForgeAPI(PluginRegistration(name="p2", module="m2"))
-        with pytest.raises(ValueError, match="already claimed"):
+        with pytest.raises(PluginError, match="already claimed"):
             api2.add_command("mycmd", lambda args: 0)
 
 

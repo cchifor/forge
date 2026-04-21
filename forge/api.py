@@ -36,8 +36,11 @@ full Python execution rights at forge startup. Register-only during load
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
+
+from forge.errors import PLUGIN_COLLISION, PluginError
 
 if TYPE_CHECKING:
     from forge.config import BackendSpec, FrontendSpec
@@ -92,7 +95,7 @@ class ForgeAPI:
 
     # -- Option registration ------------------------------------------------
 
-    def add_option(self, option: "Option") -> None:
+    def add_option(self, option: Option) -> None:
         """Register a new Option in OPTION_REGISTRY.
 
         The plugin is responsible for ensuring the dotted path doesn't
@@ -102,31 +105,43 @@ class ForgeAPI:
         from forge.options import OPTION_REGISTRY  # noqa: PLC0415
 
         if option.path in OPTION_REGISTRY:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register option "
                 f"'{option.path}', but that path is already registered. "
-                "Plugin options must use a namespaced prefix (e.g. 'mycompany.audit_log')."
+                "Plugin options must use a namespaced prefix (e.g. 'mycompany.audit_log').",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "option",
+                    "value": option.path,
+                },
             )
         OPTION_REGISTRY[option.path] = option
         self._registration.options_added += 1
 
     # -- Fragment registration ---------------------------------------------
 
-    def add_fragment(self, fragment: "Fragment") -> None:
+    def add_fragment(self, fragment: Fragment) -> None:
         """Register a new Fragment in FRAGMENT_REGISTRY."""
         from forge.fragments import FRAGMENT_REGISTRY  # noqa: PLC0415
 
         if fragment.name in FRAGMENT_REGISTRY:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register fragment "
-                f"'{fragment.name}', but that name is already registered."
+                f"'{fragment.name}', but that name is already registered.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "fragment",
+                    "value": fragment.name,
+                },
             )
         FRAGMENT_REGISTRY[fragment.name] = fragment
         self._registration.fragments_added += 1
 
     # -- Backend registration ----------------------------------------------
 
-    def add_backend(self, language_value: str, spec: "BackendSpec") -> None:
+    def add_backend(self, language_value: str, spec: BackendSpec) -> None:
         """Register a new backend language in BACKEND_REGISTRY.
 
         1.0.0a2+ lets plugins extend ``BackendLanguage`` via a sentinel
@@ -141,8 +156,8 @@ class ForgeAPI:
         """
         from forge.config import (  # noqa: PLC0415
             BACKEND_REGISTRY,
-            BackendLanguage,
             PLUGIN_LANGUAGES,
+            BackendLanguage,
             register_backend_language,
         )
 
@@ -154,9 +169,15 @@ class ForgeAPI:
                 break
 
         if builtin is not None and builtin in BACKEND_REGISTRY:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register backend "
-                f"'{language_value}', but that language is already registered."
+                f"'{language_value}', but that language is already registered.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "backend",
+                    "value": language_value,
+                },
             )
 
         if builtin is not None:
@@ -165,9 +186,15 @@ class ForgeAPI:
             if language_value in PLUGIN_LANGUAGES:
                 sentinel = PLUGIN_LANGUAGES[language_value]
                 if sentinel in BACKEND_REGISTRY:
-                    raise ValueError(
+                    raise PluginError(
                         f"Plugin '{self._registration.name}' tried to register backend "
-                        f"'{language_value}', but a plugin already claimed that name."
+                        f"'{language_value}', but a plugin already claimed that name.",
+                        code=PLUGIN_COLLISION,
+                        context={
+                            "plugin": self._registration.name,
+                            "kind": "backend",
+                            "value": language_value,
+                        },
                     )
             sentinel = register_backend_language(language_value)
             BACKEND_REGISTRY[sentinel] = spec
@@ -175,7 +202,7 @@ class ForgeAPI:
 
     # -- Frontend registration (1.0.0a4+) -----------------------------------
 
-    def add_frontend(self, value: str, spec: "FrontendSpec") -> None:
+    def add_frontend(self, value: str, spec: FrontendSpec) -> None:
         """Register a new frontend framework.
 
         Mirrors ``add_backend``: plugins can ship their own frontend
@@ -188,8 +215,8 @@ class ForgeAPI:
         """
         from forge.config import (  # noqa: PLC0415
             FRONTEND_SPECS,
-            FrontendFramework,
             PLUGIN_FRAMEWORKS,
+            FrontendFramework,
             register_frontend_framework,
         )
 
@@ -200,15 +227,27 @@ class ForgeAPI:
                 break
 
         if builtin is not None:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register frontend "
-                f"'{value}', but that framework is a built-in."
+                f"'{value}', but that framework is a built-in.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "frontend",
+                    "value": value,
+                },
             )
 
         if value in PLUGIN_FRAMEWORKS and value in FRONTEND_SPECS:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register frontend "
-                f"'{value}', but a plugin already claimed that name."
+                f"'{value}', but a plugin already claimed that name.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "frontend",
+                    "value": value,
+                },
             )
 
         register_frontend_framework(value)
@@ -231,9 +270,15 @@ class ForgeAPI:
         from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
 
         if name in COMMAND_REGISTRY:
-            raise ValueError(
+            raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register command "
-                f"'{name}', but a plugin already claimed that name."
+                f"'{name}', but a plugin already claimed that name.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "command",
+                    "value": name,
+                },
             )
         COMMAND_REGISTRY[name] = handler
         self._commands.append(handler)

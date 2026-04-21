@@ -27,7 +27,23 @@ import yaml
 
 from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
-from forge.errors import GeneratorError
+from forge.errors import (
+    FRAGMENT_DEP_SPEC_INVALID,
+    FRAGMENT_DEPS_FILE_MISSING,
+    FRAGMENT_DEPS_SECTION_MISSING,
+    FRAGMENT_DIR_MISSING,
+    FRAGMENT_FILES_OVERLAP,
+    FRAGMENT_INJECT_YAML_BAD_POSITION,
+    FRAGMENT_INJECT_YAML_BAD_SHAPE,
+    FRAGMENT_INJECT_YAML_BAD_ZONE,
+    FRAGMENT_INJECT_YAML_MISSING_KEY,
+    INJECTION_MARKER_AMBIGUOUS,
+    INJECTION_MARKER_MISSING,
+    INJECTION_SENTINEL_CORRUPT,
+    INJECTION_TARGET_MISSING,
+    FragmentError,
+    InjectionError,
+)
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
 from forge.provenance import ProvenanceCollector
 
@@ -200,9 +216,11 @@ def _apply_fragment(
 ) -> None:
     fragment = _resolve_fragment_dir(impl.fragment_dir)
     if not fragment.is_dir():
-        raise GeneratorError(
+        raise FragmentError(
             f"Fragment directory not found: {fragment}. "
-            "Check FragmentImplSpec.fragment_dir in fragments.py."
+            "Check FragmentImplSpec.fragment_dir in fragments.py.",
+            code=FRAGMENT_DIR_MISSING,
+            context={"fragment_dir": str(fragment), "fragment_impl_key": impl.fragment_dir},
         )
 
     files_dir = fragment / "files"
@@ -264,10 +282,12 @@ def _copy_files(
         if dst_path.exists():
             if skip_existing:
                 continue
-            raise GeneratorError(
+            raise FragmentError(
                 f"Fragment '{src.parent.name}' tried to overwrite existing file "
                 f"'{dst_path}'. Use inject.yaml to modify existing files; "
-                "fragments/files/ is for new paths only."
+                "fragments/files/ is for new paths only.",
+                code=FRAGMENT_FILES_OVERLAP,
+                context={"fragment": src.parent.name, "destination": str(dst_path)},
             )
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_path, dst_path)
@@ -281,26 +301,42 @@ def _copy_files(
 def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
     if not isinstance(data, list):
-        raise GeneratorError(
-            f"{path}: expected a YAML list of injections, got {type(data).__name__}"
+        raise FragmentError(
+            f"{path}: expected a YAML list of injections, got {type(data).__name__}",
+            code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+            context={"path": str(path), "got_type": type(data).__name__},
         )
     out: list[_Injection] = []
     for i, entry in enumerate(data):
         if not isinstance(entry, dict):
-            raise GeneratorError(f"{path}[{i}]: injection must be a mapping")
+            raise FragmentError(
+                f"{path}[{i}]: injection must be a mapping",
+                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                context={"path": str(path), "index": i},
+            )
         try:
             target = str(entry["target"])
             marker = str(entry["marker"])
             snippet = str(entry["snippet"])
         except KeyError as e:
-            raise GeneratorError(f"{path}[{i}]: missing required key {e}") from e
+            raise FragmentError(
+                f"{path}[{i}]: missing required key {e}",
+                code=FRAGMENT_INJECT_YAML_MISSING_KEY,
+                context={"path": str(path), "index": i, "missing_key": str(e).strip("'")},
+            ) from e
         position = str(entry.get("position", "after"))
         if position not in ("before", "after"):
-            raise GeneratorError(f"{path}[{i}]: position must be 'before' or 'after'")
+            raise FragmentError(
+                f"{path}[{i}]: position must be 'before' or 'after'",
+                code=FRAGMENT_INJECT_YAML_BAD_POSITION,
+                context={"path": str(path), "index": i, "position": position},
+            )
         zone = str(entry.get("zone", "generated"))
         if zone not in ("generated", "user", "merge"):
-            raise GeneratorError(
-                f"{path}[{i}]: zone must be 'generated' | 'user' | 'merge' (got {zone!r})"
+            raise FragmentError(
+                f"{path}[{i}]: zone must be 'generated' | 'user' | 'merge' (got {zone!r})",
+                code=FRAGMENT_INJECT_YAML_BAD_ZONE,
+                context={"path": str(path), "index": i, "zone": zone},
             )
         out.append(
             _Injection(
@@ -533,7 +569,11 @@ def _inject_snippet(
         scope cleanly.
     """
     if not file.is_file():
-        raise GeneratorError(f"Injection target not found: {file}")
+        raise InjectionError(
+            f"Injection target not found: {file}",
+            code=INJECTION_TARGET_MISSING,
+            context={"file": str(file)},
+        )
 
     needle = marker if marker.startswith(MARKER_PREFIX) else f"{MARKER_PREFIX}{marker}"
     prefix = _comment_prefix(file)
@@ -549,9 +589,11 @@ def _inject_snippet(
     if begin_idx is not None:
         end_idx = _find_unique_line(lines, end_needle, file, needle=end_needle)
         if end_idx is None or end_idx < begin_idx:
-            raise GeneratorError(
+            raise InjectionError(
                 f"{file}: found BEGIN sentinel for '{tag}' but matching END "
-                f"is missing or out of order."
+                f"is missing or out of order.",
+                code=INJECTION_SENTINEL_CORRUPT,
+                context={"file": str(file), "tag": tag},
             )
         # Preserve the BEGIN line's indentation so a regenerated block keeps
         # the same shape as the original marker-aligned one.
@@ -564,9 +606,11 @@ def _inject_snippet(
     # Path 2 — fresh injection: find the marker and insert a new block.
     marker_idx = _find_unique_line(lines, needle, file, needle=needle)
     if marker_idx is None:
-        raise GeneratorError(
+        raise InjectionError(
             f"Marker '{needle}' not found in {file}. "
-            "Add the marker to the base template or check the fragment's inject.yaml."
+            "Add the marker to the base template or check the fragment's inject.yaml.",
+            code=INJECTION_MARKER_MISSING,
+            context={"file": str(file), "marker": needle},
         )
     indent = _indent_of(lines[marker_idx])
     block = _render_block(indent, prefix, tag, snippet)
@@ -586,7 +630,11 @@ def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: s
     if not hits:
         return None
     if len(hits) > 1:
-        raise GeneratorError(f"'{needle}' appears {len(hits)} times in {file}; must be unique.")
+        raise InjectionError(
+            f"'{needle}' appears {len(hits)} times in {file}; must be unique.",
+            code=INJECTION_MARKER_AMBIGUOUS,
+            context={"file": str(file), "marker": needle, "count": len(hits)},
+        )
     return hits[0]
 
 
@@ -618,11 +666,19 @@ def _add_dependencies(lang: BackendLanguage, backend_dir: Path, deps: tuple[str,
 
 def _add_python_deps(pyproject: Path, deps: tuple[str, ...]) -> None:
     if not pyproject.is_file():
-        raise GeneratorError(f"pyproject.toml not found at {pyproject}")
+        raise FragmentError(
+            f"pyproject.toml not found at {pyproject}",
+            code=FRAGMENT_DEPS_FILE_MISSING,
+            context={"path": str(pyproject), "language": "python"},
+        )
     doc = tomlkit.parse(pyproject.read_text(encoding="utf-8"))
     project = doc.get("project")
     if project is None:
-        raise GeneratorError(f"{pyproject}: [project] section missing")
+        raise FragmentError(
+            f"{pyproject}: [project] section missing",
+            code=FRAGMENT_DEPS_SECTION_MISSING,
+            context={"path": str(pyproject), "section": "project"},
+        )
     existing = list(project.get("dependencies", []))
     existing_names = {_py_dep_name(d): d for d in existing}
     for dep in deps:
@@ -645,7 +701,11 @@ def _py_dep_name(dep: str) -> str:
 
 def _add_node_deps(package_json: Path, deps: tuple[str, ...]) -> None:
     if not package_json.is_file():
-        raise GeneratorError(f"package.json not found at {package_json}")
+        raise FragmentError(
+            f"package.json not found at {package_json}",
+            code=FRAGMENT_DEPS_FILE_MISSING,
+            context={"path": str(package_json), "language": "node"},
+        )
     raw = package_json.read_text(encoding="utf-8")
     data = json.loads(raw)
     deps_obj: dict[str, Any] = data.setdefault("dependencies", {})
@@ -677,7 +737,11 @@ def _add_rust_deps(cargo_toml: Path, deps: tuple[str, ...]) -> None:
     Existing entries are preserved — forge never clobbers hand-edited deps.
     """
     if not cargo_toml.is_file():
-        raise GeneratorError(f"Cargo.toml not found at {cargo_toml}")
+        raise FragmentError(
+            f"Cargo.toml not found at {cargo_toml}",
+            code=FRAGMENT_DEPS_FILE_MISSING,
+            context={"path": str(cargo_toml), "language": "rust"},
+        )
     doc = tomlkit.parse(cargo_toml.read_text(encoding="utf-8"))
     table = doc.setdefault("dependencies", tomlkit.table())
     for dep in deps:
@@ -703,11 +767,19 @@ def _parse_rust_dep(dep: str) -> tuple[str, Any]:
         name_part, _, rhs = stripped.partition("=")
         name = name_part.strip()
         if not name:
-            raise GeneratorError(f"bad Rust dep spec (empty name): {dep!r}")
+            raise FragmentError(
+                f"bad Rust dep spec (empty name): {dep!r}",
+                code=FRAGMENT_DEP_SPEC_INVALID,
+                context={"dep": dep, "reason": "empty_name"},
+            )
         try:
             parsed = tomlkit.parse(f"__v = {rhs.strip()}")
         except Exception as e:  # noqa: BLE001
-            raise GeneratorError(f"bad Rust dep value in {dep!r}: {e}") from e
+            raise FragmentError(
+                f"bad Rust dep value in {dep!r}: {e}",
+                code=FRAGMENT_DEP_SPEC_INVALID,
+                context={"dep": dep, "reason": "toml_parse_failure"},
+            ) from e
         return name, parsed["__v"]
     if "@" in stripped:
         name, version = stripped.split("@", 1)
