@@ -42,11 +42,33 @@ include = ["forge*"]
 [tool.setuptools.package-data]
 "forge.templates" = ["**/*"]
 
+# Epic DD (1.1.0-alpha.1) — keep wheel's forge/templates/ clean. The
+# `**/*` include above is generous so fragments can ship any file type;
+# this companion exclude drops caches + build output that occasionally
+# accumulate in the live working tree. Keep in sync with MANIFEST.in.
+[tool.setuptools.exclude-package-data]
+"forge.templates" = [
+    "**/__pycache__/*",
+    "**/.mypy_cache/*",
+    "**/.ruff_cache/*",
+    "**/.pytest_cache/*",
+    "**/node_modules/*",
+    "**/.venv/*",
+    "**/htmlcov/*",
+    "**/.next/*",
+    "**/.svelte-kit/*",
+    "**/.dart_tool/*",
+    "**/*.pyc",
+    "**/*.pyo",
+    "**/.DS_Store",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing"
 markers = [
     "e2e: end-to-end tests that scaffold a project and run its native test suite (slow, opt-in via -m e2e)",
+    "package_integrity: assert the uv-built sdist + wheel contain every template file and no cache contamination (slow, opt-in via -m package_integrity; CI runs as a separate job)",
 ]
 
 [tool.coverage.run]

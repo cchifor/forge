@@ -1,4 +1,20 @@
+# Include every shipped template file under forge/templates/ …
 recursive-include forge/templates *
+
+# … except ephemeral caches + build output that occasionally end up in the
+# working tree and would otherwise leak into the sdist/wheel. Epic DD's
+# tests/test_package_integrity.py enforces the same exclusion list against
+# the built artefacts — keep these two in sync when adding entries.
 recursive-exclude forge/templates */__pycache__/*
 recursive-exclude forge/templates */.mypy_cache/*
-global-exclude *.pyc *.pyo
+recursive-exclude forge/templates */.ruff_cache/*
+recursive-exclude forge/templates */.pytest_cache/*
+recursive-exclude forge/templates */node_modules/*
+recursive-exclude forge/templates */.venv/*
+recursive-exclude forge/templates */htmlcov/*
+recursive-exclude forge/templates */.next/*
+recursive-exclude forge/templates */.svelte-kit/*
+recursive-exclude forge/templates */dist/*
+recursive-exclude forge/templates */build/*
+recursive-exclude forge/templates */.dart_tool/*
+global-exclude *.pyc *.pyo .DS_Store
