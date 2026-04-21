@@ -232,7 +232,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.7.0" },
-    { name = "ty", specifier = ">=0.0.1a7" },
+    { name = "ty", specifier = "==0.0.29" },
 ]
 
 [[package]]

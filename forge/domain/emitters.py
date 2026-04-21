@@ -16,7 +16,6 @@ from __future__ import annotations
 from forge.domain.spec import EntityField, EntitySpec, FieldType
 from forge.errors import GeneratorError
 
-
 # -- Python / Pydantic --------------------------------------------------------
 
 
@@ -59,10 +58,7 @@ def _add_enum_imports_python(lines: list[str], spec: EntitySpec) -> None:
 
 def _pydantic_field(f: EntityField) -> str:
     py_type = _pydantic_type(f)
-    if f.optional:
-        suffix = " | None"
-    else:
-        suffix = ""
+    suffix = " | None" if f.optional else ""
     constraints = _pydantic_constraints(f)
     if f.optional and not constraints:
         default = " = None"

@@ -108,7 +108,7 @@ def compile_tsp(source_dir: Path, *, entry: str | None = None) -> TypespecEmitOu
         try:
             import yaml  # noqa: PLC0415
         except ImportError:
-            yaml = None  # type: ignore[assignment]
+            yaml = None  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
         if yaml is not None and yaml_text:
             spec = yaml.safe_load(yaml_text) or {}
 

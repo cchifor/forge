@@ -13,8 +13,9 @@ so ``forge --plugins list`` can enumerate them after load.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from importlib import metadata
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from forge.api import ForgeAPI, PluginRegistration
 
@@ -88,7 +89,7 @@ def load_all() -> list[PluginRegistration]:
     return LOADED_PLUGINS
 
 
-def _iter_entry_points() -> "Iterable[metadata.EntryPoint]":
+def _iter_entry_points() -> Iterable[metadata.EntryPoint]:
     """Return entry points in the ``forge.plugins`` group.
 
     Python 3.10+ supports ``entry_points().select(group=...)``. Older
@@ -101,7 +102,7 @@ def _iter_entry_points() -> "Iterable[metadata.EntryPoint]":
     return eps.get(ENTRY_POINT_GROUP, ())  # type: ignore[attr-defined]
 
 
-def _plugin_version(ep: "metadata.EntryPoint") -> str | None:
+def _plugin_version(ep: metadata.EntryPoint) -> str | None:
     """Best-effort version discovery for a plugin entry point.
 
     Extracts the distribution name from ``ep.dist`` when present, else

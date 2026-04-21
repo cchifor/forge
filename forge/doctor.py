@@ -8,7 +8,6 @@ failed. ``--json`` output is usable by CI.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import socket
 import subprocess

@@ -22,7 +22,13 @@ dev = [
     "pytest-cov>=6.0",
     "pyyaml>=6.0",
     "ruff>=0.7.0",
-    "ty>=0.0.1a7",
+    # ty is pinned to an exact alpha until a ty-upgrade PR lands (Epic X).
+    # Astral ships breaking changes between alphas (the 0.0.1a7 in the old
+    # `>=` constraint didn't even know about `[tool.ty.src].include`); a
+    # passing canary run is the precondition for bumping this pin. See
+    # .github/workflows/ty-upgrade.yml and tests/test_ty_canary.py for the
+    # upgrade dance.
+    "ty==0.0.29",
     "pre-commit>=3.7.0",
 ]
 

@@ -22,8 +22,8 @@ from forge.domain.spec import (
     EntityField,
     EntitySpec,
     FieldType,
-    load_entity_yaml,
     load_all,
+    load_entity_yaml,
 )
 
 __all__ = [

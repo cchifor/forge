@@ -16,8 +16,8 @@ from typing import Any
 # later ``print`` survives mixed-locale output.
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # ty:ignore[unresolved-attribute]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # ty:ignore[unresolved-attribute]
     except (AttributeError, OSError):
         pass
 
@@ -214,7 +214,7 @@ def _record_tree(
     """
     from forge.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
 
-    origin_typed: _PO = origin  # type: ignore[assignment]
+    origin_typed: _PO = origin  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
     if not root.is_dir():
         return
     for p in root.rglob("*"):

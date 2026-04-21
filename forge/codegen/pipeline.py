@@ -37,6 +37,8 @@ from forge.codegen.ui_protocol import (
     emit_dart,
     emit_pydantic,
     emit_typescript,
+)
+from forge.codegen.ui_protocol import (
     load_all as load_ui_schemas,
 )
 from forge.config import BackendLanguage, FrontendFramework
@@ -51,9 +53,9 @@ _ENUMS_ROOT = _TEMPLATES_ROOT / "_shared" / "domain" / "enums"
 
 
 def run_codegen(
-    config: "ProjectConfig",
+    config: ProjectConfig,
     project_root: Path,
-    collector: "ProvenanceCollector | None" = None,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
     """Run every schema-driven emitter and write outputs into the project tree.
 
@@ -68,9 +70,9 @@ def run_codegen(
 
 
 def _emit_ui_protocol(
-    config: "ProjectConfig",
+    config: ProjectConfig,
     project_root: Path,
-    collector: "ProvenanceCollector | None",
+    collector: ProvenanceCollector | None,
 ) -> None:
     """Regenerate UI-protocol types for each frontend + Python backend."""
     schemas = load_ui_schemas(UI_PROTOCOL_ROOT)
@@ -129,9 +131,9 @@ def _emit_ui_protocol(
 
 
 def _emit_canvas_manifests(
-    config: "ProjectConfig",
+    config: ProjectConfig,
     project_root: Path,
-    collector: "ProvenanceCollector | None",
+    collector: ProvenanceCollector | None,
 ) -> None:
     """Write ``canvas.manifest.json`` into each frontend's public dir.
 
@@ -152,9 +154,9 @@ def _emit_canvas_manifests(
 
 
 def _emit_shared_enums(
-    config: "ProjectConfig",
+    config: ProjectConfig,
     project_root: Path,
-    collector: "ProvenanceCollector | None",
+    collector: ProvenanceCollector | None,
 ) -> None:
     """Emit each shared enum into the right place for each backend/frontend.
 
@@ -247,7 +249,7 @@ def _emit_shared_enums(
 def _write(
     target: Path,
     content: str,
-    collector: "ProvenanceCollector | None",
+    collector: ProvenanceCollector | None,
 ) -> None:
     """Write ``content`` to ``target`` and record base-template provenance."""
     target.parent.mkdir(parents=True, exist_ok=True)

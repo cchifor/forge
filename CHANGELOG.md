@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic X (ty pin + upstream regression canary)
+
+- **ty pinned to exact version** (`0.0.29`) in `pyproject.toml`. The old `>=0.0.1a7` constraint let uv resolve to whatever Astral had released — handy for bug fixes, dangerous for CI stability. New ty bumps now go through `.github/workflows/ty-upgrade.yml` (scheduled monthly + `workflow_dispatch`), which runs the canary + forge typecheck before opening a PR with the lock churn.
+- **`tests/fixtures/ty_canary/`** — 12 small Python files exercising the 5 enabled ty rules (`unresolved-import`, `invalid-argument-type`, `invalid-return-type`, `missing-argument`, `unknown-argument`) plus `TypedDict` and generic `Protocol` inference smoke tests. Each file has a `# expect: error[<rule>]` or `# expect: ok` header.
+- **`tests/test_ty_canary.py`** — 13 tests that subprocess-invoke `ty check` against each fixture and assert the reported diagnostic rule matches the header. A divergence means ty's behaviour changed — the CI failure surfaces as "upstream ty regression" rather than "forge typing regression".
+- **Split `typecheck` job in `ci.yml`** into `typecheck-forge` and `typecheck-ty-canary`. Running in parallel. A green `typecheck-ty-canary` with a failing `typecheck-forge` points at forge code; the reverse points at ty.
+- **`.github/workflows/ty-upgrade.yml`** — scheduled bot. First Monday of each month (or `workflow_dispatch`) bumps ty to the latest alpha, runs canary + forge typecheck, opens a labelled PR with the bump. Humans review + merge.
+
+### Fixed — Epic X (pre-existing ty diagnostics)
+
+- Seven typechecker diagnostics that ty 0.0.29 surfaces on the forge codebase (the old `>=0.0.1a7` constraint was resolving to a newer ty in practice, but the diagnostics weren't being enforced — CI was running whatever uv cached). Each is suppressed with a targeted `# ty:ignore[<rule>]` comment and a rationale. Sites: `forge/cli/interactive.py:106` (BackendLanguage + plugin-sentinel union), `forge/codegen/enums.py:104, 109` (narrowed dict.get), `forge/domain/typespec.py:111` (optional-import-shim), `forge/generator.py:19, 20, 217` (Windows stdout reconfigure + provenance origin assignment). These are intentional pragmatic suppressions; a future epic tightens the relevant dataclass types to remove them.
+
+### Fixed — Epic X (pre-existing ruff diagnostics)
+
+- Ruff 0.15.11 (refreshed via `uv sync` during Epic X) surfaces ~37 pre-existing UP037 / UP035 diagnostics — quoted type annotations that `from __future__ import annotations` makes unnecessary, plus `typing.Callable` → `collections.abc.Callable` migrations. All auto-fixed by `ruff check --fix`; the resulting diffs are mechanical.
+- Three style fixes that ruff flags but can't auto-fix: SIM108 ternary in `forge/domain/emitters.py` (ternary applied); SIM102 nested-if in `forge/feature_injector.py` (combined with `and`); UP042 `str + Enum` in `forge/domain/spec.py` (kept with a targeted `noqa` — StrEnum changes `==` semantics and the YAML loader depends on the current behaviour).
+- `uv.lock` refreshed for the new ty pin + the current ruff.
+
 ### Added — Epic S (per-module coverage gates)
 
 - **`tests/test_coverage_gates.py`** — per-module coverage floors for the critical path (`capability_resolver`, `feature_injector`, `merge`, `provenance`, both AST injectors, `updater`). Parametrized across the gate table so a CI failure names the exact module that regressed instead of just "coverage low".

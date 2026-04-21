@@ -1,0 +1,112 @@
+name: ty upgrade
+
+# Epic X (1.1.0-alpha.1) — scheduled probe for ty upgrades.
+#
+# Rationale: ty is pinned to an exact alpha in `pyproject.toml` so
+# upstream regressions don't silently break CI. This workflow
+# monthly (and on-demand via workflow_dispatch) bumps the pin to the
+# latest alpha, runs both the forge typecheck and the canary fixture
+# suite, and opens a PR with the lock churn if both pass. A human
+# reviews the diff and merges — we never auto-merge a ty bump.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'ty version to test (leave blank for "latest")'
+        required: false
+        default: ''
+  schedule:
+    # First Monday of each month at 06:00 UTC. Frequent enough to catch
+    # interesting releases, infrequent enough not to be noisy.
+    - cron: '0 6 1-7 * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install base dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Resolve target ty version
+        id: target
+        run: |
+          if [ -n "${{ inputs.target_version }}" ]; then
+            echo "version=${{ inputs.target_version }}" >> "$GITHUB_OUTPUT"
+          else
+            # Latest release from PyPI — use uv's dry-run resolver so we
+            # don't touch uv.lock until after the canary passes.
+            latest=$(uv run python -c "from urllib.request import urlopen; import json; print(json.load(urlopen('https://pypi.org/pypi/ty/json'))['info']['version'])")
+            echo "version=$latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Current pin
+        id: current
+        run: |
+          pinned=$(grep -oP '"ty==\K[^"]+' pyproject.toml || true)
+          echo "version=$pinned" >> "$GITHUB_OUTPUT"
+          echo "Currently pinned: $pinned"
+          echo "Target candidate:  ${{ steps.target.outputs.version }}"
+
+      - name: Skip if already on target
+        if: steps.current.outputs.version == steps.target.outputs.version
+        run: |
+          echo "Already on ${{ steps.target.outputs.version }} — nothing to do."
+          exit 0
+
+      - name: Bump ty pin to ${{ steps.target.outputs.version }}
+        if: steps.current.outputs.version != steps.target.outputs.version
+        run: |
+          python - <<PY
+          import re
+          from pathlib import Path
+          p = Path("pyproject.toml")
+          body = p.read_text(encoding="utf-8")
+          new = re.sub(r'"ty==[^"]+"', '"ty==${{ steps.target.outputs.version }}"', body)
+          p.write_text(new, encoding="utf-8")
+          PY
+          uv sync --all-extras --dev
+
+      - name: Canary — ty's behaviour on the fixture suite
+        if: steps.current.outputs.version != steps.target.outputs.version
+        run: uv run pytest tests/test_ty_canary.py -v --no-cov
+
+      - name: Forge typecheck with the new ty
+        if: steps.current.outputs.version != steps.target.outputs.version
+        run: uv run ty check forge/
+
+      - name: Open PR with the bump
+        if: steps.current.outputs.version != steps.target.outputs.version
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ty-upgrade/${{ steps.target.outputs.version }}
+          base: main
+          commit-message: |
+            chore(deps): bump ty to ${{ steps.target.outputs.version }}
+
+            Canary + forge typecheck pass locally in CI. Review the
+            pyproject + uv.lock diff and merge.
+          title: 'chore(deps): bump ty to ${{ steps.target.outputs.version }}'
+          body: |
+            Automated by `.github/workflows/ty-upgrade.yml`.
+
+            - Previous pin: `${{ steps.current.outputs.version }}`
+            - New pin:      `${{ steps.target.outputs.version }}`
+            - Canary result: green (see workflow run)
+            - `ty check forge/`: green (see workflow run)
+
+            Merge if the diffs look sane. A human review is required
+            — we never auto-merge a ty bump.
+          labels: |
+            ty-upgrade
+            dependencies

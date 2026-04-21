@@ -42,10 +42,13 @@ def _dispatch_add_backend(args) -> None:
         )
         sys.exit(2)
 
-    from forge.config import BackendConfig, BackendLanguage, ProjectConfig  # noqa: PLC0415
+    from forge.config import (  # noqa: PLC0415
+        BACKEND_REGISTRY,  # noqa: PLC0415
+        BackendConfig,
+        BackendLanguage,
+    )
     from forge.forge_toml import read_forge_toml  # noqa: PLC0415
-    from forge.generator import _generate_single_backend, _record_tree  # noqa: PLC0415
-    from forge.config import BACKEND_REGISTRY  # noqa: PLC0415
+    from forge.generator import _generate_single_backend  # noqa: PLC0415
 
     manifest = project_path / "forge.toml"
     if not manifest.is_file():

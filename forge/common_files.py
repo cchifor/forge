@@ -22,9 +22,9 @@ COMMON_DIR = Path(__file__).resolve().parent / "templates" / "_common"
 
 
 def apply_common_files(
-    config: "ProjectConfig",
+    config: ProjectConfig,
     project_root: Path,
-    collector: "ProvenanceCollector | None" = None,
+    collector: ProvenanceCollector | None = None,
 ) -> None:
     """Drop shared quality-signal files at the project root if absent.
 
@@ -49,7 +49,7 @@ def apply_common_files(
             _copy_if_absent(ci_src, ci_dst, collector)
 
 
-def _ci_source_for(bc: "BackendConfig") -> Path | None:
+def _ci_source_for(bc: BackendConfig) -> Path | None:
     """Return the CI workflow template for the backend's language, if any."""
     from forge.config import BackendLanguage  # noqa: PLC0415
 
@@ -60,7 +60,7 @@ def _ci_source_for(bc: "BackendConfig") -> Path | None:
 
 
 def _copy_if_absent(
-    src: Path, dst: Path, collector: "ProvenanceCollector | None"
+    src: Path, dst: Path, collector: ProvenanceCollector | None
 ) -> None:
     if dst.exists():
         return

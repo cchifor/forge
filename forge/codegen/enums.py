@@ -39,7 +39,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -101,12 +100,12 @@ def load_enum_yaml(path: Path) -> EnumSpec:
         if isinstance(entry, str):
             values.append(EnumValue(value=entry))
         elif isinstance(entry, dict):
-            v = entry.get("value")
+            v = entry.get("value")  # ty:ignore[invalid-argument-type]
             if not isinstance(v, str) or not v:
                 raise GeneratorError(
                     f"{path}.values[{i}]: `value` must be a non-empty string"
                 )
-            label = entry.get("label")
+            label = entry.get("label")  # ty:ignore[invalid-argument-type]
             values.append(EnumValue(value=v, label=str(label) if label else None))
         else:
             raise GeneratorError(

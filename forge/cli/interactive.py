@@ -103,7 +103,7 @@ def _prompt_backend(
     return BackendConfig(
         name=name,
         project_name=project_name,
-        language=language,
+        language=language,  # ty:ignore[invalid-argument-type]
         description=description,
         features=features,
         server_port=port,

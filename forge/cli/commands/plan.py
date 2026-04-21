@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 from typing import Any
 
 from forge.capability_resolver import resolve
@@ -46,7 +45,6 @@ def _dispatch_plan(args: argparse.Namespace) -> None:
 
 def _build_preview(config, plan) -> dict[str, Any]:
     """Structured preview consumable by JSON mode or the tree printer."""
-    from forge.feature_injector import FRAGMENTS_DIR  # noqa: PLC0415
 
     backends = [
         {

@@ -39,7 +39,7 @@ Schema (``domain/<entity>.yaml``):
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -49,7 +49,7 @@ import yaml
 from forge.errors import GeneratorError
 
 
-class FieldType(str, Enum):
+class FieldType(str, Enum):  # noqa: UP042  # str + Enum kept for YAML-loader compat; StrEnum changes eq semantics
     """Supported scalar/composite field types."""
 
     STRING = "string"

@@ -31,7 +31,7 @@ class BackendLanguage(Enum):
 # (``"go"``, ``"java"``), value is a sentinel object (_PluginLanguage)
 # that mimics a BackendLanguage member well enough for the generator
 # dispatch + fragment lookup. Look up via ``resolve_backend_language``.
-PLUGIN_LANGUAGES: dict[str, "_PluginLanguage"] = {}
+PLUGIN_LANGUAGES: dict[str, _PluginLanguage] = {}
 
 
 class _PluginLanguage:
@@ -64,14 +64,14 @@ class _PluginLanguage:
         return hash(("BackendLanguage", self.value))
 
 
-def register_backend_language(value: str) -> "_PluginLanguage":
+def register_backend_language(value: str) -> _PluginLanguage:
     """Register a plugin language value. Returns the sentinel member."""
     if value not in PLUGIN_LANGUAGES:
         PLUGIN_LANGUAGES[value] = _PluginLanguage(value)
     return PLUGIN_LANGUAGES[value]
 
 
-def resolve_backend_language(value: str) -> "BackendLanguage | _PluginLanguage":
+def resolve_backend_language(value: str) -> BackendLanguage | _PluginLanguage:
     """Look up a language by string value. Checks built-in enum first,
     then plugin-registered sentinels. Raises ValueError if neither
     matches — callers treat that as "unknown language".
@@ -111,7 +111,7 @@ class FrontendSpec:
 # Plugin-registered frontends. Keyed by the wire value (``"solid"``,
 # ``"qwik"``), value is a ``_PluginFramework`` sentinel. Looked up
 # via ``resolve_frontend_framework``.
-PLUGIN_FRAMEWORKS: dict[str, "_PluginFramework"] = {}
+PLUGIN_FRAMEWORKS: dict[str, _PluginFramework] = {}
 
 # Specs for plugin frontends — not a dict-keyed-by-enum like
 # ``BACKEND_REGISTRY`` because the built-in frameworks don't have
@@ -144,14 +144,14 @@ class _PluginFramework:
         return hash(("FrontendFramework", self.value))
 
 
-def register_frontend_framework(value: str) -> "_PluginFramework":
+def register_frontend_framework(value: str) -> _PluginFramework:
     """Register a plugin frontend. Returns the sentinel member."""
     if value not in PLUGIN_FRAMEWORKS:
         PLUGIN_FRAMEWORKS[value] = _PluginFramework(value)
     return PLUGIN_FRAMEWORKS[value]
 
 
-def resolve_frontend_framework(value: str) -> "FrontendFramework | _PluginFramework":
+def resolve_frontend_framework(value: str) -> FrontendFramework | _PluginFramework:
     """Look up a frontend framework by wire value (built-in or plugin)."""
     for member in FrontendFramework:
         if member.value == value:
@@ -179,7 +179,7 @@ class BackendSpec:
 # BACKEND_REGISTRY keys are either real ``BackendLanguage`` members or
 # ``_PluginLanguage`` sentinels — both share the ``.value`` attribute so
 # downstream code can treat them uniformly.
-BACKEND_REGISTRY: dict["BackendLanguage | _PluginLanguage", BackendSpec] = {
+BACKEND_REGISTRY: dict[BackendLanguage | _PluginLanguage, BackendSpec] = {
     BackendLanguage.PYTHON: BackendSpec(
         template_dir="services/python-service-template",
         display_label="Python (FastAPI)",

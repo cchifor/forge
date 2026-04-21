@@ -15,7 +15,6 @@ from __future__ import annotations
 import questionary  # noqa: F401
 
 from forge.cli.builder import (
-    _Resolver,
     _build_backends_from_cfg,
     _build_config,
     _build_frontend_from_cfg,
@@ -23,6 +22,7 @@ from forge.cli.builder import (
     _coerce_set_value,
     _flatten_nested,
     _normalize_features,
+    _Resolver,
 )
 from forge.cli.commands.describe import _describe_option
 from forge.cli.commands.list import (

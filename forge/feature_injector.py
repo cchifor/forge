@@ -376,9 +376,8 @@ def _apply_zoned_injection(
                         conflict; leaves the target untouched. See
                         ``forge/merge.py``.
     """
-    if inj.zone == "user":
-        if _has_sentinel_block(target, inj.feature_key, inj.marker):
-            return False
+    if inj.zone == "user" and _has_sentinel_block(target, inj.feature_key, inj.marker):
+        return False
 
     if inj.zone == "merge" and project_root is not None:
         return _apply_merge_zone(

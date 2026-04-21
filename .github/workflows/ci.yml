@@ -25,7 +25,13 @@ jobs:
       - name: ruff format --check
         run: uv run ruff format --check forge/
 
-  typecheck:
+  # Epic X (1.1.0-alpha.1) — typecheck split into forge + canary. A
+  # failure in `typecheck-forge` alone is a forge typing regression. A
+  # failure in `typecheck-ty-canary` alone is an upstream ty regression
+  # that requires bumping the pin in pyproject.toml via the
+  # `ty-upgrade` workflow. If both fail, investigate the canary first
+  # — the forge errors are probably secondary.
+  typecheck-forge:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +40,20 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
-      - name: ty check
+      - name: ty check forge/
         run: uv run ty check forge/
+
+  typecheck-ty-canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - name: ty canary (detect upstream ty regressions)
+        run: uv run pytest tests/test_ty_canary.py -v --no-cov
 
   test:
     strategy:
