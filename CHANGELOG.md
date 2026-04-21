@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic G (option aliases + rename-options codemod)
+
+- **`Option.aliases: tuple[str, ...] = ()`** and **`Option.deprecated_since: str | None`** — an Option can declare deprecated paths that previously pointed at it. Aliases pass the same path-shape validation as the canonical path and cannot collide with any registered Option's path or alias.
+- **`OPTION_ALIAS_INDEX: dict[str, str]`** + **`resolve_alias(path)`** — populated at registration, looked up by the resolver to rewrite user-supplied alias paths to canonical before validation.
+- **`capability_resolver._apply_option_defaults` transparently rewrites aliases** with a `WARNING`-level log pointing at the `forge migrate-rename-options` codemod. If a user sets both the alias and the canonical path, the resolver raises `OptionsError(OPTIONS_UNKNOWN_PATH, context={alias, canonical})` so the conflict surfaces explicitly rather than silently dropping one.
+- **`forge migrate-rename-options` codemod** (`forge/migrations/migrate_rename_options.py`) — parses `forge.toml`'s `[forge.options]` table via tomlkit (comment-preserving), rewrites aliased keys to canonical paths, saves. Idempotent; re-running after a successful rewrite returns `skipped_reason="No aliased option keys found in forge.toml"`. Registered in `discover_migrations()` so `forge migrate` + `forge migrate-rename-options` both find it.
+- **20 new tests** in `tests/test_option_aliases.py` cover `Option.__post_init__` alias validation (self-conflict, duplicates, invalid path, `deprecated_since` without aliases), `register_option` collision detection (alias vs canonical, alias vs alias, canonical vs alias), resolver rewrites + deprecation warning, resolver raises on alias+canonical conflict, and the full codemod lifecycle (apply, dry-run, idempotent re-run, canonical-already-set short-circuit, missing manifest, missing options table, `discover_migrations` registration).
+
+Unblocks Epic L's `forge migrate-auth-provider` codemod, which will rename existing option paths that gate Keycloak-specific behaviour (still Python-only but due to be renamed once auth becomes a first-class Option).
+
 ### Added — Epic K (MiddlewareSpec cross-language abstraction)
 
 - **`forge/middleware_spec.py`** — frozen `MiddlewareSpec(name, backend, order, import_snippet, register_snippet, rust_mod_snippet=None)` dataclass. One spec == one middleware registration for one backend; a fragment supporting Python+Node+Rust ships three specs. Three per-backend renderers (`render_fastapi_middleware`, `render_fastify_plugin`, `render_axum_layer`) emit the `_Injection` records that the existing inject.yaml pipeline would have written by hand. `render_middleware_injections()` dispatches by `spec.backend` and sorts deterministically by `(order, name)`.

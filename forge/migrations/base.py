@@ -42,6 +42,7 @@ def discover_migrations() -> list[AvailableMigration]:
     from forge.migrations import (  # noqa: F401, PLC0415
         migrate_adapters,
         migrate_entities,
+        migrate_rename_options,
         migrate_ui_protocol,
     )
 
@@ -66,6 +67,13 @@ def discover_migrations() -> list[AvailableMigration]:
             to_version=migrate_adapters.TO,
             description=migrate_adapters.DESCRIPTION,
             runner=migrate_adapters.run,
+        ),
+        AvailableMigration(
+            name=migrate_rename_options.NAME,
+            from_version=migrate_rename_options.FROM,
+            to_version=migrate_rename_options.TO,
+            description=migrate_rename_options.DESCRIPTION,
+            runner=migrate_rename_options.run,
         ),
     ]
 
