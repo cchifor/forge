@@ -32,7 +32,6 @@ from forge.errors import (
     FRAGMENT_DEP_SPEC_INVALID,
     FRAGMENT_DEPS_FILE_MISSING,
     FRAGMENT_DEPS_SECTION_MISSING,
-    FRAGMENT_DIR_MISSING,
     FRAGMENT_FILES_OVERLAP,
     FRAGMENT_INJECT_YAML_BAD_POSITION,
     FRAGMENT_INJECT_YAML_BAD_SHAPE,
@@ -237,53 +236,25 @@ def _apply_fragment(
     impl: FragmentImplSpec,
     feature_key: str,
 ) -> None:
-    """Apply one fragment implementation within its :class:`FragmentContext`.
+    """Apply one fragment implementation via the default :class:`FragmentPipeline`.
 
-    Underscore-prefixed: private to ``feature_injector``. Epic A's applier
-    decomposition splits this body into single-responsibility classes;
-    Epic E merely refactors the function signature to take a
-    :class:`FragmentContext` so the applier work in Epic A is a strict
-    move rather than a plumbing exercise.
+    Epic A lands the applier decomposition: four single-responsibility
+    classes (:class:`FragmentFileApplier`, :class:`FragmentInjectionApplier`,
+    :class:`FragmentDepsApplier`, :class:`FragmentEnvApplier`) composed
+    by :class:`FragmentPipeline`. Each applier operates only on
+    ``ctx`` + :class:`FragmentPlan`, so they're unit-testable in
+    isolation and swappable by plugins + downstream epics. See
+    :mod:`forge.appliers`.
+
+    This function is kept as a stable internal entry point — callers
+    inside ``feature_injector`` route through it so the rest of the
+    module doesn't need to know pipelines exist. A future PR moves the
+    applier-helper bodies (``_copy_files``, ``_add_dependencies``, etc.)
+    out of this module and into the applier modules that own them.
     """
-    fragment = _resolve_fragment_dir(impl.fragment_dir)
-    if not fragment.is_dir():
-        raise FragmentError(
-            f"Fragment directory not found: {fragment}. "
-            "Check FragmentImplSpec.fragment_dir in fragments.py.",
-            code=FRAGMENT_DIR_MISSING,
-            context={"fragment_dir": str(fragment), "fragment_impl_key": impl.fragment_dir},
-        )
+    from forge.appliers import FragmentPipeline  # noqa: PLC0415
 
-    files_dir = fragment / "files"
-    if files_dir.is_dir():
-        _copy_files(
-            files_dir,
-            ctx.backend_dir,
-            skip_existing=ctx.skip_existing_files,
-            collector=ctx.provenance,
-            fragment_name=feature_key,
-        )
-
-    inject_path = fragment / "inject.yaml"
-    if inject_path.is_file():
-        for inj in _load_injections(inject_path, feature_key, options=ctx.options):
-            target = ctx.backend_dir / inj.target
-            applied = _apply_zoned_injection(
-                target,
-                inj,
-                project_root=ctx.project_root,
-                collector=ctx.provenance,
-            )
-            if applied and ctx.provenance is not None:
-                ctx.provenance.record(target, origin="fragment", fragment_name=feature_key)
-
-    if impl.dependencies:
-        _add_dependencies(ctx.backend_config.language, ctx.backend_dir, impl.dependencies)
-
-    if impl.env_vars:
-        env_file = ctx.backend_dir / ".env.example"
-        for key, value in impl.env_vars:
-            _add_env_var(env_file, key, value)
+    FragmentPipeline.default().run(ctx, impl, feature_key)
 
 
 # -- File copy ---------------------------------------------------------------

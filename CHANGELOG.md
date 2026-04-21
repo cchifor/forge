@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic A (fragment applier decomposition)
+
+- **`forge/appliers/` subpackage** — four single-responsibility applier classes each consuming a `FragmentContext` + `FragmentPlan`:
+  - `FragmentPlan(fragment_dir, files_dir, injections, dependencies, env_vars, feature_key)` frozen dataclass; `FragmentPlan.from_impl(impl, feature_key, options=...)` is the resolution pass.
+  - `FragmentFileApplier` — copies the fragment's `files/` tree.
+  - `FragmentInjectionApplier` — runs `inject.yaml` entries through the zoned dispatcher.
+  - `FragmentDepsApplier` — merges dependencies into `pyproject.toml` / `package.json` / `Cargo.toml`.
+  - `FragmentEnvApplier` — appends env vars to `.env.example`.
+- **`FragmentPipeline`** composes them in the canonical order (files → injection → deps → env). `FragmentPipeline.default()` is the factory; the pipeline is a frozen dataclass so plugins + downstream epics can swap a single applier without restating the rest (Epic K substitutes `FragmentInjectionApplier`).
+- **`_apply_fragment` shrinks** from ~50 LOC orchestrator to 5 lines that dispatch into `FragmentPipeline.default().run(ctx, impl, feature_key)`. This is Phase 1 of the decomposition — the applier bodies still live in `feature_injector.py` and the appliers call through as thin wrappers, so behaviour is preserved byte-for-byte. A follow-up moves the helper bodies into the applier modules.
+- **11 new tests** in `tests/appliers/` cover `FragmentPlan.from_impl` resolution (missing dir, files-only, inject-only, deps + env propagation, Jinja render) and `FragmentPipeline` ordering + short-circuit semantics on empty plan segments.
+
 ### Added — Epic E (FragmentContext + option_values plumbing)
 
 - **`forge/fragment_context.py`** with a frozen `FragmentContext` dataclass bundling `backend_config`, `backend_dir`, `project_root`, filtered `options`, `provenance`, `skip_existing_files`. This is the sole input to `_apply_fragment` (Epic A's applier decomposition builds on it).
