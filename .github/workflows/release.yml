@@ -15,8 +15,65 @@ permissions:
   contents: read
 
 jobs:
+  # Epic Z (1.1.0-alpha.1) — release rehearsal gate. Queries the
+  # `release-dryrun/ok` check-run on the tagged commit's SHA and
+  # fails fast unless a successful dry-run completed within 72h.
+  # Every publish-* job depends on this, so a broken build, an
+  # npm publish misconfiguration, or a malformed CHANGELOG section
+  # gets caught in the separate `release-dryrun.yml` workflow before
+  # we ever touch PyPI / npm / pub.dev.
+  #
+  # Escape hatch: repo variable SKIP_DRYRUN_GATE=true short-circuits
+  # the check (auditable — variable mutations are in the repo log).
+  # Use sparingly; the gate exists to save you from yourself.
+  preflight-dryrun:
+    name: Preflight — release-dryrun/ok within 72h
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+    steps:
+      - name: Check for a recent release-dryrun/ok
+        if: vars.SKIP_DRYRUN_GATE != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha;
+            const resp = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              check_name: "release-dryrun/ok",
+            });
+            const cutoffMs = 72 * 60 * 60 * 1000;
+            const now = Date.now();
+            const recent = resp.data.check_runs.find((r) => {
+              if (r.conclusion !== "success") return false;
+              const t = r.completed_at ? new Date(r.completed_at).getTime() : 0;
+              return (now - t) < cutoffMs;
+            });
+            if (!recent) {
+              core.setFailed([
+                `No successful release-dryrun/ok check-run for ${sha} within 72h.`,
+                "",
+                "Fix: run the 'Release dry-run' workflow against this commit",
+                "(Actions → Release dry-run → Run workflow), wait for green,",
+                "then re-push the tag. See RELEASING.md 'Pre-release dry-run protocol'.",
+                "",
+                "Escape hatch: set repo variable SKIP_DRYRUN_GATE=true (auditable).",
+              ].join("\n"));
+              return;
+            }
+            core.notice(`release-dryrun/ok from ${recent.completed_at} — gate cleared.`);
+
+      - name: Skip-gate escape hatch active
+        if: vars.SKIP_DRYRUN_GATE == 'true'
+        run: |
+          echo "::warning::SKIP_DRYRUN_GATE=true — release dry-run gate bypassed."
+          echo "Consider re-enabling after this release."
+
   publish-pypi:
     name: Publish forge (PyPI)
+    needs: preflight-dryrun
     runs-on: ubuntu-latest
     environment: release
     permissions:

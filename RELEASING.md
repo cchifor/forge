@@ -37,10 +37,43 @@ Each release follows the same steps:
 1. **CHANGELOG.md** — move entries from `## [Unreleased]` into a dated version section. Every breaking change must have an entry under `### Breaking`.
 2. **pyproject.toml** — bump `version`.
 3. **Create release branch** — e.g. `git checkout -b release/1.0.0a1 1.0-dev`.
-4. **Tag** — `git tag -a v1.0.0a1 -m "forge 1.0.0a1"`.
-5. **Build + publish** — `uv build`, `uv publish`. For alphas, publish to TestPyPI first.
-6. **GitHub release** — copy the CHANGELOG section as the release notes.
-7. **Bump next dev** — on `1.0-dev`, bump version to `1.0.0a2.dev0`.
+4. **Run the dry-run rehearsal** — see *Pre-release dry-run protocol* below. **Required** before the tag push.
+5. **Tag** — `git tag -a v1.0.0a1 -m "forge 1.0.0a1"`.
+6. **Push the tag** — `release.yml` triggers; its `preflight-dryrun` job consumes the check-run the rehearsal produced.
+7. **GitHub release** — the workflow creates this automatically from the CHANGELOG section.
+8. **Bump next dev** — on `1.0-dev`, bump version to `1.0.0a2.dev0`.
+
+## Pre-release dry-run protocol
+
+Every tagged release goes through a rehearsal first. The rehearsal exercises every publish path (PyPI build + metadata, forge CLI install smoke, canvas-vue npm dry-run, canvas-svelte npm dry-run, forge_canvas pub.dev dry-run, CHANGELOG extraction) without touching a live registry. On green it writes a `release-dryrun/ok` check-run on the rehearsed SHA; `release.yml`'s `preflight-dryrun` job refuses to publish unless that check-run exists and is <72h old.
+
+### Running the rehearsal
+
+1. **Ensure CHANGELOG is finalised** for the release version (dated section, not `[Unreleased]`). The rehearsal validates the section extraction; a stale CHANGELOG fails the `changelog-extract` job.
+2. **Push the release commit** to the branch you intend to tag from.
+3. **Open GitHub → Actions → "Release dry-run"** and click **Run workflow**. Leave `ref` blank to rehearse the default branch, or supply a specific SHA.
+4. **Wait for all 6 jobs to go green.** Typical runtime ~8 minutes.
+5. **Verify the check-run** — the final job writes `release-dryrun/ok` as a GitHub check on the commit. You'll see it in the commit's checks panel.
+6. **Tag within 72h.** `release.yml` treats the check-run as expired after that.
+
+### When a rehearsal fails
+
+Each job's failure points at a specific class of problem:
+
+| Failed job                | Typical cause                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `build-python`            | `twine check` rejects package metadata (bad README content-type, missing classifier).          |
+| `install-smoke`           | Wheel is missing template files, or `forge --list` fails due to a broken plugin/option registration. |
+| `npm-canvas-vue`          | `package.json` `files:` glob misses a built artefact, or `access` is set incorrectly.          |
+| `npm-canvas-svelte`       | Same shape as canvas-vue.                                                                      |
+| `pub-dev-canvas-dart`     | `flutter analyze` warnings, or `pubspec.yaml` missing required fields for pub.dev publish.     |
+| `changelog-extract`       | No dated `## [X.Y.Z]` section in CHANGELOG.md (still `[Unreleased]`).                          |
+
+Fix, push a new commit, re-run the rehearsal. Tag the fixed commit — the check-run is SHA-specific.
+
+### Escape hatch (use sparingly)
+
+Emergency fix with no time for a rehearsal? Set the repo variable `SKIP_DRYRUN_GATE=true` in **Settings → Secrets and variables → Actions → Variables**. `preflight-dryrun` emits a warning but lets the release proceed. **Reset the variable to `false` (or delete it) after the emergency release** — variable mutations are recorded in the repo log, so a lingering `true` is easy to spot in an audit.
 
 ## Breaking-change policy
 

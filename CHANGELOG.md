@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic Z (release dry-run rehearsal + 72h preflight)
+
+- **`.github/workflows/release-dryrun.yml`** (`workflow_dispatch`-only) — rehearses every publish path against dry-run endpoints / offline validators: Python sdist+wheel build + `twine check`, `forge` CLI install smoke from the built wheel (`forge --version / --help / --list`), `npm publish --dry-run` for canvas-vue and canvas-svelte, `flutter pub publish --dry-run` + `flutter analyze` for forge_canvas, CHANGELOG section extraction. On green, writes a `release-dryrun/ok` check-run on the rehearsed SHA.
+- **`preflight-dryrun` job in `release.yml`** — queries the GitHub Checks API for `release-dryrun/ok` on the tagged commit, fails fast unless a successful rehearsal completed within 72h. Every publish-* job now depends on this preflight, so a broken build or misconfigured registry never reaches PyPI / npm / pub.dev.
+- **Escape hatch** — repo variable `SKIP_DRYRUN_GATE=true` bypasses the preflight with a CI warning. Mutations are in the repo log, so an accidental lingering bypass is visible in audit.
+- **`RELEASING.md` "Pre-release dry-run protocol"** section — step-by-step protocol, per-job failure taxonomy, escape-hatch usage.
+
 ### Added — Epic X (ty pin + upstream regression canary)
 
 - **ty pinned to exact version** (`0.0.29`) in `pyproject.toml`. The old `>=0.0.1a7` constraint let uv resolve to whatever Astral had released — handy for bug fixes, dangerous for CI stability. New ty bumps now go through `.github/workflows/ty-upgrade.yml` (scheduled monthly + `workflow_dispatch`), which runs the canary + forge typecheck before opening a PR with the lock churn.
