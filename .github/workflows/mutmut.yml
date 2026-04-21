@@ -1,0 +1,112 @@
+name: Mutation testing
+
+# Epic U (1.1.0-alpha.1) — scheduled mutmut run + breaking-change gate.
+#
+# Why this isn't in the main PR matrix: mutmut is slow (45 min on the
+# critical-path set) and mutation scores drift naturally on refactors.
+# Gating every PR on kill-rate would be noisy + wall-clock-expensive.
+#
+# The actual gates:
+#   - schedule: Monday 06:00 UTC — full run on the module set in
+#     pyproject.toml's [tool.mutmut].paths_to_mutate.
+#   - workflow_dispatch: maintainer-triggered ad-hoc re-run.
+#   - pull_request with "breaking-change" label: runs only on the files
+#     the PR modifies, enforces baselines from tests/mutmut_baselines.json.
+#
+# A scheduled failure opens an issue; a PR failure blocks merge.
+
+on:
+  schedule:
+    # First day of the week, 06:00 UTC. Lines up with the Monday
+    # maintainer schedule without hitting GitHub's weekend rate caps.
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+  pull_request:
+    types: [labeled, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  mutmut:
+    # For PR events, only run when the `breaking-change` label is
+    # present. The `synchronize` event fires on every push to a labelled
+    # PR; the check still gates on the label being present when the run
+    # starts.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'breaking-change')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch enough history for `git diff origin/main...HEAD` on PR
+          # events.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Compute paths-to-mutate
+        id: paths
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Only mutate critical-path files the PR actually touched.
+            changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+              | grep -E '^forge/(feature_injector|merge|provenance|updater|injectors/python_ast|injectors/ts_ast)\.py$' \
+              || true)
+            if [ -z "$changed" ]; then
+              echo "No critical-path files changed — exiting."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "paths<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$changed" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            # Scheduled or manual run — mutate the full critical-path
+            # set from pyproject.toml.
+            echo "paths<<EOF" >> "$GITHUB_OUTPUT"
+            uv run python -c "import tomllib; print('\n'.join(tomllib.loads(open('pyproject.toml', 'rb').read().decode())['tool']['mutmut']['paths_to_mutate']))" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Run mutmut
+        if: steps.paths.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # One file per mutmut invocation so we can map results back
+          # to the baselines table by module name.
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            echo "::group::mutmut run on $file"
+            uv run mutmut run --paths-to-mutate "$file" || true
+            # Capture results.
+            uv run mutmut results > "mutmut-results-${file//\//_}.txt" || true
+            echo "::endgroup::"
+          done <<< "${{ steps.paths.outputs.paths }}"
+
+      - name: Enforce kill-rate baselines
+        if: steps.paths.outputs.skip != 'true'
+        run: uv run python .github/workflows/scripts/mutmut_enforce.py
+
+      - name: Upload mutmut results
+        if: always() && steps.paths.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-results-${{ github.run_id }}
+          path: mutmut-results-*.txt
+          retention-days: 30

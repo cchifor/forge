@@ -1,0 +1,43 @@
+{
+  "comment": [
+    "Mutation-testing kill-rate floors for forge's critical path (Epic U, 1.1.0-alpha.1).",
+    "Consumed by .github/workflows/mutmut.yml on its weekly run + on",
+    "breaking-change-labeled PRs that touch these modules.",
+    "",
+    "kill_rate_min: fraction of generated mutants that tests MUST catch.",
+    "  A drop below this floor fails the workflow.",
+    "survivors_max: upper bound on surviving mutants per module — a",
+    "  companion check that flags a regression even when the fraction",
+    "  still passes due to a growing total count.",
+    "",
+    "Update policy mirrors docs/coverage-policy.md's ratchet rules —",
+    "tightening floors needs a sprint; loosening them needs a CHANGELOG",
+    "entry + RFC-002 justification."
+  ],
+  "modules": {
+    "forge/feature_injector.py": {
+      "kill_rate_min": 0.95,
+      "survivors_max": 5
+    },
+    "forge/merge.py": {
+      "kill_rate_min": 1.0,
+      "survivors_max": 0
+    },
+    "forge/provenance.py": {
+      "kill_rate_min": 1.0,
+      "survivors_max": 0
+    },
+    "forge/injectors/python_ast.py": {
+      "kill_rate_min": 0.9,
+      "survivors_max": 3
+    },
+    "forge/injectors/ts_ast.py": {
+      "kill_rate_min": 0.9,
+      "survivors_max": 3
+    },
+    "forge/updater.py": {
+      "kill_rate_min": 0.85,
+      "survivors_max": 5
+    }
+  }
+}

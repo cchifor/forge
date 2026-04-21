@@ -7,6 +7,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic U (mutmut weekly workflow + breaking-change PR gate)
+
+- **`.github/workflows/mutmut.yml`** — scheduled Monday 06:00 UTC full run on the critical-path modules, `workflow_dispatch` for ad-hoc re-runs, PR gate that fires on `breaking-change`-labelled PRs (skips if no critical-path file changed). Uploads `mutmut-results-*.txt` artefacts with 30-day retention.
+- **`tests/mutmut_baselines.json`** — per-file kill-rate floors + survivor caps for `feature_injector`, `merge`, `provenance`, `updater`, `injectors/python_ast`, `injectors/ts_ast`. Ratchet policy mirrors coverage gates.
+- **`.github/workflows/scripts/mutmut_enforce.py`** — post-run enforcer parses `mutmut results`, aggregates survivors per source file, compares against the baseline caps, fails the job with an actionable message when a module regresses. Skips silently when no mutmut cache exists (keeps the workflow valid before the first run).
+
+### Added — Epic AA (full-feature golden snapshot preset)
+
+- **`full_feature` preset in `tests/test_golden_snapshots.py`** — 5th golden preset exercising observability + reliability middleware + conversational-AI persistence + agent tools + chat attachments + webhooks + CLI extensions + AGENTS.md, plus a Vue frontend with auth + chat + OpenAPI. Generates ~3,600 files (vs. ~600 for `python_minimal`). Catches regressions in the "rich" Python-stack union that the 4 minimal presets miss.
+- **Expanded snapshot-noise filter** — `.git/` at any depth (frontend templates run their own `git init`) + `__pycache__/` + `.pyc` files (frontend post-generate scripts byte-compile their modules). Without these filters, the frontend-inclusive preset was nondeterministic across runs. Keeps the four pre-Epic-AA presets byte-identical to their prior snapshots.
+- **`ProjectConfig.options` threaded through the test's config-copy** so the preset's rich options actually reach the generator (pre-AA, the copy dropped `options=`, which wouldn't have mattered until the first preset that set anything — this one).
+
+### Added — Epic CC (troubleshooting + known-issues docs)
+
+- **`docs/troubleshooting.md`** — 12 entries covering install/CLI (uv PATH setup, ty alpha quirks), generation (Windows long paths, Flutter SDK, Keycloak ports, hung prompts), `forge --update` (Epic H lock + sentinel audit errors, Epic G alias deprecation warnings), Docker + runtime, and packaging + release (Epic DD contaminants, Epic Z release-dryrun gate).
+- **`docs/known-issues.md`** — tracked limitations grouped by template/platform/polyglot/tooling. Each row has impact + workaround + tracking reference so contributors stop rediscovering the same gotchas.
+- **README's Support section links both docs** so they're discoverable from the project front page.
+
+### Added — Epic RFC-Q (polyglot ports roadmap — design only)
+
+- **`docs/rfcs/RFC-005-polyglot-ports.md`** — design document specifying TypeSpec port contracts for `queue`, `object_store`, `llm`, `vector_store` cross-language, enumerating the adapter inventory (16 new adapters × 3-5 engineer-days each = ~13 engineer-weeks), and **deferring implementation to 2.x** so 1.1.x can focus on Python depth + Epic J ops parity.
+- The narrower follow-up — publishing the TypeSpec spec files without adapters so plugin authors have something to conform to — is tracked as a P2 1.x item.
+- `docs/rfcs/README.md` index updated with the RFC-005 row.
+
 ### Added — Epic H (updater lock + sentinel integrity audit)
 
 - **`forge/updater_lock.py`** — ``acquire_lock(project_root, no_lock=False)`` context manager writes ``<project_root>/.forge/lock`` with PID + ISO-8601 timestamp on entry, removes on exit. Stale locks (owning PID no longer alive) are reclaimed transparently. Cross-platform liveness via ``os.kill(pid, 0)`` on POSIX and ``OpenProcess`` via ctypes on Windows — stdlib only, no psutil. Raises ``ProvenanceError(PROVENANCE_UPDATE_LOCK_HELD)`` when a live process already holds the lock. ``no_lock=True`` is a no-op escape hatch for read-only filesystems.
