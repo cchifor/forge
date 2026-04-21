@@ -36,6 +36,7 @@ from forge.appliers.plan import FragmentPlan
 if TYPE_CHECKING:
     from forge.fragment_context import FragmentContext
     from forge.fragments import FragmentImplSpec
+    from forge.middleware_spec import MiddlewareSpec
 
 
 @dataclass(frozen=True)
@@ -58,9 +59,23 @@ class FragmentPipeline:
         ctx: FragmentContext,
         impl: FragmentImplSpec,
         feature_key: str,
+        *,
+        middlewares: tuple[MiddlewareSpec, ...] = (),
     ) -> None:
-        """Build the plan + apply each phase in the canonical order."""
-        plan = FragmentPlan.from_impl(impl, feature_key, options=ctx.options)
+        """Build the plan + apply each phase in the canonical order.
+
+        ``middlewares`` (Epic K) are expanded into injections at plan-
+        build time using the renderer for the current backend. Fragments
+        with no middleware declarations pass ``()`` and the plan looks
+        identical to the pre-Epic-K shape.
+        """
+        plan = FragmentPlan.from_impl(
+            impl,
+            feature_key,
+            options=ctx.options,
+            middlewares=middlewares,
+            backend=ctx.backend_config.language,
+        )
         self.files.apply(ctx, plan)
         self.injection.apply(ctx, plan)
         self.deps.apply(ctx, plan)

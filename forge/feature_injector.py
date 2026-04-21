@@ -46,6 +46,7 @@ from forge.errors import (
 )
 from forge.fragment_context import FragmentContext
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
+from forge.middleware_spec import MiddlewareSpec
 from forge.provenance import ProvenanceCollector
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -193,7 +194,7 @@ def apply_features(
             provenance=collector,
             skip_existing_files=skip_existing_files,
         )
-        _apply_fragment(ctx, impl, rf.fragment.name)
+        _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
 
 
 def apply_project_features(
@@ -227,7 +228,12 @@ def apply_project_features(
                     provenance=collector,
                     skip_existing_files=skip_existing_files,
                 )
-                _apply_fragment(ctx, impl, rf.fragment.name)
+                # Project-scope fragments typically don't declare middlewares
+                # (they emit project-level files like AGENTS.md). Pass the
+                # tuple anyway so the pipeline API stays uniform.
+                _apply_fragment(
+                    ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
+                )
                 break
 
 
@@ -235,26 +241,26 @@ def _apply_fragment(
     ctx: FragmentContext,
     impl: FragmentImplSpec,
     feature_key: str,
+    *,
+    middlewares: tuple[MiddlewareSpec, ...] = (),
 ) -> None:
     """Apply one fragment implementation via the default :class:`FragmentPipeline`.
 
     Epic A lands the applier decomposition: four single-responsibility
-    classes (:class:`FragmentFileApplier`, :class:`FragmentInjectionApplier`,
-    :class:`FragmentDepsApplier`, :class:`FragmentEnvApplier`) composed
-    by :class:`FragmentPipeline`. Each applier operates only on
-    ``ctx`` + :class:`FragmentPlan`, so they're unit-testable in
-    isolation and swappable by plugins + downstream epics. See
-    :mod:`forge.appliers`.
+    classes composed by :class:`FragmentPipeline`. Epic K threads any
+    :class:`MiddlewareSpec` declarations on the fragment into the plan
+    so the applier emits the middleware import + registration lines
+    without a handwritten ``inject.yaml``.
 
-    This function is kept as a stable internal entry point — callers
-    inside ``feature_injector`` route through it so the rest of the
-    module doesn't need to know pipelines exist. A future PR moves the
+    This function is a stable internal entry point — callers inside
+    ``feature_injector`` route through it so the rest of the module
+    doesn't need to know pipelines exist. A future PR moves the
     applier-helper bodies (``_copy_files``, ``_add_dependencies``, etc.)
     out of this module and into the applier modules that own them.
     """
     from forge.appliers import FragmentPipeline  # noqa: PLC0415
 
-    FragmentPipeline.default().run(ctx, impl, feature_key)
+    FragmentPipeline.default().run(ctx, impl, feature_key, middlewares=middlewares)
 
 
 # -- File copy ---------------------------------------------------------------

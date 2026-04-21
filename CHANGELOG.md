@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic K (MiddlewareSpec cross-language abstraction)
+
+- **`forge/middleware_spec.py`** — frozen `MiddlewareSpec(name, backend, order, import_snippet, register_snippet, rust_mod_snippet=None)` dataclass. One spec == one middleware registration for one backend; a fragment supporting Python+Node+Rust ships three specs. Three per-backend renderers (`render_fastapi_middleware`, `render_fastify_plugin`, `render_axum_layer`) emit the `_Injection` records that the existing inject.yaml pipeline would have written by hand. `render_middleware_injections()` dispatches by `spec.backend` and sorts deterministically by `(order, name)`.
+- **`Fragment.middlewares: tuple[MiddlewareSpec, ...] = ()`** — per-fragment middleware declarations. Default empty, so existing fragments are unaffected until they migrate.
+- **`FragmentPlan.from_impl` + `FragmentPipeline.run`** gained `middlewares` + `backend` parameters. At plan time, specs matching the current backend are expanded into synthesised `_Injection` records and appended after any inject.yaml entries. Backward-compatible — callers that don't pass `middlewares` behave exactly as before.
+- **`correlation_id/python` migrated** as the first proof: `inject.yaml` deleted, replaced by a single `MiddlewareSpec` literal on the Fragment. The generated project sees byte-identical output. Epic J (Node+Rust ops parity) migrates the remaining five middleware fragments (rate_limit, security_headers, observability, observability_otel, response_cache) and backfills Node+Rust specs for the Python-only ones.
+- **13 new tests** in `tests/test_middleware_spec.py` — per-renderer shape, dispatch + filtering + ordering semantics, FragmentPlan integration (middleware-only fragment, absent-backend short-circuit, inject.yaml+middlewares combined), and a pair of sanity checks asserting the migrated `correlation_id` fragment has the expected MiddlewareSpec and that its legacy inject.yaml is gone.
+
 ### Added — Epic A (fragment applier decomposition)
 
 - **`forge/appliers/` subpackage** — four single-responsibility applier classes each consuming a `FragmentContext` + `FragmentPlan`:
