@@ -34,6 +34,7 @@ from forge.errors import (
     FragmentError,
     PluginError,
 )
+from forge.middleware_spec import MiddlewareSpec
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,14 @@ class Fragment:
     # Controls middleware registration ordering on before-marker
     # injections.
     order: int = 100
+    # Epic K (1.1.0-alpha.1) — declarative middleware registrations. Each
+    # spec targets one backend; a fragment that supports all three backends
+    # ships three specs. At apply time, the applier expands every spec
+    # targeting the current backend into ``_Injection`` records using the
+    # per-backend renderer (``render_fastapi_middleware``,
+    # ``render_fastify_plugin``, ``render_axum_layer``). Fragments that
+    # don't register middleware leave this empty and behave as before.
+    middlewares: tuple[MiddlewareSpec, ...] = ()
 
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations
@@ -304,6 +313,24 @@ register_fragment(
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="correlation_id/python"),
         },
+        # Epic K (1.1.0-alpha.1) — MiddlewareSpec replaces the
+        # correlation_id/python/inject.yaml file. The files/ tree (the
+        # actual CorrelationIdMiddleware class) still lives on disk; only
+        # the import + app.add_middleware(...) ceremony is declarative now.
+        middlewares=(
+            MiddlewareSpec(
+                name="correlation_id",
+                backend=BackendLanguage.PYTHON,
+                order=90,
+                import_snippet=(
+                    "from app.middleware.correlation import CorrelationIdMiddleware"
+                ),
+                register_snippet=(
+                    "# Correlation ID (outermost — runs first, sets context for all inner middleware)\n"
+                    "app.add_middleware(CorrelationIdMiddleware)"
+                ),
+            ),
+        ),
     )
 )
 

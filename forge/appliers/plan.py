@@ -21,8 +21,10 @@ from typing import TYPE_CHECKING, Any
 from forge.errors import FRAGMENT_DIR_MISSING, FragmentError
 
 if TYPE_CHECKING:
+    from forge.config import BackendLanguage
     from forge.feature_injector import _Injection
     from forge.fragments import FragmentImplSpec
+    from forge.middleware_spec import MiddlewareSpec
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,8 @@ class FragmentPlan:
         feature_key: str,
         *,
         options: Mapping[str, Any] | None = None,
+        middlewares: tuple[MiddlewareSpec, ...] = (),
+        backend: BackendLanguage | None = None,
     ) -> FragmentPlan:
         """Resolve an impl to a concrete plan.
 
@@ -64,12 +68,23 @@ class FragmentPlan:
         entries that set ``render: true`` in ``inject.yaml``. The
         resolver has already validated that every path the impl
         declares in ``reads_options`` exists in the registry.
+
+        ``middlewares`` + ``backend`` (Epic K, 1.1.0-alpha.1) let the
+        applier expand :class:`MiddlewareSpec` declarations into
+        ``_Injection`` records using the per-backend renderer. Specs
+        whose ``backend`` doesn't match are silently dropped, so one
+        fragment can carry specs for every backend it supports.
+        Synth'd injections are appended after ``inject.yaml`` ones;
+        they share the same zoned-dispatch pipeline downstream.
         """
         # Lazy imports to avoid a circular: feature_injector imports
         # from forge.appliers at module-load time post-Epic-A.
         from forge.feature_injector import (  # noqa: PLC0415
             _load_injections,
             _resolve_fragment_dir,
+        )
+        from forge.middleware_spec import (  # noqa: PLC0415
+            render_middleware_injections,
         )
 
         fragment_dir = _resolve_fragment_dir(impl.fragment_dir)
@@ -89,16 +104,22 @@ class FragmentPlan:
 
         inject_path = fragment_dir / "inject.yaml"
         if inject_path.is_file():
-            injections = tuple(
+            yaml_injections = tuple(
                 _load_injections(inject_path, feature_key, options=options or {})
             )
         else:
-            injections = ()
+            yaml_injections = ()
+
+        synth_injections: tuple[_Injection, ...] = ()
+        if middlewares and backend is not None:
+            synth_injections = render_middleware_injections(
+                middlewares, backend, feature_key
+            )
 
         return cls(
             fragment_dir=fragment_dir,
             files_dir=files_dir,
-            injections=injections,
+            injections=yaml_injections + synth_injections,
             dependencies=impl.dependencies,
             env_vars=impl.env_vars,
             feature_key=feature_key,

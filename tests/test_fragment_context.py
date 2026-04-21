@@ -246,7 +246,12 @@ class TestApplyFeaturesThreadsOptions:
 
         captured: list[FragmentContext] = []
 
-        def _capture(ctx: FragmentContext, impl: FragmentImplSpec, feature_key: str) -> None:
+        def _capture(
+            ctx: FragmentContext,
+            impl: FragmentImplSpec,
+            feature_key: str,
+            **kwargs: object,  # Epic K added middlewares=; absorb any future kwargs too
+        ) -> None:
             captured.append(ctx)
 
         fragments = {
