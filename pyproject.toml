@@ -51,6 +51,16 @@ omit = [
 ]
 
 [tool.coverage.report]
+# Project-wide floor (Epic S, 1.1.0-alpha.1). Measured baseline at the start
+# of Epic S was 83.5% — the original 75 figure is honest and actively being
+# met; the roadmap's 26% number was stale. The gate stays at 75 as the
+# coarse safety net. Finer-grained critical-path floors live in
+# `tests/test_coverage_gates.py`; those are the ones that bite when someone
+# touches merge / provenance / feature_injector / the injectors.
+#
+# Policy: each sprint's coverage PR ratchets the critical-path floors upward
+# toward the targets in docs/coverage-policy.md. Lowering any floor requires
+# a CHANGELOG note + RFC-002 justification.
 fail_under = 75
 show_missing = true
 exclude_lines = [
