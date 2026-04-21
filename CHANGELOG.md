@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic I (FRAGMENT_REGISTRY freeze + startup audit)
+
+- **`_FragmentRegistry` subclass of `dict`** — replaces the bare `dict[str, Fragment]` backing `forge.fragments.FRAGMENT_REGISTRY`. Adds a one-shot `freeze()` method and a `frozen: bool` flag. Before `freeze()` behaves like an ordinary dict; after `freeze()`, `__setitem__` / `__delitem__` raise `PluginError(PLUGIN_REGISTRY_FROZEN)` so late registrations don't silently slip past the audit.
+- **Startup audit** runs four passes over the full registry:
+  1. *Orphan `depends_on`* — hard error, surfacing a silently-renamed fragment at startup instead of mid-generation.
+  2. *Orphan `conflicts_with`* — logs a warning (the "if this ever gets added, we conflict" pattern is legitimate).
+  3. *Conflict symmetry* — warns when fragment A declares a conflict with B but B doesn't reciprocate. A future epic will tighten to a hard error with automatic promotion.
+  4. *Cycle detection* — Kahn toposort dry-run; a cycle raises `FragmentError(cycle_among=[...])` with the affected fragment names.
+- **`Fragment.__post_init__`** rejects self-consistency violations at construction: a fragment listing itself in `conflicts_with`, or the same name appearing in both `depends_on` and `conflicts_with`.
+- **`plugins.load_all()` calls `FRAGMENT_REGISTRY.freeze()`** after the per-plugin loop. A failed audit captures into `FAILED_PLUGINS` as `<registry audit>` rather than crashing, so introspection verbs (`forge --list`, `forge --plugins`) still work for diagnosis.
+- **17 new tests** in `tests/test_fragment_registry_freeze.py` cover every audit pass, freeze/thaw semantics, `Fragment.__post_init__`, and a sanity check that the shipped built-in registry audit passes.
+- **`plugins.reset_for_tests()`** now also thaws the registry so the test-wide fixture that clears plugin state works in both orders.
+
 ### Added — Epic Z (release dry-run rehearsal + 72h preflight)
 
 - **`.github/workflows/release-dryrun.yml`** (`workflow_dispatch`-only) — rehearses every publish path against dry-run endpoints / offline validators: Python sdist+wheel build + `twine check`, `forge` CLI install smoke from the built wheel (`forge --version / --help / --list`), `npm publish --dry-run` for canvas-vue and canvas-svelte, `flutter pub publish --dry-run` + `flutter analyze` for forge_canvas, CHANGELOG section extraction. On green, writes a `release-dryrun/ok` check-run on the rehearsed SHA.

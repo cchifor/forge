@@ -22,11 +22,20 @@ each backend's directory (use for cross-cutting files like AGENTS.md).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from forge.config import BackendLanguage
+from forge.errors import (
+    PLUGIN_COLLISION,
+    PLUGIN_REGISTRY_FROZEN,
+    FragmentError,
+    PluginError,
+)
+
+logger = logging.getLogger(__name__)
 
 # Marker format used to locate injection points in base templates.
 # Python/Rust/TS source files use `# FORGE:NAME` / `// FORGE:NAME`.
@@ -84,14 +93,191 @@ class Fragment:
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations
 
+    def __post_init__(self) -> None:
+        """Epic I (1.1.0-alpha.1) — fragment self-consistency at construction.
 
-FRAGMENT_REGISTRY: dict[str, Fragment] = {}
+        Catches the obvious ways a fragment can conflict with itself: a
+        ``conflicts_with`` entry pointing at its own name, or a fragment
+        listed in both ``depends_on`` and ``conflicts_with``. These are
+        legitimate authoring mistakes; surfacing them at Fragment()
+        construction beats surfacing them at resolve time in a generated
+        project where the error context is thinner.
+        """
+        if self.name in self.conflicts_with:
+            raise FragmentError(
+                f"Fragment {self.name!r} lists itself in conflicts_with",
+                context={"fragment": self.name, "conflicts_with": list(self.conflicts_with)},
+            )
+        overlap = set(self.depends_on) & set(self.conflicts_with)
+        if overlap:
+            raise FragmentError(
+                f"Fragment {self.name!r} has names in both depends_on and "
+                f"conflicts_with: {sorted(overlap)}",
+                context={
+                    "fragment": self.name,
+                    "depends_on": list(self.depends_on),
+                    "conflicts_with": list(self.conflicts_with),
+                    "overlap": sorted(overlap),
+                },
+            )
+
+
+class _FragmentRegistry(dict[str, Fragment]):
+    """Registry dict with a one-shot ``freeze()`` + startup audit.
+
+    Before ``freeze()`` — behaves like a regular dict. Built-ins and
+    plugins register into it during module import and ``plugins.load_all``.
+    After ``freeze()`` — mutations raise :class:`PluginError`
+    (``PLUGIN_REGISTRY_FROZEN``) so a late registration doesn't slip past
+    the audit. A clean ``freeze()`` call runs:
+
+    1. **Orphan ``depends_on``** — every name in ``Fragment.depends_on``
+       must resolve to a registered fragment. Hard error.
+    2. **Orphan ``conflicts_with``** — if a fragment names a non-existent
+       conflict, warn (the intent is usually "if this ever gets added,
+       we conflict"; not a typo worth failing on).
+    3. **Conflict symmetry** — ``conflicts_with`` is promoted to
+       symmetric: if A declares conflict-with B but B doesn't declare
+       conflict-with A, we *don't* silently mutate B (frozen dataclass);
+       instead we warn so the author fixes it. Until Epic I+1 tightens
+       this to a hard error, the resolver's symmetric check at
+       ``capability_resolver._check_conflicts`` still catches both
+       directions because it iterates every fragment's declared
+       conflicts.
+    4. **Toposort dry-run** — runs Kahn's algorithm over the full
+       registry; any cycle is a hard error (``capability_resolver`` would
+       hit it later, but catching at startup keeps stack traces short).
+
+    The audit deliberately runs on the full registry rather than just on
+    options-selected fragments — the set that resolves at any given
+    generation is a subset, so whole-registry sanity is strictly
+    stronger than per-plan validation.
+
+    Tests that monkey-patch a fresh empty dict into the import sites
+    (see ``tests/test_capability_resolver.py::isolated_registries``)
+    bypass freezing entirely, which is correct — those tests swap the
+    object, not mutate the real one.
+    """
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self.frozen: bool = False
+
+    def __setitem__(self, key: str, value: Fragment) -> None:
+        if self.frozen:
+            raise PluginError(
+                f"Cannot register fragment {key!r} — FRAGMENT_REGISTRY is "
+                f"frozen. Late registration after plugin.load_all() is "
+                f"rejected to keep the audit at startup a complete picture.",
+                code=PLUGIN_REGISTRY_FROZEN,
+                context={"fragment": key},
+            )
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        if self.frozen:
+            raise PluginError(
+                f"Cannot delete fragment {key!r} — FRAGMENT_REGISTRY is frozen.",
+                code=PLUGIN_REGISTRY_FROZEN,
+                context={"fragment": key},
+            )
+        super().__delitem__(key)
+
+    def freeze(self) -> None:
+        """Run the registry audit, then lock the registry."""
+        self._audit()
+        self.frozen = True
+
+    def _reset_for_tests(self) -> None:
+        """Thaw + empty the registry; used by fixtures that swap in fakes."""
+        self.frozen = False
+        self.clear()
+
+    # --- Audit passes -------------------------------------------------------
+
+    def _audit(self) -> None:
+        self._audit_orphan_depends_on()
+        self._audit_orphan_conflicts()
+        self._audit_conflict_symmetry()
+        self._audit_no_cycles()
+
+    def _audit_orphan_depends_on(self) -> None:
+        for frag in self.values():
+            missing = [d for d in frag.depends_on if d not in self]
+            if missing:
+                raise FragmentError(
+                    f"Fragment {frag.name!r} depends_on unknown fragment(s): "
+                    f"{sorted(missing)}. Registry out of sync — was a "
+                    f"fragment removed or renamed without updating "
+                    f"depends_on?",
+                    context={"fragment": frag.name, "missing": sorted(missing)},
+                )
+
+    def _audit_orphan_conflicts(self) -> None:
+        for frag in self.values():
+            missing = [c for c in frag.conflicts_with if c not in self]
+            if missing:
+                # Not a hard error — "if this ever gets added, we conflict"
+                # is a legitimate pattern for future-mutually-exclusive
+                # fragments. Warn so the author notices typos.
+                logger.warning(
+                    "Fragment %r conflicts_with unknown fragment(s): %s",
+                    frag.name,
+                    sorted(missing),
+                )
+
+    def _audit_conflict_symmetry(self) -> None:
+        for frag in self.values():
+            for other in frag.conflicts_with:
+                peer = self.get(other)
+                if peer is None:
+                    continue  # already warned in _audit_orphan_conflicts
+                if frag.name not in peer.conflicts_with:
+                    logger.warning(
+                        "Fragment %r declares conflict with %r, but %r does "
+                        "not declare conflict with %r. conflicts_with should "
+                        "be symmetric — add %r to %r.conflicts_with.",
+                        frag.name,
+                        other,
+                        other,
+                        frag.name,
+                        frag.name,
+                        other,
+                    )
+
+    def _audit_no_cycles(self) -> None:
+        """Kahn's algorithm dry-run over the full registry."""
+        remaining = dict(self)
+        order: set[str] = set()
+        while remaining:
+            ready = [
+                name
+                for name, frag in remaining.items()
+                if all(dep in order for dep in frag.depends_on)
+            ]
+            if not ready:
+                cyclic = sorted(remaining)
+                raise FragmentError(
+                    f"Cyclic dependencies detected in FRAGMENT_REGISTRY among: "
+                    f"{cyclic}. Inspect `depends_on` entries in fragments.py.",
+                    context={"cycle_among": cyclic},
+                )
+            order.update(ready)
+            for name in ready:
+                del remaining[name]
+
+
+FRAGMENT_REGISTRY: _FragmentRegistry = _FragmentRegistry()
 
 
 def register_fragment(frag: Fragment) -> None:
-    """Register a fragment. Raises on duplicate name."""
+    """Register a fragment. Raises on duplicate name or frozen registry."""
     if frag.name in FRAGMENT_REGISTRY:
-        raise ValueError(f"Fragment {frag.name!r} is already registered")
+        raise PluginError(
+            f"Fragment {frag.name!r} is already registered",
+            code=PLUGIN_COLLISION,
+            context={"fragment": frag.name},
+        )
     FRAGMENT_REGISTRY[frag.name] = frag
 
 
