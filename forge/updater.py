@@ -33,7 +33,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-from forge.capability_resolver import resolve
+from forge.capability_resolver import ResolvedPlan, resolve
 from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import (
     PROVENANCE_MANIFEST_MISSING,
@@ -44,11 +44,18 @@ from forge.errors import (
 from forge.feature_injector import apply_features, apply_project_features
 from forge.forge_toml import read_forge_toml, write_forge_toml
 from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
+from forge.sentinel_audit import audit_targets, raise_if_corrupt
+from forge.updater_lock import acquire_lock
 
 logger = logging.getLogger(__name__)
 
 
-def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]:
+def update_project(
+    project_root: Path,
+    quiet: bool = False,
+    *,
+    no_lock: bool = False,
+) -> dict[str, object]:
     """Re-apply option-driven fragments to the project at ``project_root``.
 
     Returns a summary dict with ``backends``, ``fragments_applied``, and
@@ -65,6 +72,18 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
             context={"project_root": str(project_root)},
         )
 
+    # Epic H (1.1.0-alpha.1) — serialise concurrent updates via .forge/lock.
+    with acquire_lock(project_root, no_lock=no_lock):
+        return _update_locked(project_root, manifest, quiet=quiet)
+
+
+def _update_locked(
+    project_root: Path,
+    manifest: Path,
+    *,
+    quiet: bool,
+) -> dict[str, object]:
+    """Main update body, called with the .forge/lock held."""
     data = read_forge_toml(manifest)
     try:
         current_version = metadata.version("forge")
@@ -125,6 +144,18 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
                 sha256=str(entry.get("sha256", "")),
             )
 
+    # Epic H — sentinel audit before re-injection. If a hand-edit broke
+    # a BEGIN/END pair, raise here with the file+tag+line rather than
+    # silently double-injecting.
+    injection_targets = _collect_injection_targets(project_root, plan, config.backends)
+    issues = audit_targets(injection_targets)
+    if issues:
+        if not quiet:
+            print(
+                f"  [update] sentinel audit found {len(issues)} structural issue(s) — aborting"
+            )
+        raise_if_corrupt(issues)
+
     fragments_applied: list[str] = []
     for bc in config.backends:
         backend_dir = project_root / "services" / bc.name
@@ -176,6 +207,46 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
         "classification": {p: s for p, s in classification.items()},
         "user_modified_count": len(user_modified),
     }
+
+
+def _collect_injection_targets(
+    project_root: Path,
+    plan: ResolvedPlan,
+    backends: list[BackendConfig],
+) -> list[Path]:
+    """Return every file path the plan's injections would touch.
+
+    Used by Epic H's sentinel audit to scan for corrupted BEGIN/END
+    pairs before injection runs. The set is the union of inject.yaml
+    targets across every resolved fragment × every matching backend.
+    Duplicates are collapsed — one file audited once is enough.
+    """
+    from forge.appliers.plan import FragmentPlan  # noqa: PLC0415
+
+    seen: set[Path] = set()
+    for rf in plan.ordered:
+        for bc in backends:
+            if bc.language not in rf.target_backends:
+                continue
+            impl = rf.fragment.implementations.get(bc.language)
+            if impl is None or impl.scope != "backend":
+                continue
+            backend_dir = project_root / "services" / bc.name
+            try:
+                fp = FragmentPlan.from_impl(
+                    impl,
+                    rf.fragment.name,
+                    options={},
+                    middlewares=rf.fragment.middlewares,
+                    backend=bc.language,
+                )
+            except Exception:  # noqa: BLE001
+                # If the plan can't even be built, the audit can't help —
+                # the main apply pass will raise with the same error.
+                continue
+            for inj in fp.injections:
+                seen.add(backend_dir / inj.target)
+    return sorted(seen)
 
 
 def classify_project_state(

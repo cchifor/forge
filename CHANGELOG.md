@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic H (updater lock + sentinel integrity audit)
+
+- **`forge/updater_lock.py`** — ``acquire_lock(project_root, no_lock=False)`` context manager writes ``<project_root>/.forge/lock`` with PID + ISO-8601 timestamp on entry, removes on exit. Stale locks (owning PID no longer alive) are reclaimed transparently. Cross-platform liveness via ``os.kill(pid, 0)`` on POSIX and ``OpenProcess`` via ctypes on Windows — stdlib only, no psutil. Raises ``ProvenanceError(PROVENANCE_UPDATE_LOCK_HELD)`` when a live process already holds the lock. ``no_lock=True`` is a no-op escape hatch for read-only filesystems.
+- **`forge/sentinel_audit.py`** — structural auditor for ``FORGE:BEGIN`` / ``FORGE:END`` pairs. Detects six issue kinds: ``orphan-begin``, ``orphan-end``, ``duplicate-begin``, ``duplicate-end``, ``nested-pair``, ``end-before-begin``. `audit_file`/`audit_targets` scan; `raise_if_corrupt` raises ``InjectionError(INJECTION_SENTINEL_CORRUPT)`` with file+tag+line details of the first 10 issues.
+- **`forge --update` wraps the whole apply pass in ``acquire_lock`` + runs the sentinel audit pre-apply** so broken hand-edits surface with a pointed error before the injector runs (pre-Epic-H, they silently double-injected). The `no_lock` kwarg propagates through `update_project()` for tests + read-only-fs scenarios.
+- **18 new tests** across `tests/test_updater_lock.py` — lock create/cleanup/exception paths, stale-PID reclaim, live-PID rejection, `no_lock=True` escape hatch, corrupt-lock resilience; sentinel audit clean/orphan-begin/end-before-begin/duplicate/nested-pair cases; `audit_targets` aggregation; `raise_if_corrupt` raises with the right code.
+
+### Added — Epic O (FrontendLayout registry)
+
+- **`forge/frontends.py`** with ``FrontendLayout(framework, ui_protocol_path, ui_protocol_emitter, canvas_manifest_path, shared_enums_dir, shared_enums_emitter)`` frozen dataclass and ``FRONTEND_LAYOUTS`` registry. Vue/Svelte/Flutter layouts registered at import time matching the pre-Epic-O paths byte-for-byte.
+- **`codegen/pipeline.py` rewritten to loop over the registered layout** rather than carrying three hardcoded per-framework ``if/elif`` ladders. Adding a plugin-defined frontend is now "register a FrontendLayout"; the codegen pipeline picks it up without editing.
+- **`register_frontend_layout(layout)` + `get_frontend_layout(framework)`** public API for plugins.
+- **7 new tests** in `tests/test_frontend_layouts.py` assert every built-in framework has a registered layout whose paths match the pre-Epic-O hardcoded values, duplicate-registration rejection, plugin layout swap.
+
 ### Added — Epic DD (package integrity gate)
 
 - **`tests/test_package_integrity.py`** — builds sdist + wheel via `uv build`, asserts every sentinel template file (one per backend, one per frontend, docker-compose, a cross-cutting fragment) is present in both artefacts, and no cache/build contamination (`.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`, `node_modules/`, `.dart_tool/`, `.venv/`, `.pyc`, `.DS_Store`, etc.) leaked into either archive. The wheel test also verifies the `forge = forge.cli:main` entry point is registered.

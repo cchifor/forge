@@ -7,13 +7,16 @@ choices.
 
 Concretely:
 
-    1. UI protocol schemas → Vue/Svelte types.ts, Flutter agent_state.dart,
-       Python Pydantic models under each backend.
-    2. Canvas component manifest → per-frontend `canvas.manifest.json`.
-    3. Shared enums → Python/TS/Dart bindings placed next to the
-       consuming code.
-    4. Domain DSL → per-backend models + a merged OpenAPI components
-       bundle (consumed by the frontend OpenAPI codegen).
+    1. UI protocol schemas → per-frontend types file + per-Python-backend
+       Pydantic models.
+    2. Canvas component manifest → per-frontend ``canvas.manifest.json``.
+    3. Shared enums → per-backend + per-frontend bindings placed next to
+       the consuming code.
+
+Epic O (1.1.0-alpha.1) — per-frontend paths + emitter flavours live in
+:class:`forge.frontends.FrontendLayout`. Adding a frontend means
+registering one ``FrontendLayout``; the pipeline picks it up without
+editing.
 
 All outputs are recorded in the provenance manifest with
 ``origin='base-template'`` since they're authoritative forge outputs,
@@ -42,6 +45,7 @@ from forge.codegen.ui_protocol import (
     load_all as load_ui_schemas,
 )
 from forge.config import BackendLanguage, FrontendFramework
+from forge.frontends import FrontendLayout, get_frontend_layout
 
 if TYPE_CHECKING:
     from forge.config import ProjectConfig
@@ -69,52 +73,33 @@ def run_codegen(
     _emit_shared_enums(config, project_root, collector)
 
 
+def _frontend_layout(config: ProjectConfig) -> FrontendLayout | None:
+    """Return the active frontend's layout, or None if no frontend / unregistered."""
+    if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
+        return None
+    return get_frontend_layout(config.frontend.framework)
+
+
 def _emit_ui_protocol(
     config: ProjectConfig,
     project_root: Path,
     collector: ProvenanceCollector | None,
 ) -> None:
-    """Regenerate UI-protocol types for each frontend + Python backend."""
+    """Regenerate UI-protocol types for the active frontend + Python backends."""
     schemas = load_ui_schemas(UI_PROTOCOL_ROOT)
     if not schemas:
         return
 
-    frontend = config.frontend
-    if frontend and frontend.framework == FrontendFramework.VUE:
-        target = (
-            project_root
-            / config.frontend_slug
-            / "src"
-            / "features"
-            / "ai_chat"
-            / "ui_protocol.gen.ts"
-        )
-        _write(target, emit_typescript(schemas), collector)
-    elif frontend and frontend.framework == FrontendFramework.SVELTE:
-        target = (
-            project_root
-            / config.frontend_slug
-            / "src"
-            / "lib"
-            / "features"
-            / "chat"
-            / "ui_protocol.gen.ts"
-        )
-        _write(target, emit_typescript(schemas), collector)
-    elif frontend and frontend.framework == FrontendFramework.FLUTTER:
-        target = (
-            project_root
-            / config.frontend_slug
-            / "lib"
-            / "src"
-            / "features"
-            / "chat"
-            / "domain"
-            / "ui_protocol.gen.dart"
-        )
-        _write(target, emit_dart(schemas), collector)
+    layout = _frontend_layout(config)
+    if layout is not None:
+        target = project_root / config.frontend_slug / layout.ui_protocol_path
+        if layout.ui_protocol_emitter == "typescript":
+            body = emit_typescript(schemas)
+        else:
+            body = emit_dart(schemas)
+        _write(target, body, collector)
 
-    # Python backends get Pydantic models too.
+    # Python backends always get Pydantic models, independent of frontend.
     for bc in config.backends:
         if bc.language is not BackendLanguage.PYTHON:
             continue
@@ -135,21 +120,17 @@ def _emit_canvas_manifests(
     project_root: Path,
     collector: ProvenanceCollector | None,
 ) -> None:
-    """Write ``canvas.manifest.json`` into each frontend's public dir.
+    """Write ``canvas.manifest.json`` into the frontend's declared location.
 
     The manifest is read at runtime (dev) to validate backend-emitted
     payloads match the component's declared props schema.
     """
-    frontend = config.frontend
-    if frontend is None or frontend.framework == FrontendFramework.NONE:
+    layout = _frontend_layout(config)
+    if layout is None:
         return
     components = load_canvas_components()
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
-
-    if frontend.framework in (FrontendFramework.VUE, FrontendFramework.SVELTE):
-        target = project_root / config.frontend_slug / "public" / "canvas.manifest.json"
-    else:
-        target = project_root / config.frontend_slug / "assets" / "canvas.manifest.json"
+    target = project_root / config.frontend_slug / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
 
 
@@ -167,11 +148,16 @@ def _emit_shared_enums(
     if not _ENUMS_ROOT.is_dir():
         return
 
+    layout = _frontend_layout(config)
+
     for enum_file in sorted(_ENUMS_ROOT.glob("*.yaml")):
         spec = load_enum_yaml(enum_file)
         targets = emit_enum_all(spec)
 
-        # Python backends
+        # Python / Node / Rust backends — paths are conventional, not
+        # registered. Adding a plugin backend needs the same
+        # {"services/<name>/..."} shape or a dedicated backend-layout
+        # registry (deferred; no plugin backend ships today).
         for bc in config.backends:
             if bc.language is BackendLanguage.PYTHON:
                 path = (
@@ -208,42 +194,20 @@ def _emit_shared_enums(
                 )
                 _write(path, targets["rust"], collector)
 
-        # Frontends
-        frontend = config.frontend
-        if frontend is None or frontend.framework == FrontendFramework.NONE:
+        # Frontend — one enum emission per registered layout.
+        if layout is None:
             continue
-        if frontend.framework == FrontendFramework.VUE:
-            path = (
-                project_root
-                / config.frontend_slug
-                / "src"
-                / "shared"
-                / "enums"
-                / f"{enum_file.stem}.ts"
-            )
-            _write(path, targets["typescript"], collector)
-        elif frontend.framework == FrontendFramework.SVELTE:
-            path = (
-                project_root
-                / config.frontend_slug
-                / "src"
-                / "lib"
-                / "shared"
-                / "enums"
-                / f"{enum_file.stem}.ts"
-            )
-            _write(path, targets["typescript"], collector)
-        elif frontend.framework == FrontendFramework.FLUTTER:
-            path = (
-                project_root
-                / config.frontend_slug
-                / "lib"
-                / "src"
-                / "shared"
-                / "enums"
-                / f"{enum_file.stem}.dart"
-            )
-            _write(path, targets["dart"], collector)
+        ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
+        emitter_key = (
+            "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
+        )
+        path = (
+            project_root
+            / config.frontend_slug
+            / layout.shared_enums_dir
+            / f"{enum_file.stem}{ext}"
+        )
+        _write(path, targets[emitter_key], collector)
 
 
 def _write(
