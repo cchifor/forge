@@ -6,9 +6,20 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+# Windows consoles default to cp1252 and raise UnicodeEncodeError on emoji /
+# non-Latin chars that lint tools sometimes emit. Reconfigure once so every
+# later ``print`` survives mixed-locale output.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
 from copier import run_copy
 from copier.errors import CopierError
@@ -443,7 +454,16 @@ def _run_backend_cmd(
     GeneratorError so the project isn't left in a half-built state. When
     `required=False` (default), failures are logged and skipped — appropriate for
     best-effort interactive setup steps like `cargo fmt --check` or `vitest run`.
+
+    On Windows, Python's ``subprocess`` doesn't walk ``PATHEXT`` when
+    resolving bare executable names, so ``npm`` (which ships as
+    ``npm.cmd``) raises FileNotFoundError even when it's on PATH.
+    ``shutil.which`` does walk PATHEXT, so resolve the executable
+    up-front to pick up the right shim.
     """
+    resolved = shutil.which(cmd[0])
+    if resolved is not None:
+        cmd = [resolved, *cmd[1:]]
     try:
         result = subprocess.run(
             cmd,

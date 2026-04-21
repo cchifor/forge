@@ -35,7 +35,10 @@ def parse_args():
     parser.add_argument("--version", default="0.1.0")
     parser.add_argument("--api-base-url", default="http://localhost:5000/api/v1")
     parser.add_argument("--default-color-scheme", default="blue")
-    parser.add_argument("--backend-features", default="{}")
+    # backend_features is a JSON object — passing it as a CLI arg breaks on
+    # Windows cmd.exe because single quotes aren't honored. Copier renders
+    # ``.forge_answers.json`` into the project directory instead; we read it
+    # below after parsing args.
     return parser.parse_args()
 
 import json as _json  # noqa: E402
@@ -57,10 +60,21 @@ API_BASE_URL = _args.api_base_url
 DEFAULT_COLOR_SCHEME = _args.default_color_scheme
 
 # WS2: per-feature backend routing for multi-backend deployments.
+# Read from the rendered .forge_answers.json sibling file instead of a CLI arg
+# — cmd.exe on Windows doesn't grouping-quote JSON strings, which made the old
+# --backend-features arg explode on `{` tokens.
+_answers_file = PROJECT_DIR / ".forge_answers.json"
 try:
-    BACKEND_FEATURES = _json.loads(_args.backend_features or "{}")
-except (ValueError, TypeError):
+    _answers = _json.loads(_answers_file.read_text(encoding="utf-8")) if _answers_file.exists() else {}
+    BACKEND_FEATURES = _answers.get("backend_features", {}) or {}
+except (ValueError, TypeError, OSError):
     BACKEND_FEATURES = {}
+# Clean up the answers file — it's transport, not a runtime artifact.
+try:
+    if _answers_file.exists():
+        _answers_file.unlink()
+except OSError:
+    pass
 FEATURE_TO_BACKEND: dict = {}
 for _bname, _binfo in BACKEND_FEATURES.items():
     for _f in (_binfo.get("features") or []):
@@ -152,6 +166,10 @@ def remove_path(path):
 def run_command(cmd, description, timeout=300):
     spinner = Spinner(description)
     spinner.start()
+    # Windows: subprocess.run doesn't walk PATHEXT for bare tool names.
+    resolved = shutil.which(cmd[0])
+    if resolved is not None:
+        cmd = [resolved, *cmd[1:]]
     try:
         result = subprocess.run(
             cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True,
@@ -345,13 +363,281 @@ def generate_readme(features):
     print("  Generated README.md")
 
 
+_NO_AUTH_APP_ROUTER = """\
+import 'package:go_router/go_router.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../features/home/home_routes.dart';
+// --- feature imports ---
+import '../features/settings/settings_routes.dart';
+import 'navigator_keys.dart';
+import 'scaffold_with_nav.dart';
+
+part 'app_router.g.dart';
+
+@Riverpod(keepAlive: true)
+GoRouter goRouter(Ref ref) {
+  return GoRouter(
+    navigatorKey: rootNavigatorKey,
+    initialLocation: '/',
+    routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return ScaffoldWithNav(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(routes: HomeRoutes.routes),
+          // --- feature branches ---
+          StatefulShellBranch(routes: SettingsRoutes.routes),
+        ],
+      ),
+    ],
+  );
+}
+"""
+
+
+_NO_AUTH_INTERCEPTOR = """\
+import 'package:dio/dio.dart';
+
+/// No-op interceptor — this build was generated with include_auth=false.
+/// Backends running without auth shouldn't require a Bearer token.
+class AuthInterceptor extends Interceptor {
+  AuthInterceptor(Object _);
+
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    handler.next(options);
+  }
+}
+"""
+
+
+def _no_auth_mocks(project_slug: str) -> str:
+    """mocks.dart without AuthRepository/DevAuthService/KeycloakAuthService imports."""
+    return (
+        "import 'package:dio/dio.dart';\n"
+        "import 'package:" + project_slug + "/src/api/generated/export.dart';\n"
+        "import 'package:" + project_slug + "/src/features/home/data/home_repository.dart';\n"
+        "import 'package:mocktail/mocktail.dart';\n"
+        "\n"
+        "class MockDio extends Mock implements Dio {}\n"
+        "\n"
+        "class MockHomeRepository extends Mock implements HomeRepository {}\n"
+        "\n"
+        "class MockRequestInterceptorHandler extends Mock\n"
+        "    implements RequestInterceptorHandler {}\n"
+        "\n"
+        "class MockErrorInterceptorHandler extends Mock\n"
+        "    implements ErrorInterceptorHandler {}\n"
+        "\n"
+        "class MockHomeClient extends Mock implements HomeClient {}\n"
+        "\n"
+        "class MockHealthClient extends Mock implements HealthClient {}\n"
+    )
+
+
+_NO_AUTH_HOME_PAGE = """\
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../theme/design_tokens.dart';
+import 'widgets/health_status_card.dart';
+import 'widgets/info_card.dart';
+import 'widgets/quick_actions_card.dart';
+
+class HomePage extends ConsumerWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: ListView(
+        padding: const EdgeInsets.all(DesignTokens.p16),
+        children: [
+          Text(
+            'Welcome back!',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: DesignTokens.p4),
+          Text(
+            "Here's an overview of your workspace.",
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: DesignTokens.p24),
+          const QuickActionsCard(),
+          const SizedBox(height: DesignTokens.p16),
+          const InfoCard(),
+          const SizedBox(height: DesignTokens.p16),
+          const HealthStatusCard(),
+        ],
+      ),
+    );
+  }
+}
+"""
+
+
+def _strip_between(text: str, start_marker: str, end_marker: str, inclusive: bool = True) -> str:
+    """Remove the substring between ``start_marker`` and ``end_marker`` (inclusive by default)."""
+    i = text.find(start_marker)
+    if i < 0:
+        return text
+    j = text.find(end_marker, i + len(start_marker))
+    if j < 0:
+        return text
+    if inclusive:
+        return text[:i] + text[j + len(end_marker):]
+    return text[:i + len(start_marker)] + text[j:]
+
+
+def _drop_import_line(text: str, needle: str) -> str:
+    """Remove the full line containing ``needle`` (including trailing newline)."""
+    out_lines = [line for line in text.splitlines(keepends=True) if needle not in line]
+    return "".join(out_lines)
+
+
+def _patch_app_sidebar_no_auth(path: Path) -> None:
+    """Drop the ProfileMenu footer from AppSidebar when auth is disabled."""
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8")
+    content = _drop_import_line(content, "'profile_menu.dart'")
+    content = content.replace(
+        "          footer: ProfileMenu(isExpanded: data.isOpen),\n",
+        "",
+    )
+    path.write_text(content, encoding="utf-8")
+
+
+def _patch_working_area_header_no_chat(path: Path) -> None:
+    """Drop the ChatButton from WorkingAreaHeader when chat is disabled."""
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8")
+    content = _drop_import_line(content, "chat_button.dart")
+    content = content.replace("          ChatButton(),\n", "")
+    path.write_text(content, encoding="utf-8")
+
+
+def _patch_app_layout_shell_no_chat(path: Path) -> None:
+    """Remove the inline ChatPanel block + endDrawer + unused locals.
+
+    Post-patch the file has no chat machinery left, so the three variables
+    (``availableWidth``, ``maxChatWidth``, ``chatWidth``) that fed the inline
+    chat and the ``layoutExt`` used only by the medium endDrawer all become
+    unused — ``flutter analyze`` flags them as warnings. Drop them too so the
+    post-patch file passes analyze cleanly.
+    """
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8")
+    content = _drop_import_line(content, "chat/presentation/chat_panel.dart")
+    content = _drop_import_line(content, "vertical_split_handle.dart")
+    # Drop the inline chat block in _ExpandedLayoutState.
+    content = _strip_between(
+        content,
+        "                // Splitter + Chat panel (explicit width)",
+        "                ],",
+    )
+    # Drop the endDrawer arg in _MediumLayout (3 lines).
+    content = content.replace(
+        "      endDrawer: SizedBox(\n"
+        "        width: layoutExt.chatDrawerWidth,\n"
+        "        child: const Drawer(child: ChatPanel(isFullScreen: true)),\n"
+        "      ),\n",
+        "",
+    )
+    # _MediumLayout used layoutExt only for endDrawer width — now unused.
+    # The suffix (``body: Row(\n``) disambiguates from _CompactLayout, which
+    # still uses layoutExt.headerHeight and must keep its declaration.
+    content = content.replace(
+        "    final layoutExt =\n"
+        "        Theme.of(context).extension<LayoutThemeExtension>()!;\n\n"
+        "    return Scaffold(\n"
+        "      body: Row(\n",
+        "    return Scaffold(\n"
+        "      body: Row(\n",
+    )
+    # _ExpandedLayoutState's three locals (availableWidth / maxChatWidth /
+    # chatWidth) existed solely for the inline chat's dynamic sizing. Remove
+    # the whole block from the LayoutBuilder.
+    content = content.replace(
+        "      builder: (context, constraints) {\n"
+        "        final availableWidth =\n"
+        "            constraints.maxWidth - layout.effectiveSidebarWidth;\n"
+        "        final maxChatWidth = availableWidth - layoutExt.minMainAreaWidth;\n"
+        "        final chatWidth = layout.chatInline\n"
+        "            ? (layout.chatWidthRatio * availableWidth).clamp(\n"
+        "                layoutExt.minChatWidth,\n"
+        "                maxChatWidth.clamp(layoutExt.minChatWidth, double.infinity),\n"
+        "              )\n"
+        "            : 0.0;\n\n"
+        "        return Material(\n",
+        "      builder: (context, constraints) {\n"
+        "        return Material(\n",
+    )
+    # `final layout = widget.layout;` and `final layoutExt = theme.extension<...>()!;`
+    # are no longer referenced after the chat-sizing block is gone.
+    content = content.replace(
+        "  Widget build(BuildContext context) {\n"
+        "    final layout = widget.layout;\n"
+        "    final theme = Theme.of(context);\n"
+        "    final layoutExt = theme.extension<LayoutThemeExtension>()!;\n",
+        "  Widget build(BuildContext context) {\n"
+        "    final theme = Theme.of(context);\n",
+    )
+    path.write_text(content, encoding="utf-8")
+
+
 def remove_optional_files():
     removed = []
     if not INCLUDE_AUTH:
-        remove_path(PROJECT_DIR / "lib" / "src" / "features" / "auth")
+        lib_src = PROJECT_DIR / "lib" / "src"
+        test_root = PROJECT_DIR / "test"
+        test_src = test_root / "src"
+        # Directory / file deletions — everything auth-specific on the source side.
+        remove_path(lib_src / "features" / "auth")
+        remove_path(lib_src / "features" / "profile")
+        remove_path(lib_src / "shared" / "layout" / "profile_menu.dart")
+        remove_path(lib_src / "shared" / "providers" / "current_user_provider.dart")
+        # flutter_secure_storage is gated off in pubspec when auth=false, so
+        # this provider's import chain fails to compile.
+        remove_path(lib_src / "core" / "storage" / "secure_storage_provider.dart")
+        remove_path(lib_src / "core" / "storage" / "secure_storage_provider.g.dart")
+        # Auth-paired test scaffolding.
+        remove_path(test_src / "features" / "auth")
+        remove_path(test_src / "features" / "profile")
+        remove_path(test_src / "api" / "client" / "auth_interceptor_test.dart")
+        remove_path(test_src / "core" / "storage")  # provider tests depend on the secure_storage pkg
+        remove_path(test_root / "fixtures" / "user.dart")
+        # mocks.dart is shared by non-auth tests (home, error-interceptor) so
+        # swap it for a variant that omits the auth mock classes + imports.
+        write_file(test_root / "helpers" / "mocks.dart", _no_auth_mocks(PROJECT_SLUG))
+        # Rewrites: router, interceptor, home page drop the auth-specific wiring.
+        write_file(lib_src / "routing" / "app_router.dart", _NO_AUTH_APP_ROUTER)
+        write_file(lib_src / "api" / "client" / "auth_interceptor.dart", _NO_AUTH_INTERCEPTOR)
+        write_file(lib_src / "features" / "home" / "presentation" / "home_page.dart", _NO_AUTH_HOME_PAGE)
+        # Sidebar drops its ProfileMenu footer.
+        _patch_app_sidebar_no_auth(lib_src / "shared" / "layout" / "app_sidebar.dart")
         removed.append("auth")
     if not INCLUDE_CHAT:
-        remove_path(PROJECT_DIR / "lib" / "src" / "features" / "chat")
+        lib_src = PROJECT_DIR / "lib" / "src"
+        test_src = PROJECT_DIR / "test" / "src"
+        remove_path(lib_src / "features" / "chat")
+        remove_path(lib_src / "shared" / "widgets" / "chat_button.dart")
+        remove_path(test_src / "features" / "chat")
+        _patch_app_layout_shell_no_chat(lib_src / "shared" / "layout" / "app_layout_shell.dart")
+        _patch_working_area_header_no_chat(lib_src / "shared" / "layout" / "working_area_header.dart")
         removed.append("chat")
     if not INCLUDE_OPENAPI:
         remove_path(PROJECT_DIR / "lib" / "src" / "api")

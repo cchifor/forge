@@ -185,8 +185,12 @@ def _collect_inputs() -> ProjectConfig | None:
         include_auth = _ask_confirm("Enable Keycloak authentication?", default=True)
         include_chat = _ask_confirm("Enable AI chat panel?", default=False)
         include_openapi = False
-        if framework in (FrontendFramework.VUE, FrontendFramework.FLUTTER):
+        if framework == FrontendFramework.VUE:
             include_openapi = _ask_confirm("Enable OpenAPI code generation?", default=False)
+        elif framework == FrontendFramework.FLUTTER:
+            # Flutter's retrofit-generated client is wired into the home feature,
+            # so OpenAPI generation is mandatory (see FrontendConfig.validate).
+            include_openapi = True
 
         color_scheme = "blue"
         if framework == FrontendFramework.VUE:

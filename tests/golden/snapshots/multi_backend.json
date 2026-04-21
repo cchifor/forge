@@ -30,19 +30,19 @@
     },
     "forge.toml": {
       "size": 38546,
-      "sha256": "41af75ba463c587c"
+      "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
     "init-db.sh": {
-      "size": 229,
-      "sha256": "2a71ce1aabb8d6e0"
+      "size": 343,
+      "sha256": "72fe8243235d907b"
     },
     "services/api-node/.copier-answers.yml": {
       "size": 449,
-      "sha256": "aa78e30dc1f5d586"
+      "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
       "size": 154,
@@ -206,7 +206,7 @@
     },
     "services/api-py/.copier-answers.yml": {
       "size": 450,
-      "sha256": "90d6d6acfe653d28"
+      "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
       "size": 271,
@@ -257,8 +257,8 @@
       "sha256": "f5e52961e8a59df3"
     },
     "services/api-py/pyproject.toml": {
-      "size": 2164,
-      "sha256": "0a219dcf7546d258"
+      "size": 2212,
+      "sha256": "800007f2580b636d"
     },
     "services/api-py/README.md": {
       "size": 33689,
@@ -669,8 +669,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/tests/docker/conftest.py": {
-      "size": 1245,
-      "sha256": "01373451f7aef79d"
+      "size": 1513,
+      "sha256": "6671c3c38ce38635"
     },
     "services/api-py/tests/docker/test_health_docker.py": {
       "size": 1207,
@@ -825,8 +825,8 @@
       "sha256": "24c2a79053ee0705"
     },
     "services/api-py/tests/unit/test_middleware_unit.py": {
-      "size": 10086,
-      "sha256": "7adc27dbf2b80440"
+      "size": 10485,
+      "sha256": "52f139c434679ffc"
     },
     "services/api-py/tests/unit/test_orm_models.py": {
       "size": 3155,

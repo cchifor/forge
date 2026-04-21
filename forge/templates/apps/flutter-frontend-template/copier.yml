@@ -130,4 +130,3 @@ _tasks:
     --version={{ version }}
     --api-base-url={{ api_base_url }}
     --default-color-scheme={{ default_color_scheme }}
-    --backend-features='{{ backend_features }}'

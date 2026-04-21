@@ -1,0 +1,17 @@
+{
+  "project_name": "{{ project_name }}",
+  "project_slug": "{{ project_slug }}",
+  "app_title": "{{ app_title | default(project_name) }}",
+  "description": "{{ description | default('A Svelte 5 SPA application') }}",
+  "features": "{{ features }}",
+  "version": "{{ version | default('0.1.0') }}",
+  "package_manager": "{{ package_manager | default('npm') }}",
+  "include_auth": {{ include_auth | tojson }},
+  "include_chat": {{ include_chat | tojson }},
+  "include_openapi": {{ include_openapi | tojson }},
+  "api_base_url": "{{ api_base_url | default('http://localhost:5000') }}",
+  "api_proxy_target": "{{ api_proxy_target | default('http://localhost:5000') }}",
+  "server_port": {{ server_port | default(5173) }},
+  "keycloak_url": "{{ keycloak_url | default('http://localhost:8080') }}",
+  "default_color_scheme": "{{ default_color_scheme | default('blue') }}"
+}

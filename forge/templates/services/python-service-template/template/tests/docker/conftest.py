@@ -18,9 +18,15 @@ def postgres_url():
         yield async_url
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def docker_engine(postgres_url):
-    """Create async engine connected to the real PostgreSQL container."""
+    """Create async engine connected to the real PostgreSQL container.
+
+    Scoped per-test because asyncpg connection pools are bound to the event
+    loop they were created in; pytest-asyncio in ``auto`` mode runs each test
+    in its own function-scoped loop, so a session-scoped engine would raise
+    ``got Future attached to a different loop``.
+    """
     engine = create_async_engine(postgres_url, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

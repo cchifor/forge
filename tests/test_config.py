@@ -106,13 +106,36 @@ class TestFrontendConfig:
         fc.validate()
 
     def test_none_skips_validation(self):
+        # NONE still rejects frontend feature flags (see next test), but skips
+        # port / package-manager / feature validation since those belong to a
+        # framework-specific surface.
         fc = FrontendConfig(
             framework=FrontendFramework.NONE,
             project_name="Test",
             package_manager="invalid",
             server_port=1,
+            include_auth=False,
+            include_chat=False,
+            include_openapi=False,
         )
         fc.validate()  # should not raise
+
+    def test_none_rejects_frontend_feature_flags(self):
+        # include_auth / include_chat / include_openapi don't make sense
+        # without a frontend — validation rejects the combination.
+        with pytest.raises(ValueError, match="require a frontend framework"):
+            FrontendConfig(
+                framework=FrontendFramework.NONE,
+                project_name="Test",
+                include_auth=True,
+            ).validate()
+        with pytest.raises(ValueError, match="require a frontend framework"):
+            FrontendConfig(
+                framework=FrontendFramework.NONE,
+                project_name="Test",
+                include_auth=False,
+                include_chat=True,
+            ).validate()
 
     def test_reserved_feature(self):
         fc = FrontendConfig(
@@ -175,6 +198,7 @@ class TestProjectConfig:
                 framework=FrontendFramework.FLUTTER,
                 project_name="Test",
                 server_port=5000,
+                include_openapi=True,  # Flutter requires it — see FrontendConfig.validate
             ),
         )
         cfg.validate()  # should not raise

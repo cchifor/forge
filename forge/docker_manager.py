@@ -170,16 +170,16 @@ def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
     env = _jinja_env()
     template = env.get_template("deploy/init-db.sh.j2")
 
-    # Collect all databases that need creating beyond the default POSTGRES_DB
+    # One db per backend plus keycloak. The template guards each CREATE with
+    # ``WHERE NOT EXISTS`` so listing the primary (already created by
+    # ``POSTGRES_DB`` env var) is idempotent — and multi-backend users expect
+    # every service's database to be visible here.
     extra_dbs = set()
     for bc in config.backends:
         db_name = bc.name.replace("-", "_")
         extra_dbs.add(db_name)
     if config.include_keycloak:
         extra_dbs.add("keycloak")
-    # Remove the primary db (created by POSTGRES_DB env var)
-    primary_db = config.backend_slug.replace("-", "_") if config.backends else "backend"
-    extra_dbs.discard(primary_db)
 
     output = template.render({"extra_databases": sorted(extra_dbs)})
     init_path = project_root / "init-db.sh"

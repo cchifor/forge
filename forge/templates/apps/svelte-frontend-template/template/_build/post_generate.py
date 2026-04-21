@@ -23,15 +23,27 @@ except ImportError:
 
 
 def load_answers():
-    """Load variables from .copier-answers.yml."""
+    """Load variables from the copier-rendered ``_build/answers.json``.
+
+    ``.copier-answers.yml`` is written *after* post-tasks run, so reading it
+    here would see a missing file on first generation and silently fall back to
+    defaults — which silently kept chat/auth scaffolding on disk for projects
+    that asked to exclude them. ``answers.json`` is emitted by copier as part
+    of the template tree, so it's on disk before this script runs.
+    """
+    import json
+    build_answers = Path.cwd() / "_build" / "answers.json"
+    if build_answers.exists():
+        return json.loads(build_answers.read_text(encoding="utf-8"))
+
+    # Fallback to .copier-answers.yml for compatibility with partial templates.
     answers_path = Path.cwd() / ".copier-answers.yml"
     if not answers_path.exists():
-        print("  WARNING: .copier-answers.yml not found, using defaults")
+        print("  WARNING: answers.json not found, using defaults")
         return {}
     if yaml:
         with open(answers_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
-    # Fallback: simple key: value parser
     answers = {}
     with open(answers_path, encoding="utf-8") as f:
         for line in f:
@@ -106,7 +118,11 @@ from feature_templates import (  # noqa: E402
     HUB_SCHEMA_EXPORT,
     HUB_SIDEBAR_ITEM,
     HUB_TYPES,
+    NO_AUTH_APP_HOME,
+    NO_AUTH_APP_SIDEBAR,
+    NO_AUTH_ROOT_LAYOUT,
     NO_CHAT_LAYOUT,
+    NO_CHAT_LAYOUT_NO_AUTH,
     ROUTE_CREATE,
     ROUTE_DETAIL,
     ROUTE_ERROR,
@@ -181,6 +197,10 @@ def remove_path(path):
 def run_command(cmd, description, timeout=300):
     spinner = Spinner(description)
     spinner.start()
+    # Windows: subprocess.run doesn't walk PATHEXT, so bare "npm" misses npm.cmd.
+    resolved = shutil.which(cmd[0])
+    if resolved is not None:
+        cmd = [resolved, *cmd[1:]]
     try:
         result = subprocess.run(
             cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=timeout,
@@ -340,7 +360,7 @@ def generate_readme(features):
             ctx["Plural"], ctx["plural"], ctx["plural"],
             ctx["plural"], ctx["singular"], ctx["singular"], ctx["Singular"])
 
-    readme = """# %s
+    readme = ("""# %s
 
 %s
 
@@ -408,7 +428,7 @@ Dev server on port %s, proxying to `%s`.
 
 - **Version**: %s
 - **Package**: `%s`
-""" % (
+""") % (
         PROJECT_NAME, DESCRIPTION,
         pm, dev_cmd,
         feature_rows,
@@ -423,23 +443,62 @@ Dev server on port %s, proxying to `%s`.
 
 # -- Optional file removal ----------------------------------------------------
 
+def _prune_export_line(filepath: Path, substrings: list[str]) -> None:
+    """Drop export/import lines from ``filepath`` that reference deleted files."""
+    if not filepath.exists():
+        return
+    lines = filepath.read_text(encoding="utf-8").splitlines(keepends=True)
+    kept = [ln for ln in lines if not any(sub in ln for sub in substrings)]
+    if kept != lines:
+        filepath.write_text("".join(kept), encoding="utf-8")
+
+
 def remove_optional_files():
     removed = []
 
     if not INCLUDE_AUTH:
+        # Directory deletions — anything auth-specific.
         remove_path(PROJECT_DIR / "src" / "routes" / "login")
+        remove_path(PROJECT_DIR / "src" / "routes" / "(app)" / "profile")
         remove_path(PROJECT_DIR / "src" / "lib" / "core" / "auth")
         remove_path(PROJECT_DIR / "static" / "silent-check-sso.html")
+        # Drop dangling re-exports of the deleted auth module.
+        _prune_export_line(
+            PROJECT_DIR / "src" / "lib" / "core" / "index.ts",
+            ["./auth/auth.svelte"],
+        )
+        # Pre-baked no-auth variants for files that can't be line-pruned cleanly:
+        # they import getAuth and call it from multiple places, so a full rewrite
+        # is simpler and more robust than surgery.
+        write_file(PROJECT_DIR / "src" / "routes" / "+layout.svelte", NO_AUTH_ROOT_LAYOUT)
+        write_file(PROJECT_DIR / "src" / "routes" / "(app)" / "+page.svelte", NO_AUTH_APP_HOME)
+        write_file(
+            PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "AppSidebar.svelte",
+            NO_AUTH_APP_SIDEBAR,
+        )
         removed.append("auth")
+
+    if not INCLUDE_OPENAPI:
+        # @hey-api/openapi-ts codegen artifacts. Package.json drops the dep via
+        # a {% if include_openapi %} guard; only the standalone files need
+        # runtime deletion.
+        remove_path(PROJECT_DIR / "openapi-snapshot.json")
+        remove_path(PROJECT_DIR / "openapi-ts.config.ts")
+        removed.append("openapi")
 
     if not INCLUDE_CHAT:
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "chat")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatDrawer.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatBottomSheet.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "VerticalSplitHandle.svelte")
+        _prune_export_line(
+            PROJECT_DIR / "src" / "lib" / "features" / "shell" / "index.ts",
+            ["./ui/ChatDrawer.svelte", "./ui/ChatBottomSheet.svelte", "./ui/VerticalSplitHandle.svelte"],
+        )
 
-        layout_path = PROJECT_DIR / "src" / "routes" / "(app)" / "+layout.svelte"
-        write_file(layout_path, NO_CHAT_LAYOUT)
+        # The chat-off (app)/+layout.svelte needs to match the auth setting.
+        layout_body = NO_CHAT_LAYOUT if INCLUDE_AUTH else NO_CHAT_LAYOUT_NO_AUTH
+        write_file(PROJECT_DIR / "src" / "routes" / "(app)" / "+layout.svelte", layout_body)
 
         header_path = PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "AppHeader.svelte"
         if header_path.exists():

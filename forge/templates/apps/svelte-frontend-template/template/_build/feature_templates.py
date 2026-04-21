@@ -791,3 +791,317 @@ NO_CHAT_LAYOUT = """\
 \t{/if}
 {/if}
 """
+
+
+# No-chat layout variant used when auth is also disabled — strips getAuth
+# imports, the reactive login redirect, and the isAuthenticated guard.
+NO_CHAT_LAYOUT_NO_AUTH = """\
+<script lang="ts">
+\timport { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
+\timport BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
+
+\tlet { children } = $props();
+\tconst ui = getUiStore();
+</script>
+
+{#if ui.isMobile}
+\t<div class="flex min-h-svh flex-col">
+\t\t<AppHeader />
+\t\t<main class="flex-1 overflow-y-auto p-4 pb-20">{@render children()}</main>
+\t\t<BottomNav />
+\t</div>
+{:else if ui.isMedium}
+\t<div class="flex min-h-svh">
+\t\t<AppSidebar forceCollapsed />
+\t\t<div class="flex flex-1 flex-col min-w-0">
+\t\t\t<AppHeader />
+\t\t\t<main class="flex-1 overflow-y-auto p-4">{@render children()}</main>
+\t\t</div>
+\t</div>
+{:else}
+\t<div
+\t\tclass="group/sidebar-wrapper flex min-h-svh"
+\t\tdata-sidebar-state={ui.sidebarCollapsed ? 'collapsed' : 'expanded'}
+\t>
+\t\t<AppSidebar />
+\t\t<div class="flex flex-1 flex-col min-w-0">
+\t\t\t<AppHeader />
+\t\t\t<main class="flex-1 overflow-y-auto p-4">{@render children()}</main>
+\t\t</div>
+\t</div>
+{/if}
+"""
+
+
+# Root layout rewritten when auth is disabled — skips getAuth import + init
+# and drops the onUnauthorized hook (api client still constructs with a null
+# token; backends running with include_auth=false shouldn't require one).
+NO_AUTH_ROOT_LAYOUT = """\
+<script lang="ts">
+\timport { QueryClientProvider } from '@tanstack/svelte-query';
+\timport { Tooltip } from 'bits-ui';
+\timport { Toaster } from 'svelte-sonner';
+\timport { onMount } from 'svelte';
+\timport { configureApiClient, createQueryClient } from '$lib/core';
+\timport { enableMockingIfNeeded } from '$lib/core/msw';
+\timport { getSettingsStore } from '$lib/features/settings';
+\timport '../app.css';
+
+\tlet { children } = $props();
+
+\tconst queryClient = createQueryClient();
+\tconst settings = getSettingsStore();
+\tlet initialized = $state(false);
+
+\tonMount(async () => {
+\t\tawait enableMockingIfNeeded();
+
+\t\tconfigureApiClient({
+\t\t\tgetToken: async () => null,
+\t\t\tonUnauthorized: () => console.warn('[api] 401 received (auth disabled in this build)')
+\t\t});
+
+\t\tsettings.applyTheme();
+
+\t\twindow.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+\t\t\tif (settings.theme === 'system') {
+\t\t\t\tsettings.applyTheme();
+\t\t\t}
+\t\t});
+
+\t\tinitialized = true;
+\t});
+</script>
+
+{#if initialized}
+\t<Tooltip.Provider delayDuration={300}>
+\t\t<QueryClientProvider client={queryClient}>
+\t\t\t{@render children()}
+\t\t\t<Toaster position="bottom-right" expand richColors closeButton />
+\t\t</QueryClientProvider>
+\t</Tooltip.Provider>
+{:else}
+\t<div class="flex min-h-svh items-center justify-center">
+\t\t<div class="flex flex-col items-center gap-2">
+\t\t\t<div class="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-primary"></div>
+\t\t\t<p class="text-sm text-muted-foreground">Loading...</p>
+\t\t</div>
+\t</div>
+{/if}
+"""
+
+
+# (app)/+page.svelte rewritten without the auth-gated greeting line.
+NO_AUTH_APP_HOME = """\
+<script lang="ts">
+\timport { Activity, Server, Info, Package, Plus } from 'lucide-svelte';
+\timport { HealthIndicator } from '$lib/shared';
+\timport { createServiceInfoQuery, createReadinessQuery } from '$lib/features/dashboard';
+
+\tconst infoQuery = createServiceInfoQuery();
+\tconst readinessQuery = createReadinessQuery();
+</script>
+
+<div class="space-y-6">
+\t<div>
+\t\t<h1 class="text-3xl font-bold tracking-tight">Welcome back!</h1>
+\t\t<p class="text-muted-foreground">Here is an overview of your service</p>
+\t</div>
+
+\t<!-- Service Info Cards -->
+\t<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+\t\t<!-- Service Card -->
+\t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
+\t\t\t<div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
+\t\t\t\t<h3 class="text-sm font-medium">Service</h3>
+\t\t\t\t<Info class="h-4 w-4 text-muted-foreground" />
+\t\t\t</div>
+\t\t\t<div class="p-6 pt-0">
+\t\t\t\t{#if $infoQuery.isLoading}
+\t\t\t\t\t<div class="mb-2 h-7 w-40 animate-pulse rounded bg-muted"></div>
+\t\t\t\t\t<div class="h-4 w-24 animate-pulse rounded bg-muted"></div>
+\t\t\t\t{:else if $infoQuery.data}
+\t\t\t\t\t<div class="text-2xl font-bold">{$infoQuery.data.title}</div>
+\t\t\t\t\t<p class="text-xs text-muted-foreground">v{$infoQuery.data.version}</p>
+\t\t\t\t{/if}
+\t\t\t</div>
+\t\t</div>
+
+\t\t<!-- Status Card -->
+\t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
+\t\t\t<div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
+\t\t\t\t<h3 class="text-sm font-medium">Status</h3>
+\t\t\t\t<Activity class="h-4 w-4 text-muted-foreground" />
+\t\t\t</div>
+\t\t\t<div class="p-6 pt-0">
+\t\t\t\t{#if $readinessQuery.isLoading}
+\t\t\t\t\t<div class="mb-2 h-7 w-20 animate-pulse rounded bg-muted"></div>
+\t\t\t\t\t<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+\t\t\t\t{:else if $readinessQuery.data}
+\t\t\t\t\t<div class="mb-1">
+\t\t\t\t\t\t<HealthIndicator status={$readinessQuery.data.status} />
+\t\t\t\t\t</div>
+\t\t\t\t\t<p class="text-xs text-muted-foreground">
+\t\t\t\t\t\t{Object.keys($readinessQuery.data.components).length} component(s) checked
+\t\t\t\t\t</p>
+\t\t\t\t{/if}
+\t\t\t</div>
+\t\t</div>
+\t</div>
+
+\t<!-- Health Components -->
+\t{#if $readinessQuery.data?.components}
+\t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
+\t\t\t<div class="p-6">
+\t\t\t\t<h3 class="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
+\t\t\t\t\t<Server class="h-5 w-5" />
+\t\t\t\t\tHealth Components
+\t\t\t\t</h3>
+\t\t\t\t<p class="mt-1.5 text-sm text-muted-foreground">
+\t\t\t\t\tReal-time status of service dependencies
+\t\t\t\t</p>
+\t\t\t</div>
+\t\t\t<div class="p-6 pt-0">
+\t\t\t\t<div class="space-y-3">
+\t\t\t\t\t{#each Object.entries($readinessQuery.data.components) as [name, component]}
+\t\t\t\t\t\t<div class="flex items-center justify-between rounded-lg border p-3">
+\t\t\t\t\t\t\t<div>
+\t\t\t\t\t\t\t\t<p class="font-medium capitalize">{name}</p>
+\t\t\t\t\t\t\t\t{#if component.latency_ms != null}
+\t\t\t\t\t\t\t\t\t<p class="text-xs text-muted-foreground">
+\t\t\t\t\t\t\t\t\t\t{component.latency_ms.toFixed(1)}ms latency
+\t\t\t\t\t\t\t\t\t</p>
+\t\t\t\t\t\t\t\t{/if}
+\t\t\t\t\t\t\t</div>
+\t\t\t\t\t\t\t<HealthIndicator status={component.status} />
+\t\t\t\t\t\t</div>
+\t\t\t\t\t{/each}
+\t\t\t\t</div>
+\t\t\t</div>
+\t\t</div>
+\t{/if}
+
+\t<!-- System Info -->
+\t{#if $readinessQuery.data?.system_info}
+\t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
+\t\t\t<div class="p-6">
+\t\t\t\t<h3 class="text-lg font-semibold leading-none tracking-tight">System Information</h3>
+\t\t\t</div>
+\t\t\t<div class="p-6 pt-0">
+\t\t\t\t<dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+\t\t\t\t\t{#each Object.entries($readinessQuery.data.system_info) as [key, value]}
+\t\t\t\t\t\t<div class="flex flex-col rounded-lg border p-3">
+\t\t\t\t\t\t\t<dt class="text-xs capitalize text-muted-foreground">
+\t\t\t\t\t\t\t\t{key.replace(/_/g, ' ')}
+\t\t\t\t\t\t\t</dt>
+\t\t\t\t\t\t\t<dd class="text-sm font-medium">{value}</dd>
+\t\t\t\t\t\t</div>
+\t\t\t\t\t{/each}
+\t\t\t\t</dl>
+\t\t\t</div>
+\t\t</div>
+\t{/if}
+</div>
+"""
+
+
+# AppSidebar variant used when auth is disabled — no user popover, no logout,
+# no profile link (profile/ is deleted in this build). Settings stays visible.
+NO_AUTH_APP_SIDEBAR = """\
+<script lang="ts">
+\timport { page } from '$app/stores';
+\timport { Home, Settings } from 'lucide-svelte';
+\timport { getUiStore } from '$lib/features/shell';
+
+\tlet { forceCollapsed = false }: { forceCollapsed?: boolean } = $props();
+
+\tconst ui = getUiStore();
+\tconst isCollapsed = $derived(forceCollapsed || ui.sidebarCollapsed);
+
+\tconst navItems = [
+\t\t{ title: 'Home', url: '/', icon: Home },
+\t\t// --- feature nav items ---
+\t];
+
+\tfunction isActive(url: string) {
+\t\tif (url === '/') return $page.url.pathname === '/';
+\t\treturn $page.url.pathname.startsWith(url);
+\t}
+
+\tfunction handleBrandClick() {
+\t\tif (!forceCollapsed) {
+\t\t\tui.toggleSidebar();
+\t\t}
+\t}
+</script>
+
+<aside
+\tclass="flex flex-col border-r bg-sidebar-background text-sidebar-foreground transition-all duration-200
+\t\t{isCollapsed ? 'w-[72px]' : 'w-60'}"
+>
+\t<button
+\t\tclass="btn-press flex h-14 w-full items-center border-b px-2 transition-colors hover:bg-sidebar-accent/50"
+\t\tonclick={handleBrandClick}
+\t\ttitle={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+\t>
+\t\t<span class="flex w-14 shrink-0 items-center justify-center">
+\t\t\t<span
+\t\t\t\tclass="flex h-8 w-8 items-center justify-center rounded-lg"
+\t\t\t\tstyle="background: linear-gradient(135deg, hsl(var(--ai-gradient-from)), hsl(var(--ai-gradient-to)))"
+\t\t\t>
+\t\t\t\t<span class="text-sm font-bold text-white">S</span>
+\t\t\t</span>
+\t\t</span>
+\t\t{#if !isCollapsed}
+\t\t\t<div class="grid flex-1 text-left text-sm leading-tight">
+\t\t\t\t<span class="truncate font-semibold">Svelte Frontend</span>
+\t\t\t\t<span class="truncate text-xs text-muted-foreground">v0.1.0</span>
+\t\t\t</div>
+\t\t{/if}
+\t</button>
+
+\t<nav class="flex-1 overflow-y-auto py-3 px-2">
+\t\t<ul class="space-y-1">
+\t\t\t{#each navItems as item}
+\t\t\t\t<li>
+\t\t\t\t\t<a
+\t\t\t\t\t\thref={item.url}
+\t\t\t\t\t\tclass="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+\t\t\t\t\t\t\t{isActive(item.url) ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
+\t\t\t\t\t\ttitle={isCollapsed ? item.title : undefined}
+\t\t\t\t\t>
+\t\t\t\t\t\t{#if isActive(item.url)}
+\t\t\t\t\t\t\t<span class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r bg-primary"></span>
+\t\t\t\t\t\t{/if}
+\t\t\t\t\t\t<span class="flex w-14 shrink-0 items-center justify-center">
+\t\t\t\t\t\t\t<item.icon class="h-5 w-5" />
+\t\t\t\t\t\t</span>
+\t\t\t\t\t\t{#if !isCollapsed}
+\t\t\t\t\t\t\t<span>{item.title}</span>
+\t\t\t\t\t\t{/if}
+\t\t\t\t\t</a>
+\t\t\t\t</li>
+\t\t\t{/each}
+\t\t</ul>
+\t</nav>
+
+\t<div class="border-t py-2 px-2 space-y-1">
+\t\t<a
+\t\t\thref="/settings"
+\t\t\tclass="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+\t\t\t\t{isActive('/settings') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
+\t\t\ttitle={isCollapsed ? 'Settings' : undefined}
+\t\t>
+\t\t\t{#if isActive('/settings')}
+\t\t\t\t<span class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r bg-primary"></span>
+\t\t\t{/if}
+\t\t\t<span class="flex w-14 shrink-0 items-center justify-center">
+\t\t\t\t<Settings class="h-5 w-5" />
+\t\t\t</span>
+\t\t\t{#if !isCollapsed}
+\t\t\t\t<span>Settings</span>
+\t\t\t{/if}
+\t\t</a>
+\t</div>
+</aside>
+"""

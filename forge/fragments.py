@@ -55,7 +55,6 @@ class FragmentImplSpec:
     dependencies: tuple[str, ...] = ()
     env_vars: tuple[tuple[str, str], ...] = ()
     settings_keys: tuple[str, ...] = ()
-    post_hooks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

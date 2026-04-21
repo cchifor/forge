@@ -384,6 +384,10 @@ def patch_readme(feature_names: list[str]) -> None:
 
 def run_command(label: str, cmd: list[str], timeout: int = 300) -> bool:
     spinner = Spinner(label)
+    # Windows: subprocess.run doesn't walk PATHEXT, so bare "npm" misses npm.cmd.
+    resolved = shutil.which(cmd[0])
+    if resolved is not None:
+        cmd = [resolved, *cmd[1:]]
     try:
         with spinner:
             result = subprocess.run(cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=timeout)

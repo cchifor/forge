@@ -33,6 +33,11 @@ def has_cargo() -> bool:
 
 
 @pytest.fixture(scope="session")
+def has_flutter() -> bool:
+    return _have("flutter")
+
+
+@pytest.fixture(scope="session")
 def has_git() -> bool:
     return _have("git")
 
@@ -53,6 +58,12 @@ def require_npm(has_npm: bool) -> None:
 def require_cargo(has_cargo: bool) -> None:
     if not has_cargo:
         pytest.skip("requires `cargo` on PATH")
+
+
+@pytest.fixture
+def require_flutter(has_flutter: bool) -> None:
+    if not has_flutter:
+        pytest.skip("requires `flutter` on PATH")
 
 
 @pytest.fixture

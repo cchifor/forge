@@ -292,7 +292,31 @@ class FrontendConfig:
 
     def validate(self) -> None:
         if self.framework == FrontendFramework.NONE:
+            # Feature toggles need a frontend to live in — silently accepting
+            # them used to produce a "generated but nothing happened" project.
+            conflicting = []
+            if self.include_auth:
+                conflicting.append("include_auth")
+            if self.include_chat:
+                conflicting.append("include_chat")
+            if self.include_openapi:
+                conflicting.append("include_openapi")
+            if conflicting:
+                raise ValueError(
+                    f"Frontend feature flags ({', '.join(conflicting)}) require "
+                    "a frontend framework. Either pick --frontend vue/svelte/flutter "
+                    "or drop the --include-* flag."
+                )
             return
+        # Flutter's home_repository binds against the retrofit-generated api
+        # client; turning OpenAPI off leaves it importing a deleted module.
+        # Until Flutter ships a hand-rolled http client for this case, require
+        # the flag.
+        if self.framework == FrontendFramework.FLUTTER and not self.include_openapi:
+            raise ValueError(
+                "Flutter requires include_openapi=True "
+                "(the home feature's retrofit client depends on the generated OpenAPI bindings)."
+            )
         validate_port(self.server_port, "Frontend port")
         validate_features(self.features)
         for f in self.features:

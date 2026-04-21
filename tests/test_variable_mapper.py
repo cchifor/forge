@@ -149,7 +149,9 @@ class TestSvelteContext:
         config = _make_config(framework=FrontendFramework.SVELTE)
         ctx = svelte_context(config)
         assert ctx["project_name"] == "Test App"
-        assert ctx["api_base_url"] == "http://backend:5000"
+        # api_base_url points at localhost for browser/dev server reachability;
+        # api_proxy_target keeps the Docker-internal hostname for vite proxy.
+        assert ctx["api_base_url"] == "http://localhost:5000"
         assert ctx["include_auth"] is True
         assert ctx["include_chat"] is True
         assert isinstance(ctx["server_port"], int)

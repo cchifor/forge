@@ -524,7 +524,7 @@ class TestCollectInputs:
                 False,  # add another? no
                 False,  # enable keycloak? no
                 False,  # enable chat? no
-                False,  # enable openapi? no
+                # openapi is auto-True for Flutter (no prompt)
                 True,  # proceed? yes
             ]
         )

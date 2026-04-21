@@ -122,7 +122,10 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
         "include_chat": fc.include_chat,
         "include_openapi": fc.include_openapi,
         "package_manager": fc.package_manager,
-        "api_base_url": f"http://{backend_name}:{backend_port}",
+        # api_base_url is consumed by the browser / dev server, so it has to
+        # be reachable from the developer's machine. Vue uses the same form.
+        # api_proxy_target is the Docker-internal hostname used by vite proxy.
+        "api_base_url": f"http://localhost:{backend_port}",
         "api_proxy_target": f"http://{backend_name}:{backend_port}",
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,

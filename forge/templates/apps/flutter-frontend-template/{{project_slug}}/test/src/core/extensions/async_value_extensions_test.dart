@@ -4,28 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('isRefreshing', () {
-    test('returns false for pure AsyncLoading (no previous value)', () {
-      const value = AsyncLoading<int>();
-      expect(value.isRefreshing, isFalse);
-    });
-
-    test('returns true for AsyncData that is loading (refresh)', () {
-      const original = AsyncData<int>(42);
-      final refreshing = original.copyWithPrevious(const AsyncLoading());
-      expect(refreshing.isRefreshing, isTrue);
-    });
-
-    test('returns false for AsyncData that is not loading', () {
-      const value = AsyncData<int>(42);
-      expect(value.isRefreshing, isFalse);
-    });
-
-    test('returns false for AsyncError that is not loading', () {
-      final value = AsyncError<int>(Exception('fail'), StackTrace.current);
-      expect(value.isRefreshing, isFalse);
-    });
-  });
+  // isRefreshing now comes from flutter_riverpod's built-in
+  // AsyncValueExtensions; removed custom tests to avoid ambiguity.
 
   group('appException', () {
     test('returns AppException from AsyncError', () {

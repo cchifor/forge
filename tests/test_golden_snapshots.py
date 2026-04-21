@@ -36,20 +36,49 @@ from forge.generator import generate
 SNAPSHOT_ROOT = Path(__file__).resolve().parent / "golden" / "snapshots"
 
 
+# Files whose content legitimately changes with every forge version bump —
+# recording them as "exists with size" is useful (removal would be a real
+# regression) but the sha is version-dependent noise. We null the sha for
+# these so the snapshot survives version bumps without hand-regen.
+_VERSION_BEARING_FILES = frozenset(
+    {
+        "forge.toml",
+    }
+)
+
+
+def _is_version_noise(rel_path: str) -> bool:
+    if rel_path in _VERSION_BEARING_FILES:
+        return True
+    # Every per-backend .copier-answers.yml records the forge version used
+    # at render time — same noise, different path.
+    return rel_path.endswith(".copier-answers.yml")
+
+
 def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
-    """Capture the shape of every file under ``project_root``."""
+    """Capture the shape of every file under ``project_root``.
+
+    Files whose content depends on the forge version itself have their
+    sha field set to ``"<version-dependent>"`` so the snapshot doesn't
+    need regenerating on every version bump. The file's existence + size
+    is still tracked — removing or drastically resizing the file still
+    counts as drift.
+    """
     files: dict[str, dict] = {}
     for p in sorted(project_root.rglob("*")):
         if not p.is_file():
             continue
-        # Skip volatile / user-agnostic paths.
         rel = p.relative_to(project_root).as_posix()
         if rel.startswith(".git/"):
             continue
         data = p.read_bytes().replace(b"\r\n", b"\n")
         files[rel] = {
             "size": len(data),
-            "sha256": hashlib.sha256(data).hexdigest()[:16],
+            "sha256": (
+                "<version-dependent>"
+                if _is_version_noise(rel)
+                else hashlib.sha256(data).hexdigest()[:16]
+            ),
         }
     return {"files": files}
 

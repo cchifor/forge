@@ -38,12 +38,12 @@ class EnvConfig {
 
   final String apiBaseUrl;
   final bool authDisabled;
+
+  bool get isDevelopment => authDisabled;
 {%- if include_auth %}
   final String keycloakUrl;
   final String keycloakRealm;
   final String keycloakClientId;
-
-  bool get isDevelopment => authDisabled;
 
   String get keycloakAuthUrl =>
       '$keycloakUrl/realms/$keycloakRealm/protocol/openid-connect/auth';

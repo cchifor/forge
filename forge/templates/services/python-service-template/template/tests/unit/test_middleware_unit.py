@@ -233,39 +233,43 @@ class TestCorrelationIdMiddleware:
 
     @pytest.mark.asyncio
     async def test_extracts_existing_header(self):
+        # Headers in real Starlette are case-insensitive via HeadersMutable; tests use
+        # plain dicts, so pass the lowercase form that _ensure_correlation_id reads.
         mw = self._make_mw()
-        resp = _ok_response()
-        call_next = AsyncMock(return_value=resp)
-        req = _make_request(headers={"X-Request-ID": "abc-123"})
+        call_next = AsyncMock(return_value=_ok_response())
+        req = _make_request(headers={"x-request-id": "abc-123"})
 
-        result = await mw.dispatch(req, call_next)
+        await mw.dispatch(req, call_next)
 
-        assert result.headers["X-Request-ID"] == "abc-123"
+        # RequestLoggingMiddleware (base layer) echoes the response header; the
+        # correlation_id fragment only mirrors state + ContextVar.
         assert req.state.correlation_id == "abc-123"
+        call_next.assert_awaited_once_with(req)
 
     @pytest.mark.asyncio
     async def test_generates_id_when_missing(self):
         mw = self._make_mw()
-        resp = _ok_response()
-        call_next = AsyncMock(return_value=resp)
+        call_next = AsyncMock(return_value=_ok_response())
         req = _make_request(headers={})
 
-        result = await mw.dispatch(req, call_next)
+        await mw.dispatch(req, call_next)
 
-        cid = result.headers["X-Request-ID"]
+        cid = req.state.correlation_id
         assert cid  # non-empty
-        assert len(cid) == 16  # uuid4().hex[:16]
+        assert len(cid) == 32  # uuid4().hex
 
     @pytest.mark.asyncio
-    async def test_echoes_id_in_response(self):
+    async def test_respects_prefilled_state(self):
+        # If RequestLoggingMiddleware ran first and stashed an id, the fragment
+        # reuses it rather than re-parsing the header.
         mw = self._make_mw()
-        resp = _ok_response()
-        call_next = AsyncMock(return_value=resp)
-        req = _make_request(headers={"X-Request-ID": "echo-me"})
+        call_next = AsyncMock(return_value=_ok_response())
+        req = _make_request(headers={"x-request-id": "header-id"})
+        req.state.correlation_id = "prefilled-id"
 
-        result = await mw.dispatch(req, call_next)
+        await mw.dispatch(req, call_next)
 
-        assert result.headers["X-Request-ID"] == "echo-me"
+        assert req.state.correlation_id == "prefilled-id"
 
 
 # ===================================================================
