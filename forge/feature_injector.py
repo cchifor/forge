@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,7 @@ from forge.errors import (
     FragmentError,
     InjectionError,
 )
+from forge.fragment_context import FragmentContext
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
 from forge.provenance import ProvenanceCollector
 
@@ -142,6 +144,8 @@ def apply_features(
     *,
     skip_existing_files: bool = False,
     collector: ProvenanceCollector | None = None,
+    option_values: Mapping[str, Any] | None = None,
+    project_root: Path | None = None,
 ) -> None:
     """Apply each backend-scoped fragment that supports this backend.
 
@@ -156,7 +160,23 @@ def apply_features(
     When ``collector`` is supplied, every file written by the fragment
     layer is recorded in the provenance manifest with ``origin='fragment'``
     and the fragment's name.
+
+    ``option_values`` (Epic E, 1.1.0-alpha.1) — the resolver's fully-
+    defaulted option map. When provided, each fragment's
+    :class:`FragmentContext` sees a filtered view restricted to the
+    impl's ``reads_options`` tuple. When omitted (backward-compat for
+    callers that haven't threaded the plan through yet), fragments see
+    ``ctx.options == {}`` — the pre-Epic-E behaviour.
+
+    ``project_root`` is needed for merge-zone injections and future
+    provenance-driven uninstall. Defaults to ``backend_dir.parent.parent``
+    on the assumption of the conventional ``<project_root>/services/<backend>/``
+    layout — the generator always passes it explicitly.
     """
+    if option_values is None:
+        option_values = {}
+    if project_root is None:
+        project_root = backend_dir.parent.parent
     for rf in resolved:
         if bc.language not in rf.target_backends:
             continue
@@ -165,15 +185,16 @@ def apply_features(
             continue
         if not quiet:
             print(f"  [frag] applying '{rf.fragment.name}' to {bc.name} ({bc.language.value})")
-        _apply_fragment(
-            bc,
-            backend_dir,
-            impl,
-            {},
-            rf.fragment.name,
+        ctx = FragmentContext.filtered(
+            backend_config=bc,
+            backend_dir=backend_dir,
+            project_root=project_root,
+            option_values=option_values,
+            reads_options=impl.reads_options,
+            provenance=collector,
             skip_existing_files=skip_existing_files,
-            collector=collector,
         )
+        _apply_fragment(ctx, impl, rf.fragment.name)
 
 
 def apply_project_features(
@@ -183,8 +204,14 @@ def apply_project_features(
     *,
     skip_existing_files: bool = False,
     collector: ProvenanceCollector | None = None,
+    option_values: Mapping[str, Any] | None = None,
 ) -> None:
-    """Apply project-scoped fragment implementations at the project root."""
+    """Apply project-scoped fragment implementations at the project root.
+
+    See :func:`apply_features` for ``option_values`` semantics.
+    """
+    if option_values is None:
+        option_values = {}
     for rf in resolved:
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
@@ -192,28 +219,32 @@ def apply_project_features(
                 if not quiet:
                     print(f"  [frag] applying '{rf.fragment.name}' to project root")
                 proxy = BackendConfig(name="project", project_name="", language=lang)
-                _apply_fragment(
-                    proxy,
-                    project_root,
-                    impl,
-                    {},
-                    rf.fragment.name,
+                ctx = FragmentContext.filtered(
+                    backend_config=proxy,
+                    backend_dir=project_root,
+                    project_root=project_root,
+                    option_values=option_values,
+                    reads_options=impl.reads_options,
+                    provenance=collector,
                     skip_existing_files=skip_existing_files,
-                    collector=collector,
                 )
+                _apply_fragment(ctx, impl, rf.fragment.name)
                 break
 
 
 def _apply_fragment(
-    bc: BackendConfig,
-    backend_dir: Path,
+    ctx: FragmentContext,
     impl: FragmentImplSpec,
-    options: dict[str, Any],
     feature_key: str,
-    *,
-    skip_existing_files: bool = False,
-    collector: ProvenanceCollector | None = None,
 ) -> None:
+    """Apply one fragment implementation within its :class:`FragmentContext`.
+
+    Underscore-prefixed: private to ``feature_injector``. Epic A's applier
+    decomposition splits this body into single-responsibility classes;
+    Epic E merely refactors the function signature to take a
+    :class:`FragmentContext` so the applier work in Epic A is a strict
+    move rather than a plumbing exercise.
+    """
     fragment = _resolve_fragment_dir(impl.fragment_dir)
     if not fragment.is_dir():
         raise FragmentError(
@@ -227,25 +258,30 @@ def _apply_fragment(
     if files_dir.is_dir():
         _copy_files(
             files_dir,
-            backend_dir,
-            skip_existing=skip_existing_files,
-            collector=collector,
+            ctx.backend_dir,
+            skip_existing=ctx.skip_existing_files,
+            collector=ctx.provenance,
             fragment_name=feature_key,
         )
 
     inject_path = fragment / "inject.yaml"
     if inject_path.is_file():
-        for inj in _load_injections(inject_path, feature_key):
-            target = backend_dir / inj.target
-            applied = _apply_zoned_injection(target, inj)
-            if applied and collector is not None:
-                collector.record(target, origin="fragment", fragment_name=feature_key)
+        for inj in _load_injections(inject_path, feature_key, options=ctx.options):
+            target = ctx.backend_dir / inj.target
+            applied = _apply_zoned_injection(
+                target,
+                inj,
+                project_root=ctx.project_root,
+                collector=ctx.provenance,
+            )
+            if applied and ctx.provenance is not None:
+                ctx.provenance.record(target, origin="fragment", fragment_name=feature_key)
 
     if impl.dependencies:
-        _add_dependencies(bc.language, backend_dir, impl.dependencies)
+        _add_dependencies(ctx.backend_config.language, ctx.backend_dir, impl.dependencies)
 
     if impl.env_vars:
-        env_file = backend_dir / ".env.example"
+        env_file = ctx.backend_dir / ".env.example"
         for key, value in impl.env_vars:
             _add_env_var(env_file, key, value)
 
@@ -298,7 +334,46 @@ def _copy_files(
 # -- Snippet injection -------------------------------------------------------
 
 
-def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
+def _render_snippet(snippet: str, options: Mapping[str, Any]) -> str:
+    """Jinja-render a snippet with ``options`` as the template context.
+
+    Opt-in per-injection via ``render: true`` in ``inject.yaml``. Undeclared
+    variables raise — a typo in ``{{ rag.top_k }}`` should not silently
+    inject an empty string. ``StrictUndefined`` handles this.
+    """
+    import jinja2  # noqa: PLC0415 — lazy so pure-copy fragments don't pay the import
+
+    env = jinja2.Environment(
+        autoescape=False,
+        undefined=jinja2.StrictUndefined,
+        keep_trailing_newline=True,
+    )
+    try:
+        return env.from_string(snippet).render(options=dict(options), **dict(options))
+    except jinja2.UndefinedError as e:
+        raise FragmentError(
+            f"inject.yaml snippet renders an undefined variable: {e}. "
+            f"Declare the option path in FragmentImplSpec.reads_options so "
+            f"the resolver can validate it at resolve time.",
+            code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+            context={"undefined_error": str(e)},
+        ) from e
+
+
+def _load_injections(
+    path: Path,
+    feature_key: str,
+    *,
+    options: Mapping[str, Any] | None = None,
+) -> list[_Injection]:
+    """Parse ``inject.yaml`` into typed :class:`_Injection` records.
+
+    Epic E adds optional Jinja rendering of the ``snippet`` field. When a
+    YAML entry sets ``render: true`` and ``options`` is non-empty, the
+    snippet is Jinja-rendered with ``options`` in scope before injection.
+    Fragments that don't need templating (most of them) leave ``render``
+    unset and the snippet is used verbatim.
+    """
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
     if not isinstance(data, list):
         raise FragmentError(
@@ -324,6 +399,8 @@ def _load_injections(path: Path, feature_key: str) -> list[_Injection]:
                 code=FRAGMENT_INJECT_YAML_MISSING_KEY,
                 context={"path": str(path), "index": i, "missing_key": str(e).strip("'")},
             ) from e
+        if entry.get("render"):
+            snippet = _render_snippet(snippet, options or {})
         position = str(entry.get("position", "after"))
         if position not in ("before", "after"):
             raise FragmentError(

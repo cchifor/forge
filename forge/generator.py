@@ -95,7 +95,15 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
         _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
         _record_tree(backend_dir, collector, origin="base-template")
-        apply_features(bc, backend_dir, plan.ordered, quiet=quiet, collector=collector)
+        apply_features(
+            bc,
+            backend_dir,
+            plan.ordered,
+            quiet=quiet,
+            collector=collector,
+            option_values=plan.option_values,
+            project_root=project_root,
+        )
         if bc.language == BackendLanguage.NODE and not dry_run:
             _run_backend_cmd(backend_dir, ["npm", "install"], "Install dependencies", required=True)
         if not quiet and not dry_run:
@@ -164,7 +172,13 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         skip_if_recorded=True,
     )
 
-    apply_project_features(project_root, plan.ordered, quiet=quiet, collector=collector)
+    apply_project_features(
+        project_root,
+        plan.ordered,
+        quiet=quiet,
+        collector=collector,
+        option_values=plan.option_values,
+    )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)
     # if the per-template generators haven't already provided them.

@@ -36,6 +36,7 @@ class TestPluginFragmentE2E:
         is handled by _apply_fragment via the resolver."""
         from forge.config import BackendConfig, BackendLanguage
         from forge.feature_injector import _apply_fragment
+        from forge.fragment_context import FragmentContext
         from forge.fragments import FragmentImplSpec
 
         # Set up a plugin fragment dir outside FRAGMENTS_DIR.
@@ -51,7 +52,17 @@ class TestPluginFragmentE2E:
         bc = BackendConfig(
             name="api", project_name="demo", language=BackendLanguage.PYTHON
         )
-        _apply_fragment(bc, backend_dir, impl, {}, "my_plugin_fragment")
+        # Epic E: _apply_fragment now takes a FragmentContext. Empty options
+        # keep the pre-E behaviour — this test just exercises the resolver
+        # path for absolute fragment_dir, nothing about option values.
+        ctx = FragmentContext(
+            backend_config=bc,
+            backend_dir=backend_dir,
+            project_root=tmp_path / "generated",
+            options={},
+            provenance=None,
+        )
+        _apply_fragment(ctx, impl, "my_plugin_fragment")
 
         assert (backend_dir / "hello.py").is_file()
         assert "from plugin" in (backend_dir / "hello.py").read_text(encoding="utf-8")

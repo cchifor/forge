@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic E (FragmentContext + option_values plumbing)
+
+- **`forge/fragment_context.py`** with a frozen `FragmentContext` dataclass bundling `backend_config`, `backend_dir`, `project_root`, filtered `options`, `provenance`, `skip_existing_files`. This is the sole input to `_apply_fragment` (Epic A's applier decomposition builds on it).
+- **`FragmentContext.filtered()`** classmethod — builds a context where `options` is a read-only view restricted to the paths the impl declared in `FragmentImplSpec.reads_options`. A fragment cannot peek at option values it didn't declare.
+- **`FragmentImplSpec.reads_options: tuple[str, ...] = ()`** — per-impl declaration of which option paths this fragment consumes at apply time. Most fragments leave it empty (pre-Epic-E behaviour).
+- **`capability_resolver._validate_reads_options()`** pass — runs before `_topo_sort`, asserts every `reads_options` path resolves against `OPTION_REGISTRY`. Orphan paths surface as `OptionsError(OPTIONS_UNKNOWN_PATH, context={fragment, path})` at resolve time rather than silently missing at apply time.
+- **`inject.yaml render: true`** flag — when set on an injection entry, the snippet is Jinja-rendered with `options={...}` in scope before injection. `StrictUndefined` semantics — a typo raises `FragmentError` with a hint to declare the path in `reads_options`.
+- **`apply_features` / `apply_project_features` kwargs**: new optional `option_values` and `project_root` (backward-compatible — callers that haven't threaded the plan through yet keep working). `forge.generator.generate` and `forge.updater.update_project` pass both.
+- **15 new tests** in `tests/test_fragment_context.py` cover direct + filtered construction, frozen-dataclass immutability, resolver validation of `reads_options`, Jinja rendering with `options` in scope, and end-to-end threading through `apply_features` via a captured context.
+
 ### Added — Epic I (FRAGMENT_REGISTRY freeze + startup audit)
 
 - **`_FragmentRegistry` subclass of `dict`** — replaces the bare `dict[str, Fragment]` backing `forge.fragments.FRAGMENT_REGISTRY`. Adds a one-shot `freeze()` method and a `frozen: bool` flag. Before `freeze()` behaves like an ordinary dict; after `freeze()`, `__setitem__` / `__delitem__` raise `PluginError(PLUGIN_REGISTRY_FROZEN)` so late registrations don't silently slip past the audit.

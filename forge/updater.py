@@ -139,6 +139,8 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
             quiet=quiet,
             skip_existing_files=True,
             collector=collector,
+            option_values=plan.option_values,
+            project_root=project_root,
         )
 
     if not quiet:
@@ -149,6 +151,7 @@ def update_project(project_root: Path, quiet: bool = False) -> dict[str, object]
         quiet=quiet,
         skip_existing_files=True,
         collector=collector,
+        option_values=plan.option_values,
     )
 
     for rf in plan.ordered:

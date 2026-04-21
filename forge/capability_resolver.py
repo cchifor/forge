@@ -199,6 +199,28 @@ def _target_backends(
     return tuple(lang for lang in project_backends if frag.supports(lang))
 
 
+def _validate_reads_options(fragment_names: set[str]) -> None:
+    """Epic E — assert every ``impl.reads_options`` path is a known Option.
+
+    A typo in ``reads_options`` would surface today as a silent missing-key
+    in the filtered ``FragmentContext.options`` at apply time; the
+    fragment would run with less context than it declared. Surfacing the
+    orphan at resolve time keeps the error next to the declaration.
+    """
+    for name in fragment_names:
+        frag = FRAGMENT_REGISTRY[name]
+        for impl in frag.implementations.values():
+            for path in impl.reads_options:
+                if path not in OPTION_REGISTRY:
+                    raise OptionsError(
+                        f"Fragment {name!r} reads_options includes unknown "
+                        f"option path {path!r}. Registered paths: "
+                        f"{', '.join(sorted(OPTION_REGISTRY)) or '(none)'}",
+                        code=OPTIONS_UNKNOWN_PATH,
+                        context={"fragment": name, "path": path},
+                    )
+
+
 def resolve(config: ProjectConfig) -> ResolvedPlan:
     """Produce an ordered ResolvedPlan from ``config.options``.
 
@@ -211,6 +233,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     option_values = _apply_option_defaults(config.options)
     fragment_set = _collect_fragments(option_values)
     fragment_set = _expand_deps(fragment_set)
+    _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set)
     order = _topo_sort(fragment_set)
 

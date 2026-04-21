@@ -64,6 +64,13 @@ class FragmentImplSpec:
     dependencies: tuple[str, ...] = ()
     env_vars: tuple[tuple[str, str], ...] = ()
     settings_keys: tuple[str, ...] = ()
+    # Epic E (1.1.0-alpha.1) — Option paths this implementation reads at
+    # apply time. The resolver validates each entry against
+    # OPTION_REGISTRY before generation begins, and FragmentContext.options
+    # exposes only these paths to the fragment (no implicit access to the
+    # whole option space). Fragments that don't need option values leave
+    # this empty and see `ctx.options == {}`.
+    reads_options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
