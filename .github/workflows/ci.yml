@@ -72,7 +72,9 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev
       - name: pytest
-        run: uv run pytest -m "not e2e"
+        # Epic DD carves package_integrity into its own job below; exclude it
+        # from the main matrix so the wall-clock stays flat.
+        run: uv run pytest -m "not e2e and not package_integrity"
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
   #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
@@ -94,7 +96,7 @@ jobs:
         run: uv sync --all-extras --dev
       - name: pytest --cov --cov-report=xml,json
         run: |
-          uv run pytest -m "not e2e" \
+          uv run pytest -m "not e2e and not package_integrity" \
             --cov=forge \
             --cov-report=xml:coverage.xml \
             --cov-report=json:coverage.json \
@@ -115,3 +117,23 @@ jobs:
           files: coverage.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Epic DD (1.1.0-alpha.1) — package integrity. Build the sdist + wheel
+  # via `uv build`, inspect both archives, assert every sentinel template
+  # file is present and no cache/build clutter leaked in. Own job because
+  # the build adds ~30s; keeping it out of the main matrix preserves the
+  # per-PR wall-clock. See tests/test_package_integrity.py for the
+  # sentinel list + contaminant whitelist.
+  package-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Set Python 3.13
+        run: uv python install 3.13
+      - name: Install
+        run: uv sync --all-extras --dev
+      - name: pytest -m package_integrity
+        run: uv run pytest -m package_integrity -v --no-cov

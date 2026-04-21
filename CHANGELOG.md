@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic DD (package integrity gate)
+
+- **`tests/test_package_integrity.py`** — builds sdist + wheel via `uv build`, asserts every sentinel template file (one per backend, one per frontend, docker-compose, a cross-cutting fragment) is present in both artefacts, and no cache/build contamination (`.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`, `node_modules/`, `.dart_tool/`, `.venv/`, `.pyc`, `.DS_Store`, etc.) leaked into either archive. The wheel test also verifies the `forge = forge.cli:main` entry point is registered.
+- **Whitelist self-check** asserts every file under `forge/templates/` uses a known extension — a new file type (e.g. `.lua`) fails the test and forces an explicit decision about whether to add it to `KNOWN_TEMPLATE_EXTENSIONS` or to exclude it from templates.
+- **`package-integrity` CI job** (`ubuntu-latest` × Python 3.13). Runs `pytest -m package_integrity`. Own job because the `uv build` costs ~30s; keeping it out of the main `test` matrix preserves wall-clock. Main `test` + `coverage` jobs now use `-m "not e2e and not package_integrity"` to mirror the carve-out.
+- **`package_integrity` pytest marker** registered in `pyproject.toml`.
+
+### Fixed — Epic DD
+
+- **`MANIFEST.in`** now excludes `.ruff_cache/`, `.pytest_cache/`, `node_modules/`, `.venv/`, `htmlcov/`, `.next/`, `.svelte-kit/`, `dist/`, `build/`, `.dart_tool/`, `.DS_Store`, in addition to the pre-existing `__pycache__/` + `.mypy_cache/` exclusions. Previously these would ship in the sdist if they accumulated in a contributor's working tree.
+- **`[tool.setuptools.exclude-package-data]`** applies the same exclusion list to the wheel's `forge.templates` package-data include so the wheel also stays clean.
+- **Removed `forge/templates/infra/gatekeeper/src/app.log`** — stray dev log from running gatekeeper locally; not git-tracked, but would have been picked up by `uv build` on any contributor's machine where it exists.
+
 ### Added — Epic G (option aliases + rename-options codemod)
 
 - **`Option.aliases: tuple[str, ...] = ()`** and **`Option.deprecated_since: str | None`** — an Option can declare deprecated paths that previously pointed at it. Aliases pass the same path-shape validation as the canonical path and cannot collide with any registered Option's path or alias.
