@@ -5,7 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.1.0-alpha.1
 
-> First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate reset (S), ty pin + canary (X), release dry-run workflow (Z).
+> First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
+
+### Added — Epic S (per-module coverage gates)
+
+- **`tests/test_coverage_gates.py`** — per-module coverage floors for the critical path (`capability_resolver`, `feature_injector`, `merge`, `provenance`, both AST injectors, `updater`). Parametrized across the gate table so a CI failure names the exact module that regressed instead of just "coverage low".
+- **`coverage` job in `.github/workflows/ci.yml`** — ubuntu × Python 3.13 only; runs pytest with `--cov-report=xml,json`, re-runs the per-module gate against the fresh report, uploads XML to Codecov (OIDC for the public repo, `CODECOV_TOKEN` honoured if set).
+- **`docs/coverage-policy.md`** — documents the two-layer gate (project-wide `fail_under` + per-module floors), the ratchet policy, and how to add or lower a floor with RFC-002 justification.
+
+### Changed — Epic S
+
+- Measured baseline at the start of Epic S was 83.5% project-wide — well above the existing `fail_under = 75`. The exploration assumption of 26% was stale. Project-wide floor stays at 75 as the coarse safety net; the new per-module floors lock in the actual 80–97% critical-path coverage with a 2pp safety margin so small incidental drops don't block unrelated PRs.
+- `.gitignore` now ignores `coverage.json` and `coverage.xml` so the CI-generated reports don't accidentally land on a feature branch.
+
+### Breaking
 
 ### Breaking
 

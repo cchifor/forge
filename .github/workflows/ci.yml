@@ -55,3 +55,45 @@ jobs:
         run: uv sync --all-extras --dev
       - name: pytest
         run: uv run pytest -m "not e2e"
+
+  # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
+  #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
+  #   2. `tests/test_coverage_gates.py` enforces per-module floors for the
+  #      critical path (resolver, feature_injector, merge, provenance, AST
+  #      injectors, updater). See docs/coverage-policy.md.
+  # Runs on ubuntu × 3.13 only — this is a gate, not a matrix, and the
+  # test_coverage_gates tests parametrize over platform-agnostic path keys.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Set Python 3.13
+        run: uv python install 3.13
+      - name: Install
+        run: uv sync --all-extras --dev
+      - name: pytest --cov --cov-report=xml,json
+        run: |
+          uv run pytest -m "not e2e" \
+            --cov=forge \
+            --cov-report=xml:coverage.xml \
+            --cov-report=json:coverage.json \
+            --cov-report=term
+      - name: Per-module floor gate
+        # Re-runs the gate tests against the fresh coverage.json so the CI
+        # failure surfaces *which* module dropped rather than just "coverage
+        # low". pytest exits non-zero when any parametrized case fails.
+        run: uv run pytest tests/test_coverage_gates.py -v --no-cov
+      - name: Upload coverage to Codecov
+        # Public repo: Codecov's OIDC flow uploads without a token. If we
+        # switch to a private repo later, set CODECOV_TOKEN in repo secrets
+        # and the same action picks it up automatically. `fail_ci_if_error`
+        # stays false so a Codecov outage doesn't block a PR on the real
+        # pytest + gate signal.
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
