@@ -29,7 +29,7 @@
       "sha256": "78f4d29ff4f5c60f"
     },
     "forge.toml": {
-      "size": 31011,
+      "size": 31218,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {

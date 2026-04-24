@@ -5,7 +5,7 @@ import { homeRoutes } from "./routes/home.js";
 import { itemRoutes } from "./routes/items.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { correlationHook } from "./middleware/correlation.js";
-import { tenantHook } from "./middleware/tenant.js";
+import { tenantHook, requireTenant } from "./middleware/tenant.js";
 import { requestLogger } from "./middleware/logging.js";
 // FORGE:MIDDLEWARE_IMPORTS
 
@@ -20,10 +20,20 @@ export async function buildApp() {
 	app.setErrorHandler(errorHandler);
 	// FORGE:MIDDLEWARE_REGISTRATION
 
+	// Public routes — no tenant required (liveness, readiness, service info).
 	await app.register(homeRoutes, { prefix: "/api/v1" });
 	await app.register(healthRoutes, { prefix: "/api/v1/health" });
-	await app.register(itemRoutes, { prefix: "/api/v1/{{ entity_plural }}" });
-	// FORGE:ROUTER_REGISTRATION
+	// FORGE:ROUTER_REGISTRATION_PUBLIC
+
+	// Authenticated scope — every route registered here inherits `requireTenant`
+	// as a preHandler. Fragments that add protected routes should target
+	// `FORGE:ROUTER_REGISTRATION`; fragments that expose public endpoints should
+	// target `FORGE:ROUTER_REGISTRATION_PUBLIC` above.
+	await app.register(async (auth) => {
+		auth.addHook("preHandler", requireTenant);
+		await auth.register(itemRoutes, { prefix: "/api/v1/{{ entity_plural }}" });
+		// FORGE:ROUTER_REGISTRATION
+	});
 
 	return app;
 }
