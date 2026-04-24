@@ -1,0 +1,28 @@
+app:
+  name: "{{ project_name }}"
+  version: "0.0.0"
+
+server:
+  host: "0.0.0.0"
+  port: 5000
+  cors:
+    enabled: true
+    allowOrigins: ["*"]
+    allowMethods: ["GET", "POST", "PATCH", "DELETE"]
+    allowHeaders: ["*"]
+    allowCredentials: false
+    maxAge: 600
+
+db:
+  url: "postgresql://postgres:postgres@localhost:5432/{{ project_name }}"
+  poolMin: 2
+  poolMax: 10
+  statementTimeoutMs: 30000
+
+logging:
+  level: "info"
+  pretty: false
+
+security:
+  auth:
+    enabled: false

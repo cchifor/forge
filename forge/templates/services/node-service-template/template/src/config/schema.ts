@@ -1,0 +1,70 @@
+import { z } from "zod";
+
+/**
+ * Canonical application config shared across Python / Node / Rust
+ * backends. See docs/rfcs/RFC-008-config-loading.md for layer
+ * precedence (env vars > secrets.yaml > <env>.yaml > defaults).
+ */
+
+export const CorsConfigSchema = z.object({
+	enabled: z.boolean().default(true),
+	allowOrigins: z.array(z.string()).default(["*"]),
+	allowMethods: z.array(z.string()).default(["GET", "POST", "PATCH", "DELETE"]),
+	allowHeaders: z.array(z.string()).default(["*"]),
+	allowCredentials: z.boolean().default(false),
+	maxAge: z.number().default(600),
+});
+
+export const ServerConfigSchema = z.object({
+	host: z.string().default("0.0.0.0"),
+	port: z.number().int().min(1).max(65535).default(5000),
+	cors: CorsConfigSchema.default({}),
+});
+
+export const DbConfigSchema = z.object({
+	url: z.string().min(1, "db.url is required"),
+	poolMin: z.number().int().nonnegative().default(2),
+	poolMax: z.number().int().positive().default(10),
+	statementTimeoutMs: z.number().int().positive().default(30_000),
+});
+
+export const LoggingConfigSchema = z.object({
+	level: z
+		.enum(["trace", "debug", "info", "warn", "error", "fatal"])
+		.default("info"),
+	pretty: z.boolean().default(false),
+});
+
+export const AuthConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	serverUrl: z.string().optional(),
+	realm: z.string().optional(),
+	clientId: z.string().optional(),
+});
+
+export const SecurityConfigSchema = z.object({
+	auth: AuthConfigSchema.default({}),
+});
+
+export const AppInfoSchema = z.object({
+	name: z.string().default("service"),
+	version: z.string().default("0.0.0"),
+	env: z
+		.enum(["development", "testing", "staging", "production"])
+		.default("development"),
+});
+
+export const AppConfigSchema = z.object({
+	app: AppInfoSchema.default({}),
+	server: ServerConfigSchema.default({}),
+	db: DbConfigSchema,
+	logging: LoggingConfigSchema.default({}),
+	security: SecurityConfigSchema.default({}),
+});
+
+export type CorsConfig = z.infer<typeof CorsConfigSchema>;
+export type ServerConfig = z.infer<typeof ServerConfigSchema>;
+export type DbConfig = z.infer<typeof DbConfigSchema>;
+export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
+export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
+export type AppConfig = z.infer<typeof AppConfigSchema>;
