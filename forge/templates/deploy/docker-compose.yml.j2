@@ -1,5 +1,6 @@
 services:
 {% for be in backends %}
+{% if database_mode != "none" %}
   # ── Migrations for {{ be.name }} ──
   {{ be.name }}-migrate:
     build:
@@ -22,6 +23,7 @@ services:
         condition: service_healthy
     networks:
       - app-network
+{% endif %}
 
   # ── {{ be.name }} ──
   {{ be.name }}:
@@ -31,14 +33,20 @@ services:
     environment:
 {% if be.language == "python" %}
       ENV: development
+{% if database_mode != "none" %}
       APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ be.db_name }}"
+{% endif %}
 {% elif be.language == "node" %}
       NODE_ENV: development
       PORT: "{{ be.port }}"
+{% if database_mode != "none" %}
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ be.db_name }}"
+{% endif %}
 {% elif be.language == "rust" %}
       PORT: "{{ be.port }}"
+{% if database_mode != "none" %}
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ be.db_name }}"
+{% endif %}
       RUST_LOG: info
 {% endif %}
 {% if include_keycloak %}
@@ -61,17 +69,22 @@ services:
       - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite"
 {% endif %}
       - "traefik.http.services.{{ be.name }}.loadbalancer.server.port={{ be.port }}"
+{% if database_mode != "none" or include_keycloak %}
     depends_on:
+{% if database_mode != "none" %}
       {{ be.name }}-migrate:
         condition: service_completed_successfully
+{% endif %}
 {% if include_keycloak %}
       keycloak:
         condition: service_healthy
+{% endif %}
 {% endif %}
     networks:
       - app-network
 {% endfor %}
 
+{% if render_postgres %}
   # ── Database ──
   postgres:
     image: postgres:16-alpine
@@ -93,6 +106,7 @@ services:
       retries: 5
     networks:
       - app-network
+{% endif %}
 
 {% if has_frontend %}
   # ── Frontend (nginx — static files + SPA fallback only) ──
@@ -105,10 +119,12 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`app.localhost`)"
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
+{% if backends %}
     depends_on:
 {% for be in backends %}
       - {{ be.name }}
 {% endfor %}
+{% endif %}
     networks:
       - app-network
 {% endif %}
@@ -203,6 +219,7 @@ services:
       - app-network
 {% endif %}
 
+{% if render_postgres %}
   # ── Tools (optional) ──
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -215,6 +232,7 @@ services:
       - tools
     networks:
       - app-network
+{% endif %}
 
 {% if has_frontend %}
   # ── E2E Tests (on-demand: docker compose --profile test run e2e) ──
@@ -244,10 +262,12 @@ services:
       - test
 {% endif %}
 
+{% if render_postgres %}
 volumes:
   pgdata:
 {% if include_keycloak %}
   redis_data:
+{% endif %}
 {% endif %}
 
 networks:

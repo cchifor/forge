@@ -15,7 +15,13 @@ class TestDiscoverMigrations:
         names = {m.name for m in migrations}
         # Epic G (1.1.0-alpha.1) added rename-options alongside the original
         # three 0.x→1.0 codemods.
-        assert names == {"ui-protocol", "entities", "adapters", "rename-options"}
+        assert names == {
+            "ui-protocol",
+            "entities",
+            "adapters",
+            "rename-options",
+            "layer-modes",
+        }
 
     def test_migrations_have_required_fields(self) -> None:
         for m in discover_migrations():
@@ -96,7 +102,13 @@ class TestApplyMigrations:
     def test_runs_all_when_no_filters(self, tmp_path: Path) -> None:
         reports = apply_migrations(tmp_path, quiet=True)
         names = {r.name for r in reports}
-        assert names == {"ui-protocol", "entities", "adapters", "rename-options"}
+        assert names == {
+            "ui-protocol",
+            "entities",
+            "adapters",
+            "rename-options",
+            "layer-modes",
+        }
 
     def test_only_filter_limits_run(self, tmp_path: Path) -> None:
         reports = apply_migrations(tmp_path, only=["entities"], quiet=True)

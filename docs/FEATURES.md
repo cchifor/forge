@@ -320,6 +320,41 @@ default; pair with `--format json` / `--format yaml` for
 machine-readable output), or `forge --describe <path>` for the full
 prose + metadata of any single option.
 
+## Layer discriminators — composing a project
+
+Four **layer-mode** options control what forge generates, one per
+major layer. Each is an ENUM with `generate` / `external` / `none`
+values (subset varies by layer) and an empty `enables` map — the mode
+orchestrates generation, it doesn't enable a fragment bundle.
+
+| Path | Options | Default | Purpose |
+|---|---|---|---|
+| `backend.mode` | `generate`, `none` | `generate` | Skip backend scaffolding entirely. Pair with `frontend.api_target.url` for a frontend-only project pointed at an external API. |
+| `database.mode` | `generate`, `none` | `generate` | Skip the postgres container + per-backend migrate sidecars. Use for stateless services. Incompatible with DB-backed options (`conversation.persistence`, `rag.backend != none`, `platform.admin`, etc.). |
+| `frontend.mode` | `generate`, `external`, `none` | `generate` | `none` skips frontend generation (coherent with `FrontendFramework.NONE`). `external` is reserved for wiring a thin wrapper at an existing deployed frontend. |
+| `agent.mode` | `generate`, `external`, `none` | `none` | Placeholder — pattern parity with the other layers. Real wiring lands when the agentic stack gets its own generate/external scenarios. |
+
+### `frontend.api_target`
+
+Structured pair that controls the URL the generated frontend talks
+to. Used by both `backend.mode=none` and any project that wants to
+point the frontend at a non-local API.
+
+| Path | Type | Default | Purpose |
+|---|---|---|---|
+| `frontend.api_target.type` | enum (`local` / `external`) | `local` | Whether Vite proxy routes `/api/*` to a Docker-internal backend or bypasses the proxy for an external URL. |
+| `frontend.api_target.url` | str | `""` | Base URL used when `type=external` or `backend.mode=none`. Empty string means fall back to local inference. |
+
+The Phase A flat path `frontend.api_target_url` is a deprecated alias
+of `frontend.api_target.url`. Existing `forge.toml` files continue to
+work; the resolver rewrites the alias and emits a warning.
+
+### Canonical scenarios
+
+- **Frontend-only** (`backend.mode=none`, `frontend.api_target.url=https://api.example.com`) — no `services/`, no postgres, no migrate sidecars. Compose ships frontend + traefik + optional keycloak.
+- **Stateless backend** (`database.mode=none`) — backend container still renders, but no postgres, no alembic migration wiring in compose. Backends consuming no DB.
+- **Local backend + external API target** (`frontend.api_target.type=external`, `frontend.api_target.url=…`) — backends run locally (for non-API work), frontend dev server points at a staging/prod API.
+
 ## JSON Schema export
 
 `forge --schema` emits the JSON Schema 2020-12 document for the whole

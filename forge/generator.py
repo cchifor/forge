@@ -108,6 +108,21 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             option_values=plan.option_values,
             project_root=project_root,
         )
+        # Phase B1: strip the database stack from Python backends when
+        # ``database.mode=none``. Runs after fragment application so
+        # fragments see the full template (config validation has
+        # already blocked every DB-consuming fragment combo); runs
+        # before ``toolchain.install`` so ``uv sync`` operates on the
+        # already-stripped ``pyproject.toml`` and no SQLAlchemy/alembic
+        # deps are resolved.
+        if (
+            config.database_mode == "none"
+            and bc.language == BackendLanguage.PYTHON
+        ):
+            from forge.strippers import strip_python_database  # noqa: PLC0415
+
+            _log(f"  Stripping DB stack from {bc.name} (database.mode=none) ...")
+            strip_python_database(backend_dir)
         # Toolchain dispatch: install() runs whenever we're writing to
         # disk (it's the step that produces lockfiles Docker needs),
         # verify() runs only in interactive mode (not quiet, not dry-run)
@@ -126,11 +141,26 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         _generate_frontend(config, project_root, quiet=quiet)
 
     # 3. Render Docker Compose
-    if config.backends:
+    #
+    # Phase A: compose also renders for frontend-only projects (backend.mode=none
+    # with a frontend framework) — the generated stack is frontend + traefik
+    # (+ optional keycloak), pointing the browser at ``frontend.api_target.url``.
+    # The template handles empty backends via ``{% if backends %}`` guards.
+    has_frontend = (
+        config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
+    )
+    if config.backends or has_frontend or config.include_keycloak:
         _log("  Rendering docker-compose.yml ...")
         render_compose(config, project_root)
-        # Render init-db.sh (creates databases for all backends)
-        if len(config.backends) > 1 or config.include_keycloak:
+        # init-db creates a database per backend plus keycloak's own db.
+        # Skip when there are 0–1 backends and no keycloak — the primary
+        # backend's POSTGRES_DB env var already handles the single-db case.
+        # Phase B1: backend DBs don't need creating when database.mode=none;
+        # init-db is only useful for keycloak's own database in that mode.
+        need_multi_backend_init = (
+            len(config.backends) > 1 and config.database_mode != "none"
+        )
+        if need_multi_backend_init or config.include_keycloak:
             _log("  Rendering init-db.sh ...")
             render_init_db(config, project_root)
         # Copy auth infrastructure if Keycloak is enabled
