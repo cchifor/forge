@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify";
+import { AuthRequiredError } from "../lib/errors.js";
 
 export interface TenantContext {
 	userId: string;
@@ -65,10 +66,8 @@ export async function tenantHook(req: FastifyRequest, _reply: FastifyReply) {
  * handlers with `AuthenticatedRequest` to make the non-null guarantee
  * statically checked.
  */
-export const requireTenant: preHandlerHookHandler = async (req, reply) => {
+export const requireTenant: preHandlerHookHandler = async (req, _reply) => {
 	if (!req.tenant) {
-		return reply
-			.code(401)
-			.send({ error: "Authentication required", code: "AUTH_REQUIRED" });
+		throw new AuthRequiredError();
 	}
 };

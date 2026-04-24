@@ -89,11 +89,12 @@ describe("tenantHook middleware", () => {
 });
 
 describe("requireTenant preHandler", () => {
-	it("returns 401 with AUTH_REQUIRED when tenant is missing", async () => {
+	it("returns 401 with AUTH_REQUIRED envelope when tenant is missing", async () => {
 		const res = await app.inject({ method: "GET", url: "/protected/test" });
 		expect(res.statusCode).toBe(401);
 		const body = JSON.parse(res.payload);
-		expect(body.code).toBe("AUTH_REQUIRED");
+		expect(body.error.code).toBe("AUTH_REQUIRED");
+		expect(body.error.type).toBe("AuthRequiredError");
 	});
 
 	it("allows the request through when tenant headers are present", async () => {
