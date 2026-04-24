@@ -18,7 +18,7 @@ from app.core.lifecycle import AppLifecycle
 from app.middleware.audit import AuditMiddleware
 from app.middleware.logging import RequestLoggingMiddleware
 # FORGE:MIDDLEWARE_IMPORTS
-from service.utils.fastapiutils import Error
+from service.utils.fastapiutils import ErrorEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,9 @@ def create_app() -> FastAPI:
         **settings.app.model_dump(),
         lifespan=AppLifecycle.lifespan,
         responses={
-            status.HTTP_400_BAD_REQUEST: {"model": Error},
-            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": Error},
-            status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": Error},
+            status.HTTP_400_BAD_REQUEST: {"model": ErrorEnvelope},
+            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorEnvelope},
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorEnvelope},
         },
     )
 

@@ -1,5 +1,7 @@
 """Tests for the exception hierarchy and HTTP status mapping."""
 
+from unittest.mock import MagicMock
+
 from app.core.errors import (
     AlreadyExistsError,
     ApplicationError,
@@ -13,6 +15,13 @@ from app.core.errors import (
     ValidationError,
     domain_exception_to_response,
 )
+
+
+def _mock_request():
+    req = MagicMock()
+    req.headers = {"x-correlation-id": "test-corr"}
+    req.state.correlation_id = "test-corr"
+    return req
 
 
 class TestExceptionHierarchy:
@@ -41,41 +50,35 @@ class TestExceptionHierarchy:
 
 class TestDomainErrorMapping:
     def test_not_found_maps_to_404(self):
-        exc = NotFoundError("Item", "123")
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), NotFoundError("Item", "123"))
         assert response.status_code == 404
 
     def test_already_exists_maps_to_409(self):
-        exc = AlreadyExistsError("Item")
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), AlreadyExistsError("Item"))
         assert response.status_code == 409
 
     def test_validation_maps_to_422(self):
-        exc = ValidationError("Bad input")
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), ValidationError("Bad input"))
         assert response.status_code == 422
 
     def test_permission_denied_maps_to_403(self):
-        exc = PermissionDeniedError()
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), PermissionDeniedError())
         assert response.status_code == 403
 
     def test_authorization_maps_to_403(self):
-        exc = AuthorizationError()
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), AuthorizationError())
         assert response.status_code == 403
 
     def test_read_only_maps_to_403(self):
-        exc = ReadOnlyError("Template", "abc")
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(
+            _mock_request(), ReadOnlyError("Template", "abc")
+        )
         assert response.status_code == 403
 
     def test_timeout_maps_to_503(self):
-        exc = DatabaseTimeoutError()
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), DatabaseTimeoutError())
         assert response.status_code == 503
 
     def test_unmapped_error_maps_to_500(self):
-        exc = ApplicationError("Unknown error")
-        response = domain_exception_to_response(exc)
+        response = domain_exception_to_response(_mock_request(), ApplicationError("Unknown"))
         assert response.status_code == 500

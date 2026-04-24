@@ -5,7 +5,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from service.utils.fastapiutils import Error
+from service.utils.fastapiutils import ErrorEnvelope, ErrorBody
 
 logger = logging.getLogger("app.errors")
 
@@ -34,6 +34,8 @@ class NotFoundError(RepositoryError):
         if entity_id is not None:
             message += f" (ID: {entity_id})"
         super().__init__(message)
+        self.entity_name = entity_name
+        self.entity_id = entity_id
 
 
 class DuplicateEntryError(RepositoryError):
@@ -44,6 +46,9 @@ class DuplicateEntryError(RepositoryError):
             f"for field '{conflicting_field}'."
         )
         super().__init__(message)
+        self.entity_name = entity_name
+        self.conflicting_field = conflicting_field
+        self.conflicting_value = conflicting_value
 
 
 class ForeignKeyViolationError(RepositoryError):
@@ -71,6 +76,11 @@ class DatabaseTimeoutError(RepositoryError):
         super().__init__(message)
 
 
+class DatabaseUnavailableError(RepositoryError):
+    def __init__(self, message="The database is unavailable."):
+        super().__init__(message)
+
+
 # --- Service Layer Errors ---
 
 
@@ -79,8 +89,9 @@ class ServiceError(ApplicationError):
 
 
 class ValidationError(ServiceError):
-    def __init__(self, message="Input data is invalid."):
+    def __init__(self, message="Input data is invalid.", context: dict | None = None):
         super().__init__(message)
+        self.context = context or {}
 
 
 class PermissionDeniedError(ServiceError):
@@ -91,6 +102,7 @@ class PermissionDeniedError(ServiceError):
 class AlreadyExistsError(ServiceError):
     def __init__(self, name: str, identifier: Any = None):
         self.name = name
+        self.identifier = identifier
         message = f"{name} already exists."
         if identifier is not None:
             message += f" (Identifier: {identifier})"
@@ -102,67 +114,146 @@ class AuthorizationError(ApplicationError):
         super().__init__(message)
 
 
+class AuthRequiredError(ApplicationError):
+    def __init__(self, message="Authentication required."):
+        super().__init__(message)
+
+
 class ReadOnlyError(ServiceError):
     def __init__(self, resource: str, identifier: Any = None):
+        self.resource = resource
+        self.identifier = identifier
         message = f"{resource} is read-only and cannot be modified."
         if identifier is not None:
             message += f" (ID: {identifier})"
         super().__init__(message)
 
 
-# --- Domain Error -> HTTP Status Mapping ---
-#
-# Fragments that define their own `ServiceError` / `RepositoryError`
-# subclasses should register them at import time via `register_domain_error`
-# rather than swallowing the exception and raising `HTTPException` inline.
-# That way the central handler produces a uniform error envelope and the
-# observability plumbing (log shape, tags, tracing) stays consistent.
+class RateLimitedError(ApplicationError):
+    def __init__(self, message="Too many requests. Please retry later."):
+        super().__init__(message)
 
-_DOMAIN_ERROR_MAP: dict[type[ApplicationError], int] = {
-    NotFoundError: status.HTTP_404_NOT_FOUND,
-    AlreadyExistsError: status.HTTP_409_CONFLICT,
-    DuplicateEntryError: status.HTTP_409_CONFLICT,
-    ValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
-    DataValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
-    PermissionDeniedError: status.HTTP_403_FORBIDDEN,
-    AuthorizationError: status.HTTP_403_FORBIDDEN,
-    ReadOnlyError: status.HTTP_403_FORBIDDEN,
-    DatabaseTimeoutError: status.HTTP_503_SERVICE_UNAVAILABLE,
+
+class DependencyUnavailableError(ApplicationError):
+    def __init__(self, dependency: str, message: str | None = None):
+        self.dependency = dependency
+        super().__init__(message or f"{dependency} is unavailable.")
+
+
+# --- RFC-007 Error Contract Mapping ---
+#
+# Each registered `ApplicationError` subclass maps to a stable (code, status)
+# pair that every backend emits identically. Fragments that define their own
+# `ApplicationError` subclasses should register at import time via
+# `register_domain_error` — duplicate registration with a conflicting code
+# or status raises, so two features cannot silently claim the same mapping.
+
+
+_DOMAIN_ERROR_MAP: dict[type[ApplicationError], tuple[str, int]] = {
+    AuthRequiredError: ("AUTH_REQUIRED", status.HTTP_401_UNAUTHORIZED),
+    AuthorizationError: ("PERMISSION_DENIED", status.HTTP_403_FORBIDDEN),
+    PermissionDeniedError: ("PERMISSION_DENIED", status.HTTP_403_FORBIDDEN),
+    ReadOnlyError: ("READ_ONLY", status.HTTP_403_FORBIDDEN),
+    NotFoundError: ("NOT_FOUND", status.HTTP_404_NOT_FOUND),
+    AlreadyExistsError: ("ALREADY_EXISTS", status.HTTP_409_CONFLICT),
+    DuplicateEntryError: ("DUPLICATE_ENTRY", status.HTTP_409_CONFLICT),
+    ForeignKeyViolationError: ("FOREIGN_KEY_VIOLATION", status.HTTP_409_CONFLICT),
+    ConstraintViolationError: ("CONSTRAINT_VIOLATION", status.HTTP_409_CONFLICT),
+    NotNullViolationError: ("CONSTRAINT_VIOLATION", status.HTTP_409_CONFLICT),
+    ValidationError: ("VALIDATION_FAILED", status.HTTP_422_UNPROCESSABLE_CONTENT),
+    DataValidationError: ("VALIDATION_FAILED", status.HTTP_422_UNPROCESSABLE_CONTENT),
+    RateLimitedError: ("RATE_LIMITED", status.HTTP_429_TOO_MANY_REQUESTS),
+    DatabaseTimeoutError: ("DATABASE_TIMEOUT", status.HTTP_503_SERVICE_UNAVAILABLE),
+    DatabaseUnavailableError: ("DATABASE_UNAVAILABLE", status.HTTP_503_SERVICE_UNAVAILABLE),
+    DependencyUnavailableError: ("DEPENDENCY_UNAVAILABLE", status.HTTP_503_SERVICE_UNAVAILABLE),
 }
 
 
-def register_domain_error(exc_type: type[ApplicationError], status_code: int) -> None:
-    """Register a fragment-owned `ApplicationError` subclass with its HTTP
-    status. Call from the fragment's import-time setup (top of a
-    module that gets loaded during app bootstrap).
+def register_domain_error(
+    exc_type: type[ApplicationError],
+    code: str,
+    status_code: int,
+) -> None:
+    """Register a fragment-owned :class:`ApplicationError` subclass.
 
-    Re-registering with a different status code raises — this catches
-    two features accidentally claiming the same exception type.
+    Call at module-import time. Re-registering with a conflicting
+    `(code, status_code)` raises to catch two features claiming the
+    same exception type silently.
     """
     existing = _DOMAIN_ERROR_MAP.get(exc_type)
-    if existing is not None and existing != status_code:
+    if existing is not None and existing != (code, status_code):
         raise ValueError(
-            f"{exc_type.__name__} is already registered with status "
-            f"{existing}; refusing re-register as {status_code}."
+            f"{exc_type.__name__} already registered as {existing}; "
+            f"refusing re-register as ({code!r}, {status_code})."
         )
-    _DOMAIN_ERROR_MAP[exc_type] = status_code
+    _DOMAIN_ERROR_MAP[exc_type] = (code, status_code)
 
 
-def domain_exception_to_response(exc: ApplicationError) -> JSONResponse:
+def _lookup_mapping(exc: ApplicationError) -> tuple[str, int]:
     for cls in type(exc).__mro__:
         if cls in _DOMAIN_ERROR_MAP:
-            status_code = _DOMAIN_ERROR_MAP[cls]
-            break
-    else:
-        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            return _DOMAIN_ERROR_MAP[cls]
+    return "INTERNAL_ERROR", status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    return JSONResponse(
+
+def _correlation_id(request: Request) -> str:
+    header = request.headers.get("x-correlation-id") or request.headers.get("x-request-id")
+    if header:
+        return header
+    return getattr(request.state, "correlation_id", "") or ""
+
+
+def _context_for(exc: ApplicationError) -> dict:
+    """Surface structured context from well-known error classes."""
+    if isinstance(exc, NotFoundError):
+        return {"entity": exc.entity_name, "id": exc.entity_id}
+    if isinstance(exc, AlreadyExistsError):
+        return {"entity": exc.name, "id": exc.identifier}
+    if isinstance(exc, DuplicateEntryError):
+        return {
+            "entity": exc.entity_name,
+            "field": exc.conflicting_field,
+            "value": exc.conflicting_value,
+        }
+    if isinstance(exc, ReadOnlyError):
+        return {"resource": exc.resource, "id": exc.identifier}
+    if isinstance(exc, ValidationError):
+        return exc.context
+    if isinstance(exc, DependencyUnavailableError):
+        return {"dependency": exc.dependency}
+    return {}
+
+
+def _envelope(
+    request: Request,
+    *,
+    code: str,
+    message: str,
+    type_name: str,
+    context: dict | None = None,
+    status_code: int,
+) -> JSONResponse:
+    body = ErrorEnvelope(
+        error=ErrorBody(
+            code=code,
+            message=message,
+            type=type_name,
+            context=context or {},
+            correlation_id=_correlation_id(request),
+        )
+    )
+    return JSONResponse(status_code=status_code, content=body.model_dump())
+
+
+def domain_exception_to_response(request: Request, exc: ApplicationError) -> JSONResponse:
+    code, status_code = _lookup_mapping(exc)
+    return _envelope(
+        request,
+        code=code,
+        message=str(exc),
+        type_name=type(exc).__name__,
+        context=_context_for(exc),
         status_code=status_code,
-        content=Error(
-            message=str(exc),
-            type=type(exc).__name__,
-            detail={"code": status_code},
-        ).model_dump(),
     )
 
 
@@ -175,6 +266,7 @@ def _log_error(request: Request, exc: Exception, status_code: int):
         "status_code": status_code,
         "error_type": exc.__class__.__name__,
         "message": str(exc),
+        "correlation_id": _correlation_id(request),
     }
     if exc.__cause__:
         error_details["inner_error_type"] = exc.__cause__.__class__.__name__
@@ -186,45 +278,60 @@ def _log_error(request: Request, exc: Exception, status_code: int):
 
 
 def http_exception_handler(request: Request, exc: Exception):
-    _log_error(request, exc, getattr(exc, "status_code", 500))
     assert isinstance(exc, StarletteHTTPException)
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=Error(
-            message=str(exc.detail),
-            type="HTTPException",
-            detail={"code": exc.status_code},
-        ).model_dump(),
+    status_code = exc.status_code
+    _log_error(request, exc, status_code)
+    code = "INVALID_INPUT" if 400 <= status_code < 500 else "INTERNAL_ERROR"
+    if status_code == 401:
+        code = "AUTH_REQUIRED"
+    elif status_code == 403:
+        code = "PERMISSION_DENIED"
+    elif status_code == 404:
+        code = "NOT_FOUND"
+    elif status_code == 429:
+        code = "RATE_LIMITED"
+    return _envelope(
+        request,
+        code=code,
+        message=str(exc.detail),
+        type_name="HTTPException",
+        status_code=status_code,
     )
 
 
 def validation_exception_handler(request: Request, exc: Exception):
     _log_error(request, exc, 422)
-    errors = {
-        f"{err['msg']}: {err['type']} {err['loc']}" for err in getattr(exc, "errors", lambda: [])()
-    }
-    message = f"Validation Error: {', '.join(errors)}"
-    return JSONResponse(
+    errors = [
+        {"msg": err.get("msg"), "type": err.get("type"), "loc": err.get("loc")}
+        for err in getattr(exc, "errors", lambda: [])()
+    ]
+    message = "Validation failed"
+    if errors:
+        message += ": " + "; ".join(f"{e['msg']} ({e['type']})" for e in errors)
+    return _envelope(
+        request,
+        code="VALIDATION_FAILED",
+        message=message,
+        type_name="ValidationError",
+        context={"errors": errors},
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content=Error(
-            message=message, type="ValidationError", detail={"errors": list(errors)}
-        ).model_dump(),
     )
 
 
 def domain_exception_handler(request: Request, exc: Exception):
     assert isinstance(exc, ApplicationError)
-    _log_error(request, exc, status.HTTP_400_BAD_REQUEST)
-    return domain_exception_to_response(exc)
+    code, status_code = _lookup_mapping(exc)
+    _log_error(request, exc, status_code)
+    return domain_exception_to_response(request, exc)
 
 
 def global_exception_handler(request: Request, exc: Exception):
     _log_error(request, exc, status.HTTP_500_INTERNAL_SERVER_ERROR)
-    return JSONResponse(
+    return _envelope(
+        request,
+        code="INTERNAL_ERROR",
+        message="An unexpected error occurred",
+        type_name="InternalError",
+        context={"note": "Check server logs for the correlation id"},
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=Error(
-            message="Internal Server Error",
-            type="ServerException",
-            detail={"note": "Check server logs for trace id"},
-        ).model_dump(),
     )
