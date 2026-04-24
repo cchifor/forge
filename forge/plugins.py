@@ -87,6 +87,18 @@ def load_all() -> list[PluginRegistration]:
             continue
 
         LOADED_PLUGINS.append(registration)
+        from forge.logging import get_logger, log_event  # noqa: PLC0415
+
+        log_event(
+            get_logger("plugins"),
+            "plugin.loaded",
+            plugin=registration.name,
+            version=registration.version,
+            options_added=registration.options_added,
+            fragments_added=registration.fragments_added,
+            backends_added=registration.backends_added,
+            commands_added=registration.commands_added,
+        )
 
     # Epic I (1.1.0-alpha.1) — lock the fragment registry after every
     # plugin has had its turn to register. A broken plugin graph (orphan

@@ -82,6 +82,13 @@ def _json_error(stdout_fd, err: object) -> None:
 
 
 def main() -> None:
+    # Install the structured logging handler before anything else so
+    # plugin-load events flow through it. Honors FORGE_LOG_FORMAT and
+    # FORGE_LOG_LEVEL environment variables.
+    from forge.logging import configure_logging  # noqa: PLC0415
+
+    configure_logging()
+
     # Discover third-party plugins before parsing — lets them extend the
     # argparse surface and the option registry before args hit validation.
     from forge import plugins  # noqa: PLC0415

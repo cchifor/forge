@@ -262,12 +262,37 @@ services:
       - test
 {% endif %}
 
-{% if render_postgres %}
+{% for svc in extra_services %}
+  # ── Plugin service: {{ svc.name }} ──
+  {{ svc.name }}:
+{% for key, value in svc.block.items() %}
+{% if value is mapping %}
+    {{ key }}:
+{% for k, v in value.items() %}
+      {{ k }}: {{ v | tojson }}
+{% endfor %}
+{% elif value is sequence and value is not string %}
+    {{ key }}:
+{% for item in value %}
+      - {{ item }}
+{% endfor %}
+{% else %}
+    {{ key }}: {{ value | tojson }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+{% if render_postgres or extra_volumes %}
 volumes:
+{% if render_postgres %}
   pgdata:
 {% if include_keycloak %}
   redis_data:
 {% endif %}
+{% endif %}
+{% for vol in extra_volumes %}
+  {{ vol }}:
+{% endfor %}
 {% endif %}
 
 networks:

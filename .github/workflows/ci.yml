@@ -74,7 +74,7 @@ jobs:
       - name: pytest
         # Epic DD carves package_integrity into its own job below; exclude it
         # from the main matrix so the wall-clock stays flat.
-        run: uv run pytest -m "not e2e and not package_integrity"
+        run: uv run pytest -m "not e2e and not package_integrity and not fuzz"
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
   #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
@@ -96,7 +96,7 @@ jobs:
         run: uv sync --all-extras --dev
       - name: pytest --cov --cov-report=xml,json
         run: |
-          uv run pytest -m "not e2e and not package_integrity" \
+          uv run pytest -m "not e2e and not package_integrity and not fuzz" \
             --cov=forge \
             --cov-report=xml:coverage.xml \
             --cov-report=json:coverage.json \

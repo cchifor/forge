@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -15,6 +16,10 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.errors import GeneratorError
+from forge.services.registry import get_services_for_capabilities
+
+if TYPE_CHECKING:
+    from forge.capability_resolver import ResolvedPlan
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -36,10 +41,30 @@ def _jinja_env() -> Environment:
     )
 
 
-def render_compose(config: ProjectConfig, project_root: Path) -> Path:
-    """Render docker-compose.yml into the project root."""
+def render_compose(
+    config: ProjectConfig,
+    project_root: Path,
+    plan: ResolvedPlan | None = None,
+) -> Path:
+    """Render docker-compose.yml into the project root.
+
+    When ``plan`` is supplied, its capabilities are resolved against
+    ``forge.services.SERVICE_REGISTRY`` and the matched templates are
+    emitted as additional top-level services in the compose file.
+    """
     env = _jinja_env()
     template = env.get_template("deploy/docker-compose.yml.j2")
+
+    extra_services: list[dict[str, object]] = []
+    extra_volumes: list[str] = []
+    if plan is not None:
+        seen_volumes: set[str] = set()
+        for svc in get_services_for_capabilities(plan.capabilities):
+            extra_services.append({"name": svc.name, "block": svc.as_compose_dict()})
+            for vol in svc.named_volumes:
+                if vol not in seen_volumes:
+                    seen_volumes.add(vol)
+                    extra_volumes.append(vol)
 
     has_frontend = (
         config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
@@ -96,6 +121,8 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
             if config.frontend and config.include_keycloak
             else config.frontend_slug
         ),
+        "extra_services": extra_services,
+        "extra_volumes": extra_volumes,
     }
 
     output = template.render(context)

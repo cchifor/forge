@@ -1,0 +1,7 @@
+logging:
+  level: "debug"
+  pretty: true
+
+security:
+  auth:
+    enabled: false

@@ -284,6 +284,60 @@ class ForgeAPI:
         self._commands.append(handler)
         self._registration.commands_added += 1
 
+    # -- Service registration (P0.4 / RFC-008) ------------------------------
+
+    def add_service(self, capability: str, template: Any) -> None:
+        """Register a docker-compose service keyed by capability.
+
+        When a fragment declaring ``capabilities=(<capability>,)`` is
+        resolved into the plan, the generator emits ``template`` into
+        ``docker-compose.yml`` alongside the core forge services. See
+        ``forge/services/registry.py`` for the :class:`ServiceTemplate`
+        dataclass.
+
+        Typical use from a plugin::
+
+            from forge.services import ServiceTemplate
+
+            def register(api):
+                api.add_service(
+                    "my_vector_store",
+                    ServiceTemplate(
+                        name="my_vector_store",
+                        image="my/vector-store:1.0",
+                        ports=['"7777:7777"'],
+                    ),
+                )
+
+        Re-registering a capability with an identical template is a
+        no-op. Conflicting registration raises.
+        """
+        from forge.services.registry import ServiceTemplate, register_service  # noqa: PLC0415
+
+        if not isinstance(template, ServiceTemplate):
+            raise PluginError(
+                f"Plugin '{self._registration.name}' passed a non-ServiceTemplate "
+                f"to add_service (got {type(template).__name__}).",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "service",
+                    "value": capability,
+                },
+            )
+        try:
+            register_service(capability, template)
+        except ValueError as exc:
+            raise PluginError(
+                str(exc),
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "service",
+                    "value": capability,
+                },
+            ) from exc
+
     # -- Emitter registration (hook for Phase 1) ---------------------------
 
     def add_emitter(self, target: str, emitter: Callable[..., Any]) -> None:

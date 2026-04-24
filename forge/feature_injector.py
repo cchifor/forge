@@ -853,17 +853,12 @@ def _is_at_shorthand(dep: str) -> bool:
 
 
 def _add_env_var(env_file: Path, key: str, value: str) -> None:
-    """Append KEY=VALUE to env_file unless KEY already present."""
-    line = f"{key}={value}\n"
-    if env_file.is_file():
-        existing = env_file.read_text(encoding="utf-8")
-        # Match KEY= at start of any line (idempotent).
-        for row in existing.splitlines():
-            if row.startswith(f"{key}="):
-                return
-        if not existing.endswith("\n"):
-            existing += "\n"
-        env_file.write_text(existing + line, encoding="utf-8")
-    else:
-        env_file.parent.mkdir(parents=True, exist_ok=True)
-        env_file.write_text(line, encoding="utf-8")
+    """Append KEY=VALUE to env_file unless KEY already present.
+
+    Kept as a thin re-export for backward compatibility; the authoritative
+    implementation now lives in :func:`forge.appliers.env.append_env_var`
+    (Epic A continuation — P1.1 in the architecture plan).
+    """
+    from forge.appliers.env import append_env_var  # noqa: PLC0415
+
+    append_env_var(env_file, key, value)

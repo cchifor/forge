@@ -88,6 +88,39 @@ class TestForgeAPI:
         assert reg.emitters_added == 1
         assert api._emitters["dart"] is fn
 
+    def test_add_service_registers_template(self) -> None:
+        from forge.services import ServiceTemplate
+        from forge.services.registry import (
+            SERVICE_REGISTRY,
+            reset_for_tests as reset_services,
+        )
+
+        reset_services()
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+        tpl = ServiceTemplate(name="my_svc", image="my/svc:1")
+        api.add_service("my_capability", tpl)
+        assert SERVICE_REGISTRY["my_capability"] == tpl
+        reset_services()
+
+    def test_add_service_rejects_non_template(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+        with pytest.raises(PluginError):
+            api.add_service("cap", {"name": "nope"})  # type: ignore[arg-type]
+
+    def test_add_service_wraps_conflict_in_plugin_error(self) -> None:
+        from forge.services import ServiceTemplate
+        from forge.services.registry import reset_for_tests as reset_services
+
+        reset_services()
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+        api.add_service("dup_cap", ServiceTemplate(name="a", image="i:1"))
+        with pytest.raises(PluginError):
+            api.add_service("dup_cap", ServiceTemplate(name="a", image="i:2"))
+        reset_services()
+
     def test_add_backend_accepts_plugin_language_in_a2(self) -> None:
         # 1.0.0a2: add_backend now supports plugin-defined languages.
         # See tests/test_plugin_backend_language.py for the full suite.

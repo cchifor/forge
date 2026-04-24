@@ -21,11 +21,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 2385,
-      "sha256": "16f044547b67c4a9"
+      "size": 2386,
+      "sha256": "f0854e63bb28010e"
     },
     "forge.toml": {
-      "size": 7826,
+      "size": 8665,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -45,8 +45,24 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 776,
-      "sha256": "c28d1149a65eee57"
+      "size": 853,
+      "sha256": "93f4b04995053d32"
+    },
+    "services/api/config/defaults.yaml": {
+      "size": 378,
+      "sha256": "47c79075c57ae63a"
+    },
+    "services/api/config/development.yaml": {
+      "size": 41,
+      "sha256": "4c8620f1d38662ce"
+    },
+    "services/api/config/production.yaml": {
+      "size": 145,
+      "sha256": "70ade5d0f424c61a"
+    },
+    "services/api/config/testing.yaml": {
+      "size": 110,
+      "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.yaml": {
       "size": 836,
@@ -77,8 +93,8 @@
       "sha256": "c42198aca42248f9"
     },
     "services/api/src/config.rs": {
-      "size": 402,
-      "sha256": "97335e136006d39b"
+      "size": 6620,
+      "sha256": "aa42209eca7e7ff0"
     },
     "services/api/src/db.rs": {
       "size": 316,
@@ -89,8 +105,8 @@
       "sha256": "1650e653974e3e98"
     },
     "services/api/src/errors.rs": {
-      "size": 1731,
-      "sha256": "5a0698430f8a4bcd"
+      "size": 9440,
+      "sha256": "f377a95f2d5379b8"
     },
     "services/api/src/lib.rs": {
       "size": 316,

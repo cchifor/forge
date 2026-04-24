@@ -1,0 +1,111 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { loadConfig } from "../../src/config/loader.js";
+
+function makeProject(yamls: Record<string, string>, secrets = ""): string {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "forge-config-"));
+	const configDir = path.join(root, "config");
+	fs.mkdirSync(configDir);
+	for (const [name, body] of Object.entries(yamls)) {
+		fs.writeFileSync(path.join(configDir, name), body);
+	}
+	if (secrets) {
+		fs.writeFileSync(path.join(root, ".secrets.yaml"), secrets);
+	}
+	return root;
+}
+
+describe("loadConfig layered precedence", () => {
+	let root: string;
+	beforeEach(() => {
+		root = makeProject(
+			{
+				"defaults.yaml": `
+app:
+  name: "svc"
+server:
+  port: 5000
+db:
+  url: "postgres://local/defaults"
+logging:
+  level: "info"
+`,
+				"production.yaml": `
+logging:
+  level: "warn"
+server:
+  port: 6000
+`,
+			},
+			`
+db:
+  url: "postgres://local/secret"
+`,
+		);
+	});
+
+	it("applies defaults alone when no env-specific layer exists", () => {
+		const config = loadConfig({
+			projectRoot: root,
+			env: "development",
+			processEnv: {},
+		});
+		expect(config.server.port).toBe(5000);
+		expect(config.logging.level).toBe("info");
+	});
+
+	it("env-specific yaml overrides defaults", () => {
+		const config = loadConfig({
+			projectRoot: root,
+			env: "production",
+			processEnv: {},
+		});
+		expect(config.server.port).toBe(6000);
+		expect(config.logging.level).toBe("warn");
+	});
+
+	it(".secrets.yaml overrides env-specific yaml", () => {
+		const config = loadConfig({
+			projectRoot: root,
+			env: "production",
+			processEnv: {},
+		});
+		expect(config.db.url).toBe("postgres://local/secret");
+	});
+
+	it("env vars (APP__*) override all yaml layers", () => {
+		const config = loadConfig({
+			projectRoot: root,
+			env: "production",
+			processEnv: {
+				APP__SERVER__PORT: "7000",
+				APP__DB__URL: "postgres://override",
+				APP__LOGGING__PRETTY: "true",
+			},
+		});
+		expect(config.server.port).toBe(7000);
+		expect(config.db.url).toBe("postgres://override");
+		expect(config.logging.pretty).toBe(true);
+	});
+
+	it("rejects invalid config via zod schema", () => {
+		expect(() =>
+			loadConfig({
+				projectRoot: root,
+				env: "production",
+				processEnv: { APP__SERVER__PORT: "not-a-number" },
+			}),
+		).toThrow();
+	});
+
+	it("sets app.env from the resolved environment when absent", () => {
+		const config = loadConfig({
+			projectRoot: root,
+			env: "testing",
+			processEnv: {},
+		});
+		expect(config.app.env).toBe("testing");
+	});
+});
