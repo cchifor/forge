@@ -42,9 +42,14 @@ from forge.errors import (
     ProvenanceError,
 )
 from forge.feature_injector import apply_features, apply_project_features
-from forge.forge_toml import read_forge_toml, write_forge_toml
+from forge.forge_toml import ForgeTomlData, read_forge_toml, write_forge_toml
 from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sentinel_audit import audit_targets, raise_if_corrupt
+from forge.uninstaller import (
+    UninstallOutcome,
+    disabled_fragments,
+    uninstall_fragment,
+)
 from forge.updater_lock import acquire_lock
 
 logger = logging.getLogger(__name__)
@@ -156,6 +161,49 @@ def _update_locked(
             )
         raise_if_corrupt(issues)
 
+    # Epic F — provenance-driven uninstall. Any fragment present in the
+    # previous run's provenance but missing from the current plan gets
+    # its files deleted (or preserved when user-modified). Opt out by
+    # setting `forge.update.no_uninstall = true` in forge.toml — used
+    # by the 1.1.x compat layer + projects that manage teardown
+    # manually.
+    uninstall_outcomes: list[UninstallOutcome] = []
+    if not _no_uninstall_flag(manifest):
+        current_plan_fragments = {rf.fragment.name for rf in plan.ordered}
+        disabled = disabled_fragments(data.provenance, current_plan_fragments)
+        if disabled and not quiet:
+            names = ", ".join(sorted(disabled))
+            print(f"  [update] uninstalling {len(disabled)} disabled fragment(s): {names}")
+        for name in sorted(disabled):
+            outcome = uninstall_fragment(
+                project_root,
+                name,
+                data.provenance,
+                collector,
+                removed_blocks_in_files=_disabled_fragment_blocks(
+                    project_root, name, data
+                ),
+            )
+            uninstall_outcomes.append(outcome)
+            if not quiet:
+                if outcome.deleted_files:
+                    print(
+                        f"    [{name}] deleted {len(outcome.deleted_files)} file(s)"
+                    )
+                if outcome.preserved_files:
+                    print(
+                        f"    [{name}] preserved {len(outcome.preserved_files)} user-modified file(s)"
+                    )
+                if outcome.removed_blocks:
+                    print(
+                        f"    [{name}] scrubbed {len(outcome.removed_blocks)} injected block(s)"
+                    )
+                if outcome.conflicted_blocks:
+                    print(
+                        f"    [{name}] {len(outcome.conflicted_blocks)} block(s) "
+                        "needed manual review — see .forge-merge sidecars"
+                    )
+
     fragments_applied: list[str] = []
     for bc in config.backends:
         backend_dir = project_root / "services" / bc.name
@@ -206,6 +254,7 @@ def _update_locked(
         "forge_version_after": current_version,
         "classification": {p: s for p, s in classification.items()},
         "user_modified_count": len(user_modified),
+        "uninstalled": [o.as_dict() for o in uninstall_outcomes],
     }
 
 
@@ -247,6 +296,55 @@ def _collect_injection_targets(
             for inj in fp.injections:
                 seen.add(backend_dir / inj.target)
     return sorted(seen)
+
+
+def _no_uninstall_flag(manifest: Path) -> bool:
+    """Read ``[forge.update].no_uninstall`` from ``forge.toml``.
+
+    Returns ``True`` when the project explicitly opts out of Epic F's
+    provenance-driven uninstall. Falls back to ``False`` when the key
+    is absent or the manifest is unreadable.
+    """
+    try:
+        import tomlkit  # noqa: PLC0415
+
+        doc = tomlkit.parse(manifest.read_text(encoding="utf-8"))
+        update_tbl = doc.get("forge", {}).get("update") or {}
+        return bool(update_tbl.get("no_uninstall", False))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _disabled_fragment_blocks(
+    project_root: Path,
+    fragment_name: str,
+    data: ForgeTomlData,
+) -> list[tuple[str, str, str]]:
+    """Produce the ``(rel_path, feature_key, marker)`` list for a disabled fragment's injections.
+
+    We can't look the fragment up in the live registry (it's been
+    removed, which is why we're uninstalling it). Instead, we derive
+    the injection targets by walking ``[forge.merge_blocks]`` for
+    entries keyed by this fragment's feature key. Epic H records every
+    merge-zone injection here; ordinary (``generated``-zone) injections
+    don't record their baseline here, so they won't be scrubbed from
+    their target files — that trade-off is acceptable for Epic F phase
+    1 because ``generated``-zone injections are owned by the fragment,
+    not merged, so the text between BEGIN/END is unambiguously safe
+    to remove on re-apply (the next ``--update`` that runs the full
+    applier pipeline handles it naturally).
+    """
+    from forge.merge import MergeBlockCollector  # noqa: PLC0415
+
+    out: list[tuple[str, str, str]] = []
+    for key in data.merge_blocks:
+        parsed = MergeBlockCollector.parse_key(key)
+        if parsed is None:
+            continue
+        rel_path, feature_key, marker = parsed
+        if feature_key == fragment_name:
+            out.append((rel_path, feature_key, marker))
+    return out
 
 
 def classify_project_state(
