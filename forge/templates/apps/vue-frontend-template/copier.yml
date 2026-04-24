@@ -72,6 +72,11 @@ api_proxy_target:
   type: str
   default: "http://localhost:5000"
 
+env_api_base_url:
+  type: str
+  when: false
+  default: "http://localhost:5173"
+
 backend_features:
   type: str
   when: false

@@ -82,8 +82,10 @@ CATEGORY_MISSION: dict[FeatureCategory, str] = {
 class OptionType(StrEnum):
     """Primitive type of an Option's value.
 
-    BOOL / ENUM / STR / INT / LIST are leaves. OBJECT is reserved for a
-    future nested-submodule shape — Phase 1 registers zero OBJECT options.
+    BOOL / ENUM / STR / INT / LIST are leaves. OBJECT is a nested dict
+    whose shape is optionally declared via ``Option.object_schema``
+    (Phase C). Options of type OBJECT must set ``stability="experimental"``
+    until the nested-shape contract stabilises.
     """
 
     BOOL = "bool"
@@ -92,6 +94,44 @@ class OptionType(StrEnum):
     INT = "int"
     LIST = "list"
     OBJECT = "object"
+
+
+@dataclass(frozen=True)
+class ObjectFieldSpec:
+    """Describes one key of an OBJECT-typed Option's value (Phase C).
+
+    The shape is a stripped-down Option: ``type`` + (for ENUM)
+    ``options`` + a ``required`` flag. ``default`` is captured so that
+    validators can apply per-key defaults when a user omits the key,
+    mirroring the top-level Option behaviour.
+
+    Declared on ``Option.object_schema`` as ``dict[str, ObjectFieldSpec]``.
+    Omitting ``object_schema`` keeps the pre-C behaviour — any dict
+    passes outer-shape validation.
+    """
+
+    type: OptionType
+    required: bool = True
+    options: tuple[Any, ...] = ()
+    default: Any = None
+
+    def __post_init__(self) -> None:
+        if self.type is OptionType.OBJECT:
+            raise ValueError(
+                "ObjectFieldSpec.type=OBJECT is not supported — nested "
+                "OBJECT-of-OBJECT requires a separate registration. "
+                "Use the flat key per nesting level instead."
+            )
+        if self.type is OptionType.ENUM and not self.options:
+            raise ValueError(
+                "ObjectFieldSpec.type=ENUM requires a non-empty "
+                "``options`` tuple listing the allowed values."
+            )
+        if self.type is not OptionType.ENUM and self.options:
+            raise ValueError(
+                f"ObjectFieldSpec.type={self.type.value}: `options` is "
+                "only valid for ENUM fields."
+            )
 
 
 # Dotted path: one-or-more identifiers joined by '.'. Identifiers allow
@@ -159,6 +199,11 @@ class Option:
     # warning message and the codemod's output so users see when each
     # rename landed.
     deprecated_since: str | None = None
+    # Phase C — OBJECT nested-field shape. Empty / None means "any dict
+    # passes outer-shape validation". Declared as a mapping because the
+    # nested schema is stable at registration time (flat keys, no
+    # recursion into further OBJECT types).
+    object_schema: dict[str, ObjectFieldSpec] | None = None
 
     def __post_init__(self) -> None:
         _validate_path(self.path)
@@ -185,6 +230,18 @@ class Option:
             raise ValueError(
                 f"Option {self.path}: LIST default must be list/tuple, got {type(d).__name__}"
             )
+        if t is OptionType.OBJECT:
+            if not isinstance(d, dict):
+                raise ValueError(
+                    f"Option {self.path}: OBJECT default must be dict, "
+                    f"got {type(d).__name__}"
+                )
+            if self.stability != "experimental":
+                raise ValueError(
+                    f"Option {self.path}: OBJECT options must declare "
+                    'stability="experimental" — the nested-shape contract '
+                    "isn't stable across forge versions yet."
+                )
         if t is OptionType.ENUM:
             if not self.options:
                 raise ValueError(f"Option {self.path}: ENUM requires non-empty options tuple")
@@ -295,6 +352,70 @@ class Option:
                 )
         if t is OptionType.LIST and not isinstance(value, (list, tuple)):
             raise ValueError(f"Option {self.path}: expected list, got {type(value).__name__}")
+        if t is OptionType.OBJECT:
+            if not isinstance(value, dict):
+                raise ValueError(
+                    f"Option {self.path}: expected dict, got {type(value).__name__}"
+                )
+            self._validate_object_shape(value)
+
+    def _validate_object_shape(self, value: dict[str, Any]) -> None:
+        """Phase C recursive validation for OBJECT options.
+
+        When ``object_schema`` is declared, every declared field is
+        checked against its spec: missing required keys raise, unknown
+        keys raise, wrong-typed values raise, ENUM values outside the
+        spec's option list raise. When ``object_schema`` is absent the
+        value passes the outer-dict check and skips per-key validation —
+        matching pre-C behaviour for any OBJECT option that doesn't
+        opt in.
+        """
+        if not self.object_schema:
+            return
+        allowed = set(self.object_schema)
+        supplied = set(value)
+        for unknown in supplied - allowed:
+            raise ValueError(
+                f"Option {self.path}: unknown OBJECT key {unknown!r}. "
+                f"Allowed: {sorted(allowed)}"
+            )
+        for key, spec in self.object_schema.items():
+            if key not in value:
+                if spec.required:
+                    raise ValueError(
+                        f"Option {self.path}: required OBJECT key "
+                        f"{key!r} is missing"
+                    )
+                continue
+            v = value[key]
+            t = spec.type
+            if t is OptionType.BOOL and not isinstance(v, bool):
+                raise ValueError(
+                    f"Option {self.path}.{key}: expected bool, "
+                    f"got {type(v).__name__}"
+                )
+            elif t is OptionType.INT and (
+                not isinstance(v, int) or isinstance(v, bool)
+            ):
+                raise ValueError(
+                    f"Option {self.path}.{key}: expected int, "
+                    f"got {type(v).__name__}"
+                )
+            elif t is OptionType.STR and not isinstance(v, str):
+                raise ValueError(
+                    f"Option {self.path}.{key}: expected str, "
+                    f"got {type(v).__name__}"
+                )
+            elif t is OptionType.LIST and not isinstance(v, (list, tuple)):
+                raise ValueError(
+                    f"Option {self.path}.{key}: expected list, "
+                    f"got {type(v).__name__}"
+                )
+            elif t is OptionType.ENUM and v not in spec.options:
+                raise ValueError(
+                    f"Option {self.path}.{key}: invalid value {v!r}; "
+                    f"allowed: {list(spec.options)}"
+                )
 
 
 # -----------------------------------------------------------------------------
@@ -444,6 +565,31 @@ def to_json_schema() -> dict[str, Any]:
             prop["type"] = "array"
         elif opt.type is OptionType.OBJECT:
             prop["type"] = "object"
+            if opt.object_schema:
+                nested_props: dict[str, dict[str, Any]] = {}
+                required_keys: list[str] = []
+                for key, spec in opt.object_schema.items():
+                    field: dict[str, Any] = {}
+                    if spec.type is OptionType.BOOL:
+                        field["type"] = "boolean"
+                    elif spec.type is OptionType.INT:
+                        field["type"] = "integer"
+                    elif spec.type is OptionType.STR:
+                        field["type"] = "string"
+                    elif spec.type is OptionType.LIST:
+                        field["type"] = "array"
+                    elif spec.type is OptionType.ENUM:
+                        field["type"] = _python_to_schema_type(spec.options[0])
+                        field["enum"] = list(spec.options)
+                    if spec.default is not None:
+                        field["default"] = spec.default
+                    nested_props[key] = field
+                    if spec.required:
+                        required_keys.append(key)
+                prop["properties"] = nested_props
+                prop["additionalProperties"] = False
+                if required_keys:
+                    prop["required"] = required_keys
         properties[opt.path] = prop
 
     return {
@@ -1234,5 +1380,175 @@ DEPENDENCY: purgatory>=3.0.0
 TUNABLE VIA ENV: CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT.""",
         category=FeatureCategory.RELIABILITY,
         enables={True: ("reliability_circuit_breaker",)},
+    )
+)
+
+
+# --- Layer composition (Phases A–C — discriminated-union modes) ------------
+#
+# These options control *what* forge generates, not *which feature*. They
+# sit above the feature registry: e.g. ``backend.mode=none`` short-circuits
+# the per-backend loop in ``generator.py``, which inhibits every
+# backend-scoped fragment's target_backends expansion. ``enables`` stays
+# empty — the discriminator orchestrates generation, it doesn't enable a
+# fragment bundle.
+#
+# All four layer discriminators (``backend.mode`` / ``database.mode`` /
+# ``frontend.mode`` / ``agent.mode``) share the same ENUM shape + empty
+# ``enables`` contract. ``tests/test_phase_c.py::TestLayerModeParity``
+# locks that invariant in.
+#
+# The Phase A flat ``frontend.api_target_url`` is preserved as a
+# deprecated alias of ``frontend.api_target.url`` (see the ``aliases=``
+# + ``deprecated_since=`` pair below). The resolver rewrites the alias
+# transparently at ``_apply_option_defaults`` time.
+
+
+register_option(
+    Option(
+        path="backend.mode",
+        type=OptionType.ENUM,
+        default="generate",
+        options=("generate", "none"),
+        summary="Whether forge scaffolds backend services for this project.",
+        description="""\
+Layer discriminator. ``generate`` (default) runs the per-backend Copier
+template + fragment pipeline for every entry in ``backends``. ``none``
+skips backend generation entirely — useful for frontend-only projects
+that point at an already-deployed API (set ``frontend.api_target.url``
+to that API's base URL).
+
+With ``mode=none`` the project still gets a docker-compose.yml (frontend
++ traefik + optional keycloak) but no ``services/`` directory.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
+        path="frontend.mode",
+        type=OptionType.ENUM,
+        default="generate",
+        options=("generate", "external", "none"),
+        summary="Whether forge scaffolds a frontend for this project.",
+        description="""\
+Layer discriminator for the frontend. ``generate`` (default) runs the
+per-framework Copier template. ``external`` is reserved for future
+work where forge renders a thin wrapper that points at an existing
+deployed frontend. ``none`` skips frontend generation entirely — use
+when you only want a backend + infra stack.
+
+Note on compatibility with ``FrontendFramework.NONE``: the two paths
+converge via ``FrontendConfig.effective_mode``. Setting
+``frontend.mode="none"`` is equivalent to omitting the frontend entry
+or setting ``framework=FrontendFramework.NONE``.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
+        path="frontend.api_target.type",
+        type=OptionType.ENUM,
+        default="local",
+        options=("local", "external"),
+        summary="Whether the frontend's API client targets a local or external backend.",
+        description="""\
+Paired with ``frontend.api_target.url``. ``local`` (default) — the
+generated Vite proxy forwards ``/api/*`` to the Docker-internal
+backend service (preserves Phase A + pre-Phase A behavior).
+``external`` — the frontend points at ``frontend.api_target.url``
+directly; Vite proxy becomes a no-op.
+
+B2 replaces the Phase A flat ``frontend.api_target_url`` option with
+this discriminated pair. The old path is preserved as a deprecated
+alias of ``frontend.api_target.url`` — pre-existing configs continue
+to work unchanged.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
+        path="frontend.api_target.url",
+        type=OptionType.STR,
+        default="",
+        summary="External API base URL (when frontend.api_target.type=external).",
+        description="""\
+Base URL the generated frontend talks to when
+``frontend.api_target.type=external`` or when ``backend.mode=none``.
+The value populates ``api_base_url`` / ``api_proxy_target`` /
+``env_api_base_url`` via ``variable_mapper``.
+
+Empty string means the template falls back to local inference
+(compute the URL from the first backend's port).""",
+        category=FeatureCategory.PLATFORM,
+        aliases=("frontend.api_target_url",),
+        deprecated_since="1.2.0",
+    )
+)
+
+
+register_option(
+    Option(
+        path="database.mode",
+        type=OptionType.ENUM,
+        default="generate",
+        options=("generate", "none"),
+        summary="Whether the generated stack provisions a local database.",
+        description="""\
+Layer discriminator. ``generate`` (default) provisions PostgreSQL in
+``docker-compose.yml`` and scaffolds the full DB stack in Python
+backends (alembic, SQLAlchemy session, connection pool). ``none``
+skips the postgres service + migrate containers entirely — suitable
+for stateless services whose persistence lives elsewhere (external
+RDBMS, API-only projects).
+
+Incompatible with DB-backed options: ``conversation.persistence``,
+``rag.backend != none``, ``chat.attachments``, ``agent.llm``. The
+resolver rejects these combinations at config-validation time.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
+        path="database.engine",
+        type=OptionType.ENUM,
+        default="postgres",
+        options=("postgres",),
+        summary="Database engine used when database.mode=generate.",
+        description="""\
+Single-value enum today (postgres) — kept as an ENUM rather than a bool
+so adding MySQL / SQLite / CockroachDB in a future phase doesn't
+break existing ``forge.toml`` files. Mirrors the
+``middleware.correlation_id`` always-on enum pattern.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
+        path="agent.mode",
+        type=OptionType.ENUM,
+        default="none",
+        options=("generate", "external", "none"),
+        summary="Layer discriminator for the agentic/LLM stack (placeholder).",
+        description="""\
+Phase C placeholder. Establishes pattern parity with ``backend.mode``,
+``database.mode``, and ``frontend.mode`` so all four layers share the
+same discriminator shape. Does nothing yet — real wiring lands when
+the agentic stack gets its own generate/external/none scenarios.
+
+Registered as ENUM without an ``enables`` map so the resolver treats
+it as a pure orchestration knob, same pattern as the other layer
+modes.""",
+        category=FeatureCategory.CONVERSATIONAL_AI,
+        stability="experimental",
     )
 )

@@ -60,6 +60,13 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
     # Primary backend (first) for backward-compat references
     primary = config.backend
 
+    # Phase B1: ``database_mode=none`` suppresses the postgres container and
+    # per-backend migrate sidecars. Keycloak has its own DB needs, so the
+    # postgres service still renders when it's enabled — ``render_postgres``
+    # captures the combined condition so the template stays readable.
+    database_mode = config.database_mode
+    render_postgres = (bool(backends_ctx) and database_mode != "none") or config.include_keycloak
+
     context = {
         "project_slug": config.project_slug,
         "backends": backends_ctx,
@@ -75,6 +82,8 @@ def render_compose(config: ProjectConfig, project_root: Path) -> Path:
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
         "traefik_dashboard_port": TRAEFIK_DASHBOARD_PORT,
+        "database_mode": database_mode,
+        "render_postgres": render_postgres,
         "keycloak_realm": (
             config.frontend.keycloak_realm
             if config.frontend
@@ -174,10 +183,15 @@ def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
     # ``WHERE NOT EXISTS`` so listing the primary (already created by
     # ``POSTGRES_DB`` env var) is idempotent — and multi-backend users expect
     # every service's database to be visible here.
+    #
+    # Phase B1: backend DBs are skipped when ``database.mode=none`` — the
+    # backends are stateless in that mode. Keycloak's own ``keycloak`` db
+    # still gets created because keycloak always needs its own store.
     extra_dbs = set()
-    for bc in config.backends:
-        db_name = bc.name.replace("-", "_")
-        extra_dbs.add(db_name)
+    if config.database_mode != "none":
+        for bc in config.backends:
+            db_name = bc.name.replace("-", "_")
+            extra_dbs.add(db_name)
     if config.include_keycloak:
         extra_dbs.add("keycloak")
 

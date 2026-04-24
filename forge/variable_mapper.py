@@ -70,6 +70,54 @@ def _build_vite_proxy_config(config: ProjectConfig) -> str:
     return "\n".join(lines)
 
 
+def _external_api_mode(config: ProjectConfig) -> bool:
+    """True when the frontend should target an externally-hosted API.
+
+    Phase A wired this to ``backend.mode=none + url set``. Phase B2
+    broadens it: ``frontend.api_target.type="external"`` also triggers
+    it (even with local backends present). The url must be non-empty
+    in both cases — ``_validate_layer_modes`` enforces that, so this
+    function treats missing url as "not external".
+    """
+    if not config.frontend_api_target_url:
+        return False
+    return (
+        config.backend_mode == "none"
+        or config.frontend_api_target_type == "external"
+    )
+
+
+def _frontend_api_urls(
+    config: ProjectConfig, backend_name: str, backend_port: int
+) -> tuple[str, str, str]:
+    """Return ``(api_base_url, api_proxy_target, env_api_base_url)``.
+
+    Three URLs for three consumers:
+
+    * ``api_base_url`` — the backend origin the generated app's HTTP
+      client points at. In local mode: ``http://localhost:{backend_port}``.
+      In external mode: the externally-hosted API URL.
+    * ``api_proxy_target`` — the Docker-internal upstream the Vite proxy
+      forwards ``/api/*`` to. Local: ``http://{backend_name}:{backend_port}``.
+      External: the external URL (proxy becomes a passthrough that
+      Docker won't actually use, but keeps the compose template valid).
+    * ``env_api_base_url`` — what ``VITE_API_BASE_URL`` resolves to in
+      ``.env.development``. Local mode keeps the historical behavior of
+      routing the browser at the Vite dev server (so Vite's proxy can
+      set cookies on the same origin). External mode points the browser
+      straight at the external URL.
+    """
+    if _external_api_mode(config):
+        ext = config.frontend_api_target_url
+        return ext, ext, ext
+    fc = config.frontend
+    local_api = f"http://localhost:{backend_port}"
+    local_proxy = f"http://{backend_name}:{backend_port}"
+    dev_port = fc.server_port if fc else 5173
+    local_env = f"http://localhost:{dev_port}"
+    return local_api, local_proxy, local_env
+
+
 def vue_context(config: ProjectConfig) -> dict[str, Any]:
     """Build data dict for the vue-frontend-template (Copier)."""
     fc = config.frontend
@@ -78,6 +126,9 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
     bc = config.backend
     backend_port = bc.server_port if bc else 5000
     backend_name = bc.name if bc else "backend"
+    api_base_url, api_proxy_target, env_api_base_url = _frontend_api_urls(
+        config, backend_name, backend_port
+    )
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
@@ -89,8 +140,9 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "include_auth": fc.include_auth,
         "include_chat": fc.include_chat,
         "include_openapi": fc.include_openapi,
-        "api_base_url": f"http://localhost:{fc.server_port}",
-        "api_proxy_target": f"http://{backend_name}:{backend_port}",
+        "api_base_url": api_base_url,
+        "api_proxy_target": api_proxy_target,
+        "env_api_base_url": env_api_base_url,
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
@@ -110,6 +162,9 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
     bc = config.backend
     backend_port = bc.server_port if bc else 5000
     backend_name = bc.name if bc else "backend"
+    api_base_url, api_proxy_target, env_api_base_url = _frontend_api_urls(
+        config, backend_name, backend_port
+    )
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
@@ -122,11 +177,9 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
         "include_chat": fc.include_chat,
         "include_openapi": fc.include_openapi,
         "package_manager": fc.package_manager,
-        # api_base_url is consumed by the browser / dev server, so it has to
-        # be reachable from the developer's machine. Vue uses the same form.
-        # api_proxy_target is the Docker-internal hostname used by vite proxy.
-        "api_base_url": f"http://localhost:{backend_port}",
-        "api_proxy_target": f"http://{backend_name}:{backend_port}",
+        "api_base_url": api_base_url,
+        "api_proxy_target": api_proxy_target,
+        "env_api_base_url": env_api_base_url,
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
@@ -145,6 +198,10 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
         raise ValueError("Flutter frontend config is required.")
     bc = config.backend
     backend_port = bc.server_port if bc else 5000
+    backend_name = bc.name if bc else "backend"
+    api_base_url, _api_proxy_target, env_api_base_url = _frontend_api_urls(
+        config, backend_name, backend_port
+    )
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
@@ -156,7 +213,8 @@ def flutter_context(config: ProjectConfig) -> dict[str, Any]:
         "include_auth": fc.include_auth,
         "include_chat": fc.include_chat,
         "include_openapi": fc.include_openapi,
-        "api_base_url": f"http://localhost:{backend_port}",
+        "api_base_url": api_base_url,
+        "env_api_base_url": env_api_base_url,
         "server_port": str(backend_port),
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
