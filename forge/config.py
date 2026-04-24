@@ -530,6 +530,24 @@ class ProjectConfig:
         return str(self.options.get("database.mode", "generate"))
 
     def validate(self) -> None:
+        """Run all ProjectConfig invariants.
+
+        Called once from the CLI builder and the interactive prompt
+        after configuration is fully assembled. Split into two phases:
+
+        1. **Structural invariants** (project name, backend / frontend
+           sanity, port uniqueness, feature names). Would also be safe
+           in ``__post_init__`` but callers that mutate ``options``
+           between construction and validation rely on validation
+           running once, after all the edits.
+        2. **Option-dependent invariants** (unknown options, layer
+           modes, database mode). Runs after option defaults have been
+           layered in, which is why this lives here rather than
+           ``__post_init__``.
+
+        Raises ``ValueError`` with a specific, actionable message on
+        the first violation found.
+        """
         if not self.project_name.strip():
             raise ValueError("Project name cannot be empty.")
         for bc in self.backends:

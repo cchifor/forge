@@ -174,6 +174,51 @@ class Fragment:
             )
         if self.parity_tier is None:
             object.__setattr__(self, "parity_tier", _auto_parity_tier(self.implementations))
+        else:
+            # Explicit tier — validate it agrees with the impls at
+            # construction time. Tier-1 must cover all built-ins;
+            # tier-3 must be Python-only. Tier-2 is the permissive
+            # residual and is allowed to label any subset.
+            _validate_explicit_parity_tier(
+                self.name, self.parity_tier, self.implementations
+            )
+
+
+def _validate_explicit_parity_tier(
+    name: str,
+    tier: ParityTier,
+    implementations: dict[BackendLanguage, FragmentImplSpec],
+) -> None:
+    """Enforce tier ↔ impl consistency when the author pins a tier.
+
+    Raised at ``Fragment()`` construction so plugin authors see parity
+    mismatches on plugin load rather than waiting for forge's own test
+    suite (``tests/test_fragment_parity.py``) to run in CI.
+    """
+    built_ins = {BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST}
+    covered = {lang for lang in implementations if lang in built_ins}
+
+    if tier == 1 and covered != built_ins:
+        missing = sorted(lang.value for lang in (built_ins - covered))
+        raise FragmentError(
+            f"Fragment {name!r} is tier 1 (cross-backend parity) but is "
+            f"missing implementations for: {missing}",
+            context={
+                "fragment": name,
+                "parity_tier": tier,
+                "missing_backends": missing,
+            },
+        )
+    if tier == 3 and covered != {BackendLanguage.PYTHON}:
+        raise FragmentError(
+            f"Fragment {name!r} is tier 3 (Python-only) but ships implementations "
+            f"for: {sorted(c.value for c in covered)}",
+            context={
+                "fragment": name,
+                "parity_tier": tier,
+                "covered_backends": sorted(c.value for c in covered),
+            },
+        )
 
 
 def _auto_parity_tier(

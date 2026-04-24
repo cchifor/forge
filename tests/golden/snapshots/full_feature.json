@@ -106105,8 +106105,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 3341,
-      "sha256": "699c3435951e56dc"
+      "size": 3342,
+      "sha256": "20d6c7a79f2eff6b"
     },
     "forge.toml": {
       "size": 5185845,
@@ -106337,8 +106337,8 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api/src/app/core/errors.py": {
-      "size": 7574,
-      "sha256": "bdf96b3a5a4bd333"
+      "size": 11473,
+      "sha256": "965dd88426062327"
     },
     "services/api/src/app/core/health_checks.py": {
       "size": 2791,
@@ -106461,8 +106461,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 4085,
-      "sha256": "e2c28846c1bfd575"
+      "size": 4117,
+      "sha256": "54cd677ede98353c"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -106685,8 +106685,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/service/utils/fastapiutils.py": {
-      "size": 604,
-      "sha256": "03b789e597e68c4c"
+      "size": 1125,
+      "sha256": "028715457a1807d2"
     },
     "services/api/tests/__init__.py": {
       "size": 0,
@@ -106773,8 +106773,8 @@
       "sha256": "0667082bdaf3cf68"
     },
     "services/api/tests/unit/test_app_errors.py": {
-      "size": 1993,
-      "sha256": "89b8b6b087e00d6d"
+      "size": 7168,
+      "sha256": "43b7b4ca81873fdd"
     },
     "services/api/tests/unit/test_app_main.py": {
       "size": 1796,
@@ -106825,8 +106825,8 @@
       "sha256": "f5c53b0342e24eda"
     },
     "services/api/tests/unit/test_errors.py": {
-      "size": 2696,
-      "sha256": "e8966da1a06b559d"
+      "size": 2896,
+      "sha256": "65eaad53c78de5e9"
     },
     "services/api/tests/unit/test_fastapi_utils.py": {
       "size": 1147,

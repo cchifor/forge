@@ -93,6 +93,14 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
 
     plan = resolve(config)
 
+    # P1.3: static pre-flight check. Catches inject.yaml / env.yaml /
+    # file-overlap problems in <100ms before Copier runs (which takes
+    # ~5s per backend). Failures here surface every issue at once so
+    # plugin authors aren't stuck iterating through them serially.
+    from forge.plan_validator import validate_plan  # noqa: PLC0415
+
+    validate_plan(plan)
+
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
         backend_dir = project_root / "services" / bc.name
@@ -151,7 +159,7 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     )
     if config.backends or has_frontend or config.include_keycloak:
         _log("  Rendering docker-compose.yml ...")
-        render_compose(config, project_root)
+        render_compose(config, project_root, plan=plan)
         # init-db creates a database per backend plus keycloak's own db.
         # Skip when there are 0–1 backends and no keycloak — the primary
         # backend's POSTGRES_DB env var already handles the single-db case.

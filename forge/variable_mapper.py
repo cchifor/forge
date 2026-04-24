@@ -1,4 +1,23 @@
-"""Maps unified ProjectConfig into per-template Copier data dicts."""
+"""Maps :class:`forge.config.ProjectConfig` into per-template Copier data dicts.
+
+Copier templates (backend services, frontend apps, the e2e harness)
+expect a flat ``dict[str, Any]`` of variables — things like
+``project_name``, ``python_version``, ``features``,
+``api_target_url``. The generator calls one of:
+
+* :func:`backend_context` — per ``BackendConfig`` (one call per backend
+  in multi-backend projects).
+* :func:`frontend_context` — per project (single frontend).
+* :func:`e2e_context` — for the shared e2e harness template.
+
+Each builder resolves the per-language version key
+(``python_version`` / ``node_version`` / ``rust_edition``) from
+``BACKEND_REGISTRY``, so adding a new backend language means updating
+the registry spec — never this module.
+
+Tests for the mapping live in ``tests/test_variable_mapper.py``; the
+generator's round-trip is covered by ``tests/test_generator.py``.
+"""
 
 from __future__ import annotations
 
