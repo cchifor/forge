@@ -1,4 +1,4 @@
-.PHONY: install-dev test test-cov lint format typecheck check e2e \
+.PHONY: install-dev test test-cov lint format typecheck check e2e fuzz \
         validate-matrix validate-matrix-quick validate-matrix-scenario \
         validate-matrix-list validate-matrix-e2e
 
@@ -7,10 +7,13 @@ install-dev:
 	uv run pre-commit install
 
 test:
-	uv run pytest -m "not e2e"
+	uv run pytest -m "not e2e and not fuzz"
 
 test-cov:
-	uv run pytest -m "not e2e" --cov-report=html
+	uv run pytest -m "not e2e and not fuzz" --cov-report=html
+
+fuzz:
+	uv run pytest -m fuzz -v
 
 lint:
 	uv run ruff check forge/
