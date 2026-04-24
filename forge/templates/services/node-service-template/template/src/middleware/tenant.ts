@@ -1,4 +1,4 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastify";
 
 export interface TenantContext {
 	userId: string;
@@ -14,12 +14,26 @@ declare module "fastify" {
 }
 
 /**
- * Extract tenant context from Gatekeeper ForwardAuth headers.
+ * Request type where `tenant` is guaranteed non-null.
  *
- * Gatekeeper injects these headers after validating the session cookie or API key:
- *   X-Gatekeeper-User-Id, X-Gatekeeper-Email, X-Gatekeeper-Tenant, X-Gatekeeper-Roles
+ * Handlers mounted inside a plugin scope that applies `requireTenant` as a
+ * preHandler can accept this type directly, eliminating non-null assertions
+ * (`req.tenant!`) and surfacing missing-auth bugs at TypeScript compile time
+ * rather than runtime.
+ */
+export type AuthenticatedRequest<Req extends FastifyRequest = FastifyRequest> =
+	Req & { tenant: TenantContext };
+
+/**
+ * Extract tenant context from Gatekeeper ForwardAuth headers. Registered as
+ * a global `onRequest` hook so every request has `req.tenant` populated (or
+ * `null`). Does NOT reject unauthenticated requests — use `requireTenant` for
+ * that, mounted on a protected plugin scope.
  *
- * For service-to-service calls, the caller propagates these headers directly.
+ * Gatekeeper injects these headers after validating the session cookie or API
+ * key: X-Gatekeeper-User-Id, X-Gatekeeper-Email, X-Gatekeeper-Tenant,
+ * X-Gatekeeper-Roles. For service-to-service calls, the caller propagates
+ * these headers directly (plus `X-Customer-Id` for tenant override).
  */
 export async function tenantHook(req: FastifyRequest, _reply: FastifyReply) {
 	const userId = req.headers["x-gatekeeper-user-id"] as string | undefined;
@@ -28,7 +42,6 @@ export async function tenantHook(req: FastifyRequest, _reply: FastifyReply) {
 		.split(",")
 		.filter(Boolean);
 
-	// x-customer-id is used for S2S tenant propagation (service account override)
 	const customerId =
 		(req.headers["x-customer-id"] as string) || userId || null;
 
@@ -38,3 +51,24 @@ export async function tenantHook(req: FastifyRequest, _reply: FastifyReply) {
 		req.tenant = null;
 	}
 }
+
+/**
+ * preHandler that enforces authenticated tenant context. Apply to a Fastify
+ * plugin scope so every route registered inside inherits the guard:
+ *
+ *     await app.register(async (auth) => {
+ *       auth.addHook("preHandler", requireTenant);
+ *       await auth.register(itemRoutes, { prefix: "/api/v1/items" });
+ *     });
+ *
+ * A route that needs `req.tenant` must live inside such a scope. Type
+ * handlers with `AuthenticatedRequest` to make the non-null guarantee
+ * statically checked.
+ */
+export const requireTenant: preHandlerHookHandler = async (req, reply) => {
+	if (!req.tenant) {
+		return reply
+			.code(401)
+			.send({ error: "Authentication required", code: "AUTH_REQUIRED" });
+	}
+};

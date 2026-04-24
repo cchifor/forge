@@ -29,7 +29,7 @@
       "sha256": "4806eee641a7f11b"
     },
     "forge.toml": {
-      "size": 38546,
+      "size": 38753,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -85,8 +85,8 @@
       "sha256": "389f88b89941827e"
     },
     "services/api-node/src/app.ts": {
-      "size": 1699,
-      "sha256": "cf83b380f6054c3c"
+      "size": 2205,
+      "sha256": "9129268faed4cce0"
     },
     "services/api-node/src/index.ts": {
       "size": 352,
@@ -125,8 +125,8 @@
       "sha256": "068346e2234c7c96"
     },
     "services/api-node/src/middleware/tenant.ts": {
-      "size": 1196,
-      "sha256": "8b3d2c0f7bad0ad6"
+      "size": 2541,
+      "sha256": "b42a042a90a49d50"
     },
     "services/api-node/src/routes/health.ts": {
       "size": 639,
@@ -137,8 +137,8 @@
       "sha256": "e073f521486d5865"
     },
     "services/api-node/src/routes/items.ts": {
-      "size": 1799,
-      "sha256": "fdd44aab931b6f72"
+      "size": 1764,
+      "sha256": "d46d1dc1a7d73754"
     },
     "services/api-node/src/schemas/common.schema.ts": {
       "size": 633,
@@ -193,8 +193,8 @@
       "sha256": "6eda7fdefbbbe121"
     },
     "services/api-node/tests/unit/tenant.test.ts": {
-      "size": 1945,
-      "sha256": "dcd7e55eb68f1581"
+      "size": 3129,
+      "sha256": "747a396b22a19d15"
     },
     "services/api-node/tsconfig.json": {
       "size": 463,

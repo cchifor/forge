@@ -4,6 +4,6 @@
   snippet: 'import { healthDeepRoutes } from "./routes/health-deep.js";'
 
 - target: src/app.ts
-  marker: FORGE:ROUTER_REGISTRATION
+  marker: FORGE:ROUTER_REGISTRATION_PUBLIC
   position: before
   snippet: 'await app.register(healthDeepRoutes, { prefix: "/api/v1/health" });'
