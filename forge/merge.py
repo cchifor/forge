@@ -61,6 +61,31 @@ class MergeBlockCollector:
         """Canonical map key for a (file, feature, marker) tuple."""
         return f"{rel_posix_path}::{feature_key}:{marker.removeprefix('FORGE:')}"
 
+    @staticmethod
+    def parse_key(key: str) -> tuple[str, str, str] | None:
+        """Inverse of :meth:`key_for`. Returns ``(rel_path, feature_key, marker)``.
+
+        Epic F (1.1.0-alpha.1) uses this to walk ``[forge.merge_blocks]``
+        when uninstalling a disabled fragment — the per-block records are
+        the only structured hint forge has about which files hold
+        sentinel-bounded injections after the fragment's own registry
+        entry is gone.
+
+        Returns ``None`` when the string doesn't match the canonical
+        shape (e.g. a pre-1.0.0a3 key, a hand-edited manifest).
+        """
+        sep = "::"
+        if sep not in key:
+            return None
+        rel, tail = key.split(sep, 1)
+        if ":" not in tail:
+            return None
+        feature_key, marker_bare = tail.split(":", 1)
+        # The stored form has the FORGE: prefix stripped; restore it so
+        # downstream code sees the same shape ``_Injection.marker`` holds.
+        marker = f"FORGE:{marker_bare}"
+        return rel, feature_key, marker
+
     def record(
         self,
         *,

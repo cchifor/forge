@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > First wave of the 12-month post-1.0 roadmap (see `plans/role-expertise-you-sprightly-nova.md`). Foundation epics that unblock the rest: structured error hierarchy (D), registry freeze + symmetry audit (I), FragmentContext plumbing (E), feature_injector decomposition (A), MiddlewareSpec abstraction (K), coverage gate (S), ty pin + canary (X), release dry-run workflow (Z).
 
+### Added — Epic F (provenance-driven uninstall)
+
+- **`forge/uninstaller.py`** — ``uninstall_fragment(project_root, fragment_name, provenance_tbl, collector, removed_blocks_in_files=...)`` computes per-file classification for every provenance record tagged to a disabled fragment and acts on it: **unchanged files deleted**, **user-modified files preserved** with a warning, **missing files pruned from the manifest** silently. Empty parent directories left behind get pruned too.
+- **Sentinel-block scrubber** — ``_remove_sentinel_block(file, feature_key, marker)`` removes a ``FORGE:BEGIN``/``FORGE:END`` pair from a file the fragment doesn't own outright. Returns ``"removed"`` on clean scrub, ``"missing"`` when the block isn't there, ``"conflicted"`` on orphan/duplicate/nested pairs (file untouched, user resolves).
+- **`disabled_fragments(previous_provenance, current_plan_fragments)`** — set-diff helper identifying which fragments were previously present but aren't in the current resolved plan.
+- **`forge --update` integration** — between the sentinel audit and the re-apply pass, computes disabled fragments from the previous provenance + current plan, runs ``uninstall_fragment`` per disabled. Summary payload gains an ``uninstalled`` key with per-fragment ``deleted/preserved/missing/removed_blocks/conflicted_blocks`` lists. Console output surfaces counts when not in quiet mode.
+- **Escape hatch** — ``[forge.update].no_uninstall = true`` in ``forge.toml`` reverts to the pre-Epic-F behaviour (disabled fragments leave their files on disk). Read on every update; corrupt-manifest returns ``False``.
+- **`MergeBlockCollector.parse_key`** — inverse of the canonical ``key_for``. Epic F walks ``[forge.merge_blocks]`` to derive ``(rel_path, feature_key, marker)`` triples for the disabled fragment's injections so sentinel-bounded blocks get scrubbed too, not just the fragment's ``files/`` outputs.
+- **24 new tests** in `tests/test_uninstaller.py` cover disabled-fragment set-diff, unchanged/user-modified/missing file paths, fragment isolation (other fragments' files untouched), collector record pruning, sentinel block clean/missing/conflicted paths, ``UninstallOutcome`` serialisation, forge.toml no_uninstall flag with corrupt-manifest fallback, and ``MergeBlockCollector.key_for``/``parse_key`` round-trip.
+
 ### Added — Epic U (mutmut weekly workflow + breaking-change PR gate)
 
 - **`.github/workflows/mutmut.yml`** — scheduled Monday 06:00 UTC full run on the critical-path modules, `workflow_dispatch` for ad-hoc re-runs, PR gate that fires on `breaking-change`-labelled PRs (skips if no critical-path file changed). Uploads `mutmut-results-*.txt` artefacts with 30-day retention.
