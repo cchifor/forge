@@ -14,6 +14,33 @@ in the generated project.
 
 Design reference: NixOS module options + Terraform provider schemas.
 Dotted paths, typed leaves, JSON-Schema-friendly.
+
+Module layout
+-------------
+The file is split by explicit section markers (``# --- <Section> ----``)
+so contributors can jump to (and extend) a single category without
+merging against unrelated option additions:
+
+    # --- Middleware ---                — middleware.*
+    # --- Observability ---             — observability.*
+    # --- Async work ---                — async.*, queue.*
+    # --- Conversation (chat history)-- — conversation.*
+    # --- Agent platform ---            — agent.*
+    # --- Chat UX ---                   — chat.*
+    # --- Knowledge (RAG) ---           — rag.*
+    # --- Platform ---                  — platform.*, security.*, llm.*,
+                                           object_store.*
+    # --- Layer composition ---         — backend.mode, frontend.*,
+                                           database.*, agent.mode
+
+Adding a new option: find the section that matches the option's
+product category, append a ``register_option(Option(...))`` block
+following the existing sibling style, and run
+``pytest tests/test_options.py tests/test_fragment_parity.py`` to
+validate the new ``enables`` map doesn't reference a missing
+fragment. A future refactor (tracked in the architecture review as
+P1.4) may split these sections into a ``forge/options/`` package once
+the registry grows past one maintainer's convenient scroll-range.
 """
 
 from __future__ import annotations
