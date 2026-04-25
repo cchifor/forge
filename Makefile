@@ -1,4 +1,4 @@
-.PHONY: install-dev test test-fast test-cov lint format typecheck check e2e fuzz \
+.PHONY: install-dev test test-fast test-serial test-cov lint format typecheck check e2e fuzz \
         snapshots validate-matrix validate-matrix-quick validate-matrix-scenario \
         validate-matrix-list validate-matrix-e2e
 
@@ -7,21 +7,27 @@ install-dev:
 	uv run pre-commit install
 
 test:
-	uv run pytest -m "not e2e and not fuzz"
+	uv run pytest -m "not e2e and not fuzz" -n auto
 
 # Excludes golden snapshots (~6 min for 5 presets) for fast iteration.
 # Keep `make test` as the full sign-off run before push.
 test-fast:
-	uv run pytest -m "not e2e and not fuzz and not golden_snapshot"
+	uv run pytest -m "not e2e and not fuzz and not golden_snapshot" -n auto
+
+# Serial fallback for diagnosing xdist-induced flakes. If `make test`
+# fails and `make test-serial` passes, the failure is a real
+# parallel-isolation bug to fix in the test that owns it.
+test-serial:
+	uv run pytest -m "not e2e and not fuzz" -p no:xdist
 
 test-cov:
-	uv run pytest -m "not e2e and not fuzz" --cov-report=html
+	uv run pytest -m "not e2e and not fuzz" -n auto --cov-report=html
 
 fuzz:
 	uv run pytest -m fuzz -v
 
 snapshots:
-	uv run pytest -m golden_snapshot -v
+	uv run pytest -m golden_snapshot -v -n auto
 
 lint:
 	uv run ruff check forge/
