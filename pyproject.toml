@@ -31,6 +31,7 @@ dev = [
     "ty==0.0.29",
     "pre-commit>=3.7.0",
     "hypothesis>=6.152.2",
+    "pytest-xdist>=3.8.0",
 ]
 
 [project.scripts]
@@ -71,6 +72,7 @@ markers = [
     "e2e: end-to-end tests that scaffold a project and run its native test suite (slow, opt-in via -m e2e)",
     "package_integrity: assert the uv-built sdist + wheel contain every template file and no cache contamination (slow, opt-in via -m package_integrity; CI runs as a separate job)",
     "fuzz: Hypothesis-driven fuzz tests for resolver combinations (slower, opt-in via -m fuzz; CI runs nightly)",
+    "golden_snapshot: full forge generation per preset; deterministic across OS+Python so CI runs them on a single matrix cell only (the coverage job)",
 ]
 filterwarnings = [
     # Epic S (1.1.0-alpha.1): internal modules still import GeneratorError

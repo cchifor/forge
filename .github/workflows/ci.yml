@@ -74,7 +74,14 @@ jobs:
       - name: pytest
         # Epic DD carves package_integrity into its own job below; exclude it
         # from the main matrix so the wall-clock stays flat.
-        run: uv run pytest -m "not e2e and not package_integrity and not fuzz"
+        # golden_snapshot tests are deterministic across OS+Python (the
+        # generator is the same Python code on every cell), so they ship
+        # only on the single coverage cell — saves ~5 min per matrix cell
+        # ×5 redundant cells = ~25 min CI compute per push.
+        # `-n auto` parallelises within the cell using pytest-xdist; the
+        # GitHub-Actions linux runner is 2-core so this typically halves
+        # the cell wall-clock.
+        run: uv run pytest -m "not e2e and not package_integrity and not fuzz and not golden_snapshot" -n auto
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
   #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
@@ -95,8 +102,11 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev
       - name: pytest --cov --cov-report=xml,json
+        # `-n auto` parallelises within the coverage cell. pytest-cov
+        # is xdist-aware so per-worker reports merge cleanly into one
+        # coverage.json before the floor gate runs.
         run: |
-          uv run pytest -m "not e2e and not package_integrity and not fuzz" \
+          uv run pytest -m "not e2e and not package_integrity and not fuzz" -n auto \
             --cov=forge \
             --cov-report=xml:coverage.xml \
             --cov-report=json:coverage.json \

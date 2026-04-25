@@ -1,5 +1,5 @@
-.PHONY: install-dev test test-cov lint format typecheck check e2e fuzz \
-        validate-matrix validate-matrix-quick validate-matrix-scenario \
+.PHONY: install-dev test test-fast test-serial test-cov lint format typecheck check e2e fuzz \
+        snapshots validate-matrix validate-matrix-quick validate-matrix-scenario \
         validate-matrix-list validate-matrix-e2e
 
 install-dev:
@@ -7,13 +7,33 @@ install-dev:
 	uv run pre-commit install
 
 test:
-	uv run pytest -m "not e2e and not fuzz"
+	uv run pytest -m "not e2e and not fuzz" -n auto
+
+# Excludes golden snapshots (~6 min for 5 presets) for fast iteration.
+# Keep `make test` as the full sign-off run before push.
+test-fast:
+	uv run pytest -m "not e2e and not fuzz and not golden_snapshot" -n auto
+
+# Serial fallback for diagnosing xdist-induced flakes. If `make test`
+# fails and `make test-serial` passes, the failure is a real
+# parallel-isolation bug to fix in the test that owns it.
+test-serial:
+	uv run pytest -m "not e2e and not fuzz" -p no:xdist
 
 test-cov:
-	uv run pytest -m "not e2e and not fuzz" --cov-report=html
+	uv run pytest -m "not e2e and not fuzz" -n auto --cov-report=html
 
 fuzz:
 	uv run pytest -m fuzz -v
+
+snapshots:
+	# Snapshots are I/O-bound on Copier rendering. With only 5 tests,
+	# `-n auto` saves no wall-clock and adds worker-spawn + disk-
+	# contention overhead (~15s pessimization on Windows NTFS). Run
+	# serially when iterating on the generator. The coverage CI cell
+	# still gets parallelism by mixing snapshots with the rest of the
+	# suite — workers there have plenty of other tests to chew through.
+	uv run pytest -m golden_snapshot -v
 
 lint:
 	uv run ruff check forge/
