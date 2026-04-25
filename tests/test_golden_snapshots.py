@@ -227,6 +227,7 @@ PRESETS = {
 }
 
 
+@pytest.mark.golden_snapshot
 @pytest.mark.parametrize("preset_name", list(PRESETS))
 def test_golden_snapshot(preset_name: str, tmp_path: Path) -> None:
     """Render the preset into a tempdir; compare its shape to the snapshot.
