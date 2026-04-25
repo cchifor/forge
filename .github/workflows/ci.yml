@@ -74,7 +74,11 @@ jobs:
       - name: pytest
         # Epic DD carves package_integrity into its own job below; exclude it
         # from the main matrix so the wall-clock stays flat.
-        run: uv run pytest -m "not e2e and not package_integrity and not fuzz"
+        # golden_snapshot tests are deterministic across OS+Python (the
+        # generator is the same Python code on every cell), so they ship
+        # only on the single coverage cell — saves ~5 min per matrix cell
+        # ×5 redundant cells = ~25 min CI compute per push.
+        run: uv run pytest -m "not e2e and not package_integrity and not fuzz and not golden_snapshot"
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
   #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
