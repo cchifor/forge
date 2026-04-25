@@ -1,8 +1,15 @@
-import type { Prisma } from "@prisma/client";
-import { prisma } from "../lib/prisma.js";
-import { NotFoundError, AlreadyExistsError } from "../lib/errors.js";
-import type { ItemCreate, ItemUpdate, ItemStatus, PaginatedItems } from "../schemas/item.schema.js";
+import { AlreadyExistsError, NotFoundError } from "../lib/errors.js";
+import {
+	itemRepository,
+	type PrismaItemRepository,
+} from "../data/repositories/index.js";
 import type { TenantContext } from "../middleware/tenant.js";
+import type {
+	ItemCreate,
+	ItemStatus,
+	ItemUpdate,
+	PaginatedItems,
+} from "../schemas/item.schema.js";
 
 interface ListParams {
 	tenant: TenantContext;
@@ -12,69 +19,72 @@ interface ListParams {
 	search?: string;
 }
 
-export async function list(params: ListParams): Promise<PaginatedItems> {
-	const { tenant, skip, limit, status, search } = params;
+/**
+ * Service layer.
+ *
+ * Depends on :class:`PrismaItemRepository` only via the
+ * :class:`Repository` interface — tests can substitute an in-memory
+ * implementation without touching the database. The default export
+ * uses the repository singleton; ``itemService.withRepository(repo)``
+ * builds a service bound to a custom repo for tests.
+ */
 
-	const where: Prisma.ItemWhereInput = { customer_id: tenant.customerId };
-	if (status) where.status = status;
-	if (search) {
-		where.AND = [
-			{ customer_id: tenant.customerId },
-			{
-				OR: [
-					{ name: { contains: search, mode: "insensitive" } },
-					{ description: { contains: search, mode: "insensitive" } },
-				],
-			},
-		];
-		delete where.customer_id;
-	}
-
-	const [items, total] = await Promise.all([
-		prisma.item.findMany({ where, skip, take: limit, orderBy: { created_at: "desc" } }),
-		prisma.item.count({ where }),
-	]);
-
-	return { items, total, skip, limit, has_more: skip + items.length < total };
-}
-
-export async function create(tenant: TenantContext, data: ItemCreate) {
-	const existing = await prisma.item.findFirst({
-		where: { name: data.name, customer_id: tenant.customerId },
-	});
-	if (existing) throw new AlreadyExistsError("Item", data.name);
-
-	return prisma.item.create({
-		data: {
-			...data,
-			customer_id: tenant.customerId,
-			user_id: tenant.userId,
+function buildService(repo: PrismaItemRepository = itemRepository) {
+	return {
+		async list(params: ListParams): Promise<PaginatedItems> {
+			const { tenant, skip, limit, status, search } = params;
+			const { items, total } = await repo.list(tenant, {
+				skip,
+				limit,
+				status,
+				search,
+			});
+			return {
+				items,
+				total,
+				skip,
+				limit,
+				has_more: skip + items.length < total,
+			};
 		},
-	});
+
+		async create(tenant: TenantContext, data: ItemCreate) {
+			const existing = await repo.findByName(tenant, data.name);
+			if (existing) throw new AlreadyExistsError("Item", data.name);
+			return repo.create(tenant, data);
+		},
+
+		async getById(tenant: TenantContext, id: string) {
+			const item = await repo.getById(tenant, id);
+			if (!item) throw new NotFoundError("Item", id);
+			return item;
+		},
+
+		async update(tenant: TenantContext, id: string, data: ItemUpdate) {
+			await this.getById(tenant, id);
+			if (data.name) {
+				const existing = await repo.findByNameExcluding(tenant, data.name, id);
+				if (existing) throw new AlreadyExistsError("Item", data.name);
+			}
+			return repo.update(tenant, id, data);
+		},
+
+		async remove(tenant: TenantContext, id: string) {
+			await this.getById(tenant, id);
+			await repo.delete(tenant, id);
+		},
+
+		withRepository(other: PrismaItemRepository) {
+			return buildService(other);
+		},
+	};
 }
 
-export async function getById(tenant: TenantContext, id: string) {
-	const item = await prisma.item.findFirst({
-		where: { id, customer_id: tenant.customerId },
-	});
-	if (!item) throw new NotFoundError("Item", id);
-	return item;
-}
+const itemService = buildService();
 
-export async function update(tenant: TenantContext, id: string, data: ItemUpdate) {
-	await getById(tenant, id);
-
-	if (data.name) {
-		const existing = await prisma.item.findFirst({
-			where: { name: data.name, customer_id: tenant.customerId, NOT: { id } },
-		});
-		if (existing) throw new AlreadyExistsError("Item", data.name);
-	}
-
-	return prisma.item.update({ where: { id }, data });
-}
-
-export async function remove(tenant: TenantContext, id: string) {
-	await getById(tenant, id);
-	await prisma.item.delete({ where: { id } });
-}
+export const list = itemService.list.bind(itemService);
+export const create = itemService.create.bind(itemService);
+export const getById = itemService.getById.bind(itemService);
+export const update = itemService.update.bind(itemService);
+export const remove = itemService.remove.bind(itemService);
+export const withRepository = itemService.withRepository.bind(itemService);
