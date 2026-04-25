@@ -27,7 +27,13 @@ fuzz:
 	uv run pytest -m fuzz -v
 
 snapshots:
-	uv run pytest -m golden_snapshot -v -n auto
+	# Snapshots are I/O-bound on Copier rendering. With only 5 tests,
+	# `-n auto` saves no wall-clock and adds worker-spawn + disk-
+	# contention overhead (~15s pessimization on Windows NTFS). Run
+	# serially when iterating on the generator. The coverage CI cell
+	# still gets parallelism by mixing snapshots with the rest of the
+	# suite — workers there have plenty of other tests to chew through.
+	uv run pytest -m golden_snapshot -v
 
 lint:
 	uv run ruff check forge/
