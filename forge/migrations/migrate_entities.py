@@ -38,7 +38,7 @@ fields:
   - name: id
     type: uuid
     primary_key: true
-  # TODO: fill in the rest of this entity's fields
+  # Add this entity's remaining fields below (delete the example fields you don't need).
   - name: customer_id
     type: uuid
   - name: user_id
