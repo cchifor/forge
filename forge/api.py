@@ -144,7 +144,7 @@ def _check_sdk_requirement(spec: str) -> bool:
             return False
         if op == "<" and not (current < target):
             return False
-        if op == "==" and not (current == target):
+        if op == "==" and current != target:
             return False
     return True
 

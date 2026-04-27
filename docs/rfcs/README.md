@@ -65,3 +65,8 @@ Things the reviewers should weigh in on.
 | 003 | Published-package naming and ownership | Draft | 1.0.0a4 |
 | 004 | Release rehearsal before 1.0.0 | Accepted | 1.0.0rc1 |
 | 005 | Polyglot ports roadmap | Deferred to 2.x | — |
+| 006 | Cross-backend fragment contract | Accepted | 1.1.0-alpha.1 |
+| 007 | Error contract | Accepted | 1.1.0-alpha.1 |
+| 008 | Config loading | Accepted | 1.1.0-alpha.2 |
+| 009 | Service registration | Accepted | 1.1.0-alpha.2 |
+| 010 | Schema-driven domain modelling | Proposed | 1.2.0 |
