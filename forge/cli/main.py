@@ -10,6 +10,7 @@ into interactive mode.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any
 
@@ -105,6 +106,24 @@ def main() -> None:
     from forge import plugins  # noqa: PLC0415
 
     plugins.load_all()
+
+    # Epic 3 (plugin SDK MVP) — surface plugin-load failures at every
+    # CLI entry point, not only via ``forge --plugins list``. Otherwise
+    # a broken plugin produces confusing "fragment not found" errors
+    # later in generation with no hint that a plugin failed earlier.
+    # Suppressible via ``FORGE_QUIET_PLUGIN_WARNINGS=1`` for scripts
+    # that intentionally tolerate broken plugins.
+    if plugins.FAILED_PLUGINS and os.environ.get("FORGE_QUIET_PLUGIN_WARNINGS") != "1":
+        for name, reason in plugins.FAILED_PLUGINS:
+            print(
+                f"  [warn] plugin {name!r} failed to load: {reason}",
+                file=sys.stderr,
+            )
+        print(
+            "  [warn] Run `forge --plugins list` for plugin status; "
+            "set FORGE_QUIET_PLUGIN_WARNINGS=1 to suppress.",
+            file=sys.stderr,
+        )
 
     args = _parse_args()
 

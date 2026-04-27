@@ -59,20 +59,94 @@ breaking change to this surface surfaces before release.
 ``provisional`` means the shape may still change in a 1.x minor — the
 emitter pipeline isn't yet wired into a stable contract. Everything
 else is stable: a breaking signature change requires a major bump.
+
+SDK versioning
+--------------
+
+:data:`SDK_VERSION` records the version of *the public plugin API
+surface itself*, distinct from the forge package version. A plugin
+declares compatibility via ``api.require_sdk(">=1.1")`` in its
+``register()`` callable; an incompatible host raises
+:class:`PluginError` immediately so the failure is visible at plugin
+load instead of as a confusing AttributeError later. Bumps to
+:data:`SDK_VERSION` are tracked in ``docs/SDK_CHANGELOG.md`` — every
+PR that mutates ``__all__`` of this module must add an entry there.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from forge.errors import PLUGIN_COLLISION, PluginError
+from forge.errors import PLUGIN_COLLISION, PLUGIN_SDK_INCOMPATIBLE, PluginError
 
 if TYPE_CHECKING:
     from forge.config import BackendSpec, FrontendSpec
     from forge.fragments import Fragment
     from forge.options import Option
+
+
+# Plugin SDK version. This is the version of the *API surface* — the
+# names + signatures listed in ``__all__`` below — not the forge
+# package version. Plugins declare compatibility with
+# ``api.require_sdk(">=X.Y")``; bumps require a CHANGELOG entry in
+# ``docs/SDK_CHANGELOG.md``.
+SDK_VERSION = "1.1"
+
+
+_SDK_VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
+
+
+def _parse_sdk_version(version: str) -> tuple[int, int]:
+    """Parse a "MAJOR.MINOR" SDK version string. Plugins target the SDK,
+    not the forge package, so the format is intentionally minimal — no
+    patch component, no pre-release labels."""
+    m = _SDK_VERSION_RE.match(version.strip())
+    if m is None:
+        raise ValueError(
+            f"SDK version {version!r} must be in 'MAJOR.MINOR' form (e.g. '1.1')"
+        )
+    return int(m.group(1)), int(m.group(2))
+
+
+_REQ_RE = re.compile(r"\s*([<>]=?|==)\s*(\d+\.\d+)\s*")
+
+
+def _check_sdk_requirement(spec: str) -> bool:
+    """Return True iff the current :data:`SDK_VERSION` satisfies ``spec``.
+
+    ``spec`` is a comma-separated list of ``OP MAJOR.MINOR`` clauses.
+    Supported operators: ``>=``, ``>``, ``<=``, ``<``, ``==``. Each
+    clause is evaluated against the current SDK version; all clauses
+    must match for the requirement to be satisfied. Examples::
+
+        ">=1.1"
+        ">=1.1, <2.0"
+        ">=1.0, <1.2"
+    """
+    current = _parse_sdk_version(SDK_VERSION)
+    for clause in spec.split(","):
+        m = _REQ_RE.fullmatch(clause)
+        if m is None:
+            raise ValueError(
+                f"bad SDK requirement clause {clause!r} in {spec!r}; "
+                "expected '>= 1.1' / '< 2.0' / '== 1.1' shape"
+            )
+        op, version_str = m.group(1), m.group(2)
+        target = _parse_sdk_version(version_str)
+        if op == ">=" and not (current >= target):
+            return False
+        if op == ">" and not (current > target):
+            return False
+        if op == "<=" and not (current <= target):
+            return False
+        if op == "<" and not (current < target):
+            return False
+        if op == "==" and not (current == target):
+            return False
+    return True
 
 
 @dataclass
@@ -119,6 +193,45 @@ class ForgeAPI:
         self._commands: list[Callable[..., Any]] = []
         # Emitters likewise — Phase 1.3 wires these.
         self._emitters: dict[str, Callable[..., Any]] = {}
+
+    # -- SDK version negotiation -------------------------------------------
+
+    def require_sdk(self, spec: str) -> None:
+        """Assert the host forge SDK satisfies ``spec``.
+
+        Plugin authors call this at the top of ``register()`` to fail
+        fast on incompatible hosts instead of crashing with a confusing
+        AttributeError when the plugin reaches for a method the host
+        doesn't ship. ``spec`` is a comma-separated list of clauses
+        (``">=1.1"``, ``">=1.1, <2.0"``); see :data:`SDK_VERSION`.
+
+        Raises :class:`PluginError` (code ``PLUGIN_SDK_INCOMPATIBLE``)
+        when the current SDK version is outside the requested range.
+        """
+        try:
+            satisfied = _check_sdk_requirement(spec)
+        except ValueError as exc:
+            raise PluginError(
+                f"Plugin {self._registration.name!r} passed an invalid "
+                f"SDK requirement {spec!r}: {exc}",
+                code=PLUGIN_SDK_INCOMPATIBLE,
+                context={
+                    "plugin": self._registration.name,
+                    "requirement": spec,
+                    "sdk_version": SDK_VERSION,
+                },
+            ) from exc
+        if not satisfied:
+            raise PluginError(
+                f"Plugin {self._registration.name!r} requires forge SDK {spec!r} "
+                f"but host ships SDK {SDK_VERSION!r}.",
+                code=PLUGIN_SDK_INCOMPATIBLE,
+                context={
+                    "plugin": self._registration.name,
+                    "requirement": spec,
+                    "sdk_version": SDK_VERSION,
+                },
+            )
 
     # -- Option registration ------------------------------------------------
 
