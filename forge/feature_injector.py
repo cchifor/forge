@@ -12,43 +12,99 @@ Each fragment directory ships an ``inject.yaml``, ``deps.yaml``, and
 ``env.yaml`` describing what to do. All three are optional; a pure-copy
 fragment can omit them entirely. A fragment with zero files and no yaml is
 valid — it just registers presence in forge.toml without touching the project.
+
+P1.1 (Epic 1b) split this module: sentinel primitives moved into
+:mod:`forge.injectors.sentinels`, deps logic into
+:mod:`forge.appliers.deps`. The names are re-exported here for one
+minor as backward-compat for callers that imported them from this
+module before the split.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import tomlkit
 import yaml
 
+from forge.appliers.deps import (
+    _add_dependencies,
+    _add_node_deps,
+    _add_python_deps,
+    _add_rust_deps,
+    _is_at_shorthand,
+    _parse_rust_dep,
+    _py_dep_name,
+)
+from forge.appliers.env import append_env_var as _add_env_var
 from forge.capability_resolver import ResolvedFragment
-from forge.config import BackendConfig, BackendLanguage
+from forge.config import BackendConfig
 from forge.errors import (
-    FRAGMENT_DEP_SPEC_INVALID,
-    FRAGMENT_DEPS_FILE_MISSING,
-    FRAGMENT_DEPS_SECTION_MISSING,
     FRAGMENT_INJECT_YAML_BAD_POSITION,
     FRAGMENT_INJECT_YAML_BAD_SHAPE,
     FRAGMENT_INJECT_YAML_BAD_ZONE,
     FRAGMENT_INJECT_YAML_MISSING_KEY,
-    INJECTION_MARKER_AMBIGUOUS,
-    INJECTION_MARKER_MISSING,
-    INJECTION_SENTINEL_CORRUPT,
-    INJECTION_TARGET_MISSING,
     FragmentError,
-    InjectionError,
 )
 from forge.fragment_context import FragmentContext, UpdateMode
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
+from forge.injectors.sentinels import (
+    _COMMENT_PREFIXES,
+    _comment_prefix,
+    _find_unique_line,
+    _has_sentinel_block,
+    _indent_of,
+    _inject_snippet,
+    _read_block_body,
+    _render_block,
+    _sentinel_tag,
+)
 from forge.middleware_spec import MiddlewareSpec
 from forge.provenance import ProvenanceCollector
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
+
+# Re-exports (backward compat — see module docstring).
+__all__ = [
+    # Public API
+    "FRAGMENTS_DIR",
+    "MARKER_PREFIX",
+    "TEMPLATES_DIR",
+    "apply_features",
+    "apply_project_features",
+    # Backward-compat re-exports of items that moved in P1.1 (Epic 1b)
+    "_COMMENT_PREFIXES",
+    "_Injection",
+    "_add_dependencies",
+    "_add_env_var",
+    "_add_node_deps",
+    "_add_python_deps",
+    "_add_rust_deps",
+    "_apply_fragment",
+    "_apply_merge_zone",
+    "_apply_zoned_injection",
+    "_comment_prefix",
+    "_copy_files",
+    "_dispatch_injector",
+    "_find_unique_line",
+    "_has_sentinel_block",
+    "_indent_of",
+    "_inject_snippet",
+    "_is_at_shorthand",
+    "_load_injections",
+    "_load_merge_baseline",
+    "_parse_rust_dep",
+    "_py_dep_name",
+    "_read_block_body",
+    "_record_merge_baseline",
+    "_render_block",
+    "_render_snippet",
+    "_resolve_fragment_dir",
+    "_sentinel_tag",
+]
 
 
 def _resolve_fragment_dir(fragment_dir: str) -> Path:
@@ -93,45 +149,6 @@ class _Injection:
     #                   and return non-zero from update. Requires a
     #                   non-empty provenance entry for the target file.
     zone: str = "generated"
-
-
-# File-extension → single-line comment prefix. Only line-comment forms are
-# supported (never `/* */` or `<!-- -->`); in practice every injection
-# target in the forge registry is a .py / .ts / .rs file.
-_COMMENT_PREFIXES: dict[str, str] = {
-    ".py": "#",
-    ".pyi": "#",
-    ".yml": "#",
-    ".yaml": "#",
-    ".toml": "#",
-    ".env": "#",
-    ".sh": "#",
-    ".ts": "//",
-    ".tsx": "//",
-    ".js": "//",
-    ".jsx": "//",
-    ".mjs": "//",
-    ".cjs": "//",
-    ".rs": "//",
-    ".go": "//",
-}
-
-
-def _comment_prefix(file: Path) -> str:
-    """Comment-syntax prefix for BEGIN/END sentinels.
-
-    Unknown extensions fall back to ``#``. If you add a fragment that
-    injects into a new file type, register its prefix here rather than
-    relying on the fallback — sentinel mismatches break idempotency.
-    """
-    return _COMMENT_PREFIXES.get(file.suffix.lower(), "#")
-
-
-def _sentinel_tag(feature_key: str, marker: str) -> str:
-    """Tag identifying one injection. Unique per (file, feature, marker)."""
-    # Strip FORGE: prefix from marker so the tag reads naturally.
-    naked = marker[len(MARKER_PREFIX) :] if marker.startswith(MARKER_PREFIX) else marker
-    return f"{feature_key}:{naked}"
 
 
 def apply_features(
@@ -262,9 +279,7 @@ def _apply_fragment(
 
     This function is a stable internal entry point — callers inside
     ``feature_injector`` route through it so the rest of the module
-    doesn't need to know pipelines exist. A future PR moves the
-    applier-helper bodies (``_copy_files``, ``_add_dependencies``, etc.)
-    out of this module and into the applier modules that own them.
+    doesn't need to know pipelines exist.
     """
     from forge.appliers import FragmentPipeline  # noqa: PLC0415
 
@@ -410,6 +425,9 @@ def _load_injections(
     return out
 
 
+# -- Zone dispatch -----------------------------------------------------------
+
+
 def _apply_zoned_injection(
     target: Path,
     inj: _Injection,
@@ -508,24 +526,6 @@ def _apply_merge_zone(
     return False
 
 
-def _read_block_body(file: Path, feature_key: str, marker: str) -> str | None:
-    """Return the lines between BEGIN/END sentinels for this tag, exclusive."""
-    if not file.is_file():
-        return None
-    tag = _sentinel_tag(feature_key, marker)
-    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
-    end_needle = f"{MARKER_PREFIX}END {tag}"
-    text = file.read_text(encoding="utf-8")
-    if begin_needle not in text or end_needle not in text:
-        return None
-    lines = text.splitlines(keepends=True)
-    begin_idx = next((i for i, line in enumerate(lines) if begin_needle in line), None)
-    end_idx = next((i for i, line in enumerate(lines) if end_needle in line), None)
-    if begin_idx is None or end_idx is None or end_idx <= begin_idx:
-        return None
-    return "".join(lines[begin_idx + 1 : end_idx])
-
-
 def _record_merge_baseline(
     target: Path,
     inj: _Injection,
@@ -589,281 +589,3 @@ def _dispatch_injector(target: Path, inj: _Injection) -> None:
         inject_ts(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
         return
     _inject_snippet(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
-
-
-def _has_sentinel_block(file: Path, feature_key: str, marker: str) -> bool:
-    """True when ``file`` already contains a BEGIN/END sentinel pair for this tag."""
-    if not file.is_file():
-        return False
-    tag = _sentinel_tag(feature_key, marker)
-    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
-    end_needle = f"{MARKER_PREFIX}END {tag}"
-    text = file.read_text(encoding="utf-8")
-    return begin_needle in text and end_needle in text
-
-
-def _inject_snippet(
-    file: Path,
-    feature_key: str,
-    marker: str,
-    snippet: str,
-    position: str,
-) -> None:
-    """Insert or replace ``snippet`` at a ``# FORGE:<marker>`` site.
-
-    The injection is wrapped in BEGIN / END sentinel comments keyed to
-    ``feature_key:marker_name``. Running this twice on the same file replaces
-    the existing block in place rather than duplicating — the foundation
-    of ``forge update`` idempotency (see B2.4 plan).
-
-    Rules:
-      - Marker (the ``# FORGE:<marker>`` line) must appear exactly once.
-      - If a BEGIN/END pair with this tag exists, replace the block (lines
-        between the two sentinels, inclusive).
-      - Otherwise, emit ``BEGIN, <snippet lines>, END`` at the marker
-        position (``before`` → above the marker; ``after`` → below).
-      - Indentation is inherited from the marker line and applied to the
-        sentinel + snippet lines so the block slots into the enclosing
-        scope cleanly.
-    """
-    if not file.is_file():
-        raise InjectionError(
-            f"Injection target not found: {file}",
-            code=INJECTION_TARGET_MISSING,
-            context={"file": str(file)},
-        )
-
-    needle = marker if marker.startswith(MARKER_PREFIX) else f"{MARKER_PREFIX}{marker}"
-    prefix = _comment_prefix(file)
-    tag = _sentinel_tag(feature_key, marker)
-    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
-    end_needle = f"{MARKER_PREFIX}END {tag}"
-
-    text = file.read_text(encoding="utf-8")
-    lines = text.splitlines(keepends=True)
-
-    # Path 1 — sentinel block already present → replace in place.
-    begin_idx = _find_unique_line(lines, begin_needle, file, needle=begin_needle)
-    if begin_idx is not None:
-        end_idx = _find_unique_line(lines, end_needle, file, needle=end_needle)
-        if end_idx is None or end_idx < begin_idx:
-            raise InjectionError(
-                f"{file}: found BEGIN sentinel for '{tag}' but matching END "
-                f"is missing or out of order.",
-                code=INJECTION_SENTINEL_CORRUPT,
-                context={"file": str(file), "tag": tag},
-            )
-        # Preserve the BEGIN line's indentation so a regenerated block keeps
-        # the same shape as the original marker-aligned one.
-        indent = _indent_of(lines[begin_idx])
-        fresh = _render_block(indent, prefix, tag, snippet)
-        lines = lines[:begin_idx] + [fresh] + lines[end_idx + 1 :]
-        file.write_text("".join(lines), encoding="utf-8")
-        return
-
-    # Path 2 — fresh injection: find the marker and insert a new block.
-    marker_idx = _find_unique_line(lines, needle, file, needle=needle)
-    if marker_idx is None:
-        raise InjectionError(
-            f"Marker '{needle}' not found in {file}. "
-            "Add the marker to the base template or check the fragment's inject.yaml.",
-            code=INJECTION_MARKER_MISSING,
-            context={"file": str(file), "marker": needle},
-        )
-    indent = _indent_of(lines[marker_idx])
-    block = _render_block(indent, prefix, tag, snippet)
-
-    insert_at = marker_idx + 1 if position == "after" else marker_idx
-    lines = lines[:insert_at] + [block] + lines[insert_at:]
-    file.write_text("".join(lines), encoding="utf-8")
-
-
-def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: str) -> int | None:
-    """Return the unique line index containing ``substring`` or None.
-
-    Raises if the substring appears more than once — ambiguous sentinels
-    would silently corrupt re-injection.
-    """
-    hits = [i for i, line in enumerate(lines) if substring in line]
-    if not hits:
-        return None
-    if len(hits) > 1:
-        raise InjectionError(
-            f"'{needle}' appears {len(hits)} times in {file}; must be unique.",
-            code=INJECTION_MARKER_AMBIGUOUS,
-            context={"file": str(file), "marker": needle, "count": len(hits)},
-        )
-    return hits[0]
-
-
-def _indent_of(line: str) -> str:
-    return line[: len(line) - len(line.lstrip(" \t"))]
-
-
-def _render_block(indent: str, prefix: str, tag: str, snippet: str) -> str:
-    """Produce ``{indent}{prefix} BEGIN ...\\n<snippet>\\n{indent}{prefix} END ...\\n``."""
-    begin = f"{indent}{prefix} {MARKER_PREFIX}BEGIN {tag}\n"
-    end = f"{indent}{prefix} {MARKER_PREFIX}END {tag}\n"
-    body = "".join(f"{indent}{line}\n" for line in snippet.splitlines())
-    return begin + body + end
-
-
-# -- Dependency addition -----------------------------------------------------
-
-
-def _add_dependencies(lang: BackendLanguage, backend_dir: Path, deps: tuple[str, ...]) -> None:
-    if not deps:
-        return
-    if lang is BackendLanguage.PYTHON:
-        _add_python_deps(backend_dir / "pyproject.toml", deps)
-    elif lang is BackendLanguage.NODE:
-        _add_node_deps(backend_dir / "package.json", deps)
-    elif lang is BackendLanguage.RUST:
-        _add_rust_deps(backend_dir / "Cargo.toml", deps)
-
-
-def _add_python_deps(pyproject: Path, deps: tuple[str, ...]) -> None:
-    if not pyproject.is_file():
-        raise FragmentError(
-            f"pyproject.toml not found at {pyproject}",
-            code=FRAGMENT_DEPS_FILE_MISSING,
-            context={"path": str(pyproject), "language": "python"},
-        )
-    doc = tomlkit.parse(pyproject.read_text(encoding="utf-8"))
-    project = doc.get("project")
-    if project is None:
-        raise FragmentError(
-            f"{pyproject}: [project] section missing",
-            code=FRAGMENT_DEPS_SECTION_MISSING,
-            context={"path": str(pyproject), "section": "project"},
-        )
-    existing = list(project.get("dependencies", []))
-    existing_names = {_py_dep_name(d): d for d in existing}
-    for dep in deps:
-        name = _py_dep_name(dep)
-        if name in existing_names:
-            continue
-        existing.append(dep)
-        existing_names[name] = dep
-    project["dependencies"] = existing
-    pyproject.write_text(tomlkit.dumps(doc), encoding="utf-8")
-
-
-def _py_dep_name(dep: str) -> str:
-    """Extract the package name from a PEP 508 spec like `slowapi>=0.1.9`."""
-    for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", "["):
-        if sep in dep:
-            return dep.split(sep, 1)[0].strip().lower()
-    return dep.strip().lower()
-
-
-def _add_node_deps(package_json: Path, deps: tuple[str, ...]) -> None:
-    if not package_json.is_file():
-        raise FragmentError(
-            f"package.json not found at {package_json}",
-            code=FRAGMENT_DEPS_FILE_MISSING,
-            context={"path": str(package_json), "language": "node"},
-        )
-    raw = package_json.read_text(encoding="utf-8")
-    data = json.loads(raw)
-    deps_obj: dict[str, Any] = data.setdefault("dependencies", {})
-    for dep in deps:
-        # Node dep spec: "name@version" or "name" for latest.
-        if "@" in dep and not dep.startswith("@"):
-            name, version = dep.split("@", 1)
-        elif dep.startswith("@"):
-            # Scoped package like "@fastify/rate-limit@1.2.3"
-            head, _, tail = dep[1:].partition("@")
-            if tail:
-                name, version = "@" + head, tail
-            else:
-                name, version = dep, "latest"
-        else:
-            name, version = dep, "latest"
-        if name not in deps_obj:
-            deps_obj[name] = version
-    package_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-
-def _add_rust_deps(cargo_toml: Path, deps: tuple[str, ...]) -> None:
-    """Merge Cargo dependencies. Two forms supported:
-
-    - Shorthand: ``"name@version"`` → ``name = "version"``.
-    - Full TOML: ``'name = { version = "x", features = [...] }'`` →
-      parsed verbatim so features / git / default-features work.
-
-    Existing entries are preserved — forge never clobbers hand-edited deps.
-    """
-    if not cargo_toml.is_file():
-        raise FragmentError(
-            f"Cargo.toml not found at {cargo_toml}",
-            code=FRAGMENT_DEPS_FILE_MISSING,
-            context={"path": str(cargo_toml), "language": "rust"},
-        )
-    doc = tomlkit.parse(cargo_toml.read_text(encoding="utf-8"))
-    table = doc.setdefault("dependencies", tomlkit.table())
-    for dep in deps:
-        name, value = _parse_rust_dep(dep)
-        if name not in table:
-            table[name] = value
-    cargo_toml.write_text(tomlkit.dumps(doc), encoding="utf-8")
-
-
-def _parse_rust_dep(dep: str) -> tuple[str, Any]:
-    """Parse a Cargo dep spec into ``(name, value)`` where value is either a
-    version string or a tomlkit-parsed inline table.
-
-    >>> _parse_rust_dep("tower@0.5")
-    ('tower', '0.5')
-    >>> _parse_rust_dep('opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"] }')  # doctest: +ELLIPSIS
-    ('opentelemetry-otlp', ...)
-    """
-    stripped = dep.strip()
-    # Full-form check: "name = <toml>" — detected by a top-level ``=`` outside
-    # of the shorthand's ``@`` separator. We prefer ``=`` when present.
-    if "=" in stripped and not _is_at_shorthand(stripped):
-        name_part, _, rhs = stripped.partition("=")
-        name = name_part.strip()
-        if not name:
-            raise FragmentError(
-                f"bad Rust dep spec (empty name): {dep!r}",
-                code=FRAGMENT_DEP_SPEC_INVALID,
-                context={"dep": dep, "reason": "empty_name"},
-            )
-        try:
-            parsed = tomlkit.parse(f"__v = {rhs.strip()}")
-        except Exception as e:  # noqa: BLE001
-            raise FragmentError(
-                f"bad Rust dep value in {dep!r}: {e}",
-                code=FRAGMENT_DEP_SPEC_INVALID,
-                context={"dep": dep, "reason": "toml_parse_failure"},
-            ) from e
-        return name, parsed["__v"]
-    if "@" in stripped:
-        name, version = stripped.split("@", 1)
-        return name.strip(), version.strip()
-    return stripped, "*"
-
-
-def _is_at_shorthand(dep: str) -> bool:
-    """True if `dep` looks like ``name@version`` — no ``=`` before the ``@``."""
-    if "@" not in dep:
-        return False
-    at = dep.index("@")
-    eq = dep.find("=")
-    return eq == -1 or eq > at
-
-
-# -- Env vars ----------------------------------------------------------------
-
-
-def _add_env_var(env_file: Path, key: str, value: str) -> None:
-    """Append KEY=VALUE to env_file unless KEY already present.
-
-    Kept as a thin re-export for backward compatibility; the authoritative
-    implementation now lives in :func:`forge.appliers.env.append_env_var`
-    (Epic A continuation — P1.1 in the architecture plan).
-    """
-    from forge.appliers.env import append_env_var  # noqa: PLC0415
-
-    append_env_var(env_file, key, value)
