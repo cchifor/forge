@@ -1,0 +1,55 @@
+name: Plugin E2E
+
+# P0.2 (1.1.0-alpha.2) — gate the public ``forge.api`` plugin contract by
+# installing ``examples/forge-plugin-example`` against the working tree
+# and running the ``plugin_e2e``-marked tests against the live registry.
+# Catches drift between the plugin SDK (forge/api.py) and the reference
+# implementation before release. See docs/plugin-development.md for the
+# stable-API table.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    # Skip the gate on PRs that don't touch the plugin surface — the
+    # other CI jobs cover those changes. Listed paths cover the public
+    # API, the loader, the registries that plugins write to, the
+    # reference plugin itself, and this workflow.
+    paths:
+      - "forge/api.py"
+      - "forge/plugins.py"
+      - "forge/options.py"
+      - "forge/options/**"
+      - "forge/fragments.py"
+      - "forge/config.py"
+      - "forge/services/**"
+      - "examples/forge-plugin-example/**"
+      - "tests/test_plugin_e2e.py"
+      - ".github/workflows/plugin-e2e.yml"
+      - "pyproject.toml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Set Python 3.13
+        run: uv python install 3.13
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Install reference plugin into the same venv
+        # Editable install so a plugin-side bug surfaces against the
+        # branch's plugin source, not a published package. The plugin
+        # depends on forge>=1.0.0a1; the dev sync above already provides
+        # the working-tree forge so this resolves locally.
+        run: uv pip install -e examples/forge-plugin-example
+      - name: pytest -m plugin_e2e
+        run: uv run pytest -m plugin_e2e -v --no-cov

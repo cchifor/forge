@@ -17,7 +17,6 @@ valid — it just registers presence in forge.toml without touching the project.
 from __future__ import annotations
 
 import json
-import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +31,6 @@ from forge.errors import (
     FRAGMENT_DEP_SPEC_INVALID,
     FRAGMENT_DEPS_FILE_MISSING,
     FRAGMENT_DEPS_SECTION_MISSING,
-    FRAGMENT_FILES_OVERLAP,
     FRAGMENT_INJECT_YAML_BAD_POSITION,
     FRAGMENT_INJECT_YAML_BAD_SHAPE,
     FRAGMENT_INJECT_YAML_BAD_ZONE,
@@ -44,7 +42,7 @@ from forge.errors import (
     FragmentError,
     InjectionError,
 )
-from forge.fragment_context import FragmentContext
+from forge.fragment_context import FragmentContext, UpdateMode
 from forge.fragments import FRAGMENTS_DIRNAME, MARKER_PREFIX, FragmentImplSpec
 from forge.middleware_spec import MiddlewareSpec
 from forge.provenance import ProvenanceCollector
@@ -142,7 +140,8 @@ def apply_features(
     resolved: tuple[ResolvedFragment, ...],
     quiet: bool = False,
     *,
-    skip_existing_files: bool = False,
+    update_mode: UpdateMode = "strict",
+    file_baselines: Mapping[str, str] | None = None,
     collector: ProvenanceCollector | None = None,
     option_values: Mapping[str, Any] | None = None,
     project_root: Path | None = None,
@@ -152,10 +151,15 @@ def apply_features(
     Project-scoped fragments are emitted separately via
     ``apply_project_features`` after all backends are rendered.
 
-    When ``skip_existing_files=True`` (used by ``forge --update``), a
-    fragment's ``files/`` copy-phase skips files that already exist
-    instead of raising. Lets repeated applies be idempotent without
-    clobbering user edits.
+    ``update_mode`` (P0.1, 1.1.0-alpha.2) drives the file-copy collision
+    behaviour. ``"strict"`` is fresh generation — fragments may not
+    overlap the base template or each other. ``"merge"`` / ``"skip"`` /
+    ``"overwrite"`` are the three ``forge --update`` modes; see
+    :data:`forge.fragment_context.UpdateMode`.
+
+    ``file_baselines`` is the manifest's per-file baseline SHA map
+    (POSIX rel-path → SHA-256). Required by ``"merge"`` mode for the
+    three-way decision; ignored by the other modes.
 
     When ``collector`` is supplied, every file written by the fragment
     layer is recorded in the provenance manifest with ``origin='fragment'``
@@ -192,7 +196,8 @@ def apply_features(
             option_values=option_values,
             reads_options=impl.reads_options,
             provenance=collector,
-            skip_existing_files=skip_existing_files,
+            update_mode=update_mode,
+            file_baselines=file_baselines,
         )
         _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
 
@@ -202,13 +207,15 @@ def apply_project_features(
     resolved: tuple[ResolvedFragment, ...],
     quiet: bool = False,
     *,
-    skip_existing_files: bool = False,
+    update_mode: UpdateMode = "strict",
+    file_baselines: Mapping[str, str] | None = None,
     collector: ProvenanceCollector | None = None,
     option_values: Mapping[str, Any] | None = None,
 ) -> None:
     """Apply project-scoped fragment implementations at the project root.
 
-    See :func:`apply_features` for ``option_values`` semantics.
+    See :func:`apply_features` for ``update_mode``, ``file_baselines``,
+    and ``option_values`` semantics.
     """
     if option_values is None:
         option_values = {}
@@ -226,7 +233,8 @@ def apply_project_features(
                     option_values=option_values,
                     reads_options=impl.reads_options,
                     provenance=collector,
-                    skip_existing_files=skip_existing_files,
+                    update_mode=update_mode,
+                    file_baselines=file_baselines,
                 )
                 # Project-scope fragments typically don't declare middlewares
                 # (they emit project-level files like AGENTS.md). Pass the
@@ -264,6 +272,11 @@ def _apply_fragment(
 
 
 # -- File copy ---------------------------------------------------------------
+# The body moved to :mod:`forge.appliers.files` in P0.1 (1.1.0-alpha.2).
+# Kept as a thin shim translating the legacy ``skip_existing`` boolean to
+# the new ``update_mode`` enum so external callers (mostly tests, but
+# possibly third-party plugins) keep working through one minor before
+# the shim is removed.
 
 
 def _copy_files(
@@ -274,38 +287,30 @@ def _copy_files(
     collector: ProvenanceCollector | None = None,
     fragment_name: str | None = None,
 ) -> None:
-    """Copy every file under src/ into dst_root/, preserving structure.
+    """Deprecated. Use :func:`forge.appliers.files.copy_files`.
 
-    On fresh generation (default), refuses to overwrite existing files —
-    fragments must not clobber the base template silently. If you need to
-    modify an existing file, use inject.yaml.
-
-    On ``forge update`` (``skip_existing=True``), pre-existing destination
-    paths are left alone and logged; this preserves user edits while still
-    letting newly-introduced fragment files land.
-
-    When ``collector`` is supplied, every newly-written file records its
-    provenance with ``origin='fragment'`` and the given ``fragment_name``.
+    ``skip_existing=True`` maps to ``update_mode="skip"``,
+    ``skip_existing=False`` maps to ``update_mode="strict"`` (the
+    pre-1.1 raise-on-overlap default). Scheduled removal: 2.0.
     """
-    for src_path in src.rglob("*"):
-        if not src_path.is_file():
-            continue
-        rel = src_path.relative_to(src)
-        dst_path = dst_root / rel
-        if dst_path.exists():
-            if skip_existing:
-                continue
-            raise FragmentError(
-                f"Fragment '{src.parent.name}' tried to overwrite existing file "
-                f"'{dst_path}'. Use inject.yaml to modify existing files; "
-                "fragments/files/ is for new paths only.",
-                code=FRAGMENT_FILES_OVERLAP,
-                context={"fragment": src.parent.name, "destination": str(dst_path)},
-            )
-        dst_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_path, dst_path)
-        if collector is not None:
-            collector.record(dst_path, origin="fragment", fragment_name=fragment_name)
+    import warnings  # noqa: PLC0415
+
+    from forge.appliers.files import copy_files  # noqa: PLC0415
+
+    warnings.warn(
+        "forge.feature_injector._copy_files is deprecated (since 1.1.0a2). "
+        "Use forge.appliers.files.copy_files with update_mode= "
+        "(strict|skip|merge|overwrite). Scheduled removal: 2.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    copy_files(
+        src,
+        dst_root,
+        update_mode="skip" if skip_existing else "strict",
+        collector=collector,
+        fragment_name=fragment_name,
+    )
 
 
 # -- Snippet injection -------------------------------------------------------

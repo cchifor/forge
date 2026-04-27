@@ -132,6 +132,43 @@ def _build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Target directory for --update. Defaults to the current directory.",
     )
+    p.add_argument(
+        "--mode",
+        dest="update_mode",
+        choices=["merge", "skip", "overwrite"],
+        default="merge",
+        help=(
+            "Collision policy for --update when a fragment file already exists "
+            "on disk. 'merge' (default) three-way-decides against the "
+            "manifest baseline, emitting .forge-merge sidecars on conflict. "
+            "'skip' preserves existing files unconditionally (pre-1.1 "
+            "behaviour). 'overwrite' clobbers existing files with fragment "
+            "content."
+        ),
+    )
+    p.add_argument(
+        "--plan-update",
+        dest="plan_update",
+        action="store_true",
+        help=(
+            "Preview the next --update without writing. Prints per-file "
+            "decisions (applied / conflict / preserved) plus the list of "
+            "fragments the next update would uninstall. Pair with --json "
+            "for a machine-readable shape."
+        ),
+    )
+    p.add_argument(
+        "--remove-fragment",
+        dest="remove_fragment",
+        metavar="NAME",
+        default=None,
+        help=(
+            "Disable a fragment by flipping its enabling option to its "
+            "default value, then run --update so the uninstaller cleans "
+            "up. Errors out when multiple options enable the fragment "
+            "(disable each one explicitly with --set <path>=<default>)."
+        ),
+    )
 
     # Plan / dry-run — resolve and preview without writing.
     p.add_argument(
@@ -139,7 +176,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Resolve the config and print the ordered fragment plan + every "
-            "planned mutation as a tree, then exit. Pairs with --json."
+            "planned mutation as a tree, then exit. Pairs with --json or --graph."
+        ),
+    )
+    p.add_argument(
+        "--graph",
+        dest="plan_graph",
+        action="store_true",
+        help=(
+            "When combined with --plan, emit a Mermaid dependency graph "
+            "instead of the tree view. Useful for answering 'why is "
+            "fragment X applied?' — pipe to a Mermaid renderer (mermaid-cli, "
+            "GitHub-flavoured Markdown, mermaid.live)."
         ),
     )
     p.add_argument(
@@ -251,6 +299,27 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["bash", "zsh", "fish"],
         metavar="SHELL",
         help="Print a shell completion script to stdout and exit",
+    )
+    p.add_argument(
+        "--log-json",
+        dest="log_json",
+        action="store_true",
+        help=(
+            "Emit forge's own structured logs as NDJSON to stderr instead of "
+            "the human-readable text format. Equivalent to setting "
+            "FORGE_LOG_FORMAT=json. Useful for CI consumers and downstream "
+            "log shippers."
+        ),
+    )
+    p.add_argument(
+        "--log-level",
+        dest="log_level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default=None,
+        help=(
+            "Override the log level for forge's structured logger. "
+            "Equivalent to FORGE_LOG_LEVEL=<level>. Defaults to INFO."
+        ),
     )
 
     # Plugin-registered commands. Each is exposed as ``--<name>`` with

@@ -1,5 +1,6 @@
-- target: src/app/main.py
-  marker: FORGE:STARTUP_HOOKS
-  snippet: |
-    from .hello import print_banner
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFECYCLE_STARTUP
+  position: before
+  snippet: |-
+    from app.hello import print_banner
     print_banner()

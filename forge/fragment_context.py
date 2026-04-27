@@ -20,13 +20,29 @@ decomposition uses this same ``FragmentContext`` as its sole input.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from forge.config import BackendConfig
     from forge.provenance import ProvenanceCollector
+
+
+# Drives :class:`forge.appliers.files.FragmentFileApplier`'s collision
+# behaviour. ``strict`` is fresh generation — fragments must not overlap
+# the base template or each other, so the applier raises on any
+# pre-existing destination. The other three are ``forge --update`` modes
+# exposed via the ``--mode`` CLI flag (P0.1, 1.1.0-alpha.2):
+#
+#   * ``merge``     — three-way decide via ``file_three_way_decide``;
+#                     emit a ``.forge-merge`` sidecar on conflict.
+#   * ``skip``      — pre-1.1 update behaviour: preserve any pre-existing
+#                     destination unconditionally.
+#   * ``overwrite`` — clobber pre-existing destinations regardless of
+#                     user edits. The escape hatch for "I really want
+#                     fragment state, my edits be damned".
+UpdateMode = Literal["strict", "merge", "skip", "overwrite"]
 
 
 @dataclass(frozen=True)
@@ -51,9 +67,17 @@ class FragmentContext:
     ``provenance`` is ``None`` during dry-runs and during the synthetic
     unit-test path; production generation always sets it.
 
-    ``skip_existing_files=True`` is the ``forge --update`` semantics —
-    fragment file copies that land on a pre-existing path skip silently
-    rather than raising.
+    ``update_mode`` (P0.1, 1.1.0-alpha.2) drives the file-copy
+    applier's collision behaviour. ``strict`` is fresh generation;
+    ``merge`` / ``skip`` / ``overwrite`` are the three update modes
+    exposed via the CLI ``--mode`` flag. Replaces the pre-1.1
+    ``skip_existing_files: bool`` field.
+
+    ``file_baselines`` is a read-only POSIX-rel-path → baseline-SHA
+    mapping used by ``merge`` mode to compare against the manifest's
+    last-recorded fragment SHAs. Populated by the updater from the
+    project's ``forge.toml`` provenance table; empty during fresh
+    generation (``strict`` mode never reads it).
     """
 
     backend_config: BackendConfig
@@ -61,7 +85,8 @@ class FragmentContext:
     project_root: Path
     options: Mapping[str, Any]
     provenance: ProvenanceCollector | None
-    skip_existing_files: bool = False
+    update_mode: UpdateMode = "strict"
+    file_baselines: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
     def filtered(
@@ -73,7 +98,8 @@ class FragmentContext:
         option_values: Mapping[str, Any],
         reads_options: tuple[str, ...],
         provenance: ProvenanceCollector | None = None,
-        skip_existing_files: bool = False,
+        update_mode: UpdateMode = "strict",
+        file_baselines: Mapping[str, str] | None = None,
     ) -> FragmentContext:
         """Build a context where ``options`` contains only ``reads_options``.
 
@@ -95,5 +121,6 @@ class FragmentContext:
             project_root=project_root,
             options=options,
             provenance=provenance,
-            skip_existing_files=skip_existing_files,
+            update_mode=update_mode,
+            file_baselines=file_baselines or {},
         )

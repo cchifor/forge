@@ -41,6 +41,7 @@ def discover_migrations() -> list[AvailableMigration]:
     # Import-side registrations — each migration module registers at import.
     from forge.migrations import (  # noqa: F401, PLC0415
         migrate_adapters,
+        migrate_adopt_baseline,
         migrate_entities,
         migrate_layer_modes,
         migrate_rename_options,
@@ -82,6 +83,16 @@ def discover_migrations() -> list[AvailableMigration]:
             to_version=migrate_layer_modes.TO,
             description=migrate_layer_modes.DESCRIPTION,
             runner=migrate_layer_modes.run,
+        ),
+        # P0.1 (1.1.0-alpha.2): opt-in baseline adoption for projects
+        # upgrading from pre-merge-mode forge. Order matters — runs after
+        # rename-options so the canonical paths are already in place.
+        AvailableMigration(
+            name=migrate_adopt_baseline.NAME,
+            from_version=migrate_adopt_baseline.FROM,
+            to_version=migrate_adopt_baseline.TO,
+            description=migrate_adopt_baseline.DESCRIPTION,
+            runner=migrate_adopt_baseline.run,
         ),
     ]
 

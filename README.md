@@ -4,19 +4,19 @@
 
 *The single-command, polyglot full-stack generator for production services, agent platforms, and RAG apps.*
 
-[![version](https://img.shields.io/badge/version-1.0.0a1-blue?style=flat-square)](https://github.com/cchifor/forge)
+[![version](https://img.shields.io/badge/version-1.1.0--alpha.2-blue?style=flat-square)](https://github.com/cchifor/forge)
 [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge)
-[![tests](https://img.shields.io/badge/tests-571%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
+[![tests](https://img.shields.io/badge/tests-1250%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
 [![backends](https://img.shields.io/badge/backends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![frontends](https://img.shields.io/badge/frontends-3-informational?style=flat-square)](docs/FEATURES.md)
-[![options](https://img.shields.io/badge/options-27-informational?style=flat-square)](docs/FEATURES.md)
+[![options](https://img.shields.io/badge/options-38-informational?style=flat-square)](docs/FEATURES.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 </div>
 
-> **1.0.0a1 alpha is live.** Schema-first core (UI protocol JSON Schemas + entity YAML DSL), provenance manifest for safe `--update`, entry-point plugin SDK, LibCST Python AST injection, three-zone merge, reliability / observability / security fragments, published canvas packages (Vue / Svelte / Dart), and seven new CLI verbs (`--doctor`, `--plan`, `--dry-run`, `--preview`, `--canvas lint`, `--plugins list`, `--migrate`, `--new-entity-name`, `--add-backend-language`). See [`RELEASING.md`](RELEASING.md), [`UPGRADING.md`](UPGRADING.md), and the [RFCs](docs/rfcs/).
+> **1.1.0-alpha.2 is on `main`.** File-level three-way merge for `forge --update` (default `--mode merge`, with `.forge-merge` sidecars on conflict), declarative `compose.yaml` snippets in fragments, plugin SDK with a dedicated end-to-end CI gate (`.github/workflows/plugin-e2e.yml`), and six new CLI verbs (`--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph` for Mermaid plan output, `--log-json`, `--log-level`). The 1.0.x core remains: schema-first UI protocol JSON Schemas + entity YAML DSL, provenance manifest, entry-point plugin SDK, LibCST Python AST injection, three-zone merge for injection blocks, reliability / observability / security fragments, published canvas packages (Vue / Svelte / Dart), and the introspection verbs (`--doctor`, `--plan`, `--dry-run`, `--preview`, `--canvas lint`, `--plugins list`, `--migrate`, `--new-entity-name`, `--add-backend-language`). See [`CHANGELOG.md`](CHANGELOG.md), [`RELEASING.md`](RELEASING.md), [`UPGRADING.md`](UPGRADING.md), and the [RFCs](docs/rfcs/).
 
 `forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed 22-option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
 
@@ -81,17 +81,24 @@ Everything configurable is an `Option` with a dotted path, a type (`bool` / `enu
 | **Observability** | Request Tracing | `middleware.correlation_id` | enum | `always-on` | python | X-Request-ID ingress + ContextVar + response echo. |
 | **Observability** | Deep Health Checks | `observability.health` | bool | `false` | python, node, rust | `/health` aggregates Postgres + Redis + Keycloak readiness. |
 | **Observability** | Distributed Tracing | `observability.tracing` | bool | `false` | python, node, rust | [Logfire](https://logfire.pydantic.dev/) (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
+| **Observability** | OpenTelemetry agent spans | `observability.otel` | bool | `false` | python | OTLP exporter + FastAPI/HTTPX instrumentations + `agent.run` / `tool.call` spans with token-cost attributes. |
+| **Observability** | SBOM workflow | `security.sbom` | bool | `false` | python | `.github/workflows/sbom.yml` emits a CycloneDX SBOM + weekly pip-audit report. |
 | **Reliability** | Rate Limiting | `middleware.rate_limit` | bool | `true` | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
 | **Reliability** | Security Headers | `middleware.security_headers` | bool | `true` | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
 | **Reliability** | PII Scrubber | `middleware.pii_redaction` | bool | `true` | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
 | **Reliability** | Response Cache | `middleware.response_cache` | bool | `false` | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
+| **Reliability** | Connection Pool | `reliability.connection_pool` | bool | `true` | python | Production-ready SQLAlchemy async pool defaults (size 20 / overflow 10 / pre-ping / 30-min recycle) with env-var overrides. |
+| **Reliability** | Circuit Breaker | `reliability.circuit_breaker` | bool | `false` | python | [purgatory](https://pypi.org/project/purgatory/)-backed breaker for outbound HTTP — LLM, vector store, auth. |
 | **Async Work** | Task Queue | `async.task_queue` | bool | `false` | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
 | **Async Work** | Knowledge Ingest Queue | `async.rag_ingest_queue` | bool | `false` | python | Taskiq tasks for off-thread RAG ingestion. |
+| **Async Work** | Queue Backend (port) | `queue.backend` | enum | `none` | python | `none` / `redis` / `sqs` — backs the `QueuePort` for delayed delivery + FIFO use cases. |
 | **Conversational AI** | Chat History | `conversation.persistence` | bool | `false` | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
 | **Conversational AI** | Tool Registry | `agent.tools` | bool | `false` | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
 | **Conversational AI** | Agent Stream | `agent.streaming` | bool | `false` | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
 | **Conversational AI** | LLM Agent | `agent.llm` | bool | `false` | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. |
+| **Conversational AI** | LLM Provider (port) | `llm.provider` | enum | `none` | python | `none` / `openai` / `anthropic` / `ollama` / `bedrock` — backs the `LlmProviderPort`; swap providers via env, no regen. |
 | **Conversational AI** | Chat Attachments | `chat.attachments` | bool | `false` | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage. |
+| **Conversational AI** | MCP scaffolds | `platform.mcp` | bool | `false` | python (Vue UI) | `/mcp/tools` + `/mcp/invoke` router plus Vue ToolRegistry + ApprovalDialog components. |
 | **Knowledge** | Vector-store backend | `rag.backend` | enum | `none` | python | Pick one of: `none`, `pgvector`, `qdrant`, `chroma`, `milvus`, `weaviate`, `pinecone`, `postgresql`. Bundles the matching fragment + `rag_pipeline` + `conversation.persistence`. |
 | **Knowledge** | Embeddings provider | `rag.embeddings` | enum | `openai` | python | `openai` (text-embedding-3-small) or `voyage` (voyage-3.5). |
 | **Knowledge** | Reranker | `rag.reranker` | bool | `false` | python | Cohere `rerank-v3.5` + local sentence-transformers cross-encoder fallback. |
@@ -100,6 +107,13 @@ Everything configurable is an `Option` with a dotted path, a type (`bool` / `enu
 | **Platform** | Outbound Webhooks | `platform.webhooks` | bool | `false` | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
 | **Platform** | Service CLI Extensions | `platform.cli_extensions` | bool | `false` | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
 | **Platform** | AI Agent Handbook | `platform.agents_md` | bool | `true` | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
+| **Platform** | Object Store (port) | `object_store.backend` | enum | `none` | python | `none` / `s3` / `local` — backs `ObjectStorePort`. The `s3` adapter handles AWS / MinIO / R2 / Wasabi via `S3_ENDPOINT_URL`. |
+| **Platform** | Strict CSP / HSTS (nginx) | `security.csp` | bool | `true` | any (project-scoped) | Drops `infra/nginx-csp.conf` with strict CSP, HSTS, defence-in-depth headers. |
+| **Layer composition** | Backend mode | `backend.mode` | enum | `generate` | any | `generate` runs the per-backend Copier pipeline; `none` skips backend generation entirely (frontend-only stacks). |
+| **Layer composition** | Frontend mode | `frontend.mode` | enum | `generate` | any | `generate` / `external` / `none` — orchestrates the per-framework Copier render. |
+| **Layer composition** | Frontend API target | `frontend.api_target.type` / `frontend.api_target.url` | enum / str | `local` / `""` | any | Pair drives whether the Vite proxy hits a Docker-internal backend or an external API base URL. |
+| **Layer composition** | Database mode / engine | `database.mode` / `database.engine` | enum / enum | `generate` / `postgres` | any | Provisions Postgres + alembic + SQLAlchemy session by default; `none` skips the DB stack for stateless services. |
+| **Layer composition** | Agent mode (placeholder) | `agent.mode` | enum | `none` | python | Phase C placeholder for the agentic-stack discriminator; mirrors the other layer modes' shape. |
 
 Introspect the live registry anytime with `forge --list`, `forge --describe <path>`, or `forge --schema` (JSON Schema 2020-12).
 
@@ -291,16 +305,23 @@ forge --list
 NAME                            DESCRIPTION
 middleware.correlation_id       X-Request-ID ingress + ContextVar propagation.
 observability.health            /health aggregates Postgres + Redis + Keycloak readiness.
+observability.otel              OpenTelemetry traces + metrics via OTLP exporter (agent.run, tool.call spans).
 observability.tracing           Distributed tracing — Logfire / OTel SDK / OTLP gRPC.
+security.sbom                   GitHub Actions workflow emitting a CycloneDX SBOM + pip-audit report.
 middleware.pii_redaction        Logging filter that scrubs emails / tokens / API keys.
 middleware.rate_limit           Token-bucket limiter keyed by tenant or IP.
 middleware.response_cache       Opt-in HTTP response caching (Redis or in-memory).
 middleware.security_headers     CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy.
+reliability.circuit_breaker     Circuit breaker for outbound HTTP calls (LLM, vector store, auth).
+reliability.connection_pool     Sane SQLAlchemy async pool defaults (size=20, overflow=10, pre_ping, recycle=30m).
 async.rag_ingest_queue          Taskiq tasks that move RAG ingest off the request thread.
 async.task_queue                Redis-backed job queue (Taskiq / BullMQ / Apalis).
+queue.backend                   Background-work queue — Redis lists or AWS SQS, behind the QueuePort. [none, redis, sqs]
 agent.llm                       pydantic-ai loop — Anthropic / OpenAI / Google / OpenRouter.
 agent.streaming                 /ws/agent with typed event protocol + runner dispatch.
 agent.tools                     Tool registry + pre-baked `current_datetime`, `web_search`.
+agent.mode                      Layer discriminator for the agentic/LLM stack (placeholder). [generate, external, none]
+llm.provider                    LLM provider for the agent loop. [none, openai, anthropic, ollama, bedrock]
 chat.attachments                /chat-files multipart + ChatFile model + local storage.
 conversation.persistence        SQLAlchemy Conversation / Message / ToolCall + migration.
 rag.backend                     Select the vector-store backend for RAG ingest + search. [none, pgvector, qdrant, chroma, milvus, weaviate, pinecone, postgresql]
@@ -310,7 +331,16 @@ rag.top_k                       Default number of chunks returned per RAG query.
 platform.admin                  SQLAdmin UI at /admin — tenant-scoped ModelViews.
 platform.agents_md              Drops AGENTS.md + CLAUDE.md for AI-coding-agent orientation.
 platform.cli_extensions         Typer subcommands — `app info`, `app tools`, `app rag`.
+platform.mcp                    Model Context Protocol router + UI scaffolds for tool discovery and approval.
 platform.webhooks               Outbound registry + HMAC-signed delivery (ts + nonce + body).
+object_store.backend            Blob storage — AWS S3 / S3-compatible / local filesystem, behind ObjectStorePort. [none, s3, local]
+security.csp                    Strict Content-Security-Policy + HSTS + X-Content-Type-Options via nginx.
+backend.mode                    Whether forge scaffolds backend services for this project. [generate, none]
+database.mode                   Whether the generated stack provisions a local database. [generate, none]
+database.engine                 Database engine used when database.mode=generate. [postgres]
+frontend.mode                   Whether forge scaffolds a frontend for this project. [generate, external, none]
+frontend.api_target.type        Whether the frontend's API client targets a local or external backend. [local, external]
+frontend.api_target.url         External API base URL (when frontend.api_target.type=external).
 ```
 
 The default output is a two-column table — `NAME DESCRIPTION` — one row per registered Option. Enum options fold their allowed values into the description as a `[a, b, c]` suffix. Use `--format {text,json,yaml}` to pick the output shape; JSON / YAML emit every field (`type`, `category`, `default`, `options`, `tech`, `stability`, `min`, `max`, `pattern`).
@@ -423,14 +453,24 @@ my_platform/
 
 ### Regenerating later (including new features)
 
-forge stamps every generated project with `forge.toml` (forge version, per-template paths, fully-resolved `[forge.options]` map) and writes a `.copier-answers.yml` inside every rendered subtree — enough to reconstruct the original generation intent. Upgrading an existing project is one command:
+forge stamps every generated project with `forge.toml` (forge version, per-template paths, fully-resolved `[forge.options]` map, per-file `[forge.provenance]` SHA baselines, per-block `[forge.merge_blocks]` records) and writes a `.copier-answers.yml` inside every rendered subtree — enough to reconstruct the original generation intent. Upgrading an existing project is one command:
 
 ```bash forge-update
 cd my_platform
-forge --update        # re-apply fragment injections, re-stamp forge.toml
+forge --update        # default: --mode merge — three-way decide vs the manifest baseline
 ```
 
-`forge --update` is idempotent by design. Every snippet it injects is wrapped in `# FORGE:BEGIN <fragment>:<marker>` / `# FORGE:END` sentinels, so a re-run is either a no-op (nothing changed upstream) or an in-place replacement of the sentineled block (a fragment was updated) — your hand-edits outside the sentinels are preserved. Files that already exist in the project are left alone; newly-introduced fragment files get added.
+**`forge --update` is idempotent and merge-aware.** Every snippet it injects is wrapped in `# FORGE:BEGIN <fragment>:<marker>` / `# FORGE:END` sentinels, so injection-block re-runs are either a no-op (nothing changed upstream), a clean replacement (the fragment moved), or a `.forge-merge` sidecar (you edited the block + the fragment moved). At the **file** level, P0.1 (1.1.0-alpha.2) extended the same three-way decision to whole files copied verbatim from a fragment's `files/` tree: a clean upstream change applies; a user-edited-and-then-fragment-moved file emits a `<target>.forge-merge` sidecar (or `.forge-merge.bin` for binary assets) and leaves the target untouched for you to resolve.
+
+Three update modes via `--mode`:
+
+```bash forge-update-modes
+forge --update                   # default: --mode merge (three-way decide; sidecars on conflict)
+forge --update --mode skip       # pre-1.1 behaviour: preserve any pre-existing destination
+forge --update --mode overwrite  # the escape hatch: fragment content wins
+```
+
+Preview before committing — `forge --plan-update` walks the same logic without writing, returning a per-file decision report (also `--json` and `--graph`-aware). Surgically remove a fragment with `forge --remove-fragment NAME` (flips its enabling option to default and runs the provenance-driven uninstaller). Schema-breaking upgrades across forge minors are handled by the registered codemods at `forge --migrate` (`rename-options`, `layer-modes`, `ui-protocol`, `entities`, `adapters`, plus `adopt-baseline` for projects from before SHA tracking).
 
 For template-level changes (base-template Jinja rewrites rather than fragment updates), `cd services/<backend> && copier update` re-renders that subtree from its saved `.copier-answers.yml`.
 
@@ -456,14 +496,26 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 | **Next up** | `security_ratelimit_strict` composite preset | One flag that bundles `rate_limit` + `security_headers` + tightened CORS for regulated deployments. |
 | **Next up** | Go backend (`go-service-template`) | Fourth backend language — Echo + pgx + sqlc pattern mirrors the other three. |
 | **Next up** | React 19 frontend | TanStack Start + React Query + Zod; lives alongside Vue / Svelte / Flutter. |
-| **Next up** | Option-rename aliases | `Option.aliases` so `forge --update` can carry projects across path renames without hand-editing `forge.toml`. |
+| **Next up** | ts-morph default for TypeScript injection | 1.1.0-alpha.2 ships the doctor check + opt-in via `FORGE_TS_AST=1`. The default flip waits on telemetry showing the toolchain is reliably present in user envs. |
+| **Next up** | Pydantic Copier variable schema | Catch generator-template variable mismatches before silent empty renders; one schema per template type. |
+| **Next up** | Dart AST injection for Flutter | Symmetry with Python (LibCST) and TypeScript (ts-morph); injections survive `dart format`. |
 | **Considered** | `cli_commands` ports to Node + Rust | npm scripts cover much of Node's surface; clap layered on `src/bin/migrate.rs` for Rust. |
 | **Considered** | `response_cache/rust` | `moka` + tower layer once a canonical idiom emerges. |
 | **Considered** | Alternative embeddings providers | Cohere, local `sentence-transformers`; same pattern as `rag_embeddings_voyage`. |
-| **Considered** | Fragment provenance manifest | `.forge/manifest.json` records which files came from which fragment so `forge --update` can remove files when a fragment is disabled. |
 | **Considered** | Kubernetes manifests | Helm chart or Kustomize bundle generated alongside `docker-compose.yml`. |
-| **Considered** | Third-party fragment plugin API | Let external crates / packages register `Option` + `Fragment` entries so downstream teams can ship their own opt-in features. |
-| **Shipped** | Unified `Option` registry | Single typed abstraction (bool / enum / int / str) with dotted paths (`rag.backend`, `middleware.rate_limit`), YAML + `--set` + JSON Schema — replaced the old feature / parameter split. |
+| **Considered** | Template render cache | Memoise repeated `_common/` template renders across multi-backend projects to cut wall-clock on big stacks. |
+| **Shipped** | File-level three-way merge for `--update` | `forge.merge.file_three_way_decide` extends the merge-zone semantics to whole `files/` trees; `.forge-merge` sidecars on conflict; `--mode={merge,skip,overwrite}` opt-out. (1.1.0-alpha.2) |
+| **Shipped** | `forge --plan-update` + `forge --remove-fragment` | Dry-run preview of the next `--update` (per-file decisions, uninstall set) and a thin wrapper that disables a fragment by flipping its enabling option to default. (1.1.0-alpha.2) |
+| **Shipped** | Declarative `compose.yaml` snippets in fragments | `forge.services.fragment_compose` parses per-fragment YAML into the existing `SERVICE_REGISTRY`; additive to the imperative compose template. (1.1.0-alpha.2) |
+| **Shipped** | `forge --plan --graph` Mermaid plan renderer | Option → fragment edges + depends_on edges as a Mermaid `graph TD`; closes the "why is fragment X applied?" loop. (1.1.0-alpha.2) |
+| **Shipped** | `--log-json` / `--log-level` CLI flags | Top-level overrides for `FORGE_LOG_FORMAT` / `FORGE_LOG_LEVEL`; pre-parse scan ensures plugin-load events flow through JSON too. (1.1.0-alpha.2) |
+| **Shipped** | Plugin end-to-end CI gate | `.github/workflows/plugin-e2e.yml` installs `examples/forge-plugin-example` against the working tree on every PR touching the plugin SDK; `forge/api.py` carries a stable-API "Since" / "Compatibility" table. (1.1.0-alpha.2) |
+| **Shipped** | Fragment cycle-path diagnostics | `_FragmentRegistry.freeze()` reports the actual cycle path (`a → b → c → a`) on detection instead of the unsorted set of fragments involved. (1.1.0-alpha.2) |
+| **Shipped** | `forge/options/` package split | The 1581-line `forge/options.py` monolith split into one module per dotted-path namespace; the public `from forge.options import …` surface is unchanged. (1.1.0-alpha.2) |
+| **Shipped** | Fragment provenance manifest | `[forge.provenance]` + `[forge.merge_blocks]` tables record per-file SHA baselines and per-block hashes; the Epic F uninstaller drives file-level uninstall on update. |
+| **Shipped** | Third-party fragment plugin API | `forge.plugins` entry-point group + `ForgeAPI` facade (options / fragments / backends / frontends / commands / services / emitters); plugin authors target a stable, versioned SDK. |
+| **Shipped** | Option-rename aliases | `Option.aliases` lets `forge --update` carry projects across path renames; `forge --migrate` runs the `rename-options` codemod. |
+| **Shipped** | Unified `Option` registry | Single typed abstraction (bool / enum / int / str / list / object) with dotted paths (`rag.backend`, `middleware.rate_limit`), YAML + `--set` + JSON Schema — replaced the old feature / parameter split. |
 | **Shipped** | `forge --update` | Idempotent re-apply of fragments against an existing project. Snippet injections carry BEGIN/END sentinels; `.copier-answers.yml` stamped per subtree. |
 | **Shipped** | `forge --list --format {text,json,yaml}` | Three output formats off one flat data model for humans and agent pipelines. |
 | **Shipped** | Tenant-isolation hardening | RAG / admin / conversation / webhook fragments all derive tenant from the authenticated principal, no more anonymous-UUID fallback. |
@@ -520,9 +572,9 @@ MIT — see [`LICENSE`](LICENSE).
 
 Active development, weekly cadence.
 
-- **Today:** 22 Options registered across six product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform), backed by 27 template fragments. Tests passing, CI green on Linux + Windows against Python 3.11 / 3.12 / 3.13.
-- **API stability:** 0.2.x introduces the unified `Option` surface. Breaking changes are possible between minor releases; every such change is called out in [`CHANGELOG.md`](CHANGELOG.md).
-- **Production-ready today:** the Foundation, Observability, and Reliability categories (`middleware.correlation_id` / `middleware.rate_limit` / `middleware.security_headers` / `middleware.pii_redaction` / `observability.tracing`); Async Work task queue; most of the Platform category (`platform.admin`, `platform.webhooks`, `platform.cli_extensions`, `platform.agents_md`).
+- **Today:** 38 Options registered across six product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform) plus a Layer-composition mode set, backed by 54 template fragments. 1250+ tests passing, CI green on Linux + Windows against Python 3.11 / 3.12 / 3.13. Critical-path coverage gates enforce per-module floors (`forge/merge.py` 92%, `forge/updater.py` 83%, `forge/capability_resolver.py` 96%, plus six others — see [`docs/coverage-policy.md`](docs/coverage-policy.md)).
+- **API stability:** 1.1.x adds merge-mode `forge --update` plus the plugin-SDK e2e gate. The `forge.api` plugin-registration surface carries a stable-API "Since" / "Compatibility" table per symbol; breaking changes between minors are still possible and called out in [`CHANGELOG.md`](CHANGELOG.md).
+- **Production-ready today:** the Foundation, Observability (`observability.tracing` + `observability.otel`), and Reliability categories (`middleware.correlation_id` / `middleware.rate_limit` / `middleware.security_headers` / `middleware.pii_redaction` / `reliability.connection_pool`); Async Work task queue + `queue.backend` port; most of the Platform category (`platform.admin`, `platform.webhooks`, `platform.cli_extensions`, `platform.agents_md`, `security.csp`); the Layer-composition discriminators (`backend.mode`, `frontend.mode`, `database.mode`).
 - **Use with awareness:** Conversational AI (agent platform) and Knowledge (RAG) are marked `experimental` — the interfaces work, but expect minor adjustments as pydantic-ai and the vector-store clients evolve.
-- **Upgrade pathway:** `forge --update` re-applies fragments idempotently against an existing project. `forge.toml` records the fully-resolved `[forge.options]` map; `.copier-answers.yml` is preserved per subtree for template-level `copier update` when needed.
-- **v1.0 gates:** documented extension API for third-party fragments, `Option.aliases` for safe path renames, `.forge/manifest.json` provenance for file-level uninstall on update, curated `examples/` directory.
+- **Upgrade pathway:** `forge --update` defaults to `--mode merge` — file-copy collisions go through three-way decide vs the manifest baseline, conflicts emit `.forge-merge` sidecars. `forge --plan-update` previews the decisions before committing; `forge --remove-fragment NAME` runs the provenance-driven uninstaller; `forge --migrate` carries projects across schema-breaking minor bumps. `.copier-answers.yml` remains per-subtree for `copier update`.
+- **v1.0 gates — all shipped:** documented extension API for third-party fragments (`forge.api` + `docs/plugin-development.md` + the P0.2 e2e gate); `Option.aliases` for safe path renames (Epic G + `migrate-rename-options` codemod); per-file SHA provenance + Epic-F uninstaller for file-level uninstall on update; curated `examples/` directory (see [`examples/forge-plugin-example/`](examples/forge-plugin-example/)).

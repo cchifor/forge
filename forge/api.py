@@ -32,6 +32,33 @@ And the plugin module::
 The trust model: plugins are pip packages. Installing one grants it
 full Python execution rights at forge startup. Register-only during load
 — no fragment application at plugin import time. See ``docs/plugin-development.md``.
+
+Stable Public API
+-----------------
+
+The names listed in ``__all__`` below are the **stable plugin API**.
+Plugin authors target this surface; forge releases follow SemVer with
+respect to it. The CI gate at ``.github/workflows/plugin-e2e.yml``
+exercises ``examples/forge-plugin-example/`` against every PR so any
+breaking change to this surface surfaces before release.
+
++--------------------------------+--------------+-------------------+
+| Name                           | Since        | Compatibility     |
++================================+==============+===================+
+| ``ForgeAPI``                   | 1.0.0a1      | stable            |
+| ``ForgeAPI.add_option``        | 1.0.0a1      | stable            |
+| ``ForgeAPI.add_fragment``      | 1.0.0a1      | stable            |
+| ``ForgeAPI.add_backend``       | 1.0.0a2      | stable            |
+| ``ForgeAPI.add_frontend``      | 1.0.0a4      | stable            |
+| ``ForgeAPI.add_command``       | 1.0.0a4      | stable            |
+| ``ForgeAPI.add_service``       | 1.1.0-alpha.1| stable            |
+| ``ForgeAPI.add_emitter``       | 1.0.0a1      | provisional       |
+| ``PluginRegistration``         | 1.0.0a1      | stable            |
++--------------------------------+--------------+-------------------+
+
+``provisional`` means the shape may still change in a 1.x minor — the
+emitter pipeline isn't yet wired into a stable contract. Everything
+else is stable: a breaking signature change requires a major bump.
 """
 
 from __future__ import annotations

@@ -84,10 +84,21 @@ def _json_error(stdout_fd, err: object) -> None:
 def main() -> None:
     # Install the structured logging handler before anything else so
     # plugin-load events flow through it. Honors FORGE_LOG_FORMAT and
-    # FORGE_LOG_LEVEL environment variables.
+    # FORGE_LOG_LEVEL environment variables, plus the --log-json /
+    # --log-level CLI flags via a pre-parse scan (the real argparse pass
+    # happens after plugins.load_all() so plugin commands can extend it).
     from forge.logging import configure_logging  # noqa: PLC0415
 
-    configure_logging()
+    early_fmt = "json" if "--log-json" in sys.argv[1:] else None
+    early_level: str | None = None
+    for i, token in enumerate(sys.argv[1:]):
+        if token == "--log-level" and i + 2 <= len(sys.argv) - 1:
+            early_level = sys.argv[i + 2]
+            break
+        if token.startswith("--log-level="):
+            early_level = token.split("=", 1)[1]
+            break
+    configure_logging(level=early_level, fmt=early_fmt)
 
     # Discover third-party plugins before parsing — lets them extend the
     # argparse surface and the option registry before args hit validation.
@@ -96,6 +107,14 @@ def main() -> None:
     plugins.load_all()
 
     args = _parse_args()
+
+    # Re-apply if argparse normalised the values (e.g. uppercase level).
+    # Idempotent: configure_logging replaces the forge-owned handler.
+    if getattr(args, "log_json", False) or getattr(args, "log_level", None):
+        configure_logging(
+            level=getattr(args, "log_level", None),
+            fmt="json" if getattr(args, "log_json", False) else None,
+        )
 
     if getattr(args, "list", False):
         fmt = getattr(args, "format", None) or "text"
@@ -155,6 +174,16 @@ def main() -> None:
 
     if getattr(args, "update", False):
         _run_update(args)
+
+    if getattr(args, "plan_update", False):
+        from forge.cli.commands.plan_update import _run_plan_update  # noqa: PLC0415
+
+        _run_plan_update(args)
+
+    if getattr(args, "remove_fragment", None):
+        from forge.cli.commands.remove_fragment import _run_remove_fragment  # noqa: PLC0415
+
+        _run_remove_fragment(args)
 
     if getattr(args, "completion", None):
         _print_completion(args.completion)

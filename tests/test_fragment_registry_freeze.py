@@ -214,6 +214,74 @@ def test_audit_accepts_dag_with_shared_dep() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cycle path diagnostics (P2)
+# ---------------------------------------------------------------------------
+
+
+def test_cycle_error_surfaces_concrete_path_two_node() -> None:
+    """Two-node cycle: error should show ``a → b → a`` so the author
+    can see exactly which edge to delete."""
+    reg = _FragmentRegistry()
+    reg["a"] = _mk("a", depends_on=("b",))
+    reg["b"] = _mk("b", depends_on=("a",))
+    with pytest.raises(FragmentError) as excinfo:
+        reg.freeze()
+    msg = excinfo.value.message
+    # Path is one of the two equivalent rotations.
+    assert "a → b → a" in msg or "b → a → b" in msg
+    cycle_path = excinfo.value.context.get("cycle_path", [])
+    assert len(cycle_path) >= 3  # closing repetition included
+
+
+def test_cycle_error_surfaces_concrete_path_three_node() -> None:
+    """Three-node cycle path is fully reported, not just the unordered set."""
+    reg = _FragmentRegistry()
+    reg["a"] = _mk("a", depends_on=("b",))
+    reg["b"] = _mk("b", depends_on=("c",))
+    reg["c"] = _mk("c", depends_on=("a",))
+    with pytest.raises(FragmentError) as excinfo:
+        reg.freeze()
+    cycle_path = excinfo.value.context.get("cycle_path", [])
+    # The cycle is one of the three rotations a→b→c→a, b→c→a→b, c→a→b→c.
+    # Whatever DFS picks, the closing element matches the opening.
+    assert len(cycle_path) == 4
+    assert cycle_path[0] == cycle_path[-1]
+    # Every node appears exactly once in the body of the cycle.
+    body = cycle_path[:-1]
+    assert sorted(body) == ["a", "b", "c"]
+
+
+def test_cycle_error_keeps_legacy_cycle_among_field() -> None:
+    """The pre-P2 ``cycle_among`` context field stays populated so any
+    consumers that branch on it keep working alongside the new ``cycle_path``."""
+    reg = _FragmentRegistry()
+    reg["a"] = _mk("a", depends_on=("b",))
+    reg["b"] = _mk("b", depends_on=("a",))
+    with pytest.raises(FragmentError) as excinfo:
+        reg.freeze()
+    assert "cycle_among" in excinfo.value.context
+    assert sorted(excinfo.value.context["cycle_among"]) == ["a", "b"]
+
+
+def test_cycle_path_isolates_cycle_when_dag_neighbours_present() -> None:
+    """A small cycle inside a larger DAG: the path reports only the
+    nodes actually in the cycle, not the unrelated DAG members."""
+    reg = _FragmentRegistry()
+    reg["leaf"] = _mk("leaf")
+    reg["a"] = _mk("a", depends_on=("b", "leaf"))
+    reg["b"] = _mk("b", depends_on=("a",))  # cycle a ↔ b
+    reg["clean"] = _mk("clean", depends_on=("leaf",))
+    with pytest.raises(FragmentError) as excinfo:
+        reg.freeze()
+    cycle_path = excinfo.value.context.get("cycle_path", [])
+    # Cycle should only mention a + b (closing repetition included).
+    assert set(cycle_path) == {"a", "b"}
+    # ``leaf`` and ``clean`` aren't in the cycle.
+    assert "leaf" not in cycle_path
+    assert "clean" not in cycle_path
+
+
+# ---------------------------------------------------------------------------
 # register_fragment collision
 # ---------------------------------------------------------------------------
 

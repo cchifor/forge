@@ -14,13 +14,15 @@ class TestDiscoverMigrations:
         migrations = discover_migrations()
         names = {m.name for m in migrations}
         # Epic G (1.1.0-alpha.1) added rename-options alongside the original
-        # three 0.x→1.0 codemods.
+        # three 0.x→1.0 codemods. P0.1 (1.1.0-alpha.2) added adopt-baseline
+        # for the merge-mode rollout.
         assert names == {
             "ui-protocol",
             "entities",
             "adapters",
             "rename-options",
             "layer-modes",
+            "adopt-baseline",
         }
 
     def test_migrations_have_required_fields(self) -> None:
@@ -108,6 +110,7 @@ class TestApplyMigrations:
             "adapters",
             "rename-options",
             "layer-modes",
+            "adopt-baseline",
         }
 
     def test_only_filter_limits_run(self, tmp_path: Path) -> None:
@@ -119,3 +122,131 @@ class TestApplyMigrations:
         reports = apply_migrations(tmp_path, skip=["entities"], quiet=True)
         names = {r.name for r in reports}
         assert "entities" not in names
+
+
+class TestMigrateAdoptBaseline:
+    """P0.1 — adopt-baseline codemod."""
+
+    def _seed_manifest(self, project_root: Path) -> None:
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+
+        project_root.mkdir(exist_ok=True)
+        write_forge_toml(
+            project_root / "forge.toml",
+            version="1.0.0",
+            project_name="adopt-test",
+            templates={"python": "services/python-service-template"},
+            options={},
+        )
+
+    def test_stamps_files_under_source_roots(self, tmp_path: Path) -> None:
+        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.merge import sha256_of_file  # noqa: PLC0415
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        self._seed_manifest(tmp_path)
+        target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def app(): pass\n", encoding="utf-8")
+
+        report = run(tmp_path, dry_run=False, quiet=True)
+        assert report.applied
+        assert any("services/backend/src/app/main.py" in c for c in report.changes)
+
+        data = read_forge_toml(tmp_path / "forge.toml")
+        rel = "services/backend/src/app/main.py"
+        assert rel in data.provenance
+        assert data.provenance[rel]["origin"] == "base-template"
+        assert data.provenance[rel]["sha256"] == sha256_of_file(target)
+
+    def test_skips_node_modules_and_caches(self, tmp_path: Path) -> None:
+        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        self._seed_manifest(tmp_path)
+        # Files under skip-listed dirs should NOT be stamped.
+        skipped = tmp_path / "apps" / "frontend" / "node_modules" / "lib" / "x.js"
+        skipped.parent.mkdir(parents=True)
+        skipped.write_text("module.exports = {};\n", encoding="utf-8")
+
+        # ... while a sibling under a real source root SHOULD be stamped.
+        kept = tmp_path / "apps" / "frontend" / "src" / "main.ts"
+        kept.parent.mkdir(parents=True)
+        kept.write_text("export {};\n", encoding="utf-8")
+
+        run(tmp_path, dry_run=False, quiet=True)
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert "apps/frontend/src/main.ts" in data.provenance
+        assert "apps/frontend/node_modules/lib/x.js" not in data.provenance
+
+    def test_does_not_overwrite_existing_records(self, tmp_path: Path) -> None:
+        from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        self._seed_manifest(tmp_path)
+        target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def app(): pass\n", encoding="utf-8")
+
+        # Pre-existing record — codemod must not clobber.
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.0.0",
+            project_name="adopt-test",
+            templates={"python": "services/python-service-template"},
+            options={},
+            provenance={
+                "services/backend/src/app/main.py": {
+                    "origin": "fragment",
+                    "sha256": "deadbeef" * 8,  # deliberately wrong
+                    "fragment_name": "rate_limit",
+                }
+            },
+        )
+
+        run(tmp_path, dry_run=False, quiet=True)
+        data = read_forge_toml(tmp_path / "forge.toml")
+        rec = data.provenance["services/backend/src/app/main.py"]
+        # Record preserved as-is — even the wrong SHA. Operator's manual
+        # records win over the bulk codemod.
+        assert rec["origin"] == "fragment"
+        assert rec["sha256"] == "deadbeef" * 8
+        assert rec["fragment_name"] == "rate_limit"
+
+    def test_dry_run_reports_without_writing(self, tmp_path: Path) -> None:
+        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        self._seed_manifest(tmp_path)
+        target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def app(): pass\n", encoding="utf-8")
+
+        report = run(tmp_path, dry_run=True, quiet=True)
+        assert report.applied is False
+        assert report.changes  # would-have-stamped paths are reported
+        # Manifest unchanged.
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert "services/backend/src/app/main.py" not in data.provenance
+
+    def test_idempotent_when_already_stamped(self, tmp_path: Path) -> None:
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        self._seed_manifest(tmp_path)
+        target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def app(): pass\n", encoding="utf-8")
+
+        first = run(tmp_path, dry_run=False, quiet=True)
+        assert first.applied
+        # Second pass: every file already has a record, so no-op.
+        second = run(tmp_path, dry_run=False, quiet=True)
+        assert second.applied is False
+        assert "already has a provenance record" in (second.skipped_reason or "")
+
+    def test_no_manifest_skips(self, tmp_path: Path) -> None:
+        from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+
+        report = run(tmp_path, dry_run=False, quiet=True)
+        assert report.applied is False
+        assert "No forge.toml" in (report.skipped_reason or "")

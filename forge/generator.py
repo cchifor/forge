@@ -159,6 +159,18 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     )
     if config.backends or has_frontend or config.include_keycloak:
         _log("  Rendering docker-compose.yml ...")
+        # P1.3 (1.1.0-alpha.2) — register any fragment-shipped
+        # ``compose.yaml`` declarations into SERVICE_REGISTRY before
+        # render_compose pulls capabilities into the docker-compose file.
+        # Additive: built-in services declared imperatively in
+        # docker-compose.yml.j2 still render via the existing template
+        # path; fragments adopting compose.yaml light up alongside them.
+        from forge.services.fragment_compose import (  # noqa: PLC0415
+            fragment_roots_from_plan,
+            register_fragment_services,
+        )
+
+        register_fragment_services(fragment_roots_from_plan(plan.ordered))
         render_compose(config, project_root, plan=plan)
         # init-db creates a database per backend plus keycloak's own db.
         # Skip when there are 0–1 backends and no keycloak — the primary

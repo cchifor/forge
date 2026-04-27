@@ -372,7 +372,14 @@ class _FragmentRegistry(dict[str, Fragment]):
                     )
 
     def _audit_no_cycles(self) -> None:
-        """Kahn's algorithm dry-run over the full registry."""
+        """Kahn's algorithm dry-run over the full registry.
+
+        On detection of a cycle, walks the dependency graph with a DFS
+        to surface the actual cycle path (``a → b → c → a``) instead
+        of just the unordered set of fragments involved. Plugin authors
+        and built-in maintainers see exactly which edge to delete to
+        break the cycle.
+        """
         remaining = dict(self)
         order: set[str] = set()
         while remaining:
@@ -383,14 +390,72 @@ class _FragmentRegistry(dict[str, Fragment]):
             ]
             if not ready:
                 cyclic = sorted(remaining)
+                cycle_path = self._find_cycle_path(remaining)
+                if cycle_path:
+                    arrow = " → ".join(cycle_path)
+                    detail = f"cycle: {arrow}"
+                else:
+                    # Fallback when no concrete cycle could be derived
+                    # (shouldn't happen — Kahn's guarantees a cycle when
+                    # ``ready`` is empty + ``remaining`` is non-empty —
+                    # but emit a useful message regardless).
+                    detail = f"fragments involved: {cyclic}"
                 raise FragmentError(
-                    f"Cyclic dependencies detected in FRAGMENT_REGISTRY among: "
-                    f"{cyclic}. Inspect `depends_on` entries in fragments.py.",
-                    context={"cycle_among": cyclic},
+                    "Cyclic dependencies detected in FRAGMENT_REGISTRY — "
+                    f"{detail}. Inspect ``depends_on`` entries in "
+                    "fragments.py (or the offending plugin's "
+                    "``api.add_fragment`` calls) and break one edge.",
+                    context={
+                        "cycle_among": cyclic,
+                        "cycle_path": list(cycle_path) if cycle_path else [],
+                    },
                 )
             order.update(ready)
             for name in ready:
                 del remaining[name]
+
+    def _find_cycle_path(
+        self, remaining: dict[str, "Fragment"]
+    ) -> list[str]:
+        """DFS the depends_on graph to recover one concrete cycle path.
+
+        Returns a list like ``["a", "b", "c", "a"]`` (the closing
+        repetition makes the cycle visually obvious) or an empty list
+        when the graph is acyclic from every entry point in ``remaining``.
+        """
+        # Cycle detection via colour-marked DFS. White → unvisited,
+        # grey → on the current DFS stack, black → fully explored.
+        WHITE, GREY, BLACK = 0, 1, 2
+        colour: dict[str, int] = dict.fromkeys(remaining, WHITE)
+        stack: list[str] = []
+
+        def _visit(node: str) -> list[str] | None:
+            colour[node] = GREY
+            stack.append(node)
+            frag = remaining.get(node)
+            if frag is not None:
+                for dep in frag.depends_on:
+                    if dep not in remaining:
+                        # Out-of-cycle dependency; ignore for cycle search.
+                        continue
+                    if colour[dep] == GREY:
+                        # Back-edge — cycle from `dep` through `node`.
+                        idx = stack.index(dep)
+                        return stack[idx:] + [dep]
+                    if colour[dep] == WHITE:
+                        result = _visit(dep)
+                        if result is not None:
+                            return result
+            stack.pop()
+            colour[node] = BLACK
+            return None
+
+        for entry in sorted(remaining):
+            if colour[entry] == WHITE:
+                cycle = _visit(entry)
+                if cycle is not None:
+                    return cycle
+        return []
 
 
 FRAGMENT_REGISTRY: _FragmentRegistry = _FragmentRegistry()

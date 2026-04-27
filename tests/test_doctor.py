@@ -13,6 +13,7 @@ from forge.doctor import (
     check_forge_toml,
     check_port_free,
     check_tool_on_path,
+    check_ts_morph_toolchain,
     render_text,
     run,
 )
@@ -124,3 +125,105 @@ class TestRun:
         names = {r.name for r in report.results}
         assert "runtime:python" in names
         assert "forge.toml:presence" in names or "forge.toml:integrity" in names
+
+    def test_includes_ts_morph_toolchain_check(self, tmp_path: Path) -> None:
+        # P1.4 — the ts-morph status row must be in the standard run.
+        report = run(tmp_path)
+        names = {r.name for r in report.results}
+        assert "ts-morph:toolchain" in names or "ts-morph:helper" in names
+
+
+class TestCheckTsMorphToolchain:
+    """P1.4 (1.1.0-alpha.2) — surface ts-morph reachability for FORGE_TS_AST."""
+
+    def test_warn_when_node_not_on_path(self) -> None:
+        # When ``shutil.which("node")`` returns None, the toolchain isn't
+        # available; doctor surfaces it as a warning with an actionable
+        # fix. The helper-missing branch is suppressed by patching
+        # _HELPER_PATH.is_file() to True.
+        from forge.injectors import ts_morph_sidecar
+
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH") as mock_path:
+            mock_path.is_file.return_value = True
+            with patch("forge.doctor.shutil.which", return_value=None):
+                result = check_ts_morph_toolchain()
+        assert result.status == "warn"
+        assert "Node" in result.detail
+        assert result.fix is not None
+        assert "FORGE_TS_AST" in (result.fix or "")
+
+    def test_warn_when_helper_missing(self, tmp_path: Path) -> None:
+        # Packaging regression: helper script absent. Should warn (not
+        # fail) so doctor doesn't escalate to a non-zero exit.
+        from forge.injectors import ts_morph_sidecar
+
+        missing_helper = tmp_path / "ts-morph-helper.mjs"
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH", missing_helper):
+            result = check_ts_morph_toolchain()
+        assert result.status == "warn"
+        assert "helper missing" in result.detail.lower() or "missing" in result.detail.lower()
+
+    def test_warn_when_ts_morph_not_reachable(self) -> None:
+        # Node present but `require('ts-morph')` exits non-zero — warn.
+        from forge.injectors import ts_morph_sidecar
+        from forge.doctor import subprocess as doctor_subprocess
+
+        class _FakeProc:
+            def __init__(self) -> None:
+                self.returncode = 1
+                self.stdout = ""
+                self.stderr = "Cannot find module 'ts-morph'"
+
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH") as mock_path:
+            mock_path.is_file.return_value = True
+            with patch("forge.doctor.shutil.which", return_value="/usr/bin/node"):
+                with patch.object(
+                    doctor_subprocess, "run", return_value=_FakeProc()
+                ):
+                    result = check_ts_morph_toolchain()
+        assert result.status == "warn"
+        assert "ts-morph" in result.detail
+        assert "regex" in result.detail.lower() or "fallback" in result.detail.lower()
+
+    def test_ok_when_reachable_and_env_set(self, monkeypatch) -> None:
+        from forge.injectors import ts_morph_sidecar
+        from forge.doctor import subprocess as doctor_subprocess
+
+        class _FakeProc:
+            def __init__(self) -> None:
+                self.returncode = 0
+                self.stdout = ""
+                self.stderr = ""
+
+        monkeypatch.setenv("FORGE_TS_AST", "1")
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH") as mock_path:
+            mock_path.is_file.return_value = True
+            with patch("forge.doctor.shutil.which", return_value="/usr/bin/node"):
+                with patch.object(
+                    doctor_subprocess, "run", return_value=_FakeProc()
+                ):
+                    result = check_ts_morph_toolchain()
+        assert result.status == "ok"
+        assert "active" in result.detail.lower() or "FORGE_TS_AST=1" in result.detail
+
+    def test_ok_when_reachable_but_env_unset(self, monkeypatch) -> None:
+        from forge.injectors import ts_morph_sidecar
+        from forge.doctor import subprocess as doctor_subprocess
+
+        class _FakeProc:
+            def __init__(self) -> None:
+                self.returncode = 0
+                self.stdout = ""
+                self.stderr = ""
+
+        monkeypatch.delenv("FORGE_TS_AST", raising=False)
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH") as mock_path:
+            mock_path.is_file.return_value = True
+            with patch("forge.doctor.shutil.which", return_value="/usr/bin/node"):
+                with patch.object(
+                    doctor_subprocess, "run", return_value=_FakeProc()
+                ):
+                    result = check_ts_morph_toolchain()
+        assert result.status == "ok"
+        # Reachable but opt-in not set: hint for setting the env var.
+        assert "FORGE_TS_AST" in result.detail

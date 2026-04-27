@@ -158,9 +158,14 @@ On `forge --update`, the updater:
 
 1. Re-resolves the plan from `[forge.options]`.
 2. Classifies each tracked file as `unchanged` / `user-modified` / `missing` using the recorded SHA.
-3. Re-applies fragments with `skip_existing_files=True` (fragment copy-phase doesn't clobber user edits).
+3. Re-applies fragments under one of three update modes (CLI flag `--mode`, default `merge`):
+   - `merge` — three-way decide via `forge.merge.file_three_way_decide` against the manifest baseline; emits `.forge-merge` (or `.forge-merge.bin`) sidecars on conflict and continues.
+   - `skip` — pre-1.1 behaviour: pre-existing destinations preserved unconditionally.
+   - `overwrite` — clobber pre-existing destinations with fragment content.
 4. Injections run through zone semantics.
 5. The `[forge.provenance]` + `[forge.merge_blocks]` tables are re-stamped.
+
+Pre-1.1 projects with empty `[forge.provenance]` can adopt their current tree as the baseline via `forge --migrate-only adopt-baseline` — the codemod stamps every file under `services/` / `apps/` / `tests/` with `origin="base-template"` so future merges have something to compare against.
 
 ## Codegen layer
 

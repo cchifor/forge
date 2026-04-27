@@ -31,6 +31,24 @@ CI runs `make check` on Linux + Windows for Python 3.11/3.12/3.13. The `e2e` wor
 - **Template change**: bump nothing — versioning is by git commit (recorded in `forge.toml` of generated projects via the `_commit:` Copier directive). Add an e2e case if behaviour changes.
 - **New error path**: raise `GeneratorError` from `forge.errors`; `cli.main()` already routes it to JSON envelope or stderr+exit(2).
 
+## Architectural decisions vs forge RFCs
+
+Two separate doc trees, on purpose — they cover different scopes:
+
+- **`docs/architecture-decisions/ADR-NNN-*.md`** — decisions about the
+  **shape of projects forge generates**. Audience: someone reading a
+  forge-generated codebase who wants to know why it's structured that
+  way. Examples: ADR-001 (pragmatic hexagonal layering), ADR-002 (ports
+  + adapters for swappable integrations).
+- **`docs/rfcs/RFC-NNN-*.md`** — decisions about **forge itself**:
+  versioning, release process, plugin contract, error contract,
+  config-loading semantics. Audience: forge contributors and plugin
+  authors. The folder's `README.md` documents when to write one and
+  the template shape.
+
+When in doubt: if the change affects what `forge new` *emits*, it's an
+ADR. If it affects how the `forge` CLI / SDK *behaves*, it's an RFC.
+
 ## Code style
 
 - Type hints required on all public functions and module-level callables; `ty check forge/` must pass.

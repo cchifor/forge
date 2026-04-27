@@ -15,15 +15,20 @@ Provenance classification (1.0.0a1+):
     * ``user-modified`` — preserve; skip fragment files, warn on injection targets
     * ``missing`` — user deleted; re-emit
 
-The classification is exposed in the summary dict and used to guide
-``skip_existing_files`` decisions. Full three-way merge lands in Phase 2.2.
+File-level three-way merge (P0.1, 1.1.0-alpha.2):
+  The default ``update_mode="merge"`` extends the merge-zone semantics
+  (which already three-way-decide injection blocks) to whole-file
+  updates from a fragment's ``files/`` tree. Pre-existing destinations
+  go through :func:`forge.merge.file_three_way_decide` against the
+  ``[forge.provenance]`` baseline; a user-edit + fragment-bump produces
+  a ``.forge-merge`` sidecar instead of being silently skipped.
+  ``--mode skip`` reproduces pre-1.1 behaviour; ``--mode overwrite``
+  is the "I want fragment state, my edits be damned" escape hatch.
 
 Out of scope (still):
   - Template-level Copier updates (base template changes). Users who want
     those can ``cd <backend>/`` and run ``copier update`` directly —
     ``.copier-answers.yml`` is the input.
-  - Deleting files from Options that were turned off. Needs the provenance
-    manifest follow-up — partial in this alpha; full in 1.0.0a3.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ from forge.errors import (
 )
 from forge.feature_injector import apply_features, apply_project_features
 from forge.forge_toml import ForgeTomlData, read_forge_toml, write_forge_toml
+from forge.fragment_context import UpdateMode
 from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sentinel_audit import audit_targets, raise_if_corrupt
 from forge.uninstaller import (
@@ -60,14 +66,29 @@ def update_project(
     quiet: bool = False,
     *,
     no_lock: bool = False,
+    update_mode: UpdateMode = "merge",
 ) -> dict[str, object]:
     """Re-apply option-driven fragments to the project at ``project_root``.
 
-    Returns a summary dict with ``backends``, ``fragments_applied``, and
-    ``forge_version_before`` / ``forge_version_after`` keys. Raises
-    :class:`ProvenanceError` if ``project_root`` isn't a forge-generated
-    project (no ``forge.toml``) or if the registry no longer recognises
-    a recorded option path.
+    ``update_mode`` (P0.1, 1.1.0-alpha.2) controls how the file-copy
+    applier handles pre-existing destinations:
+
+      * ``"merge"`` (default) — three-way decide vs the manifest's
+        baseline; emit ``.forge-merge`` sidecars on conflict.
+      * ``"skip"`` — pre-1.1 behaviour; preserve any pre-existing
+        destination unconditionally.
+      * ``"overwrite"`` — clobber pre-existing destinations.
+
+    Note: ``"strict"`` is not a valid update mode (it's the fresh-
+    generation default that raises on overlap); the CLI ``--mode`` flag
+    only exposes the three update values.
+
+    Returns a summary dict with ``backends``, ``fragments_applied``,
+    ``forge_version_before`` / ``forge_version_after``, and
+    ``file_conflicts`` (count of ``.forge-merge`` sidecars emitted by
+    the file applier this run). Raises :class:`ProvenanceError` if
+    ``project_root`` isn't a forge-generated project (no ``forge.toml``)
+    or if the registry no longer recognises a recorded option path.
     """
     manifest = project_root / "forge.toml"
     if not manifest.is_file():
@@ -79,7 +100,9 @@ def update_project(
 
     # Epic H (1.1.0-alpha.1) — serialise concurrent updates via .forge/lock.
     with acquire_lock(project_root, no_lock=no_lock):
-        return _update_locked(project_root, manifest, quiet=quiet)
+        return _update_locked(
+            project_root, manifest, quiet=quiet, update_mode=update_mode
+        )
 
 
 def _update_locked(
@@ -87,6 +110,7 @@ def _update_locked(
     manifest: Path,
     *,
     quiet: bool,
+    update_mode: UpdateMode,
 ) -> dict[str, object]:
     """Main update body, called with the .forge/lock held."""
     data = read_forge_toml(manifest)
@@ -123,9 +147,10 @@ def _update_locked(
         ) from e
 
     # Classify every provenance-tracked file BEFORE re-applying. The
-    # classification feeds the summary (user visibility) and warns about
-    # user-modified files that are about to be left alone by the
-    # skip_existing_files=True apply path.
+    # classification feeds the summary (user visibility) and reports
+    # which files diverged from their recorded baseline since last run.
+    # The merge applier uses the manifest baselines directly via
+    # ``file_baselines`` below; the classification is observational.
     classification = classify_project_state(project_root, data.provenance)
     user_modified = [p for p, s in classification.items() if s == "user-modified"]
     if user_modified and not quiet:
@@ -134,20 +159,51 @@ def _update_locked(
             print(f"    * {p}")
         if len(user_modified) > 10:
             print(f"    ... and {len(user_modified) - 10} more")
-        print(
-            "  [update] skip_existing_files=True — these files are preserved. "
-            "Three-zone merge lands in 1.0.0a3."
-        )
+        if update_mode == "merge":
+            print(
+                "  [update] mode=merge — file-copy collisions go through "
+                "three-way decide; conflicts emit .forge-merge sidecars."
+            )
+        elif update_mode == "skip":
+            print("  [update] mode=skip — these files are preserved unconditionally.")
+        elif update_mode == "overwrite":
+            print(
+                "  [update] mode=overwrite — these files will be clobbered "
+                "with fragment content."
+            )
 
-    # Fresh collector for the post-update provenance re-stamp. Carries over
-    # any prior records we can't re-derive (user-labeled files).
+    # Fresh collector for the post-update provenance re-stamp. Seed it
+    # with EVERY prior record (not just user-labelled), so that files
+    # the new apply pass legitimately skips — ``skipped-no-change``,
+    # ``no-baseline``, mode=skip — keep their prior baselines in the
+    # re-stamped manifest. The applier overwrites entries it touches;
+    # the uninstaller (Epic F) prunes records for removed fragments
+    # explicitly. P0.1 (1.1.0-alpha.2): pre-1.1 only seeded user
+    # records, which silently dropped baselines for skipped fragment
+    # files and made every subsequent ``--update`` re-baseline from
+    # scratch.
     collector = ProvenanceCollector(project_root=project_root)
     for rel, entry in data.provenance.items():
+        origin = entry.get("origin")
+        if origin not in ("user", "fragment", "base-template"):
+            continue
+        collector.records[rel] = ProvenanceRecord(
+            origin=origin,  # type: ignore[arg-type]
+            sha256=str(entry.get("sha256", "")),
+            fragment_name=entry.get("fragment_name") or None,
+            fragment_version=entry.get("fragment_version") or None,
+        )
+
+    # File-level merge baselines — POSIX rel-path → SHA. Excludes
+    # ``user``-origin records (those aren't fragment baselines) and
+    # any record without a SHA.
+    file_baselines: dict[str, str] = {}
+    for rel, entry in data.provenance.items():
         if entry.get("origin") == "user":
-            collector.records[rel] = ProvenanceRecord(
-                origin="user",
-                sha256=str(entry.get("sha256", "")),
-            )
+            continue
+        sha = str(entry.get("sha256", ""))
+        if sha:
+            file_baselines[rel] = sha
 
     # Epic H — sentinel audit before re-injection. If a hand-edit broke
     # a BEGIN/END pair, raise here with the file+tag+line rather than
@@ -216,7 +272,8 @@ def _update_locked(
             backend_dir,
             plan.ordered,
             quiet=quiet,
-            skip_existing_files=True,
+            update_mode=update_mode,
+            file_baselines=file_baselines,
             collector=collector,
             option_values=plan.option_values,
             project_root=project_root,
@@ -228,7 +285,8 @@ def _update_locked(
         project_root,
         plan.ordered,
         quiet=quiet,
-        skip_existing_files=True,
+        update_mode=update_mode,
+        file_baselines=file_baselines,
         collector=collector,
         option_values=plan.option_values,
     )
@@ -236,6 +294,17 @@ def _update_locked(
     for rf in plan.ordered:
         if rf.fragment.name not in fragments_applied:
             fragments_applied.append(rf.fragment.name)
+
+    # File-level merge sidecars produced by the apply pass. We glob
+    # rather than thread a counter through the appliers — sidecars on
+    # disk are the source of truth, and the count survives across CLI
+    # process boundaries (preview tools, tests inspecting state).
+    file_conflicts = _count_file_sidecars(project_root)
+    if file_conflicts and not quiet:
+        print(
+            f"  [update] {file_conflicts} file conflict(s) — see .forge-merge "
+            "(.forge-merge.bin for binary) sidecars and resolve by hand."
+        )
 
     _restamp_forge_toml(
         manifest=manifest,
@@ -255,7 +324,30 @@ def _update_locked(
         "classification": {p: s for p, s in classification.items()},
         "user_modified_count": len(user_modified),
         "uninstalled": [o.as_dict() for o in uninstall_outcomes],
+        "update_mode": update_mode,
+        "file_conflicts": file_conflicts,
     }
+
+
+def _count_file_sidecars(project_root: Path) -> int:
+    """Count ``.forge-merge`` (text) and ``.forge-merge.bin`` sidecars under root.
+
+    Walks the project tree once. Skips ``.forge/`` (forge-internal
+    state) and dot-prefixed subtrees that aren't part of generated
+    output. Used by the update summary to surface conflict counts.
+    """
+    if not project_root.is_dir():
+        return 0
+    count = 0
+    for path in project_root.rglob("*.forge-merge*"):
+        if not path.is_file():
+            continue
+        # Only the two sidecar suffixes; ignore arbitrary user files.
+        if path.name.endswith(".forge-merge") or path.name.endswith(
+            ".forge-merge.bin"
+        ):
+            count += 1
+    return count
 
 
 def _collect_injection_targets(
@@ -353,9 +445,11 @@ def classify_project_state(
     """Classify every recorded file as unchanged / user-modified / missing.
 
     Files not in the provenance table are invisible to this pass — the
-    updater assumes the user created them on purpose. When the provenance
-    table is empty (old pre-1.0 project), returns an empty classification
-    and the updater falls back to its legacy skip_existing behavior.
+    updater assumes the user created them on purpose. When the
+    provenance table is empty (old pre-1.0 project), returns an empty
+    classification; ``update_mode="merge"`` then resolves every
+    pre-existing file to ``no-baseline`` (preserved like a user file)
+    via :func:`forge.merge.file_three_way_decide`.
     """
     out: dict[str, FileState] = {}
     for rel, entry in provenance_tbl.items():

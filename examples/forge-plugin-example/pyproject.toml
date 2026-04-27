@@ -18,3 +18,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Fragment trees ship as package data so wheel-installs (not just
+# editable installs) can resolve the fragment_dir paths the plugin
+# passes to FragmentImplSpec. Without this, ``pip install
+# forge-plugin-example`` (no -e) leaves ``fragments/`` outside the
+# wheel and the plan validator fails with FRAGMENT_DIR_MISSING.
+forge_plugin_example = [
+    "fragments/**/*.yaml",
+    "fragments/**/*.py",
+]

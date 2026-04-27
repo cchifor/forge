@@ -73,6 +73,8 @@ markers = [
     "package_integrity: assert the uv-built sdist + wheel contain every template file and no cache contamination (slow, opt-in via -m package_integrity; CI runs as a separate job)",
     "fuzz: Hypothesis-driven fuzz tests for resolver combinations (slower, opt-in via -m fuzz; CI runs nightly)",
     "golden_snapshot: full forge generation per preset; deterministic across OS+Python so CI runs them on a single matrix cell only (the coverage job)",
+    "plugin_e2e: end-to-end tests that require examples/forge-plugin-example to be pip-installed; opt-in via -m plugin_e2e (CI runs as a dedicated job, see .github/workflows/plugin-e2e.yml)",
+    "bench: lightweight performance bench tests (time.perf_counter-based budgets); opt-in via -m bench. Establishes a measurement floor for the merge-mode hot paths so a future PR can ratchet absolute thresholds.",
 ]
 filterwarnings = [
     # Epic S (1.1.0-alpha.1): internal modules still import GeneratorError

@@ -19,7 +19,7 @@ can leave the overall percentage unchanged while the critical path decays
 silently. The per-module gate makes every regression in the modules we care
 about surface in a single line of the failing test output.
 
-## Current floors (1.1.0-alpha.1)
+## Current floors (1.1.0-alpha.2)
 
 Floors are measured - 2pp: a small, incidental coverage drop won't block
 an unrelated PR, but a meaningful decline does. Targets are the steady
@@ -29,14 +29,15 @@ deciding how much headroom a PR has.
 
 | Module                           | Measured | Floor | Target  | Why it matters                                                      |
 | -------------------------------- | -------- | ----- | ------- | ------------------------------------------------------------------- |
-| `forge/capability_resolver.py`   | 97.0%    | 95%   | 98%     | Single choke-point: options → fragments → ordered plan              |
-| `forge/feature_injector.py`      | 90.0%    | 88%   | 95%     | Applier orchestration; most complex module in the core              |
-| `forge/merge.py`                 | 86.7%    | 85%   | 95%     | Three-way merge decision table; silent bugs here lose user edits    |
+| `forge/capability_resolver.py`   | 98.3%    | 96%   | 98%     | Single choke-point: options → fragments → ordered plan              |
+| `forge/feature_injector.py`      | 89.1%    | 88%   | 95%     | Applier orchestration; most complex module in the core              |
+| `forge/merge.py`                 | 94.1%    | 92%   | 95%     | Three-way merge decision table; silent bugs here lose user edits    |
 | `forge/provenance.py`            | 96.7%    | 95%   | 98%     | File classification drives `--update` safety                        |
 | `forge/injectors/python_ast.py`  | 97.8%    | 95%   | 98%     | Fragment injection into Python templates via LibCST                 |
-| `forge/injectors/ts_ast.py`      | 97.3%    | 95%   | 98%     | Fragment injection into TS/JS templates (regex + ts-morph sidecar)  |
-| `forge/updater.py`               | 80.5%    | 78%   | 90%     | `forge --update` — re-apply + classification + re-stamp             |
-| **Project-wide**                 | 83.5%    | 75%   | 85%     | Whole-package safety net; excludes `forge/templates/` by design     |
+| `forge/injectors/ts_ast.py`      | 95.9%    | 95%   | 98%     | Fragment injection into TS/JS templates (regex + ts-morph sidecar)  |
+| `forge/updater.py`               | 85.2%    | 83%   | 90%     | `forge --update` — re-apply + classification + re-stamp             |
+| `forge/plan_update.py`           | 85.5%    | 83%   | 90%     | `forge --plan-update` dry-run + UpdatePlanReport (P0.1 follow-on)   |
+| **Project-wide**                 | 83.9%    | 75%   | 85%     | Whole-package safety net; excludes `forge/templates/` by design     |
 
 ## Ratchet policy
 

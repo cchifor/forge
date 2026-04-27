@@ -219,3 +219,32 @@ auditable in the repo log.
   the project's `uv`-managed ruff.
 - **ty 0.0.x upgrades are deliberate** — see Epic X and `docs/troubleshooting.md`'s
   ty section above.
+
+### TypeScript injection: regex anchors vs ts-morph AST
+
+The default TypeScript injector at `forge/injectors/ts_ast.py` uses
+regex-anchored comment markers (`// forge:anchor <name>`). It's robust
+against most reformatters, but an aggressive Prettier or ESLint rule
+that rewrites comment positions can move an anchor to a line that no
+longer parses cleanly.
+
+The opt-in alternative is the ts-morph-backed sidecar at
+`forge/injectors/ts_morph_sidecar.py`. Set `FORGE_TS_AST=1` in the
+environment before running forge, and the injector dispatches to a
+Node subprocess that walks the TS AST instead of the regex path —
+surviving any reformatting that preserves the anchor's containing
+syntactic node.
+
+Requirements: `node` 20+ on `PATH` and the `ts-morph` npm package
+reachable through `NODE_PATH` or the working directory's
+`node_modules`. `forge --doctor` reports the toolchain status as
+`ts-morph:toolchain` — `ok` when AST injection is reachable, `warn`
+with an actionable fix when it isn't. The fallback to regex is silent;
+you can always run forge without ts-morph and lose only the durability
+guarantee.
+
+P1.4 (1.1.0-alpha.2) ships the doctor check + this note. A future
+minor will flip the default to ts-morph once telemetry shows the
+toolchain is reliably present in user environments. For now, treat
+ts-morph as the recommended-but-opt-in path for projects that
+aggressively reformat their TypeScript.

@@ -33,11 +33,13 @@ class TestFragmentContext:
             project_root=tmp_path.parent,
             options={"rag.top_k": 5, "agent.streaming": True},
             provenance=None,
-            skip_existing_files=False,
+            update_mode="strict",
         )
         assert ctx.options == {"rag.top_k": 5, "agent.streaming": True}
         assert ctx.backend_dir == tmp_path
         assert ctx.provenance is None
+        assert ctx.update_mode == "strict"
+        assert ctx.file_baselines == {}
 
     def test_filtered_keeps_only_reads_options_paths(self, tmp_path: Path) -> None:
         ctx = FragmentContext.filtered(

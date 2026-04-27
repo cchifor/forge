@@ -1,0 +1,329 @@
+"""Dry-run preview of ``forge --update`` (P1.2, 1.1.0-alpha.2).
+
+Walks the resolver + the fragment file trees but never writes — produces
+a structured :class:`UpdatePlanReport` describing every file decision
+``--update`` would make plus the list of fragments the next update would
+uninstall. The CLI verb ``forge --plan-update`` dispatches here.
+
+The plan exists to make the file-level merge introduced in P0.1 legible:
+once collisions and sidecars are real, users want to see the decisions
+before committing to an apply. ``--plan-update`` answers "what will
+change" without touching the working tree.
+
+Scope: file-copy decisions and uninstall set. Injection-block decisions
+(merge zones) are still deferred — they need an in-process pass that
+reads the on-disk file body without writing, which is more invasive
+than the current plumbing supports. Tracked as a follow-up; the file
+preview is enough to surface the merge-mode UX.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from forge.appliers.plan import FragmentPlan
+from forge.capability_resolver import resolve
+from forge.config import BackendConfig, ProjectConfig
+from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
+from forge.forge_toml import read_forge_toml
+from forge.fragment_context import UpdateMode
+from forge.merge import file_three_way_decide, sha256_of_file
+from forge.uninstaller import disabled_fragments
+from forge.updater import _infer_backends
+
+
+@dataclass(frozen=True)
+class FilePlanEntry:
+    """One file-level decision the next ``--update`` would make.
+
+    ``rel_path`` is POSIX, relative to the project root. ``action`` is
+    one of the strings :func:`forge.merge.file_three_way_decide` returns
+    plus ``"new"`` for files that don't yet exist on disk. ``reason``
+    is a short human-readable explanation suitable for CLI output.
+    """
+
+    rel_path: str
+    fragment: str
+    backend: str  # backend dir name or "<project>" for project-scope fragments
+    action: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class UpdatePlanReport:
+    """Aggregate dry-run report for ``forge --plan-update``."""
+
+    update_mode: UpdateMode
+    backends: list[str]
+    fragments_in_plan: list[str]
+    fragments_to_uninstall: list[str]
+    file_decisions: list[FilePlanEntry] = field(default_factory=list)
+
+    @property
+    def conflict_count(self) -> int:
+        return sum(1 for d in self.file_decisions if d.action == "conflict")
+
+    @property
+    def applied_count(self) -> int:
+        return sum(1 for d in self.file_decisions if d.action in ("applied", "new"))
+
+    def as_dict(self) -> dict:
+        """JSON-friendly view for ``forge --plan-update --json``."""
+        return {
+            "update_mode": self.update_mode,
+            "backends": list(self.backends),
+            "fragments_in_plan": list(self.fragments_in_plan),
+            "fragments_to_uninstall": list(self.fragments_to_uninstall),
+            "file_decisions": [
+                {
+                    "rel_path": d.rel_path,
+                    "fragment": d.fragment,
+                    "backend": d.backend,
+                    "action": d.action,
+                    "reason": d.reason,
+                }
+                for d in self.file_decisions
+            ],
+            "summary": {
+                "applied": self.applied_count,
+                "conflicts": self.conflict_count,
+                "total": len(self.file_decisions),
+            },
+        }
+
+
+def plan_update(
+    project_root: Path,
+    *,
+    update_mode: UpdateMode = "merge",
+) -> UpdatePlanReport:
+    """Compute a dry-run plan for ``forge --update``.
+
+    Reads the manifest, runs the resolver, and walks each fragment's
+    ``files/`` tree without writing. Produces a per-file decision using
+    :func:`forge.merge.file_three_way_decide` so the user sees what the
+    real update would do — applied / conflict / preserved — before
+    committing.
+
+    Raises :class:`ProvenanceError` when ``project_root`` isn't a
+    forge-generated project (no ``forge.toml``).
+    """
+    manifest = project_root / "forge.toml"
+    if not manifest.is_file():
+        raise ProvenanceError(
+            f"No forge.toml at {project_root}. Is this a forge-generated project?",
+            code=PROVENANCE_MANIFEST_MISSING,
+            context={"project_root": str(project_root)},
+        )
+
+    data = read_forge_toml(manifest)
+    backends = _infer_backends(project_root)
+    if not backends:
+        raise ProvenanceError(
+            f"No services/<backend>/ directories found under {project_root}.",
+            context={"project_root": str(project_root)},
+        )
+
+    config = ProjectConfig(
+        project_name=data.project_name or project_root.name,
+        backends=list(backends),
+        options=dict(data.options),
+    )
+    plan = resolve(config)
+
+    file_baselines = _baselines_from_provenance(data.provenance)
+    current_plan_fragments = {rf.fragment.name for rf in plan.ordered}
+    uninstalls = sorted(
+        disabled_fragments(data.provenance, current_plan_fragments)
+    )
+
+    decisions: list[FilePlanEntry] = []
+    for rf in plan.ordered:
+        for backend in rf.target_backends:
+            impl = rf.fragment.implementations.get(backend)
+            if impl is None:
+                continue
+            backend_dir, backend_label = _backend_dir_and_label(
+                project_root, backend, config.backends, impl.scope
+            )
+            if backend_dir is None:
+                continue
+            decisions.extend(
+                _decide_for_fragment(
+                    rf.fragment.name,
+                    backend_label,
+                    impl,
+                    project_root,
+                    backend_dir,
+                    plan.option_values,
+                    file_baselines,
+                    update_mode,
+                )
+            )
+
+    return UpdatePlanReport(
+        update_mode=update_mode,
+        backends=[bc.name for bc in config.backends],
+        fragments_in_plan=sorted(current_plan_fragments),
+        fragments_to_uninstall=uninstalls,
+        file_decisions=decisions,
+    )
+
+
+def _baselines_from_provenance(
+    provenance_tbl: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """Same baseline construction the updater does — POSIX rel-path → SHA."""
+    baselines: dict[str, str] = {}
+    for rel, entry in provenance_tbl.items():
+        if entry.get("origin") == "user":
+            continue
+        sha = str(entry.get("sha256", ""))
+        if sha:
+            baselines[rel] = sha
+    return baselines
+
+
+def _backend_dir_and_label(
+    project_root: Path,
+    backend: object,
+    project_backends: list[BackendConfig],
+    scope: str,
+) -> tuple[Path | None, str]:
+    """Resolve the backend dir + display label for plan entries."""
+    if scope == "project":
+        return project_root, "<project>"
+    for bc in project_backends:
+        if bc.language == backend:
+            backend_dir = project_root / "services" / bc.name
+            return (backend_dir if backend_dir.is_dir() else None, bc.name)
+    return None, str(backend)
+
+
+def _decide_for_fragment(
+    fragment_name: str,
+    backend_label: str,
+    impl,  # FragmentImplSpec — avoid the cyclic import
+    project_root: Path,
+    backend_dir: Path,
+    option_values: dict,
+    baselines: dict[str, str],
+    update_mode: UpdateMode,
+) -> list[FilePlanEntry]:
+    """Produce file-level decisions for one fragment × one backend."""
+    try:
+        fp = FragmentPlan.from_impl(
+            impl,
+            fragment_name,
+            options=option_values,
+        )
+    except Exception:  # noqa: BLE001 — the apply pass would surface this; preview gracefully.
+        return []
+    if fp.files_dir is None:
+        return []
+
+    out: list[FilePlanEntry] = []
+    for src_path in fp.files_dir.rglob("*"):
+        if not src_path.is_file():
+            continue
+        rel = src_path.relative_to(fp.files_dir)
+        dst = backend_dir / rel
+        try:
+            rel_key = dst.relative_to(project_root).as_posix()
+        except ValueError:
+            rel_key = dst.as_posix()
+
+        if not dst.exists():
+            out.append(
+                FilePlanEntry(
+                    rel_path=rel_key,
+                    fragment=fragment_name,
+                    backend=backend_label,
+                    action="new",
+                    reason="fresh emit (file not yet on disk)",
+                )
+            )
+            continue
+
+        if update_mode == "skip":
+            out.append(
+                FilePlanEntry(
+                    rel_path=rel_key,
+                    fragment=fragment_name,
+                    backend=backend_label,
+                    action="skipped-no-change",
+                    reason="--mode skip preserves any pre-existing destination",
+                )
+            )
+            continue
+        if update_mode == "overwrite":
+            out.append(
+                FilePlanEntry(
+                    rel_path=rel_key,
+                    fragment=fragment_name,
+                    backend=backend_label,
+                    action="applied",
+                    reason="--mode overwrite clobbers existing destinations",
+                )
+            )
+            continue
+        if update_mode == "strict":
+            # Strict is a fresh-generation mode; on update it would raise.
+            # Surface it as a synthetic "would-error" entry for visibility.
+            out.append(
+                FilePlanEntry(
+                    rel_path=rel_key,
+                    fragment=fragment_name,
+                    backend=backend_label,
+                    action="error",
+                    reason=(
+                        "--mode strict would raise FRAGMENT_FILES_OVERLAP — "
+                        "use merge / skip / overwrite for updates"
+                    ),
+                )
+            )
+            continue
+
+        # update_mode == "merge"
+        baseline_sha = baselines.get(rel_key)
+        new_sha = sha256_of_file(src_path)
+        current_sha = sha256_of_file(dst)
+        decision = file_three_way_decide(
+            baseline_sha=baseline_sha,
+            current_sha=current_sha,
+            new_sha=new_sha,
+        )
+        out.append(
+            FilePlanEntry(
+                rel_path=rel_key,
+                fragment=fragment_name,
+                backend=backend_label,
+                action=decision,
+                reason=_reason_for_decision(
+                    decision,
+                    has_baseline=baseline_sha is not None,
+                    user_modified=current_sha != baseline_sha,
+                ),
+            )
+        )
+    return out
+
+
+def _reason_for_decision(
+    decision: str, *, has_baseline: bool, user_modified: bool
+) -> str:
+    """Render a one-line rationale for a merge-mode decision."""
+    if decision == "applied":
+        if not has_baseline:
+            return "first emit (no baseline tracked yet)"
+        return "current matches baseline → safe overwrite"
+    if decision == "skipped-idempotent":
+        return "on-disk content already equals fragment-authored content"
+    if decision == "skipped-no-change":
+        return "fragment unchanged since baseline; user edits preserved"
+    if decision == "no-baseline":
+        return "no baseline tracked + file present → preserved as user-authored"
+    if decision == "conflict":
+        return "user edited + fragment changed → .forge-merge sidecar would be emitted"
+    return decision

@@ -94,3 +94,49 @@ def test_env_var_fallback(monkeypatch):
     log_event(logger, "debug.check", level=logging.DEBUG, detail="ok")
     line = buf.getvalue().strip().splitlines()[0]
     assert json.loads(line)["event"] == "debug.check"
+
+
+# ---------------------------------------------------------------------------
+# P2 — explicit ``fmt`` / ``level`` kwargs win over env vars
+# ---------------------------------------------------------------------------
+
+
+def test_explicit_fmt_overrides_env(monkeypatch):
+    """--log-json (fmt='json') wins even when FORGE_LOG_FORMAT=text."""
+    monkeypatch.setenv("FORGE_LOG_FORMAT", "text")
+    buf = io.StringIO()
+    configure_logging(stream=buf, fmt="json")
+    logger = get_logger("tests")
+    log_event(logger, "override.json")
+    line = buf.getvalue().strip().splitlines()[0]
+    payload = json.loads(line)
+    assert payload["event"] == "override.json"
+
+
+def test_explicit_level_overrides_env(monkeypatch):
+    """--log-level=DEBUG wins even when FORGE_LOG_LEVEL=INFO."""
+    monkeypatch.setenv("FORGE_LOG_LEVEL", "INFO")
+    buf = io.StringIO()
+    configure_logging(stream=buf, level="DEBUG")
+    logger = get_logger("tests")
+    log_event(logger, "level.override", level=logging.DEBUG, msg="visible")
+    out = buf.getvalue()
+    # DEBUG line should reach the buffer.
+    assert "level.override" in out
+
+
+def test_log_json_kwarg_emits_ndjson_lines(monkeypatch):
+    """The output of ``configure_logging(fmt='json')`` is one JSON object
+    per line — the NDJSON contract downstream consumers depend on."""
+    monkeypatch.delenv("FORGE_LOG_FORMAT", raising=False)
+    buf = io.StringIO()
+    configure_logging(stream=buf, fmt="json")
+    logger = get_logger("tests")
+    log_event(logger, "ndjson.one", k=1)
+    log_event(logger, "ndjson.two", k=2)
+    lines = [ln for ln in buf.getvalue().strip().splitlines() if ln]
+    assert len(lines) == 2
+    a = json.loads(lines[0])
+    b = json.loads(lines[1])
+    assert a["event"] == "ndjson.one" and a["k"] == 1
+    assert b["event"] == "ndjson.two" and b["k"] == 2

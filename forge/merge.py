@@ -169,3 +169,176 @@ def write_sidecar(target: Path, new_block: str, tag: str) -> Path:
     )
     sidecar.write_text(body, encoding="utf-8")
     return sidecar
+
+
+# ---------------------------------------------------------------------------
+# File-level three-way merge (P0.1, 1.1.0-alpha.2)
+# ---------------------------------------------------------------------------
+#
+# Mirror of the block-level three-way merge above, but for whole files
+# copied verbatim from a fragment's ``files/`` tree. Used by
+# :mod:`forge.appliers.files` on the ``forge --update`` path so a fragment
+# that ships a bug-fix to ``files/auth/middleware.py`` actually reaches
+# existing projects, instead of being silently skipped because the file
+# already exists. Pre-1.1 the updater passed ``skip_existing_files=True``
+# unconditionally — see ``updater.py``'s deferral comment removed in this
+# epic.
+#
+# Hashes feed the same decision table as :func:`three_way_decide`, with
+# two extra rows for the file-level cases that don't apply to inline
+# blocks: "user deleted the file" (still a baseline; current is None) and
+# "no baseline at all" (pre-1.0 generation; treat as user-authored).
+
+
+_BINARY_SAMPLE_BYTES = 8192
+
+
+def _looks_binary(sample: bytes) -> bool:
+    """Null-byte heuristic Git uses for "is this file text or binary?"."""
+    return b"\x00" in sample
+
+
+def is_binary_file(path: Path) -> bool:
+    """Return ``True`` when ``path`` looks like binary content.
+
+    Reads at most :data:`_BINARY_SAMPLE_BYTES` from the head of the file,
+    matching Git's ``buffer_is_binary`` heuristic. Returns ``False`` for
+    missing or empty files (caller decides whether that case is binary
+    in context).
+    """
+    if not path.is_file():
+        return False
+    with path.open("rb") as fh:
+        sample = fh.read(_BINARY_SAMPLE_BYTES)
+    return _looks_binary(sample)
+
+
+def sha256_of_file(path: Path) -> str:
+    """SHA-256 of ``path``'s contents, with CRLF normalisation for text.
+
+    Text files (no null byte in the head sample, decode as UTF-8) get the
+    same CRLF→LF normalisation as :func:`sha256_of_text`, so a fragment
+    file checked-in with LF line endings round-trips cleanly through a
+    Windows working tree. Binary files (or files that don't decode as
+    UTF-8) hash the raw bytes — line-ending normalisation would corrupt
+    them.
+    """
+    data = path.read_bytes()
+    if _looks_binary(data[:_BINARY_SAMPLE_BYTES]):
+        return hashlib.sha256(data).hexdigest()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return hashlib.sha256(data).hexdigest()
+    return sha256_of_text(text)
+
+
+@dataclass(frozen=True)
+class FileMergeOutcome:
+    """What happened when a fragment-authored file was re-applied on update.
+
+    Mirror of :class:`MergeOutcome` at file granularity. ``action`` is
+    one of:
+      * ``applied`` — file written (fresh emit, clean overwrite, or
+        user-deleted re-emit)
+      * ``skipped-idempotent`` — current already equals new
+      * ``skipped-no-change`` — fragment unchanged since baseline; user
+        edits preserved
+      * ``conflict`` — ``.forge-merge`` (or ``.forge-merge.bin``) sidecar
+        emitted; target untouched
+      * ``no-baseline`` — pre-1.1 generation or otherwise untracked file;
+        preserved as if user-authored (``skip_existing`` semantics)
+    """
+
+    action: str
+    target: Path
+    sidecar_path: Path | None = None
+
+
+def file_three_way_decide(
+    *,
+    baseline_sha: str | None,
+    current_sha: str | None,
+    new_sha: str,
+) -> str:
+    """Three-way decision for a fragment-authored file on ``forge --update``.
+
+    Pure function over content hashes — caller does the file I/O. The
+    decision table covers all 7 (baseline × current × new) combinations
+    that matter:
+
+    +-------------+-------------+-------+----------------------+
+    | baseline    | current     | new   | action               |
+    +=============+=============+=======+======================+
+    | None        | None        | *     | applied              |
+    | None        | exists      | *     | no-baseline          |
+    | sha         | None        | *     | applied              |
+    | sha         | == baseline | == base | skipped-idempotent |
+    | sha         | == baseline | new   | applied              |
+    | sha         | other       | == base | skipped-no-change  |
+    | sha         | other       | other | conflict             |
+    +-------------+-------------+-------+----------------------+
+
+    The ``no-baseline`` row is the file-level analogue of the same
+    branch in :func:`three_way_decide`: a file the manifest doesn't
+    track is treated as user-authored and preserved. This makes the
+    flip from ``skip_existing_files=True`` (pre-1.1) to ``--mode merge``
+    (1.1+) safe for projects that haven't yet adopted SHA baselines.
+    """
+    # No baseline tracked at all. If nothing on disk, fresh emit.
+    # Otherwise the file pre-dates SHA tracking — preserve it.
+    if baseline_sha is None:
+        if current_sha is None:
+            return "applied"
+        return "no-baseline"
+
+    # Baseline exists but the user deleted the file. Re-emit; users who
+    # want it gone should disable the fragment, not delete the file.
+    if current_sha is None:
+        return "applied"
+
+    # All three present — same logic as the inline-block path.
+    if current_sha == new_sha:
+        return "skipped-idempotent"
+    if current_sha == baseline_sha:
+        return "applied"
+    if new_sha == baseline_sha:
+        return "skipped-no-change"
+    return "conflict"
+
+
+def write_file_sidecar(
+    target: Path,
+    new_content: str | bytes,
+    *,
+    tag: str,
+) -> Path:
+    """Emit a ``<target>.forge-merge`` sidecar with the desired new file.
+
+    Counterpart to :func:`write_sidecar` at file granularity. Text
+    content goes to ``<target>.forge-merge`` with the same comment-style
+    header the block sidecar uses; binary content goes to
+    ``<target>.forge-merge.bin`` with no header (the bytes are the
+    payload — no consumer can ignore a banner).
+
+    Returns the path written so callers can record it on the
+    :class:`FileMergeOutcome`.
+    """
+    if isinstance(new_content, bytes):
+        sidecar = target.with_suffix(target.suffix + ".forge-merge.bin")
+        sidecar.write_bytes(new_content)
+        return sidecar
+    sidecar = target.with_suffix(target.suffix + ".forge-merge")
+    body = (
+        f"# forge merge conflict — tag: {tag}\n"
+        f"# target: {target.name}\n"
+        "# \n"
+        "# The content below is what forge wanted to write. Your current\n"
+        "# file contents differ from both this version AND the baseline\n"
+        "# forge last wrote, so the generator cannot safely pick a\n"
+        "# resolution. Merge by hand, then delete this sidecar.\n"
+        "\n"
+        f"{new_content}"
+    )
+    sidecar.write_text(body, encoding="utf-8")
+    return sidecar

@@ -2,6 +2,49 @@
 
 This guide walks through building a forge plugin — a pip-installable package that extends forge with new options, fragments, backends, frontends, commands, or emitters.
 
+## Quickstart (10 minutes)
+
+The fastest path from zero to a working plugin. Copy the reference plugin, change the names, install in dev-mode, verify with `forge --plugins list`.
+
+```bash
+# 1. Clone or copy the reference plugin from the forge repo.
+cp -r examples/forge-plugin-example my-plugin
+cd my-plugin
+
+# 2. Rename: src/forge_plugin_example/ → src/forge_plugin_<your-name>/
+#    Update pyproject.toml's `name`, `[project.entry-points]`, and the
+#    package directory under `src/`.
+
+# 3. Edit src/forge_plugin_<name>/__init__.py:
+#    - Replace `example.hello_banner` with your namespaced option path
+#      (e.g. `mycompany.audit_log`).
+#    - Replace `example_hello_banner` with your fragment name.
+#    - Move/rename fragments/hello_banner/ to fragments/<your-fragment>/.
+
+# 4. Install in dev-mode and verify the plugin loads.
+uv pip install -e .
+forge --plugins list
+# Expected: your plugin appears under "Loaded plugins".
+
+# 5. Generate a project with your option enabled.
+forge --project-name demo --backend-language python \
+      --features items --set <your-option-path>=true --quiet
+# Inspect the generated project — your fragment's files + injections
+# should be present.
+```
+
+**Common gotchas the [P0.2 CI gate](../tests/test_plugin_e2e.py) catches in the reference plugin (and that you'll hit in your own):**
+
+1. **`Fragment(category=..., summary=...)` no longer exists.** User-visible metadata lives on the `Option`. The `Fragment` is implementation-only; constructor takes `name`, `implementations`, `depends_on`, `conflicts_with`, `capabilities`.
+2. **`fragment_dir` must be an absolute path for plugins.** Relative paths resolve against forge's built-in `_fragments/` directory. Use `Path(__file__).parent / "fragments" / "<name>" / "<lang>"`.
+3. **`files/` mirrors the backend root.** `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is importable as `app.hello`. `files/hello.py` lands at `<backend>/hello.py` — outside the package, not importable.
+4. **`compose.yaml` (P1.3) lives at the fragment root**, peer of the per-language sub-dirs, not inside `<lang>/`. The schema is documented in `forge/services/fragment_compose.py`'s module docstring.
+5. **`pyproject.toml` needs `[tool.setuptools.package-data]`** so wheel installs ship your fragment tree (YAML + Python files). Editable installs (`pip install -e`) work without it; published wheels don't.
+
+When stuck, run `forge --doctor` — it lists which plugins loaded, which failed, and (P1.4) whether `ts-morph` AST injection is reachable.
+
+## Trust model
+
 ## Trust model
 
 **A forge plugin is a pip package.** Installing one grants it full Python execution rights when `forge` starts — forge does not sandbox plugin code. Treat plugin installation with the same care as any pip dependency:
@@ -16,6 +59,12 @@ Forge enforces the following at load time:
 2. **Namespaced paths.** Option paths and fragment names must use a prefix that doesn't collide with built-ins (e.g. `mycompany.audit_log`, not `audit_log`). Forge raises on collision.
 3. **No file I/O during load.** Plugins must not read, write, or execute files during discovery. Fragment application (which does touch the filesystem) happens inside forge's trust boundary, not the plugin's.
 
+## Stable API surface
+
+The plugin contract — every name plugin authors target — is documented in `forge/api.py`'s module docstring with a per-symbol "Since" / "Compatibility" table. Stable symbols follow SemVer relative to the public ``forge`` package: a breaking signature change requires a major version bump.
+
+P0.2 (1.1.0-alpha.2) added an end-to-end CI gate at [`.github/workflows/plugin-e2e.yml`](../.github/workflows/plugin-e2e.yml) that pip-installs `examples/forge-plugin-example/` against the working tree on every PR touching `forge/api.py`, `forge/plugins.py`, the option/fragment registries, or the example itself. The gate runs `pytest -m plugin_e2e` (defined in [`tests/test_plugin_e2e.py`](../tests/test_plugin_e2e.py)) which exercises the full discovery → registration → CLI → generation → update flow. Drift between the public API surface and the reference plugin surfaces here before release.
+
 ## Minimal plugin
 
 ### 1. Project structure
@@ -28,14 +77,17 @@ forge-plugin-example/
 │       ├── __init__.py
 │       └── fragments/
 │           └── hello_banner/
-│               ├── python/
-│               │   ├── inject.yaml
-│               │   └── files/
-│               │       └── hello.py
-│               └── __init__.py
+│               └── python/
+│                   ├── inject.yaml
+│                   └── files/
+│                       └── src/
+│                           └── app/
+│                               └── hello.py
 └── tests/
     └── test_register.py
 ```
+
+The fragment's `files/` tree mirrors the *backend root* layout — a file at `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is therefore importable as `app.hello`. Fragment directories shipped from a plugin must be passed to `FragmentImplSpec(fragment_dir=...)` as **absolute paths** (typically `Path(__file__).parent / "fragments" / "<name>" / "<lang>"`); relative paths are interpreted against forge's built-in `_fragments/` directory, which the plugin doesn't own.
 
 ### 2. `pyproject.toml`
 

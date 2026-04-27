@@ -44,17 +44,24 @@ class ModuleGate(NamedTuple):
 # Calibration note (Epic S, 1.1.0-alpha.1): measured baseline was
 #   capability_resolver=97.0%  feature_injector=90.0%  merge=86.7%
 #   provenance=96.7%  python_ast=97.8%  ts_ast=97.3%  updater=80.5%
-# The floor values below are measured - 2pp so a small incidental drop
-# doesn't block an unrelated PR. Targets represent the steady state we
-# aim for across 1.x. See docs/coverage-policy.md for the ratchet rules.
+# Ratchet (P0.1 + follow-up tests, 1.1.0-alpha.2): updater +
+# feature_injector dropped after the new merge-mode code paths landed,
+# then recovered after the test backfill. New measured baseline:
+#   capability_resolver=98.3%  feature_injector=89.1%  merge=94.1%
+#   provenance=96.7%  python_ast=97.8%  ts_ast=95.9%  updater=85.2%
+#   plan_update=85.5% (new module — added with its own floor)
+# Floors are measured - 2pp so a small incidental drop doesn't block
+# an unrelated PR. Targets represent the steady state we aim for across
+# 1.x. See docs/coverage-policy.md for the ratchet rules.
 MODULE_FLOORS: dict[str, ModuleGate] = {
-    "forge/capability_resolver.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
+    "forge/capability_resolver.py": ModuleGate(floor_pct=96.0, target_pct=98.0),
     "forge/feature_injector.py": ModuleGate(floor_pct=88.0, target_pct=95.0),
-    "forge/merge.py": ModuleGate(floor_pct=85.0, target_pct=95.0),
+    "forge/merge.py": ModuleGate(floor_pct=92.0, target_pct=95.0),
     "forge/provenance.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/python_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/ts_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
-    "forge/updater.py": ModuleGate(floor_pct=78.0, target_pct=90.0),
+    "forge/updater.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
+    "forge/plan_update.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
 }
 
 

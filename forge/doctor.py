@@ -201,6 +201,109 @@ def check_registered_backends() -> list[CheckResult]:
     return results
 
 
+def check_ts_morph_toolchain() -> CheckResult:
+    """P1.4 (1.1.0-alpha.2) — surface whether AST-based TS injection is wired.
+
+    The Python regex anchor injector at ``forge/injectors/ts_ast.py`` is
+    the default for ``.ts`` / ``.tsx`` / ``.js`` files. ``FORGE_TS_AST=1``
+    opts into the ts-morph-backed sidecar, which is more durable under
+    Prettier reformatting that moves anchor comments. The sidecar
+    requires Node on PATH plus the ``ts-morph`` npm package reachable
+    via ``NODE_PATH`` (or installed in the working directory's
+    ``node_modules``).
+
+    Doctor reports four states:
+
+    * ``ok``   — Node + ts-morph reachable, ``FORGE_TS_AST`` set → AST
+                 injection actively in use.
+    * ``ok``   — Node + ts-morph reachable, env var unset → AST
+                 injection available (one ``export FORGE_TS_AST=1`` away).
+    * ``warn`` — Node missing, or Node present but ``ts-morph`` not
+                 reachable. Forge still works; AST injection silently
+                 falls back to regex.
+    * ``warn`` — helper script missing (packaging regression — should
+                 never trigger in a wheel install).
+    """
+    import os  # noqa: PLC0415
+
+    from forge.injectors.ts_morph_sidecar import _HELPER_PATH  # noqa: PLC0415
+
+    if not _HELPER_PATH.is_file():
+        return CheckResult(
+            name="ts-morph:helper",
+            status="warn",
+            detail=(
+                f"ts-morph helper missing at {_HELPER_PATH} — "
+                "AST injection unavailable, regex fallback in use"
+            ),
+            fix=(
+                "Re-install forge from a published wheel; the helper "
+                "ships as package data."
+            ),
+        )
+
+    node = shutil.which("node")
+    if node is None:
+        return CheckResult(
+            name="ts-morph:toolchain",
+            status="warn",
+            detail=(
+                "Node not on PATH — ts-morph AST injection unavailable, "
+                "TS injections use the regex anchor fallback"
+            ),
+            fix=(
+                "Install Node 20+ and re-run `forge --doctor`. AST "
+                "injection is opt-in via FORGE_TS_AST=1."
+            ),
+        )
+
+    # Probe `ts-morph` reachability from this Node. Cheap: a require()
+    # exits 0 when the module resolves and non-zero with a clean error
+    # otherwise. NODE_PATH and any working-directory node_modules both
+    # contribute to module resolution.
+    try:
+        proc = subprocess.run(
+            [node, "-e", "require('ts-morph')"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception as e:  # noqa: BLE001
+        return CheckResult(
+            name="ts-morph:toolchain",
+            status="warn",
+            detail=f"ts-morph probe failed: {e}",
+            fix="Install Node 20+ and `npm install ts-morph` in your project.",
+        )
+
+    if proc.returncode != 0:
+        return CheckResult(
+            name="ts-morph:toolchain",
+            status="warn",
+            detail=(
+                "Node found but ts-morph not reachable — "
+                "TS injections use the regex anchor fallback"
+            ),
+            fix=(
+                "Install ts-morph: `npm install ts-morph` in the project "
+                "root, or globally with `npm install -g ts-morph` and "
+                "set NODE_PATH to the global modules dir."
+            ),
+        )
+
+    flag = os.getenv("FORGE_TS_AST", "").strip().lower()
+    enabled = flag in ("1", "true", "yes", "on")
+    state = "active (FORGE_TS_AST=1)" if enabled else (
+        "available — set FORGE_TS_AST=1 to opt in"
+    )
+    return CheckResult(
+        name="ts-morph:toolchain",
+        status="ok",
+        detail=f"Node + ts-morph reachable; AST injection {state}",
+    )
+
+
 def check_forge_toml(project_path: Path) -> CheckResult:
     """If ``project_path/forge.toml`` exists, parse it and verify integrity."""
     manifest = project_path / "forge.toml"
@@ -252,6 +355,9 @@ def run(project_path: Path | None = None) -> DoctorReport:
     report.results.append(check_tool_on_path("cargo", kind="tool"))
     report.results.append(check_tool_on_path("flutter", kind="tool"))
     report.results.append(check_docker_reachable())
+    # P1.4 — surface ts-morph reachability so users planning to enable
+    # FORGE_TS_AST=1 see whether the toolchain is ready.
+    report.results.append(check_ts_morph_toolchain())
 
     # Surface every registered backend + its toolchain. Built-ins always
     # land in BACKEND_REGISTRY; plugin backends land here once loaded.

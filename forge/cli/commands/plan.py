@@ -36,7 +36,9 @@ def _dispatch_plan(args: argparse.Namespace) -> None:
     plan = resolve(config)
     preview = _build_preview(config, plan)
 
-    if getattr(args, "json_output", False):
+    if getattr(args, "plan_graph", False):
+        sys.stdout.write(_render_mermaid(config, plan))
+    elif getattr(args, "json_output", False):
         sys.stdout.write(json.dumps(preview, indent=2, default=str) + "\n")
     else:
         _print_tree(preview)
@@ -177,3 +179,110 @@ def _print_tree(preview: dict[str, Any]) -> None:
             for inj in injections:
                 _w(f"{vbar}    ~ {inj['target']}  (at {inj['marker']}, {inj['position']})\n")
         _w("\n")
+
+
+def _render_mermaid(config, plan) -> str:
+    """Render the resolved plan as a Mermaid ``graph TD`` diagram.
+
+    The diagram answers "why is fragment X applied?" by showing every
+    option that contributed (with the value that triggered it) and the
+    fragment-to-fragment ``depends_on`` edges. Each node is labelled
+    with the fragment's name + its target backends; option nodes carry
+    their dotted path + chosen value.
+
+    Output is ready to paste into a Markdown ``mermaid`` fence, pipe
+    to ``mermaid-cli``, or render at https://mermaid.live.
+    """
+    from forge.options import OPTION_REGISTRY  # noqa: PLC0415
+
+    lines: list[str] = ["graph TD"]
+    lines.append(f"  %% forge plan — project={config.project_name}")
+    lines.append(
+        f"  %% backends: "
+        + ", ".join(f"{bc.name} ({bc.language.value})" for bc in config.backends)
+    )
+    lines.append("")
+
+    # Track which fragments have a containing option so we know whether
+    # to draw an "(implicit)" hint on un-claimed fragments.
+    fragments_in_plan: dict[str, object] = {
+        rf.fragment.name: rf for rf in plan.ordered
+    }
+
+    # Option nodes — only those whose chosen value actually pulls a
+    # fragment into the plan. Pure-context options (rag.top_k, etc.)
+    # would clutter the graph without informing the "why".
+    option_node_ids: dict[str, str] = {}
+    for path, opt in sorted(OPTION_REGISTRY.items()):
+        chosen = plan.option_values.get(path, opt.default)
+        triggered = opt.enables.get(chosen, ())
+        if not triggered:
+            continue
+        if not any(name in fragments_in_plan for name in triggered):
+            continue
+        node_id = _mermaid_id(path)
+        option_node_ids[path] = node_id
+        label = f"{path}<br/>= {chosen!r}"
+        lines.append(f"  {node_id}{{{{{label}}}}}")
+
+    lines.append("")
+
+    # Fragment nodes — labelled with target-backend list.
+    frag_node_ids: dict[str, str] = {}
+    for rf in plan.ordered:
+        node_id = _mermaid_id(rf.fragment.name)
+        frag_node_ids[rf.fragment.name] = node_id
+        backends = ", ".join(lang.value for lang in rf.target_backends) or "—"
+        label = f"{rf.fragment.name}<br/>[{backends}]"
+        lines.append(f"  {node_id}[{label}]")
+
+    lines.append("")
+
+    # Option → fragment edges (option triggered the fragment via enables).
+    for path, opt_node_id in option_node_ids.items():
+        opt = OPTION_REGISTRY[path]
+        chosen = plan.option_values.get(path, opt.default)
+        for fragment_name in opt.enables.get(chosen, ()):
+            if fragment_name not in frag_node_ids:
+                continue
+            lines.append(
+                f"  {opt_node_id} --> {frag_node_ids[fragment_name]}"
+            )
+
+    # Fragment → fragment depends_on edges (transitive deps the resolver
+    # pulled in regardless of options). Drawn with a different arrow
+    # style so users can tell "you asked for this" from "this came along
+    # for the ride".
+    for rf in plan.ordered:
+        for dep in rf.fragment.depends_on:
+            if dep not in frag_node_ids:
+                continue
+            lines.append(
+                f"  {frag_node_ids[rf.fragment.name]} -.->|depends_on| "
+                f"{frag_node_ids[dep]}"
+            )
+
+    if not plan.ordered:
+        lines.append("  empty[(no fragments — every option at default)]")
+
+    return "\n".join(lines) + "\n"
+
+
+def _mermaid_id(value: str) -> str:
+    """Sanitise an option path / fragment name for use as a Mermaid node id.
+
+    Mermaid identifiers must be ASCII-alphanumeric / underscore; dots
+    and dashes break the parser. We keep the original string in the
+    label and use a sanitised id for edges.
+    """
+    out = []
+    for ch in value:
+        if ch.isalnum() or ch == "_":
+            out.append(ch)
+        else:
+            out.append("_")
+    sanitised = "".join(out)
+    # Mermaid ids can't start with a digit.
+    if sanitised and sanitised[0].isdigit():
+        sanitised = "n_" + sanitised
+    return sanitised or "n"
