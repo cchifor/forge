@@ -288,7 +288,13 @@ def test_cycle_path_isolates_cycle_when_dag_neighbours_present() -> None:
 
 def test_register_fragment_rejects_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
     # Swap in an isolated registry so we don't pollute the real one.
+    # Post-Epic-1 split, ``register_fragment`` lives in
+    # ``forge.fragments._registry`` and refers to the module-local
+    # ``FRAGMENT_REGISTRY``; patching the package-level re-export
+    # alone leaves the canonical reference unchanged. Patch both
+    # locations so ``register_fragment`` sees the fake.
     fake = _FragmentRegistry()
+    monkeypatch.setattr("forge.fragments._registry.FRAGMENT_REGISTRY", fake)
     monkeypatch.setattr("forge.fragments.FRAGMENT_REGISTRY", fake)
     register_fragment(_mk("unique_name"))
     with pytest.raises(PluginError) as excinfo:
