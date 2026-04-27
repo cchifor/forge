@@ -44,7 +44,9 @@ import json
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 
 
@@ -146,3 +148,57 @@ def log_event(
         message or event,
         extra={"_forge_event": record_fields},
     )
+
+
+# -- Phase timing (Epic 4 — generation telemetry) --------------------------
+
+
+@contextmanager
+def phase_timer(
+    logger: logging.Logger,
+    event: str,
+    **fields: Any,
+):
+    """Time a generator phase and emit a structured ``<event>`` event on exit.
+
+    Usage::
+
+        with phase_timer(logger, "copier.run", backend=bc.name):
+            run_copier(...)
+
+    Emits a single log record at INFO level with the duration in
+    milliseconds attached as ``duration_ms``. On exception, emits the
+    same event at WARNING level with ``status="failed"`` and re-raises
+    — callers don't need to wrap with try/except just to get a failure
+    signal in telemetry.
+
+    The intent is observability of forge itself, not generated
+    services. ``generator.generate`` wraps each phase
+    (``resolver.resolve``, ``copier.run``, ``feature_injector.apply``,
+    ``toolchain.install``, ``codegen.run``, ``provenance.write_toml``)
+    so a future ``forge --log-json`` consumer can build a flame chart
+    of generation cost without external instrumentation.
+    """
+    start = perf_counter()
+    try:
+        yield
+    except BaseException:
+        duration_ms = int((perf_counter() - start) * 1000)
+        log_event(
+            logger,
+            event,
+            level=logging.WARNING,
+            duration_ms=duration_ms,
+            status="failed",
+            **fields,
+        )
+        raise
+    else:
+        duration_ms = int((perf_counter() - start) * 1000)
+        log_event(
+            logger,
+            event,
+            duration_ms=duration_ms,
+            status="ok",
+            **fields,
+        )

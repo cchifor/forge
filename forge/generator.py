@@ -51,7 +51,10 @@ from forge.errors import (
     TemplateError,
 )
 from forge.feature_injector import apply_features, apply_project_features
+from forge.logging import get_logger, phase_timer
 from forge.provenance import ProvenanceCollector
+
+_logger = get_logger("generator")
 
 __all__ = ["GeneratorError", "generate"]
 
@@ -91,7 +94,8 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     # fragment-modified files on subsequent `forge --update` runs.
     collector = ProvenanceCollector(project_root=project_root)
 
-    plan = resolve(config)
+    with phase_timer(_logger, "generate.resolve"):
+        plan = resolve(config)
 
     # P1.3: static pre-flight check. Catches inject.yaml / env.yaml /
     # file-overlap problems in <100ms before Copier runs (which takes
@@ -99,23 +103,37 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     # plugin authors aren't stuck iterating through them serially.
     from forge.plan_validator import validate_plan  # noqa: PLC0415
 
-    validate_plan(plan)
+    with phase_timer(_logger, "generate.validate_plan"):
+        validate_plan(plan)
 
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
         backend_dir = project_root / "services" / bc.name
         _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
-        _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
+        with phase_timer(
+            _logger,
+            "generate.copier.backend",
+            backend=bc.name,
+            language=bc.language.value,
+        ):
+            _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
         _record_tree(backend_dir, collector, origin="base-template")
-        apply_features(
-            bc,
-            backend_dir,
-            plan.ordered,
-            quiet=quiet,
-            collector=collector,
-            option_values=plan.option_values,
-            project_root=project_root,
-        )
+        with phase_timer(
+            _logger,
+            "generate.apply_features",
+            backend=bc.name,
+            language=bc.language.value,
+            fragment_count=len(plan.ordered),
+        ):
+            apply_features(
+                bc,
+                backend_dir,
+                plan.ordered,
+                quiet=quiet,
+                collector=collector,
+                option_values=plan.option_values,
+                project_root=project_root,
+            )
         # Phase B1: strip the database stack from Python backends when
         # ``database.mode=none``. Runs after fragment application so
         # fragments see the full template (config validation has
@@ -138,15 +156,32 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         # shouldn't spend time on. Both are plugin-overridable via
         # ``BackendSpec.toolchain`` — see forge.toolchains.
         if not dry_run:
-            spec.toolchain.install(backend_dir, quiet=quiet)
+            with phase_timer(
+                _logger,
+                "generate.toolchain.install",
+                backend=bc.name,
+                language=bc.language.value,
+            ):
+                spec.toolchain.install(backend_dir, quiet=quiet)
         if not quiet and not dry_run:
-            spec.toolchain.verify(backend_dir, quiet=quiet)
+            with phase_timer(
+                _logger,
+                "generate.toolchain.verify",
+                backend=bc.name,
+                language=bc.language.value,
+            ):
+                spec.toolchain.verify(backend_dir, quiet=quiet)
             spec.toolchain.post_generate(backend_dir, quiet=quiet)
 
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         _log(f"  Generating {config.frontend.framework.value} frontend ...")
-        _generate_frontend(config, project_root, quiet=quiet)
+        with phase_timer(
+            _logger,
+            "generate.copier.frontend",
+            framework=config.frontend.framework.value,
+        ):
+            _generate_frontend(config, project_root, quiet=quiet)
 
     # 3. Render Docker Compose
     #
@@ -171,7 +206,8 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         )
 
         register_fragment_services(fragment_roots_from_plan(plan.ordered))
-        render_compose(config, project_root, plan=plan)
+        with phase_timer(_logger, "generate.compose.render"):
+            render_compose(config, project_root, plan=plan)
         # init-db creates a database per backend plus keycloak's own db.
         # Skip when there are 0–1 backends and no keycloak — the primary
         # backend's POSTGRES_DB env var already handles the single-db case.
@@ -233,13 +269,14 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         skip_if_recorded=True,
     )
 
-    apply_project_features(
-        project_root,
-        plan.ordered,
-        quiet=quiet,
-        collector=collector,
-        option_values=plan.option_values,
-    )
+    with phase_timer(_logger, "generate.apply_project_features"):
+        apply_project_features(
+            project_root,
+            plan.ordered,
+            quiet=quiet,
+            collector=collector,
+            option_values=plan.option_values,
+        )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)
     # if the per-template generators haven't already provided them.
@@ -254,12 +291,14 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
 
     try:
-        run_codegen(config, project_root, collector=collector)
+        with phase_timer(_logger, "generate.codegen"):
+            run_codegen(config, project_root, collector=collector)
     except Exception as exc:  # noqa: BLE001
         if not quiet:
             print(f"  [warn] codegen pipeline emitted an error: {exc}")
 
-    _write_forge_toml(config, project_root, plan, collector=collector)
+    with phase_timer(_logger, "generate.write_forge_toml"):
+        _write_forge_toml(config, project_root, plan, collector=collector)
 
     if not dry_run:
         _log("  Initializing git repository ...")
