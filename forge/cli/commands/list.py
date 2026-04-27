@@ -73,9 +73,21 @@ def _build_option_rows() -> list[dict[str, Any]]:
 
 _DEFAULT_TEXT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("NAME", "name"),
+    ("TIER", "tier_badge"),
     ("DESCRIPTION", "description"),
 )
 _TEXT_COLUMN_PAD = 3
+
+
+def _tier_badge(row: dict[str, Any]) -> str:
+    """Compact RFC-006 parity-tier badge for the text-mode TIER column.
+
+    Operators picking a non-Python backend can scan this column to see
+    which options actually apply to them: ``T1`` means all built-in
+    backends ship; ``T2`` means a documented migration to T1; ``T3``
+    means Python-only and won't reach Node/Rust.
+    """
+    return f"T{row.get('parity_tier', 1)}"
 
 
 def _description_cell(row: dict[str, Any]) -> str:
@@ -110,6 +122,8 @@ def _format_text(
     def cell(row: dict[str, Any], field: str) -> str:
         if field == "description":
             return _description_cell(row)
+        if field == "tier_badge":
+            return _tier_badge(row)
         value = row.get(field)
         if isinstance(value, list):
             return "[" + ", ".join(str(v) for v in value) + "]"

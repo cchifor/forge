@@ -109,3 +109,44 @@ def test_tier_distribution_is_reasonable() -> None:
     # should be represented.
     assert tiers[1] >= 3, f"too few tier-1 fragments: {tiers}"
     assert tiers[3] >= 3, f"too few tier-3 fragments: {tiers}"
+
+
+# -- Filesystem-layout invariant (Epic 2 cheap path) --------------------------
+#
+# The dataclass-level checks above only enforce that ``Fragment.implementations``
+# is keyed correctly. A tier-1 fragment that claims Python+Node+Rust impls but
+# ships no actual ``files/<backend>/`` directory under
+# ``forge/templates/_fragments/<name>/`` would still be applied at generate
+# time and only fail at the plan_validator step (or worse, mid-generation if
+# only ``inject.yaml`` is missing). Catching these here keeps tier-1 honesty
+# enforced at PR time across both the dataclass and disk surfaces.
+
+
+@pytest.mark.parametrize(
+    "fragment",
+    [f for f in FRAGMENT_REGISTRY.values() if f.parity_tier == 1],
+    ids=lambda f: f.name,
+)
+def test_tier_one_has_filesystem_dirs_for_all_built_ins(fragment: Fragment) -> None:
+    """Each tier-1 fragment's ``implementations[lang].fragment_dir`` must
+    resolve to a real directory under ``forge/templates/_fragments/``.
+
+    A tier-1 fragment must ship physical content for each built-in
+    backend it claims to cover — otherwise generation lands an empty
+    no-op for that backend, which violates the parity contract more
+    quietly than the impl-key check above.
+    """
+    from forge.feature_injector import _resolve_fragment_dir
+
+    missing: list[tuple[str, str]] = []
+    for lang in BUILT_INS:
+        impl = fragment.implementations.get(lang)
+        if impl is None:
+            continue  # already caught by test_tier_one_covers_all_built_in_backends
+        frag_dir = _resolve_fragment_dir(impl.fragment_dir)
+        if not frag_dir.is_dir():
+            missing.append((lang.value, str(frag_dir)))
+    assert not missing, (
+        f"tier-1 fragment {fragment.name!r} declares impls whose fragment_dir "
+        f"does not exist on disk: {missing}"
+    )
