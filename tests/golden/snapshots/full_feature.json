@@ -582,7 +582,7 @@
     },
     "apps/frontend/node_modules/.package-lock.json": {
       "size": 299316,
-      "sha256": "c76e53a2a65276b0"
+      "sha256": "f579c50a67f94041"
     },
     "apps/frontend/node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts": {
       "size": 6521,
@@ -14049,12 +14049,12 @@
       "sha256": "188da82c7741db8e"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/_tsup-dts-rollup.d.cts": {
-      "size": 98038,
-      "sha256": "8489dcb4cda18d15"
+      "size": 97966,
+      "sha256": "5a2cdf6adeec348b"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/_tsup-dts-rollup.d.ts": {
-      "size": 98038,
-      "sha256": "8489dcb4cda18d15"
+      "size": 97966,
+      "sha256": "5a2cdf6adeec348b"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/chunk-PXG64RU4.js": {
       "size": 1108,
@@ -14113,12 +14113,12 @@
       "sha256": "b6b6f86620a7d93f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/hydration.cjs": {
-      "size": 8399,
-      "sha256": "f82f64d53dd09f7b"
+      "size": 8544,
+      "sha256": "ca4aa9ee958bfe96"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/hydration.cjs.map": {
-      "size": 13747,
-      "sha256": "596f0cc3f62a9fe4"
+      "size": 14036,
+      "sha256": "332da9098297343e"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/hydration.d.cts": {
       "size": 419,
@@ -14129,12 +14129,12 @@
       "sha256": "6cc30ee142e61bd2"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/hydration.js": {
-      "size": 7189,
-      "sha256": "27c4234c6e4eee18"
+      "size": 7334,
+      "sha256": "5091fc1085f55875"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/hydration.js.map": {
-      "size": 13696,
-      "sha256": "3a3aa174b77492bd"
+      "size": 13985,
+      "sha256": "79f1b14c192622d0"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/index.cjs": {
       "size": 4693,
@@ -14161,12 +14161,12 @@
       "sha256": "82c16f6cff74cbcb"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryBehavior.cjs": {
-      "size": 5509,
-      "sha256": "5fbbfda047dd7f19"
+      "size": 5530,
+      "sha256": "1312fb02cd10bee2"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryBehavior.cjs.map": {
-      "size": 7945,
-      "sha256": "89708f222cd9e4ec"
+      "size": 7981,
+      "sha256": "1560955a22084ce4"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryBehavior.d.cts": {
       "size": 176,
@@ -14177,20 +14177,20 @@
       "sha256": "677ef4f2a68cea2c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryBehavior.js": {
-      "size": 4375,
-      "sha256": "28acbb445b2e0317"
+      "size": 4396,
+      "sha256": "12e9a69a5edbe4fa"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryBehavior.js.map": {
-      "size": 7935,
-      "sha256": "e1f1e6a129dbed65"
+      "size": 7971,
+      "sha256": "e88000fbe3cecb96"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryObserver.cjs": {
-      "size": 3548,
-      "sha256": "e0d91234f01b67c9"
+      "size": 3438,
+      "sha256": "1b436938840db395"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryObserver.cjs.map": {
-      "size": 6454,
-      "sha256": "69a80e243617d67a"
+      "size": 6338,
+      "sha256": "cb8a92e5f27b84e1"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryObserver.d.cts": {
       "size": 97,
@@ -14201,12 +14201,12 @@
       "sha256": "a9f066c6c9bb3ae8"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryObserver.js": {
-      "size": 2363,
-      "sha256": "8e359bc326d107e6"
+      "size": 2292,
+      "sha256": "e21f4ef784e0dd65"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/infiniteQueryObserver.js.map": {
-      "size": 6448,
-      "sha256": "c80d49ab16e4244a"
+      "size": 6308,
+      "sha256": "fb1aa4513de01690"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/mutation.cjs": {
       "size": 10639,
@@ -14329,12 +14329,12 @@
       "sha256": "8c7c1f0b5858ce80"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queriesObserver.cjs": {
-      "size": 10857,
-      "sha256": "b3c2be36a6cb55f5"
+      "size": 11394,
+      "sha256": "065bafd755c1cf47"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queriesObserver.cjs.map": {
-      "size": 13920,
-      "sha256": "8272b994fbd8edf2"
+      "size": 14588,
+      "sha256": "49ffc8c8db342b54"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queriesObserver.d.cts": {
       "size": 184,
@@ -14345,36 +14345,36 @@
       "sha256": "3272d126796553e5"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queriesObserver.js": {
-      "size": 9023,
-      "sha256": "36469d4559d8e345"
+      "size": 9560,
+      "sha256": "751b015b29e357a8"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queriesObserver.js.map": {
-      "size": 13900,
-      "sha256": "6b17631ffc404ec2"
+      "size": 14568,
+      "sha256": "bc308c3718886a18"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.cjs": {
-      "size": 17161,
-      "sha256": "6ab098078e05d8a1"
+      "size": 17620,
+      "sha256": "60e760ea3f27dbf9"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.cjs.map": {
-      "size": 30318,
-      "sha256": "9d68a7475948304a"
+      "size": 30802,
+      "sha256": "cf606ddccbda3902"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.d.cts": {
-      "size": 593,
-      "sha256": "31e8d44c50a3622a"
+      "size": 535,
+      "sha256": "00c2f9737dc675ff"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.d.ts": {
-      "size": 583,
-      "sha256": "3a51ec5c3f8a9cfa"
+      "size": 526,
+      "sha256": "ec8053060838db9f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.js": {
-      "size": 15334,
-      "sha256": "1b54f9a15b371495"
+      "size": 15752,
+      "sha256": "c28d1ad8bc6d7bc5"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/query.js.map": {
-      "size": 30357,
-      "sha256": "8fe5cf390a7dccd0"
+      "size": 30845,
+      "sha256": "576cbb49e06dd901"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryCache.cjs": {
       "size": 4443,
@@ -14401,12 +14401,12 @@
       "sha256": "19901704a460d087"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryClient.cjs": {
-      "size": 13528,
-      "sha256": "adcc1dfa1c0eeb45"
+      "size": 13327,
+      "sha256": "b79f42c1209292f3"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryClient.cjs.map": {
-      "size": 23986,
-      "sha256": "d57f514a26038202"
+      "size": 23666,
+      "sha256": "f4050d1c8c5df5f9"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryClient.d.cts": {
       "size": 77,
@@ -14417,12 +14417,12 @@
       "sha256": "ed4fb66cbee951af"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryClient.js": {
-      "size": 11251,
-      "sha256": "8c5f8b27b8589b28"
+      "size": 11125,
+      "sha256": "c6b08c6a80592ba6"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryClient.js.map": {
-      "size": 24015,
-      "sha256": "8afb9942732a2f02"
+      "size": 23690,
+      "sha256": "96706f7bffa836a7"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/queryObserver.cjs": {
       "size": 23300,
@@ -14597,8 +14597,8 @@
       "sha256": "a4d6395a136a994c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/types.cjs.map": {
-      "size": 42222,
-      "sha256": "ac1da1b5fe0c9501"
+      "size": 42197,
+      "sha256": "ee1f2045a17c9f9c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/types.d.cts": {
       "size": 8969,
@@ -14613,8 +14613,8 @@
       "sha256": "21f6d1ba1aea0887"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/types.js.map": {
-      "size": 42170,
-      "sha256": "b2de05c3fc8f9fa9"
+      "size": 42145,
+      "sha256": "fbf8939f63963733"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/legacy/utils.cjs": {
       "size": 9687,
@@ -14641,12 +14641,12 @@
       "sha256": "a984b47c52487f97"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/_tsup-dts-rollup.d.cts": {
-      "size": 98038,
-      "sha256": "8489dcb4cda18d15"
+      "size": 97966,
+      "sha256": "5a2cdf6adeec348b"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/_tsup-dts-rollup.d.ts": {
-      "size": 98038,
-      "sha256": "8489dcb4cda18d15"
+      "size": 97966,
+      "sha256": "5a2cdf6adeec348b"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/environmentManager.cjs": {
       "size": 1623,
@@ -14697,12 +14697,12 @@
       "sha256": "0533cda4b6fde232"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/hydration.cjs": {
-      "size": 7802,
-      "sha256": "4258f1894149ab37"
+      "size": 7947,
+      "sha256": "7a57bae8350a4dbb"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/hydration.cjs.map": {
-      "size": 13561,
-      "sha256": "9650fbe38ce9b8c4"
+      "size": 13850,
+      "sha256": "190cd2bf88f68a74"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/hydration.d.cts": {
       "size": 419,
@@ -14713,12 +14713,12 @@
       "sha256": "6cc30ee142e61bd2"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/hydration.js": {
-      "size": 6561,
-      "sha256": "5772224fefb9d871"
+      "size": 6706,
+      "sha256": "e7a1d93927499985"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/hydration.js.map": {
-      "size": 13507,
-      "sha256": "0e8a761a6012b4b4"
+      "size": 13796,
+      "sha256": "e0247f2cec790f90"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/index.cjs": {
       "size": 4693,
@@ -14745,12 +14745,12 @@
       "sha256": "54543a19d7fc149f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.cjs": {
-      "size": 5201,
-      "sha256": "d3d75b9cd869517a"
+      "size": 5222,
+      "sha256": "baf8882136ddb27d"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.cjs.map": {
-      "size": 7827,
-      "sha256": "b8cba134b400deca"
+      "size": 7863,
+      "sha256": "74a2cd5a26122402"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.d.cts": {
       "size": 176,
@@ -14761,20 +14761,20 @@
       "sha256": "677ef4f2a68cea2c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.js": {
-      "size": 4036,
-      "sha256": "1aeefaf61f6d87a0"
+      "size": 4057,
+      "sha256": "ae3141e86faa511c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.js.map": {
-      "size": 7815,
-      "sha256": "30644a13fb487da7"
+      "size": 7851,
+      "sha256": "aca70f5c542d3626"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryObserver.cjs": {
-      "size": 3476,
-      "sha256": "aeb71a736ddac883"
+      "size": 3366,
+      "sha256": "d8f1cfb7ccdcf244"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryObserver.cjs.map": {
-      "size": 6431,
-      "sha256": "01d2b2e345ac4a27"
+      "size": 6315,
+      "sha256": "26015c4c9db57e7f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryObserver.d.cts": {
       "size": 97,
@@ -14785,12 +14785,12 @@
       "sha256": "a9f066c6c9bb3ae8"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryObserver.js": {
-      "size": 2260,
-      "sha256": "8426ae5486b11538"
+      "size": 2189,
+      "sha256": "9965836880928917"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/infiniteQueryObserver.js.map": {
-      "size": 6423,
-      "sha256": "54fd79832232ce27"
+      "size": 6283,
+      "sha256": "13fa79bdda793995"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/mutation.cjs": {
       "size": 8259,
@@ -14913,12 +14913,12 @@
       "sha256": "2c3ad3c5010c98e2"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queriesObserver.cjs": {
-      "size": 8031,
-      "sha256": "df1ea066faf02513"
+      "size": 8357,
+      "sha256": "655a0d1db49b3c35"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queriesObserver.cjs.map": {
-      "size": 13829,
-      "sha256": "eb463eee248d0ea3"
+      "size": 14449,
+      "sha256": "7280b5cd31433c2f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queriesObserver.d.cts": {
       "size": 184,
@@ -14929,36 +14929,36 @@
       "sha256": "3272d126796553e5"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queriesObserver.js": {
-      "size": 6865,
-      "sha256": "8c95c96512a9ccbb"
+      "size": 7191,
+      "sha256": "9c4684bb3825a523"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queriesObserver.js.map": {
-      "size": 13810,
-      "sha256": "bc4631e87f117ed3"
+      "size": 14430,
+      "sha256": "cc0355c7736b8676"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.cjs": {
-      "size": 14146,
-      "sha256": "6672e3527ac3f528"
+      "size": 14478,
+      "sha256": "4094882b046510f6"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.cjs.map": {
-      "size": 30170,
-      "sha256": "984a05a087a253c8"
+      "size": 30654,
+      "sha256": "17859d4ca68efcbb"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.d.cts": {
-      "size": 593,
-      "sha256": "31e8d44c50a3622a"
+      "size": 535,
+      "sha256": "00c2f9737dc675ff"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.d.ts": {
-      "size": 583,
-      "sha256": "3a51ec5c3f8a9cfa"
+      "size": 526,
+      "sha256": "ec8053060838db9f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.js": {
-      "size": 12987,
-      "sha256": "c292accfe17d5317"
+      "size": 13278,
+      "sha256": "f420b6227ed3db29"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/query.js.map": {
-      "size": 30210,
-      "sha256": "af219fd181992892"
+      "size": 30698,
+      "sha256": "ac6aca5877b4bcfb"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryCache.cjs": {
       "size": 3613,
@@ -14985,12 +14985,12 @@
       "sha256": "fddb8c70a6d45556"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryClient.cjs": {
-      "size": 11076,
-      "sha256": "24038096747b4968"
+      "size": 10875,
+      "sha256": "f2147fd0fd4eb6dc"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryClient.cjs.map": {
-      "size": 23863,
-      "sha256": "5d443c0c8ef27667"
+      "size": 23543,
+      "sha256": "e748717bd35b8c31"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryClient.d.cts": {
       "size": 77,
@@ -15001,12 +15001,12 @@
       "sha256": "ed4fb66cbee951af"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryClient.js": {
-      "size": 9549,
-      "sha256": "0e6ed14b21a7f613"
+      "size": 9423,
+      "sha256": "5684bfc22c3e9dac"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryClient.js.map": {
-      "size": 23900,
-      "sha256": "903b8de0cf783390"
+      "size": 23575,
+      "sha256": "0994f80acfc5b5c8"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/queryObserver.cjs": {
       "size": 18361,
@@ -15181,8 +15181,8 @@
       "sha256": "a4d6395a136a994c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/types.cjs.map": {
-      "size": 42222,
-      "sha256": "ac1da1b5fe0c9501"
+      "size": 42197,
+      "sha256": "ee1f2045a17c9f9c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/types.d.cts": {
       "size": 8969,
@@ -15197,8 +15197,8 @@
       "sha256": "4ac301f7c1236494"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/types.js.map": {
-      "size": 42168,
-      "sha256": "7bc70b81d526415d"
+      "size": 42143,
+      "sha256": "64a8abe32671e5df"
     },
     "apps/frontend/node_modules/@tanstack/query-core/build/modern/utils.cjs": {
       "size": 9616,
@@ -15230,7 +15230,7 @@
     },
     "apps/frontend/node_modules/@tanstack/query-core/package.json": {
       "size": 2337,
-      "sha256": "2c12847abad1f05c"
+      "sha256": "31fecc730e2d49dc"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/environmentManager.ts": {
       "size": 582,
@@ -15241,20 +15241,20 @@
       "sha256": "705304db0577913b"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/hydration.ts": {
-      "size": 9742,
-      "sha256": "9e53f936ff33c0eb"
+      "size": 9915,
+      "sha256": "0faabb5c0cc60b82"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/index.ts": {
       "size": 1714,
       "sha256": "af93d63f545db3b2"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/infiniteQueryBehavior.ts": {
-      "size": 5155,
-      "sha256": "dd76a779ce14843e"
+      "size": 5176,
+      "sha256": "f39e1b50f4a51b89"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/infiniteQueryObserver.ts": {
-      "size": 4803,
-      "sha256": "e6787f785d9a854f"
+      "size": 4729,
+      "sha256": "c77cc8ae9d7ff665"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/mutation.ts": {
       "size": 10388,
@@ -15277,20 +15277,20 @@
       "sha256": "1e7ef869b1ac7fdd"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/queriesObserver.ts": {
-      "size": 8886,
-      "sha256": "c47e66a1614bc0d3"
+      "size": 9287,
+      "sha256": "6b4da974cca867fe"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/query.ts": {
-      "size": 20676,
-      "sha256": "25eef4e5b321a44a"
+      "size": 20974,
+      "sha256": "b0f45ecfe5dc68d4"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/queryCache.ts": {
       "size": 5681,
       "sha256": "b8ecdf2454a7db3f"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/queryClient.ts": {
-      "size": 16770,
-      "sha256": "69ed302721adb82c"
+      "size": 16506,
+      "sha256": "89fa5a54be590c82"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/queryObserver.ts": {
       "size": 23924,
@@ -15321,8 +15321,8 @@
       "sha256": "ee8cfb7772a5378c"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/types.ts": {
-      "size": 40587,
-      "sha256": "94aa18689f7bb5a1"
+      "size": 40565,
+      "sha256": "624e57303e496b11"
     },
     "apps/frontend/node_modules/@tanstack/query-core/src/utils.ts": {
       "size": 12624,
@@ -16025,12 +16025,12 @@
       "sha256": "0e4629984d46d7f4"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/devtools.cjs": {
-      "size": 7953,
-      "sha256": "efca25031df2b676"
+      "size": 8035,
+      "sha256": "6d32252c549caec0"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/devtools.cjs.map": {
-      "size": 11380,
-      "sha256": "4d59194d548e74ee"
+      "size": 11514,
+      "sha256": "be5142a183c501e7"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/devtools.d.cts": {
       "size": 57,
@@ -16041,12 +16041,12 @@
       "sha256": "a03c1cd8fba27a2e"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/devtools.js": {
-      "size": 6765,
-      "sha256": "0d5eed01e6b08589"
+      "size": 6847,
+      "sha256": "4bf2adf4b264be89"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/devtools.js.map": {
-      "size": 11390,
-      "sha256": "f55d5284b937b8c4"
+      "size": 11524,
+      "sha256": "a7d769d8aa4ce5e8"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/legacy/devtools/utils.cjs": {
       "size": 2991,
@@ -16561,12 +16561,12 @@
       "sha256": "0e4629984d46d7f4"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/devtools.cjs": {
-      "size": 7853,
-      "sha256": "25c76f591509eac9"
+      "size": 7935,
+      "sha256": "4a5ce5eba7bdf6d0"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/devtools.cjs.map": {
-      "size": 11360,
-      "sha256": "519f0c6a96e46748"
+      "size": 11494,
+      "sha256": "92c24b2a70664b76"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/devtools.d.cts": {
       "size": 57,
@@ -16577,12 +16577,12 @@
       "sha256": "a03c1cd8fba27a2e"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/devtools.js": {
-      "size": 6665,
-      "sha256": "60ce01ba1a219bbe"
+      "size": 6747,
+      "sha256": "bb0516378d81f8b5"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/devtools.js.map": {
-      "size": 11370,
-      "sha256": "e8bb748989463102"
+      "size": 11504,
+      "sha256": "7ce89d8a9843e716"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/build/modern/devtools/utils.cjs": {
       "size": 2991,
@@ -17202,7 +17202,7 @@
     },
     "apps/frontend/node_modules/@tanstack/vue-query/package.json": {
       "size": 3092,
-      "sha256": "e857872e49a527c3"
+      "sha256": "4320a35ac63f327a"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/README.md": {
       "size": 2935,
@@ -17217,8 +17217,8 @@
       "sha256": "8cfa81396d13abaf"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/src/devtools/devtools.ts": {
-      "size": 6994,
-      "sha256": "1233252e76480cba"
+      "size": 7077,
+      "sha256": "24ee07950b6c1cc5"
     },
     "apps/frontend/node_modules/@tanstack/vue-query/src/devtools/utils.ts": {
       "size": 2031,
@@ -19021,8 +19021,8 @@
       "sha256": "438f0aca7bca70af"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-condition.js": {
-      "size": 33855,
-      "sha256": "bdf5a718a5380f67"
+      "size": 33932,
+      "sha256": "af51b6ad9346f3f0"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-parameter-property-assignment.d.ts": {
       "size": 254,
@@ -19053,16 +19053,16 @@
       "sha256": "52ec5e00d96cc0df"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-type-arguments.js": {
-      "size": 8209,
-      "sha256": "f2b9b781344a16d3"
+      "size": 8516,
+      "sha256": "648d37f4fe6df33a"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-type-assertion.d.ts": {
       "size": 447,
       "sha256": "e7ac6e497ea8e07e"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-type-assertion.js": {
-      "size": 37686,
-      "sha256": "2c636e1218f281ef"
+      "size": 38920,
+      "sha256": "6012eccadaf41da6"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/dist/rules/no-unnecessary-type-constraint.d.ts": {
       "size": 276,
@@ -19994,7 +19994,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/package.json": {
       "size": 3344,
-      "sha256": "763ba4afd3e28466"
+      "sha256": "6e0f8158591ce74f"
     },
     "apps/frontend/node_modules/@typescript-eslint/eslint-plugin/raw-plugin.d.ts": {
       "size": 916,
@@ -20030,7 +20030,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/parser/package.json": {
       "size": 1979,
-      "sha256": "22f18de6f2f2398d"
+      "sha256": "38c832dbfa42db52"
     },
     "apps/frontend/node_modules/@typescript-eslint/parser/README.md": {
       "size": 859,
@@ -20066,7 +20066,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/project-service/package.json": {
       "size": 1878,
-      "sha256": "ade6d1103cd22267"
+      "sha256": "2d7dc374c17a5887"
     },
     "apps/frontend/node_modules/@typescript-eslint/project-service/README.md": {
       "size": 764,
@@ -21502,7 +21502,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/scope-manager/package.json": {
       "size": 1985,
-      "sha256": "7e0044e9093d344d"
+      "sha256": "186180e031038c64"
     },
     "apps/frontend/node_modules/@typescript-eslint/scope-manager/README.md": {
       "size": 696,
@@ -21538,7 +21538,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/tsconfig-utils/package.json": {
       "size": 1701,
-      "sha256": "7d74941a90ec7270"
+      "sha256": "167556a391ff36f3"
     },
     "apps/frontend/node_modules/@typescript-eslint/tsconfig-utils/README.md": {
       "size": 832,
@@ -21726,7 +21726,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/type-utils/package.json": {
       "size": 1994,
-      "sha256": "d7e97262fbec7391"
+      "sha256": "000da06037db5664"
     },
     "apps/frontend/node_modules/@typescript-eslint/type-utils/README.md": {
       "size": 769,
@@ -21778,7 +21778,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/types/package.json": {
       "size": 2351,
-      "sha256": "fcc70632ca459bbe"
+      "sha256": "136e6be252768e62"
     },
     "apps/frontend/node_modules/@typescript-eslint/types/README.md": {
       "size": 432,
@@ -22134,7 +22134,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/typescript-estree/package.json": {
       "size": 2300,
-      "sha256": "bcb5fb65e0378ecc"
+      "sha256": "5a0d682bffed580e"
     },
     "apps/frontend/node_modules/@typescript-eslint/typescript-estree/README.md": {
       "size": 789,
@@ -22458,7 +22458,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/utils/package.json": {
       "size": 2622,
-      "sha256": "2fb8a5a2bae9ec67"
+      "sha256": "d28168e9858305bc"
     },
     "apps/frontend/node_modules/@typescript-eslint/utils/README.md": {
       "size": 700,
@@ -22530,7 +22530,7 @@
     },
     "apps/frontend/node_modules/@typescript-eslint/visitor-keys/package.json": {
       "size": 1703,
-      "sha256": "5cc0dd4722e9f0be"
+      "sha256": "e1e57ee3ac4b16c0"
     },
     "apps/frontend/node_modules/@typescript-eslint/visitor-keys/README.md": {
       "size": 366,
@@ -24873,32 +24873,32 @@
       "sha256": "4e3fed11a7a1424c"
     },
     "apps/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.browser.js": {
-      "size": 329779,
-      "sha256": "f2801020a2db17a7"
+      "size": 329979,
+      "sha256": "2d374139d27758f3"
     },
     "apps/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js": {
-      "size": 299922,
-      "sha256": "66859dcc891bd14d"
+      "size": 300106,
+      "sha256": "bc4d35da463e8b66"
     },
     "apps/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.esm-browser.js": {
-      "size": 493542,
-      "sha256": "20cc2d6801ef034c"
+      "size": 493726,
+      "sha256": "c3c3f288deed3a6d"
     },
     "apps/frontend/node_modules/@vue/test-utils/dist/vue-test-utils.esm-bundler.mjs": {
-      "size": 299157,
-      "sha256": "4fdbfeae4c94e5c3"
+      "size": 299341,
+      "sha256": "88966f14563de584"
     },
     "apps/frontend/node_modules/@vue/test-utils/LICENSE": {
       "size": 1079,
       "sha256": "fcb656436f40daac"
     },
     "apps/frontend/node_modules/@vue/test-utils/package.json": {
-      "size": 3615,
-      "sha256": "0ae67259cae8cb71"
+      "size": 3616,
+      "sha256": "b1eedccd7e180208"
     },
     "apps/frontend/node_modules/@vue/test-utils/README.md": {
-      "size": 1909,
-      "sha256": "54b47383a933bd7d"
+      "size": 2680,
+      "sha256": "f1b16d76a263faaa"
     },
     "apps/frontend/node_modules/@vue/tsconfig/.github/MAINTENANCE.md": {
       "size": 667,
@@ -28325,16 +28325,16 @@
       "sha256": "b4bf0e7179a8b3f1"
     },
     "apps/frontend/node_modules/baseline-browser-mapping/dist/index.cjs": {
-      "size": 120591,
-      "sha256": "5e50dd8eb5de92ee"
+      "size": 120697,
+      "sha256": "59f04b3dad74eb34"
     },
     "apps/frontend/node_modules/baseline-browser-mapping/dist/index.d.ts": {
       "size": 4437,
       "sha256": "6ebe5d201aaaf585"
     },
     "apps/frontend/node_modules/baseline-browser-mapping/dist/index.js": {
-      "size": 120577,
-      "sha256": "da81a33eae2a1ec1"
+      "size": 120683,
+      "sha256": "e40227110ce4352d"
     },
     "apps/frontend/node_modules/baseline-browser-mapping/LICENSE.txt": {
       "size": 11357,
@@ -28342,7 +28342,7 @@
     },
     "apps/frontend/node_modules/baseline-browser-mapping/package.json": {
       "size": 2834,
-      "sha256": "13d41295edf77677"
+      "sha256": "eeb4d4b31031d4c8"
     },
     "apps/frontend/node_modules/baseline-browser-mapping/README.md": {
       "size": 21911,
@@ -29685,8 +29685,8 @@
       "sha256": "8dd0289fca6002c9"
     },
     "apps/frontend/node_modules/caniuse-lite/data/features/css3-attr.js": {
-      "size": 2038,
-      "sha256": "823b1f4c91e92124"
+      "size": 2044,
+      "sha256": "25e17df553be20c0"
     },
     "apps/frontend/node_modules/caniuse-lite/data/features/css3-boxsizing.js": {
       "size": 2038,
@@ -32218,7 +32218,7 @@
     },
     "apps/frontend/node_modules/caniuse-lite/package.json": {
       "size": 742,
-      "sha256": "19778c3b18a82afa"
+      "sha256": "5cbf38acada5753c"
     },
     "apps/frontend/node_modules/caniuse-lite/README.md": {
       "size": 164,
@@ -49294,7 +49294,7 @@
     },
     "apps/frontend/node_modules/jose/dist/webapi/jwks/remote.js": {
       "size": 6003,
-      "sha256": "71b25f107812d657"
+      "sha256": "e73d50848c3ef2ae"
     },
     "apps/frontend/node_modules/jose/dist/webapi/jws/compact/sign.js": {
       "size": 627,
@@ -49429,8 +49429,8 @@
       "sha256": "2a938d4c272e0b45"
     },
     "apps/frontend/node_modules/jose/dist/webapi/lib/pbes2kw.js": {
-      "size": 1614,
-      "sha256": "5294c7b34bf54ed7"
+      "size": 1760,
+      "sha256": "ca96e2ae0a6a41ab"
     },
     "apps/frontend/node_modules/jose/dist/webapi/lib/rsaes.js": {
       "size": 930,
@@ -49474,7 +49474,7 @@
     },
     "apps/frontend/node_modules/jose/package.json": {
       "size": 5633,
-      "sha256": "1c2090109c3f3b36"
+      "sha256": "cbd17f658085419b"
     },
     "apps/frontend/node_modules/jose/README.md": {
       "size": 9503,
@@ -52637,24 +52637,24 @@
       "sha256": "0a9392a978ea08e5"
     },
     "apps/frontend/node_modules/local-pkg/node_modules/pkg-types/dist/index.d.mts": {
-      "size": 23842,
-      "sha256": "058bccfe2b628d60"
+      "size": 24836,
+      "sha256": "4e97037d3a6831c8"
     },
     "apps/frontend/node_modules/local-pkg/node_modules/pkg-types/dist/index.mjs": {
-      "size": 10828,
-      "sha256": "28d469fb7a841e7b"
+      "size": 10028,
+      "sha256": "c1cd53c822e43e17"
     },
     "apps/frontend/node_modules/local-pkg/node_modules/pkg-types/LICENSE": {
       "size": 2267,
       "sha256": "cb00dc7c358014d3"
     },
     "apps/frontend/node_modules/local-pkg/node_modules/pkg-types/package.json": {
-      "size": 1238,
-      "sha256": "71203100b688832c"
+      "size": 1240,
+      "sha256": "dadc2a40de2fb021"
     },
     "apps/frontend/node_modules/local-pkg/node_modules/pkg-types/README.md": {
-      "size": 5903,
-      "sha256": "aa0f8291038a1aa0"
+      "size": 8191,
+      "sha256": "f4dc99dde04b93a1"
     },
     "apps/frontend/node_modules/local-pkg/package.json": {
       "size": 1582,
@@ -79385,8 +79385,8 @@
       "sha256": "a039dc21f045919f"
     },
     "apps/frontend/node_modules/postcss/lib/lazy-result.js": {
-      "size": 13562,
-      "sha256": "299821a7481d314d"
+      "size": 13851,
+      "sha256": "cb49b4d4a8bb7911"
     },
     "apps/frontend/node_modules/postcss/lib/list.d.ts": {
       "size": 1424,
@@ -79433,8 +79433,8 @@
       "sha256": "8d369483f0c2b9ee"
     },
     "apps/frontend/node_modules/postcss/lib/postcss.d.ts": {
-      "size": 11457,
-      "sha256": "00cf4001e0d9c6e5"
+      "size": 11542,
+      "sha256": "e3cf0611709328b4"
     },
     "apps/frontend/node_modules/postcss/lib/postcss.js": {
       "size": 2898,
@@ -79449,8 +79449,8 @@
       "sha256": "52dcc257df5119fb"
     },
     "apps/frontend/node_modules/postcss/lib/previous-map.js": {
-      "size": 4035,
-      "sha256": "a8a7f904a294c99f"
+      "size": 4508,
+      "sha256": "a4ab645c175790e5"
     },
     "apps/frontend/node_modules/postcss/lib/processor.d.ts": {
       "size": 3345,
@@ -79458,7 +79458,7 @@
     },
     "apps/frontend/node_modules/postcss/lib/processor.js": {
       "size": 1739,
-      "sha256": "70b84516799bbb7c"
+      "sha256": "edadc854f09bfc81"
     },
     "apps/frontend/node_modules/postcss/lib/result.d.ts": {
       "size": 4346,
@@ -79489,8 +79489,8 @@
       "sha256": "0807e4031561395f"
     },
     "apps/frontend/node_modules/postcss/lib/stringifier.js": {
-      "size": 9001,
-      "sha256": "8a2eaf5a8721bbb3"
+      "size": 9628,
+      "sha256": "05d1a781cb224cfc"
     },
     "apps/frontend/node_modules/postcss/lib/stringify.d.ts": {
       "size": 163,
@@ -79509,8 +79509,8 @@
       "sha256": "27f1eb6cc633f394"
     },
     "apps/frontend/node_modules/postcss/lib/tokenize.js": {
-      "size": 6538,
-      "sha256": "fb29fa5e5432989b"
+      "size": 6700,
+      "sha256": "ddfcaaa01f5eac9e"
     },
     "apps/frontend/node_modules/postcss/lib/warn-once.js": {
       "size": 256,
@@ -79530,7 +79530,7 @@
     },
     "apps/frontend/node_modules/postcss/package.json": {
       "size": 2497,
-      "sha256": "b4f5c8dcbd8b0cdd"
+      "sha256": "2115c0db5a62d0a2"
     },
     "apps/frontend/node_modules/postcss/README.md": {
       "size": 1156,
@@ -98073,24 +98073,24 @@
       "sha256": "0a9392a978ea08e5"
     },
     "apps/frontend/node_modules/unimport/node_modules/pkg-types/dist/index.d.mts": {
-      "size": 23842,
-      "sha256": "058bccfe2b628d60"
+      "size": 24836,
+      "sha256": "4e97037d3a6831c8"
     },
     "apps/frontend/node_modules/unimport/node_modules/pkg-types/dist/index.mjs": {
-      "size": 10828,
-      "sha256": "28d469fb7a841e7b"
+      "size": 10028,
+      "sha256": "c1cd53c822e43e17"
     },
     "apps/frontend/node_modules/unimport/node_modules/pkg-types/LICENSE": {
       "size": 2267,
       "sha256": "cb00dc7c358014d3"
     },
     "apps/frontend/node_modules/unimport/node_modules/pkg-types/package.json": {
-      "size": 1238,
-      "sha256": "71203100b688832c"
+      "size": 1240,
+      "sha256": "dadc2a40de2fb021"
     },
     "apps/frontend/node_modules/unimport/node_modules/pkg-types/README.md": {
-      "size": 5903,
-      "sha256": "aa0f8291038a1aa0"
+      "size": 8191,
+      "sha256": "f4dc99dde04b93a1"
     },
     "apps/frontend/node_modules/unimport/package.json": {
       "size": 2022,
@@ -105214,7 +105214,7 @@
     },
     "apps/frontend/package-lock.json": {
       "size": 338179,
-      "sha256": "82aa9ae25aca399f"
+      "sha256": "b712c4af09a0b21f"
     },
     "apps/frontend/package.json": {
       "size": 1914,
@@ -106109,7 +106109,7 @@
       "sha256": "20d6c7a79f2eff6b"
     },
     "forge.toml": {
-      "size": 5185845,
+      "size": 5186321,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -106927,6 +106927,18 @@
     "services/api/tests/unit/test_webhooks_fragment.py": {
       "size": 2210,
       "sha256": "db206dc785a67895"
+    },
+    "services/api/tests/utils/__init__.py": {
+      "size": 459,
+      "sha256": "b9e4dd0edc59a926"
+    },
+    "services/api/tests/utils/errors.py": {
+      "size": 2038,
+      "sha256": "93b444fdc83a1487"
+    },
+    "services/api/tests/utils/tenant.py": {
+      "size": 2094,
+      "sha256": "3e7454fc99b0eed2"
     },
     "services/api/uv.lock": {
       "size": 201791,

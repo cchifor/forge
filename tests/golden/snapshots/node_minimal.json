@@ -25,7 +25,7 @@
       "sha256": "eefecdd2be4049fa"
     },
     "forge.toml": {
-      "size": 10301,
+      "size": 11306,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -108,6 +108,18 @@
       "size": 2292,
       "sha256": "7b2b51e61547a7c1"
     },
+    "services/api/src/data/repositories/base-repository.ts": {
+      "size": 1461,
+      "sha256": "e891e4b068bfcc45"
+    },
+    "services/api/src/data/repositories/index.ts": {
+      "size": 146,
+      "sha256": "edd44fae82d46385"
+    },
+    "services/api/src/data/repositories/item-repository.ts": {
+      "size": 3246,
+      "sha256": "70530209b353a6ce"
+    },
     "services/api/src/index.ts": {
       "size": 423,
       "sha256": "7e2937581c3e0e38"
@@ -185,8 +197,8 @@
       "sha256": "889ff3f81da91263"
     },
     "services/api/src/services/item.service.ts": {
-      "size": 2332,
-      "sha256": "73f537e8be9eea4e"
+      "size": 2571,
+      "sha256": "0ad2914418bbf14c"
     },
     "services/api/tests/integration/health.test.ts": {
       "size": 1330,
@@ -216,9 +228,21 @@
       "size": 5305,
       "sha256": "6eda7fdefbbbe121"
     },
+    "services/api/tests/unit/repositories.test.ts": {
+      "size": 2815,
+      "sha256": "f0deb6009b673c2f"
+    },
     "services/api/tests/unit/tenant.test.ts": {
       "size": 3197,
       "sha256": "8a6b13b2fe15fdf5"
+    },
+    "services/api/tests/utils/errors.ts": {
+      "size": 1412,
+      "sha256": "ea7ca44ffc65f37e"
+    },
+    "services/api/tests/utils/tenant.ts": {
+      "size": 1226,
+      "sha256": "ced6f26da80e0c96"
     },
     "services/api/tsconfig.json": {
       "size": 463,

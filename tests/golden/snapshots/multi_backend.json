@@ -29,7 +29,7 @@
       "sha256": "7fce0268a23e0887"
     },
     "forge.toml": {
-      "size": 40057,
+      "size": 41577,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -116,6 +116,18 @@
       "size": 2292,
       "sha256": "7b2b51e61547a7c1"
     },
+    "services/api-node/src/data/repositories/base-repository.ts": {
+      "size": 1461,
+      "sha256": "e891e4b068bfcc45"
+    },
+    "services/api-node/src/data/repositories/index.ts": {
+      "size": 146,
+      "sha256": "edd44fae82d46385"
+    },
+    "services/api-node/src/data/repositories/item-repository.ts": {
+      "size": 3246,
+      "sha256": "70530209b353a6ce"
+    },
     "services/api-node/src/index.ts": {
       "size": 423,
       "sha256": "7e2937581c3e0e38"
@@ -193,8 +205,8 @@
       "sha256": "889ff3f81da91263"
     },
     "services/api-node/src/services/item.service.ts": {
-      "size": 2332,
-      "sha256": "73f537e8be9eea4e"
+      "size": 2571,
+      "sha256": "0ad2914418bbf14c"
     },
     "services/api-node/tests/integration/health.test.ts": {
       "size": 1330,
@@ -224,9 +236,21 @@
       "size": 5305,
       "sha256": "6eda7fdefbbbe121"
     },
+    "services/api-node/tests/unit/repositories.test.ts": {
+      "size": 2815,
+      "sha256": "f0deb6009b673c2f"
+    },
     "services/api-node/tests/unit/tenant.test.ts": {
       "size": 3197,
       "sha256": "8a6b13b2fe15fdf5"
+    },
+    "services/api-node/tests/utils/errors.ts": {
+      "size": 1412,
+      "sha256": "ea7ca44ffc65f37e"
+    },
+    "services/api-node/tests/utils/tenant.ts": {
+      "size": 1226,
+      "sha256": "ced6f26da80e0c96"
     },
     "services/api-node/tsconfig.json": {
       "size": 463,
@@ -919,6 +943,18 @@
     "services/api-py/tests/unit/test_tenant_isolation.py": {
       "size": 4327,
       "sha256": "de590e00e9604609"
+    },
+    "services/api-py/tests/utils/__init__.py": {
+      "size": 459,
+      "sha256": "b9e4dd0edc59a926"
+    },
+    "services/api-py/tests/utils/errors.py": {
+      "size": 2038,
+      "sha256": "93b444fdc83a1487"
+    },
+    "services/api-py/tests/utils/tenant.py": {
+      "size": 2094,
+      "sha256": "3e7454fc99b0eed2"
     },
     "services/api-py/uv.lock": {
       "size": 201791,

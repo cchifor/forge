@@ -25,7 +25,7 @@
       "sha256": "f0854e63bb28010e"
     },
     "forge.toml": {
-      "size": 8665,
+      "size": 9310,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -45,8 +45,8 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 853,
-      "sha256": "93f4b04995053d32"
+      "size": 873,
+      "sha256": "d44b683e20b96de5"
     },
     "services/api/config/defaults.yaml": {
       "size": 378,
@@ -96,6 +96,18 @@
       "size": 6620,
       "sha256": "aa42209eca7e7ff0"
     },
+    "services/api/src/data/mod.rs": {
+      "size": 22,
+      "sha256": "b79d73638ab2b26e"
+    },
+    "services/api/src/data/repositories/item_repository.rs": {
+      "size": 8276,
+      "sha256": "ec8012f36e64aba7"
+    },
+    "services/api/src/data/repositories/mod.rs": {
+      "size": 746,
+      "sha256": "4f25de61f4f9cb04"
+    },
     "services/api/src/db.rs": {
       "size": 316,
       "sha256": "89db9354b981eab4"
@@ -109,8 +121,8 @@
       "sha256": "f377a95f2d5379b8"
     },
     "services/api/src/lib.rs": {
-      "size": 316,
-      "sha256": "b49250ff4fcb31f1"
+      "size": 330,
+      "sha256": "324f7c51d298ff7a"
     },
     "services/api/src/main.rs": {
       "size": 1061,
@@ -169,8 +181,8 @@
       "sha256": "802d0699775d860c"
     },
     "services/api/src/services/item_service.rs": {
-      "size": 6302,
-      "sha256": "f46e6a6efc6fc2fe"
+      "size": 2167,
+      "sha256": "47981ddb1228a52f"
     },
     "services/api/src/services/mod.rs": {
       "size": 57,
@@ -187,6 +199,10 @@
     "services/api/tests/tenant_test.rs": {
       "size": 3909,
       "sha256": "3166f10bca113854"
+    },
+    "services/api/tests/utils.rs": {
+      "size": 2111,
+      "sha256": "a94f8ad49b0062f1"
     }
   }
 }
