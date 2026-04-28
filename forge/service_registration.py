@@ -15,7 +15,7 @@ authors can start writing ``services.yaml`` files immediately.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -132,7 +132,7 @@ def _parse_entry(path: Path, idx: int, entry: dict) -> ServiceRegistration:
         name=str(entry["name"]),
         type=str(entry["type"]),
         import_path=str(entry["import_path"]),
-        scope=scope,  # type: ignore[arg-type]
+        scope=scope,  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
         languages=tuple(languages_raw),
         dependencies=tuple(deps_raw),
         config_key=str(entry.get("config_key", "")),
