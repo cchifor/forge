@@ -6,12 +6,15 @@
   position: after
   zone: generated
   snippet: |-
-    # Vector-store adapter: Qdrant
+    # Vector-store adapter: Qdrant — wired lazily so module import doesn't
+    # error out when the user hasn't set ``QDRANT_URL`` yet (template
+    # ships without qdrant config fields on ``Settings``).
+    import os as _qdrant_os
+
     from app.adapters.vector_store.qdrant import QdrantAdapter
-    from app.core.config import settings as _settings
 
     _qdrant_adapter = QdrantAdapter(
-        url=_settings.qdrant_url,
-        api_key=_settings.qdrant_api_key,
-        collection_prefix=_settings.qdrant_collection,
+        url=_qdrant_os.environ.get("QDRANT_URL", "http://localhost:6333"),
+        api_key=_qdrant_os.environ.get("QDRANT_API_KEY"),
+        collection_prefix=_qdrant_os.environ.get("QDRANT_COLLECTION", "default"),
     )

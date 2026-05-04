@@ -3,13 +3,15 @@
   position: after
   zone: generated
   snippet: |-
-    # Vector-store adapter: Chroma
+    # Vector-store adapter: Chroma — wired lazily off env vars (template
+    # ships without chroma config fields on ``Settings``).
+    import os as _chroma_os
+
     from app.adapters.vector_store.chroma import ChromaAdapter
-    from app.core.config import settings as _settings
 
     _chroma_adapter = ChromaAdapter(
-        url=_settings.chroma_url,
-        collection_prefix=_settings.chroma_collection,
-        tenant=_settings.chroma_tenant,
-        database=_settings.chroma_database,
+        url=_chroma_os.environ.get("CHROMA_URL", "http://localhost:8000"),
+        collection_prefix=_chroma_os.environ.get("CHROMA_COLLECTION", "default"),
+        tenant=_chroma_os.environ.get("CHROMA_TENANT", "default_tenant"),
+        database=_chroma_os.environ.get("CHROMA_DATABASE", "default_database"),
     )
