@@ -11,10 +11,16 @@
   snippet: "pub mod otel;"
 
 - target: src/main.rs
+  marker: FORGE:MAIN_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: "mod otel;"
+
+- target: src/main.rs
   marker: FORGE:TRACING_LAYERS
   position: before
   zone: generated
   snippet: |-
     let service_name = std::env::var("OTEL_SERVICE_NAME")
         .unwrap_or_else(|_| "forge-service".to_string());
-    let _ = crate::otel::configure_otel(&service_name);
+    let _ = otel::configure_otel(&service_name);

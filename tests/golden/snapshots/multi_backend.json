@@ -29,7 +29,7 @@
       "sha256": "7fce0268a23e0887"
     },
     "forge.toml": {
-      "size": 41577,
+      "size": 41742,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -396,6 +396,10 @@
       "size": 4299,
       "sha256": "c091a2ba6a85a277"
     },
+    "services/api-py/src/app/core/container.py": {
+      "size": 907,
+      "sha256": "cb788464f33846c2"
+    },
     "services/api-py/src/app/core/db.py": {
       "size": 1793,
       "sha256": "112704f0cb4111ea"
@@ -493,8 +497,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api-py/src/app/main.py": {
-      "size": 4117,
-      "sha256": "54cd677ede98353c"
+      "size": 4225,
+      "sha256": "5d9b7fc86ef10ed4"
     },
     "services/api-py/src/app/middleware/__init__.py": {
       "size": 0,

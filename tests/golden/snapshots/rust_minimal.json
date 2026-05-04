@@ -121,12 +121,12 @@
       "sha256": "bbb3e7e29255f01d"
     },
     "services/api/src/lib.rs": {
-      "size": 1103,
-      "sha256": "915a902eec389adf"
+      "size": 1172,
+      "sha256": "1f6a025f6e3cd0e4"
     },
     "services/api/src/main.rs": {
-      "size": 1836,
-      "sha256": "b23fa0a7bdcfd7e1"
+      "size": 1905,
+      "sha256": "29d57d498bc16e92"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
@@ -193,8 +193,8 @@
       "sha256": "1479f5c245978c1b"
     },
     "services/api/tests/items_test.rs": {
-      "size": 4452,
-      "sha256": "5a4738e138e42ac5"
+      "size": 4447,
+      "sha256": "b4e927be87872855"
     },
     "services/api/tests/tenant_test.rs": {
       "size": 3980,

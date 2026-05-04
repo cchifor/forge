@@ -953,7 +953,7 @@
       "sha256": "20d6c7a79f2eff6b"
     },
     "forge.toml": {
-      "size": 5189188,
+      "size": 5189350,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1172,6 +1172,10 @@
       "size": 4299,
       "sha256": "c091a2ba6a85a277"
     },
+    "services/api/src/app/core/container.py": {
+      "size": 907,
+      "sha256": "cb788464f33846c2"
+    },
     "services/api/src/app/core/db.py": {
       "size": 1793,
       "sha256": "112704f0cb4111ea"
@@ -1237,8 +1241,8 @@
       "sha256": "ac6928c02483d386"
     },
     "services/api/src/app/data/models/conversation.py": {
-      "size": 3871,
-      "sha256": "d56ef8796388477b"
+      "size": 3885,
+      "sha256": "dd03be8f16a3a90c"
     },
     "services/api/src/app/data/models/item.py": {
       "size": 1039,
@@ -1257,8 +1261,8 @@
       "sha256": "934e7f5f186e0098"
     },
     "services/api/src/app/data/repositories/conversation_repository.py": {
-      "size": 4443,
-      "sha256": "0f81a4411f230a8a"
+      "size": 4457,
+      "sha256": "fdf074a11a7ec834"
     },
     "services/api/src/app/data/repositories/item_repository.py": {
       "size": 2563,
@@ -1305,8 +1309,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 4117,
-      "sha256": "54cd677ede98353c"
+      "size": 4225,
+      "sha256": "5d9b7fc86ef10ed4"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
