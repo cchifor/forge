@@ -3,15 +3,24 @@
   position: after
   zone: generated
   snippet: |-
-    # Vector-store adapter: Chroma — wired lazily off env vars (template
-    # ships without chroma config fields on ``Settings``).
+    # Vector-store adapter: Chroma — accessor instead of module-level
+    # instance. ``ChromaAdapter.__init__`` opens an HTTP connection to the
+    # chroma server, which would fail at *import* time on dev boxes
+    # without a running chroma container. Wrap in a lazy singleton.
     import os as _chroma_os
 
-    from app.adapters.vector_store.chroma import ChromaAdapter
+    from app.adapters.vector_store.chroma import ChromaAdapter as _ChromaAdapter
 
-    _chroma_adapter = ChromaAdapter(
-        url=_chroma_os.environ.get("CHROMA_URL", "http://localhost:8000"),
-        collection_prefix=_chroma_os.environ.get("CHROMA_COLLECTION", "default"),
-        tenant=_chroma_os.environ.get("CHROMA_TENANT", "default_tenant"),
-        database=_chroma_os.environ.get("CHROMA_DATABASE", "default_database"),
-    )
+    _chroma_adapter: _ChromaAdapter | None = None
+
+
+    def get_chroma_adapter() -> _ChromaAdapter:
+        global _chroma_adapter
+        if _chroma_adapter is None:
+            _chroma_adapter = _ChromaAdapter(
+                url=_chroma_os.environ.get("CHROMA_URL", "http://localhost:8000"),
+                collection_prefix=_chroma_os.environ.get("CHROMA_COLLECTION", "default"),
+                tenant=_chroma_os.environ.get("CHROMA_TENANT", "default_tenant"),
+                database=_chroma_os.environ.get("CHROMA_DATABASE", "default_database"),
+            )
+        return _chroma_adapter
