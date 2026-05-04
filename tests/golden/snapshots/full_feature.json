@@ -72,10 +72,6 @@
       "size": 297,
       "sha256": "f54019766431b4c1"
     },
-    "apps/frontend/package-lock.json": {
-      "size": 338186,
-      "sha256": "eae6d9b9cd2ae0fc"
-    },
     "apps/frontend/package.json": {
       "size": 1914,
       "sha256": "6da72d0bb718ce62"
@@ -123,10 +119,6 @@
     "apps/frontend/src/app/styles/main.css": {
       "size": 5811,
       "sha256": "71e789b307f83334"
-    },
-    "apps/frontend/src/auto-imports.d.ts": {
-      "size": 15174,
-      "sha256": "155f1c0134587de7"
     },
     "apps/frontend/src/core/ui-protocol/types.ts": {
       "size": 457,
@@ -427,14 +419,6 @@
     "apps/frontend/src/shared/api/client.ts": {
       "size": 1288,
       "sha256": "7f21c5514468ba89"
-    },
-    "apps/frontend/src/shared/api/generated/index.ts": {
-      "size": 82,
-      "sha256": "312eff7df839fe35"
-    },
-    "apps/frontend/src/shared/api/generated/types.gen.ts": {
-      "size": 20586,
-      "sha256": "6d6fabe6c93b9c9f"
     },
     "apps/frontend/src/shared/api/namespace.ts": {
       "size": 290,

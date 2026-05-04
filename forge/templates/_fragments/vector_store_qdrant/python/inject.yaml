@@ -1,7 +1,7 @@
 # Qdrant adapter — registers itself with the container only when the
 # user opts into `rag.backend=qdrant`. Port ships from vector_store_port.
 
-- target: src/app/core/container.py
+- target: src/app/main.py
   marker: FORGE:APP_POST_CONFIGURE
   position: after
   zone: generated
