@@ -5,7 +5,7 @@
 #
 # Zone: "generated" — the port is forge-owned and should not drift.
 
-- target: src/app/main.py
+- target: src/app/core/container.py
   marker: FORGE:APP_POST_CONFIGURE
   position: after
   zone: generated

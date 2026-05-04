@@ -6,9 +6,7 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 /// Helper handler that extracts TenantContext and returns it as JSON.
-async fn echo_tenant(
-    tenant: {{ project_name | replace("-", "_") }}::middleware::tenant::TenantContext,
-) -> Json<serde_json::Value> {
+async fn echo_tenant(tenant: {{ project_name | replace("-", "_") }}::middleware::tenant::TenantContext) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "user_id": tenant.user_id.to_string(),
         "email": tenant.email,
