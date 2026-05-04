@@ -505,8 +505,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/tests/docker/conftest.py": {
-      "size": 1513,
-      "sha256": "6671c3c38ce38635"
+      "size": 2522,
+      "sha256": "f44f05bee08b4b05"
     },
     "services/api/tests/docker/test_health_docker.py": {
       "size": 1207,
