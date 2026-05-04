@@ -197,8 +197,8 @@
       "sha256": "b4e927be87872855"
     },
     "services/api/tests/tenant_test.rs": {
-      "size": 3980,
-      "sha256": "f2d4f2a1212d631d"
+      "size": 4289,
+      "sha256": "e9945d73beba9925"
     },
     "services/api/tests/utils.rs": {
       "size": 2111,
