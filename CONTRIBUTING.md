@@ -11,15 +11,33 @@ uv sync --all-extras --dev
 uv run pre-commit install
 ```
 
+## Local CI parity
+
+Before pushing, run:
+
+```bash
+make check
+```
+
+That target runs `ruff check` + `ruff format --check` + `ty check` +
+`pytest` — the same gates push-CI's `lint`, `typecheck-forge`, and
+`test` jobs enforce. The matrix-verify lanes (which need Node + Rust
+toolchains) run only in CI; for a local generator-only sweep use
+`make validate-matrix`.
+
+`uv run pre-commit install` (run once during **Setup**) catches ruff
+and ty drift on every commit, so `make check` rarely surprises you.
+
 ## Workflow
 
 ```bash
-make check       # ruff + ty + unit tests (fast, ~10s)
+make check       # ruff (check + format --check) + ty + unit tests (fast, ~10s)
 make lint        # ruff check
+make format      # ruff format (writes)
+make format-check # ruff format --check (read-only — same as CI)
 make typecheck   # ty check
 make test        # pytest (excludes -m e2e)
 make e2e         # full e2e suite (slow — needs uv, npm, cargo, git)
-make format      # ruff format
 ```
 
 CI runs `make check` on Linux + Windows for Python 3.11/3.12/3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
