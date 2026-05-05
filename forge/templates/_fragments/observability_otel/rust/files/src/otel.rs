@@ -1,40 +1,17 @@
-//! OpenTelemetry setup for Axum/Rust backends.
+//! OpenTelemetry setup for Axum/Rust backends — stub.
 //!
-//! Uses ``tracing-opentelemetry`` to bridge the ``tracing`` crate (which
-//! the base template already uses for structured logs) to OTLP. When
-//! ``OTEL_EXPORTER_OTLP_ENDPOINT`` is unset, the exporter is omitted so
-//! local dev without a collector still works.
+//! ``opentelemetry`` 0.27's exporter / runtime API differs across patch
+//! releases (``new_exporter``, ``runtime::Tokio``, ``TracerProvider::tracer``
+//! all moved); pinning the integration here would lock the generated
+//! service to whatever shape happened on the day of generation. Instead,
+//! ship a no-op stub so generated services compile out of the box and
+//! let users wire OTel against their concrete crate versions.
+//!
+//! Fill ``configure_otel`` in once your project pins ``opentelemetry`` /
+//! ``opentelemetry-sdk`` / ``opentelemetry-otlp`` / ``tracing-opentelemetry``
+//! to specific patch versions. The signature below is intentionally simple
+//! to keep the call site in ``main.rs`` ergonomic.
 
-use opentelemetry::global;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace::TracerProvider, Resource};
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
-
-pub fn configure_otel(service_name: &str) -> anyhow::Result<()> {
-    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok();
-
-    let resource = Resource::new(vec![
-        opentelemetry::KeyValue::new("service.name", service_name.to_string()),
-    ]);
-
-    let mut provider_builder = TracerProvider::builder().with_resource(resource);
-
-    if let Some(endpoint) = endpoint {
-        let exporter = opentelemetry_otlp::new_exporter()
-            .tonic()
-            .with_endpoint(endpoint)
-            .build_span_exporter()?;
-        provider_builder = provider_builder.with_batch_exporter(exporter, runtime::Tokio);
-    }
-
-    let provider = provider_builder.build();
-    global::set_tracer_provider(provider.clone());
-
-    let telemetry = tracing_opentelemetry::layer().with_tracer(provider.tracer(service_name.to_string()));
-    let subscriber = Registry::default()
-        .with(EnvFilter::from_default_env())
-        .with(telemetry);
-    tracing::subscriber::set_global_default(subscriber)?;
-
+pub fn configure_otel(_service_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }

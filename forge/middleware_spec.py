@@ -115,9 +115,7 @@ def _axum_mod_target() -> str:
     return "src/middleware/mod.rs"
 
 
-def render_fastapi_middleware(
-    spec: MiddlewareSpec, feature_key: str
-) -> tuple[_Injection, ...]:
+def render_fastapi_middleware(spec: MiddlewareSpec, feature_key: str) -> tuple[_Injection, ...]:
     """Emit _Injection records for a Python/FastAPI middleware.
 
     Both injections land at ``src/app/main.py`` with ``position=before`` —
@@ -143,9 +141,7 @@ def render_fastapi_middleware(
     )
 
 
-def render_fastify_plugin(
-    spec: MiddlewareSpec, feature_key: str
-) -> tuple[_Injection, ...]:
+def render_fastify_plugin(spec: MiddlewareSpec, feature_key: str) -> tuple[_Injection, ...]:
     """Emit _Injection records for a Node/Fastify plugin registration."""
     from forge.feature_injector import _Injection  # noqa: PLC0415
 
@@ -167,9 +163,7 @@ def render_fastify_plugin(
     )
 
 
-def render_axum_layer(
-    spec: MiddlewareSpec, feature_key: str
-) -> tuple[_Injection, ...]:
+def render_axum_layer(spec: MiddlewareSpec, feature_key: str) -> tuple[_Injection, ...]:
     """Emit _Injection records for a Rust/Axum tower layer.
 
     Adds the mod declaration at ``src/middleware/mod.rs`` (position=after)

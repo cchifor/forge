@@ -63,7 +63,7 @@ function onSubmit(e: Event) {
         :type="field.type"
         :name="field.name"
         :required="field.required"
-        v-model="values[field.name]"
+        v-model="values[field.name] as any"
       />
       <input
         v-else-if="field.type === 'number'"
@@ -79,14 +79,14 @@ function onSubmit(e: Event) {
         :name="field.name"
         :required="field.required"
         rows="4"
-        v-model="values[field.name]"
+        v-model="values[field.name] as any"
       />
       <select
         v-else-if="field.type === 'select'"
         :id="`dform-${field.name}`"
         :name="field.name"
         :required="field.required"
-        v-model="values[field.name]"
+        v-model="values[field.name] as any"
       >
         <option v-for="opt in (field.options ?? [])" :key="opt" :value="opt">{{ opt }}</option>
       </select>
@@ -95,7 +95,7 @@ function onSubmit(e: Event) {
           :id="`dform-${field.name}`"
           type="checkbox"
           :name="field.name"
-          v-model="values[field.name]"
+          v-model="values[field.name] as any"
         />
         <span>{{ field.description || field.label }}</span>
       </label>

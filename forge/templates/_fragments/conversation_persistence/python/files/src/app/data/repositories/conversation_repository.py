@@ -57,7 +57,9 @@ class ConversationRepository(TenantScopedRepository):
         model = result.scalar_one_or_none()
         return Conversation.model_validate(model) if model else None
 
-    async def list_conversations(self, *, limit: int = 50, offset: int = 0) -> Sequence[Conversation]:
+    async def list_conversations(
+        self, *, limit: int = 50, offset: int = 0
+    ) -> Sequence[Conversation]:
         stmt = (
             select(ConversationModel)
             .where(

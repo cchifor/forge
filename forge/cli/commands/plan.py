@@ -143,9 +143,7 @@ def _print_tree(preview: dict[str, Any]) -> None:
     _w(f"forge plan  .  project={preview['project_name']}\n")
     _w(f"output    : {preview['output_dir']}\n")
     backends_line = (
-        ", ".join(
-            bc["name"] + " (" + bc["language"] + ")" for bc in preview["backends"]
-        )
+        ", ".join(bc["name"] + " (" + bc["language"] + ")" for bc in preview["backends"])
         or "(none)"
     )
     _w(f"backends  : {backends_line}\n")
@@ -198,16 +196,13 @@ def _render_mermaid(config, plan) -> str:
     lines: list[str] = ["graph TD"]
     lines.append(f"  %% forge plan — project={config.project_name}")
     lines.append(
-        f"  %% backends: "
-        + ", ".join(f"{bc.name} ({bc.language.value})" for bc in config.backends)
+        "  %% backends: " + ", ".join(f"{bc.name} ({bc.language.value})" for bc in config.backends)
     )
     lines.append("")
 
     # Track which fragments have a containing option so we know whether
     # to draw an "(implicit)" hint on un-claimed fragments.
-    fragments_in_plan: dict[str, object] = {
-        rf.fragment.name: rf for rf in plan.ordered
-    }
+    fragments_in_plan: dict[str, object] = {rf.fragment.name: rf for rf in plan.ordered}
 
     # Option nodes — only those whose chosen value actually pulls a
     # fragment into the plan. Pure-context options (rag.top_k, etc.)
@@ -245,9 +240,7 @@ def _render_mermaid(config, plan) -> str:
         for fragment_name in opt.enables.get(chosen, ()):
             if fragment_name not in frag_node_ids:
                 continue
-            lines.append(
-                f"  {opt_node_id} --> {frag_node_ids[fragment_name]}"
-            )
+            lines.append(f"  {opt_node_id} --> {frag_node_ids[fragment_name]}")
 
     # Fragment → fragment depends_on edges (transitive deps the resolver
     # pulled in regardless of options). Drawn with a different arrow
@@ -258,8 +251,7 @@ def _render_mermaid(config, plan) -> str:
             if dep not in frag_node_ids:
                 continue
             lines.append(
-                f"  {frag_node_ids[rf.fragment.name]} -.->|depends_on| "
-                f"{frag_node_ids[dep]}"
+                f"  {frag_node_ids[rf.fragment.name]} -.->|depends_on| {frag_node_ids[dep]}"
             )
 
     if not plan.ordered:

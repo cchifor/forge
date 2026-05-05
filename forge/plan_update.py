@@ -134,9 +134,7 @@ def plan_update(
 
     file_baselines = _baselines_from_provenance(data.provenance)
     current_plan_fragments = {rf.fragment.name for rf in plan.ordered}
-    uninstalls = sorted(
-        disabled_fragments(data.provenance, current_plan_fragments)
-    )
+    uninstalls = sorted(disabled_fragments(data.provenance, current_plan_fragments))
 
     decisions: list[FilePlanEntry] = []
     for rf in plan.ordered:
@@ -310,9 +308,7 @@ def _decide_for_fragment(
     return out
 
 
-def _reason_for_decision(
-    decision: str, *, has_baseline: bool, user_modified: bool
-) -> str:
+def _reason_for_decision(decision: str, *, has_baseline: bool, user_modified: bool) -> str:
     """Render a one-line rationale for a merge-mode decision."""
     if decision == "applied":
         if not has_baseline:

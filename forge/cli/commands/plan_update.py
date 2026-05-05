@@ -17,9 +17,7 @@ def _run_plan_update(args: argparse.Namespace) -> None:
 
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))
-    update_mode = cast(
-        "UpdateMode", getattr(args, "update_mode", "merge")
-    )
+    update_mode = cast("UpdateMode", getattr(args, "update_mode", "merge"))
     json_output = bool(getattr(args, "json_output", False))
 
     try:
@@ -39,10 +37,7 @@ def _run_plan_update(args: argparse.Namespace) -> None:
         print(f"forge --plan-update: {project_path} (mode={update_mode})")
         print(f"  backends: {', '.join(report.backends)}")
         if report.fragments_to_uninstall:
-            print(
-                f"  fragments to uninstall: "
-                f"{', '.join(report.fragments_to_uninstall)}"
-            )
+            print(f"  fragments to uninstall: {', '.join(report.fragments_to_uninstall)}")
         print(f"  files inspected: {len(report.file_decisions)}")
         if report.applied_count:
             print(f"  would apply: {report.applied_count}")

@@ -45,7 +45,7 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
@@ -55,7 +55,7 @@ class _JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -86,6 +86,16 @@ def _format_scalar(value: Any) -> str:
     return str(value)
 
 
+class _ForgeStreamHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """StreamHandler tagged so ``configure_logging`` can prune only its own.
+
+    Subclass exists purely to declare ``_forge_owned`` as a typed attribute;
+    runtime behaviour is identical to ``logging.StreamHandler``.
+    """
+
+    _forge_owned: bool = True
+
+
 def configure_logging(
     *,
     level: str | None = None,
@@ -106,14 +116,11 @@ def configure_logging(
         if getattr(existing, "_forge_owned", False):
             root.removeHandler(existing)
 
-    handler = logging.StreamHandler(stream or sys.stderr)
-    handler._forge_owned = True  # type: ignore[attr-defined]
+    handler = _ForgeStreamHandler(stream or sys.stderr)
     if resolved_fmt == "json":
         handler.setFormatter(_JsonFormatter())
     else:
-        handler.setFormatter(
-            _TextFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-        )
+        handler.setFormatter(_TextFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     root.addHandler(handler)
     root.setLevel(resolved_level)
     # Let parent ``logging`` emit a warning if the level string is wrong

@@ -258,6 +258,7 @@ def __getattr__(name: str):
         return ForgeError
     raise AttributeError(f"module 'forge.errors' has no attribute {name!r}")
 
+
 __all__ = [
     # Base + subclasses
     "ForgeError",
@@ -269,8 +270,11 @@ __all__ = [
     "PluginError",
     "TemplateError",
     "FilesystemError",
-    # Deprecated alias
-    "GeneratorError",
+    # Deprecated alias — provided lazily via module ``__getattr__`` above so
+    # ``except GeneratorError:`` callers keep working through the 1.x series
+    # while the read emits a DeprecationWarning. ruff's F822 can't see
+    # ``__getattr__``-provided names, hence the noqa.
+    "GeneratorError",  # noqa: F822
     # OptionsError codes
     "OPTIONS_UNKNOWN_PATH",
     "OPTIONS_INVALID_VALUE",

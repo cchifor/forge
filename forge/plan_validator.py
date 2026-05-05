@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -40,9 +41,7 @@ class _Issue:
     detail: str
 
     def render(self) -> str:
-        return (
-            f"  - [{self.fragment} / {self.backend}] {self.path}: {self.detail}"
-        )
+        return f"  - [{self.fragment} / {self.backend}] {self.path}: {self.detail}"
 
 
 def validate_plan(plan: ResolvedPlan) -> None:
@@ -123,15 +122,18 @@ def _check_inject_yaml(
             detail=f"inject.yaml top-level must be a list, got {type(parsed).__name__}",
         )
         return
-    for idx, entry in enumerate(parsed):
-        if not isinstance(entry, dict):
+    for idx, raw_entry in enumerate(parsed):
+        if not isinstance(raw_entry, dict):
             yield _Issue(
                 fragment=resolved.fragment.name,
                 backend=backend.value,
                 path=f"{inject_yaml}[{idx}]",
-                detail=f"entry must be a mapping, got {type(entry).__name__}",
+                detail=f"entry must be a mapping, got {type(raw_entry).__name__}",
             )
             continue
+        # Cast explicitly so ty doesn't narrow the key type to ``Never``
+        # via the literal-string ``in`` checks below (``dict`` is invariant).
+        entry = cast(dict[str, Any], raw_entry)
         for required in ("target", "marker", "snippet"):
             if required not in entry and "anchor" not in entry:
                 # `anchor` is an alias for `marker` in some fragments.

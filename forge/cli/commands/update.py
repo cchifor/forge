@@ -18,9 +18,7 @@ def _run_update(args: argparse.Namespace) -> None:
 
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))
-    update_mode = cast(
-        "UpdateMode", getattr(args, "update_mode", "merge")
-    )
+    update_mode = cast("UpdateMode", getattr(args, "update_mode", "merge"))
 
     if not quiet:
         print(f"forge update: {project_path} (mode={update_mode})")
@@ -46,9 +44,6 @@ def _run_update(args: argparse.Namespace) -> None:
         print(f"  backends: {', '.join(backends)}")
         print(f"  fragments: {frags}")
         if file_conflicts:
-            print(
-                f"  file conflicts: {file_conflicts} — resolve .forge-merge "
-                "sidecar(s) by hand."
-            )
+            print(f"  file conflicts: {file_conflicts} — resolve .forge-merge sidecar(s) by hand.")
         print("Update complete.")
     sys.exit(0)

@@ -2,7 +2,9 @@
 //!
 //! Usage from `db.rs`:
 //!
-//!     let pool = forge_db_pool::build_pool(&settings.database_url).await?;
+//! ```text
+//! let pool = db_pool::build_pool(&settings.database_url).await?;
+//! ```
 //!
 //! Defaults:
 //!   * max_connections = 20
@@ -18,12 +20,18 @@ use std::time::Duration;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 
 fn env_u32(name: &str, default: u32) -> u32 {
-    std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }
 
 fn env_secs(name: &str, default: u64) -> Duration {
     Duration::from_secs(
-        std::env::var(name).ok().and_then(|s| s.parse().ok()).unwrap_or(default),
+        std::env::var(name)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default),
     )
 }
 

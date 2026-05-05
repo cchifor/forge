@@ -27,7 +27,13 @@ _DEFAULT_HEADERS: dict[str, str] = {
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Inject standard security headers into every response."""
 
-    def __init__(self, app, *, extra_headers: dict[str, str] | None = None, hsts_max_age: int = 31536000):
+    def __init__(
+        self,
+        app,
+        *,
+        extra_headers: dict[str, str] | None = None,
+        hsts_max_age: int = 31536000,
+    ):
         super().__init__(app)
         self._headers = dict(_DEFAULT_HEADERS)
         if extra_headers:

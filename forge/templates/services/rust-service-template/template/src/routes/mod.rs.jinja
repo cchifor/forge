@@ -6,6 +6,10 @@ mod items;
 use axum::Router;
 use sqlx::PgPool;
 
+// ``#[rustfmt::skip]`` keeps the ``FORGE:ROUTES_NESTED_REGISTRATION``
+// marker pinned at the chain-method indent so fragments can inject
+// ``.nest(...)`` calls before it without rustfmt reshuffling.
+#[rustfmt::skip]
 pub fn api_routes() -> Router<PgPool> {
     Router::new()
         .merge(home::routes())

@@ -83,14 +83,11 @@ def load_fragment_compose(
     try:
         raw = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise FragmentComposeError(
-            f"{compose_path}: invalid YAML — {exc}"
-        ) from exc
+        raise FragmentComposeError(f"{compose_path}: invalid YAML — {exc}") from exc
 
     if not isinstance(raw, dict):
         raise FragmentComposeError(
-            f"{compose_path}: expected a top-level mapping with "
-            "``capability`` and ``service`` keys"
+            f"{compose_path}: expected a top-level mapping with ``capability`` and ``service`` keys"
         )
 
     capability = raw.get("capability")
@@ -101,20 +98,14 @@ def load_fragment_compose(
 
     service_block = raw.get("service")
     if not isinstance(service_block, dict):
-        raise FragmentComposeError(
-            f"{compose_path}: top-level ``service`` must be a mapping"
-        )
+        raise FragmentComposeError(f"{compose_path}: top-level ``service`` must be a mapping")
 
     name = service_block.get("name")
     image = service_block.get("image")
     if not isinstance(name, str) or not name.strip():
-        raise FragmentComposeError(
-            f"{compose_path}: ``service.name`` must be a non-empty string"
-        )
+        raise FragmentComposeError(f"{compose_path}: ``service.name`` must be a non-empty string")
     if not isinstance(image, str) or not image.strip():
-        raise FragmentComposeError(
-            f"{compose_path}: ``service.image`` must be a non-empty string"
-        )
+        raise FragmentComposeError(f"{compose_path}: ``service.image`` must be a non-empty string")
 
     template = ServiceTemplate(
         name=name,
@@ -122,18 +113,13 @@ def load_fragment_compose(
         command=list(service_block["command"])
         if "command" in service_block and service_block["command"]
         else None,
-        environment={
-            str(k): str(v) for k, v in (service_block.get("environment") or {}).items()
-        },
+        environment={str(k): str(v) for k, v in (service_block.get("environment") or {}).items()},
         ports=[str(p) for p in (service_block.get("ports") or [])],
         volumes=[str(v) for v in (service_block.get("volumes") or [])],
         healthcheck=dict(service_block["healthcheck"])
         if service_block.get("healthcheck")
         else None,
-        depends_on={
-            str(k): dict(v)
-            for k, v in (service_block.get("depends_on") or {}).items()
-        },
+        depends_on={str(k): dict(v) for k, v in (service_block.get("depends_on") or {}).items()},
         networks=tuple(service_block.get("networks") or ("app-network",)),
         restart=str(service_block.get("restart", "unless-stopped")),
         named_volumes=tuple(service_block.get("named_volumes") or ()),

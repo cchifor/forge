@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 pub async fn create_pool() -> PgPool {
     let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

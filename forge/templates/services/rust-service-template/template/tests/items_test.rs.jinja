@@ -3,11 +3,11 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-/// Integration test stubs for CRUD endpoints.
-///
-/// These tests validate the request/response contract without a live database.
-/// They use a standalone Axum router with mock handlers that return the expected
-/// shapes. Full integration tests require a running PostgreSQL instance.
+// Integration test stubs for CRUD endpoints.
+//
+// These tests validate the request/response contract without a live database.
+// They use a standalone Axum router with mock handlers that return the expected
+// shapes. Full integration tests require a running PostgreSQL instance.
 
 fn mock_item() -> serde_json::Value {
     serde_json::json!({
@@ -24,8 +24,8 @@ fn mock_item() -> serde_json::Value {
 }
 
 fn build_mock_router() -> axum::Router {
-    use axum::routing::{get, post};
     use axum::Json;
+    use axum::routing::get;
 
     axum::Router::new()
         .route(

@@ -45,8 +45,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api/biome.json": {
-      "size": 250,
-      "sha256": "1f4c61daa8a1c6e1"
+      "size": 296,
+      "sha256": "38ba09d9a964e6d6"
     },
     "services/api/config/defaults.yaml": {
       "size": 448,
@@ -141,8 +141,8 @@
       "sha256": "648c5e000d6764c1"
     },
     "services/api/src/lib/prisma.ts": {
-      "size": 596,
-      "sha256": "8ac5798ade209426"
+      "size": 599,
+      "sha256": "090fa12890818552"
     },
     "services/api/src/middleware/correlation.ts": {
       "size": 394,
@@ -233,8 +233,8 @@
       "sha256": "f0deb6009b673c2f"
     },
     "services/api/tests/unit/tenant.test.ts": {
-      "size": 3197,
-      "sha256": "8a6b13b2fe15fdf5"
+      "size": 3530,
+      "sha256": "a4dae923bf2ee957"
     },
     "services/api/tests/utils/errors.ts": {
       "size": 1412,
@@ -249,8 +249,8 @@
       "sha256": "7aed9f41bf232c59"
     },
     "services/api/vitest.config.ts": {
-      "size": 170,
-      "sha256": "14c3e0b72b4a82ce"
+      "size": 473,
+      "sha256": "0fa0aa4a35095faf"
     }
   }
 }

@@ -39,14 +39,10 @@ class FragmentDepsApplier:
     def apply(self, ctx: FragmentContext, plan: FragmentPlan) -> None:
         if not plan.dependencies:
             return
-        _add_dependencies(
-            ctx.backend_config.language, ctx.backend_dir, plan.dependencies
-        )
+        _add_dependencies(ctx.backend_config.language, ctx.backend_dir, plan.dependencies)
 
 
-def _add_dependencies(
-    lang: BackendLanguage, backend_dir: Path, deps: tuple[str, ...]
-) -> None:
+def _add_dependencies(lang: BackendLanguage, backend_dir: Path, deps: tuple[str, ...]) -> None:
     """Dispatch ``deps`` into the right per-language manifest editor."""
     if not deps:
         return

@@ -210,9 +210,7 @@ def _apply_merge(
             src_path.read_text(encoding="utf-8"),
             tag=tag,
         )
-    return FileMergeOutcome(
-        action="conflict", target=dst_path, sidecar_path=sidecar
-    )
+    return FileMergeOutcome(action="conflict", target=dst_path, sidecar_path=sidecar)
 
 
 def _write(src_path: Path, dst_path: Path) -> None:

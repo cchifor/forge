@@ -10,5 +10,5 @@
   position: after
   zone: generated
   snippet: |-
-    import { configureOtel } from './lib/otel';
-    configureOtel(process.env.OTEL_SERVICE_NAME ?? 'forge-service');
+    import { configureOtel } from "./lib/otel.js";
+    configureOtel(process.env.OTEL_SERVICE_NAME ?? "forge-service");

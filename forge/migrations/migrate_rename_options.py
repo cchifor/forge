@@ -74,8 +74,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
         if canonical in options_table:
             if not quiet:
                 print(
-                    f"  [rename-options] {key!r} → {canonical!r}: "
-                    f"skipping (canonical already set)"
+                    f"  [rename-options] {key!r} → {canonical!r}: skipping (canonical already set)"
                 )
             # Don't drop here either; leaving both gives the resolver
             # a chance to complain loudly so the user picks one.

@@ -33,11 +33,7 @@ pub async fn create(
     repo.create(tenant, data).await
 }
 
-pub async fn get_by_id(
-    pool: &PgPool,
-    tenant: &TenantContext,
-    id: Uuid,
-) -> Result<Item, AppError> {
+pub async fn get_by_id(pool: &PgPool, tenant: &TenantContext, id: Uuid) -> Result<Item, AppError> {
     let repo = PgItemRepository::new(pool.clone());
     repo.get_by_id(tenant, id)
         .await?
@@ -56,7 +52,11 @@ pub async fn update(
         .ok_or_else(|| AppError::not_found("Item", id.to_string()))?;
 
     if let Some(ref name) = data.name {
-        if repo.find_by_name_excluding(tenant, name, id).await?.is_some() {
+        if repo
+            .find_by_name_excluding(tenant, name, id)
+            .await?
+            .is_some()
+        {
             return Err(AppError::already_exists("Item", name));
         }
     }

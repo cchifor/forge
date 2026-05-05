@@ -15,7 +15,7 @@ async fn health_live_returns_up() {
     //   let app = my_service::app::create_app(pool);
     //
     // For now, we build a minimal router that mirrors the live endpoint.
-    use axum::{routing::get, Json, Router};
+    use axum::{Json, Router, routing::get};
     use serde_json::json;
 
     let app = Router::new().route(

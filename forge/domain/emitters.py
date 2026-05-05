@@ -41,7 +41,7 @@ def emit_pydantic(spec: EntitySpec) -> str:
     _add_enum_imports_python(lines, spec)
     lines.append("")
     if spec.description:
-        lines.append(f'class {spec.name}(BaseModel):')
+        lines.append(f"class {spec.name}(BaseModel):")
         lines.append(f'    """{spec.description}"""')
     else:
         lines.append(f"class {spec.name}(BaseModel):")

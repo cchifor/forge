@@ -48,7 +48,7 @@ class ChromaAdapter(VectorStorePort):
         embeddings = [v[1] for v in vectors]
         documents = [v[2] for v in vectors]
         metadatas = [v[3] for v in vectors]
-        col.upsert(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)
+        col.upsert(ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas)  # ty: ignore[invalid-argument-type]
 
     async def query(
         self,

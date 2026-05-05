@@ -19,11 +19,11 @@
 //! (propagated by `middleware::correlation`). Handlers that wish to
 //! echo it in the body can attach via `AppError::with_correlation`.
 
+use axum::Json;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Canonical error codes shared across Python / Node / Rust backends.
 /// Keep this list in sync with RFC-007.
@@ -79,9 +79,9 @@ impl ErrorCode {
             Self::ValidationFailed | Self::InvalidInput => StatusCode::UNPROCESSABLE_ENTITY,
             Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             Self::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::DatabaseUnavailable
-            | Self::DatabaseTimeout
-            | Self::DependencyUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::DatabaseUnavailable | Self::DatabaseTimeout | Self::DependencyUnavailable => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         }
     }
 }
@@ -212,7 +212,11 @@ impl AppError {
             Self::AlreadyExists { entity, name } => {
                 json!({ "entity": entity, "name": name })
             }
-            Self::DuplicateEntry { entity, field, value } => {
+            Self::DuplicateEntry {
+                entity,
+                field,
+                value,
+            } => {
                 json!({ "entity": entity, "field": field, "value": value })
             }
             Self::ReadOnly { resource } => json!({ "resource": resource }),

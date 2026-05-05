@@ -44,13 +44,48 @@ OPTIONS: none | pgvector | qdrant | chroma | milvus | weaviate | pinecone | post
         # fragments are deprecated but still resolvable for
         # pre-1.0.0a2 projects invoking `forge --update`.
         enables={
-            "pgvector": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_postgres"),
-            "qdrant": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_qdrant"),
-            "chroma": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_chroma"),
-            "milvus": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_milvus"),
-            "weaviate": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_weaviate"),
-            "pinecone": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_pinecone"),
-            "postgresql": ("conversation_persistence", "rag_pipeline", "vector_store_port", "vector_store_postgres"),
+            "pgvector": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_postgres",
+            ),
+            "qdrant": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_qdrant",
+            ),
+            "chroma": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_chroma",
+            ),
+            "milvus": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_milvus",
+            ),
+            "weaviate": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_weaviate",
+            ),
+            "pinecone": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_pinecone",
+            ),
+            "postgresql": (
+                "conversation_persistence",
+                "rag_pipeline",
+                "vector_store_port",
+                "vector_store_postgres",
+            ),
         },
     )
 )

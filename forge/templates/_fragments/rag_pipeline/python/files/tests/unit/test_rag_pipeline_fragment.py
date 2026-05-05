@@ -12,6 +12,17 @@ from app.rag.embeddings import _get_client, embedding_dim, reset_client
 from app.rag.retriever import _default_top_k
 
 
+@pytest.fixture(autouse=True)
+def _stub_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_get_client`` constructs an ``openai.OpenAI`` client which raises
+    ``OpenAIError`` if neither ``OPENAI_API_KEY`` nor an explicit ``api_key``
+    is supplied. Stub the env var before each test so the singleton +
+    reset-cycle tests run without requiring a real key — the network is
+    never touched here.
+    """
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-real")
+
+
 def test_embeddings_client_is_singleton() -> None:
     reset_client()
     c1 = _get_client()

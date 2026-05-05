@@ -82,7 +82,7 @@ export function warnOnLintIssues(componentName: string, issues: LintIssue[]): vo
   // Vite sets import.meta.env.PROD; fall back to process.env.NODE_ENV so
   // non-Vite builds (Webpack, Rspack, etc.) still get the dev-mode warn.
   const isProd =
-    // @ts-expect-error — import.meta.env is Vite-specific; guard at runtime.
+    // @ts-ignore — import.meta.env is Vite-specific; guard at runtime.
     (typeof import.meta !== 'undefined' && import.meta.env?.PROD === true) ||
     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
   if (isProd) return

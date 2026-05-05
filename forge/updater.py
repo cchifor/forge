@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from forge.capability_resolver import ResolvedPlan, resolve
 from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
@@ -100,9 +100,7 @@ def update_project(
 
     # Epic H (1.1.0-alpha.1) — serialise concurrent updates via .forge/lock.
     with acquire_lock(project_root, no_lock=no_lock):
-        return _update_locked(
-            project_root, manifest, quiet=quiet, update_mode=update_mode
-        )
+        return _update_locked(project_root, manifest, quiet=quiet, update_mode=update_mode)
 
 
 def _update_locked(
@@ -168,8 +166,7 @@ def _update_locked(
             print("  [update] mode=skip — these files are preserved unconditionally.")
         elif update_mode == "overwrite":
             print(
-                "  [update] mode=overwrite — these files will be clobbered "
-                "with fragment content."
+                "  [update] mode=overwrite — these files will be clobbered with fragment content."
             )
 
     # Fresh collector for the post-update provenance re-stamp. Seed it
@@ -188,7 +185,7 @@ def _update_locked(
         if origin not in ("user", "fragment", "base-template"):
             continue
         collector.records[rel] = ProvenanceRecord(
-            origin=origin,  # type: ignore[arg-type]
+            origin=cast(Literal["base-template", "fragment", "user"], origin),
             sha256=str(entry.get("sha256", "")),
             fragment_name=entry.get("fragment_name") or None,
             fragment_version=entry.get("fragment_version") or None,
@@ -212,9 +209,7 @@ def _update_locked(
     issues = audit_targets(injection_targets)
     if issues:
         if not quiet:
-            print(
-                f"  [update] sentinel audit found {len(issues)} structural issue(s) — aborting"
-            )
+            print(f"  [update] sentinel audit found {len(issues)} structural issue(s) — aborting")
         raise_if_corrupt(issues)
 
     # Epic F — provenance-driven uninstall. Any fragment present in the
@@ -236,24 +231,18 @@ def _update_locked(
                 name,
                 data.provenance,
                 collector,
-                removed_blocks_in_files=_disabled_fragment_blocks(
-                    project_root, name, data
-                ),
+                removed_blocks_in_files=_disabled_fragment_blocks(project_root, name, data),
             )
             uninstall_outcomes.append(outcome)
             if not quiet:
                 if outcome.deleted_files:
-                    print(
-                        f"    [{name}] deleted {len(outcome.deleted_files)} file(s)"
-                    )
+                    print(f"    [{name}] deleted {len(outcome.deleted_files)} file(s)")
                 if outcome.preserved_files:
                     print(
                         f"    [{name}] preserved {len(outcome.preserved_files)} user-modified file(s)"
                     )
                 if outcome.removed_blocks:
-                    print(
-                        f"    [{name}] scrubbed {len(outcome.removed_blocks)} injected block(s)"
-                    )
+                    print(f"    [{name}] scrubbed {len(outcome.removed_blocks)} injected block(s)")
                 if outcome.conflicted_blocks:
                     print(
                         f"    [{name}] {len(outcome.conflicted_blocks)} block(s) "
@@ -343,9 +332,7 @@ def _count_file_sidecars(project_root: Path) -> int:
         if not path.is_file():
             continue
         # Only the two sidecar suffixes; ignore arbitrary user files.
-        if path.name.endswith(".forge-merge") or path.name.endswith(
-            ".forge-merge.bin"
-        ):
+        if path.name.endswith(".forge-merge") or path.name.endswith(".forge-merge.bin"):
             count += 1
     return count
 

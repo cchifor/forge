@@ -85,9 +85,7 @@ def load_enum_yaml(path: Path) -> EnumSpec:
     if not isinstance(name, str) or not name:
         raise GeneratorError(f"{path}: `name` must be a non-empty string")
     if not re.match(r"^[A-Z][A-Za-z0-9_]*$", name):
-        raise GeneratorError(
-            f"{path}: `name` must be a PascalCase identifier (got {name!r})"
-        )
+        raise GeneratorError(f"{path}: `name` must be a PascalCase identifier (got {name!r})")
 
     description = str(raw.get("description") or "")
 
@@ -102,15 +100,11 @@ def load_enum_yaml(path: Path) -> EnumSpec:
         elif isinstance(entry, dict):
             v = entry.get("value")  # ty:ignore[invalid-argument-type]
             if not isinstance(v, str) or not v:
-                raise GeneratorError(
-                    f"{path}.values[{i}]: `value` must be a non-empty string"
-                )
+                raise GeneratorError(f"{path}.values[{i}]: `value` must be a non-empty string")
             label = entry.get("label")  # ty:ignore[invalid-argument-type]
             values.append(EnumValue(value=v, label=str(label) if label else None))
         else:
-            raise GeneratorError(
-                f"{path}.values[{i}]: must be a string or mapping"
-            )
+            raise GeneratorError(f"{path}.values[{i}]: must be a string or mapping")
 
     return EnumSpec(name=name, description=description, values=tuple(values))
 
@@ -121,9 +115,7 @@ def load_enum_yaml(path: Path) -> EnumSpec:
 def emit_python(spec: EnumSpec) -> str:
     """Emit a Python ``str`` Enum subclass."""
     lines: list[str] = [
-        '"""Generated from '
-        f"{spec.name}.yaml — do not edit by hand."
-        '"""',
+        f'"""Generated from {spec.name}.yaml — do not edit by hand."""',
         "",
         "from __future__ import annotations",
         "",

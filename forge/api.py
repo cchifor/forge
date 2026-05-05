@@ -105,9 +105,7 @@ def _parse_sdk_version(version: str) -> tuple[int, int]:
     patch component, no pre-release labels."""
     m = _SDK_VERSION_RE.match(version.strip())
     if m is None:
-        raise ValueError(
-            f"SDK version {version!r} must be in 'MAJOR.MINOR' form (e.g. '1.1')"
-        )
+        raise ValueError(f"SDK version {version!r} must be in 'MAJOR.MINOR' form (e.g. '1.1')")
     return int(m.group(1)), int(m.group(2))
 
 

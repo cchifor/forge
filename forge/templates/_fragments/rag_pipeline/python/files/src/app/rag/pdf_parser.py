@@ -32,7 +32,7 @@ def extract_text_from_pdf(path: Path | str) -> str:
     doc = pymupdf.open(str(path))
     try:
         chunks: list[str] = []
-        for page_no, page in enumerate(doc):
+        for page_no, page in enumerate(doc):  # ty: ignore[invalid-argument-type]
             try:
                 page_text = page.get_text("text")
             except (ValueError, RuntimeError):
@@ -61,7 +61,7 @@ def extract_text_from_bytes(data: bytes, filename: str | None = None) -> str:
     doc = pymupdf.open(stream=data, filetype="pdf")
     try:
         chunks: list[str] = []
-        for page_no, page in enumerate(doc):
+        for page_no, page in enumerate(doc):  # ty: ignore[invalid-argument-type]
             try:
                 page_text = page.get_text("text")
             except (ValueError, RuntimeError):

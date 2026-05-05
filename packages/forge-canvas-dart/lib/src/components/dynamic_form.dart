@@ -201,7 +201,7 @@ class _FieldWidgetState extends State<_FieldWidget> {
     if (field.type == 'select') {
       return DropdownButtonFormField<String>(
         decoration: decoration,
-        initialValue: _value as String?,
+        value: _value as String?,
         items: [
           for (final opt in field.options)
             DropdownMenuItem(value: opt, child: Text(opt)),

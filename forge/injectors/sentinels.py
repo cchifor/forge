@@ -86,9 +86,7 @@ def _indent_of(line: str) -> str:
     return m.group(0) if m else ""
 
 
-def _find_unique_line(
-    lines: list[str], substring: str, file: Path, *, needle: str
-) -> int | None:
+def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: str) -> int | None:
     """Return the unique line index containing ``substring`` or None.
 
     Raises if the substring appears more than once — ambiguous sentinels

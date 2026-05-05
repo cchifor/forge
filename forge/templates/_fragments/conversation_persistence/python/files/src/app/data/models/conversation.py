@@ -27,7 +27,9 @@ class Conversation(Base, TenantMixin, UserOwnedMixin, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(500), nullable=False, default="New conversation")
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON_TYPE, nullable=True)
-    archived_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation",

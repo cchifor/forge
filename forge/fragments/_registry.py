@@ -196,9 +196,7 @@ class _FragmentRegistry(dict[str, Fragment]):
             for name in ready:
                 del remaining[name]
 
-    def _find_cycle_path(
-        self, remaining: dict[str, "Fragment"]
-    ) -> list[str]:
+    def _find_cycle_path(self, remaining: dict[str, Fragment]) -> list[str]:
         """DFS the depends_on graph to recover one concrete cycle path.
 
         Returns a list like ``["a", "b", "c", "a"]`` (the closing

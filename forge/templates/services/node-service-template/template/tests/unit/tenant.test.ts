@@ -5,11 +5,16 @@ import {
 	requireTenant,
 	type AuthenticatedRequest,
 } from "../../src/middleware/tenant.js";
+import { errorHandler } from "../../src/middleware/error-handler.js";
 
 let app: FastifyInstance;
 
 beforeAll(async () => {
 	app = Fastify();
+	// AppError-shaped responses (``{error: {code, type, ...}}``) are produced
+	// by ``errorHandler`` only — without it Fastify's default envelope leaks
+	// through and the requireTenant assertion below sees an undefined code.
+	app.setErrorHandler(errorHandler);
 	app.addHook("onRequest", tenantHook);
 
 	app.get("/public/test", async (req) => ({ tenant: req.tenant }));

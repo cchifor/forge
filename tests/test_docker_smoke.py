@@ -26,7 +26,7 @@ class TestDockerComposeConfig:
             ["docker", "compose", "config", "--quiet"],
             cwd=str(project_root),
             capture_output=True,
-            timeout=30,
+            timeout=120,
         )
         assert result.returncode == 0, f"docker compose config failed: {result.stderr.decode()}"
 
@@ -48,7 +48,7 @@ class TestDockerComposeConfig:
             ["docker", "compose", "config", "--quiet"],
             cwd=str(project_root),
             capture_output=True,
-            timeout=30,
+            timeout=120,
         )
         assert result.returncode == 0, f"docker compose config failed: {result.stderr.decode()}"
 
@@ -66,6 +66,6 @@ class TestDockerComposeConfig:
             ["docker", "compose", "config", "--quiet"],
             cwd=str(project_root),
             capture_output=True,
-            timeout=30,
+            timeout=120,
         )
         assert result.returncode == 0

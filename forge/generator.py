@@ -141,10 +141,7 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         # before ``toolchain.install`` so ``uv sync`` operates on the
         # already-stripped ``pyproject.toml`` and no SQLAlchemy/alembic
         # deps are resolved.
-        if (
-            config.database_mode == "none"
-            and bc.language == BackendLanguage.PYTHON
-        ):
+        if config.database_mode == "none" and bc.language == BackendLanguage.PYTHON:
             from forge.strippers import strip_python_database  # noqa: PLC0415
 
             _log(f"  Stripping DB stack from {bc.name} (database.mode=none) ...")
@@ -213,9 +210,7 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         # backend's POSTGRES_DB env var already handles the single-db case.
         # Phase B1: backend DBs don't need creating when database.mode=none;
         # init-db is only useful for keycloak's own database in that mode.
-        need_multi_backend_init = (
-            len(config.backends) > 1 and config.database_mode != "none"
-        )
+        need_multi_backend_init = len(config.backends) > 1 and config.database_mode != "none"
         if need_multi_backend_init or config.include_keycloak:
             _log("  Rendering init-db.sh ...")
             render_init_db(config, project_root)

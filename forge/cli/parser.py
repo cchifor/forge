@@ -345,9 +345,7 @@ def _add_plugin_commands(parser: argparse.ArgumentParser) -> None:
         # Only register if the flag isn't already claimed (avoid collisions
         # with core forge flags). Plugins should use namespaced names
         # like ``mycompany-audit`` to be safe.
-        existing = {
-            opt for action in parser._actions for opt in action.option_strings
-        }
+        existing = {opt for action in parser._actions for opt in action.option_strings}
         if flag in existing:
             continue
         parser.add_argument(

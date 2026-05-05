@@ -1,5 +1,7 @@
 use axum::http::{HeaderName, HeaderValue, Request};
-use tower_http::request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer};
+use tower_http::request_id::{
+    MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
+};
 use uuid::Uuid;
 
 static X_REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");

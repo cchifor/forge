@@ -382,9 +382,7 @@ def _write_stateless_replacements(backend_dir: Path) -> None:
 # -- regex strippers ---------------------------------------------------------
 
 
-_API_IMPORT_RE = re.compile(
-    r"^from app\.api\.v1\.endpoints import (.*)$", re.MULTILINE
-)
+_API_IMPORT_RE = re.compile(r"^from app\.api\.v1\.endpoints import (.*)$", re.MULTILINE)
 _API_INCLUDE_RE = re.compile(
     r"^api_router\.include_router\(\s*(items|tasks)\.router.*?\n",
     re.MULTILINE,
