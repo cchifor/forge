@@ -55,9 +55,19 @@ class ContractResult:
         return not self.violations
 
 
-HEALTH_LIVE_PATHS: tuple[str, ...] = ("/healthz", "/health/live")
-HEALTH_READY_PATHS: tuple[str, ...] = ("/readyz", "/health/ready")
-OPENAPI_PATHS: tuple[str, ...] = ("/openapi.json", "/api/schema", "/api/openapi.json")
+# All three backend templates (python, node, rust) currently expose
+# health under ``/api/v1/health/{live,ready}``. The unprefixed variants
+# stay in the tuple so a future minimal-service template (no /api/v1
+# router) is still covered, and so a custom backend that follows the
+# Kubernetes-style ``/healthz`` convention also passes the contract.
+HEALTH_LIVE_PATHS: tuple[str, ...] = ("/api/v1/health/live", "/healthz", "/health/live")
+HEALTH_READY_PATHS: tuple[str, ...] = ("/api/v1/health/ready", "/readyz", "/health/ready")
+OPENAPI_PATHS: tuple[str, ...] = (
+    "/openapi.json",
+    "/api/v1/openapi.json",
+    "/api/schema",
+    "/api/openapi.json",
+)
 
 
 def _get_first(base_url: str, paths: tuple[str, ...], timeout_s: int) -> tuple[str, int, bytes]:
@@ -100,7 +110,7 @@ def _check_health_live(base_url: str, timeout_s: int, violations: list[ContractV
         violations.append(
             ContractViolation(
                 endpoint=path,
-                reason="liveness should return 200",
+                reason=f"liveness should return 200 (got {status})",
                 status=status,
                 body=body.decode("utf-8", "replace")[:200],
             )
@@ -149,7 +159,7 @@ def _check_health_ready(base_url: str, timeout_s: int, violations: list[Contract
         violations.append(
             ContractViolation(
                 endpoint=path,
-                reason="readiness must return 200 (UP) or 503 (DOWN)",
+                reason=f"readiness must return 200 (UP) or 503 (DOWN), got {status}",
                 status=status,
                 body=body.decode("utf-8", "replace")[:200],
             )
@@ -193,7 +203,7 @@ def _check_openapi(base_url: str, timeout_s: int, violations: list[ContractViola
         violations.append(
             ContractViolation(
                 endpoint=path,
-                reason="OpenAPI endpoint should return 200",
+                reason=f"OpenAPI endpoint should return 200 (got {status})",
                 status=status,
                 body=body.decode("utf-8", "replace")[:200],
             )
