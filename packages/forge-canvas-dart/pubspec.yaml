@@ -15,7 +15,7 @@ dependencies:
   json_annotation: ^4.9.0
   flutter_markdown: ^0.7.4
   flutter_highlight: ^0.7.0
-  json_patch: ^3.0.1
+  json_patch: ^3.0.0
 
 dev_dependencies:
   flutter_test:
