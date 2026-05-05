@@ -29,6 +29,7 @@ rather than a byte-for-byte match.
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -59,9 +60,7 @@ HEALTH_READY_PATHS: tuple[str, ...] = ("/readyz", "/health/ready")
 OPENAPI_PATHS: tuple[str, ...] = ("/openapi.json", "/api/schema", "/api/openapi.json")
 
 
-def _get_first(
-    base_url: str, paths: tuple[str, ...], timeout_s: int
-) -> tuple[str, int, bytes]:
+def _get_first(base_url: str, paths: tuple[str, ...], timeout_s: int) -> tuple[str, int, bytes]:
     """Try each path in order, return the first that doesn't 404.
 
     Returns ``(path, status, body)``. Raises the final network error
@@ -86,9 +85,7 @@ def _get_first(
     raise RuntimeError("no paths supplied")
 
 
-def _check_health_live(
-    base_url: str, timeout_s: int, violations: list[ContractViolation]
-) -> None:
+def _check_health_live(base_url: str, timeout_s: int, violations: list[ContractViolation]) -> None:
     try:
         path, status, body = _get_first(base_url, HEALTH_LIVE_PATHS, timeout_s)
     except Exception as exc:  # noqa: BLE001
@@ -133,9 +130,7 @@ def _check_health_live(
         )
 
 
-def _check_health_ready(
-    base_url: str, timeout_s: int, violations: list[ContractViolation]
-) -> None:
+def _check_health_ready(base_url: str, timeout_s: int, violations: list[ContractViolation]) -> None:
     try:
         path, status, body = _get_first(base_url, HEALTH_READY_PATHS, timeout_s)
     except Exception as exc:  # noqa: BLE001
@@ -183,9 +178,7 @@ def _check_health_ready(
         )
 
 
-def _check_openapi(
-    base_url: str, timeout_s: int, violations: list[ContractViolation]
-) -> None:
+def _check_openapi(base_url: str, timeout_s: int, violations: list[ContractViolation]) -> None:
     try:
         path, status, body = _get_first(base_url, OPENAPI_PATHS, timeout_s)
     except Exception as exc:  # noqa: BLE001
@@ -238,19 +231,51 @@ def _check_openapi(
         )
 
 
+def _wait_for_ready(base_url: str, max_wait_s: int) -> None:
+    """Poll the liveness endpoint until the backend responds (any status).
+
+    ``compose up --wait`` only blocks until containers are *running* —
+    not until the application has finished startup. The deploy compose
+    template doesn't define per-backend healthchecks (the ``slim``
+    runtime images for python / node / rust don't share a single
+    portable healthcheck command), so the wait happens here. Any HTTP
+    response — including 404 / 503 — counts as "up": it means the
+    server is binding and accepting connections, even if specific
+    endpoints aren't yet wired. ``ConnectionResetError`` and refused
+    connections trigger a retry with exponential backoff.
+
+    No-op once the deadline passes; the per-endpoint checks below will
+    surface the actual error in that case.
+    """
+    deadline = time.monotonic() + max_wait_s
+    delay = 0.5
+    url = base_url.rstrip("/") + HEALTH_LIVE_PATHS[0]
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2):
+                return
+        except urllib.error.HTTPError:
+            return  # server responded with a status — it's up
+        except (urllib.error.URLError, ConnectionResetError, OSError):
+            time.sleep(delay)
+            delay = min(delay * 1.5, 4.0)
+
+
 def assert_contract(
     base_url: str,
     scenario: str,
     backend_name: str,
     *,
     timeout_s: int = 10,
+    readiness_wait_s: int = 60,
 ) -> ContractResult:
     """Run the RFC-006 HTTP contract against a live backend.
 
     ``base_url`` is the reachable root (``http://localhost:<port>``).
     ``scenario`` and ``backend_name`` are labels for the return value —
     the runner uses them to attribute violations back to the scenario
-    grid.
+    grid. ``readiness_wait_s`` caps how long :func:`_wait_for_ready`
+    will block before running the per-endpoint checks.
 
     The CRUD portion of the contract (``POST``/``GET``/``PATCH``/
     ``DELETE`` cycle against a seed entity) is a sprint-2 follow-on
@@ -258,6 +283,7 @@ def assert_contract(
     fields ahead of time, which varies per fragment. Tracked in
     RFC-006's open questions.
     """
+    _wait_for_ready(base_url, readiness_wait_s)
     violations: list[ContractViolation] = []
     _check_health_live(base_url, timeout_s, violations)
     _check_health_ready(base_url, timeout_s, violations)
