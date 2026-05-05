@@ -332,6 +332,16 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
     """
     import subprocess  # noqa: PLC0415
 
+    # ``tests.matrix.smoke_contract`` is a sibling module; when this file
+    # is invoked as a script (``uv run python tests/matrix/runner.py``)
+    # the script's own directory — not the repo root — is on sys.path,
+    # so the absolute ``from tests.matrix...`` import below would
+    # ``ModuleNotFoundError`` on the matrix-nightly CI runner. Add the
+    # repo root once, idempotently, before the absolute import.
+    _repo_root = str(Path(__file__).resolve().parents[2])
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
     from forge.errors import ForgeError  # noqa: PLC0415
     from forge.generator import generate  # noqa: PLC0415
     from tests.matrix.smoke_contract import assert_contract  # noqa: PLC0415
