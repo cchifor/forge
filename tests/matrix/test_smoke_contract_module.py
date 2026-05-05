@@ -158,6 +158,41 @@ def test_openapi_must_expose_at_least_one_path(stub_server: str) -> None:
     assert any("path" in v.reason.lower() for v in result.violations)
 
 
+OPENAPI_MISSING_TREATED_AS_SKIP = {
+    "/healthz": (200, {"status": "ok"}),
+    "/readyz": (200, {"status": "UP"}),
+    # Deliberately omit every entry in OPENAPI_PATHS so each one 404s.
+}
+
+
+@pytest.mark.parametrize("stub_server", [OPENAPI_MISSING_TREATED_AS_SKIP], indirect=True)
+def test_openapi_missing_is_treated_as_skip(stub_server: str, capsys) -> None:
+    """Path B of ticket #28: when every OpenAPI path 404s, the backend
+    template has no exporter wired (current state for rust + node), so
+    the contract logs a skip and passes rather than failing the lane."""
+    result = assert_contract(stub_server, scenario="rust_svelte_min", backend_name="api")
+    assert result.passed, format_result(result)
+    captured = capsys.readouterr()
+    assert "skipping" in captured.out.lower()
+
+
+OPENAPI_500_STILL_A_VIOLATION = {
+    "/healthz": (200, {"status": "ok"}),
+    "/readyz": (200, {"status": "UP"}),
+    "/openapi.json": (500, {"detail": "exporter blew up"}),
+}
+
+
+@pytest.mark.parametrize("stub_server", [OPENAPI_500_STILL_A_VIOLATION], indirect=True)
+def test_openapi_500_is_still_a_violation(stub_server: str) -> None:
+    """The skip path is exclusively for "no exporter wired" (404 every
+    path). A 500 indicates a broken exporter (ticket #27) and must
+    surface as a contract violation."""
+    result = assert_contract(stub_server, scenario="test", backend_name="api")
+    assert not result.passed
+    assert any("500" in v.reason for v in result.violations)
+
+
 def test_results_exit_code_zero_on_empty() -> None:
     assert results_exit_code([]) == 0
 
