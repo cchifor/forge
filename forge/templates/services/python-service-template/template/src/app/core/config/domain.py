@@ -1,14 +1,27 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from service.domain.config import AuthConfig
 
 
 class Contact(BaseModel):
-    name: str = ""
+    # ``AppConfig.model_dump()`` is splatted into ``FastAPI(**...)`` and
+    # FastAPI's OpenAPI ``Contact`` model declares ``email`` as
+    # ``Optional[EmailStr]``. An empty string is *not* a valid ``EmailStr``
+    # and would crash ``/openapi.json`` with HTTP 500. Coerce blank
+    # strings to ``None`` so legacy configs (``contact: {email: ""}``)
+    # still work.
+    name: str | None = None
     url: str | None = None
-    email: str = ""
+    email: str | None = None
+
+    @field_validator("name", "url", "email", mode="before")
+    @classmethod
+    def _blank_to_none(cls, value: Any) -> Any:
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
 
 class LicenseInfo(BaseModel):
@@ -21,7 +34,7 @@ class AppConfig(BaseModel):
     description: str = "A Python microservice"
     version: str = "0.1.0"
     terms_of_service: str | None = None
-    contact: Contact = Contact()
+    contact: Contact | None = Field(default_factory=Contact)
     license_info: LicenseInfo = LicenseInfo()
 
 
