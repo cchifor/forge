@@ -1,23 +1,27 @@
 """Epic U baseline enforcement for the mutmut workflow.
 
-Reads ``tests/mutmut_baselines.json`` + ``mutmut results`` output (via
-``uv run mutmut results``) and fails when any module's kill rate drops
-below its declared floor.
+Reads ``tests/mutmut_baselines.json`` plus the per-shard ``mutmut
+results`` text files emitted by the workflow and fails when any
+module's kill rate drops below its declared floor.
 
-Invoked from ``.github/workflows/mutmut.yml`` after ``mutmut run``.
-Uses the script-mode convention so the workflow stays simple
-(``uv run python .github/workflows/scripts/mutmut_enforce.py``).
+Invoked from ``.github/workflows/mutmut.yml`` after the parallel
+``mutate`` shards have completed. Each shard mutates one file and
+uploads its ``mutmut results`` text as an artifact; this script
+downloads them into a single directory and aggregates.
+
+Usage::
+
+    python .github/workflows/scripts/mutmut_enforce.py <results-dir>
 
 Exit codes:
     0 — every module meets its floor.
     1 — one or more modules regressed; GH Actions fails the job.
-    2 — mutmut hasn't been run (no cache database); skip silently.
+    2 — no result text files found in ``<results-dir>``; skip silently.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -25,23 +29,22 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINES = REPO_ROOT / "tests" / "mutmut_baselines.json"
 
 
-def _run_mutmut_results() -> str:
-    """Return `mutmut results` stdout, or '' when the cache is missing."""
-    try:
-        result = subprocess.run(
-            ["uv", "run", "mutmut", "results"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+def _read_results_dir(results_dir: Path) -> str:
+    """Concatenate every ``*.txt`` under ``results_dir`` (recursive).
+
+    Each shard uploads its own artifact, and ``actions/download-artifact``
+    flattens them into per-shard subdirectories — recursive glob picks
+    those up. Empty input produces ``""`` so the caller can short-circuit.
+    """
+    if not results_dir.is_dir():
         return ""
-    # A clean cache-less run writes "No mutation results" or similar.
-    if "No mutation" in result.stdout + result.stderr:
-        return ""
-    return result.stdout
+    chunks: list[str] = []
+    for txt in sorted(results_dir.rglob("*.txt")):
+        try:
+            chunks.append(txt.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    return "\n".join(chunks)
 
 
 def _parse_survivors(results: str) -> dict[str, int]:
@@ -68,6 +71,15 @@ def _parse_survivors(results: str) -> dict[str, int]:
 
 
 def main() -> int:
+    if len(sys.argv) != 2:
+        print(
+            "usage: mutmut_enforce.py <results-dir>\n"
+            "  <results-dir> is the directory the workflow downloaded "
+            "the per-shard mutmut-results-*.txt artifacts into.",
+            file=sys.stderr,
+        )
+        return 2
+
     if not BASELINES.is_file():
         print(f"::warning::baselines file missing: {BASELINES}")
         return 2
@@ -75,9 +87,9 @@ def main() -> int:
     baselines = json.loads(BASELINES.read_text(encoding="utf-8"))
     modules = baselines["modules"]
 
-    results = _run_mutmut_results()
-    if not results:
-        print("::warning::no mutmut cache found — skipping enforcement")
+    results = _read_results_dir(Path(sys.argv[1]))
+    if not results.strip():
+        print("::warning::no mutmut result files found — skipping enforcement")
         return 2
 
     survivors = _parse_survivors(results)

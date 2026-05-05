@@ -2,9 +2,16 @@ name: Mutation testing
 
 # Epic U (1.1.0-alpha.1) — scheduled mutmut run + breaking-change gate.
 #
-# Why this isn't in the main PR matrix: mutmut is slow (45 min on the
-# critical-path set) and mutation scores drift naturally on refactors.
-# Gating every PR on kill-rate would be noisy + wall-clock-expensive.
+# Why this isn't in the main PR matrix: mutmut is slow (single-file run
+# is 5–15 min, full critical-path set sequentially overran the 60-min
+# and even 180-min single-job budgets). Gating every PR on kill-rate
+# would be noisy + wall-clock-expensive.
+#
+# Sharding: each file in ``[tool.mutmut].paths_to_mutate`` runs in its
+# own parallel matrix job; total wall-clock is max-per-file (~15 min)
+# instead of sum (~3 h+). Each shard uploads its ``mutmut results``
+# text; the ``enforce`` job downloads them all and runs the kill-rate
+# baseline gate.
 #
 # The actual gates:
 #   - schedule: Monday 06:00 UTC — full run on the module set in
@@ -30,8 +37,14 @@ permissions:
   issues: write
   pull-requests: write
 
+# Pin once so every job — and the enforce script's baseline keys —
+# stays in sync. Bumping this requires re-keying tests/mutmut_baselines.json
+# (mutation IDs are not stable across major versions).
+env:
+  MUTMUT_VERSION: "2.5.0"
+
 jobs:
-  mutmut:
+  setup:
     # For PR events, only run when the `breaking-change` label is
     # present. The `synchronize` event fires on every push to a labelled
     # PR; the check still gates on the label being present when the run
@@ -40,11 +53,10 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'breaking-change')
     runs-on: ubuntu-latest
-    # Scheduled / manual runs mutate the full critical-path set (~6 files,
-    # observed at >60min on ubuntu-latest); PR runs only mutate the
-    # changed files (typically ≤2). Pick the budget per event so PR-mode
-    # stays snappy while scheduled mode actually completes.
-    timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 180 || 60 }}
+    timeout-minutes: 5
+    outputs:
+      paths: ${{ steps.compute.outputs.paths }}
+      skip: ${{ steps.compute.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,7 +75,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Compute paths-to-mutate
-        id: paths
+        id: compute
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -74,48 +86,102 @@ jobs:
             if [ -z "$changed" ]; then
               echo "No critical-path files changed — exiting."
               echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "paths=[]" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "paths<<EOF" >> "$GITHUB_OUTPUT"
-            echo "$changed" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
+            paths_json=$(echo "$changed" | python -c 'import json,sys; print(json.dumps([l for l in sys.stdin.read().splitlines() if l]))')
           else
             # Scheduled or manual run — mutate the full critical-path
             # set from pyproject.toml.
-            echo "paths<<EOF" >> "$GITHUB_OUTPUT"
-            uv run python -c "import tomllib; print('\n'.join(tomllib.loads(open('pyproject.toml', 'rb').read().decode())['tool']['mutmut']['paths_to_mutate']))" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
+            paths_json=$(uv run python -c "import json, tomllib; print(json.dumps(tomllib.loads(open('pyproject.toml','rb').read().decode())['tool']['mutmut']['paths_to_mutate']))")
           fi
+          echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Sharding mutmut across: $paths_json"
 
-      - name: Run mutmut
-        if: steps.paths.outputs.skip != 'true'
+  mutate:
+    needs: setup
+    if: needs.setup.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    # Per-file budget — single-file mutmut runs typically take 5–15 min;
+    # 60 min is a comfortable ceiling for outliers without bleeding into
+    # the next scheduled cycle.
+    timeout-minutes: 60
+    strategy:
+      # Don't cancel sibling shards when one fails — we want full
+      # baseline data per file even if one shard misbehaves.
+      fail-fast: false
+      matrix:
+        path: ${{ fromJSON(needs.setup.outputs.paths) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Run mutmut on ${{ matrix.path }}
         run: |
           set -euo pipefail
           # ``uvx mutmut`` per the comment on ``[tool.mutmut]`` in
           # pyproject.toml — mutmut is intentionally NOT in dev-deps so
           # the analysis tool stays out of the regular dependency
-          # surface. Pin to 2.x while ``tests/mutmut_baselines.json`` is
-          # keyed against 2.x mutation IDs (3.x renumbers them).
-          # One file per mutmut invocation so we can map results back
-          # to the baselines table by module name.
-          while IFS= read -r file; do
-            [ -n "$file" ] || continue
-            echo "::group::mutmut run on $file"
-            uvx mutmut@2.5.0 run --paths-to-mutate "$file" || true
-            # Capture results.
-            uvx mutmut@2.5.0 results > "mutmut-results-${file//\//_}.txt" || true
-            echo "::endgroup::"
-          done <<< "${{ steps.paths.outputs.paths }}"
+          # surface. Pin via the workflow-level env so every step (and
+          # the enforce script's baseline keys) stay in sync.
+          file="${{ matrix.path }}"
+          echo "::group::mutmut run on $file"
+          uvx "mutmut@${MUTMUT_VERSION}" run --paths-to-mutate "$file" || true
+          uvx "mutmut@${MUTMUT_VERSION}" results > "mutmut-results-${file//\//_}.txt" || true
+          echo "::endgroup::"
 
-      - name: Enforce kill-rate baselines
-        if: steps.paths.outputs.skip != 'true'
-        run: uv run python .github/workflows/scripts/mutmut_enforce.py
+      - name: Sanitize artifact name
+        id: artname
+        run: |
+          path="${{ matrix.path }}"
+          # GitHub artifact names can't contain '/'.
+          echo "name=mutmut-results-shard-${path//\//_}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload mutmut results
-        if: always() && steps.paths.outputs.skip != 'true'
+      - name: Upload shard results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mutmut-results-${{ github.run_id }}
+          name: ${{ steps.artname.outputs.name }}
           path: mutmut-results-*.txt
           retention-days: 30
+
+  enforce:
+    needs: [setup, mutate]
+    # ``always()`` so a single shard timeout doesn't skip the gate —
+    # the enforce script tolerates partial input and only fails on
+    # genuine baseline regressions.
+    if: always() && needs.setup.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Download all shard results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mutmut-results-shard-*
+          path: shard-results
+          merge-multiple: false
+
+      - name: Enforce kill-rate baselines
+        run: uv run python .github/workflows/scripts/mutmut_enforce.py shard-results
