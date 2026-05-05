@@ -30,6 +30,13 @@ services:
     build:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
+    # Direct host:container port so the matrix-nightly lane-C smoke
+    # contract — and any local ``curl http://localhost:{{ be.port }}`` —
+    # can reach the backend without going through Traefik. The Traefik
+    # entry above remains for the production-shape ``app.localhost``
+    # route; this is the dev/test stack so exposing both is fine.
+    ports:
+      - "{{ be.port }}:{{ be.port }}"
     environment:
 {% if be.language == "python" %}
       ENV: development
