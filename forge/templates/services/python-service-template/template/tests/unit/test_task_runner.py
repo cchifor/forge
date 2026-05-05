@@ -89,7 +89,9 @@ class TestBackgroundTaskRunnerExecution:
             return {"done": True}
 
         try:
-            task = await _insert_task(task_sf, "test.success", status=TaskStatus.RUNNING, attempts=1)
+            task = await _insert_task(
+                task_sf, "test.success", status=TaskStatus.RUNNING, attempts=1
+            )
             await runner._execute_task(task)
             updated = await _get_task(task_sf, task.id)
             assert updated.status == TaskStatus.COMPLETED

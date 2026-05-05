@@ -100,10 +100,7 @@ def _external_api_mode(config: ProjectConfig) -> bool:
     """
     if not config.frontend_api_target_url:
         return False
-    return (
-        config.backend_mode == "none"
-        or config.frontend_api_target_type == "external"
-    )
+    return config.backend_mode == "none" or config.frontend_api_target_type == "external"
 
 
 def _frontend_api_urls(

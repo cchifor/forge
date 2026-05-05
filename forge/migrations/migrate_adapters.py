@@ -34,7 +34,9 @@ DESCRIPTION = "Suggest ports/adapters restructure for legacy RAG fragments."
 def run(project_root: Path, dry_run: bool = False, quiet: bool = False) -> MigrationReport:
     report = MigrationReport(name=NAME, applied=False)
 
-    for backend_dir in (project_root / "services").glob("*") if (project_root / "services").is_dir() else []:
+    for backend_dir in (
+        (project_root / "services").glob("*") if (project_root / "services").is_dir() else []
+    ):
         rag_dir = backend_dir / "src" / "app" / "rag"
         if not rag_dir.is_dir():
             continue

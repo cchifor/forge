@@ -20,11 +20,7 @@ pub trait ItemRepository: Send + Sync {
         params: ListParams,
     ) -> Result<PaginatedResponse<Item>, AppError>;
 
-    async fn get_by_id(
-        &self,
-        tenant: &TenantContext,
-        id: Uuid,
-    ) -> Result<Option<Item>, AppError>;
+    async fn get_by_id(&self, tenant: &TenantContext, id: Uuid) -> Result<Option<Item>, AppError>;
 
     async fn find_by_name(
         &self,
@@ -39,11 +35,7 @@ pub trait ItemRepository: Send + Sync {
         exclude_id: Uuid,
     ) -> Result<Option<Item>, AppError>;
 
-    async fn create(
-        &self,
-        tenant: &TenantContext,
-        data: CreateItem,
-    ) -> Result<Item, AppError>;
+    async fn create(&self, tenant: &TenantContext, data: CreateItem) -> Result<Item, AppError>;
 
     async fn update(
         &self,
@@ -133,18 +125,13 @@ impl ItemRepository for PgItemRepository {
         })
     }
 
-    async fn get_by_id(
-        &self,
-        tenant: &TenantContext,
-        id: Uuid,
-    ) -> Result<Option<Item>, AppError> {
-        let item = sqlx::query_as::<_, Item>(
-            "SELECT * FROM items WHERE id = $1 AND customer_id = $2",
-        )
-        .bind(id)
-        .bind(tenant.customer_id)
-        .fetch_optional(&self.pool)
-        .await?;
+    async fn get_by_id(&self, tenant: &TenantContext, id: Uuid) -> Result<Option<Item>, AppError> {
+        let item =
+            sqlx::query_as::<_, Item>("SELECT * FROM items WHERE id = $1 AND customer_id = $2")
+                .bind(id)
+                .bind(tenant.customer_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(item)
     }
 
@@ -153,13 +140,12 @@ impl ItemRepository for PgItemRepository {
         tenant: &TenantContext,
         name: &str,
     ) -> Result<Option<Item>, AppError> {
-        let item = sqlx::query_as::<_, Item>(
-            "SELECT * FROM items WHERE name = $1 AND customer_id = $2",
-        )
-        .bind(name)
-        .bind(tenant.customer_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let item =
+            sqlx::query_as::<_, Item>("SELECT * FROM items WHERE name = $1 AND customer_id = $2")
+                .bind(name)
+                .bind(tenant.customer_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(item)
     }
 
@@ -180,11 +166,7 @@ impl ItemRepository for PgItemRepository {
         Ok(item)
     }
 
-    async fn create(
-        &self,
-        tenant: &TenantContext,
-        data: CreateItem,
-    ) -> Result<Item, AppError> {
+    async fn create(&self, tenant: &TenantContext, data: CreateItem) -> Result<Item, AppError> {
         let tags = data.tags.unwrap_or(serde_json::json!([]));
         let status = data.status.unwrap_or_else(|| "DRAFT".to_string());
 

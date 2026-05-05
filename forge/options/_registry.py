@@ -129,8 +129,7 @@ class ObjectFieldSpec:
             )
         if self.type is not OptionType.ENUM and self.options:
             raise ValueError(
-                f"ObjectFieldSpec.type={self.type.value}: `options` is "
-                "only valid for ENUM fields."
+                f"ObjectFieldSpec.type={self.type.value}: `options` is only valid for ENUM fields."
             )
 
 
@@ -233,8 +232,7 @@ class Option:
         if t is OptionType.OBJECT:
             if not isinstance(d, dict):
                 raise ValueError(
-                    f"Option {self.path}: OBJECT default must be dict, "
-                    f"got {type(d).__name__}"
+                    f"Option {self.path}: OBJECT default must be dict, got {type(d).__name__}"
                 )
             if self.stability != "experimental":
                 raise ValueError(
@@ -290,17 +288,13 @@ class Option:
         for alias in self.aliases:
             _validate_path(alias)
             if alias == self.path:
-                raise ValueError(
-                    f"Option {self.path}: alias {alias!r} equals the canonical path"
-                )
+                raise ValueError(f"Option {self.path}: alias {alias!r} equals the canonical path")
         if len(set(self.aliases)) != len(self.aliases):
             raise ValueError(
                 f"Option {self.path}: duplicate entries in aliases {list(self.aliases)}"
             )
         if self.deprecated_since is not None and not self.aliases:
-            raise ValueError(
-                f"Option {self.path}: deprecated_since set but no aliases declared"
-            )
+            raise ValueError(f"Option {self.path}: deprecated_since set but no aliases declared")
 
     def _validate_constraints(self) -> None:
         if self.min is not None and self.type is not OptionType.INT:
@@ -354,9 +348,7 @@ class Option:
             raise ValueError(f"Option {self.path}: expected list, got {type(value).__name__}")
         if t is OptionType.OBJECT:
             if not isinstance(value, dict):
-                raise ValueError(
-                    f"Option {self.path}: expected dict, got {type(value).__name__}"
-                )
+                raise ValueError(f"Option {self.path}: expected dict, got {type(value).__name__}")
             self._validate_object_shape(value)
 
     def _validate_object_shape(self, value: dict[str, Any]) -> None:
@@ -376,45 +368,26 @@ class Option:
         supplied = set(value)
         for unknown in supplied - allowed:
             raise ValueError(
-                f"Option {self.path}: unknown OBJECT key {unknown!r}. "
-                f"Allowed: {sorted(allowed)}"
+                f"Option {self.path}: unknown OBJECT key {unknown!r}. Allowed: {sorted(allowed)}"
             )
         for key, spec in self.object_schema.items():
             if key not in value:
                 if spec.required:
-                    raise ValueError(
-                        f"Option {self.path}: required OBJECT key "
-                        f"{key!r} is missing"
-                    )
+                    raise ValueError(f"Option {self.path}: required OBJECT key {key!r} is missing")
                 continue
             v = value[key]
             t = spec.type
             if t is OptionType.BOOL and not isinstance(v, bool):
-                raise ValueError(
-                    f"Option {self.path}.{key}: expected bool, "
-                    f"got {type(v).__name__}"
-                )
-            elif t is OptionType.INT and (
-                not isinstance(v, int) or isinstance(v, bool)
-            ):
-                raise ValueError(
-                    f"Option {self.path}.{key}: expected int, "
-                    f"got {type(v).__name__}"
-                )
+                raise ValueError(f"Option {self.path}.{key}: expected bool, got {type(v).__name__}")
+            elif t is OptionType.INT and (not isinstance(v, int) or isinstance(v, bool)):
+                raise ValueError(f"Option {self.path}.{key}: expected int, got {type(v).__name__}")
             elif t is OptionType.STR and not isinstance(v, str):
-                raise ValueError(
-                    f"Option {self.path}.{key}: expected str, "
-                    f"got {type(v).__name__}"
-                )
+                raise ValueError(f"Option {self.path}.{key}: expected str, got {type(v).__name__}")
             elif t is OptionType.LIST and not isinstance(v, (list, tuple)):
-                raise ValueError(
-                    f"Option {self.path}.{key}: expected list, "
-                    f"got {type(v).__name__}"
-                )
+                raise ValueError(f"Option {self.path}.{key}: expected list, got {type(v).__name__}")
             elif t is OptionType.ENUM and v not in spec.options:
                 raise ValueError(
-                    f"Option {self.path}.{key}: invalid value {v!r}; "
-                    f"allowed: {list(spec.options)}"
+                    f"Option {self.path}.{key}: invalid value {v!r}; allowed: {list(spec.options)}"
                 )
 
 

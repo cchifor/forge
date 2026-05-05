@@ -86,9 +86,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
 # -- TOML path ---------------------------------------------------------------
 
 
-def _rewrite_toml(
-    path: Path, dry_run: bool, quiet: bool
-) -> tuple[list[str], str | None]:
+def _rewrite_toml(path: Path, dry_run: bool, quiet: bool) -> tuple[list[str], str | None]:
     """Rewrite aliased keys in forge.toml. Mirrors ``migrate_rename_options``
     but scoped to layer-mode aliases — independent invocation."""
     import tomlkit  # noqa: PLC0415
@@ -129,9 +127,7 @@ def _rewrite_toml(
 # -- YAML / JSON path --------------------------------------------------------
 
 
-def _rewrite_yaml_or_json(
-    path: Path, dry_run: bool, quiet: bool
-) -> tuple[list[str], str | None]:
+def _rewrite_yaml_or_json(path: Path, dry_run: bool, quiet: bool) -> tuple[list[str], str | None]:
     """Rewrite aliased keys in a YAML or JSON config file.
 
     Looks for an ``options`` top-level mapping (the convention forge's
@@ -185,7 +181,7 @@ def _load_yaml_or_json(raw: str, suffix: str) -> Any:
         except json.JSONDecodeError:
             return None
     try:
-        from ruamel.yaml import YAML  # noqa: PLC0415
+        from ruamel.yaml import YAML  # noqa: PLC0415  # ty: ignore[unresolved-import]
 
         yaml = YAML(typ="rt")
         return yaml.load(raw)
@@ -206,7 +202,7 @@ def _dump_yaml_or_json(data: Any, path: Path) -> None:
         path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         return
     try:
-        from ruamel.yaml import YAML  # noqa: PLC0415
+        from ruamel.yaml import YAML  # noqa: PLC0415  # ty: ignore[unresolved-import]
 
         yaml = YAML(typ="rt")
         with path.open("w", encoding="utf-8") as fh:

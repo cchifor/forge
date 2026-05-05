@@ -60,8 +60,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             response.headers[CORRELATION_HEADER] = correlation_id
             if isinstance(response, StreamingResponse):
+                # Starlette's ``body_iterator`` is typed as
+                # ``AsyncContentStream`` (``str | bytes | memoryview``) which
+                # is broader than the ``str | bytes`` ``_stream_response_wrapper``
+                # accepts; ty rejects the assignment but the bytes branch is
+                # the only one Starlette ever sends.
                 response.body_iterator = self._stream_response_wrapper(
-                    response.body_iterator, request, response.status_code, start_time
+                    response.body_iterator,  # ty: ignore[invalid-argument-type]
+                    request,
+                    response.status_code,
+                    start_time,
                 )
             else:
                 self._log_request(request, response.status_code, start_time)

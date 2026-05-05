@@ -241,8 +241,16 @@ impl AppConfig {
         let secrets_path = project_root.join(".secrets.yaml");
 
         let mut builder = ConfigBuilder::builder()
-            .add_source(File::from(defaults_path.as_path()).required(false).format(FileFormat::Yaml))
-            .add_source(File::from(env_path.as_path()).required(false).format(FileFormat::Yaml));
+            .add_source(
+                File::from(defaults_path.as_path())
+                    .required(false)
+                    .format(FileFormat::Yaml),
+            )
+            .add_source(
+                File::from(env_path.as_path())
+                    .required(false)
+                    .format(FileFormat::Yaml),
+            );
 
         if Path::new(&secrets_path).exists() {
             builder = builder.add_source(

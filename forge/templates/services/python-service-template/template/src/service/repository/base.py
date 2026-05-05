@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any, Generic, TypeVar, cast
 
 from sqlalchemy import asc, desc, false, inspect, select
 from sqlalchemy.orm import DeclarativeBase, InstanceState, Mapper
@@ -10,8 +10,10 @@ from service.repository.mixins import SoftDeleteMixin, TenantMixin, UserOwnedMix
 
 MAX_PAGE_SIZE = 1000
 
+ModelType = TypeVar("ModelType", bound=DeclarativeBase)
 
-class RepositoryLogicMixin[ModelType: DeclarativeBase]:
+
+class RepositoryLogicMixin(Generic[ModelType]):
     """Shared business logic for repositories: introspection, scoping, filtering, sorting."""
 
     model: type[ModelType]

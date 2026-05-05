@@ -79,9 +79,7 @@ def inject_python(
 
         cst.parse_module(source)
     except Exception:  # noqa: BLE001
-        logger.debug(
-            "libcst could not parse %s; falling back to text-marker injection", file
-        )
+        logger.debug("libcst could not parse %s; falling back to text-marker injection", file)
         _text_inject(file, source, tag, marker_name, snippet, position)
         return
 

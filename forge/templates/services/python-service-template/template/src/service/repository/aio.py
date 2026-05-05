@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
@@ -14,13 +14,16 @@ from service.repository.errors import EntityNotFoundException, RepositoryExcepti
 from .base import MAX_PAGE_SIZE, RepositoryLogicMixin
 from .mixins import SoftDeleteMixin, TenantMixin, UserOwnedMixin
 
+ModelType = TypeVar("ModelType", bound=DeclarativeBase)
+PydanticSchema = TypeVar("PydanticSchema", bound=BaseModel)
+CreateSchema = TypeVar("CreateSchema", bound=BaseModel)
+UpdateSchema = TypeVar("UpdateSchema", bound=BaseModel)
 
-class AsyncBaseRepository[
-    ModelType: DeclarativeBase,
-    PydanticSchema: BaseModel,
-    CreateSchema: BaseModel,
-    UpdateSchema: BaseModel,
-](RepositoryLogicMixin[ModelType]):
+
+class AsyncBaseRepository(
+    RepositoryLogicMixin[ModelType],
+    Generic[ModelType, PydanticSchema, CreateSchema, UpdateSchema],
+):
     def __init__(
         self,
         session: AsyncSession,

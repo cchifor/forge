@@ -23,9 +23,7 @@ class RustToolchain:
     def verify(self, backend_dir: Path, *, quiet: bool = False) -> list[Check]:
         return [
             run_backend_cmd(backend_dir, ["cargo", "build"], "Build", quiet=quiet),
-            run_backend_cmd(
-                backend_dir, ["cargo", "fmt", "--check"], "Format check", quiet=quiet
-            ),
+            run_backend_cmd(backend_dir, ["cargo", "fmt", "--check"], "Format check", quiet=quiet),
             run_backend_cmd(
                 backend_dir,
                 ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],

@@ -110,11 +110,7 @@ class FragmentContext:
         drop it — the alternative would be to raise during generation,
         which defeats the "catch early" purpose of the resolver pass.
         """
-        options = {
-            path: option_values[path]
-            for path in reads_options
-            if path in option_values
-        }
+        options = {path: option_values[path] for path in reads_options if path in option_values}
         return cls(
             backend_config=backend_config,
             backend_dir=backend_dir,

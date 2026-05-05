@@ -192,7 +192,9 @@ def register_domain_error(
 def _lookup_mapping(exc: ApplicationError) -> tuple[str, int]:
     for cls in type(exc).__mro__:
         if cls in _DOMAIN_ERROR_MAP:
-            return _DOMAIN_ERROR_MAP[cls]
+            # ``cls`` from ``__mro__`` is plain ``type``; ty's narrowing won't
+            # walk the MRO to confirm it's an ``ApplicationError`` subclass.
+            return _DOMAIN_ERROR_MAP[cls]  # ty: ignore[invalid-argument-type]
     return "INTERNAL_ERROR", status.HTTP_500_INTERNAL_SERVER_ERROR
 
 

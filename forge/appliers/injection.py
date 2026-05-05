@@ -39,6 +39,4 @@ class FragmentInjectionApplier:
                 collector=ctx.provenance,
             )
             if applied and ctx.provenance is not None:
-                ctx.provenance.record(
-                    target, origin="fragment", fragment_name=plan.feature_key
-                )
+                ctx.provenance.record(target, origin="fragment", fragment_name=plan.feature_key)

@@ -14,7 +14,10 @@
     # OpenTelemetry: initialize the tracer + metrics providers and wire up
     # FastAPI + HTTPX instrumentations. No-ops when OTEL_EXPORTER_OTLP_ENDPOINT
     # is unset, so local dev without a collector "just works".
-    configure_otel(service_name=settings.service_name if hasattr(settings, "service_name") else "forge-service")
+    _otel_service_name: str = (
+        str(settings.service_name) if hasattr(settings, "service_name") else "forge-service"
+    )
+    configure_otel(service_name=_otel_service_name)
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # noqa: PLC0415
         FastAPIInstrumentor.instrument_app(app)

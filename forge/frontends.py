@@ -77,9 +77,7 @@ def register_frontend_layout(layout: FrontendLayout) -> None:
     :meth:`ForgeAPI.add_frontend`.
     """
     if layout.framework in FRONTEND_LAYOUTS:
-        raise ValueError(
-            f"FrontendLayout for {layout.framework.value!r} is already registered"
-        )
+        raise ValueError(f"FrontendLayout for {layout.framework.value!r} is already registered")
     FRONTEND_LAYOUTS[layout.framework] = layout
 
 

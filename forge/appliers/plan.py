@@ -112,9 +112,7 @@ class FragmentPlan:
 
         synth_injections: tuple[_Injection, ...] = ()
         if middlewares and backend is not None:
-            synth_injections = render_middleware_injections(
-                middlewares, backend, feature_key
-            )
+            synth_injections = render_middleware_injections(middlewares, backend, feature_key)
 
         return cls(
             fragment_dir=fragment_dir,

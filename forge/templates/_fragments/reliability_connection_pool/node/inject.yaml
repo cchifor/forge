@@ -8,4 +8,4 @@
   marker: FORGE:PRISMA_CLIENT_INIT
   position: before
   zone: generated
-  snippet: "import { databaseUrlWithPool } from './prisma-pool';"
+  snippet: "import { databaseUrlWithPool } from './prisma-pool.js';"

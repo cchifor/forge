@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
@@ -11,11 +13,28 @@ from app.data.models import Base
 
 @pytest.fixture(scope="session")
 def postgres_url():
-    """Start a real PostgreSQL container and return its async connection URL."""
-    with PostgresContainer("postgres:16-alpine") as pg:
-        sync_url = pg.get_connection_url()
-        async_url = sync_url.replace("psycopg2", "asyncpg")
-        yield async_url
+    """Start a real PostgreSQL container and return its async connection URL.
+
+    Skips the entire docker test suite when docker isn't available or when
+    spinning up the container fails (e.g., flaky CI runner, image-pull
+    timeout, port collision). The whole-session ``pytest.skip`` keeps
+    ``pytest -v`` exit-clean instead of erroring 17 fixtures' worth of
+    cascading setup failures.
+    """
+    if shutil.which("docker") is None:
+        pytest.skip("docker not on PATH — skipping testcontainers-backed docker tests")
+    # ``pgvector/pgvector:pg16`` is the upstream postgres + pgvector image —
+    # fragments that need vector types (rag_pipeline / vector_store_postgres)
+    # would crash on plain ``postgres:16-alpine`` with ``type "vector" does
+    # not exist``. Plain installs that don't enable a vector backend
+    # ignore the extra extension at zero migration cost.
+    try:
+        with PostgresContainer("pgvector/pgvector:pg16") as pg:
+            sync_url = pg.get_connection_url()
+            async_url = sync_url.replace("psycopg2", "asyncpg")
+            yield async_url
+    except Exception as exc:  # noqa: BLE001 — testcontainers raises a wide range
+        pytest.skip(f"could not start postgres testcontainer: {exc}")
 
 
 @pytest.fixture

@@ -41,9 +41,7 @@ def _run_remove_fragment(args: argparse.Namespace) -> None:
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))
     json_output = bool(getattr(args, "json_output", False))
-    update_mode = cast(
-        "UpdateMode", getattr(args, "update_mode", "merge")
-    )
+    update_mode = cast("UpdateMode", getattr(args, "update_mode", "merge"))
 
     enabling_options = _options_that_enable(fragment_name, OPTION_REGISTRY)
     if not enabling_options:
@@ -56,8 +54,7 @@ def _run_remove_fragment(args: argparse.Namespace) -> None:
         sys.exit(2)
     if len(enabling_options) > 1:
         toggles = ", ".join(
-            f"{path} (--set {path}={_format_default(opt)})"
-            for path, opt, _val in enabling_options
+            f"{path} (--set {path}={_format_default(opt)})" for path, opt, _val in enabling_options
         )
         msg = (
             f"Fragment {fragment_name!r} is enabled by {len(enabling_options)} "
@@ -132,9 +129,7 @@ def _run_remove_fragment(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
-def _options_that_enable(
-    fragment_name: str, registry: dict
-) -> list[tuple[str, Any, Any]]:
+def _options_that_enable(fragment_name: str, registry: dict) -> list[tuple[str, Any, Any]]:
     """Return ``(path, Option, value_that_enables)`` for every option whose
     ``enables`` map references ``fragment_name``.
 

@@ -61,7 +61,9 @@ class DoctorReport:
 # -- Individual checks --------------------------------------------------------
 
 
-def check_tool_on_path(name: str, *, min_version: str | None = None, kind: str = "tool") -> CheckResult:
+def check_tool_on_path(
+    name: str, *, min_version: str | None = None, kind: str = "tool"
+) -> CheckResult:
     """Check that ``name`` is on PATH. If ``min_version`` is given, verify
     the reported version meets it (string-compare, which is good enough for
     SemVer-ish tools).
@@ -108,9 +110,7 @@ def check_docker_reachable() -> CheckResult:
             fix="Install Docker Desktop or docker-cli.",
         )
     try:
-        proc = subprocess.run(
-            [exe, "info"], capture_output=True, text=True, timeout=5, check=False
-        )
+        proc = subprocess.run([exe, "info"], capture_output=True, text=True, timeout=5, check=False)
     except Exception as e:  # noqa: BLE001
         return CheckResult(
             name="docker:daemon",
@@ -236,10 +236,7 @@ def check_ts_morph_toolchain() -> CheckResult:
                 f"ts-morph helper missing at {_HELPER_PATH} — "
                 "AST injection unavailable, regex fallback in use"
             ),
-            fix=(
-                "Re-install forge from a published wheel; the helper "
-                "ships as package data."
-            ),
+            fix=("Re-install forge from a published wheel; the helper ships as package data."),
         )
 
     node = shutil.which("node")
@@ -294,9 +291,7 @@ def check_ts_morph_toolchain() -> CheckResult:
 
     flag = os.getenv("FORGE_TS_AST", "").strip().lower()
     enabled = flag in ("1", "true", "yes", "on")
-    state = "active (FORGE_TS_AST=1)" if enabled else (
-        "available — set FORGE_TS_AST=1 to opt in"
-    )
+    state = "active (FORGE_TS_AST=1)" if enabled else ("available — set FORGE_TS_AST=1 to opt in")
     return CheckResult(
         name="ts-morph:toolchain",
         status="ok",

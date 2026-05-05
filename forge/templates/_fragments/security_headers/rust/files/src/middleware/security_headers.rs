@@ -39,7 +39,9 @@ pub async fn security_headers_middleware(req: Request<Body>, next: Next) -> Resp
     if is_https {
         headers
             .entry(HeaderName::from_static("strict-transport-security"))
-            .or_insert(HeaderValue::from_static("max-age=31536000; includeSubDomains"));
+            .or_insert(HeaderValue::from_static(
+                "max-age=31536000; includeSubDomains",
+            ));
     }
     response
 }

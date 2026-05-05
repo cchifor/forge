@@ -36,7 +36,10 @@ def _dispatch_new_entity(args) -> None:
         print("error: --new-entity-name is required", file=sys.stderr)
         sys.exit(2)
     if not fields_raw:
-        print("error: --new-entity-fields is required (e.g. 'name:string,qty:integer')", file=sys.stderr)
+        print(
+            "error: --new-entity-fields is required (e.g. 'name:string,qty:integer')",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     try:
@@ -49,7 +52,9 @@ def _dispatch_new_entity(args) -> None:
     domain_dir.mkdir(exist_ok=True)
     target = domain_dir / f"{_snake_case(name)}.yaml"
     if target.exists():
-        print(f"error: {target} already exists. Edit it directly or delete it first.", file=sys.stderr)
+        print(
+            f"error: {target} already exists. Edit it directly or delete it first.", file=sys.stderr
+        )
         sys.exit(2)
 
     target.write_text(body, encoding="utf-8")
@@ -102,9 +107,7 @@ def parse_field_spec(raw: str) -> list[dict]:
             entry = entry[:-1]
         parts = entry.split(":")
         if len(parts) < 2:
-            raise GeneratorError(
-                f"field {entry!r}: expected '<name>:<type>[:<enum>]'"
-            )
+            raise GeneratorError(f"field {entry!r}: expected '<name>:<type>[:<enum>]'")
         name, type_ = parts[0].strip(), parts[1].strip()
         if not name:
             raise GeneratorError(f"field spec missing name in entry {entry!r}")

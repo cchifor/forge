@@ -229,7 +229,11 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
     r = _Resolver(args, cfg)
     project_name = r.get("project_name", "project_name", default="My Platform")
     description = r.get("description", "description", default="A full-stack application")
-    output_dir = args.output_dir
+    # Fall back to the cfg file's ``output_dir`` when args has no value (e.g.
+    # the matrix runner seeds ``output_dir`` via cfg with a synthetic argparse
+    # namespace). The CLI argparse default of ``"."`` keeps the normal path
+    # unchanged.
+    output_dir = r.get("output_dir", "output_dir", default=".")
 
     backends = _build_backends_from_cfg(r, project_name, description)
     frontend, include_auth = _build_frontend_from_cfg(r, project_name, description)

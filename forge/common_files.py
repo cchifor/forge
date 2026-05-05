@@ -59,9 +59,7 @@ def _ci_source_for(bc: BackendConfig) -> Path | None:
     return mapping.get(bc.language)
 
 
-def _copy_if_absent(
-    src: Path, dst: Path, collector: ProvenanceCollector | None
-) -> None:
+def _copy_if_absent(src: Path, dst: Path, collector: ProvenanceCollector | None) -> None:
     if dst.exists():
         return
     if not src.is_file():

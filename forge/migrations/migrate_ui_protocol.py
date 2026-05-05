@@ -55,7 +55,9 @@ def run(project_root: Path, dry_run: bool = False, quiet: bool = False) -> Migra
                 report.changes.append(f"would rename: {path.relative_to(project_root)} -> .legacy")
             else:
                 path.rename(legacy_target)
-                report.changes.append(f"renamed: {path.relative_to(project_root)} -> .legacy ({label})")
+                report.changes.append(
+                    f"renamed: {path.relative_to(project_root)} -> .legacy ({label})"
+                )
 
     report.applied = bool(report.changes) and not dry_run
     if not report.changes:

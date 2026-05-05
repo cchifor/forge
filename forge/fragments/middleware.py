@@ -30,9 +30,7 @@ register_fragment(
                 name="correlation_id",
                 backend=BackendLanguage.PYTHON,
                 order=90,
-                import_snippet=(
-                    "from app.middleware.correlation import CorrelationIdMiddleware"
-                ),
+                import_snippet=("from app.middleware.correlation import CorrelationIdMiddleware"),
                 register_snippet=(
                     "# Correlation ID (outermost — runs first, sets context for all inner middleware)\n"
                     "app.add_middleware(CorrelationIdMiddleware)"

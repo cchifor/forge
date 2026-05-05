@@ -170,9 +170,7 @@ class Fragment:
             # construction time. Tier-1 must cover all built-ins;
             # tier-3 must be Python-only. Tier-2 is the permissive
             # residual and is allowed to label any subset.
-            _validate_explicit_parity_tier(
-                self.name, self.parity_tier, self.implementations
-            )
+            _validate_explicit_parity_tier(self.name, self.parity_tier, self.implementations)
 
 
 def _validate_explicit_parity_tier(

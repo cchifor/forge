@@ -103,15 +103,7 @@ def _emit_ui_protocol(
     for bc in config.backends:
         if bc.language is not BackendLanguage.PYTHON:
             continue
-        target = (
-            project_root
-            / "services"
-            / bc.name
-            / "src"
-            / "app"
-            / "domain"
-            / "ui_protocol.py"
-        )
+        target = project_root / "services" / bc.name / "src" / "app" / "domain" / "ui_protocol.py"
         _write(target, emit_pydantic(schemas), collector)
 
 
@@ -198,14 +190,9 @@ def _emit_shared_enums(
         if layout is None:
             continue
         ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
-        emitter_key = (
-            "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
-        )
+        emitter_key = "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
         path = (
-            project_root
-            / config.frontend_slug
-            / layout.shared_enums_dir
-            / f"{enum_file.stem}{ext}"
+            project_root / config.frontend_slug / layout.shared_enums_dir / f"{enum_file.stem}{ext}"
         )
         _write(path, targets[emitter_key], collector)
 

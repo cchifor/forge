@@ -64,7 +64,7 @@ class QdrantAdapter(VectorStorePort):
     async def delete(self, *, tenant_id: str, ids: list[str]) -> None:
         await self._client.delete(
             collection_name=self._collection(tenant_id),
-            points_selector=ids,  # type: ignore[arg-type]
+            points_selector=ids,  # type: ignore[arg-type]  # ty: ignore[invalid-argument-type]
         )
 
     async def ensure_collection(self, *, tenant_id: str, dim: int) -> None:

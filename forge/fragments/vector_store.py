@@ -18,9 +18,7 @@ register_fragment(
     Fragment(
         name="vector_store_port",
         implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="vector_store_port/python"
-            ),
+            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="vector_store_port/python"),
         },
     )
 )

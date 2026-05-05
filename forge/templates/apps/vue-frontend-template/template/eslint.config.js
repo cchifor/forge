@@ -4,6 +4,19 @@ import tsParser from '@typescript-eslint/parser'
 import vuePlugin from 'eslint-plugin-vue'
 import vueParser from 'vue-eslint-parser'
 
+// eslint-plugin-vue 10.x ships flat configs as ``configs['flat/<name>']``;
+// the legacy ``configs['vue3-recommended']`` namespace was dropped. Pull
+// the recommended rules out of the flat config object so we can spread
+// them into our own block alongside the TS / Vue parser overrides.
+const vueRecommendedRules = (
+  vuePlugin.configs['flat/recommended'] ?? []
+).reduce((acc, entry) => {
+  if (entry && typeof entry === 'object' && entry.rules) {
+    Object.assign(acc, entry.rules)
+  }
+  return acc
+}, {})
+
 export default [
   js.configs.recommended,
   {
@@ -26,7 +39,7 @@ export default [
     },
     plugins: { vue: vuePlugin },
     rules: {
-      ...vuePlugin.configs['vue3-recommended'].rules,
+      ...vueRecommendedRules,
       'vue/multi-word-component-names': 'off',
     },
   },

@@ -29,7 +29,7 @@
       "sha256": "7fce0268a23e0887"
     },
     "forge.toml": {
-      "size": 41577,
+      "size": 41742,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -53,8 +53,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api-node/biome.json": {
-      "size": 250,
-      "sha256": "1f4c61daa8a1c6e1"
+      "size": 296,
+      "sha256": "38ba09d9a964e6d6"
     },
     "services/api-node/config/defaults.yaml": {
       "size": 458,
@@ -149,8 +149,8 @@
       "sha256": "648c5e000d6764c1"
     },
     "services/api-node/src/lib/prisma.ts": {
-      "size": 596,
-      "sha256": "8ac5798ade209426"
+      "size": 599,
+      "sha256": "090fa12890818552"
     },
     "services/api-node/src/middleware/correlation.ts": {
       "size": 394,
@@ -241,8 +241,8 @@
       "sha256": "f0deb6009b673c2f"
     },
     "services/api-node/tests/unit/tenant.test.ts": {
-      "size": 3197,
-      "sha256": "8a6b13b2fe15fdf5"
+      "size": 3530,
+      "sha256": "a4dae923bf2ee957"
     },
     "services/api-node/tests/utils/errors.ts": {
       "size": 1412,
@@ -257,8 +257,8 @@
       "sha256": "7aed9f41bf232c59"
     },
     "services/api-node/vitest.config.ts": {
-      "size": 170,
-      "sha256": "14c3e0b72b4a82ce"
+      "size": 473,
+      "sha256": "0fa0aa4a35095faf"
     },
     "services/api-py/.copier-answers.yml": {
       "size": 450,
@@ -313,8 +313,8 @@
       "sha256": "f5e52961e8a59df3"
     },
     "services/api-py/pyproject.toml": {
-      "size": 2212,
-      "sha256": "800007f2580b636d"
+      "size": 3454,
+      "sha256": "c8ea794e7dd31fe9"
     },
     "services/api-py/README.md": {
       "size": 33689,
@@ -396,6 +396,10 @@
       "size": 4299,
       "sha256": "c091a2ba6a85a277"
     },
+    "services/api-py/src/app/core/container.py": {
+      "size": 907,
+      "sha256": "cb788464f33846c2"
+    },
     "services/api-py/src/app/core/db.py": {
       "size": 1793,
       "sha256": "112704f0cb4111ea"
@@ -405,8 +409,8 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api-py/src/app/core/errors.py": {
-      "size": 11473,
-      "sha256": "965dd88426062327"
+      "size": 11666,
+      "sha256": "3e5c5352d10473ba"
     },
     "services/api-py/src/app/core/ioc/__init__.py": {
       "size": 437,
@@ -469,8 +473,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/domain/base.py": {
-      "size": 320,
-      "sha256": "6d9f0baa22b327ac"
+      "size": 384,
+      "sha256": "c65d6235b6631cea"
     },
     "services/api-py/src/app/domain/enums/approval_mode.py": {
       "size": 312,
@@ -489,12 +493,12 @@
       "sha256": "97481958e01caaf6"
     },
     "services/api-py/src/app/domain/ui_protocol.py": {
-      "size": 2123,
-      "sha256": "ba31916479c1ea6c"
+      "size": 2193,
+      "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api-py/src/app/main.py": {
-      "size": 4117,
-      "sha256": "54cd677ede98353c"
+      "size": 4225,
+      "sha256": "5d9b7fc86ef10ed4"
     },
     "services/api-py/src/app/middleware/__init__.py": {
       "size": 0,
@@ -509,16 +513,16 @@
       "sha256": "3fd729ed9e584c39"
     },
     "services/api-py/src/app/middleware/logging.py": {
-      "size": 4371,
-      "sha256": "77e236bb92beb676"
+      "size": 4820,
+      "sha256": "bd1b3f38852fbdf5"
     },
     "services/api-py/src/app/middleware/rate_limit.py": {
       "size": 2443,
       "sha256": "cf7dd049864a6203"
     },
     "services/api-py/src/app/middleware/security_headers.py": {
-      "size": 1923,
-      "sha256": "1f6de5b47a67894c"
+      "size": 1970,
+      "sha256": "73d6af1b448c85e5"
     },
     "services/api-py/src/app/services/__init__.py": {
       "size": 0,
@@ -637,12 +641,12 @@
       "sha256": "da81df18ed794f0a"
     },
     "services/api-py/src/service/repository/aio.py": {
-      "size": 7169,
-      "sha256": "657cc8be8887729a"
+      "size": 7367,
+      "sha256": "4be148b6246f241c"
     },
     "services/api-py/src/service/repository/base.py": {
-      "size": 4894,
-      "sha256": "a3572735e37a58de"
+      "size": 4961,
+      "sha256": "13dd35b77dc4b786"
     },
     "services/api-py/src/service/repository/errors.py": {
       "size": 1141,
@@ -725,8 +729,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/tests/docker/conftest.py": {
-      "size": 1513,
-      "sha256": "6671c3c38ce38635"
+      "size": 2522,
+      "sha256": "f44f05bee08b4b05"
     },
     "services/api-py/tests/docker/test_health_docker.py": {
       "size": 1207,
@@ -933,8 +937,8 @@
       "sha256": "6fe8ba79195d2bf2"
     },
     "services/api-py/tests/unit/test_task_runner.py": {
-      "size": 6210,
-      "sha256": "b15699b32ffffd98"
+      "size": 6240,
+      "sha256": "41f9d0fdeddd2303"
     },
     "services/api-py/tests/unit/test_task_service.py": {
       "size": 2645,

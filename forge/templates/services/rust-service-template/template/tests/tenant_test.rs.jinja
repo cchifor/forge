@@ -6,9 +6,12 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 /// Helper handler that extracts TenantContext and returns it as JSON.
-async fn echo_tenant(
-    tenant: {{ project_name | replace("-", "_") }}::middleware::tenant::TenantContext,
-) -> Json<serde_json::Value> {
+/// ``#[rustfmt::skip]`` here because the project_slug substitution makes
+/// the signature length non-deterministic — short slugs fit on a single
+/// line, longer ones overflow ``line_length=100`` and rustfmt wraps to
+/// multi-line. Skipping keeps the template stable across slug widths.
+#[rustfmt::skip]
+async fn echo_tenant(tenant: {{ project_name | replace("-", "_") }}::middleware::tenant::TenantContext) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "user_id": tenant.user_id.to_string(),
         "email": tenant.email,
@@ -27,7 +30,10 @@ async fn tenant_extractor_parses_gatekeeper_headers() {
 
     let request = Request::builder()
         .uri("/test")
-        .header("x-gatekeeper-user-id", "550e8400-e29b-41d4-a716-446655440001")
+        .header(
+            "x-gatekeeper-user-id",
+            "550e8400-e29b-41d4-a716-446655440001",
+        )
         .header("x-gatekeeper-email", "user@example.com")
         .header("x-gatekeeper-roles", "admin,user")
         .body(Body::empty())
@@ -50,7 +56,10 @@ async fn tenant_extractor_uses_x_customer_id_for_s2s() {
 
     let request = Request::builder()
         .uri("/test")
-        .header("x-gatekeeper-user-id", "550e8400-e29b-41d4-a716-446655440001")
+        .header(
+            "x-gatekeeper-user-id",
+            "550e8400-e29b-41d4-a716-446655440001",
+        )
         .header("x-gatekeeper-email", "svc@internal")
         .header("x-customer-id", "550e8400-e29b-41d4-a716-446655440099")
         .body(Body::empty())
@@ -71,10 +80,7 @@ async fn tenant_extractor_uses_x_customer_id_for_s2s() {
 async fn tenant_extractor_returns_401_without_headers() {
     let app = build_tenant_router();
 
-    let request = Request::builder()
-        .uri("/test")
-        .body(Body::empty())
-        .unwrap();
+    let request = Request::builder().uri("/test").body(Body::empty()).unwrap();
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -100,7 +106,10 @@ async fn tenant_extractor_handles_empty_roles() {
 
     let request = Request::builder()
         .uri("/test")
-        .header("x-gatekeeper-user-id", "550e8400-e29b-41d4-a716-446655440001")
+        .header(
+            "x-gatekeeper-user-id",
+            "550e8400-e29b-41d4-a716-446655440001",
+        )
         .header("x-gatekeeper-roles", "")
         .body(Body::empty())
         .unwrap();

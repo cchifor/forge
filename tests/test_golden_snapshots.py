@@ -71,11 +71,20 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
         rel = p.relative_to(project_root).as_posix()
         # Generator noise at any depth — not part of the shape we want to
         # regression-test:
-        #   .git/        — frontend templates run their own git init,
-        #                  producing non-deterministic object SHAs.
-        #   __pycache__/ — frontend post-generate scripts are Python;
-        #                  running them bytes-compiles their modules.
-        #   .pyc files   — as above.
+        #   .git/         — frontend templates run their own git init,
+        #                   producing non-deterministic object SHAs.
+        #   __pycache__/  — frontend post-generate scripts are Python;
+        #                   running them bytes-compiles their modules.
+        #   .pyc files    — as above.
+        #   node_modules/ — frontend post-generate runs ``npm install``
+        #                   when Node is on PATH; the resolved dependency
+        #                   tree depends on the registry's HEAD at run time
+        #                   (esbuild platform binaries, mswjs interceptors,
+        #                   playwright-core artifacts, etc.) and would
+        #                   otherwise drift the snapshot on every CI run.
+        # Skip lockfiles, OS-specific build artefacts, and codegen output
+        # whose presence/content depends on which post-generate steps the
+        # generator's host happened to run (Linux CI vs Windows dev box).
         if (
             rel == ".git"
             or rel.startswith(".git/")
@@ -83,6 +92,18 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
             or "/__pycache__/" in rel
             or rel.startswith("__pycache__/")
             or rel.endswith(".pyc")
+            or "/node_modules/" in rel
+            or rel.startswith("node_modules/")
+            or rel.endswith("/package-lock.json")
+            or rel == "package-lock.json"
+            # Vue auto-import declarations are produced at first ``npm run dev``
+            # / ``vue-tsc`` only; whether they exist on the snapshot host
+            # depends on Node availability.
+            or rel.endswith("/auto-imports.d.ts")
+            or rel == "auto-imports.d.ts"
+            # OpenAPI generated client (``hey-api/openapi-ts``) — produced
+            # only when ``npm run codegen`` ran in post-generate.
+            or "/api/generated/" in rel
         ):
             continue
         data = p.read_bytes().replace(b"\r\n", b"\n")

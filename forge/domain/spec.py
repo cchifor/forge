@@ -124,9 +124,7 @@ def load_entity_yaml(path: Path) -> EntitySpec:
 
     plural = raw.get("plural")
     if not isinstance(plural, str) or not re.match(r"^[a-z][a-z0-9_]*$", plural):
-        raise GeneratorError(
-            f"{path}: `plural` must be a snake_case identifier (got {plural!r})"
-        )
+        raise GeneratorError(f"{path}: `plural` must be a snake_case identifier (got {plural!r})")
 
     description = str(raw.get("description") or "")
 
@@ -175,7 +173,9 @@ def _load_field(path: Path, entry: Any) -> EntityField:
     if ftype is FieldType.ARRAY and not entry.get("of"):
         raise GeneratorError(f"{path}: field {name!r} is type=array but missing `of: <type>`")
     if ftype is FieldType.RELATION and not entry.get("target"):
-        raise GeneratorError(f"{path}: field {name!r} is type=relation but missing `target: <Entity>`")
+        raise GeneratorError(
+            f"{path}: field {name!r} is type=relation but missing `target: <Entity>`"
+        )
 
     return EntityField(
         name=name,

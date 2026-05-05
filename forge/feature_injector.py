@@ -256,9 +256,7 @@ def apply_project_features(
                 # Project-scope fragments typically don't declare middlewares
                 # (they emit project-level files like AGENTS.md). Pass the
                 # tuple anyway so the pipeline API stays uniform.
-                _apply_fragment(
-                    ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
-                )
+                _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
                 break
 
 
@@ -457,18 +455,14 @@ def _apply_zoned_injection(
         return False
 
     if inj.zone == "merge" and project_root is not None:
-        return _apply_merge_zone(
-            target, inj, project_root=project_root, collector=collector
-        )
+        return _apply_merge_zone(target, inj, project_root=project_root, collector=collector)
 
     _dispatch_injector(target, inj)
     # For merge-zone on first apply (no baseline), record the block so
     # the next re-apply can three-way-merge. This also covers the
     # project_root-is-None fallback path when merge can't run.
     if inj.zone == "merge" and collector is not None and project_root is not None:
-        _record_merge_baseline(
-            target, inj, project_root=project_root, collector=collector
-        )
+        _record_merge_baseline(target, inj, project_root=project_root, collector=collector)
     return True
 
 
@@ -495,9 +489,7 @@ def _apply_merge_zone(
         # record the baseline.
         _dispatch_injector(target, inj)
         if collector is not None:
-            _record_merge_baseline(
-                target, inj, project_root=project_root, collector=collector
-            )
+            _record_merge_baseline(target, inj, project_root=project_root, collector=collector)
         return True
 
     current_body = _read_block_body(target, inj.feature_key, inj.marker) or ""
@@ -512,9 +504,7 @@ def _apply_merge_zone(
     if decision in ("no-baseline", "applied"):
         _dispatch_injector(target, inj)
         if collector is not None:
-            _record_merge_baseline(
-                target, inj, project_root=project_root, collector=collector
-            )
+            _record_merge_baseline(target, inj, project_root=project_root, collector=collector)
         return True
 
     if decision in ("skipped-no-change", "skipped-idempotent"):

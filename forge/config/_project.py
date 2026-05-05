@@ -169,9 +169,7 @@ class ProjectConfig:
         surface with the existing close-match hint first.
         """
         mode = self.backend_mode
-        has_frontend = bool(
-            self.frontend and self.frontend.framework != FrontendFramework.NONE
-        )
+        has_frontend = bool(self.frontend and self.frontend.framework != FrontendFramework.NONE)
         if mode == "none" and self.backends:
             raise ValueError(
                 f"backend.mode=none is incompatible with {len(self.backends)} "
@@ -204,16 +202,21 @@ class ProjectConfig:
         ``frontend.api_target.url`` to be non-empty.
         """
         mode = self.frontend_mode
-        framework_is_none = (
-            self.frontend is None
-            or self.frontend.framework == FrontendFramework.NONE
-        )
-        if mode == "none" and not framework_is_none:
+        # Inline the narrowing rather than caching `framework_is_none` so ty
+        # can see ``self.frontend is not None`` on the contradiction branch.
+        if (
+            mode == "none"
+            and self.frontend is not None
+            and self.frontend.framework != FrontendFramework.NONE
+        ):
             raise ValueError(
-                f"frontend.mode=none contradicts frontend.framework="
+                "frontend.mode=none contradicts frontend.framework="
                 f"{self.frontend.framework.value!r}. Either remove the "
                 "frontend config or set frontend.mode=generate."
             )
+        framework_is_none = (
+            self.frontend is None or self.frontend.framework == FrontendFramework.NONE
+        )
         if mode != "none" and framework_is_none and mode != "generate":
             # mode="external" with framework=NONE is nonsensical — there's
             # no app being generated to point at the external URL.

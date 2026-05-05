@@ -142,8 +142,6 @@ def _walk_files(root: Path):
             yield from _walk_files(entry)
         elif entry.is_file():
             # Skip the sidecars themselves — they're transient state.
-            if entry.name.endswith(".forge-merge") or entry.name.endswith(
-                ".forge-merge.bin"
-            ):
+            if entry.name.endswith(".forge-merge") or entry.name.endswith(".forge-merge.bin"):
                 continue
             yield entry

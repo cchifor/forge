@@ -6,12 +6,22 @@
   position: after
   zone: generated
   snippet: |-
-    # Vector-store adapter: Qdrant
-    from app.adapters.vector_store.qdrant import QdrantAdapter
-    from app.core.config import settings as _settings
+    # Vector-store adapter: Qdrant — accessor (lazy singleton). Init
+    # opens an async client; deferring it to first call keeps imports
+    # cheap and lets dev boxes without a running qdrant load the module.
+    import os as _qdrant_os
 
-    _qdrant_adapter = QdrantAdapter(
-        url=_settings.qdrant_url,
-        api_key=_settings.qdrant_api_key,
-        collection_prefix=_settings.qdrant_collection,
-    )
+    from app.adapters.vector_store.qdrant import QdrantAdapter as _QdrantAdapter
+
+    _qdrant_adapter: _QdrantAdapter | None = None
+
+
+    def get_qdrant_adapter() -> _QdrantAdapter:
+        global _qdrant_adapter
+        if _qdrant_adapter is None:
+            _qdrant_adapter = _QdrantAdapter(
+                url=_qdrant_os.environ.get("QDRANT_URL", "http://localhost:6333"),
+                api_key=_qdrant_os.environ.get("QDRANT_API_KEY"),
+                collection_prefix=_qdrant_os.environ.get("QDRANT_COLLECTION", "default"),
+            )
+        return _qdrant_adapter

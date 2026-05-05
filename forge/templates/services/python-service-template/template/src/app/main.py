@@ -6,6 +6,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.v1.api import api_router as api_v1_router
+from app.core import container as _container  # noqa: F401  (side-effect: fragment-injected adapter wiring)
 from app.core.config import Settings, settings
 from app.core.errors import (
     ApplicationError,

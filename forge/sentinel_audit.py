@@ -109,9 +109,7 @@ def audit_file(file: Path) -> list[SentinelIssue]:
             else:
                 seen_ends.add(tag)
             # Is there an open BEGIN for this tag?
-            match_idx = next(
-                (i for i, (t, _) in enumerate(open_stack) if t == tag), None
-            )
+            match_idx = next((i for i, (t, _) in enumerate(open_stack) if t == tag), None)
             if match_idx is None:
                 # END without a preceding BEGIN
                 if tag not in seen_begins:
