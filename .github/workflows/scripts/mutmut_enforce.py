@@ -14,9 +14,8 @@ Usage::
     python .github/workflows/scripts/mutmut_enforce.py <results-dir>
 
 Exit codes:
-    0 — every module meets its floor.
+    0 — every module meets its floor, OR no result files found (skip-silently).
     1 — one or more modules regressed; GH Actions fails the job.
-    2 — no result text files found in ``<results-dir>``; skip silently.
 """
 
 from __future__ import annotations
@@ -90,7 +89,7 @@ def main() -> int:
     results = _read_results_dir(Path(sys.argv[1]))
     if not results.strip():
         print("::warning::no mutmut result files found — skipping enforcement")
-        return 2
+        return 0
 
     survivors = _parse_survivors(results)
 

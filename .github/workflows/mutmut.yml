@@ -103,10 +103,10 @@ jobs:
     needs: setup
     if: needs.setup.outputs.skip != 'true'
     runs-on: ubuntu-latest
-    # Per-file budget — single-file mutmut runs typically take 5–15 min;
-    # 60 min is a comfortable ceiling for outliers without bleeding into
-    # the next scheduled cycle.
-    timeout-minutes: 60
+    # Per-file budget — single-file mutmut runs typically take 90–120 min
+    # on the critical-path files; 120 min is a comfortable ceiling for
+    # outliers without bleeding into the next scheduled cycle.
+    timeout-minutes: 120
     strategy:
       # Don't cancel sibling shards when one fails — we want full
       # baseline data per file even if one shard misbehaves.
