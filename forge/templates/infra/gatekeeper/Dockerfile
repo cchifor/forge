@@ -34,18 +34,25 @@ RUN pip install -U pdm
 
 WORKDIR /project
 
-# OPTIMIZATION: Copy dependency definitions FIRST
-COPY pyproject.toml pdm.lock README.md /project/
+# OPTIMIZATION: Copy dependency definitions FIRST.
+# ``pdm.lock*`` is a glob — present means pinned/reproducible install,
+# absent means PDM will resolve from pyproject.toml (slower, but the
+# build still succeeds). Same for ``README.md*`` since some pyproject
+# tooling references it but it isn't strictly required at install time.
+COPY pyproject.toml pdm.lock* README.md* /project/
 
-# OPTIMIZATION: Install dependencies ONLY (no source code yet)
-RUN pdm install --check --prod --no-editable --no-self
+# OPTIMIZATION: Install dependencies ONLY (no source code yet).
+# ``--check`` is intentionally OMITTED: it requires an up-to-date lock,
+# which we can't guarantee from a freshly-rendered project tree. PDM
+# will refresh the lock in-place if pyproject.toml drifted.
+RUN pdm install --prod --no-editable --no-self
 
 # Copy the actual source code and config
 COPY src/ /project/src
 COPY config/ /project/config
 
-# Install the project itself (src) into the venv
-RUN pdm install --check --prod --no-editable
+# ``distribution = false`` in pyproject.toml means there's no project
+# wheel to install — the dependency-only install above is sufficient.
 
 # ==========================================
 # Run Stage
