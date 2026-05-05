@@ -88,14 +88,19 @@ jobs:
         if: steps.paths.outputs.skip != 'true'
         run: |
           set -euo pipefail
+          # ``uvx mutmut`` per the comment on ``[tool.mutmut]`` in
+          # pyproject.toml — mutmut is intentionally NOT in dev-deps so
+          # the analysis tool stays out of the regular dependency
+          # surface. Pin to 2.x while ``tests/mutmut_baselines.json`` is
+          # keyed against 2.x mutation IDs (3.x renumbers them).
           # One file per mutmut invocation so we can map results back
           # to the baselines table by module name.
           while IFS= read -r file; do
             [ -n "$file" ] || continue
             echo "::group::mutmut run on $file"
-            uv run mutmut run --paths-to-mutate "$file" || true
+            uvx mutmut@2.5.0 run --paths-to-mutate "$file" || true
             # Capture results.
-            uv run mutmut results > "mutmut-results-${file//\//_}.txt" || true
+            uvx mutmut@2.5.0 results > "mutmut-results-${file//\//_}.txt" || true
             echo "::endgroup::"
           done <<< "${{ steps.paths.outputs.paths }}"
 

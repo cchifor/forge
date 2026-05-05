@@ -1,4 +1,4 @@
-.PHONY: install-dev test test-fast test-serial test-cov lint format typecheck check e2e fuzz \
+.PHONY: install-dev test test-fast test-serial test-cov lint format format-check typecheck check e2e fuzz \
         snapshots validate-matrix validate-matrix-quick validate-matrix-scenario \
         validate-matrix-list validate-matrix-e2e
 
@@ -41,10 +41,15 @@ lint:
 format:
 	uv run ruff format forge/
 
+# Mirrors push-CI's ``ruff format --check`` step. Catches format drift
+# locally before push so ``make check`` ≡ what CI gates on.
+format-check:
+	uv run ruff format --check forge/
+
 typecheck:
 	uv run ty check forge/
 
-check: lint typecheck test
+check: lint format-check typecheck test
 
 e2e:
 	uv run pytest -m e2e -v
