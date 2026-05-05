@@ -40,7 +40,11 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'breaking-change')
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Scheduled / manual runs mutate the full critical-path set (~6 files,
+    # observed at >60min on ubuntu-latest); PR runs only mutate the
+    # changed files (typically ≤2). Pick the budget per event so PR-mode
+    # stays snappy while scheduled mode actually completes.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 180 || 60 }}
     steps:
       - uses: actions/checkout@v4
         with:
