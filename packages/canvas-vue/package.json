@@ -32,7 +32,8 @@
     "@ag-ui/client": "^0.0.51",
     "@ag-ui/core": "^0.0.51",
     "marked": "^15.0.0",
-    "dompurify": "^3.2.0"
+    "dompurify": "^3.2.0",
+    "highlight.js": "^11.10.0"
   },
   "devDependencies": {
     "vue": "^3.5.0",
@@ -40,7 +41,9 @@
     "vite": "^6.3.0",
     "vitest": "^2.1.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@vitejs/plugin-vue": "^5.2.0",
+    "vite-plugin-dts": "^4.5.0"
   },
   "publishConfig": {
     "access": "public"

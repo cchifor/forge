@@ -61,7 +61,7 @@ const layout = computed(() => {
   }
 
   const positions = new Map<string, { x: number; y: number }>()
-  const maxCols = Math.max(...byDepth.values().map((a) => a.length), 1)
+  const maxCols = Math.max(...Array.from(byDepth.values()).map((a: string[]) => a.length), 1)
   for (const [d, ids] of byDepth) {
     const rowW = ids.length * NODE_W + (ids.length - 1) * H_GAP
     const startX = ((maxCols * NODE_W + (maxCols - 1) * H_GAP) - rowW) / 2

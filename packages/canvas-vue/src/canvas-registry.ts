@@ -10,7 +10,7 @@ import type { Component } from 'vue'
 
 import { lintProps, warnOnLintIssues } from './lint'
 
-export interface CanvasComponent<Props = Record<string, unknown>> {
+export interface CanvasComponent<_Props = Record<string, unknown>> {
   name: string
   component: Component
   /** Optional JSON Schema for the props — enables runtime lint in dev. */
