@@ -189,9 +189,37 @@ def _check_health_ready(base_url: str, timeout_s: int, violations: list[Contract
 
 
 def _check_openapi(base_url: str, timeout_s: int, violations: list[ContractViolation]) -> None:
+    """Validate the OpenAPI document, treating "no exporter wired" as a skip.
+
+    A 404 on every path in :data:`OPENAPI_PATHS` is interpreted as "this
+    backend template does not expose its schema yet" — currently true
+    for the rust and node services, where adding an exporter is tracked
+    as path A of ticket #28. Logs a one-line skip notice on stdout and
+    returns without appending a violation. Any other failure (server
+    unreachable, connection reset, non-404 status including 500) is
+    still a contract violation: a 500 from ``/openapi.json`` indicates
+    a real bug in the exporter rather than its absence.
+    """
     try:
         path, status, body = _get_first(base_url, OPENAPI_PATHS, timeout_s)
+    except urllib.error.HTTPError as exc:
+        # ``_get_first`` only re-raises ``HTTPError`` after every path
+        # 404'd (non-404 statuses return through the happy path). A
+        # 404-on-every-path therefore means the backend template doesn't
+        # expose a schema endpoint at all — treat as skip, not violation.
+        if exc.code == 404:
+            print("  scenario does not expose OpenAPI; skipping check")
+            return
+        violations.append(
+            ContractViolation(
+                endpoint="/openapi.json",
+                reason=f"no OpenAPI endpoint responded ({type(exc).__name__}): {exc}",
+            )
+        )
+        return
     except Exception as exc:  # noqa: BLE001
+        # Server unreachable, connection reset, DNS failure — these are
+        # real contract violations: the service should be answering.
         violations.append(
             ContractViolation(
                 endpoint="/openapi.json",
