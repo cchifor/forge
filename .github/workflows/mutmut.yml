@@ -131,6 +131,11 @@ jobs:
           path: .coverage
           retention-days: 1
           if-no-files-found: warn
+          # ``.coverage`` is a hidden file (leading dot); upload-artifact
+          # v4 defaults to skipping hidden files. Without this the
+          # artifact uploads empty and every mutate shard's download
+          # fails with "Artifact not found for name: mutmut-coverage".
+          include-hidden-files: true
 
   mutate:
     needs: setup
@@ -163,6 +168,12 @@ jobs:
 
       - name: Download coverage data (nightly only)
         if: needs.setup.outputs.mode == 'nightly'
+        # If the setup upload warned (no .coverage produced), the
+        # download will 404. That's fine — the next step gates
+        # ``--use-coverage`` on ``[ -f .coverage ]``, so a missing
+        # artifact just means the shard runs without the coverage
+        # speedup rather than failing.
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: mutmut-coverage
