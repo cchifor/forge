@@ -24,6 +24,10 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist/
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma/
+# Copy the runtime config dir so loadConfig() finds defaults.yaml /
+# <env>.yaml on boot. Without this, Zod validation throws on the
+# required `db.url` field and the container exits(1) before listen.
+COPY config ./config/
 
 ENV NODE_ENV=production
 EXPOSE {{ server_port }}

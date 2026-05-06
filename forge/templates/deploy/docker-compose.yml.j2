@@ -45,8 +45,17 @@ services:
 {% endif %}
 {% elif be.language == "node" %}
       NODE_ENV: development
-      PORT: "{{ be.port }}"
+      # The Node config loader reads ``APP__SERVER__PORT`` (RFC-008
+      # prefix); plain ``PORT`` is a Node-ecosystem convention but isn't
+      # wired into our schema, so the listener would otherwise bind to
+      # the schema default (5000) and the host:container port mapping
+      # above would land on a closed port inside the container.
+      APP__SERVER__PORT: "{{ be.port }}"
 {% if database_mode != "none" %}
+      # ``APP__DB__URL`` is consumed by the Zod schema; ``DATABASE_URL``
+      # is what Prisma reads. Both must point at the in-network postgres
+      # host or boot will fail (Zod) / migrations will misroute (Prisma).
+      APP__DB__URL: "postgresql://postgres:postgres@postgres:5432/{{ be.db_name }}"
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ be.db_name }}"
 {% endif %}
 {% elif be.language == "rust" %}
