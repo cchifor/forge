@@ -1,7 +1,7 @@
 """Add RAG chunk table + pgvector extension + HNSW index.
 
-Revision ID: 0004
-Revises: 0003
+Revision ID: 0003
+Revises: 0002
 Create Date: 2026-04-18
 """
 
@@ -11,8 +11,15 @@ import sqlalchemy as sa
 from alembic import op
 from pgvector.sqlalchemy import Vector
 
-revision: str = "0004"
-down_revision: Union[str, None] = "0003"
+# Chain after ``conversation_persistence``'s 0002 — the only fragment
+# this one declares as a dependency. The previous ``down_revision = "0003"``
+# pointed at ``file_upload``'s migration, which only renders when
+# ``chat.attachments`` is enabled; scenarios that opt into RAG without
+# attachments (e.g., ``py_vue_full``) hit ``KeyError: '0003'`` at
+# ``alembic upgrade head`` and the api-migrate container exits 1
+# before the api ever boots.
+revision: str = "0003"
+down_revision: Union[str, None] = "0002"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
