@@ -102,8 +102,15 @@ services:
 
 {% if render_postgres %}
   # ── Database ──
+  # ``pgvector/pgvector:pg16`` is a superset of stock ``postgres:16``
+  # with the ``pgvector`` extension preinstalled. The ``rag_pipeline``
+  # fragment's ``CREATE EXTENSION IF NOT EXISTS vector`` migration
+  # would otherwise fail at ``alembic upgrade head`` for any scenario
+  # that enables RAG (chroma backend included — the migration runs
+  # regardless of the configured vector store; see RFC notes).
+  # Non-RAG scenarios pay a negligible ~30 MB image-size delta.
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     ports:
       - "15432:5432"
     environment:
