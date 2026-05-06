@@ -25,8 +25,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 5277,
-      "sha256": "e4aa309e93f2a4f6"
+      "size": 5755,
+      "sha256": "b6224290f86245ce"
     },
     "forge.toml": {
       "size": 41742,
@@ -41,7 +41,7 @@
       "sha256": "72fe8243235d907b"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 491,
+      "size": 449,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -261,7 +261,7 @@
       "sha256": "0fa0aa4a35095faf"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 492,
+      "size": 450,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {

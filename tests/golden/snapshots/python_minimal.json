@@ -25,8 +25,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 2805,
-      "sha256": "5247290c30baa991"
+      "size": 3283,
+      "sha256": "ff98dec41184122d"
     },
     "forge.toml": {
       "size": 31856,
@@ -37,7 +37,7 @@
       "sha256": "045bea9db1cb85bd"
     },
     "services/api/.copier-answers.yml": {
-      "size": 486,
+      "size": 444,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
