@@ -8,7 +8,7 @@
 [![python](https://img.shields.io/badge/python-%3E%3D3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge)
-[![tests](https://img.shields.io/badge/tests-1353%20passed-brightgreen?style=flat-square)](https://github.com/cchifor/forge/actions)
+[![ci](https://img.shields.io/github/actions/workflow/status/cchifor/forge/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/cchifor/forge/actions/workflows/ci.yml)
 [![backends](https://img.shields.io/badge/backends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![frontends](https://img.shields.io/badge/frontends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![options](https://img.shields.io/badge/options-38-informational?style=flat-square)](docs/FEATURES.md)
@@ -16,9 +16,9 @@
 
 </div>
 
-> **1.1.0-alpha.2 is on `main`.** File-level three-way merge for `forge --update` (default `--mode merge`, with `.forge-merge` sidecars on conflict), declarative `compose.yaml` snippets in fragments, plugin SDK with a dedicated end-to-end CI gate (`.github/workflows/plugin-e2e.yml`), and six new CLI verbs (`--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph` for Mermaid plan output, `--log-json`, `--log-level`). The 1.0.x core remains: schema-first UI protocol JSON Schemas + entity YAML DSL, provenance manifest, entry-point plugin SDK, LibCST Python AST injection, three-zone merge for injection blocks, reliability / observability / security fragments, published canvas packages (Vue / Svelte / Dart), and the introspection verbs (`--doctor`, `--plan`, `--dry-run`, `--preview`, `--canvas lint`, `--plugins list`, `--migrate`, `--new-entity-name`, `--add-backend-language`). See [`CHANGELOG.md`](CHANGELOG.md), [`RELEASING.md`](RELEASING.md), [`UPGRADING.md`](UPGRADING.md), and the [RFCs](docs/rfcs/).
+> **`main` is post-1.1.0-alpha.2.** Latest unreleased work: built-in features colocated under `forge/features/<ns>/` (Wave A–C of the features-reorganization refactor), so authoring a built-in feature now uses the same on-disk layout third-party plugins use. 1.1.0-alpha.2 itself shipped file-level three-way merge for `forge --update` (default `--mode merge`, `.forge-merge` sidecars on conflict), declarative `compose.yaml` fragment snippets, the plugin-SDK e2e gate (`.github/workflows/plugin-e2e.yml`), and six new CLI verbs (`--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph`, `--log-json`, `--log-level`). The 1.0.x core remains intact (schema-first UI protocol, provenance manifest, plugin SDK, LibCST/ts-morph AST injection, three-zone merge, published canvas packages). See [`CHANGELOG.md`](CHANGELOG.md) for the full delta, [`UPGRADING.md`](UPGRADING.md) for migration notes, and the [RFCs](docs/rfcs/) for design context.
 
-`forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed 22-option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
+`forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
 
 ---
 
@@ -63,7 +63,7 @@ flowchart LR
     Project ==>|docker compose up| Proj
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/plugin-development.md`](docs/plugin-development.md)).
 
 ---
 
@@ -151,6 +151,8 @@ Three commands. Zero assumptions about prior toolchain install — the installer
    ```
 
 Your services now answer on `http://app.localhost`, Keycloak on `http://localhost:18080`, and the [Traefik](https://traefik.io/) dashboard on `http://localhost:19090`. Everything is wired.
+
+Stuck on install or generation? See [`docs/troubleshooting.md`](docs/troubleshooting.md) for common gotchas with copy-paste fixes, or run `forge --doctor` to introspect the live environment.
 
 ---
 
@@ -451,6 +453,32 @@ my_platform/
 └── README.md
 ```
 
+Each generated project ships its own test suites — backend unit tests via `uv run pytest` (Python), `pnpm test` (Node), or `cargo test` (Rust); frontend unit tests via `pnpm test` (Vue / Svelte) or `flutter test`; and the Playwright e2e suite via `docker compose run --rm e2e npx playwright test`. They're wired by default; no extra setup once `docker compose up` succeeds.
+
+### Using a third-party plugin
+
+Plugins extend forge with new options, fragments, backends, or frontends — same shape as the built-ins. Install one alongside forge and it's discovered automatically through the `forge.plugins` entry-point group:
+
+```bash forge-plugin-install
+uv tool install --with forge-plugin-foo forge
+forge --plugins list
+# Loaded plugins (1):
+#   * foo v0.1.0  (forge_plugin_foo:register)
+#       adds: 1 option(s), 1 fragment(s)
+```
+
+The plugin's options now show up in `forge --list` / `--describe` / `--schema` and are settable via `--set` or `options:` in your YAML config exactly like built-ins. See [`docs/plugin-development.md`](docs/plugin-development.md) and [`examples/forge-plugin-example/`](examples/forge-plugin-example/) to author one.
+
+### Upgrading forge itself
+
+Forge ships as a `uv` tool, so `uv tool upgrade` is the canonical path:
+
+```bash forge-tool-upgrade
+uv tool upgrade forge
+```
+
+Existing generated projects are unaffected until you opt in via `forge --update` (next section). The forge version that originally generated each project is recorded in `forge.toml`, so a future `forge --update` knows which migrations to run.
+
 ### Regenerating later (including new features)
 
 forge stamps every generated project with `forge.toml` (forge version, per-template paths, fully-resolved `[forge.options]` map, per-file `[forge.provenance]` SHA baselines, per-block `[forge.merge_blocks]` records) and writes a `.copier-answers.yml` inside every rendered subtree — enough to reconstruct the original generation intent. Upgrading an existing project is one command:
@@ -478,6 +506,30 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 
 ---
 
+## Documentation
+
+| Topic | File |
+|---|---|
+| 10-minute tour from install to running stack | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
+| Per-feature reference + parity matrix | [`docs/FEATURES.md`](docs/FEATURES.md) |
+| Internal architecture (registries, injectors, codegen, provenance) | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Authoring a third-party plugin | [`docs/plugin-development.md`](docs/plugin-development.md) |
+| Adding a backend language | [`docs/adding-a-backend.md`](docs/adding-a-backend.md) |
+| Adding a frontend framework | [`docs/adding-a-frontend.md`](docs/adding-a-frontend.md) |
+| Common install / update gotchas | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
+| Tracked limitations + workarounds | [`docs/known-issues.md`](docs/known-issues.md) |
+| MCP support | [`docs/mcp.md`](docs/mcp.md) |
+| Testing generated backends | [`docs/testing-generated-backends.md`](docs/testing-generated-backends.md) |
+| Windows-specific dev notes | [`docs/WINDOWS_DEV.md`](docs/WINDOWS_DEV.md) |
+| Maintainer onboarding (deeper internals) | [`docs/MAINTAINER_ONBOARDING.md`](docs/MAINTAINER_ONBOARDING.md) |
+| Plugin SDK changelog | [`docs/SDK_CHANGELOG.md`](docs/SDK_CHANGELOG.md) |
+| Coverage policy + per-module floors | [`docs/coverage-policy.md`](docs/coverage-policy.md) |
+| Tier 1/2/3 backend parity status | [`docs/matrix-status.md`](docs/matrix-status.md) |
+
+ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/architecture-decisions/); RFCs under [`docs/rfcs/`](docs/rfcs/).
+
+---
+
 ## Support
 
 - **Issue tracker:** [github.com/cchifor/forge/issues](https://github.com/cchifor/forge/issues) — bug reports, feature requests, roadmap suggestions.
@@ -485,7 +537,7 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 - **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md) — common install / generation / update / packaging gotchas with step-by-step fixes.
 - **Known issues:** [`docs/known-issues.md`](docs/known-issues.md) — tracked limitations with workarounds.
 - **Changelog:** release-to-release deltas live in [`CHANGELOG.md`](CHANGELOG.md).
-- **Security reports:** please email the maintainer before opening a public issue.
+- **Security reports:** please open a private advisory via [GitHub Security Advisories](https://github.com/cchifor/forge/security/advisories/new) — don't file vulnerabilities as public issues.
 
 ---
 
