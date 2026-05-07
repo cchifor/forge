@@ -15,11 +15,16 @@ import pytest
 
 
 def _load_audit_module():
+    # mcp_server moved under forge.features.platform in the
+    # features-reorganization refactor. The on-disk layout is the same,
+    # just rooted at forge/features/platform/templates/ instead of
+    # forge/templates/_fragments/.
     path = (
         Path(__file__).resolve().parent.parent
         / "forge"
+        / "features"
+        / "platform"
         / "templates"
-        / "_fragments"
         / "mcp_server"
         / "python"
         / "files"

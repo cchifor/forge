@@ -16,12 +16,18 @@ import pytest
 
 
 def _load_mcp_client_module():
-    """Import the template's client.py directly — it's not on sys.path."""
+    """Import the template's client.py directly — it's not on sys.path.
+
+    mcp_server moved under forge.features.platform in the
+    features-reorganization refactor. The on-disk layout is unchanged
+    below the fragment root.
+    """
     client_path = (
         Path(__file__).resolve().parent.parent
         / "forge"
+        / "features"
+        / "platform"
         / "templates"
-        / "_fragments"
         / "mcp_server"
         / "python"
         / "files"

@@ -36,11 +36,9 @@ from __future__ import annotations
 # enables → fragment graph after every plugin has had its turn.
 from forge.options import (  # noqa: F401, E402
     agent,
-    async_work,
     chat,
     conversation,
     layers,
-    platform_ops,
     rag,
 )
 from forge.options._registry import (

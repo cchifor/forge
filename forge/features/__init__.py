@@ -20,7 +20,11 @@ import-complete first; ``forge/__init__.py`` enforces that ordering.
 from __future__ import annotations
 
 from forge.features import (  # noqa: F401, E402
+    async_work,
     middleware,
+    object_store,
     observability,
+    platform,
     reliability,
+    security,
 )
