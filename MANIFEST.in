@@ -1,6 +1,11 @@
 # Include every shipped template file under forge/templates/ …
 recursive-include forge/templates *
 
+# Built-in feature subpackages colocate template trees alongside their
+# Python registration modules (forge/features/<name>/templates/). Same
+# convention third-party plugins use; same exclusion rules apply.
+recursive-include forge/features *
+
 # … except ephemeral caches + build output that occasionally end up in the
 # working tree and would otherwise leak into the sdist/wheel. Epic DD's
 # tests/test_package_integrity.py enforces the same exclusion list against
@@ -17,4 +22,8 @@ recursive-exclude forge/templates */.svelte-kit/*
 recursive-exclude forge/templates */dist/*
 recursive-exclude forge/templates */build/*
 recursive-exclude forge/templates */.dart_tool/*
+recursive-exclude forge/features */__pycache__/*
+recursive-exclude forge/features */.mypy_cache/*
+recursive-exclude forge/features */.ruff_cache/*
+recursive-exclude forge/features */.pytest_cache/*
 global-exclude *.pyc *.pyo .DS_Store

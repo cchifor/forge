@@ -55,8 +55,11 @@ SENTINEL_TEMPLATE_FILES: tuple[str, ...] = (
     "forge/templates/apps/flutter-frontend-template/{{project_slug}}/pubspec.yaml",
     # docker-compose template
     "forge/templates/deploy/docker-compose.yml.j2",
-    # A cross-cutting fragment — the Python service's correlation_id impl
-    "forge/templates/_fragments/correlation_id/python/files/src/app/middleware/correlation.py",
+    # A cross-cutting fragment — the Python service's correlation_id impl.
+    # Lives under forge/features/middleware/templates/ after the
+    # features-reorganization refactor (the directory mirrors the
+    # third-party plugin layout; see docs/plugin-development.md).
+    "forge/features/middleware/templates/correlation_id/python/files/src/app/middleware/correlation.py",
 )
 
 # Anything matching one of these substrings in its path is a contaminant.

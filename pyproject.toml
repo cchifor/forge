@@ -43,6 +43,12 @@ include = ["forge*"]
 
 [tool.setuptools.package-data]
 "forge.templates" = ["**/*"]
+# Built-in feature subpackages (forge/features/<name>/) colocate template
+# trees alongside their Python registration modules — same convention
+# third-party plugins use. Wheels need these globbed in or the bundled
+# fragments are lost on `pip install forge` (editable installs ship them
+# automatically from the source tree).
+"forge.features" = ["**/templates/**/*"]
 
 # Epic DD (1.1.0-alpha.1) — keep wheel's forge/templates/ clean. The
 # `**/*` include above is generous so fragments can ship any file type;
@@ -60,6 +66,12 @@ include = ["forge*"]
     "**/.next/*",
     "**/.svelte-kit/*",
     "**/.dart_tool/*",
+    "**/*.pyc",
+    "**/*.pyo",
+    "**/.DS_Store",
+]
+"forge.features" = [
+    "**/__pycache__/*",
     "**/*.pyc",
     "**/*.pyo",
     "**/.DS_Store",
