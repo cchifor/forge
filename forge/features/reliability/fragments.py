@@ -7,16 +7,25 @@ circuit breaker thresholds for Purgatory/Opossum.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from forge.config import BackendLanguage
 from forge.fragments._registry import register_fragment
 from forge.fragments._spec import Fragment, FragmentImplSpec
+
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+
+
+def _impl(name: str, lang: str) -> str:
+    return str(_TEMPLATES / name / lang)
+
 
 register_fragment(
     Fragment(
         name="reliability_connection_pool",
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="reliability_connection_pool/python",
+                fragment_dir=_impl("reliability_connection_pool", "python"),
                 env_vars=(
                     ("SQLALCHEMY_POOL_SIZE", "20"),
                     ("SQLALCHEMY_MAX_OVERFLOW", "10"),
@@ -25,14 +34,14 @@ register_fragment(
                 ),
             ),
             BackendLanguage.NODE: FragmentImplSpec(
-                fragment_dir="reliability_connection_pool/node",
+                fragment_dir=_impl("reliability_connection_pool", "node"),
                 env_vars=(
                     ("PRISMA_CONNECTION_LIMIT", "20"),
                     ("PRISMA_POOL_TIMEOUT", "10"),
                 ),
             ),
             BackendLanguage.RUST: FragmentImplSpec(
-                fragment_dir="reliability_connection_pool/rust",
+                fragment_dir=_impl("reliability_connection_pool", "rust"),
                 env_vars=(
                     ("SQLX_MAX_CONNECTIONS", "20"),
                     ("SQLX_MIN_CONNECTIONS", "2"),
@@ -50,7 +59,7 @@ register_fragment(
         name="reliability_circuit_breaker",
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="reliability_circuit_breaker/python",
+                fragment_dir=_impl("reliability_circuit_breaker", "python"),
                 dependencies=("purgatory>=3.0.0",),
                 env_vars=(
                     ("CIRCUIT_BREAKER_THRESHOLD", "5"),
@@ -58,7 +67,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.NODE: FragmentImplSpec(
-                fragment_dir="reliability_circuit_breaker/node",
+                fragment_dir=_impl("reliability_circuit_breaker", "node"),
                 dependencies=("opossum@9.0.0",),
                 env_vars=(
                     ("CIRCUIT_BREAKER_TIMEOUT_MS", "10000"),
@@ -67,7 +76,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.RUST: FragmentImplSpec(
-                fragment_dir="reliability_circuit_breaker/rust",
+                fragment_dir=_impl("reliability_circuit_breaker", "rust"),
                 env_vars=(
                     ("CIRCUIT_BREAKER_THRESHOLD", "5"),
                     ("CIRCUIT_BREAKER_RESET_TIMEOUT", "30"),

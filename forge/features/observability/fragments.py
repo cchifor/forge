@@ -8,16 +8,25 @@ on top of the base ``/health`` endpoint shipped by every backend.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from forge.config import BackendLanguage
 from forge.fragments._registry import register_fragment
 from forge.fragments._spec import Fragment, FragmentImplSpec
+
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+
+
+def _impl(name: str, lang: str) -> str:
+    return str(_TEMPLATES / name / lang)
+
 
 register_fragment(
     Fragment(
         name="observability",
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="observability/python",
+                fragment_dir=_impl("observability", "python"),
                 dependencies=("logfire>=3.0.0",),
                 env_vars=(
                     ("LOGFIRE_TOKEN", ""),
@@ -25,7 +34,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.NODE: FragmentImplSpec(
-                fragment_dir="observability/node",
+                fragment_dir=_impl("observability", "node"),
                 dependencies=(
                     "@opentelemetry/sdk-node@0.55.0",
                     "@opentelemetry/auto-instrumentations-node@0.55.0",
@@ -40,7 +49,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.RUST: FragmentImplSpec(
-                fragment_dir="observability/rust",
+                fragment_dir=_impl("observability", "rust"),
                 dependencies=(
                     "opentelemetry@0.27",
                     'opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }',
@@ -62,7 +71,7 @@ register_fragment(
         name="enhanced_health",
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="enhanced_health/python",
+                fragment_dir=_impl("enhanced_health", "python"),
                 dependencies=("redis>=6.0.0",),
                 env_vars=(
                     ("REDIS_URL", "redis://redis:6379/0"),
@@ -70,7 +79,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.NODE: FragmentImplSpec(
-                fragment_dir="enhanced_health/node",
+                fragment_dir=_impl("enhanced_health", "node"),
                 dependencies=("redis@4.7.0",),
                 env_vars=(
                     ("REDIS_URL", "redis://redis:6379/0"),
@@ -78,7 +87,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.RUST: FragmentImplSpec(
-                fragment_dir="enhanced_health/rust",
+                fragment_dir=_impl("enhanced_health", "rust"),
                 env_vars=(
                     ("REDIS_URL", "redis://redis:6379/0"),
                     ("KEYCLOAK_HEALTH_URL", "http://keycloak:9000/health/ready"),
@@ -94,7 +103,7 @@ register_fragment(
         name="observability_otel",
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="observability_otel/python",
+                fragment_dir=_impl("observability_otel", "python"),
                 dependencies=(
                     "opentelemetry-api>=1.28.0",
                     "opentelemetry-sdk>=1.28.0",
@@ -109,7 +118,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.NODE: FragmentImplSpec(
-                fragment_dir="observability_otel/node",
+                fragment_dir=_impl("observability_otel", "node"),
                 dependencies=(
                     "@opentelemetry/sdk-node@^0.55.0",
                     "@opentelemetry/resources@^1.28.0",
@@ -122,7 +131,7 @@ register_fragment(
                 ),
             ),
             BackendLanguage.RUST: FragmentImplSpec(
-                fragment_dir="observability_otel/rust",
+                fragment_dir=_impl("observability_otel", "rust"),
                 dependencies=(
                     "opentelemetry@0.27",
                     "opentelemetry_sdk@0.27",

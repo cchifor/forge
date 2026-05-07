@@ -40,11 +40,8 @@ from forge.options import (  # noqa: F401, E402
     chat,
     conversation,
     layers,
-    middleware,
-    observability,
     platform_ops,
     rag,
-    reliability,
 )
 from forge.options._registry import (
     CATEGORY_DISPLAY,

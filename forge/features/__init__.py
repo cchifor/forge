@@ -21,4 +21,6 @@ from __future__ import annotations
 
 from forge.features import (  # noqa: F401, E402
     middleware,
+    observability,
+    reliability,
 )

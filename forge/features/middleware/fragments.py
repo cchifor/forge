@@ -1,6 +1,8 @@
-"""Fragments for built-in middleware features.
+"""HTTP middleware fragments — request-path cross-cutting concerns.
 
-POC scope: ``correlation_id`` only.
+Order is significant: ``correlation_id`` is outermost (order=90) so its
+context is set before any other middleware runs; ``security_headers``
+(order=80) is below it; ``rate_limit`` (order=50) sits in the middle.
 
 Fragment template trees ship from this package using absolute paths via
 ``Path(__file__).resolve().parent / "templates"`` — the same convention
@@ -20,13 +22,18 @@ from forge.middleware_spec import MiddlewareSpec
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 
+
+def _impl(name: str, lang: str) -> str:
+    return str(_TEMPLATES / name / lang)
+
+
 register_fragment(
     Fragment(
         name="correlation_id",
         order=90,  # outermost middleware — registers last, runs first
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir=str(_TEMPLATES / "correlation_id" / "python"),
+                fragment_dir=_impl("correlation_id", "python"),
             ),
         },
         # Epic K (1.1.0-alpha.1) — MiddlewareSpec replaces the
@@ -45,5 +52,76 @@ register_fragment(
                 ),
             ),
         ),
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="rate_limit",
+        order=50,
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir=_impl("rate_limit", "python")),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("rate_limit", "node"),
+                dependencies=("@fastify/rate-limit@10.3.0",),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(fragment_dir=_impl("rate_limit", "rust")),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="security_headers",
+        order=80,  # below correlation_id (90) so registers inside it
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("security_headers", "python"),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("security_headers", "node"),
+                dependencies=("@fastify/helmet@13.0.1",),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("security_headers", "rust"),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="pii_redaction",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("pii_redaction", "python"),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="response_cache",
+        capabilities=("redis",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("response_cache", "python"),
+                dependencies=("fastapi-cache2>=0.2.2", "redis>=6.0.0"),
+                env_vars=(
+                    ("RESPONSE_CACHE_URL", "redis://redis:6379/1"),
+                    ("RESPONSE_CACHE_PREFIX", "forge:cache"),
+                ),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("response_cache", "node"),
+                dependencies=("@fastify/caching@9.0.1",),
+                env_vars=(("RESPONSE_CACHE_URL", "redis://redis:6379/1"),),
+            ),
+        },
     )
 )
