@@ -10,8 +10,11 @@ Forge is a **project generator**, not a framework. It composes:
 
 1. **Templates** (`forge/templates/`) — Copier-rendered backend +
    frontend project skeletons.
-2. **Fragments** (`forge/templates/_fragments/`) — optional features
-   applied on top of a base template via code injection.
+2. **Fragments** (`forge/features/<ns>/templates/`) — optional features
+   applied on top of a base template via code injection. Each feature
+   namespace owns its options, fragments, and template trees under
+   `forge/features/<ns>/`; this mirrors how third-party plugins ship
+   their own features (see `docs/plugin-development.md`).
 3. **A resolver** (`forge/capability_resolver.py`) — turns a user's
    option choices into an ordered fragment plan.
 4. **An injector** (`forge/feature_injector.py`) — applies each

@@ -33,9 +33,11 @@ export the whole schema with `forge --schema` (JSON Schema 2020-12).
 - **Options** are the human / agent surface. Dotted paths, typed
   leaves (`bool` / `enum` / `int` / `str` / `list`), JSON-Schema
   emitter.
-- **Fragments** are the implementation detail. Each fragment is a
-  directory under `forge/templates/_fragments/<name>/<backend>/` plus a
-  `Fragment` entry in `forge/fragments.py`.
+- **Fragments** are the implementation detail. Each fragment lives
+  under its owning feature: `forge/features/<ns>/templates/<name>/<backend>/`
+  for the template tree plus a `Fragment` entry in
+  `forge/features/<ns>/fragments.py`. (Plugins follow the same shape
+  inside their own package — see `docs/plugin-development.md`.)
 
 Options enumerate fragments. Fragments never surface to the user.
 
@@ -83,11 +85,17 @@ current project.
 ## Fragment layout on disk
 
 ```
-forge/templates/_fragments/<fragment_name>/<backend_lang>/
-    files/                  # verbatim files to add (must not already exist)
-    inject.yaml             # list of (target, marker, snippet) injections
-    deps.yaml   (optional)  # v1 uses FragmentImplSpec.dependencies
-    env.yaml    (optional)  # v1 uses FragmentImplSpec.env_vars
+forge/features/<feature_namespace>/
+    __init__.py
+    options.py              # register_option(...) calls
+    fragments.py            # register_fragment(...) calls — passes
+                            # absolute fragment_dir paths via
+                            # Path(__file__).resolve().parent / "templates"
+    templates/<fragment_name>/<backend_lang>/
+        files/              # verbatim files to add (must not already exist)
+        inject.yaml         # list of (target, marker, snippet) injections
+        deps.yaml (optional)  # FragmentImplSpec.dependencies preferred
+        env.yaml  (optional)  # FragmentImplSpec.env_vars preferred
 ```
 
 ### Files
@@ -171,9 +179,11 @@ fragment.
    `conflicts_with` / `capabilities`.
 
 3. **Author the fragment directory** at
-   `forge/templates/_fragments/<name>/<backend>/`. Start with `files/`
-   for anything new and `inject.yaml` for modifications to base-template
-   files.
+   `forge/features/<feature_namespace>/templates/<name>/<backend>/`.
+   Start with `files/` for anything new and `inject.yaml` for
+   modifications to base-template files. The owning `fragments.py`
+   passes the absolute directory path via
+   `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`.
 
 4. **Add any new markers** to every base template that supports the
    fragment, *before* your injector tries to use them.

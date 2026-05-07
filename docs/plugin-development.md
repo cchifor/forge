@@ -36,7 +36,7 @@ forge --project-name demo --backend-language python \
 **Common gotchas the [P0.2 CI gate](../tests/test_plugin_e2e.py) catches in the reference plugin (and that you'll hit in your own):**
 
 1. **`Fragment(category=..., summary=...)` no longer exists.** User-visible metadata lives on the `Option`. The `Fragment` is implementation-only; constructor takes `name`, `implementations`, `depends_on`, `conflicts_with`, `capabilities`.
-2. **`fragment_dir` must be an absolute path for plugins.** Relative paths resolve against forge's built-in `_fragments/` directory. Use `Path(__file__).parent / "fragments" / "<name>" / "<lang>"`.
+2. **`fragment_dir` must be an absolute path.** Plugins ship fragment templates inside their own package; pass `str(Path(__file__).resolve().parent / "fragments" / "<name>" / "<lang>")`. Built-in forge features now use the same convention (see `forge/features/<ns>/fragments.py` for live examples), so the resolver path is identical for built-ins and plugins.
 3. **`files/` mirrors the backend root.** `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is importable as `app.hello`. `files/hello.py` lands at `<backend>/hello.py` — outside the package, not importable.
 4. **`compose.yaml` (P1.3) lives at the fragment root**, peer of the per-language sub-dirs, not inside `<lang>/`. The schema is documented in `forge/services/fragment_compose.py`'s module docstring.
 5. **`pyproject.toml` needs `[tool.setuptools.package-data]`** so wheel installs ship your fragment tree (YAML + Python files). Editable installs (`pip install -e`) work without it; published wheels don't.
@@ -87,7 +87,7 @@ forge-plugin-example/
     └── test_register.py
 ```
 
-The fragment's `files/` tree mirrors the *backend root* layout — a file at `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is therefore importable as `app.hello`. Fragment directories shipped from a plugin must be passed to `FragmentImplSpec(fragment_dir=...)` as **absolute paths** (typically `Path(__file__).parent / "fragments" / "<name>" / "<lang>"`); relative paths are interpreted against forge's built-in `_fragments/` directory, which the plugin doesn't own.
+The fragment's `files/` tree mirrors the *backend root* layout — a file at `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is therefore importable as `app.hello`. Fragment directories must be passed to `FragmentImplSpec(fragment_dir=...)` as **absolute paths** (typically `str(Path(__file__).resolve().parent / "fragments" / "<name>" / "<lang>")`). Built-in forge features use the same pattern — `forge/features/<ns>/fragments.py` is a working reference, e.g. `forge/features/middleware/fragments.py` for the simplest case (`correlation_id`, single Python implementation, no inject.yaml).
 
 ### 2. `pyproject.toml`
 
@@ -140,14 +140,13 @@ def register(api: ForgeAPI) -> None:
     )
 
     # 2. Declare the fragment the option enables.
+    _FRAGMENT_ROOT = Path(__file__).resolve().parent / "fragments"
     api.add_fragment(
         Fragment(
             name="example_hello_banner",
-            category=FeatureCategory.PLATFORM,
-            summary="Print a hello banner at startup",
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
-                    fragment_dir="forge_plugin_example/fragments/hello_banner/python",
+                    fragment_dir=str(_FRAGMENT_ROOT / "hello_banner" / "python"),
                     dependencies=(),
                     env_vars=(),
                 ),
@@ -207,9 +206,9 @@ Registers a new `Option` in the global `OPTION_REGISTRY`. The `path` must use a 
 
 ### `api.add_fragment(Fragment)`
 
-Registers a new `Fragment` in the global `FRAGMENT_REGISTRY`. Each implementation's `fragment_dir` is resolved relative to `forge/templates/` — plugins can ship their own fragment directories by making their package install under `forge/templates/` or (cleaner) by providing an absolute path resolver.
+Registers a new `Fragment` in the global `FRAGMENT_REGISTRY`. Each implementation's `fragment_dir` should be an absolute filesystem path — typically `str(Path(__file__).resolve().parent / "fragments" / "<name>" / "<lang>")`. The injector's `_resolve_fragment_dir` returns absolute paths verbatim, so plugin fragments and built-in forge fragments flow through identical resolution code.
 
-For 1.0.0a1, plugins use the legacy relative-path convention. The 1.0.0a3 plugin SDK upgrade lands a path resolver that lets plugins ship fragments from their own package tree.
+Built-in forge features (under `forge/features/<ns>/`) follow the same convention — they're a useful reference when authoring a plugin. See `forge/features/middleware/fragments.py` (small, no inject.yaml) or `forge/features/rag/fragments.py` (larger, with cross-feature `depends_on`).
 
 ### `api.add_backend(language_value, spec)`
 

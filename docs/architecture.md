@@ -25,7 +25,7 @@ flowchart TD
     Generator --> Codegen
     Generator --> Provenance
 
-    Templates[(forge/templates/<br/>services/* apps/* _fragments/*<br/>_shared/*)] --> Generator
+    Templates[(forge/templates/<br/>services/* apps/* _shared/*<br/>+ forge/features/&lt;ns&gt;/templates/*)] --> Generator
     Injector -->|AST or text| Injectors[python_ast + ts_ast + text fallback]
 
     Generator --> Output[Generated project<br/>services/ apps/ docker-compose.yml forge.toml]
@@ -60,18 +60,21 @@ Option(
 - `type` drives validation and CLI parsing (`bool` / `enum` / `int` / `str` / `list`).
 - `enables` maps chosen values to **Fragment names** (plumbing-level, not user-visible).
 
-### `FRAGMENT_REGISTRY` — `forge/fragments.py`
+### `FRAGMENT_REGISTRY` — `forge/fragments/_registry.py`
 
-The **implementation side**. Each `Fragment` names a capability and declares per-backend implementations:
+The **implementation side**. Each `Fragment` names a capability and declares per-backend implementations. Fragment definitions live under `forge/features/<ns>/fragments.py` (one feature per directory, mirroring the plugin layout); template trees ship under `forge/features/<ns>/templates/`:
 
 ```python
+# forge/features/rag/fragments.py
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+
 Fragment(
     name="vector_store_qdrant",
     depends_on=("vector_store_port",),
     capabilities=("qdrant",),
     implementations={
         BackendLanguage.PYTHON: FragmentImplSpec(
-            fragment_dir="vector_store_qdrant/python",
+            fragment_dir=str(_TEMPLATES / "vector_store_qdrant" / "python"),
             dependencies=("qdrant-client>=1.12.0",),
             env_vars=(("QDRANT_URL", "http://qdrant:6333"), ...),
         ),
@@ -80,8 +83,8 @@ Fragment(
 ```
 
 - `implementations` is keyed by `BackendLanguage` (Python/Node/Rust or a `_PluginLanguage` sentinel for plugin backends).
-- `fragment_dir` is a path under `forge/templates/_fragments/` (or an absolute path for plugin-shipped fragments).
-- `depends_on` + `conflicts_with` drive the resolver's topological sort + conflict detection.
+- `fragment_dir` is an absolute path. Built-in features compute it from the feature module's location (`Path(__file__).resolve().parent / "templates"`); plugin authors do the same from their own package root. Both flow through the injector's `_resolve_fragment_dir` identically.
+- `depends_on` + `conflicts_with` drive the resolver's topological sort + conflict detection. Cross-feature edges (e.g. `rag_pipeline` → `conversation_persistence`) are resolved by name at registry-freeze time.
 
 ### `BACKEND_REGISTRY` + `FRONTEND_SPECS` — `forge/config.py`
 

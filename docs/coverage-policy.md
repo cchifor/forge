@@ -87,5 +87,5 @@ deciding how much headroom a PR has.
   runs its dispatcher in a different process. Epic C's `VerbHandler` protocol
   will make this testable with plain pytest; the gate adds `forge/cli/` once
   that lands.
-- `forge/templates/_fragments/*/python/files/**` — shipped *inside* generated
+- `forge/features/*/templates/*/python/files/**` — shipped *inside* generated
   projects and tested by their own pytest suite at e2e time, not forge's.
