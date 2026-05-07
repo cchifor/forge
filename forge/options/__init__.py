@@ -34,13 +34,7 @@ from __future__ import annotations
 # Trigger registrations. Order does not matter — register_option is
 # idempotent over collisions, and capability_resolver validates the
 # enables → fragment graph after every plugin has had its turn.
-from forge.options import (  # noqa: F401, E402
-    agent,
-    chat,
-    conversation,
-    layers,
-    rag,
-)
+from forge.options import layers  # noqa: F401, E402
 from forge.options._registry import (
     CATEGORY_DISPLAY,
     CATEGORY_MISSION,

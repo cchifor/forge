@@ -1,11 +1,11 @@
-"""RAG (retrieval-augmented generation) fragments — pipeline + backends.
+"""RAG fragments — pipeline + embeddings + reranker + per-backend adapters.
 
 ``rag_pipeline`` is the canonical entry point: it ships the embedding
 loop, document ingestion, and pgvector default. The other fragments
 attach: embedding-provider variants (Voyage), reranker (Cohere), and
 vector-store back-ends (Milvus, Weaviate, Pinecone, Chroma, Postgres,
 Qdrant). ``rag_sync_tasks`` adds background syncing via
-``background_tasks``.
+``background_tasks`` (in ``forge.features.async_work``).
 
 The legacy ``rag_*`` direct-backend fragments coexist with the newer
 ``vector_store_*`` port+adapter fragments — see RFC-005. The newer
@@ -14,9 +14,20 @@ shape is preferred for plugin-authored backends.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from forge.config import BackendLanguage
 from forge.fragments._registry import register_fragment
 from forge.fragments._spec import Fragment, FragmentImplSpec
+
+_TEMPLATES = Path(__file__).resolve().parent / "templates"
+
+
+def _impl(name: str, lang: str) -> str:
+    return str(_TEMPLATES / name / lang)
+
+
+# --- core pipeline + embeddings + reranker ----------------------------------
 
 register_fragment(
     Fragment(
@@ -25,7 +36,7 @@ register_fragment(
         capabilities=("postgres-pgvector",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_pipeline/python",
+                fragment_dir=_impl("rag_pipeline", "python"),
                 dependencies=(
                     "pgvector>=0.3.0",
                     "openai>=2.0.0",
@@ -49,7 +60,9 @@ register_fragment(
         name="rag_sync_tasks",
         depends_on=("rag_pipeline", "background_tasks"),
         implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="rag_sync_tasks/python"),
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("rag_sync_tasks", "python"),
+            ),
         },
     )
 )
@@ -61,7 +74,7 @@ register_fragment(
         depends_on=("rag_pipeline",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_embeddings_voyage/python",
+                fragment_dir=_impl("rag_embeddings_voyage", "python"),
                 dependencies=("voyageai>=0.3.0",),
                 env_vars=(
                     ("VOYAGE_API_KEY", ""),
@@ -80,7 +93,7 @@ register_fragment(
         depends_on=("rag_pipeline",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_reranking/python",
+                fragment_dir=_impl("rag_reranking", "python"),
                 dependencies=("cohere>=5.13.0",),
                 env_vars=(
                     ("COHERE_API_KEY", ""),
@@ -93,6 +106,8 @@ register_fragment(
 )
 
 
+# --- legacy direct-backend rag_* adapters -----------------------------------
+
 register_fragment(
     Fragment(
         name="rag_milvus",
@@ -100,7 +115,7 @@ register_fragment(
         capabilities=("milvus",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_milvus/python",
+                fragment_dir=_impl("rag_milvus", "python"),
                 dependencies=("pymilvus>=2.5.0",),
                 env_vars=(
                     ("MILVUS_URI", "http://milvus:19530"),
@@ -120,7 +135,7 @@ register_fragment(
         capabilities=("weaviate",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_weaviate/python",
+                fragment_dir=_impl("rag_weaviate", "python"),
                 dependencies=("weaviate-client>=4.9.0",),
                 env_vars=(
                     ("WEAVIATE_URL", "http://weaviate:8080"),
@@ -140,7 +155,7 @@ register_fragment(
         capabilities=("pinecone",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_pinecone/python",
+                fragment_dir=_impl("rag_pinecone", "python"),
                 dependencies=("pinecone>=5.4.0",),
                 env_vars=(
                     ("PINECONE_API_KEY", ""),
@@ -160,7 +175,7 @@ register_fragment(
         capabilities=("chroma",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_chroma/python",
+                fragment_dir=_impl("rag_chroma", "python"),
                 dependencies=("chromadb>=0.5.0",),
                 env_vars=(
                     ("CHROMA_URL", "http://chroma:8000"),
@@ -179,7 +194,9 @@ register_fragment(
         name="rag_postgresql",
         depends_on=("rag_pipeline",),
         implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="rag_postgresql/python"),
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("rag_postgresql", "python"),
+            ),
         },
     )
 )
@@ -192,13 +209,141 @@ register_fragment(
         capabilities=("qdrant",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir="rag_qdrant/python",
+                fragment_dir=_impl("rag_qdrant", "python"),
                 dependencies=("qdrant-client>=1.12.0",),
                 env_vars=(
                     ("QDRANT_URL", "http://qdrant:6333"),
                     ("QDRANT_API_KEY", ""),
                     ("QDRANT_COLLECTION", "forge_rag"),
                 ),
+            ),
+        },
+    )
+)
+
+
+# --- vector_store_* port + adapters (RFC-005, preferred) ---------------------
+
+register_fragment(
+    Fragment(
+        name="vector_store_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_port", "python"),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_qdrant",
+        depends_on=("vector_store_port",),
+        capabilities=("qdrant",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_qdrant", "python"),
+                dependencies=("qdrant-client>=1.12.0",),
+                env_vars=(
+                    ("QDRANT_URL", "http://qdrant:6333"),
+                    ("QDRANT_API_KEY", ""),
+                    ("QDRANT_COLLECTION", "forge_rag"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_chroma",
+        depends_on=("vector_store_port",),
+        capabilities=("chroma",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_chroma", "python"),
+                dependencies=("chromadb>=0.5.0",),
+                env_vars=(
+                    ("CHROMA_URL", "http://chroma:8000"),
+                    ("CHROMA_COLLECTION", "forge_rag"),
+                    ("CHROMA_TENANT", "default_tenant"),
+                    ("CHROMA_DATABASE", "default_database"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_pinecone",
+        depends_on=("vector_store_port",),
+        capabilities=("pinecone",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_pinecone", "python"),
+                dependencies=("pinecone>=5.4.0",),
+                env_vars=(
+                    ("PINECONE_API_KEY", ""),
+                    ("PINECONE_INDEX", "forge-rag"),
+                    ("PINECONE_ENVIRONMENT", ""),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_milvus",
+        depends_on=("vector_store_port",),
+        capabilities=("milvus",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_milvus", "python"),
+                dependencies=("pymilvus>=2.5.0",),
+                env_vars=(
+                    ("MILVUS_URI", "http://milvus:19530"),
+                    ("MILVUS_TOKEN", ""),
+                    ("MILVUS_COLLECTION", "forge_rag"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_weaviate",
+        depends_on=("vector_store_port",),
+        capabilities=("weaviate",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_weaviate", "python"),
+                dependencies=("weaviate-client>=4.9.0",),
+                env_vars=(
+                    ("WEAVIATE_URL", "http://weaviate:8080"),
+                    ("WEAVIATE_API_KEY", ""),
+                    ("WEAVIATE_COLLECTION", "ForgeRag"),
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="vector_store_postgres",
+        depends_on=("vector_store_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("vector_store_postgres", "python"),
             ),
         },
     )

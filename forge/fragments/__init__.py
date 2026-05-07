@@ -17,12 +17,6 @@ from __future__ import annotations
 # Trigger registrations. Order matters only for parity-tier auto-derivation
 # of fragments whose ``depends_on`` cross-references; the registry's
 # freeze-time audit catches any cycles or orphans regardless of import order.
-from forge.fragments import (  # noqa: F401, E402
-    agent,
-    llm,
-    rag,
-    vector_store,
-)
 from forge.fragments._registry import (
     FRAGMENT_REGISTRY,
     _FragmentRegistry,
