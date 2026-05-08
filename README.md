@@ -16,7 +16,13 @@
 
 </div>
 
-> **`main` is post-1.1.0-alpha.2.** Latest unreleased work: built-in features colocated under `forge/features/<ns>/` (Wave A–C of the features-reorganization refactor), so authoring a built-in feature now uses the same on-disk layout third-party plugins use. 1.1.0-alpha.2 itself shipped file-level three-way merge for `forge --update` (default `--mode merge`, `.forge-merge` sidecars on conflict), declarative `compose.yaml` fragment snippets, the plugin-SDK e2e gate (`.github/workflows/plugin-e2e.yml`), and six new CLI verbs (`--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph`, `--log-json`, `--log-level`). The 1.0.x core remains intact (schema-first UI protocol, provenance manifest, plugin SDK, LibCST/ts-morph AST injection, three-zone merge, published canvas packages). See [`CHANGELOG.md`](CHANGELOG.md) for the full delta, [`UPGRADING.md`](UPGRADING.md) for migration notes, and the [RFCs](docs/rfcs/) for design context.
+> **What's on `main`:**
+>
+> - **Unreleased (post-1.1.0-alpha.2)** — built-in features colocate under `forge/features/<ns>/`, so authoring a built-in feature uses the same on-disk layout as third-party plugins.
+> - **1.1.0-alpha.2** — file-level three-way merge for `forge --update` (default `--mode merge`, `.forge-merge` sidecars on conflict), declarative `compose.yaml` fragment snippets, the plugin-SDK e2e gate, and six new CLI verbs: `--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph`, `--log-json`, `--log-level`.
+> - **1.0.x core (intact)** — schema-first UI protocol, provenance manifest, plugin SDK, LibCST / ts-morph AST injection, three-zone merge, published canvas packages.
+>
+> See [`CHANGELOG.md`](CHANGELOG.md) for the full delta, [`UPGRADING.md`](UPGRADING.md) for migration notes, and the [RFCs](docs/rfcs/) for design context.
 
 `forge` is a CLI that scaffolds production-ready full-stack platforms from a single YAML (or a single interactive run). Where [create-next-app](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and [cookiecutter-fastapi](https://github.com/tiangolo/full-stack-fastapi-template) give you one frontend and one backend, forge combines three backends ([FastAPI](https://fastapi.tiangolo.com/), [Fastify](https://fastify.dev/), [Axum](https://github.com/tokio-rs/axum)), three frontends ([Vue 3](https://vuejs.org/), [Svelte 5](https://svelte.dev/), [Flutter](https://flutter.dev/)), enterprise auth ([Keycloak](https://www.keycloak.org/) + [Gatekeeper](https://gatekeeper.readthedocs.io/) + [Traefik](https://traefik.io/)) and a typed option registry (NixOS / Terraform style — dotted paths, JSON-Schema export) — then wires them behind one reverse proxy with Docker Compose. It's designed to be driven by humans in a terminal **and** by autonomous AI agents through a headless, stdin-pipeable, JSON-first CLI, so CI pipelines, Claude Code, or Copilot workspaces can generate the same project you would.
 
