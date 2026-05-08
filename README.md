@@ -75,53 +75,47 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries
 
 ## Options
 
-Everything configurable is an `Option` with a dotted path, a type (`bool` / `enum` / `int` / `str`), and a default. Set one at generation time with `--set PATH=VALUE` (repeatable) or in the `options:` block of your YAML config. See [Usage Examples](#usage-examples).
+Everything configurable is an `Option` with a dotted path, a type (`bool` / `enum` / `int` / `str` / `list`), and a default. Set one at generation time with `--set PATH=VALUE` (repeatable) or in the `options:` block of your YAML config. See [Usage Examples](#usage-examples).
 
-| Category | Capability | Option path | Type | Default | Backends | What you get |
-|---|---|---|---|---|---|---|
-| **Foundation** | Polyglot backends | — | — | — | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
-| **Foundation** | Frontends | — | — | — | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
-| **Foundation** | Docker-compose + Traefik | — | — | — | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
-| **Foundation** | Enterprise auth | — | — | — | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
-| **Foundation** | `forge.toml` stamping | — | — | — | all | Project records forge version + template paths + fully-resolved option map; machine-readable for `forge --update`. |
-| **Observability** | Request Tracing | `middleware.correlation_id` | enum | `always-on` | python | X-Request-ID ingress + ContextVar + response echo. |
-| **Observability** | Deep Health Checks | `observability.health` | bool | `false` | python, node, rust | `/health` aggregates Postgres + Redis + Keycloak readiness. |
-| **Observability** | Distributed Tracing | `observability.tracing` | bool | `false` | python, node, rust | [Logfire](https://logfire.pydantic.dev/) (Py) / [`@opentelemetry/sdk-node`](https://opentelemetry.io/docs/languages/js/) (Node) / OTLP gRPC via [`tracing-opentelemetry`](https://crates.io/crates/tracing-opentelemetry) (Rust). |
-| **Observability** | OpenTelemetry agent spans | `observability.otel` | bool | `false` | python | OTLP exporter + FastAPI/HTTPX instrumentations + `agent.run` / `tool.call` spans with token-cost attributes. |
-| **Observability** | SBOM workflow | `security.sbom` | bool | `false` | python | `.github/workflows/sbom.yml` emits a CycloneDX SBOM + weekly pip-audit report. |
-| **Reliability** | Rate Limiting | `middleware.rate_limit` | bool | `true` | python, node, rust | Token-bucket limiter: in-memory (Py), [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) (Node), Axum tower middleware (Rust). |
-| **Reliability** | Security Headers | `middleware.security_headers` | bool | `true` | python, node, rust | CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS on HTTPS responses. |
-| **Reliability** | PII Scrubber | `middleware.pii_redaction` | bool | `true` | python | stdlib logging filter that scrubs emails, bearer tokens, API keys before handlers run. |
-| **Reliability** | Response Cache | `middleware.response_cache` | bool | `false` | python, node | `fastapi-cache2` + Redis (Py) / `@fastify/caching` (Node). |
-| **Reliability** | Connection Pool | `reliability.connection_pool` | bool | `true` | python | Production-ready SQLAlchemy async pool defaults (size 20 / overflow 10 / pre-ping / 30-min recycle) with env-var overrides. |
-| **Reliability** | Circuit Breaker | `reliability.circuit_breaker` | bool | `false` | python | [purgatory](https://pypi.org/project/purgatory/)-backed breaker for outbound HTTP — LLM, vector store, auth. |
-| **Async Work** | Task Queue | `async.task_queue` | bool | `false` | python, node, rust | [Taskiq](https://taskiq-python.github.io/) broker (Py) / [BullMQ](https://docs.bullmq.io/) + ioredis (Node) / [Apalis](https://github.com/geofmureithi/apalis) + Redis (Rust). |
-| **Async Work** | Knowledge Ingest Queue | `async.rag_ingest_queue` | bool | `false` | python | Taskiq tasks for off-thread RAG ingestion. |
-| **Async Work** | Queue Backend (port) | `queue.backend` | enum | `none` | python | `none` / `redis` / `sqs` — backs the `QueuePort` for delayed delivery + FIFO use cases. |
-| **Conversational AI** | Chat History | `conversation.persistence` | bool | `false` | python | SQLAlchemy `Conversation`/`Message`/`ToolCall` + Alembic migration. |
-| **Conversational AI** | Tool Registry | `agent.tools` | bool | `false` | python | Tool base class + process-wide registry + pre-baked `current_datetime` + `web_search` + `/api/v1/tools` endpoint. |
-| **Conversational AI** | Agent Stream | `agent.streaming` | bool | `false` | python | `/api/v1/ws/agent` WebSocket with typed event protocol (`text_delta`, `tool_call`, `tool_result`, `agent_status`, …) and a runner-dispatch module. |
-| **Conversational AI** | LLM Agent | `agent.llm` | bool | `false` | python | [pydantic-ai](https://ai.pydantic.dev/) LLM loop — Anthropic / OpenAI / Google / OpenRouter. |
-| **Conversational AI** | LLM Provider (port) | `llm.provider` | enum | `none` | python | `none` / `openai` / `anthropic` / `ollama` / `bedrock` — backs the `LlmProviderPort`; swap providers via env, no regen. |
-| **Conversational AI** | Chat Attachments | `chat.attachments` | bool | `false` | python | `/api/v1/chat-files` multipart endpoint + `ChatFile` model + local storage. |
-| **Conversational AI** | MCP scaffolds | `platform.mcp` | bool | `false` | python (Vue UI) | `/mcp/tools` + `/mcp/invoke` router plus Vue ToolRegistry + ApprovalDialog components. |
-| **Knowledge** | Vector-store backend | `rag.backend` | enum | `none` | python | Pick one of: `none`, `pgvector`, `qdrant`, `chroma`, `milvus`, `weaviate`, `pinecone`, `postgresql`. Bundles the matching fragment + `rag_pipeline` + `conversation.persistence`. |
-| **Knowledge** | Embeddings provider | `rag.embeddings` | enum | `openai` | python | `openai` (text-embedding-3-small) or `voyage` (voyage-3.5). |
-| **Knowledge** | Reranker | `rag.reranker` | bool | `false` | python | Cohere `rerank-v3.5` + local sentence-transformers cross-encoder fallback. |
-| **Knowledge** | Top-K chunks | `rag.top_k` | int (1–100) | `5` | python | Default number of chunks returned per RAG query. |
-| **Platform** | Admin Console | `platform.admin` | bool | `false` | python | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI at `/admin`, env-gated (`dev`/`all`/`disabled`). |
-| **Platform** | Outbound Webhooks | `platform.webhooks` | bool | `false` | python, node, rust | CRUD registry + HMAC-SHA256 signed outbound delivery + `/test` endpoint. |
-| **Platform** | Service CLI Extensions | `platform.cli_extensions` | bool | `false` | python | Typer subcommands: `app info`, `app tools`, `app rag ingest`. |
-| **Platform** | AI Agent Handbook | `platform.agents_md` | bool | `true` | any (project-scoped) | Drops `AGENTS.md` + `CLAUDE.md` at the project root so AI coding agents orient themselves before editing. |
-| **Platform** | Object Store (port) | `object_store.backend` | enum | `none` | python | `none` / `s3` / `local` — backs `ObjectStorePort`. The `s3` adapter handles AWS / MinIO / R2 / Wasabi via `S3_ENDPOINT_URL`. |
-| **Platform** | Strict CSP / HSTS (nginx) | `security.csp` | bool | `true` | any (project-scoped) | Drops `infra/nginx-csp.conf` with strict CSP, HSTS, defence-in-depth headers. |
-| **Layer composition** | Backend mode | `backend.mode` | enum | `generate` | any | `generate` runs the per-backend Copier pipeline; `none` skips backend generation entirely (frontend-only stacks). |
-| **Layer composition** | Frontend mode | `frontend.mode` | enum | `generate` | any | `generate` / `external` / `none` — orchestrates the per-framework Copier render. |
-| **Layer composition** | Frontend API target | `frontend.api_target.type` / `frontend.api_target.url` | enum / str | `local` / `""` | any | Pair drives whether the Vite proxy hits a Docker-internal backend or an external API base URL. |
-| **Layer composition** | Database mode / engine | `database.mode` / `database.engine` | enum / enum | `generate` / `postgres` | any | Provisions Postgres + alembic + SQLAlchemy session by default; `none` skips the DB stack for stateless services. |
-| **Layer composition** | Agent mode (placeholder) | `agent.mode` | enum | `none` | python | Phase C placeholder for the agentic-stack discriminator; mirrors the other layer modes' shape. |
+> **📚 Full per-option reference: [`docs/FEATURES.md`](docs/FEATURES.md).**
+> That document is the canonical option catalog, **auto-generated from the live `OPTION_REGISTRY`**. It carries every option's path, type, default, summary, full description, allowed values, stability, backends, and the fragments each value enables. **Humans and AI coding agents reading this README should load `docs/FEATURES.md` before generating any forge config** — the README's category-level summary below is just a map.
 
-Introspect the live registry anytime with `forge --list`, `forge --describe <path>`, or `forge --schema` (JSON Schema 2020-12).
+### Foundation (always included)
+
+| Capability | Backends | What you get |
+|---|---|---|
+| Polyglot backends | python, node, rust | [FastAPI](https://fastapi.tiangolo.com/) / [Fastify](https://fastify.dev/) / [Axum](https://github.com/tokio-rs/axum) with matching ORM + migrations + lint/test toolchain. |
+| Frontends | vue, svelte, flutter | [Vue 3](https://vuejs.org/) + Vite + TanStack Query, [SvelteKit](https://svelte.dev/) + runes, [Flutter](https://flutter.dev/) (web) + Riverpod. All ship an [AG-UI](https://github.com/cchifor/ag-ui) chat panel. |
+| Docker-compose + Traefik | all | Generated `docker-compose.yml` with [Traefik](https://traefik.io/) routing `/api/{backend}` per-service. Multi-backend + per-service migrations included. |
+| Enterprise auth | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
+| `forge.toml` stamping | all | Project records forge version + template paths + fully-resolved option map; machine-readable for `forge --update`. |
+
+### Optional features — 31 options across six categories
+
+| Category | Options | Highlights |
+|---|---|---|
+| **[Observability](docs/FEATURES.md#observability)** | 5 | Distributed tracing ([Logfire](https://logfire.pydantic.dev/) / OTel SDK / OTLP gRPC), OpenTelemetry agent + tool spans, deep `/health`, X-Request-ID correlation, CycloneDX SBOM workflow |
+| **[Reliability](docs/FEATURES.md#reliability)** | 6 | Rate limiting (in-memory / [`@fastify/rate-limit`](https://github.com/fastify/fastify-rate-limit) / Axum tower), security headers (CSP / XFO / HSTS), PII log redaction, opt-in response caching, SQLAlchemy connection pool, [purgatory](https://pypi.org/project/purgatory/) circuit breaker |
+| **[Async Work](docs/FEATURES.md#async-work)** | 3 | Redis-backed task queue ([Taskiq](https://taskiq-python.github.io/) / [BullMQ](https://docs.bullmq.io/) / [Apalis](https://github.com/geofmureithi/apalis)), off-thread RAG ingest, `QueuePort` (redis / sqs) |
+| **[Conversational AI](docs/FEATURES.md#conversational-ai)** | 7 | Chat history persistence, agent WebSocket streaming, tool registry, [pydantic-ai](https://ai.pydantic.dev/) LLM loop, `LlmProviderPort` (OpenAI / Anthropic / Ollama / Bedrock), chat attachments, MCP scaffolds |
+| **[Knowledge](docs/FEATURES.md#knowledge)** | 4 | Vector-store backend (`pgvector` / `qdrant` / `chroma` / `milvus` / `weaviate` / `pinecone` / `postgresql`), embeddings provider (OpenAI / Voyage), Cohere reranker + cross-encoder fallback, configurable top-K |
+| **[Platform](docs/FEATURES.md#platform)** | 6 | [SQLAdmin](https://aminalaee.dev/sqladmin/) UI, outbound webhook delivery (HMAC-signed), `app info`/`app tools`/`app rag` typer subcommands, AGENTS.md / CLAUDE.md drop, `ObjectStorePort` (s3 / local), strict-CSP nginx config |
+
+Each row links to the corresponding section of [`docs/FEATURES.md`](docs/FEATURES.md), where every option is documented with its full description, default, allowed values, and the fragments it enables.
+
+### Layer discriminators
+
+These options orchestrate generation rather than enabling a fragment bundle. Documented in detail under [Layer discriminators in `docs/FEATURES.md`](docs/FEATURES.md#layer-discriminators--composing-a-project).
+
+| Path | Type | Default | Purpose |
+|---|---|---|---|
+| `backend.mode` | enum | `generate` | `generate` runs the per-backend Copier pipeline; `none` skips backend generation entirely (frontend-only stacks). |
+| `database.mode` / `database.engine` | enum / enum | `generate` / `postgres` | Provisions Postgres + alembic + SQLAlchemy session by default; `none` skips the DB stack for stateless services. |
+| `frontend.mode` | enum | `generate` | `generate` / `external` / `none` — orchestrates the per-framework Copier render. |
+| `frontend.api_target.type` / `frontend.api_target.url` | enum / str | `local` / `""` | Pair drives whether the Vite proxy hits a Docker-internal backend or an external API base URL. |
+| `agent.mode` | enum | `none` | Phase C placeholder for the agentic-stack discriminator; mirrors the other layer modes' shape. |
+
+Introspect the **live** registry anytime with `forge --list` (plugin-aware), `forge --describe <path>`, or `forge --schema` (JSON Schema 2020-12) — these include any third-party plugin options that the bundled `docs/FEATURES.md` doesn't.
 
 ---
 
@@ -517,7 +511,7 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 | Topic | File |
 |---|---|
 | 10-minute tour from install to running stack | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
-| Per-feature reference + parity matrix | [`docs/FEATURES.md`](docs/FEATURES.md) |
+| **Canonical option catalog** (per-option reference, auto-generated from `OPTION_REGISTRY`) | [`docs/FEATURES.md`](docs/FEATURES.md) |
 | Internal architecture (registries, injectors, codegen, provenance) | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Authoring a third-party plugin | [`docs/plugin-development.md`](docs/plugin-development.md) |
 | Adding a backend language | [`docs/adding-a-backend.md`](docs/adding-a-backend.md) |
@@ -607,7 +601,7 @@ make check      # ruff lint + ruff format --check + ty typecheck + pytest (~10s)
 - **Typechecker:** `uv run ty check forge/` (forge's typechecker of choice — not mypy).
 - **Test runner:** `uv run pytest -m "not e2e"` must be green. Full e2e with `make e2e` (requires `uv`, `npm`, `cargo`, `git` on PATH). Generated projects ship a [Playwright](https://playwright.dev/) suite; forge itself has no browser tests.
 - **Commit style:** [Conventional Commits](https://www.conventionalcommits.org/), imperative mood, subject line ≤ 50 chars, no AI co-author trailer. One logical change per PR.
-- **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md). Pick (or create) a feature namespace under `forge/features/<ns>/`, register the `Option` in its `options.py`, register the matching `Fragment` in its `fragments.py` (with its `FragmentImplSpec` pointing at `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`), drop files under `forge/features/<ns>/templates/<name>/<backend>/`, and extend the registry invariants test in `tests/test_options.py`. Built-in features now follow the same on-disk layout third-party plugins use — see [`docs/plugin-development.md`](docs/plugin-development.md).
+- **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md). Pick (or create) a feature namespace under `forge/features/<ns>/`, register the `Option` in its `options.py`, register the matching `Fragment` in its `fragments.py` (with its `FragmentImplSpec` pointing at `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`), drop files under `forge/features/<ns>/templates/<name>/<backend>/`, extend the registry invariants test in `tests/test_options.py`, and regenerate the option catalog with `uv run python tools/gen_features_doc.py` (the `tests/test_features_doc_in_sync.py` gate fails the build if you forget). Built-in features follow the same on-disk layout third-party plugins use — see [`docs/plugin-development.md`](docs/plugin-development.md).
 
 CI runs the full matrix — Ubuntu + Windows, Python 3.11 / 3.12 / 3.13 — on every push and PR. Nightly e2e runs on Ubuntu against Python 3.13.
 
