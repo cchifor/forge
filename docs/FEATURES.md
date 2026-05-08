@@ -1,11 +1,34 @@
 # Option Registry
 
+> **This is the canonical option catalog for built-in forge features.**
+> Humans, AI coding agents, and CI pipelines: load this file when you
+> need the full per-option reference (paths, types, defaults,
+> descriptions, allowed values, fragment dependencies, stability).
+> The README's Options section is a category-level summary that links
+> back here; this document is the source of truth.
+>
+> The per-option sections in this file are **auto-generated** from the
+> live `OPTION_REGISTRY` in `forge/options/_registry.py`. Edit the
+> option in `forge/features/<ns>/options.py` and rerun the generator
+> rather than hand-editing the catalog block:
+>
+> ```bash
+> uv run python tools/gen_features_doc.py
+> ```
+>
+> The CI gate at `tests/test_features_doc_in_sync.py` enforces that
+> what's on disk matches what the generator would produce.
+
 Forge's configuration surface is a single typed `Option` registry
 (NixOS / Terraform style) that compiles into a set of template
-**fragments**. This document is for contributors adding a new knob.
+**fragments**. This document doubles as the per-option catalog (auto-
+generated, below) and a contributor's guide for adding a new knob.
 End users configure options via YAML (`options:` block), the `--set
 PATH=VALUE` CLI flag, or the interactive prompt; machine users can
-export the whole schema with `forge --schema` (JSON Schema 2020-12).
+export the whole schema with `forge --schema` (JSON Schema 2020-12)
+and inspect the live registry at runtime with `forge --list`,
+`forge --describe <path>`, or `forge --plugins list` (the runtime
+view is plugin-aware; this document covers built-ins only).
 
 ## The two layers
 
@@ -240,95 +263,641 @@ project-level prompts. Option toggles live in YAML / CLI flags only
 
 ## Registered options
 
-Options are grouped by `FeatureCategory` — same order
-`forge --list` prints and `forge --describe` narrates. Run
-`forge --describe <path>` for the full prose + tag lines
-(`BACKENDS:` / `ENDPOINTS:` / `REQUIRES:`) per option.
+<!-- BEGIN GENERATED:OPTIONS-CATALOG — do not hand-edit. Regenerate with: uv run python tools/gen_features_doc.py -->
 
-### Observability — visibility into the running system
+Options are grouped by `FeatureCategory` — same order `forge --list`
+prints. Run `forge --describe <path>` for the full prose plus tag
+lines (`BACKENDS:` / `ENDPOINTS:` / `REQUIRES:`) of any single
+option. The CLI is the runtime SSoT and is plugin-aware; this
+catalog covers built-in options only. Layer-discriminator options
+(`backend.mode`, `database.mode`, `frontend.mode`,
+`frontend.api_target.*`, `agent.mode`) are documented in the
+hand-written section below.
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `middleware.correlation_id` | enum | `always-on` | python | X-Request-ID header + ContextVar propagation |
-| `observability.health` | bool | `false` | python, node, rust | /health aggregates DB + Redis + Keycloak readiness |
-| `observability.tracing` | bool | `false` | python, node, rust | Logfire (Py) / OTel SDK (Node) / OTLP gRPC (Rust) |
+## Observability
 
-Enable these when you need to trace a request hop across services,
-gate rollouts on actual dependency health, or ship structured traces
-into an OTLP collector.
+_Visibility into the running system — tracing, metrics, health._
 
-### Reliability — protection + stability middleware
+### `middleware.correlation_id`
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `middleware.rate_limit` | bool | `true` | python, node, rust | Token-bucket limiter keyed by tenant / IP |
-| `middleware.security_headers` | bool | `true` | python, node, rust | CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy |
-| `middleware.pii_redaction` | bool | `true` | python | logging.Filter that redacts emails / tokens / API keys |
-| `middleware.response_cache` | bool | `false` | python, node | fastapi-cache2 + Redis (Py) / @fastify/caching (Node) |
+**Type:** `enum` · **Default:** `always-on` · **Stability:** `stable` · **Backends:** python
 
-The on-by-default entries are there for a reason; turn them off only
-for intentional insecure-demo scenarios. Response cache is opt-in —
-decorate specific handlers rather than blanket-enabling.
+**Allowed values:** `always-on`
 
-### Async Work — off-thread job processing
+_X-Request-ID ingress + ContextVar propagation._
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `async.task_queue` | bool | `false` | python, node, rust | Taskiq (Py) / BullMQ + ioredis (Node) / Apalis + Redis (Rust) |
-| `async.rag_ingest_queue` | bool | `false` | python | Taskiq tasks that move RAG ingest off the request thread |
+Every inbound request is tagged with an X-Request-ID header, the value
+is stored in a ContextVar so any async task downstream sees it, and the
+same ID is echoed back on the response.
 
-Reach for these when you've got work a user shouldn't wait on —
-emails, webhook retries, RAG ingestion, LLM fan-outs. Node and Rust
-variants share the `TASKIQ_BROKER_URL` env convention so docker-compose
-ops stay uniform across backends.
+This option is always-on — it has no off value. Index the
+``correlation_id`` log field in your aggregator to trace a single
+request end-to-end across services.
 
-### Conversational AI — chat, tools, and the agent loop
+BACKENDS: python
+ENDPOINTS: none — ambient context via service.observability.correlation
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `conversation.persistence` | bool | `false` | python | SQLAlchemy Conversation/Message/ToolCall + migration |
-| `agent.streaming` | bool | `false` | python | /api/v1/ws/agent WebSocket with typed events + runner dispatch |
-| `agent.tools` | bool | `false` | python | Tool base class + process registry + /api/v1/tools |
-| `agent.llm` | bool | `false` | python | pydantic-ai loop (Anthropic / OpenAI / Google / OpenRouter) |
-| `chat.attachments` | bool | `false` | python | /api/v1/chat-files + ChatFile model + local storage |
+**Enables fragments:**
+- on `always-on` → `correlation_id`
 
-Order of introduction: enable `conversation.persistence` first
-(storage), then `agent.streaming` (WebSocket + echo runner), then
-`agent.tools` + `agent.llm` (LLM loop), then `chat.attachments` if you
-need attachments. The `rag_search` agent tool auto-registers when RAG
-is also on.
+### `observability.health`
 
-### Knowledge — vector storage + retrieval (RAG)
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** node, python, rust
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `rag.backend` | enum | `none` | python | Pick one: `none` / `pgvector` / `qdrant` / `chroma` / `milvus` / `weaviate` / `pinecone` / `postgresql` |
-| `rag.embeddings` | enum | `openai` | python | `openai` (text-embedding-3-small) or `voyage` (voyage-3.5) |
-| `rag.reranker` | bool | `false` | python | Cohere rerank + local cross-encoder fallback for sharper top-K |
-| `rag.top_k` | int (1–100) | `5` | python | Default chunks returned per RAG query |
+_/health aggregates Postgres + Redis + Keycloak readiness._
 
-`rag.backend` is a single enum with eight values — each value bundles
-the matching fragment (`rag_qdrant`, `rag_chroma`, …) alongside the
-shared `rag_pipeline` + required `conversation_persistence`. No need
-to hand-pick the transitive dependency chain.
+Upgrades the default /health check to a deep readiness probe that
+verifies DB connectivity, Redis ping, and Keycloak health endpoint
+reachability. Each dependency reports individually so an orchestrator
+(Kubernetes readiness gate, load balancer) sees which specific
+downstream is down rather than an opaque 503.
 
-### Platform — operator-facing tooling
+BACKENDS: python, node, rust
+ENDPOINTS: /health (replaces the shallow default)
+REQUIRES: REDIS_URL, KEYCLOAK_HEALTH_URL.
 
-| Path | Type | Default | Backends | Summary |
-|---|---|---|---|---|
-| `platform.admin` | bool | `false` | python | SQLAdmin UI at /admin, env-gated, auto-registers views |
-| `platform.webhooks` | bool | `false` | python, node, rust | Registry + HMAC-SHA256 signed delivery + /test endpoint |
-| `platform.cli_extensions` | bool | `false` | python | `app info` / `app tools` / `app rag` typer subcommands |
-| `platform.agents_md` | bool | `true` | all (project-scoped) | Drops AGENTS.md + CLAUDE.md at project root |
+**Enables fragments:**
+- on `true` → `enhanced_health`
 
-Operator UX — human admins browsing data, event fan-out for
-third-party integrators, SSH-in shell commands, and guidance docs for
-AI coding agents contributing to the generated repo.
+### `observability.otel`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_OpenTelemetry traces + metrics via OTLP exporter (agent.run, tool.call spans)._
+
+Emits ``app/core/otel.py`` wiring FastAPI + HTTPX instrumentations and an
+OTLP exporter to whatever ``OTEL_EXPORTER_OTLP_ENDPOINT`` points at.
+Spans of interest for agentic workloads: ``agent.run`` (per agent
+invocation), ``tool.call`` (per tool invocation). Token / cost counters
+from AG-UI RUN_FINISHED are attached as span attributes.
+
+BACKENDS: python
+DEPENDENCIES: opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi / instrumentation-httpx
+ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.
+
+**Enables fragments:**
+- on `true` → `observability_otel`
+
+### `observability.tracing`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Distributed tracing -- Logfire / OTel SDK / OTLP gRPC._
+
+Distributed tracing + structured logs wired out of the box. Python uses
+Logfire (which exports OTLP under the hood); Node uses @opentelemetry
+auto-instrumentations for HTTP / DB / Fastify spans; Rust uses
+tracing-opentelemetry + OTLP gRPC. All three honour the same OTel
+semantic-convention service name so your tracing backend (Jaeger,
+Tempo, Honeycomb, Datadog APM, Logfire) sees one service-map across
+languages.
+
+BACKENDS: python, node, rust
+REQUIRES: OTEL_EXPORTER_OTLP_ENDPOINT (or LOGFIRE_TOKEN on Python).
+
+**Enables fragments:**
+- on `true` → `observability`
+
+### `security.sbom`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_GitHub Actions workflow emitting a CycloneDX SBOM + pip-audit report._
+
+Adds ``.github/workflows/sbom.yml`` that generates a CycloneDX SBOM on
+every push and runs pip-audit weekly. Artifacts are uploaded so SBOM
+attestation and vulnerability disclosure happens as part of normal CI.
+
+BACKENDS: python
+DEPENDENCY: none runtime; CI installs cyclonedx-bom + pip-audit.
+
+**Enables fragments:**
+- on `true` → `security_sbom`
+
+## Reliability
+
+_Protection + stability middleware that every production service needs._
+
+### `middleware.pii_redaction`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** python
+
+_Logging filter that scrubs emails / tokens / API keys._
+
+A logging.Filter attached at startup that scrubs emails, bearer tokens,
+common API-key shapes (sk-*, sk-ant-*, AIza*, hf_*), and
+password=/api_key= value pairs from every log record before handlers
+run. Helps satisfy GDPR / SOC2 log-hygiene requirements without
+per-call-site discipline.
+
+BACKENDS: python
+ENDPOINTS: none — applies to logger output globally.
+
+**Enables fragments:**
+- on `true` → `pii_redaction`
+
+### `middleware.rate_limit`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Token-bucket limiter keyed by tenant or IP._
+
+Token-bucket rate limiter, keyed by tenant when authenticated or by
+client IP otherwise. Protects downstream services from hot callers and
+smooths burst traffic. Ships three first-class implementations with
+matching knobs — Python (in-memory), Node (@fastify/rate-limit), Rust
+(Axum tower layer).
+
+BACKENDS: python, node, rust
+ENDPOINTS: returns 429 on limit breach; /health and /metrics skipped.
+REQUIRES: nothing by default; set REDIS_URL to share state across replicas.
+
+**Enables fragments:**
+- on `true` → `rate_limit`
+
+### `middleware.response_cache`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** node, python
+
+_Opt-in HTTP response caching (Redis or in-memory)._
+
+Wires a cache backend at startup so route handlers can decorate
+themselves for server-side response caching. Python uses fastapi-cache2
+with a Redis backend (falls back to in-memory if RESPONSE_CACHE_URL
+isn't set); Node uses @fastify/caching. No blanket behavior change —
+handlers opt in per-endpoint.
+
+BACKENDS: python, node
+ENDPOINTS: none — decorate existing routes with @cache(expire=N).
+REQUIRES: RESPONSE_CACHE_URL pointing at Redis (recommended for prod).
+
+**Enables fragments:**
+- on `true` → `response_cache`
+
+### `middleware.security_headers`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_CSP + XFO + HSTS + Referrer-Policy + Permissions-Policy._
+
+Attaches a conservative set of response headers (CSP, X-Frame-Options,
+X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and HSTS
+on HTTPS responses) to every request. Turning this off is a deliberate
+choice for intentionally-insecure demos.
+
+BACKENDS: python, node, rust
+ENDPOINTS: none — middleware decorates every response.
+
+**Enables fragments:**
+- on `true` → `security_headers`
+
+### `reliability.circuit_breaker`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Circuit breaker for outbound HTTP calls (LLM, vector store, auth)._
+
+Emits ``app/core/circuit_breaker.py`` backed by the purgatory library.
+Wraps downstream dependencies so a flaky provider doesn't cascade
+failures into every request.
+
+BACKENDS: python
+DEPENDENCY: purgatory>=3.0.0
+TUNABLE VIA ENV: CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT.
+
+**Enables fragments:**
+- on `true` → `reliability_circuit_breaker`
+
+### `reliability.connection_pool`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Sane SQLAlchemy async pool defaults (size=20, overflow=10, pre_ping, recycle=30m)._
+
+Emits ``app/core/db_pool.py`` with production-ready SQLAlchemy pool
+settings and env-var overrides. Without this fragment, generated
+projects run on SQLAlchemy's default pool_size=5, which saturates under
+moderate burst traffic and produces mysterious 99p tail latency.
+
+BACKENDS: python
+TUNABLE VIA ENV: SQLALCHEMY_POOL_SIZE, SQLALCHEMY_MAX_OVERFLOW,
+SQLALCHEMY_POOL_PRE_PING, SQLALCHEMY_POOL_RECYCLE.
+
+**Enables fragments:**
+- on `true` → `reliability_connection_pool`
+
+## Async Work
+
+_Off-thread job processing so request handlers stay fast._
+
+### `async.rag_ingest_queue`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_Taskiq tasks that move RAG ingest off the request thread._
+
+Taskiq tasks that move RAG ingestion off the request thread. Enqueue
+with ``await ingest_text_task.kiq(...)`` or
+``ingest_pdf_bytes_task.kiq(...)`` from any handler — the worker picks
+it up and runs chunk + embed + store in the background. The endpoint
+returns immediately with a task ID.
+
+BACKENDS: python
+REQUIRES: rag.backend ≠ none + async.task_queue = true.
+
+**Enables fragments:**
+- on `true` → `rag_sync_tasks`
+
+### `async.task_queue`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** node, python, rust
+
+_Redis-backed job queue (Taskiq / BullMQ / Apalis)._
+
+A Redis-backed job queue + example task + worker binary. Define jobs as
+regular async functions, enqueue them from request handlers, process
+them out-of-process in a dedicated worker container. Ships with Taskiq
+(Python), BullMQ + ioredis (Node), and Apalis (Rust) — three different
+ecosystems with the same env-var convention (TASKIQ_BROKER_URL).
+
+BACKENDS: python, node, rust
+REQUIRES: TASKIQ_BROKER_URL → Redis.
+
+**Enables fragments:**
+- on `true` → `background_tasks`
+
+### `queue.backend`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `redis`, `sqs`
+
+_Background-work queue — Redis lists or AWS SQS, behind the QueuePort._
+
+Selects which queue implementation the ``QueuePort`` resolves to.
+Redis is the simple-and-cheap default for self-hosted setups; SQS
+covers AWS-native deployments with delayed delivery + FIFO.
+
+OPTIONS: none | redis | sqs
+BACKENDS: python
+DEPENDENCY: redis-py (redis) or aioboto3 (sqs)
+ENV: REDIS_URL / AWS_REGION
+
+**Enables fragments:**
+- on `redis` → `queue_port`, `queue_redis`
+- on `sqs` → `queue_port`, `queue_sqs`
+
+## Conversational AI
+
+_Chat persistence, tool registry, streaming WebSocket, and an LLM agent loop._
+
+### `agent.llm`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_pydantic-ai loop -- Anthropic / OpenAI / Google / OpenRouter._
+
+A pydantic-ai LLM loop that swaps in for the echo runner shipped by
+agent.streaming — no endpoint or WebSocket-contract change needed.
+Auto-picks the provider from LLM_PROVIDER (anthropic / openai / google
+/ openrouter). Every tool registered in the ToolRegistry is bridged
+into pydantic-ai automatically.
+
+BACKENDS: python
+REQUIRES: one of ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY /
+OPENROUTER_API_KEY; agent.streaming = true; agent.tools = true.
+
+**Enables fragments:**
+- on `true` → `agent`
+
+### `agent.streaming`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_/ws/agent with typed event protocol + runner dispatch._
+
+A WebSocket endpoint at /api/v1/ws/agent that streams typed AgentEvent
+JSON frames (conversation_created, user_prompt, text_delta, tool_call,
+tool_result, agent_status, error). Ships with an echo runner and a
+runner-dispatch module that prefers ``app.agents.llm_runner`` if
+present — enabling ``agent.llm`` swaps in a real LLM loop with zero
+endpoint churn.
+
+BACKENDS: python
+ENDPOINTS: /api/v1/ws/agent (WebSocket)
+REQUIRES: conversation.persistence = true.
+
+**Enables fragments:**
+- on `true` → `agent_streaming`
+
+### `agent.tools`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_Tool registry + pre-baked `current_datetime`, `web_search`._
+
+A lightweight Tool base class, a process-wide registry, and two
+pre-baked tools (current_datetime, web_search via Tavily). When
+rag.backend ≠ none it auto-registers rag_search too. Exposes a
+/api/v1/tools list + invoke endpoint so humans can exercise tools
+without an LLM loop attached.
+
+BACKENDS: python
+ENDPOINTS: /api/v1/tools (GET list, POST invoke)
+REQUIRES: TAVILY_API_KEY for the web_search tool (optional).
+
+**Enables fragments:**
+- on `true` → `agent_tools`
+
+### `chat.attachments`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_/chat-files multipart + ChatFile model + local storage._
+
+Multipart upload + download endpoints under /api/v1/chat-files with
+local-disk storage, configurable size + MIME allow-list, and a
+ChatFile SQLAlchemy model + migration for users who want DB
+persistence. The endpoint is storage-only by default (no DB write) so
+dropping it in doesn't require Dishka DI changes.
+
+BACKENDS: python
+ENDPOINTS: /api/v1/chat-files (upload + download by id)
+REQUIRES: conversation.persistence = true; UPLOAD_DIR writable.
+
+**Enables fragments:**
+- on `true` → `file_upload`
+
+### `conversation.persistence`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_SQLAlchemy Conversation / Message / ToolCall + migration._
+
+SQLAlchemy models + Pydantic schemas + a repository for Conversation,
+Message, and ToolCall rows, plus the Alembic migration that creates
+them. Rows are tenant + user scoped. This is the foundation the agent
+stream persists history to.
+
+BACKENDS: python
+REQUIRES: migration 0002 applied (``alembic upgrade head``).
+
+**Enables fragments:**
+- on `true` → `conversation_persistence`
+
+### `llm.provider`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `openai`, `anthropic`, `ollama`, `bedrock`
+
+_LLM provider for the agent loop (OpenAI, Anthropic, Ollama, or AWS Bedrock)._
+
+Selects which LLM provider the generated service talks to via the
+``LlmProviderPort`` (see ``docs/architecture-decisions/ADR-002-ports-and-adapters.md``).
+The chosen adapter registers with the dependency container; the rest
+of the app imports the Protocol. Swap providers in production by
+changing one env var — no regeneration.
+
+OPTIONS: none | openai | anthropic | ollama | bedrock
+BACKENDS: python
+DEPENDENCY: provider-specific SDK (openai / anthropic / ollama / aioboto3)
+ENV: provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
+
+**Enables fragments:**
+- on `openai` → `llm_port`, `llm_openai`
+- on `anthropic` → `llm_port`, `llm_anthropic`
+- on `ollama` → `llm_port`, `llm_ollama`
+- on `bedrock` → `llm_port`, `llm_bedrock`
+
+### `platform.mcp`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Model Context Protocol router + UI scaffolds for tool discovery and approval._
+
+Scaffolds a backend ``/mcp/tools`` + ``/mcp/invoke`` router (Python,
+FastAPI) plus Vue ToolRegistry + ApprovalDialog components. Config
+lives at project-root ``mcp.config.json`` (schema at
+``forge/templates/_shared/mcp/mcp_config_schema.json``). Real MCP
+subprocess spawning and tool-call proxying land in 1.0.0a3 — this alpha
+ships the stable endpoints + UI surface so integrators can start
+wiring today.
+
+BACKENDS: python
+FRONTENDS: vue (svelte + flutter in 1.0.0a3)
+DOCS: docs/mcp.md.
+
+**Enables fragments:**
+- on `true` → `mcp_server`, `mcp_ui`
+
+## Knowledge
+
+_Vector storage and retrieval — the RAG stack with pluggable backends._
+
+### `rag.backend`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `experimental` · **Backends:** python
+
+**Allowed values:** `none`, `pgvector`, `qdrant`, `chroma`, `milvus`, `weaviate`, `pinecone`, `postgresql`
+
+_Select the vector-store backend for RAG ingest + search._
+
+Picks which vector store the generated service talks to. ``none`` skips
+the RAG stack entirely. ``pgvector`` uses the default Postgres
+extension. All other values swap in an alternative backend alongside
+the shared chunker + embeddings + PDF-parser modules.
+
+OPTIONS: none | pgvector | qdrant | chroma | milvus | weaviate | pinecone | postgresql
+
+**Enables fragments:**
+- on `pgvector` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_postgres`
+- on `qdrant` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_qdrant`
+- on `chroma` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_chroma`
+- on `milvus` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_milvus`
+- on `weaviate` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_weaviate`
+- on `pinecone` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_pinecone`
+- on `postgresql` → `conversation_persistence`, `rag_pipeline`, `vector_store_port`, `vector_store_postgres`
+
+### `rag.embeddings`
+
+**Type:** `enum` · **Default:** `openai` · **Stability:** `experimental` · **Backends:** python
+
+**Allowed values:** `openai`, `voyage`
+
+_Embeddings provider for RAG ingest + query._
+
+OpenAI's text-embedding-3-small (1536-dim) is the default. Voyage AI
+offers domain-specialized models (voyage-3.5, voyage-code-3,
+voyage-finance-2) that typically score higher on retrieval benchmarks
+— at the cost of a separate API key and incompatible vector shapes
+(rebuild the index after switching).
+
+Only meaningful when ``rag.backend ≠ none``.
+
+OPTIONS: openai | voyage
+
+**Enables fragments:**
+- on `voyage` → `rag_embeddings_voyage`
+
+### `rag.reranker`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_Cohere rerank (+ local cross-encoder fallback) for sharper top-K._
+
+Post-retrieval rerank pass. Oversamples candidates from the vector
+store and reorders them with a cross-encoder so top-K is sharper than
+pure embedding similarity gives you. Cohere is the default provider; a
+local sentence-transformers cross-encoder is available as an opt-in
+fallback. Degrades to a silent no-op when no provider is configured.
+
+BACKENDS: python
+ENDPOINTS: /api/v1/rag/rerank/search
+REQUIRES: rag.backend ≠ none; COHERE_API_KEY.
+
+**Enables fragments:**
+- on `true` → `rag_reranking`
+
+### `rag.top_k`
+
+**Type:** `int` · **Default:** `5` · **Stability:** `experimental` · **Backends:** —
+
+**Bounds:** min `1`, max `100`
+
+_Default number of chunks returned per RAG query._
+
+Number of top-K chunks the RAG retriever returns by default. Only
+meaningful when ``rag.backend ≠ none``. Callers can still override
+per-query via the top_k parameter on /api/v1/rag/search.
+
+Used as the default for every rag_* endpoint and the `rag_search` agent
+tool. Written into .env.example as RAG_TOP_K.
+
+## Platform
+
+_Operator-facing tooling: admin UI, outbound webhooks, CLI extensions, AI-agent docs._
+
+### `object_store.backend`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `s3`, `local`
+
+_Blob storage — AWS S3 / S3-compatible / local filesystem, behind ObjectStorePort._
+
+Selects which object-store implementation backs the ``ObjectStorePort``.
+The ``s3`` adapter also handles MinIO / R2 / Wasabi (set S3_ENDPOINT_URL).
+The ``local`` adapter writes under a filesystem root — dev / test only.
+
+OPTIONS: none | s3 | local
+BACKENDS: python
+DEPENDENCY: aioboto3 (s3) | none (local)
+ENV: AWS_REGION / S3_ENDPOINT_URL / OBJECT_STORE_ROOT
+
+**Enables fragments:**
+- on `s3` → `object_store_port`, `object_store_s3`
+- on `local` → `object_store_port`, `object_store_local`
+
+### `platform.admin`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_SQLAdmin UI at /admin -- tenant-scoped ModelViews._
+
+A browser-facing admin UI mounted at /admin, built on SQLAdmin. It
+auto-registers ModelViews for whichever tables the enabled options
+have shipped — items, audit_logs, conversations, messages, webhooks
+— and skips any model whose Python import fails.
+
+BACKENDS: python
+ENDPOINTS: /admin (HTML UI)
+REQUIRES: ADMIN_PANEL_MODE=disabled|dev|all (env var); sqladmin +
+itsdangerous.
+
+**Enables fragments:**
+- on `true` → `admin_panel`
+
+### `platform.agents_md`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Drops AGENTS.md + CLAUDE.md for AI-coding-agent orientation._
+
+Drops AGENTS.md + CLAUDE.md at the project root so AI coding agents
+(Claude Code, Cursor, Copilot workspaces) have a structured
+orientation document before they touch generated code. Covers the
+option stamp, backend layout, test commands, and the house
+conventions so agents ship PRs that match the project's style on the
+first try.
+
+BACKENDS: python, node, rust (same content, project-scoped)
+
+**Enables fragments:**
+- on `true` → `agents_md`
+
+### `platform.cli_extensions`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_Typer subcommands -- `app info`, `app tools`, `app rag`._
+
+Extends the generated service's ``app`` typer CLI with operational
+subcommands: ``app info show`` (environment dump), ``app tools
+list``/``invoke`` (exercise registered agent tools), ``app rag
+ingest`` (ingest a local file into the knowledge base). Each subcommand
+degrades gracefully — if its prerequisite option isn't enabled, it
+prints a hint and exits non-zero.
+
+BACKENDS: python
+ENDPOINTS: none — CLI surface only.
+
+**Enables fragments:**
+- on `true` → `cli_commands`
+
+### `platform.webhooks`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** node, python, rust
+
+_Outbound registry + HMAC-signed delivery (ts + nonce + body)._
+
+A registry + HMAC-SHA256 signed outbound delivery pipeline. Clients
+POST to /api/v1/webhooks to register a target URL; your code calls
+``fireEvent`` to deliver a signed JSON payload. Receiver verifies the
+same way across all three backends — the signature header format is
+identical.
+
+BACKENDS: python, node, rust
+ENDPOINTS: /api/v1/webhooks (CRUD + /{id}/test fire)
+
+**Enables fragments:**
+- on `true` → `webhooks`
+
+### `security.csp`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_Strict Content-Security-Policy + HSTS + X-Content-Type-Options via nginx._
+
+Drops ``infra/nginx-csp.conf`` with production-ready strict CSP (no
+unsafe-inline, strict-dynamic, nonce-based script tags), HSTS, and
+related defence-in-depth headers. ``include infra/nginx-csp.conf;`` from
+any nginx server{} block.
+
+BACKENDS: all (project-scoped)
+DEV NOTE: relax the ``connect-src`` directive during local development
+if your dev server streams from a non-default origin.
+
+**Enables fragments:**
+- on `true` → `security_csp`
+
+<!-- END GENERATED:OPTIONS-CATALOG -->
 
 Run `forge --list` for the up-to-date list (flat columnar table by
 default; pair with `--format json` / `--format yaml` for
-machine-readable output), or `forge --describe <path>` for the full
-prose + metadata of any single option.
+machine-readable output) — the runtime view also includes plugin
+options. `forge --describe <path>` prints the full prose plus
+metadata of any single option.
 
 ## Layer discriminators — composing a project
 
