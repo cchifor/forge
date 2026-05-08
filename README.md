@@ -16,7 +16,7 @@
 
 </div>
 
-> **What's on `main`:**
+> **What's new?**
 >
 > - **Unreleased (post-1.1.0-alpha.2)** — built-in features colocate under `forge/features/<ns>/`, so authoring a built-in feature uses the same on-disk layout as third-party plugins.
 > - **1.1.0-alpha.2** — file-level three-way merge for `forge --update` (default `--mode merge`, `.forge-merge` sidecars on conflict), declarative `compose.yaml` fragment snippets, the plugin-SDK e2e gate, and six new CLI verbs: `--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph`, `--log-json`, `--log-level`.
