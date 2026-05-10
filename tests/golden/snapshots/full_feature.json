@@ -957,7 +957,7 @@
       "sha256": "d41ef1a7e81c9946"
     },
     "forge.toml": {
-      "size": 5210540,
+      "size": 5207263,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {

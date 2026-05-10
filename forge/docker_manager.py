@@ -59,7 +59,11 @@ def render_compose(
     extra_volumes: list[str] = []
     if plan is not None:
         seen_volumes: set[str] = set()
-        for svc in get_services_for_capabilities(plan.capabilities):
+        # ``plan.capabilities`` is a ``frozenset`` — iteration order is
+        # hash-based and non-deterministic across runs. Sort to keep
+        # the rendered docker-compose.yml stable so golden snapshots
+        # don't drift between identical generations.
+        for svc in get_services_for_capabilities(sorted(plan.capabilities)):
             extra_services.append({"name": svc.name, "block": svc.as_compose_dict()})
             for vol in svc.named_volumes:
                 if vol not in seen_volumes:
