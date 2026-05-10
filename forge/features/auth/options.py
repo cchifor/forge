@@ -81,31 +81,26 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                 "platform_auth_session_timeout_vue",
                 "platform_auth_session_timeout_svelte",
                 "platform_auth_session_timeout_flutter",
-                # NOTE: per-language service-template middleware
-                # fragments (``platform_auth_python_middleware``,
-                # ``platform_auth_node_middleware``,
-                # ``platform_auth_rust_middleware``) are NOT yet in
-                # this enables tuple. Reason: forge's existing
-                # python-service-template ships
-                # ``service/security/auth.py`` and
-                # ``service/client/auth.py`` at the same paths the
-                # Python middleware fragment writes — collision.
-                # The Phase 2 cutover (forthcoming) removes the
-                # legacy files from the base templates AND wires
-                # these three middleware fragments here in one
-                # atomic change. Until then, the middleware
-                # fragments are registered-but-dormant; existing
-                # projects upgrade via
-                # ``forge --migrate auth-keycloak-to-platform-auth``
-                # which removes the legacy files BEFORE
-                # ``forge --update`` ships the new ones.
-                #
+                # Phase 3 Wave 2 (cut over) — Python service-template
+                # middleware. Legacy ``service/security/providers/``,
+                # ``service/security/{auth,base}.py``,
+                # ``service/client/auth.py`` were removed from the
+                # python-service-template; the fragment ships their
+                # platform-auth replacements at the same paths.
+                # ``app/core/lifecycle.py``'s auth setup block was
+                # rewritten to use ``build_auth_guard`` +
+                # ``initialize_auth(bundle=...)``.
+                "platform_auth_python_middleware",
+                # NOTE: ``platform_auth_node_middleware`` and
+                # ``platform_auth_rust_middleware`` remain dormant
+                # pending Phase 5 / 7 cutover (legacy
+                # ``middleware/tenant.{ts,rs}`` removal).
                 # ``platform_auth_gatekeeper`` and
                 # ``platform_auth_gatekeeper_keygen`` are also held
                 # back pending the imperative compose-block removal
                 # in ``forge/templates/deploy/docker-compose.yml.j2``
                 # and the legacy ``forge/templates/infra/gatekeeper/``
-                # template removal — same atomic-cutover concern.
+                # template removal — Phase 2 Wave 2.
             ),
         },
     )

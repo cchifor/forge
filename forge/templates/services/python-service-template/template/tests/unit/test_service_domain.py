@@ -1,4 +1,4 @@
-"""Tests for service-layer domain models (Account, User, AuthSchema, Config)."""
+"""Tests for service-layer domain models (Account, User, Config)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import pytest
 from pydantic import SecretStr
 
 from service.domain.account import Account, UserRole, _to_uuid
-from service.domain.auth_schema import KeycloakRealmAccess, TokenPayload
 from service.domain.config import AuthConfig
 from service.domain.user import User
 
@@ -96,21 +95,6 @@ class TestUser:
         data = user.model_dump()
         assert data["username"] == "bob"
         assert data["service_account"] is False
-
-
-# -- TokenPayload / KeycloakRealmAccess ----------------------------------------
-
-
-class TestTokenPayload:
-    def test_minimal(self):
-        tp = TokenPayload(sub="sub-1")
-        assert tp.sub == "sub-1"
-        assert tp.email is None
-        assert tp.realm_access.roles == []
-
-    def test_extra_fields_ignored(self):
-        tp = TokenPayload(sub="s", unknown_field="ignored")
-        assert not hasattr(tp, "unknown_field")
 
 
 # -- AuthConfig ----------------------------------------------------------------
