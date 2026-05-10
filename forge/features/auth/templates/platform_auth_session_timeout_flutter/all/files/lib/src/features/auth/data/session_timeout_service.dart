@@ -1,11 +1,22 @@
 /// Inactivity-based session timeout — Flutter service.
 ///
-/// Mirrors the Vue / Svelte composable semantically: implements
-/// platform's BFF + session-timeout RFC for a cookie-based BFF
-/// architecture (web-first; native is the explicit-refresh-token
-/// follow-up the RFC marked out of scope).
+/// Mirrors the Vue / Svelte composable semantically. Two modes:
 ///
-/// Three RFC-mandated behaviours are present:
+///  - **web** — cookie-based BFF (Gatekeeper). `_extend()` POSTs to
+///    `/auth/session`; the server is the source of truth for
+///    countdown values. `bootstrap()` GETs the same endpoint.
+///
+///  - **native** — explicit refresh-token model (iOS / Android). The
+///    Gatekeeper `/auth/session` endpoint is cookie-only, so native
+///    bypasses it entirely. `_extend()` rotates the access token
+///    via the consumer-supplied `refreshAccessToken` callback (wired
+///    to `KeycloakAuthService.refreshAccessToken` in the host app).
+///    Countdown is computed locally — `idle_remaining_seconds` is
+///    capped at the configured idle timeout, so a long-lived access
+///    token (e.g. 5 min) doesn't bypass the 30-min idle window the
+///    compliance posture mandates.
+///
+/// Three RFC-mandated behaviours are present in both modes:
 ///
 ///  1. **Drift-immune countdown** — stores ``idleExpiresAt`` (an
 ///     absolute ``DateTime``); recomputes the remaining seconds via
@@ -17,8 +28,9 @@
 ///     listening to events would otherwise extend the session
 ///     forever.
 ///
-///  3. **Activity debounce** — 30-second debounce on extension POSTs
-///     to prevent hammering the server-side rate limit.
+///  3. **Activity debounce** — 30-second debounce on extension calls
+///     to avoid hammering the server-side rate limit (web) or
+///     spamming the IdP refresh endpoint (native).
 ///
 /// Cross-tab leader election (the BroadcastChannel piece in the Vue
 /// and Svelte fragments) is web-only; on native there is exactly one
@@ -34,6 +46,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
+
+/// How the service obtains and refreshes the session.
+enum SessionTimeoutMode { web, native }
+
+/// Callback the service uses on native to rotate the access token.
+///
+/// Wire to ``AuthRepository.refreshAccessToken`` (which delegates to
+/// ``KeycloakAuthService.refreshAccessToken`` under the hood). Returns
+/// the new access token's expiry timestamp on success; throws when
+/// the refresh token is rejected (revoked / expired).
+typedef RefreshAccessToken = Future<DateTime?> Function();
 
 /// Response shape from GET / POST /auth/session.
 @immutable
@@ -71,6 +94,9 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
   static const String _defaultEndpoint = '/auth/session';
   static const Duration _defaultDebounce = Duration(seconds: 30);
   static const Duration _defaultTick = Duration(seconds: 1);
+  static const int _defaultIdleTimeoutSeconds = 1800; // 30 min
+  static const int _defaultAbsoluteTimeoutSeconds = 43200; // 12 h
+  static const int _defaultWarnAtSeconds = 60;
   static const List<String> _activityHints = <String>[
     'mousemove',
     'keydown',
@@ -78,26 +104,69 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
     'visibilitychange',
   ];
 
+  final SessionTimeoutMode mode;
   final Uri endpoint;
   final Duration debounce;
   final Duration tick;
   final http.Client _http;
+  final RefreshAccessToken? _refreshAccessToken;
+  final int _nativeIdleTimeoutSeconds;
+  final int _nativeAbsoluteTimeoutSeconds;
+  final int _nativeWarnAtSeconds;
+  final VoidCallback? _onForcedLogout;
 
   bool _enabled = false;
   DateTime _idleExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _absoluteExpiresAt = DateTime.fromMillisecondsSinceEpoch(0);
-  int _warnAtSeconds = 60;
+  int _warnAtSeconds = _defaultWarnAtSeconds;
   Timer? _tickTimer;
   Timer? _debounceTimer;
   bool _isMounted = false;
 
+  /// Web (default) — POSTs to /auth/session against the BFF.
   SessionTimeoutService({
     String endpoint = _defaultEndpoint,
     this.debounce = _defaultDebounce,
     this.tick = _defaultTick,
     http.Client? client,
-  })  : endpoint = Uri.parse(endpoint),
-        _http = client ?? http.Client();
+  })  : mode = SessionTimeoutMode.web,
+        endpoint = Uri.parse(endpoint),
+        _http = client ?? http.Client(),
+        _refreshAccessToken = null,
+        _nativeIdleTimeoutSeconds = _defaultIdleTimeoutSeconds,
+        _nativeAbsoluteTimeoutSeconds = _defaultAbsoluteTimeoutSeconds,
+        _nativeWarnAtSeconds = _defaultWarnAtSeconds,
+        _onForcedLogout = null;
+
+  /// Native — uses [refreshAccessToken] to rotate the access token
+  /// on activity; computes countdown locally.
+  ///
+  /// [idleTimeoutSeconds] / [absoluteTimeoutSeconds] / [warnAtSeconds]
+  /// mirror the per-tenant defaults the Gatekeeper exposes on web
+  /// (1800 / 43200 / 60). The native client doesn't ask the server
+  /// for them; align with your deployment's `TenantConfig` defaults
+  /// or pass overrides explicitly.
+  ///
+  /// [onForcedLogout] is called when the refresh-token rotation
+  /// fails (revoked / expired) or the absolute timeout elapses.
+  /// The host app typically wires this to `AuthRepository.logout()`
+  /// + a navigation to the login route.
+  SessionTimeoutService.forNative({
+    required RefreshAccessToken refreshAccessToken,
+    int idleTimeoutSeconds = _defaultIdleTimeoutSeconds,
+    int absoluteTimeoutSeconds = _defaultAbsoluteTimeoutSeconds,
+    int warnAtSeconds = _defaultWarnAtSeconds,
+    VoidCallback? onForcedLogout,
+    this.debounce = _defaultDebounce,
+    this.tick = _defaultTick,
+  })  : mode = SessionTimeoutMode.native,
+        endpoint = Uri.parse(_defaultEndpoint),
+        _http = http.Client(),
+        _refreshAccessToken = refreshAccessToken,
+        _nativeIdleTimeoutSeconds = idleTimeoutSeconds,
+        _nativeAbsoluteTimeoutSeconds = absoluteTimeoutSeconds,
+        _nativeWarnAtSeconds = warnAtSeconds,
+        _onForcedLogout = onForcedLogout;
 
   bool get enabled => _enabled;
   int get warnAtSeconds => _warnAtSeconds;
@@ -144,23 +213,10 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
   /// Bypasses the activity debounce.
   Future<void> extend() async {
     if (!_enabled) return;
-    try {
-      final response = await _http.post(endpoint, headers: <String, String>{
-        'Accept': 'application/json',
-      });
-      if (response.statusCode == 401) {
-        // Session expired between trigger and POST. Let the API layer's
-        // 401 handler drive the redirect.
-        _enabled = false;
-        notifyListeners();
-        return;
-      }
-      if (response.statusCode != 200) return;
-      _applyState(
-        SessionState.fromJson(jsonDecode(response.body) as Map<String, dynamic>),
-      );
-    } catch (_) {
-      // Network blip — silently ignore; next activity will retry.
+    if (mode == SessionTimeoutMode.native) {
+      await _extendNative();
+    } else {
+      await _extendWeb();
     }
   }
 
@@ -191,6 +247,14 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _bootstrap() async {
+    if (mode == SessionTimeoutMode.native) {
+      _bootstrapNative();
+    } else {
+      await _bootstrapWeb();
+    }
+  }
+
+  Future<void> _bootstrapWeb() async {
     try {
       final response = await _http.get(endpoint, headers: <String, String>{
         'Accept': 'application/json',
@@ -207,6 +271,76 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
       _enabled = false;
       notifyListeners();
     }
+  }
+
+  void _bootstrapNative() {
+    if (_nativeIdleTimeoutSeconds == 0 && _nativeAbsoluteTimeoutSeconds == 0) {
+      _enabled = false;
+      notifyListeners();
+      return;
+    }
+    _applyState(SessionState(
+      idleRemainingSeconds: _nativeIdleTimeoutSeconds,
+      absoluteRemainingSeconds: _nativeAbsoluteTimeoutSeconds,
+      idleTimeoutSeconds: _nativeIdleTimeoutSeconds,
+      absoluteTimeoutSeconds: _nativeAbsoluteTimeoutSeconds,
+      warnAtSeconds: _nativeWarnAtSeconds,
+    ));
+  }
+
+  Future<void> _extendWeb() async {
+    try {
+      final response = await _http.post(endpoint, headers: <String, String>{
+        'Accept': 'application/json',
+      });
+      if (response.statusCode == 401) {
+        // Session expired between trigger and POST. Let the API layer's
+        // 401 handler drive the redirect.
+        _enabled = false;
+        notifyListeners();
+        return;
+      }
+      if (response.statusCode != 200) return;
+      _applyState(
+        SessionState.fromJson(jsonDecode(response.body) as Map<String, dynamic>),
+      );
+    } catch (_) {
+      // Network blip — silently ignore; next activity will retry.
+    }
+  }
+
+  Future<void> _extendNative() async {
+    final refresh = _refreshAccessToken;
+    if (refresh == null) return;
+    final DateTime? newExp;
+    try {
+      newExp = await refresh();
+    } catch (_) {
+      // Keycloak rejected the refresh token (revoked / expired). The
+      // session is dead; force logout via the consumer callback.
+      _enabled = false;
+      notifyListeners();
+      _onForcedLogout?.call();
+      return;
+    }
+    // Reset the local idle countdown. Cap at the configured idle
+    // timeout so a long-lived access token (e.g. 5-min Keycloak
+    // default) doesn't widen the compliance window beyond intent.
+    final now = DateTime.now();
+    final accessTokenLifeSec = newExp == null
+        ? _nativeIdleTimeoutSeconds
+        : newExp.difference(now).inSeconds;
+    final idleRemaining = accessTokenLifeSec < _nativeIdleTimeoutSeconds
+        ? accessTokenLifeSec
+        : _nativeIdleTimeoutSeconds;
+    final absoluteRemaining = _absoluteExpiresAt.difference(now).inSeconds;
+    _applyState(SessionState(
+      idleRemainingSeconds: idleRemaining < 0 ? 0 : idleRemaining,
+      absoluteRemainingSeconds: absoluteRemaining < 0 ? 0 : absoluteRemaining,
+      idleTimeoutSeconds: _nativeIdleTimeoutSeconds,
+      absoluteTimeoutSeconds: _nativeAbsoluteTimeoutSeconds,
+      warnAtSeconds: _nativeWarnAtSeconds,
+    ));
   }
 
   void _applyState(SessionState state) {
@@ -226,7 +360,23 @@ class SessionTimeoutService extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startTickTimer() {
     _tickTimer?.cancel();
-    _tickTimer = Timer.periodic(tick, (_) => notifyListeners());
+    _tickTimer = Timer.periodic(tick, (_) {
+      // On native, when the idle countdown or the absolute timeout
+      // elapses, the user has not been active for the full window
+      // and there's no point in waiting for the next activity event
+      // — force a logout so the login screen lands.
+      if (mode == SessionTimeoutMode.native &&
+          _enabled &&
+          (idleRemainingSeconds <= 0 || absoluteRemainingSeconds <= 0)) {
+        _enabled = false;
+        _tickTimer?.cancel();
+        _tickTimer = null;
+        notifyListeners();
+        _onForcedLogout?.call();
+        return;
+      }
+      notifyListeners();
+    });
   }
 
   /// `WidgetsBindingObserver` — when the app comes back to foreground

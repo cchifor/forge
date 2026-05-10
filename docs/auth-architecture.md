@@ -270,6 +270,41 @@ The pre-warning modal opens at `T - warn_at_seconds` from idle
 expiry. "Stay signed in" force-fires `extend()`, bypassing the
 debounce. "Sign out" navigates to `/logout`.
 
+### Flutter native — dual model
+
+Flutter web rides the same cookie-based BFF flow as Vue / Svelte
+above. Flutter **native** (iOS / Android) takes a parallel path: no
+cookies, explicit refresh tokens, client-managed rotation.
+
+`SessionTimeoutService.forNative(...)` is the dedicated factory.
+Differences from the cookie-based variant:
+
+- **No GET / POST `/auth/session`.** Native bypasses the Gatekeeper
+  session endpoint entirely (it's cookie-only). Bootstrap reads the
+  configured idle / absolute timeout values locally; `extend()` calls
+  the consumer-supplied `RefreshAccessToken` callback (wired to
+  `KeycloakAuthService.refreshAccessToken`) which rotates via
+  `flutter_appauth.token(refreshToken: ...)`.
+- **Idle countdown is capped at the configured idle timeout.** The
+  rotated access token typically has its own short TTL (~5 min from
+  Keycloak); the local idle anchor takes the lesser of the access
+  token's lifetime and the compliance idle window so a long-lived
+  access token can't widen the compliance posture beyond intent.
+- **Forced logout on idle / absolute / refresh-failure.** The tick
+  timer detects when either countdown elapses and invokes the
+  consumer-supplied `onForcedLogout` callback (typically wired to
+  `AuthRepository.logout()` + a navigation to the login route).
+  Refresh-token rejection (revoked / expired) follows the same path.
+- **Dio 401 retry path.** The generated app's `auth_interceptor.dart`
+  catches 401 from any API call and attempts a single
+  `refreshAccessToken()` + replay before surfacing the error. Mirrors
+  the standard mobile-OIDC pattern.
+
+The `SessionTimeoutModal` UX is shared: same "Stay signed in" /
+"Sign out" buttons, same warn-at threshold, same drift-immune
+countdown. `extend()` rotates instead of POSTs; users see no
+behavioral difference.
+
 ## Token flow walkthroughs
 
 ### Browser login
@@ -476,10 +511,6 @@ plan inherits the same scope split:
   device / geo anomaly.
 - **Concurrent-session limits** — "max 3 concurrent sessions per
   user."
-- **Mobile / native client refresh** — non-browser clients need an
-  explicit refresh-token model. Flutter's native target ships a stub
-  that bypasses session-timeout enforcement until that workstream
-  lands.
 - **Alternative `KEY_BACKEND`s** — `aws_kms`, `vault`, `gcp_kms`.
 - **`@forge/platform-auth-web` shared SPA SDK** — currently each
   frontend gets its own copy of `useSessionTimeout` +

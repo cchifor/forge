@@ -5,10 +5,15 @@
 /// a live countdown, and offers two actions:
 ///
 ///  - **Stay signed in** → fires an immediate extension via
-///    ``service.extend()``, bypassing the activity debounce.
-///  - **Sign out** → existing /logout flow (browser navigation on
-///    web; the native equivalent is a separate route handler the
-///    consumer wires up).
+///    ``service.extend()``, bypassing the activity debounce. On web
+///    this POSTs to ``/auth/session``; on native it rotates the
+///    access token via the consumer-supplied ``RefreshAccessToken``
+///    callback wired into ``SessionTimeoutService.forNative(...)``.
+///  - **Sign out** → consumer-supplied ``onSignOut`` callback.
+///    Native consumers MUST pass it (typically wired to
+///    ``AuthRepository.logout`` plus a navigation to the login route);
+///    web consumers can leave it null and the modal will redirect to
+///    ``/logout`` via the browser.
 ///
 /// Wire once at the authenticated layout's root. Consume the service
 /// via the framework integration the project already uses (Provider,

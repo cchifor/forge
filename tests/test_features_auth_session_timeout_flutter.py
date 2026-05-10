@@ -156,3 +156,202 @@ def test_modal_offers_stay_signed_in_and_sign_out() -> None:
     assert ".extend()" in text or "service.extend" in text, (
         "Modal's 'Stay signed in' must call service.extend()"
     )
+
+
+# -- Native auth refresh path ---------------------------------------------------
+#
+# The session-timeout service ships a dedicated ``forNative`` factory
+# that uses an injected ``RefreshAccessToken`` callback (wired to the
+# host app's ``AuthRepository.refreshAccessToken``) instead of POSTing
+# to ``/auth/session`` (which is cookie-only). These invariants pin the
+# native code path so a future regression that drops the factory or its
+# refresh-token wiring surfaces here at forge generate time.
+
+
+def test_service_exposes_session_timeout_mode_enum() -> None:
+    """``SessionTimeoutMode { web, native }`` distinguishes the two
+    code paths inside the service. Pinned so the dual model stays
+    explicit rather than collapsing back to a kIsWeb branch."""
+    text = _service_path().read_text(encoding="utf-8")
+    assert "enum SessionTimeoutMode" in text, (
+        "Service must declare a SessionTimeoutMode enum to distinguish "
+        "the cookie-based BFF path (web) from the refresh-token path "
+        "(native)"
+    )
+    assert "SessionTimeoutMode.web" in text
+    assert "SessionTimeoutMode.native" in text
+
+
+def test_service_exposes_refresh_access_token_typedef() -> None:
+    """``RefreshAccessToken`` typedef lets the consumer wire
+    ``AuthRepository.refreshAccessToken`` (or any other rotation
+    function) without the service taking a hard dep on the host app's
+    auth layer."""
+    text = _service_path().read_text(encoding="utf-8")
+    assert "typedef RefreshAccessToken" in text, (
+        "Service must declare a RefreshAccessToken typedef so the "
+        "native code path takes the rotation function as a callback"
+    )
+    # Returns the new access token's expiry so the service can reset
+    # its drift-immune countdown anchor.
+    assert "Future<DateTime?> Function()" in text, (
+        "RefreshAccessToken must be Future<DateTime?> Function() — "
+        "returns the new access token's expiry timestamp"
+    )
+
+
+def test_service_ships_native_factory() -> None:
+    """``SessionTimeoutService.forNative(...)`` is the dedicated
+    constructor for non-cookie clients. It MUST take a
+    ``refreshAccessToken`` callback (no default — every native consumer
+    must wire its own auth repository)."""
+    text = _service_path().read_text(encoding="utf-8")
+    assert "SessionTimeoutService.forNative" in text, (
+        "Service must ship a forNative factory constructor"
+    )
+    assert "required RefreshAccessToken refreshAccessToken" in text, (
+        "forNative factory must require a refreshAccessToken callback"
+    )
+    # Defaults mirror the Gatekeeper's per-tenant defaults so cross-
+    # platform behavior aligns.
+    assert "idleTimeoutSeconds" in text
+    assert "absoluteTimeoutSeconds" in text
+    assert "warnAtSeconds" in text
+    # Native consumers wire onForcedLogout to AuthRepository.logout()
+    # plus a navigation to the login route.
+    assert "onForcedLogout" in text, (
+        "forNative factory must accept an onForcedLogout callback so "
+        "the host app can clear tokens + navigate on idle / absolute "
+        "timeout or refresh-token rejection"
+    )
+
+
+def test_service_native_path_does_not_post_to_auth_session() -> None:
+    """Native bypasses the Gatekeeper /auth/session endpoint (cookie-
+    only). The service's native code path MUST call the refresh
+    callback rather than POSTing."""
+    text = _service_path().read_text(encoding="utf-8")
+    assert "_extendNative" in text, (
+        "Service must split the extend path into a native variant "
+        "that delegates to the refresh-token callback"
+    )
+    # The native bootstrap is local-only (no server roundtrip) — no
+    # baseline cookie GET to fall back to.
+    assert "_bootstrapNative" in text, (
+        "Service must split the bootstrap path so native computes "
+        "initial countdown from the configured idle/absolute timeouts "
+        "without a server call"
+    )
+
+
+def test_service_forces_logout_on_idle_or_absolute_timeout() -> None:
+    """When either countdown elapses on native, the service must
+    invoke the onForcedLogout callback. Without this, the user would
+    sit on a stale UI past the compliance idle window."""
+    text = _service_path().read_text(encoding="utf-8")
+    assert "_onForcedLogout" in text
+    # Tick timer must check countdown values and fire the callback.
+    assert "absoluteRemainingSeconds <= 0" in text or "idleRemainingSeconds <= 0" in text, (
+        "Tick timer must detect idle / absolute timeout elapsed on "
+        "native and invoke the forced-logout callback"
+    )
+
+
+def test_modal_documents_native_signout_requirement() -> None:
+    """The modal's onSignOut callback is consumer-supplied. On native,
+    the consumer MUST pass it (typically AuthRepository.logout + a
+    navigation). The doc-comment makes this explicit."""
+    text = _modal_path().read_text(encoding="utf-8")
+    assert "Native consumers MUST pass it" in text, (
+        "Modal doc must call out that native consumers must pass "
+        "onSignOut explicitly"
+    )
+
+
+# -- Base flutter-frontend-template wiring -------------------------------------
+#
+# The session-timeout fragment is half the story; the native
+# refresh-token rotation is wired through the base flutter-frontend-
+# template's auth layer. These invariants pin the supporting public
+# surface so a refactor can't silently strip the integration points
+# the fragment depends on.
+
+_FLUTTER_TEMPLATE_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "forge"
+    / "templates"
+    / "apps"
+    / "flutter-frontend-template"
+    / "{{project_slug}}"
+    / "lib"
+    / "src"
+)
+
+
+def test_keycloak_auth_service_exposes_refresh_access_token() -> None:
+    """``KeycloakAuthService.refreshAccessToken`` is the native
+    rotation primitive the session-timeout service's forNative factory
+    delegates to. Pinned as a public method so a refactor can't
+    accidentally re-privatize it (the flow already existed in
+    ``init()``; this method is the extracted public surface)."""
+    text = (
+        _FLUTTER_TEMPLATE_ROOT / "features" / "auth" / "data" / "keycloak_auth_service.dart"
+    ).read_text(encoding="utf-8")
+    assert "Future<DateTime?> refreshAccessToken()" in text, (
+        "KeycloakAuthService must expose a public Future<DateTime?> "
+        "refreshAccessToken() method that returns the new access "
+        "token's expiry timestamp"
+    )
+    # The rotation must go through flutter_appauth's token endpoint
+    # with the stored refresh token (the existing init() pattern,
+    # extracted into a shared helper).
+    assert "_rotateFromRefreshToken" in text, (
+        "Rotation should live in a shared private helper so init() "
+        "and refreshAccessToken() use one code path"
+    )
+
+
+def test_auth_repository_delegates_refresh_to_keycloak() -> None:
+    """``AuthRepository.refreshAccessToken`` returns null on dev / web
+    and delegates to ``KeycloakAuthService.refreshAccessToken`` on
+    native. The session-timeout service's forNative factory wires
+    this method as its rotation callback."""
+    text = (
+        _FLUTTER_TEMPLATE_ROOT / "features" / "auth" / "data" / "auth_repository.dart"
+    ).read_text(encoding="utf-8")
+    assert "Future<DateTime?> refreshAccessToken()" in text, (
+        "AuthRepository must expose refreshAccessToken() so the "
+        "session-timeout service can call it as a callback"
+    )
+    assert "if (_authDisabled || _useGatekeeper) return null" in text, (
+        "Web / dev paths must short-circuit to null (the cookie-based "
+        "BFF flow doesn't manage refresh tokens client-side)"
+    )
+
+
+def test_auth_interceptor_retries_once_on_401() -> None:
+    """The Dio auth interceptor catches 401, attempts a single refresh,
+    then retries the request. Mirrors the standard mobile-OIDC pattern.
+    Pinned so the retry path can't regress to the original
+    inject-only-on-outbound shape."""
+    text = (
+        _FLUTTER_TEMPLATE_ROOT / "api" / "client" / "auth_interceptor.dart"
+    ).read_text(encoding="utf-8")
+    # The retry guard prevents infinite recursion on a second 401.
+    assert "_retriedFlag" in text or "retried" in text, (
+        "Interceptor must mark already-retried requests so a second "
+        "401 doesn't trigger another refresh attempt"
+    )
+    # The retry must call refresh THEN replay the request.
+    assert "refreshAccessToken" in text, (
+        "Interceptor must call refreshAccessToken() on 401"
+    )
+    assert "dio.fetch" in text, (
+        "Interceptor must replay the original request via dio.fetch "
+        "after rotating the access token"
+    )
+    # Web bypass — the cookie-based flow uses redirect handling.
+    assert "kIsWeb" in text, (
+        "Interceptor must skip the 401 retry on web (cookie-based "
+        "auth uses a different recovery path)"
+    )

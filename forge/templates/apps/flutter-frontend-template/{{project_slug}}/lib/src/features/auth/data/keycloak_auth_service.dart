@@ -33,21 +33,47 @@ class KeycloakAuthService {
     if (storedAccess == null || storedRefresh == null) return null;
 
     try {
-      final result = await _appAuth.token(
-        TokenRequest(
-          _config.keycloakClientId,
-          'com.example.flutterfrontend:/callback',
-          issuer: _issuer,
-          refreshToken: storedRefresh,
-        ),
-      );
-
-      await _handleTokenResponse(result);
+      await _rotateFromRefreshToken(storedRefresh);
       return _currentUser;
     } catch (_) {
       await _clearTokens();
     }
     return null;
+  }
+
+  /// Rotate the access token using the stored refresh token.
+  ///
+  /// Used by the session-timeout service to extend the local idle
+  /// countdown on user activity (replaces the BFF cookie-based POST
+  /// /auth/session that the web variant fires) and by the API client's
+  /// 401 interceptor to recover from a server-side expiry.
+  ///
+  /// Returns the new access token's expiry timestamp. The caller resets
+  /// its local idle-countdown anchor against this value.
+  ///
+  /// Throws when:
+  /// - no refresh token is stored locally (caller must trigger login),
+  /// - Keycloak rejects the refresh token (revoked / expired / signed
+  ///   out elsewhere) — caller must clear tokens and force login.
+  Future<DateTime?> refreshAccessToken() async {
+    final storedRefresh = await _secureStorage.read(key: _refreshTokenKey);
+    if (storedRefresh == null) {
+      throw StateError('refreshAccessToken called with no stored refresh token');
+    }
+    await _rotateFromRefreshToken(storedRefresh);
+    return _tokenPair?.expiresAt;
+  }
+
+  Future<void> _rotateFromRefreshToken(String refreshToken) async {
+    final result = await _appAuth.token(
+      TokenRequest(
+        _config.keycloakClientId,
+        'com.example.flutterfrontend:/callback',
+        issuer: _issuer,
+        refreshToken: refreshToken,
+      ),
+    );
+    await _handleTokenResponse(result);
   }
 
   Future<(User, TokenPair)> login() async {

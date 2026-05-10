@@ -99,6 +99,26 @@ class AuthRepository {
     }
   }
 
+  /// Rotate the access token (native only).
+  ///
+  /// Returns the new access token's expiry timestamp. Used by the
+  /// session-timeout service's native code path to extend the local
+  /// idle countdown on user activity, and by the Dio auth interceptor
+  /// to recover from a server-side 401.
+  ///
+  /// Returns ``null`` on dev / web (Gatekeeper-cookie) auth — those
+  /// paths don't manage refresh tokens client-side, so callers should
+  /// treat ``null`` as "not applicable" rather than failure.
+  ///
+  /// Throws when Keycloak rejects the refresh token (revoked /
+  /// expired) — caller must logout and force re-login.
+  Future<DateTime?> refreshAccessToken() async {
+    if (_authDisabled || _useGatekeeper) return null;
+    final expiresAt = await _keycloakService!.refreshAccessToken();
+    _accessToken = _keycloakService!.accessToken;
+    return expiresAt;
+  }
+
   User? get currentUser {
     if (_authDisabled) return _devService?.currentUser;
     if (_useGatekeeper) return _gatekeeperService?.currentUser;
