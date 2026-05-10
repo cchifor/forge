@@ -10,12 +10,14 @@ class KeycloakAuthService {
   KeycloakAuthService({
     required EnvConfig config,
     required FlutterSecureStorage secureStorage,
+    FlutterAppAuth? appAuth,
   })  : _config = config,
-        _secureStorage = secureStorage;
+        _secureStorage = secureStorage,
+        _appAuth = appAuth ?? const FlutterAppAuth();
 
   final EnvConfig _config;
   final FlutterSecureStorage _secureStorage;
-  final FlutterAppAuth _appAuth = const FlutterAppAuth();
+  final FlutterAppAuth _appAuth;
 
   TokenPair? _tokenPair;
   User? _currentUser;
