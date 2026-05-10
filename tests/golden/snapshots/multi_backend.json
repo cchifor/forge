@@ -29,7 +29,7 @@
       "sha256": "b6224290f86245ce"
     },
     "forge.toml": {
-      "size": 53856,
+      "size": 53781,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -273,8 +273,8 @@
       "sha256": "26238d0022cd5d6d"
     },
     "services/api-node/package.json": {
-      "size": 1097,
-      "sha256": "a8091b5c27ee9055"
+      "size": 1145,
+      "sha256": "3640fc3d6da85006"
     },
     "services/api-node/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -293,8 +293,8 @@
       "sha256": "389f88b89941827e"
     },
     "services/api-node/src/app.ts": {
-      "size": 2205,
-      "sha256": "9129268faed4cce0"
+      "size": 2430,
+      "sha256": "ece8f45a1a53423b"
     },
     "services/api-node/src/config/index.ts": {
       "size": 356,
@@ -309,16 +309,16 @@
       "sha256": "7b2b51e61547a7c1"
     },
     "services/api-node/src/data/repositories/base-repository.ts": {
-      "size": 1461,
-      "sha256": "e891e4b068bfcc45"
+      "size": 1480,
+      "sha256": "8cf49126331d536d"
     },
     "services/api-node/src/data/repositories/index.ts": {
       "size": 146,
       "sha256": "edd44fae82d46385"
     },
     "services/api-node/src/data/repositories/item-repository.ts": {
-      "size": 3246,
-      "sha256": "70530209b353a6ce"
+      "size": 3288,
+      "sha256": "f5937f3055082952"
     },
     "services/api-node/src/index.ts": {
       "size": 423,
@@ -327,10 +327,6 @@
     "services/api-node/src/lib/errors.ts": {
       "size": 4396,
       "sha256": "a82da1a14419b56a"
-    },
-    "services/api-node/src/lib/http-client.ts": {
-      "size": 1836,
-      "sha256": "a44f0b0878cc7679"
     },
     "services/api-node/src/lib/logger.ts": {
       "size": 251,
@@ -344,6 +340,10 @@
       "size": 599,
       "sha256": "090fa12890818552"
     },
+    "services/api-node/src/middleware/auth.ts": {
+      "size": 3570,
+      "sha256": "994770b1c175e25a"
+    },
     "services/api-node/src/middleware/correlation.ts": {
       "size": 394,
       "sha256": "1130d8a9a12c2118"
@@ -353,12 +353,8 @@
       "sha256": "86c7677f63a270e0"
     },
     "services/api-node/src/middleware/logging.ts": {
-      "size": 416,
-      "sha256": "068346e2234c7c96"
-    },
-    "services/api-node/src/middleware/tenant.ts": {
-      "size": 2529,
-      "sha256": "67cfaa192e3f940c"
+      "size": 620,
+      "sha256": "dc604326f61b395a"
     },
     "services/api-node/src/routes/health.ts": {
       "size": 639,
@@ -369,8 +365,8 @@
       "sha256": "e073f521486d5865"
     },
     "services/api-node/src/routes/items.ts": {
-      "size": 1764,
-      "sha256": "d46d1dc1a7d73754"
+      "size": 1777,
+      "sha256": "bff7f9efdd33d6a0"
     },
     "services/api-node/src/schemas/common.schema.ts": {
       "size": 633,
@@ -397,8 +393,12 @@
       "sha256": "889ff3f81da91263"
     },
     "services/api-node/src/services/item.service.ts": {
-      "size": 2571,
-      "sha256": "0ad2914418bbf14c"
+      "size": 2606,
+      "sha256": "89ca92bcfd47d4c3"
+    },
+    "services/api-node/src/types/auth.ts": {
+      "size": 1238,
+      "sha256": "75a06d4d59545314"
     },
     "services/api-node/tests/integration/health.test.ts": {
       "size": 1330,
@@ -425,16 +425,12 @@
       "sha256": "3f55e41cf4ee5ed0"
     },
     "services/api-node/tests/unit/item.service.test.ts": {
-      "size": 5305,
-      "sha256": "6eda7fdefbbbe121"
+      "size": 5297,
+      "sha256": "7d476324f1555695"
     },
     "services/api-node/tests/unit/repositories.test.ts": {
-      "size": 2815,
-      "sha256": "f0deb6009b673c2f"
-    },
-    "services/api-node/tests/unit/tenant.test.ts": {
-      "size": 3530,
-      "sha256": "a4dae923bf2ee957"
+      "size": 2777,
+      "sha256": "7863bde099cc9278"
     },
     "services/api-node/tests/utils/errors.ts": {
       "size": 1412,

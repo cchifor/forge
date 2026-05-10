@@ -158,14 +158,33 @@ def test_inject_yaml_wires_app_ts_markers() -> None:
     )
 
 
-def test_node_middleware_fragment_not_yet_wired_to_auth_mode() -> None:
-    """Phase 5's fragment registered but NOT yet wired into
-    ``auth.mode=generate``'s enables map. Conflict-with-legacy
-    concern same as Phase 3 — bundled with the atomic cutover."""
+def test_node_middleware_fragment_wired_to_auth_mode() -> None:
+    """Phase 5 Wave 2 cutover landed — the fragment is now in
+    ``auth.mode=generate``'s enables tuple.
+
+    Cutover: legacy ``src/middleware/tenant.ts``,
+    ``src/lib/http-client.ts``, and ``tests/unit/tenant.test.ts``
+    were removed from the node-service-template; the fragment ships
+    ``src/middleware/auth.ts`` + ``src/types/auth.ts`` (`bootstrapAuth`
+    + `AuthenticatedRequest`); ``src/app.ts.jinja`` had its
+    ``tenantHook`` / ``requireTenant`` registrations replaced (the
+    new platform-auth plugin handles verification globally via
+    onRequest); the repository / service / route layers were
+    refactored from ``TenantContext`` (userId / customerId / email /
+    roles) to ``IdentityContext`` (tenantId / subject / scopes /
+    roles).
+
+    Pinning the wiring here so a future regression that drops the
+    fragment from ``auth.mode``'s enables map gets caught.
+    """
     from forge.options import OPTION_REGISTRY
 
     auth_mode = OPTION_REGISTRY["auth.mode"]
     enabled = auth_mode.enables.get("generate", ())
-    assert "platform_auth_node_middleware" not in enabled, (
-        "platform_auth_node_middleware was wired before the Phase 2 cutover"
+    assert "platform_auth_node_middleware" in enabled, (
+        "platform_auth_node_middleware fragment must be in "
+        "auth.mode=generate's enables tuple after the Phase 5 Wave 2 "
+        "cutover — without it, a generated Node project gets the SDK "
+        "at sdks/platform-auth-node/ but no middleware wiring it "
+        "into Fastify."
     )

@@ -91,10 +91,18 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                 # rewritten to use ``build_auth_guard`` +
                 # ``initialize_auth(bundle=...)``.
                 "platform_auth_python_middleware",
-                # NOTE: ``platform_auth_node_middleware`` and
-                # ``platform_auth_rust_middleware`` remain dormant
-                # pending Phase 5 / 7 cutover (legacy
-                # ``middleware/tenant.{ts,rs}`` removal).
+                # Phase 5 Wave 2 (cut over) — Node service-template
+                # middleware. Legacy ``middleware/tenant.ts``,
+                # ``lib/http-client.ts`` removed; Repository/Service/
+                # route layers refactored from ``TenantContext``
+                # (userId / customerId / email / roles) to
+                # ``IdentityContext`` (tenantId / subject / scopes /
+                # roles). The fragment's ``bootstrapAuth(app)`` is
+                # injected at the FORGE markers in ``app.ts``.
+                "platform_auth_node_middleware",
+                # NOTE: ``platform_auth_rust_middleware`` remains
+                # dormant pending Phase 7 cutover (legacy
+                # ``middleware/tenant.rs`` removal).
                 # ``platform_auth_gatekeeper`` and
                 # ``platform_auth_gatekeeper_keygen`` are also held
                 # back pending the imperative compose-block removal

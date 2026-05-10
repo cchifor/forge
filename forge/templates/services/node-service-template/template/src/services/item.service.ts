@@ -3,16 +3,16 @@ import {
 	itemRepository,
 	type PrismaItemRepository,
 } from "../data/repositories/index.js";
-import type { TenantContext } from "../middleware/tenant.js";
 import type {
 	ItemCreate,
 	ItemStatus,
 	ItemUpdate,
 	PaginatedItems,
 } from "../schemas/item.schema.js";
+import type { IdentityContext } from "../types/auth.js";
 
 interface ListParams {
-	tenant: TenantContext;
+	identity: IdentityContext;
 	skip: number;
 	limit: number;
 	status?: ItemStatus;
@@ -32,8 +32,8 @@ interface ListParams {
 function buildService(repo: PrismaItemRepository = itemRepository) {
 	return {
 		async list(params: ListParams): Promise<PaginatedItems> {
-			const { tenant, skip, limit, status, search } = params;
-			const { items, total } = await repo.list(tenant, {
+			const { identity, skip, limit, status, search } = params;
+			const { items, total } = await repo.list(identity, {
 				skip,
 				limit,
 				status,
@@ -48,30 +48,30 @@ function buildService(repo: PrismaItemRepository = itemRepository) {
 			};
 		},
 
-		async create(tenant: TenantContext, data: ItemCreate) {
-			const existing = await repo.findByName(tenant, data.name);
+		async create(identity: IdentityContext, data: ItemCreate) {
+			const existing = await repo.findByName(identity, data.name);
 			if (existing) throw new AlreadyExistsError("Item", data.name);
-			return repo.create(tenant, data);
+			return repo.create(identity, data);
 		},
 
-		async getById(tenant: TenantContext, id: string) {
-			const item = await repo.getById(tenant, id);
+		async getById(identity: IdentityContext, id: string) {
+			const item = await repo.getById(identity, id);
 			if (!item) throw new NotFoundError("Item", id);
 			return item;
 		},
 
-		async update(tenant: TenantContext, id: string, data: ItemUpdate) {
-			await this.getById(tenant, id);
+		async update(identity: IdentityContext, id: string, data: ItemUpdate) {
+			await this.getById(identity, id);
 			if (data.name) {
-				const existing = await repo.findByNameExcluding(tenant, data.name, id);
+				const existing = await repo.findByNameExcluding(identity, data.name, id);
 				if (existing) throw new AlreadyExistsError("Item", data.name);
 			}
-			return repo.update(tenant, id, data);
+			return repo.update(identity, id, data);
 		},
 
-		async remove(tenant: TenantContext, id: string) {
-			await this.getById(tenant, id);
-			await repo.delete(tenant, id);
+		async remove(identity: IdentityContext, id: string) {
+			await this.getById(identity, id);
+			await repo.delete(identity, id);
 		},
 
 		withRepository(other: PrismaItemRepository) {
