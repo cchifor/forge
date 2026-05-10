@@ -110,6 +110,17 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                 # ``app.rs`` adds the ``axum::middleware::from_fn``
                 # auth_middleware layer.
                 "platform_auth_rust_middleware",
+                # Phase 2 Wave 2 (cut over) — Gatekeeper as token
+                # authority + signing-key init service. Imperative
+                # gatekeeper compose block in
+                # ``forge/templates/deploy/docker-compose.yml.j2`` and
+                # the legacy ``forge/templates/infra/gatekeeper/``
+                # tree were removed. Declarative ``compose.yaml``
+                # entries on these two fragments register the
+                # gatekeeper + gatekeeper-keygen sidecars via
+                # ``forge.services.fragment_compose``.
+                "platform_auth_gatekeeper",
+                "platform_auth_gatekeeper_keygen",
                 # ``platform_auth_gatekeeper`` and
                 # ``platform_auth_gatekeeper_keygen`` are also held
                 # back pending the imperative compose-block removal

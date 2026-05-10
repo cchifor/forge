@@ -89,7 +89,11 @@ register_fragment(
             BackendLanguage.NODE: _GATEKEEPER_IMPL,
             BackendLanguage.RUST: _GATEKEEPER_IMPL,
         },
-        capabilities=("redis",),  # BFF session store + service-extension rate limit
+        # ``gatekeeper`` keys the fragment's own declarative compose.yaml
+        # entry into ``plan.capabilities``; ``redis`` pulls in the BFF
+        # session-store + rate-limit sidecar from the existing service
+        # registry.
+        capabilities=("gatekeeper", "redis"),
         # depends_on the keygen init fragment so docker-compose's
         # ``service_completed_successfully`` wiring resolves before
         # gatekeeper main starts. Both fragments must end up in the
@@ -407,5 +411,10 @@ register_fragment(
             BackendLanguage.NODE: _GATEKEEPER_KEYGEN_IMPL,
             BackendLanguage.RUST: _GATEKEEPER_KEYGEN_IMPL,
         },
+        # The keygen init container's compose.yaml registers under
+        # capability ``gatekeeper-keygen``; declaring it here pulls
+        # the service into ``plan.capabilities`` so docker_manager
+        # renders it alongside the main gatekeeper service.
+        capabilities=("gatekeeper-keygen",),
     )
 )

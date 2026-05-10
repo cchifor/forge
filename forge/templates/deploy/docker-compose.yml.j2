@@ -169,36 +169,12 @@ services:
       - app-network
 
 {% if include_keycloak %}
-  # ── Auth Gateway (OIDC ForwardAuth) ──
-  gatekeeper:
-    build:
-      context: ./infra/gatekeeper
-      dockerfile: Dockerfile
-    environment:
-      ENV: development
-      KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
-      KEYCLOAK_EXTERNAL_URL: "http://localhost:{{ keycloak_port }}/realms"
-      GATEKEEPER_CLIENT_ID: gatekeeper
-      GATEKEEPER_CLIENT_SECRET: gatekeeper-dev-secret
-      COOKIE_NAME: tenant_session
-      COOKIE_SECURE: "False"
-      REFRESH_COOKIE_NAME: tenant_refresh
-      REDIS_URL: "redis://redis:6379"
-      DEFAULT_RATE_LIMIT: "600"
-    depends_on:
-      keycloak:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.auth.forwardauth.address=http://gatekeeper:5000/auth"
-      - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=X-Gatekeeper-User-Id,X-Gatekeeper-Email,X-Gatekeeper-Tenant,X-Gatekeeper-Roles,X-Gatekeeper-Auth-Method,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset"
-      - "traefik.http.middlewares.auth.forwardauth.trustForwardHeader=true"
-      - "traefik.http.routers.gatekeeper.rule=PathPrefix(`/callback`) || PathPrefix(`/logout`) || PathPrefix(`/auth/userinfo`) || PathPrefix(`/auth/login`)"
-      - "traefik.http.services.gatekeeper.loadbalancer.server.port=5000"
-    networks:
-      - app-network
+  # Gatekeeper (OIDC ForwardAuth + token authority) is now contributed
+  # by the ``platform_auth_gatekeeper`` + ``platform_auth_gatekeeper_keygen``
+  # fragments via declarative compose.yaml entries (registered through
+  # ``forge.services.fragment_compose``). The fragments build the
+  # service block from the same ``./infra/gatekeeper/`` source tree that
+  # used to be hand-rolled here.
 
   # ── Identity Provider ──
   keycloak:

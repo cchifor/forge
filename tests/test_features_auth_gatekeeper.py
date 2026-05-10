@@ -132,27 +132,33 @@ def test_gatekeeper_pyproject_targets_supported_pythons() -> None:
     )
 
 
-def test_gatekeeper_fragment_not_yet_wired_to_auth_mode() -> None:
-    """Phase 2's gatekeeper is registered but intentionally NOT yet wired
-    into ``auth.mode=generate``'s enables map.
+def test_gatekeeper_fragments_wired_to_auth_mode() -> None:
+    """Phase 2 Wave 2 cutover landed — both gatekeeper fragments are
+    in ``auth.mode=generate``'s enables tuple.
 
-    Reason: until Phase 10's migration codemod handles the cutover from
-    the legacy ``forge/templates/infra/gatekeeper/`` tree, activating the
-    new fragment would emit two gatekeeper directories per project. The
-    fragment is dormant by design; flipping the wiring is a one-line edit
-    that ships alongside the codemod.
+    Cutover: removed the imperative gatekeeper service block from
+    ``forge/templates/deploy/docker-compose.yml.j2`` and the entire
+    legacy ``forge/templates/infra/gatekeeper/`` source tree. The
+    gatekeeper + gatekeeper-keygen sidecars now ship via the
+    declarative ``compose.yaml`` entries on these two fragments
+    (registered through ``forge.services.fragment_compose``).
 
-    This test is a *negative* invariant — it documents the deliberate
-    half-step. Remove it (or invert it) when Phase 10 lands.
+    Pinning the wiring here so a future regression that drops either
+    fragment from ``auth.mode``'s enables map gets caught.
     """
     from forge.options import OPTION_REGISTRY
 
     auth_mode = OPTION_REGISTRY["auth.mode"]
     enabled = auth_mode.enables.get("generate", ())
-    assert "platform_auth_gatekeeper" not in enabled, (
-        "platform_auth_gatekeeper fragment was wired into auth.mode=generate "
-        "before Phase 10's migration codemod landed — this would cause "
-        "double-gatekeeper emission for existing projects."
+    assert "platform_auth_gatekeeper" in enabled, (
+        "platform_auth_gatekeeper fragment must be in auth.mode=generate's "
+        "enables tuple after the Phase 2 Wave 2 cutover — without it, a "
+        "generated project gets no gatekeeper sidecar."
+    )
+    assert "platform_auth_gatekeeper_keygen" in enabled, (
+        "platform_auth_gatekeeper_keygen fragment must be in "
+        "auth.mode=generate's enables tuple — gatekeeper depends on it "
+        "(gatekeeper-keygen runs first to produce the ECDSA signing keys)."
     )
 
 
