@@ -1,13 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import type { TenantContext } from "../../src/middleware/tenant.js";
+import { buildIdentity } from "@forge/platform-auth-node";
 import { PrismaItemRepository } from "../../src/data/repositories/item-repository.js";
 
-const tenant: TenantContext = {
-	userId: "user-1",
-	email: "u@example.com",
-	customerId: "tenant-1",
-	roles: [],
-};
+const identity = buildIdentity({
+	tenantId: "tenant-1",
+	subject: "user-1",
+});
 
 interface MockPrismaItem {
 	findMany: ReturnType<typeof vi.fn>;
@@ -30,13 +28,13 @@ function makeMock(): MockPrismaItem {
 }
 
 describe("PrismaItemRepository", () => {
-	it("scopes list queries by customerId", async () => {
+	it("scopes list queries by tenantId", async () => {
 		const mock = makeMock();
 		mock.findMany.mockResolvedValue([]);
 		mock.count.mockResolvedValue(0);
 		const repo = new PrismaItemRepository(mock as unknown as never);
 
-		await repo.list(tenant, { skip: 0, limit: 10 });
+		await repo.list(identity, { skip: 0, limit: 10 });
 
 		expect(mock.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -51,7 +49,7 @@ describe("PrismaItemRepository", () => {
 		mock.count.mockResolvedValue(0);
 		const repo = new PrismaItemRepository(mock as unknown as never);
 
-		await repo.list(tenant, { status: "ACTIVE" });
+		await repo.list(identity, { status: "ACTIVE" });
 
 		const args = mock.findMany.mock.calls[0][0];
 		expect(args.where.status).toBe("ACTIVE");
@@ -63,7 +61,7 @@ describe("PrismaItemRepository", () => {
 		mock.findFirst.mockResolvedValue(null);
 		const repo = new PrismaItemRepository(mock as unknown as never);
 
-		await repo.getById(tenant, "abc");
+		await repo.getById(identity, "abc");
 
 		expect(mock.findFirst).toHaveBeenCalledWith({
 			where: { customer_id: "tenant-1", id: "abc" },
@@ -75,7 +73,7 @@ describe("PrismaItemRepository", () => {
 		mock.findFirst.mockResolvedValue(null);
 		const repo = new PrismaItemRepository(mock as unknown as never);
 
-		await repo.findByNameExcluding(tenant, "dup", "abc");
+		await repo.findByNameExcluding(identity, "dup", "abc");
 
 		expect(mock.findFirst).toHaveBeenCalledWith({
 			where: {
@@ -91,7 +89,7 @@ describe("PrismaItemRepository", () => {
 		mock.create.mockResolvedValue({});
 		const repo = new PrismaItemRepository(mock as unknown as never);
 
-		await repo.create(tenant, { name: "x" } as never);
+		await repo.create(identity, { name: "x" } as never);
 
 		expect(mock.create).toHaveBeenCalledWith({
 			data: expect.objectContaining({

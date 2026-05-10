@@ -1,4 +1,4 @@
-import type { TenantContext } from "../../middleware/tenant.js";
+import type { IdentityContext } from "../../types/auth.js";
 
 /**
  * Tenant-aware repository contract.
@@ -14,25 +14,25 @@ import type { TenantContext } from "../../middleware/tenant.js";
  * - `TUpdate` — fields the caller may patch.
  *
  * Implementations are responsible for scoping every query by
- * `tenant.customerId` — concrete repos build a tenant `where` clause
+ * `identity.tenantId` — concrete repos build a tenant `where` clause
  * once in `scopeWhere` (see `PrismaRepository`) so callers can't
  * accidentally bypass isolation.
  */
 export interface Repository<TEntity, TCreate, TUpdate> {
 	list(
-		tenant: TenantContext,
+		identity: IdentityContext,
 		options?: ListOptions,
 	): Promise<{ items: TEntity[]; total: number }>;
 
-	getById(tenant: TenantContext, id: string): Promise<TEntity | null>;
+	getById(identity: IdentityContext, id: string): Promise<TEntity | null>;
 
-	findByName(tenant: TenantContext, name: string): Promise<TEntity | null>;
+	findByName(identity: IdentityContext, name: string): Promise<TEntity | null>;
 
-	create(tenant: TenantContext, data: TCreate): Promise<TEntity>;
+	create(identity: IdentityContext, data: TCreate): Promise<TEntity>;
 
-	update(tenant: TenantContext, id: string, data: TUpdate): Promise<TEntity>;
+	update(identity: IdentityContext, id: string, data: TUpdate): Promise<TEntity>;
 
-	delete(tenant: TenantContext, id: string): Promise<void>;
+	delete(identity: IdentityContext, id: string): Promise<void>;
 }
 
 export interface ListOptions {

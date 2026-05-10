@@ -1,11 +1,11 @@
 import type { Item, Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "../../lib/prisma.js";
-import type { TenantContext } from "../../middleware/tenant.js";
 import type {
 	ItemCreate,
 	ItemStatus,
 	ItemUpdate,
 } from "../../schemas/item.schema.js";
+import type { IdentityContext } from "../../types/auth.js";
 import type { ListOptions, Repository } from "./base-repository.js";
 
 interface ItemListOptions extends ListOptions {
@@ -27,23 +27,23 @@ export class PrismaItemRepository
 	constructor(private readonly client: ItemPrismaClient = defaultPrisma.item) {}
 
 	private scopeWhere(
-		tenant: TenantContext,
+		identity: IdentityContext,
 		extra: Prisma.ItemWhereInput = {},
 	): Prisma.ItemWhereInput {
-		return { customer_id: tenant.customerId, ...extra };
+		return { customer_id: identity.tenantId, ...extra };
 	}
 
 	async list(
-		tenant: TenantContext,
+		identity: IdentityContext,
 		options: ItemListOptions = {},
 	): Promise<{ items: Item[]; total: number }> {
 		const { skip = 0, limit = 25, status, search } = options;
-		let where: Prisma.ItemWhereInput = this.scopeWhere(tenant);
+		let where: Prisma.ItemWhereInput = this.scopeWhere(identity);
 		if (status) where.status = status;
 		if (search) {
 			where = {
 				AND: [
-					{ customer_id: tenant.customerId },
+					{ customer_id: identity.tenantId },
 					{
 						OR: [
 							{ name: { contains: search, mode: "insensitive" } },
@@ -67,48 +67,48 @@ export class PrismaItemRepository
 		return { items, total };
 	}
 
-	async getById(tenant: TenantContext, id: string): Promise<Item | null> {
-		return this.client.findFirst({ where: this.scopeWhere(tenant, { id }) });
+	async getById(identity: IdentityContext, id: string): Promise<Item | null> {
+		return this.client.findFirst({ where: this.scopeWhere(identity, { id }) });
 	}
 
-	async findByName(tenant: TenantContext, name: string): Promise<Item | null> {
-		return this.client.findFirst({ where: this.scopeWhere(tenant, { name }) });
+	async findByName(identity: IdentityContext, name: string): Promise<Item | null> {
+		return this.client.findFirst({ where: this.scopeWhere(identity, { name }) });
 	}
 
 	async findByNameExcluding(
-		tenant: TenantContext,
+		identity: IdentityContext,
 		name: string,
 		excludeId: string,
 	): Promise<Item | null> {
 		return this.client.findFirst({
-			where: this.scopeWhere(tenant, { name, NOT: { id: excludeId } }),
+			where: this.scopeWhere(identity, { name, NOT: { id: excludeId } }),
 		});
 	}
 
-	async create(tenant: TenantContext, data: ItemCreate): Promise<Item> {
+	async create(identity: IdentityContext, data: ItemCreate): Promise<Item> {
 		return this.client.create({
 			data: {
 				...data,
-				customer_id: tenant.customerId,
-				user_id: tenant.userId,
+				customer_id: identity.tenantId,
+				user_id: identity.subject,
 			},
 		});
 	}
 
 	async update(
-		tenant: TenantContext,
+		identity: IdentityContext,
 		id: string,
 		data: ItemUpdate,
 	): Promise<Item> {
 		// Update bypasses scopeWhere because Prisma doesn't accept a
 		// composite `where` for `update`; service-layer callers MUST
 		// invoke `getById` first to confirm tenant ownership.
-		void tenant;
+		void identity;
 		return this.client.update({ where: { id }, data });
 	}
 
-	async delete(tenant: TenantContext, id: string): Promise<void> {
-		void tenant;
+	async delete(identity: IdentityContext, id: string): Promise<void> {
+		void identity;
 		await this.client.delete({ where: { id } });
 	}
 }
