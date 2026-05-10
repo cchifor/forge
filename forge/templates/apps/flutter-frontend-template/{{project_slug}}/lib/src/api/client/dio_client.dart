@@ -29,11 +29,17 @@ Dio dio(Ref ref) {
     ),
   );
 
+  final authInterceptor = AuthInterceptor(ref);
   dio.interceptors.addAll([
-    AuthInterceptor(ref),
+    authInterceptor,
     ErrorInterceptor(),
     if (config.isDevelopment) LoggingInterceptor(),
   ]);
+  // Bind after registration so the interceptor's 401-retry path can
+  // replay the original request with the rotated bearer token. The
+  // dio reference can't be passed to the ctor (it doesn't exist yet
+  // at that point in the provider).
+  authInterceptor.bindDio(dio);
 
   return dio;
 }
