@@ -40,7 +40,7 @@ from forge.appliers.deps import (
 )
 from forge.appliers.env import append_env_var as _add_env_var
 from forge.capability_resolver import ResolvedFragment
-from forge.config import BackendConfig
+from forge.config import BackendConfig, FrontendFramework
 from forge.errors import (
     FRAGMENT_INJECT_YAML_BAD_POSITION,
     FRAGMENT_INJECT_YAML_BAD_SHAPE,
@@ -228,15 +228,38 @@ def apply_project_features(
     file_baselines: Mapping[str, str] | None = None,
     collector: ProvenanceCollector | None = None,
     option_values: Mapping[str, Any] | None = None,
+    frontend_framework: FrontendFramework | None = None,
 ) -> None:
     """Apply project-scoped fragment implementations at the project root.
 
     See :func:`apply_features` for ``update_mode``, ``file_baselines``,
     and ``option_values`` semantics.
+
+    ``frontend_framework`` (when provided) gates fragments whose
+    ``target_frontends`` tuple is non-empty: a fragment that declares
+    ``target_frontends=(FrontendFramework.VUE,)`` only applies when the
+    project's frontend is Vue. Pass ``FrontendFramework.NONE`` for
+    frontend-less projects so frontend-targeted fragments skip
+    explicitly. Pass ``None`` (the default) when the caller doesn't yet
+    track frontend choice (the updater path) — gating becomes a no-op
+    in that case so existing behavior is preserved until the caller is
+    wired through.
     """
     if option_values is None:
         option_values = {}
     for rf in resolved:
+        if (
+            frontend_framework is not None
+            and rf.fragment.target_frontends
+            and frontend_framework not in rf.fragment.target_frontends
+        ):
+            if not quiet:
+                print(
+                    f"  [frag] skipping '{rf.fragment.name}' — "
+                    f"target_frontends={[f.value for f in rf.fragment.target_frontends]}, "
+                    f"project frontend={frontend_framework.value}"
+                )
+            continue
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
             if impl.scope == "project":

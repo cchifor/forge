@@ -15,7 +15,8 @@ class TestDiscoverMigrations:
         names = {m.name for m in migrations}
         # Epic G (1.1.0-alpha.1) added rename-options alongside the original
         # three 0.x→1.0 codemods. P0.1 (1.1.0-alpha.2) added adopt-baseline
-        # for the merge-mode rollout.
+        # for the merge-mode rollout. Phase 10 of the auth-stack rebuild
+        # added auth-keycloak-to-platform-auth.
         assert names == {
             "ui-protocol",
             "entities",
@@ -23,6 +24,7 @@ class TestDiscoverMigrations:
             "rename-options",
             "layer-modes",
             "adopt-baseline",
+            "auth-keycloak-to-platform-auth",
         }
 
     def test_migrations_have_required_fields(self) -> None:
@@ -111,6 +113,7 @@ class TestApplyMigrations:
             "rename-options",
             "layer-modes",
             "adopt-baseline",
+            "auth-keycloak-to-platform-auth",
         }
 
     def test_only_filter_limits_run(self, tmp_path: Path) -> None:

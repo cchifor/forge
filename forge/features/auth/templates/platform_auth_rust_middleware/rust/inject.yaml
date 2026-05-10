@@ -1,0 +1,21 @@
+# platform_auth_rust_middleware: wire `auth_middleware` into the
+# generated Axum app's middleware chain.
+#
+# Two injection sites mirror security_headers / rate_limit:
+#   1. middleware/mod.rs: register the `auth` submodule
+#   2. app.rs: import + .layer(...) the from_fn middleware
+
+- target: src/middleware/mod.rs
+  marker: FORGE:MOD_REGISTRATION
+  position: before
+  snippet: "pub mod auth;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "use crate::middleware::auth::auth_middleware;"
+
+- target: src/app.rs
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: ".layer(axum::middleware::from_fn(auth_middleware))"

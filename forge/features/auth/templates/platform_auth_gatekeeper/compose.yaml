@@ -1,0 +1,104 @@
+# Declarative compose service for the platform-auth Gatekeeper container.
+#
+# Loaded by forge.services.fragment_compose at plan-resolution time and
+# registered into SERVICE_REGISTRY under the ``gatekeeper`` capability.
+# Phase 10's migration codemod retires the corresponding imperative block
+# in forge/templates/deploy/docker-compose.yml.j2 once existing projects
+# have migrated.
+#
+# Cross-reference: implementation plan at
+# ~/.claude/plans/review-the-c-users-chifo-work-platform-a-pure-torvalds.md
+# (Phase 2 deliverables; Phase 4 invariants for the Gatekeeper sole-issuer
+# model; platform's BFF + session-timeout RFC for the env defaults).
+
+capability: gatekeeper
+
+service:
+  name: gatekeeper
+  # ``image:`` is required by the fragment_compose schema, but the real
+  # build instruction lives in ``extra.build`` since this image is built
+  # locally from the shipped infra/gatekeeper/ directory rather than
+  # pulled from a registry. The ``image:`` value is the local tag the
+  # build will produce.
+  image: forge-gatekeeper:local
+
+  # Health and dependency wiring.
+  depends_on:
+    redis:
+      condition: service_healthy
+    keycloak:
+      condition: service_healthy
+    gatekeeper-keygen:
+      condition: service_completed_successfully
+  networks:
+    - app-network
+  restart: unless-stopped
+
+  ports:
+    - "5000:5000"
+
+  # Mount points expected by gatekeeper:
+  # - signing keys (written by gatekeeper-keygen init service)
+  # - service_registry.yaml (per-project entries appended by Phase 3+)
+  volumes:
+    - "gatekeeper_signing_keys:/run/secrets/gatekeeper-signing:ro"
+    - "./infra/gatekeeper/secrets/service_registry.yaml:/run/secrets/gatekeeper-service-registry/service_registry.yaml:ro"
+
+  named_volumes:
+    - gatekeeper_signing_keys
+
+  environment:
+    # ── Keycloak bridge (login form + Admin API consumer) ────────────
+    KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
+    KEYCLOAK_ADMIN_REALM: "app"
+    GATEKEEPER_CLIENT_ID: "gatekeeper"
+    # Override in production via .env / secrets manager — dev value only.
+    GATEKEEPER_CLIENT_SECRET: "gatekeeper-dev-secret"
+
+    # ── Cookies / BFF substrate ──────────────────────────────────────
+    SESSION_ID_COOKIE_NAME: "tenant_session_id"
+    COOKIE_SECURE: "false"  # Lax-cookies on http://localhost — flip for prod
+    REDIS_URL: "redis://redis:6379"
+
+    # ── Tenant claim (forge-namespaced; platform default is platform/) ─
+    TENANT_ID_CLAIM: "https://forge/tenant_id"
+    DEFAULT_TENANT_ID: "00000000-0000-0000-0000-000000000001"
+
+    # ── Phase 4 invariant: gatekeeper sole token authority ───────────
+    GATEKEEPER_ISSUER: "http://gatekeeper:5000"
+    INTERNAL_TOKEN_AUDIENCE: "forge-services"
+    INTERNAL_TOKEN_TTL_SECONDS: "300"
+    KEY_BACKEND: "file"
+    SIGNING_KEY_DIR: "/run/secrets/gatekeeper-signing"
+
+    # ── Inactivity-based session timeout (per platform's BFF RFC) ───
+    SESSION_TIMEOUT_ENABLED: "true"
+    DEFAULT_IDLE_TIMEOUT_SECONDS: "1800"   # 30 min
+    DEFAULT_ABSOLUTE_TIMEOUT_SECONDS: "43200"  # 12 h
+    SESSION_WARN_AT_SECONDS: "60"
+    # Generate via: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+    # Override in production. Rotation invalidates every outstanding session.
+    SESSION_FERNET_KEY: "ZmFrZS1mZXJuZXQta2V5LWZvci1kZXYtb25seS0zMmI="
+    DELEGATION_GRANT_FERNET_KEY: "ZmFrZS1mZXJuZXQta2V5LWZvci1kZWxlZ2F0aW9uLTMy"
+
+    # ── /auth/token (service-to-service via S2SClient) ───────────────
+    SERVICE_REGISTRY_PATH: "/run/secrets/gatekeeper-service-registry/service_registry.yaml"
+    SVC_AUTH_BACKEND: "preshared"
+
+    # ── Rate limit (4/min on POST /auth/session via the existing limiter) ─
+    DEFAULT_RATE_LIMIT: "600"
+
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:5000/auth/jwks"]
+    interval: "10s"
+    timeout: "3s"
+    retries: 5
+
+  # The fragment_compose schema's ServiceTemplate exposes ``extra`` for
+  # arbitrary docker-compose fields not modelled in the typed schema.
+  # ``build:`` lives here because the gatekeeper image is built locally
+  # from the project tree, not pulled from a registry.
+  extra:
+    build:
+      context: ./infra/gatekeeper
+      dockerfile: Dockerfile

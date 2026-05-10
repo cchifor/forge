@@ -22,6 +22,7 @@ from __future__ import annotations
 from forge.features import (  # noqa: F401, E402
     agent,
     async_work,
+    auth,
     conversation,
     middleware,
     object_store,

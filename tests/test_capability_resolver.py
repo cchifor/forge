@@ -177,6 +177,56 @@ class TestBackendCompatibility:
         with pytest.raises(GeneratorError, match="Unknown option"):
             resolve(_project([BackendLanguage.PYTHON], {"nope.nada": True}))
 
+    def test_discriminator_fanout_skips_unmatched_languages_silently(
+        self, isolated_registries
+    ) -> None:
+        """A discriminator option that fans out per-language fragments must NOT
+        hard-error when only some of them have a compatible backend.
+
+        Real-world example: ``auth.mode=generate`` enables
+        ``platform_auth_sdk_python`` + ``_node`` + ``_rust``. A Python-only
+        project should silently skip the Node and Rust SDK fragments,
+        not raise "supported backends … not present".
+
+        Single-fragment options preserve the hard-error behavior — that's
+        a real user typo, tested above by
+        ``test_unsupported_backend_raises_when_user_requested``.
+        """
+        options, fragments = isolated_registries
+        fragments["sdk_python"] = _mk_fragment(
+            "sdk_python",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        fragments["sdk_node"] = _mk_fragment(
+            "sdk_node",
+            implementations={BackendLanguage.NODE: FragmentImplSpec(fragment_dir="n")},
+        )
+        fragments["sdk_rust"] = _mk_fragment(
+            "sdk_rust",
+            implementations={BackendLanguage.RUST: FragmentImplSpec(fragment_dir="r")},
+        )
+        # Multi-fragment enables → discriminator/bundle fanout.
+        options["auth.mode"] = Option(
+            path="auth.mode",
+            type=OptionType.ENUM,
+            default="generate",
+            options=("generate", "none"),
+            summary="auth.mode",
+            description="auth.mode",
+            category=FeatureCategory.PLATFORM,
+            enables={"generate": ("sdk_python", "sdk_node", "sdk_rust")},
+        )
+        # User explicitly sets auth.mode=generate, but project only has Python.
+        plan = resolve(
+            _project([BackendLanguage.PYTHON], {"auth.mode": "generate"})
+        )
+        # Only the Python SDK was applied — Node and Rust silently skipped.
+        applied = sorted(rf.fragment.name for rf in plan.ordered)
+        assert applied == ["sdk_python"], (
+            f"discriminator fanout must skip incompatible-backend fragments silently, "
+            f"got {applied}"
+        )
+
     def test_target_backends_preserves_project_order(self, isolated_registries) -> None:
         options, fragments = isolated_registries
         fragments["poly"] = _mk_fragment(

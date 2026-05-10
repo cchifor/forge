@@ -315,11 +315,30 @@ def _is_user_selected(user_options: dict[str, object], fragment_name: str) -> bo
 
     Used to distinguish "silent skip — default didn't apply here" from
     "hard error — user requested something impossible."
+
+    Discriminator options that fan out to multiple per-language fragments
+    (e.g. ``auth.mode=generate`` enables ``platform_auth_sdk_python`` +
+    ``_node`` + ``_rust``) are NOT counted as user-selecting any single
+    incompatible fragment. The user picked the *bundle*; the resolver is
+    expected to take only the per-language fragments compatible with the
+    project's backends. Hard-erroring on the unmatched ones would block
+    every Python-only / Node-only / Rust-only project from using the
+    auth stack.
+
+    A single-fragment option (e.g. ``platform.admin_panel=True`` enables
+    only ``admin_panel``) still hard-errors when incompatible — that's a
+    real user typo, not a fanout intent.
     """
     for path, value in user_options.items():
         spec = OPTION_REGISTRY.get(path)
         if spec is None:
             continue
-        if fragment_name in spec.enables.get(value, ()):
+        enabled_set = spec.enables.get(value, ())
+        if fragment_name not in enabled_set:
+            continue
+        # Single-fragment enables = user opted into THIS fragment specifically.
+        # Multi-fragment enables = discriminator/bundle; treat unmatched
+        # entries as silent fanout-skips, not hard errors.
+        if len(enabled_set) == 1:
             return True
     return False

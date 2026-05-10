@@ -1,0 +1,60 @@
+version: 1
+
+server:
+  host: "0.0.0.0"
+  port: 5000
+  log_level: "info"
+  reload: false
+  max_workers: 4
+  cors:
+    enabled: false
+    allow_origins: ["http://localhost"]
+    allow_credentials: true
+    allow_headers: ["*"]
+    allow_methods: ["*"]
+    max_age: 600
+
+security:
+  secret_key: "${SECURITY_SECRET_KEY}"
+  access_token_expire_minutes: 30
+  refresh_token_expire_minutes: 600
+  auth:
+    enabled: true
+    server_url: "${AUTH_SERVER_URL}"
+    realm: "${AUTH_REALM}"
+    client_id: "${AUTH_CLIENT_ID}"
+    client_secret: "${AUTH_CLIENT_SECRET}"
+
+discovery:
+  enabled: true
+  app_name: 'gatekeeper'
+  service_url: "${EUREKA_URL}"
+  service_port: 8761
+  service_user: "${EUREKA_USER}"
+  service_password: "${EUREKA_PASSWORD}"
+  instance_host: "gatekeeper"
+  instance_port: 5000
+
+db:
+  url: '${DATABASE_URL}'
+  echo: false
+
+logging:
+  version: 1
+  formatters:
+    simple:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: simple
+      stream: ext://sys.stdout
+      level: INFO
+  loggers:
+    uvicorn:
+      level: WARNING
+      handlers: [console]
+      propagate: false
+  root:
+    level: INFO
+    handlers: [console]

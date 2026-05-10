@@ -97,6 +97,141 @@ _To be populated when Phase 4 beta ships._
 
 ---
 
+## 1.1 → 1.2 — auth-stack rebuild (unreleased)
+
+The 1.2 release replaces the legacy Keycloak-direct auth stack with
+the platform-auth model: Gatekeeper as sole token authority (ES256
+internal JWTs), per-language verifier SDKs (Python / Node / Rust),
+BFF Redis sessions with a single opaque cookie, inactivity-based
+session timeout, and frontend session-timeout composables for Vue /
+Svelte / Flutter. See `docs/auth-architecture.md` for the model;
+this section is the migration procedure.
+
+This is a **breaking change** for projects generated under 1.1.x —
+both the source layout (new `sdks/platform-auth*/` directories,
+new gatekeeper modules) and the env-var shape (some `KEYCLOAK_*`
+keys move to `GATEKEEPER_*`).
+
+### Migration steps
+
+```bash
+# 1. Bump forge.
+uv tool upgrade forge
+
+# 2. Plan the migration — dry run, no writes.
+cd <generated-project>
+forge --plan-migrate auth-keycloak-to-platform-auth
+
+# Reports:
+#   - Files to add (sdks/platform-auth/, sdks/platform-auth-node/,
+#     sdks/platform-auth-rs/, expanded infra/gatekeeper/)
+#   - Files to replace (per-backend service/security/auth.* modules,
+#     middleware/tenant.{ts,rs} → middleware/auth.{ts,rs})
+#   - infra/keycloak-realm.json additive changes (tenant-id mapper,
+#     serviceAccountsEnabled on gatekeeper client, dev user attribute)
+#   - docker-compose.yml service changes (gatekeeper-keygen init,
+#     extended gatekeeper env block)
+#   - Env var renames (KEYCLOAK_* → GATEKEEPER_* per the table below)
+
+# 3. Apply the codemod. Three-way merge against your edits;
+#    .forge-merge sidecars on conflict (resolve by hand).
+forge --migrate auth-keycloak-to-platform-auth
+
+# 4. Inspect any sidecars produced.
+git status | grep .forge-merge
+
+# 5. Rebuild + boot.
+docker compose up --build
+#   - gatekeeper-keygen runs first, generates ECDSA P-256 keys
+#   - gatekeeper boots, /auth/jwks serves the public key
+#   - backends pick up the new SDK from sdks/platform-auth*/
+#   - browser flow: login at Keycloak, callback issues session_id cookie
+```
+
+### Env var renames
+
+| Before (1.1.x) | After (1.2.x) | Notes |
+| --- | --- | --- |
+| `KEYCLOAK_BASE_URL` | `KEYCLOAK_BASE_URL` | Still consumed by gatekeeper for the OIDC bridge. |
+| `KEYCLOAK_REALM` | (gone) | Encoded in `KEYCLOAK_BASE_URL` path now. |
+| `KEYCLOAK_CLIENT_ID` | `GATEKEEPER_CLIENT_ID` | Was the per-service client; now the gatekeeper's confidential client. |
+| `KEYCLOAK_CLIENT_SECRET` | `GATEKEEPER_CLIENT_SECRET` | Same scope shift. |
+| `APP__SECURITY__AUTH__SERVER_URL` | `GATEKEEPER_ISSUER` | Backends verify against gatekeeper's JWKS, not Keycloak's. |
+| `APP__SECURITY__AUTH__REALM` | (gone) | Subsumed by `GATEKEEPER_ISSUER` (single trusted issuer). |
+| (new) | `INTERNAL_TOKEN_AUDIENCE` | aud claim on minted JWTs. Defaults to `forge-services`. |
+| (new) | `SESSION_FERNET_KEY` | Required. Generate via `python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'`. Rotation invalidates all live sessions. |
+| (new) | `SESSION_TIMEOUT_ENABLED` | Defaults to `true`. Set `false` to skip idle/absolute checks (still issues internal JWTs). |
+| (new) | `DEFAULT_IDLE_TIMEOUT_SECONDS` | Default `1800` (30 min). Per-tenant overridable via `TenantConfig`. |
+| (new) | `DEFAULT_ABSOLUTE_TIMEOUT_SECONDS` | Default `43200` (12 h). |
+| (new) | `SESSION_WARN_AT_SECONDS` | Default `60`. SPA modal threshold. |
+| (new) | `SERVICE_REGISTRY_PATH` | argon2id-hashed S2S client secrets. |
+| (new) | `KEY_BACKEND` | `file` (default). `aws_kms` / `vault` are follow-ups. |
+| (new) | `SIGNING_KEY_DIR` | Where `gatekeeper-keygen` writes keys. Default `/run/secrets/gatekeeper-signing`. |
+
+### Cookie changes
+
+The browser cookie surface contracts from two cookies to one:
+
+| Before | After | Notes |
+| --- | --- | --- |
+| `tenant_session=<jwt>` | (gone) | Access tokens no longer leave the server. |
+| `tenant_refresh=<jwt>` | (gone) | Refresh tokens stay in Redis. |
+| (new) | `tenant_session_id=<24-byte-random>` | `HttpOnly`, `Secure`, `SameSite=Lax`, `Max-Age=absolute_timeout_seconds`. |
+
+`SameSite=Lax` (not `Strict`) — preserves deep-linking from external
+tools. CSRF is mitigated at the API layer via
+`Content-Type: application/json` enforcement on mutating endpoints.
+If your project added a non-JSON mutating endpoint, audit it before
+upgrading or you'll lose the CSRF guard silently.
+
+### Hard cutover, NOT dual-mode
+
+The codemod replaces the auth stack atomically — no flag toggles
+the old vs new behaviour. Existing sessions are invalidated at
+deploy. Schedule a maintenance window and announce it; the new
+stack boots in under a minute on a warm machine.
+
+### Rollback
+
+If something breaks post-migration, the cleanest rollback is:
+
+```bash
+git checkout <pre-migration-commit>
+forge --update                # re-applies the 1.1.x baseline
+docker compose up --build
+```
+
+`forge --update` is idempotent and respects user edits via
+`.forge-merge` sidecars, so this is safe even with concurrent
+in-progress work.
+
+### Behavioural changes engineers should know
+
+1. **`/auth` does NOT extend the session.** Every authenticated route
+   passes through `/auth` (Traefik's ForwardAuth), but the call is
+   read-only — no idle-TTL touch. Sessions extend exclusively when
+   the SPA POSTs `/auth/session` on real user activity (mouse,
+   keyboard, scroll, visibility). New code that polls a backend in
+   the background has zero session impact, by design. Document this
+   in your `AGENTS.md` / `CLAUDE.md` so a future contributor "fixing"
+   an unexpected logout by adding a heartbeat poll doesn't defeat
+   the compliance posture.
+2. **Internal JWT TTL is 5 minutes.** A token revoked upstream stays
+   verifiable for up to 5 minutes after `/logout` —
+   `internal_token_cache.evict_for_sub` is best-effort. Engineers
+   building features with hard revocation requirements (e.g.,
+   financial-impact actions) need to gate on the session itself,
+   not the bearer.
+3. **Scope-based authz is now first-class.** Endpoints can declare
+   `requireScope("things:read")` (or the language-equivalent) and
+   AuthGuard rejects with a typed `ScopeRequired` error carrying
+   the missing scopes. Wildcards (`things:*`, `*`) are honored.
+4. **S2S calls go through `S2SClient`**, not raw `httpx`/`fetch`/`reqwest`.
+   The client handles client_credentials and RFC 8693 token-exchange
+   automatically and caches the resulting tokens.
+
+---
+
 ## Codemods and tooling
 
 When a mechanical migration is possible, forge ships a `forge migrate-<x>` codemod:

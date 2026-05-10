@@ -25,12 +25,88 @@
       "sha256": "aac7d109385db896"
     },
     "forge.toml": {
-      "size": 11306,
+      "size": 15127,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
+    },
+    "sdks/platform-auth-node/package.json": {
+      "size": 1315,
+      "sha256": "0e0cb7a0233dc082"
+    },
+    "sdks/platform-auth-node/README.md": {
+      "size": 3762,
+      "sha256": "43f0e786b8a5a746"
+    },
+    "sdks/platform-auth-node/src/AuthGuard.ts": {
+      "size": 18853,
+      "sha256": "08a6ca08b5dd2dee"
+    },
+    "sdks/platform-auth-node/src/context.ts": {
+      "size": 3380,
+      "sha256": "52cd971ea66186db"
+    },
+    "sdks/platform-auth-node/src/exceptions.ts": {
+      "size": 2530,
+      "sha256": "9f772bde8e549dea"
+    },
+    "sdks/platform-auth-node/src/IdentityContext.ts": {
+      "size": 3840,
+      "sha256": "7846f4483e5e80c8"
+    },
+    "sdks/platform-auth-node/src/index.ts": {
+      "size": 2445,
+      "sha256": "001dc1645b0563f1"
+    },
+    "sdks/platform-auth-node/src/JWKSCache.ts": {
+      "size": 5996,
+      "sha256": "a4a464e08e9b4a95"
+    },
+    "sdks/platform-auth-node/src/may_act.ts": {
+      "size": 3121,
+      "sha256": "c33ec3f3654a2f36"
+    },
+    "sdks/platform-auth-node/src/middleware.ts": {
+      "size": 4013,
+      "sha256": "ff2ee5483ba82cd7"
+    },
+    "sdks/platform-auth-node/src/plugin.ts": {
+      "size": 6018,
+      "sha256": "d7e60b1e6fb03a56"
+    },
+    "sdks/platform-auth-node/src/revocation.ts": {
+      "size": 1572,
+      "sha256": "a03eaafabdb13e82"
+    },
+    "sdks/platform-auth-node/src/S2SClient.ts": {
+      "size": 13961,
+      "sha256": "6f33012ccb41dd81"
+    },
+    "sdks/platform-auth-node/src/scopes.ts": {
+      "size": 1770,
+      "sha256": "26e5e10d35cbb76d"
+    },
+    "sdks/platform-auth-node/src/testing.ts": {
+      "size": 6702,
+      "sha256": "71f6789b3dee8c9b"
+    },
+    "sdks/platform-auth-node/src/trust.ts": {
+      "size": 3145,
+      "sha256": "15429dfee5c12adc"
+    },
+    "sdks/platform-auth-node/test/audit_callback.test.ts": {
+      "size": 5679,
+      "sha256": "af9a6e298308d3ed"
+    },
+    "sdks/platform-auth-node/test/parity_runner.test.ts": {
+      "size": 17696,
+      "sha256": "ab68d15cfdf9c1f6"
+    },
+    "sdks/platform-auth-node/tsconfig.json": {
+      "size": 540,
+      "sha256": "4272da876034d6b1"
     },
     "services/api/.copier-answers.yml": {
       "size": 438,

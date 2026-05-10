@@ -1,0 +1,81 @@
+version: 1
+app:
+  title: Gatekeeper
+  description: OIDC Relying Party and Traefik ForwardAuth gateway for multi-tenant authentication
+  version: "1.0.0"
+  terms_of_service: http://strive.us/terms/
+  contact:
+    name: Strive
+    url: http://strive.us/contact/
+    email: dev@strive.us
+  license_info:
+    name: strive
+    url: http://strive.us/license/
+
+server:
+  host: "0.0.0.0"
+  port: 5009
+  log_level: "critical"
+  reload: false
+  max_workers: 1
+  cors:
+    enabled: false
+    allow_origins: ["http://localhost"]
+    allow_credentials: true
+    allow_headers: ["*"]
+    allow_methods: ["*"]
+    max_age: 600
+
+audit:
+  enabled: false
+  log_request_body: false
+  max_body_size: 51200
+  excluded_paths:
+    - "/health"
+    - "/metrics"
+    - "/docs"
+    - "/openapi.json"
+    - "/favicon.ico"
+  excluded_methods:
+    - "OPTIONS"
+    - "HEAD"
+
+logging:
+  version: 1
+  formatters:
+    simple:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    verbose:
+      format: '[%(asctime)s] [%(name)s] %(levelname)-8s: %(message)s (%(filename)s:%(lineno)d)'
+    colored:
+      (): colorlog.ColoredFormatter
+      format: "%(log_color)s%(asctime)s - %(process)d - %(processName)s - %(levelname)s - %(name)s - %(filename)s:%(lineno)d - %(message)s"
+      log_colors:
+        DEBUG: "cyan"
+        INFO: "green"
+        WARNING: "yellow"
+        ERROR: "red"
+        CRITICAL: "bold_red"
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: colored
+      stream: ext://sys.stdout
+      level: DEBUG
+    file:
+      class: logging.FileHandler
+      level: INFO
+      formatter: simple
+      filename: app.log
+  loggers:
+    uvicorn:
+      level: WARNING
+      handlers: [console]
+      propagate: false
+    api.access:
+      level: DEBUG
+      handlers: [console]
+      propagate: false
+  root:
+    level: DEBUG
+    handlers: [console]

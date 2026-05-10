@@ -1,0 +1,16 @@
+# platform_auth_node_middleware: wire the bootstrapAuth() helper
+# into the generated Fastify app's plugin-registration block.
+#
+# The base node-service-template ships ``src/app.ts`` with two
+# canonical FORGE markers — same convention security_headers /
+# rate_limit / etc use.
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: 'import { bootstrapAuth } from "./middleware/auth.js";'
+
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: "await bootstrapAuth(app);"
