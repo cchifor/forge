@@ -1,0 +1,53 @@
+{
+  "name": "@forge/platform-auth-node",
+  "version": "0.1.0",
+  "description": "Identity, RBAC, and S2S auth primitives for Fastify services — Node port of platform-auth (Python). Verifies Gatekeeper-issued ES256 JWTs, multi-issuer JWKS cache with stale-serve, scope-based authz with wildcard, RFC 8693 token-exchange.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check src/ test/",
+    "lint:fix": "biome check --write src/ test/",
+    "format": "biome format --write src/ test/"
+  },
+  "dependencies": {
+    "jose": "^5.9.6",
+    "lru-cache": "^11.0.2",
+    "fastify-plugin": "^5.0.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "fastify": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ]
+}

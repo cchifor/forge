@@ -1,0 +1,92 @@
+[package]
+name = "platform-auth"
+version = "0.1.0"
+edition = "2021"
+description = "Identity, RBAC, and S2S auth primitives for Axum services — Rust port of platform-auth (Python). Verifies Gatekeeper-issued ES256 JWTs, multi-issuer JWKS cache with stale-serve, scope-based authz with wildcard, RFC 8693 token-exchange."
+license = "MIT"
+publish = false
+
+[dependencies]
+# JWT verification + decoding. jsonwebtoken is the most-installed Rust
+# JWT lib and supports ES256 first-class.
+jsonwebtoken = "9"
+
+# Async + concurrency primitives. Match forge's Rust service template
+# version pinning (axum 0.8, tokio 1).
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+async-trait = "0.1"
+
+# HTTP client for JWKS fetch + S2S token endpoint (when S2SClient lands).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Serde-based JSON for raw_claims + JWKS document parsing.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# UUID validation on the tenant_id claim.
+uuid = { version = "1", features = ["serde", "v4"] }
+
+# Future-aware LRU cache for the S2S token cache (Phase 6 follow-up).
+# Bring in now so the dependency surface is stable from day one.
+moka = { version = "0.12", features = ["future"] }
+
+# Typed errors with backtraces + From conversions.
+thiserror = "2"
+
+# Base64 decoding for the unverified-claim path (read `iss` to pick
+# the JWKS resolver before the real verify). jsonwebtoken depends on
+# the same crate internally, so this adds zero compile-time cost.
+base64 = "0.22"
+
+# Structured logging — services that already use `tracing` get our
+# events for free; everyone else can install a no-op subscriber.
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+# wiremock serves JWKS documents on a real local port during the
+# cross-SDK parity runner so the verifier's reqwest::Client can fetch
+# without hitting the network. Standard pattern for testing reqwest-
+# based code; same dep used by the platform repo's auth-chain tests.
+wiremock = "0.6"
+# Pretty assertions in the parity runner output.
+serde_json = "1"
+
+[features]
+default = []
+# Optional axum integration — adds AuthLayer (Tower) and FromRequestParts
+# for IdentityContext. Off by default so consumers of the bare verifier
+# don't pull axum into their dep tree.
+axum = ["dep:axum", "dep:tower", "dep:tower-http"]
+# Optional test-token minting — exposes ``platform_auth::testing``
+# (TestEcdsaKeypair, build_test_token) for unit tests in consuming
+# crates. Pulls in ECDSA keypair generation (p256 + ecdsa + rand)
+# so it's gated off by default to keep production builds slim.
+testing = ["dep:p256", "dep:ecdsa", "dep:rand"]
+
+[dependencies.axum]
+version = "0.8"
+optional = true
+
+[dependencies.tower]
+version = "0.5"
+optional = true
+
+[dependencies.tower-http]
+version = "0.6"
+optional = true
+
+# ECDSA P-256 keypair generation for `testing` feature.
+[dependencies.p256]
+version = "0.13"
+features = ["ecdsa", "pkcs8"]
+optional = true
+
+[dependencies.ecdsa]
+version = "0.16"
+features = ["pem"]
+optional = true
+
+[dependencies.rand]
+version = "0.8"
+optional = true

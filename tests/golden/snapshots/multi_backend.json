@@ -29,7 +29,7 @@
       "sha256": "b6224290f86245ce"
     },
     "forge.toml": {
-      "size": 41742,
+      "size": 54815,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -39,6 +39,198 @@
     "init-db.sh": {
       "size": 343,
       "sha256": "72fe8243235d907b"
+    },
+    "sdks/platform-auth/pyproject.toml": {
+      "size": 1368,
+      "sha256": "4d9c7acb2299e4fb"
+    },
+    "sdks/platform-auth/README.md": {
+      "size": 1468,
+      "sha256": "9c06875bd132381d"
+    },
+    "sdks/platform-auth/src/platform_auth/__init__.py": {
+      "size": 1490,
+      "sha256": "f89b9b770112c796"
+    },
+    "sdks/platform-auth/src/platform_auth/auth_guard.py": {
+      "size": 20927,
+      "sha256": "aa2ff755bbac82fa"
+    },
+    "sdks/platform-auth/src/platform_auth/exceptions.py": {
+      "size": 3572,
+      "sha256": "3bc6b1044252cf7d"
+    },
+    "sdks/platform-auth/src/platform_auth/identity.py": {
+      "size": 3270,
+      "sha256": "cb553a1cd1e23402"
+    },
+    "sdks/platform-auth/src/platform_auth/jwks.py": {
+      "size": 8694,
+      "sha256": "94512b209c637d91"
+    },
+    "sdks/platform-auth/src/platform_auth/may_act.py": {
+      "size": 3475,
+      "sha256": "3165b352ef048e2d"
+    },
+    "sdks/platform-auth/src/platform_auth/revocation.py": {
+      "size": 3477,
+      "sha256": "1037b6bf08105da5"
+    },
+    "sdks/platform-auth/src/platform_auth/s2s_client.py": {
+      "size": 14321,
+      "sha256": "59f11508546bd665"
+    },
+    "sdks/platform-auth/src/platform_auth/scopes.py": {
+      "size": 5190,
+      "sha256": "17c5ba9839c89cd8"
+    },
+    "sdks/platform-auth/src/platform_auth/testing.py": {
+      "size": 13715,
+      "sha256": "e7d1d4bb00f1e8a0"
+    },
+    "sdks/platform-auth/src/platform_auth/trust.py": {
+      "size": 5793,
+      "sha256": "08d3cad0ab84903e"
+    },
+    "sdks/platform-auth/tests/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "sdks/platform-auth/tests/conftest.py": {
+      "size": 442,
+      "sha256": "f02ef1b9a90a1070"
+    },
+    "sdks/platform-auth/tests/README.md": {
+      "size": 1245,
+      "sha256": "0afc5d668d2a43a1"
+    },
+    "sdks/platform-auth/tests/unit/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "sdks/platform-auth/tests/unit/test_auth_guard.py": {
+      "size": 28344,
+      "sha256": "603c207b81defbf8"
+    },
+    "sdks/platform-auth/tests/unit/test_exceptions.py": {
+      "size": 3263,
+      "sha256": "518dea43aee23632"
+    },
+    "sdks/platform-auth/tests/unit/test_identity.py": {
+      "size": 4403,
+      "sha256": "0d530c468751e489"
+    },
+    "sdks/platform-auth/tests/unit/test_jwks.py": {
+      "size": 17042,
+      "sha256": "01782d9bb8229327"
+    },
+    "sdks/platform-auth/tests/unit/test_may_act.py": {
+      "size": 3104,
+      "sha256": "fa24827c8a26ac11"
+    },
+    "sdks/platform-auth/tests/unit/test_require_scope.py": {
+      "size": 4685,
+      "sha256": "55e8d7c5d07a24f8"
+    },
+    "sdks/platform-auth/tests/unit/test_revocation.py": {
+      "size": 4212,
+      "sha256": "84179ea433e24a59"
+    },
+    "sdks/platform-auth/tests/unit/test_s2s_client.py": {
+      "size": 20250,
+      "sha256": "d578dd0735e223fb"
+    },
+    "sdks/platform-auth/tests/unit/test_s2s_client_tenant.py": {
+      "size": 7477,
+      "sha256": "69924b50bac28b87"
+    },
+    "sdks/platform-auth/tests/unit/test_scopes.py": {
+      "size": 6527,
+      "sha256": "16076a88259dbac9"
+    },
+    "sdks/platform-auth/tests/unit/test_trust.py": {
+      "size": 6026,
+      "sha256": "92b4d508b4aa3d9b"
+    },
+    "sdks/platform-auth/uv.lock": {
+      "size": 140520,
+      "sha256": "d776524c5649390a"
+    },
+    "sdks/platform-auth-node/package.json": {
+      "size": 1315,
+      "sha256": "0e0cb7a0233dc082"
+    },
+    "sdks/platform-auth-node/README.md": {
+      "size": 3762,
+      "sha256": "43f0e786b8a5a746"
+    },
+    "sdks/platform-auth-node/src/AuthGuard.ts": {
+      "size": 18853,
+      "sha256": "08a6ca08b5dd2dee"
+    },
+    "sdks/platform-auth-node/src/context.ts": {
+      "size": 3380,
+      "sha256": "52cd971ea66186db"
+    },
+    "sdks/platform-auth-node/src/exceptions.ts": {
+      "size": 2530,
+      "sha256": "9f772bde8e549dea"
+    },
+    "sdks/platform-auth-node/src/IdentityContext.ts": {
+      "size": 3840,
+      "sha256": "7846f4483e5e80c8"
+    },
+    "sdks/platform-auth-node/src/index.ts": {
+      "size": 2445,
+      "sha256": "001dc1645b0563f1"
+    },
+    "sdks/platform-auth-node/src/JWKSCache.ts": {
+      "size": 5996,
+      "sha256": "a4a464e08e9b4a95"
+    },
+    "sdks/platform-auth-node/src/may_act.ts": {
+      "size": 3121,
+      "sha256": "c33ec3f3654a2f36"
+    },
+    "sdks/platform-auth-node/src/middleware.ts": {
+      "size": 4013,
+      "sha256": "ff2ee5483ba82cd7"
+    },
+    "sdks/platform-auth-node/src/plugin.ts": {
+      "size": 6018,
+      "sha256": "d7e60b1e6fb03a56"
+    },
+    "sdks/platform-auth-node/src/revocation.ts": {
+      "size": 1572,
+      "sha256": "a03eaafabdb13e82"
+    },
+    "sdks/platform-auth-node/src/S2SClient.ts": {
+      "size": 13961,
+      "sha256": "6f33012ccb41dd81"
+    },
+    "sdks/platform-auth-node/src/scopes.ts": {
+      "size": 1770,
+      "sha256": "26e5e10d35cbb76d"
+    },
+    "sdks/platform-auth-node/src/testing.ts": {
+      "size": 6702,
+      "sha256": "71f6789b3dee8c9b"
+    },
+    "sdks/platform-auth-node/src/trust.ts": {
+      "size": 3145,
+      "sha256": "15429dfee5c12adc"
+    },
+    "sdks/platform-auth-node/test/audit_callback.test.ts": {
+      "size": 5679,
+      "sha256": "af9a6e298308d3ed"
+    },
+    "sdks/platform-auth-node/test/parity_runner.test.ts": {
+      "size": 17696,
+      "sha256": "ab68d15cfdf9c1f6"
+    },
+    "sdks/platform-auth-node/tsconfig.json": {
+      "size": 540,
+      "sha256": "4272da876034d6b1"
     },
     "services/api-node/.copier-answers.yml": {
       "size": 449,

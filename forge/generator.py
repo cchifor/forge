@@ -271,6 +271,9 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             quiet=quiet,
             collector=collector,
             option_values=plan.option_values,
+            frontend_framework=(
+                config.frontend.framework if config.frontend else FrontendFramework.NONE
+            ),
         )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)

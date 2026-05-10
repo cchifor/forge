@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from forge.config import BackendLanguage
+from forge.config import BackendLanguage, FrontendFramework
 from forge.errors import FragmentError
 from forge.middleware_spec import MiddlewareSpec
 
@@ -125,6 +125,18 @@ class Fragment:
     # ``render_fastify_plugin``, ``render_axum_layer``). Fragments that
     # don't register middleware leave this empty and behave as before.
     middlewares: tuple[MiddlewareSpec, ...] = ()
+    # Frontend-framework gating for project-scoped fragments that emit
+    # framework-specific files (e.g. ``platform_auth_session_timeout_vue``
+    # ships ``.vue`` files under ``apps/frontend/src/...``; emitting them
+    # to a Svelte or Flutter project is wrong). Empty tuple = "applies
+    # regardless of frontend" (the default — preserves existing behavior
+    # for every fragment that doesn't care). Non-empty tuple = "skip the
+    # fragment unless the project's frontend is in this set". The
+    # ``apply_project_features`` applier honors this; backend-scoped
+    # fragments don't currently consult it (frontend-targeted fragments
+    # are typically project-scoped because they touch the active frontend
+    # tree).
+    target_frontends: tuple[FrontendFramework, ...] = ()
 
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations

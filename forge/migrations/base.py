@@ -42,6 +42,7 @@ def discover_migrations() -> list[AvailableMigration]:
     from forge.migrations import (  # noqa: F401, PLC0415
         migrate_adapters,
         migrate_adopt_baseline,
+        migrate_auth_keycloak_to_platform_auth,
         migrate_entities,
         migrate_layer_modes,
         migrate_rename_options,
@@ -93,6 +94,17 @@ def discover_migrations() -> list[AvailableMigration]:
             to_version=migrate_adopt_baseline.TO,
             description=migrate_adopt_baseline.DESCRIPTION,
             runner=migrate_adopt_baseline.run,
+        ),
+        # 1.1 → 1.2 (auth-stack rebuild): swap legacy Keycloak-direct
+        # for the platform-auth model. Order: runs LAST so prior
+        # migrations have already brought the project to the 1.1
+        # canonical baseline before this pass starts the auth swap.
+        AvailableMigration(
+            name=migrate_auth_keycloak_to_platform_auth.NAME,
+            from_version=migrate_auth_keycloak_to_platform_auth.FROM,
+            to_version=migrate_auth_keycloak_to_platform_auth.TO,
+            description=migrate_auth_keycloak_to_platform_auth.DESCRIPTION,
+            runner=migrate_auth_keycloak_to_platform_auth.run,
         ),
     ]
 

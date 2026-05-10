@@ -1,0 +1,38 @@
+# Declarative compose service for the gatekeeper-keygen init container.
+#
+# Runs once at stack startup, before gatekeeper boots, and writes ECDSA
+# P-256 signing keys to the shared ``gatekeeper_signing_keys`` volume.
+# Gatekeeper depends on this service via
+# ``condition: service_completed_successfully`` so a missing/rotated key
+# is regenerated transparently before the main process starts.
+#
+# Cross-reference: implementation plan at
+# ~/.claude/plans/review-the-c-users-chifo-work-platform-a-pure-torvalds.md
+# (Phase 2 — gatekeeper-keygen init service).
+
+capability: gatekeeper-keygen
+
+service:
+  name: gatekeeper-keygen
+  image: forge-gatekeeper:local  # same image as gatekeeper; overrides command
+  command: ["python", "scripts/keygen.py"]
+  networks:
+    - app-network
+  restart: "no"  # one-shot; not service-managed restart
+
+  volumes:
+    - "gatekeeper_signing_keys:/run/secrets/gatekeeper-signing"
+
+  named_volumes:
+    - gatekeeper_signing_keys
+
+  environment:
+    SIGNING_KEY_DIR: "/run/secrets/gatekeeper-signing"
+    KEY_BACKEND: "file"
+
+  # Same image build as gatekeeper main service; defining build here too
+  # so docker compose understands both services share the build context.
+  extra:
+    build:
+      context: ./infra/gatekeeper
+      dockerfile: Dockerfile

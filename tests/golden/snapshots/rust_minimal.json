@@ -25,12 +25,96 @@
       "sha256": "a6a66ab85bf10171"
     },
     "forge.toml": {
-      "size": 9310,
+      "size": 13469,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
+    },
+    "sdks/platform-auth-rs/Cargo.lock": {
+      "size": 62733,
+      "sha256": "69eccf950609877e"
+    },
+    "sdks/platform-auth-rs/Cargo.toml": {
+      "size": 3163,
+      "sha256": "8dbbe7b44ce28ef1"
+    },
+    "sdks/platform-auth-rs/README.md": {
+      "size": 3701,
+      "sha256": "7415d53e97b8ec20"
+    },
+    "sdks/platform-auth-rs/src/audit.rs": {
+      "size": 3824,
+      "sha256": "3d6662fbd0fa59bd"
+    },
+    "sdks/platform-auth-rs/src/auth_guard.rs": {
+      "size": 18681,
+      "sha256": "e593c30ed4c4e956"
+    },
+    "sdks/platform-auth-rs/src/errors.rs": {
+      "size": 4358,
+      "sha256": "432a6c2f2b168c76"
+    },
+    "sdks/platform-auth-rs/src/extractor.rs": {
+      "size": 3065,
+      "sha256": "19eab11377b840d5"
+    },
+    "sdks/platform-auth-rs/src/identity.rs": {
+      "size": 2873,
+      "sha256": "b69bc801c3ff6587"
+    },
+    "sdks/platform-auth-rs/src/jwks.rs": {
+      "size": 9846,
+      "sha256": "53adbbda2a3cef6f"
+    },
+    "sdks/platform-auth-rs/src/layer.rs": {
+      "size": 7325,
+      "sha256": "7ffcb886c87090a0"
+    },
+    "sdks/platform-auth-rs/src/lib.rs": {
+      "size": 3216,
+      "sha256": "f8fa799e1344fda6"
+    },
+    "sdks/platform-auth-rs/src/may_act.rs": {
+      "size": 3603,
+      "sha256": "f0701603f6ab7f21"
+    },
+    "sdks/platform-auth-rs/src/require_scope.rs": {
+      "size": 4314,
+      "sha256": "0035fbb6e8e4636a"
+    },
+    "sdks/platform-auth-rs/src/revocation.rs": {
+      "size": 2216,
+      "sha256": "90d7591d0fe3c5e0"
+    },
+    "sdks/platform-auth-rs/src/s2s_client.rs": {
+      "size": 17772,
+      "sha256": "921970c8ac6a652c"
+    },
+    "sdks/platform-auth-rs/src/scopes.rs": {
+      "size": 1691,
+      "sha256": "54915799b5c3b168"
+    },
+    "sdks/platform-auth-rs/src/testing.rs": {
+      "size": 11037,
+      "sha256": "4059199c5393e1c7"
+    },
+    "sdks/platform-auth-rs/src/trust.rs": {
+      "size": 4232,
+      "sha256": "82e6651dd9bfba51"
+    },
+    "sdks/platform-auth-rs/tests/audit_callback.rs": {
+      "size": 8162,
+      "sha256": "f1eb725812956dbe"
+    },
+    "sdks/platform-auth-rs/tests/integration_axum.rs": {
+      "size": 8754,
+      "sha256": "46625b3ba40c29af"
+    },
+    "sdks/platform-auth-rs/tests/parity_runner.rs": {
+      "size": 20765,
+      "sha256": "4143b3079b44017f"
     },
     "services/api/.copier-answers.yml": {
       "size": 440,

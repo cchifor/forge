@@ -1,0 +1,60 @@
+# Environment
+.env
+.secrets.yaml
+config/.secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PDM
+.pdm-python
+pdm.lock
+
+# Database
+*.db
+*.db-journal
+*.sqlite3
+
+# Logs
+*.log
+
+# Coverage & Testing
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.pytest_cache/
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Documentation
+site/
+
+# Storage uploads
+storage/
