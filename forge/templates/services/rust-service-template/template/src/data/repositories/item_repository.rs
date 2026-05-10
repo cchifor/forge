@@ -4,47 +4,48 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use platform_auth::IdentityContext;
+
 use crate::errors::AppError;
-use crate::middleware::tenant::TenantContext;
 use crate::models::{CreateItem, Item, ListParams, PaginatedResponse, UpdateItem};
 
 /// Persistence contract for the `items` table.
 ///
 /// Every method is tenant-scoped — the implementation must add a
-/// `customer_id = tenant.customer_id` clause to every query.
+/// `customer_id = identity.tenant_id` clause to every query.
 #[async_trait]
 pub trait ItemRepository: Send + Sync {
     async fn list(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         params: ListParams,
     ) -> Result<PaginatedResponse<Item>, AppError>;
 
-    async fn get_by_id(&self, tenant: &TenantContext, id: Uuid) -> Result<Option<Item>, AppError>;
+    async fn get_by_id(&self, identity: &IdentityContext, id: Uuid) -> Result<Option<Item>, AppError>;
 
     async fn find_by_name(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         name: &str,
     ) -> Result<Option<Item>, AppError>;
 
     async fn find_by_name_excluding(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         name: &str,
         exclude_id: Uuid,
     ) -> Result<Option<Item>, AppError>;
 
-    async fn create(&self, tenant: &TenantContext, data: CreateItem) -> Result<Item, AppError>;
+    async fn create(&self, identity: &IdentityContext, data: CreateItem) -> Result<Item, AppError>;
 
     async fn update(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         id: Uuid,
         data: UpdateItem,
     ) -> Result<Item, AppError>;
 
-    async fn delete(&self, tenant: &TenantContext, id: Uuid) -> Result<(), AppError>;
+    async fn delete(&self, identity: &IdentityContext, id: Uuid) -> Result<(), AppError>;
 }
 
 /// Postgres-backed implementation built on sqlx.
@@ -62,7 +63,7 @@ impl PgItemRepository {
 impl ItemRepository for PgItemRepository {
     async fn list(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         params: ListParams,
     ) -> Result<PaginatedResponse<Item>, AppError> {
         let skip = params.skip.unwrap_or(0);
@@ -94,7 +95,7 @@ impl ItemRepository for PgItemRepository {
         );
 
         let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
-        count_query = count_query.bind(tenant.customer_id);
+        count_query = count_query.bind(identity.tenant_id);
         if let Some(ref status) = params.status {
             count_query = count_query.bind(status);
         }
@@ -105,7 +106,7 @@ impl ItemRepository for PgItemRepository {
         let total = count_query.fetch_one(&self.pool).await?;
 
         let mut items_query = sqlx::query_as::<_, Item>(&query_sql);
-        items_query = items_query.bind(tenant.customer_id);
+        items_query = items_query.bind(identity.tenant_id);
         if let Some(ref status) = params.status {
             items_query = items_query.bind(status);
         }
@@ -125,11 +126,11 @@ impl ItemRepository for PgItemRepository {
         })
     }
 
-    async fn get_by_id(&self, tenant: &TenantContext, id: Uuid) -> Result<Option<Item>, AppError> {
+    async fn get_by_id(&self, identity: &IdentityContext, id: Uuid) -> Result<Option<Item>, AppError> {
         let item =
             sqlx::query_as::<_, Item>("SELECT * FROM items WHERE id = $1 AND customer_id = $2")
                 .bind(id)
-                .bind(tenant.customer_id)
+                .bind(identity.tenant_id)
                 .fetch_optional(&self.pool)
                 .await?;
         Ok(item)
@@ -137,13 +138,13 @@ impl ItemRepository for PgItemRepository {
 
     async fn find_by_name(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         name: &str,
     ) -> Result<Option<Item>, AppError> {
         let item =
             sqlx::query_as::<_, Item>("SELECT * FROM items WHERE name = $1 AND customer_id = $2")
                 .bind(name)
-                .bind(tenant.customer_id)
+                .bind(identity.tenant_id)
                 .fetch_optional(&self.pool)
                 .await?;
         Ok(item)
@@ -151,7 +152,7 @@ impl ItemRepository for PgItemRepository {
 
     async fn find_by_name_excluding(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         name: &str,
         exclude_id: Uuid,
     ) -> Result<Option<Item>, AppError> {
@@ -159,14 +160,14 @@ impl ItemRepository for PgItemRepository {
             "SELECT * FROM items WHERE name = $1 AND customer_id = $2 AND id != $3",
         )
         .bind(name)
-        .bind(tenant.customer_id)
+        .bind(identity.tenant_id)
         .bind(exclude_id)
         .fetch_optional(&self.pool)
         .await?;
         Ok(item)
     }
 
-    async fn create(&self, tenant: &TenantContext, data: CreateItem) -> Result<Item, AppError> {
+    async fn create(&self, identity: &IdentityContext, data: CreateItem) -> Result<Item, AppError> {
         let tags = data.tags.unwrap_or(serde_json::json!([]));
         let status = data.status.unwrap_or_else(|| "DRAFT".to_string());
 
@@ -181,8 +182,8 @@ impl ItemRepository for PgItemRepository {
         .bind(&data.description)
         .bind(&tags)
         .bind(&status)
-        .bind(tenant.customer_id)
-        .bind(tenant.user_id)
+        .bind(identity.tenant_id)
+        .bind(Uuid::parse_str(&identity.subject).unwrap_or_default())
         .fetch_one(&self.pool)
         .await?;
         Ok(item)
@@ -190,7 +191,7 @@ impl ItemRepository for PgItemRepository {
 
     async fn update(
         &self,
-        tenant: &TenantContext,
+        identity: &IdentityContext,
         id: Uuid,
         data: UpdateItem,
     ) -> Result<Item, AppError> {
@@ -246,16 +247,16 @@ impl ItemRepository for PgItemRepository {
         if let Some(ref status) = data.status {
             query = query.bind(status);
         }
-        query = query.bind(id).bind(tenant.customer_id);
+        query = query.bind(id).bind(identity.tenant_id);
 
         let item = query.fetch_one(&self.pool).await?;
         Ok(item)
     }
 
-    async fn delete(&self, tenant: &TenantContext, id: Uuid) -> Result<(), AppError> {
+    async fn delete(&self, identity: &IdentityContext, id: Uuid) -> Result<(), AppError> {
         sqlx::query("DELETE FROM items WHERE id = $1 AND customer_id = $2")
             .bind(id)
-            .bind(tenant.customer_id)
+            .bind(identity.tenant_id)
             .execute(&self.pool)
             .await?;
         Ok(())

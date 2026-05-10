@@ -192,14 +192,28 @@ def test_inject_yaml_wires_module_and_layer() -> None:
     )
 
 
-def test_rust_middleware_fragment_not_yet_wired_to_auth_mode() -> None:
-    """Phase 7's fragment registered but NOT yet wired into
-    ``auth.mode=generate``'s enables map. Conflict-with-legacy
-    concern same as Phase 3 — bundled with the atomic cutover."""
+def test_rust_middleware_fragment_wired_to_auth_mode() -> None:
+    """Phase 7 Wave 2 cutover landed — the fragment is now in
+    ``auth.mode=generate``'s enables tuple.
+
+    Cutover: legacy ``src/middleware/tenant.rs`` (header-trust
+    FromRequestParts) and ``src/client.rs`` (S2S header propagation)
+    were removed from the rust-service-template; the fragment ships
+    ``src/middleware/auth.rs`` (init_auth + auth_middleware) plus the
+    inject.yaml entries that wire ``init_auth()`` into ``main.rs`` at
+    FORGE:STARTUP_INIT and ``axum::middleware::from_fn(auth_middleware)``
+    into ``app.rs`` at FORGE:MIDDLEWARE_REGISTRATION. Repository /
+    service / route layers were refactored from ``&TenantContext`` to
+    ``&IdentityContext``.
+    """
     from forge.options import OPTION_REGISTRY
 
     auth_mode = OPTION_REGISTRY["auth.mode"]
     enabled = auth_mode.enables.get("generate", ())
-    assert "platform_auth_rust_middleware" not in enabled, (
-        "platform_auth_rust_middleware was wired before the Phase 2 cutover"
+    assert "platform_auth_rust_middleware" in enabled, (
+        "platform_auth_rust_middleware fragment must be in "
+        "auth.mode=generate's enables tuple after the Phase 7 Wave 2 "
+        "cutover — without it, a generated Rust project gets the SDK "
+        "at sdks/platform-auth-rs/ but no middleware wiring it into "
+        "Axum."
     )

@@ -1,5 +1,4 @@
 pub mod correlation;
-pub mod tenant;
 // FORGE:MOD_REGISTRATION
 // FORGE:BEGIN security_headers:MOD_REGISTRATION
 pub mod security_headers;

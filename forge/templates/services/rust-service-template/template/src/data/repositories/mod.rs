@@ -8,8 +8,8 @@
 //! drivers without rewriting business logic.
 //!
 //! Implementations are responsible for scoping every query by
-//! `tenant.customer_id`. The trait surface intentionally takes
-//! `&TenantContext` on every method to make accidental tenant bypass
+//! `identity.tenant_id`. The trait surface intentionally takes
+//! `&IdentityContext` on every method to make accidental tenant bypass
 //! impossible at compile time.
 
 pub mod item_repository;
