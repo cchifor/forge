@@ -183,32 +183,30 @@ def test_service_client_auth_caches_tokens() -> None:
     )
 
 
-def test_python_middleware_fragment_not_yet_wired_to_auth_mode() -> None:
-    """Phase 3's middleware is registered but intentionally NOT yet
-    wired into ``auth.mode=generate``'s enables map.
+def test_python_middleware_fragment_wired_to_auth_mode() -> None:
+    """Phase 3 Wave 2 cutover landed — the fragment is now in
+    ``auth.mode=generate``'s enables tuple.
 
-    Reason: forge's existing python-service-template ships
-    ``service/security/auth.py`` and ``service/client/auth.py`` at the
-    same paths this fragment writes — wiring without first removing
-    those legacy files (in a coordinated cutover with the Phase 2
-    gatekeeper template removal) emits a hard ``FragmentError`` at
-    generate time.
+    Cutover: legacy ``service/security/{auth,base}.py``,
+    ``service/security/providers/`` (and its dev/keycloak providers),
+    ``service/client/auth.py``, ``service/domain/auth_schema.py`` were
+    removed from the python-service-template, and
+    ``app/core/lifecycle.py``'s auth setup block was rewritten to
+    use ``build_auth_guard`` + ``initialize_auth(bundle=...)``. The
+    fragment now ships its replacements without collision.
 
-    The fragment IS reachable via the migration codemod path —
-    ``forge --migrate auth-keycloak-to-platform-auth`` strips the
-    legacy files first, then ``forge --update`` ships the fragment.
-    Greenfield projects need the cutover landed before they can
-    consume this fragment.
-
-    Negative invariant — flip when the cutover lands.
+    Pinning the wiring here so a future regression that drops the
+    fragment from ``auth.mode``'s enables map (or splits it into a
+    separate option) gets caught.
     """
     from forge.options import OPTION_REGISTRY
 
     auth_mode = OPTION_REGISTRY["auth.mode"]
     enabled = auth_mode.enables.get("generate", ())
-    assert "platform_auth_python_middleware" not in enabled, (
-        "platform_auth_python_middleware fragment was wired into "
-        "auth.mode=generate before the Phase 2 cutover landed — this "
-        "would conflict with forge's existing python-service-template "
-        "auth modules and emit FragmentError at generate time."
+    assert "platform_auth_python_middleware" in enabled, (
+        "platform_auth_python_middleware fragment must be in "
+        "auth.mode=generate's enables tuple after the Phase 3 Wave 2 "
+        "cutover — without it, a generated Python project gets the "
+        "SDK at sdks/platform-auth/ but no middleware wiring it into "
+        "FastAPI."
     )

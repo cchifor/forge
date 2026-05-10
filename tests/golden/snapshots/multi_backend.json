@@ -29,7 +29,7 @@
       "sha256": "b6224290f86245ce"
     },
     "forge.toml": {
-      "size": 54815,
+      "size": 53856,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -572,6 +572,10 @@
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
+    "services/api-py/src/app/core/auth.py": {
+      "size": 1917,
+      "sha256": "b5198c5fee767f49"
+    },
     "services/api-py/src/app/core/config/__init__.py": {
       "size": 605,
       "sha256": "d9795309dc89bd45"
@@ -621,8 +625,8 @@
       "sha256": "1744f5d64be0678f"
     },
     "services/api-py/src/app/core/lifecycle.py": {
-      "size": 5737,
-      "sha256": "456d31226b93e591"
+      "size": 5912,
+      "sha256": "8f5792645c313696"
     },
     "services/api-py/src/app/core/pii_redaction.py": {
       "size": 2600,
@@ -699,6 +703,10 @@
     "services/api-py/src/app/middleware/audit.py": {
       "size": 1541,
       "sha256": "239e47e157cbde86"
+    },
+    "services/api-py/src/app/middleware/auth_context.py": {
+      "size": 2372,
+      "sha256": "3c2af71359faa7e3"
     },
     "services/api-py/src/app/middleware/correlation.py": {
       "size": 1272,
@@ -804,13 +812,9 @@
       "size": 778,
       "sha256": "2b0a16e5c82489a7"
     },
-    "services/api-py/src/service/domain/auth_schema.py": {
-      "size": 583,
-      "sha256": "a0cdebb4f69889db"
-    },
     "services/api-py/src/service/domain/config.py": {
-      "size": 1003,
-      "sha256": "e04d05390c284b0d"
+      "size": 1468,
+      "sha256": "7770bd87d6d51591"
     },
     "services/api-py/src/service/domain/user.py": {
       "size": 262,
@@ -853,24 +857,12 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/service/security/auth.py": {
-      "size": 5057,
-      "sha256": "4ab4914cb3b902bc"
+      "size": 6642,
+      "sha256": "9486210b9638c88f"
     },
-    "services/api-py/src/service/security/base.py": {
-      "size": 467,
-      "sha256": "6b19e3b9bff21662"
-    },
-    "services/api-py/src/service/security/providers/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/security/providers/dev.py": {
-      "size": 1057,
-      "sha256": "6d65d95a4c75ed96"
-    },
-    "services/api-py/src/service/security/providers/keycloak.py": {
-      "size": 1454,
-      "sha256": "32aaffa6cc52ba47"
+    "services/api-py/src/service/security/platform_auth_setup.py": {
+      "size": 2108,
+      "sha256": "68b8c542c046e4bc"
     },
     "services/api-py/src/service/tasks/__init__.py": {
       "size": 0,
@@ -1004,10 +996,6 @@
       "size": 2164,
       "sha256": "c723fa655ac71c3b"
     },
-    "services/api-py/tests/unit/test_client_auth.py": {
-      "size": 3530,
-      "sha256": "03d9b4d96faa27d1"
-    },
     "services/api-py/tests/unit/test_client_errors.py": {
       "size": 1541,
       "sha256": "30cd3a5731ec203d"
@@ -1031,10 +1019,6 @@
     "services/api-py/tests/unit/test_db_config.py": {
       "size": 3167,
       "sha256": "d91fad0946189013"
-    },
-    "services/api-py/tests/unit/test_dev_provider.py": {
-      "size": 1106,
-      "sha256": "73ec2abf914f6fe7"
     },
     "services/api-py/tests/unit/test_domain_models.py": {
       "size": 5807,
@@ -1068,10 +1052,6 @@
       "size": 2466,
       "sha256": "816e1666716aaa2f"
     },
-    "services/api-py/tests/unit/test_keycloak_provider.py": {
-      "size": 5386,
-      "sha256": "771d279b1d7ad948"
-    },
     "services/api-py/tests/unit/test_lifecycle.py": {
       "size": 3082,
       "sha256": "24c2a79053ee0705"
@@ -1104,17 +1084,13 @@
       "size": 3998,
       "sha256": "30d1167a157e25c8"
     },
-    "services/api-py/tests/unit/test_security_auth.py": {
-      "size": 3732,
-      "sha256": "9e67375951a74aa9"
-    },
     "services/api-py/tests/unit/test_service_client.py": {
       "size": 4313,
       "sha256": "fbc02baf774fbc11"
     },
     "services/api-py/tests/unit/test_service_domain.py": {
-      "size": 4279,
-      "sha256": "a9691ed8fd5829f3"
+      "size": 3760,
+      "sha256": "c238a3d5491545a1"
     },
     "services/api-py/tests/unit/test_service_errors.py": {
       "size": 1988,
@@ -1135,10 +1111,6 @@
     "services/api-py/tests/unit/test_task_service.py": {
       "size": 2645,
       "sha256": "26b5fc39676b8835"
-    },
-    "services/api-py/tests/unit/test_tenant_isolation.py": {
-      "size": 4327,
-      "sha256": "de590e00e9604609"
     },
     "services/api-py/tests/utils/__init__.py": {
       "size": 459,

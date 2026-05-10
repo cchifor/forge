@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
 from service.discovery import Discovery
 from service.security import auth
+from service.security.platform_auth_setup import build_auth_guard
 from service.tasks.runner import BackgroundTaskRunner
 
 logger = logging.getLogger(__name__)
@@ -36,22 +37,21 @@ class AppLifecycle:
         container = make_async_container(*providers, context={Settings: config})
         setup_dishka(container, app)
 
-        # 3. Setup Authentication
-        if config.security.auth.enabled:
-            from service.security.providers.keycloak import KeycloakProvider
-
-            provider = KeycloakProvider(config.security.auth)
-        else:
-            from service.security.providers.dev import DevAuthProvider
-
-            provider = DevAuthProvider(config.security.auth)
-            logger.warning("Auth DISABLED — using DevAuthProvider (dev mode only)")
-
+        # 3. Setup Authentication — platform-auth model.
+        # Verifies bearer tokens against the configured Gatekeeper's JWKS
+        # endpoint. ``auth.enabled=False`` activates dev-mode (synthesized
+        # local user, no token verification) — local development only.
+        bundle = build_auth_guard(config.security.auth)
+        if not config.security.auth.enabled:
+            logger.warning(
+                "Auth DISABLED — dev mode (synthetic user, no JWT verification)"
+            )
         auth.initialize_auth(
             app,
-            provider=provider,
+            bundle=bundle,
             auth_url=config.security.auth.auth_url,
             token_url=config.security.auth.token_url,
+            dev_mode=not config.security.auth.enabled,
         )
 
         logger.info("Application bootstrap complete. Waiting for server startup...")
