@@ -1,13 +1,13 @@
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
+use platform_auth::IdentityContext;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::middleware::tenant::TenantContext;
 use crate::models::{CreateItem, ListParams, UpdateItem};
 use crate::services::item_service;
 
@@ -22,46 +22,46 @@ pub fn routes() -> Router<PgPool> {
 
 async fn list_items(
     State(pool): State<PgPool>,
-    tenant: TenantContext,
+    Extension(identity): Extension<IdentityContext>,
     Query(params): Query<ListParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = item_service::list(&pool, &tenant, params).await?;
+    let result = item_service::list(&pool, &identity, params).await?;
     Ok(Json(result))
 }
 
 async fn create_item(
     State(pool): State<PgPool>,
-    tenant: TenantContext,
+    Extension(identity): Extension<IdentityContext>,
     Json(body): Json<CreateItem>,
 ) -> Result<impl IntoResponse, AppError> {
-    let item = item_service::create(&pool, &tenant, body).await?;
+    let item = item_service::create(&pool, &identity, body).await?;
     Ok((StatusCode::CREATED, Json(item)))
 }
 
 async fn get_item(
     State(pool): State<PgPool>,
-    tenant: TenantContext,
+    Extension(identity): Extension<IdentityContext>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let item = item_service::get_by_id(&pool, &tenant, id).await?;
+    let item = item_service::get_by_id(&pool, &identity, id).await?;
     Ok(Json(item))
 }
 
 async fn update_item(
     State(pool): State<PgPool>,
-    tenant: TenantContext,
+    Extension(identity): Extension<IdentityContext>,
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateItem>,
 ) -> Result<impl IntoResponse, AppError> {
-    let item = item_service::update(&pool, &tenant, id, body).await?;
+    let item = item_service::update(&pool, &identity, id, body).await?;
     Ok(Json(item))
 }
 
 async fn delete_item(
     State(pool): State<PgPool>,
-    tenant: TenantContext,
+    Extension(identity): Extension<IdentityContext>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    item_service::delete(&pool, &tenant, id).await?;
+    item_service::delete(&pool, &identity, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

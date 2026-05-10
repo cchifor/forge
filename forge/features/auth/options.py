@@ -100,9 +100,16 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                 # roles). The fragment's ``bootstrapAuth(app)`` is
                 # injected at the FORGE markers in ``app.ts``.
                 "platform_auth_node_middleware",
-                # NOTE: ``platform_auth_rust_middleware`` remains
-                # dormant pending Phase 7 cutover (legacy
-                # ``middleware/tenant.rs`` removal).
+                # Phase 7 Wave 2 (cut over) — Rust service-template
+                # middleware. Legacy ``middleware/tenant.rs`` (header-
+                # trust ``FromRequestParts``) and ``client.rs`` (S2S
+                # header propagation) removed; Repository / service /
+                # route layers refactored to take ``&IdentityContext``
+                # from ``platform_auth``. ``main.rs`` calls
+                # ``init_auth()`` (injected at FORGE:STARTUP_INIT) and
+                # ``app.rs`` adds the ``axum::middleware::from_fn``
+                # auth_middleware layer.
+                "platform_auth_rust_middleware",
                 # ``platform_auth_gatekeeper`` and
                 # ``platform_auth_gatekeeper_keygen`` are also held
                 # back pending the imperative compose-block removal

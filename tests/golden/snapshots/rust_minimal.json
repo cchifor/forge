@@ -25,7 +25,7 @@
       "sha256": "a6a66ab85bf10171"
     },
     "forge.toml": {
-      "size": 13469,
+      "size": 13272,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -129,8 +129,8 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 873,
-      "sha256": "d44b683e20b96de5"
+      "size": 926,
+      "sha256": "946a3b47af2fc8a0"
     },
     "services/api/config/defaults.yaml": {
       "size": 378,
@@ -165,16 +165,12 @@
       "sha256": "62c13b9b99ad7620"
     },
     "services/api/src/app.rs": {
-      "size": 1554,
-      "sha256": "48d43178ad1056a6"
+      "size": 1937,
+      "sha256": "5caee3752473e491"
     },
     "services/api/src/bin/migrate.rs": {
       "size": 511,
       "sha256": "84a5285ef7f1685f"
-    },
-    "services/api/src/client.rs": {
-      "size": 2874,
-      "sha256": "8051c633d0af6cbb"
     },
     "services/api/src/config.rs": {
       "size": 6766,
@@ -185,12 +181,12 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8194,
-      "sha256": "9f21ab276c4d5310"
+      "size": 8281,
+      "sha256": "8974d3967dbaa868"
     },
     "services/api/src/data/repositories/mod.rs": {
-      "size": 746,
-      "sha256": "4f25de61f4f9cb04"
+      "size": 748,
+      "sha256": "30a4ddc7e465cb8b"
     },
     "services/api/src/db.rs": {
       "size": 316,
@@ -209,16 +205,20 @@
       "sha256": "1f6a025f6e3cd0e4"
     },
     "services/api/src/main.rs": {
-      "size": 1905,
-      "sha256": "29d57d498bc16e92"
+      "size": 2185,
+      "sha256": "d69992c969f097be"
+    },
+    "services/api/src/middleware/auth.rs": {
+      "size": 7759,
+      "sha256": "6b677d3fb4b7b8ee"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
       "sha256": "19537a6542a7852c"
     },
     "services/api/src/middleware/mod.rs": {
-      "size": 289,
-      "sha256": "2167abddcd533734"
+      "size": 409,
+      "sha256": "fc1223ecbb40de84"
     },
     "services/api/src/middleware/rate_limit.rs": {
       "size": 2872,
@@ -227,10 +227,6 @@
     "services/api/src/middleware/security_headers.rs": {
       "size": 1592,
       "sha256": "9dbd078cf55ca0ed"
-    },
-    "services/api/src/middleware/tenant.rs": {
-      "size": 2405,
-      "sha256": "f5b8573bb77570af"
     },
     "services/api/src/models/enums/approval_mode.rs": {
       "size": 349,
@@ -257,16 +253,16 @@
       "sha256": "600e9e01a075a179"
     },
     "services/api/src/routes/items.rs": {
-      "size": 1851,
-      "sha256": "c783aed6810741dd"
+      "size": 1992,
+      "sha256": "1bae65efb342cdc4"
     },
     "services/api/src/routes/mod.rs": {
       "size": 542,
       "sha256": "907d248303776cf4"
     },
     "services/api/src/services/item_service.rs": {
-      "size": 2199,
-      "sha256": "70bfdcde9cb59e7f"
+      "size": 2257,
+      "sha256": "507837676575798d"
     },
     "services/api/src/services/mod.rs": {
       "size": 57,
@@ -277,12 +273,8 @@
       "sha256": "1479f5c245978c1b"
     },
     "services/api/tests/items_test.rs": {
-      "size": 4447,
-      "sha256": "b4e927be87872855"
-    },
-    "services/api/tests/tenant_test.rs": {
-      "size": 4289,
-      "sha256": "e9945d73beba9925"
+      "size": 4509,
+      "sha256": "5d902d1309c5d022"
     },
     "services/api/tests/utils.rs": {
       "size": 2111,

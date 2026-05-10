@@ -44,6 +44,8 @@ async fn main() {
     // FORGE:TRACING_LAYERS
     registry.init();
 
+    // FORGE:STARTUP_INIT
+
     let pool = db::create_pool().await;
     let app = app::create_app(pool);
     let port: u16 = std::env::var("PORT")

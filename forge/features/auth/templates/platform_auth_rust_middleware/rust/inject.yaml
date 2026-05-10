@@ -1,9 +1,12 @@
 # platform_auth_rust_middleware: wire `auth_middleware` into the
-# generated Axum app's middleware chain.
+# generated Axum app's middleware chain + `init_auth()` into main().
 #
-# Two injection sites mirror security_headers / rate_limit:
+# Three injection sites mirror security_headers / rate_limit:
 #   1. middleware/mod.rs: register the `auth` submodule
 #   2. app.rs: import + .layer(...) the from_fn middleware
+#   3. main.rs: call init_auth() after tracing init, before server
+#      start. Without this, the middleware short-circuits with 503
+#      "service_misconfigured" on every request.
 
 - target: src/middleware/mod.rs
   marker: FORGE:MOD_REGISTRATION
@@ -19,3 +22,8 @@
   marker: FORGE:MIDDLEWARE_REGISTRATION
   position: before
   snippet: ".layer(axum::middleware::from_fn(auth_middleware))"
+
+- target: src/main.rs
+  marker: FORGE:STARTUP_INIT
+  position: before
+  snippet: "crate::middleware::auth::init_auth().await.expect(\"auth init failed — check GATEKEEPER_ISSUER + SERVICE_AUDIENCE env vars\");"

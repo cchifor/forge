@@ -41,13 +41,11 @@ def test_auth_mode_option_registered() -> None:
     assert opt.default == "generate"
     assert opt.options == ("generate", "none")
     # Phase 2 cutover progress: auth.mode=generate enables the 3 SDKs +
-    # 3 frontend session-timeout + the Python and Node service-template
-    # middleware (Phase 3 + Phase 5 Wave 2 cutovers landed). The
-    # remaining Rust middleware fragment and the 2 gatekeeper fragments
-    # stay deferred until the matching legacy templates are removed
-    # (file collisions otherwise — see the negative invariants in
-    # test_features_auth_rust_middleware.py and
-    # test_features_auth_gatekeeper.py).
+    # 3 frontend session-timeout + the Python, Node, and Rust service-
+    # template middleware (Phase 3 + 5 + 7 Wave 2 cutovers landed). The
+    # 2 gatekeeper fragments stay deferred until the imperative compose
+    # block is removed (file collision otherwise — see the negative
+    # invariant in test_features_auth_gatekeeper.py).
     enabled = opt.enables["generate"]
     assert "platform_auth_sdk_python" in enabled
     assert "platform_auth_sdk_node" in enabled
@@ -57,10 +55,11 @@ def test_auth_mode_option_registered() -> None:
     assert "platform_auth_session_timeout_flutter" in enabled
     assert "platform_auth_python_middleware" in enabled
     assert "platform_auth_node_middleware" in enabled
-    assert len(enabled) == 8, (
-        f"auth.mode=generate should enable 8 fragments (SDK x3 + "
-        f"session-timeout x3 + python middleware + node middleware); "
-        f"got {len(enabled)}: {enabled}"
+    assert "platform_auth_rust_middleware" in enabled
+    assert len(enabled) == 9, (
+        f"auth.mode=generate should enable 9 fragments (SDK x3 + "
+        f"session-timeout x3 + python/node/rust middleware); got "
+        f"{len(enabled)}: {enabled}"
     )
 
 

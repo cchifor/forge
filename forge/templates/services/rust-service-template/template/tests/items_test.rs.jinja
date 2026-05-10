@@ -73,7 +73,8 @@ async fn create_item_returns_201() {
     let app = build_mock_router();
 
     // customer_id and user_id are no longer in the request body —
-    // they are injected from TenantContext (Gatekeeper headers)
+    // they are injected from the verified IdentityContext (tenant_id +
+    // subject) bound by the platform-auth middleware.
     let request = Request::builder()
         .method("POST")
         .uri("/api/v1/{{ entity_plural }}")

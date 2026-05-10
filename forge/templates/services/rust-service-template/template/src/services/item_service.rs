@@ -4,56 +4,60 @@
 //! including in-memory test doubles, satisfies the bound. The default
 //! wiring uses [`PgItemRepository`].
 
+use platform_auth::IdentityContext;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::data::repositories::{ItemRepository, PgItemRepository};
 use crate::errors::AppError;
-use crate::middleware::tenant::TenantContext;
 use crate::models::{CreateItem, Item, ListParams, PaginatedResponse, UpdateItem};
 
 pub async fn list(
     pool: &PgPool,
-    tenant: &TenantContext,
+    identity: &IdentityContext,
     params: ListParams,
 ) -> Result<PaginatedResponse<Item>, AppError> {
     let repo = PgItemRepository::new(pool.clone());
-    repo.list(tenant, params).await
+    repo.list(identity, params).await
 }
 
 pub async fn create(
     pool: &PgPool,
-    tenant: &TenantContext,
+    identity: &IdentityContext,
     data: CreateItem,
 ) -> Result<Item, AppError> {
     let repo = PgItemRepository::new(pool.clone());
-    if repo.find_by_name(tenant, &data.name).await?.is_some() {
+    if repo.find_by_name(identity, &data.name).await?.is_some() {
         return Err(AppError::already_exists("Item", &data.name));
     }
-    repo.create(tenant, data).await
+    repo.create(identity, data).await
 }
 
-pub async fn get_by_id(pool: &PgPool, tenant: &TenantContext, id: Uuid) -> Result<Item, AppError> {
+pub async fn get_by_id(
+    pool: &PgPool,
+    identity: &IdentityContext,
+    id: Uuid,
+) -> Result<Item, AppError> {
     let repo = PgItemRepository::new(pool.clone());
-    repo.get_by_id(tenant, id)
+    repo.get_by_id(identity, id)
         .await?
         .ok_or_else(|| AppError::not_found("Item", id.to_string()))
 }
 
 pub async fn update(
     pool: &PgPool,
-    tenant: &TenantContext,
+    identity: &IdentityContext,
     id: Uuid,
     data: UpdateItem,
 ) -> Result<Item, AppError> {
     let repo = PgItemRepository::new(pool.clone());
-    repo.get_by_id(tenant, id)
+    repo.get_by_id(identity, id)
         .await?
         .ok_or_else(|| AppError::not_found("Item", id.to_string()))?;
 
     if let Some(ref name) = data.name {
         if repo
-            .find_by_name_excluding(tenant, name, id)
+            .find_by_name_excluding(identity, name, id)
             .await?
             .is_some()
         {
@@ -61,13 +65,17 @@ pub async fn update(
         }
     }
 
-    repo.update(tenant, id, data).await
+    repo.update(identity, id, data).await
 }
 
-pub async fn delete(pool: &PgPool, tenant: &TenantContext, id: Uuid) -> Result<(), AppError> {
+pub async fn delete(
+    pool: &PgPool,
+    identity: &IdentityContext,
+    id: Uuid,
+) -> Result<(), AppError> {
     let repo = PgItemRepository::new(pool.clone());
-    repo.get_by_id(tenant, id)
+    repo.get_by_id(identity, id)
         .await?
         .ok_or_else(|| AppError::not_found("Item", id.to_string()))?;
-    repo.delete(tenant, id).await
+    repo.delete(identity, id).await
 }
