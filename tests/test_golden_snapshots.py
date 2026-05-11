@@ -96,6 +96,16 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
             or rel.startswith("node_modules/")
             or rel.endswith("/package-lock.json")
             or rel == "package-lock.json"
+            # Cargo build artifacts. The auth Wave 1 Rust SDK ships
+            # tests; when the cross-SDK parity gate (test_rust_runner.py)
+            # runs before the snapshot test in the same CI job, cargo
+            # leaves a target/ tree inside the SDK source dir. forge's
+            # generator then copies that tree into every generated
+            # project that includes the auth fragment, producing
+            # non-deterministic snapshot drift across runs (hashes
+            # depend on the host's libc, rustc version, etc.).
+            or "/target/" in rel
+            or rel.startswith("target/")
             # Vue auto-import declarations are produced at first ``npm run dev``
             # / ``vue-tsc`` only; whether they exist on the snapshot host
             # depends on Node availability.
