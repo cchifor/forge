@@ -6,7 +6,7 @@ from app.domain.health import (
     LivenessResponse,
     ReadinessResponse,
 )
-from service.uow.aio import AsyncUnitOfWork, HealthRepository
+from weld.core.persistence.uow.aio import AsyncUnitOfWork, HealthRepository
 
 
 class HealthService:

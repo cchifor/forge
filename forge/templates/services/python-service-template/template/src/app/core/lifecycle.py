@@ -9,10 +9,9 @@ from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
-from service.discovery import Discovery
-from service.security import auth
-from service.security.platform_auth_setup import build_auth_guard
-from service.tasks.runner import BackgroundTaskRunner
+from weld.core.discovery import Discovery
+from weld.fastapi.security import auth
+from weld.fastapi.security.platform_auth_setup import build_auth_guard
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +20,6 @@ class AppLifecycle:
     """Orchestrates the Application Lifecycle.
     Separates 'Build-time' wiring (Bootstrap) from 'Run-time' management (Lifespan).
     """
-
-    _task_runner: BackgroundTaskRunner | None = None
 
     @classmethod
     def bootstrap(cls, app: FastAPI, config: Settings) -> None:
@@ -101,7 +98,7 @@ class AppLifecycle:
             logger.info("Service discovery disabled, skipping registration.")
 
         # Auto-create tables for SQLite dev databases
-        from service.db.aio import AsyncDatabase
+        from weld.core.persistence.db.aio import AsyncDatabase
 
         db = await container.get(AsyncDatabase)
         if "sqlite" in config.db.url:
@@ -111,27 +108,21 @@ class AppLifecycle:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("SQLite tables auto-created (dev mode).")
 
-        # Start background task runner
+        # Publish the session factory for code that runs outside request
+        # scope (Taskiq workers, admin panel startup) — one engine, one
+        # pool. The async_work feature's background_tasks fragment opts
+        # into this when enabled.
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
         from app.core.db import set_session_factory
 
         session_factory = await container.get(async_sessionmaker[AsyncSession])
-        # Publish for code that runs outside request scope (agent tools,
-        # Taskiq workers, admin panel startup) — one engine, one pool.
         set_session_factory(session_factory)
-        runner = BackgroundTaskRunner(session_factory, poll_interval=5.0)
-        AppLifecycle._task_runner = runner
-        await runner.start()
-        logger.info("Background task runner started.")
+        # FORGE:LIFESPAN_STARTUP
 
     @staticmethod
     async def _on_shutdown(container: AsyncContainer) -> None:
-        # Stop background task runner first (drains in-flight)
-        if AppLifecycle._task_runner:
-            await AppLifecycle._task_runner.stop()
-            AppLifecycle._task_runner = None
-
+        # FORGE:LIFESPAN_SHUTDOWN
         await container.close()
         logger.info("DI Container closed.")
 

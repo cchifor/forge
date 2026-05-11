@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from service.domain.config import AuthConfig
+from weld.core.domain.config import AuthConfig
 
 
 class Contact(BaseModel):

@@ -8,11 +8,11 @@ from dishka import Provider, Scope, provide
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from service.core import context
-from service.domain.account import Account
-from service.domain.user import User
-from service.security.auth import authenticate_request
-from service.uow.aio import AsyncUnitOfWork
+from weld.core import context
+from weld.core.domain.account import Account
+from weld.core.domain.user import User
+from weld.core.persistence.uow.aio import AsyncUnitOfWork
+from weld.fastapi.security.auth import authenticate_request
 
 AuthUnitOfWork = NewType("AuthUnitOfWork", AsyncUnitOfWork)
 PublicUnitOfWork = NewType("PublicUnitOfWork", AsyncUnitOfWork)
