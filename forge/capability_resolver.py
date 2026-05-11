@@ -340,6 +340,11 @@ def _is_user_selected(user_options: dict[str, object], fragment_name: str) -> bo
         spec = OPTION_REGISTRY.get(path)
         if spec is None:
             continue
+        # LIST / STR / INT / OBJECT options never map values to fragments
+        # (see _collect_fragments for the same short-circuit). Skipping
+        # here also avoids dict.get() raising on unhashable list values.
+        if not spec.enables:
+            continue
         enabled_set = spec.enables.get(value, ())
         if fragment_name not in enabled_set:
             continue
