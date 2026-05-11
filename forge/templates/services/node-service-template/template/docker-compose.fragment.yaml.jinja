@@ -1,0 +1,42 @@
+# docker-compose fragment for the {{ project_slug }} Node service. Mirrors
+# the Python template's shape so platform-level orchestration is uniform
+# across language backends.
+
+services:
+  {{ project_slug }}-migrate:
+    build:
+      context: ./services/{{ project_slug }}
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app-network]
+
+  {{ project_slug }}:
+    build:
+      context: ./services/{{ project_slug }}
+      dockerfile: Dockerfile
+    ports:
+      - "{{ server_port }}:{{ server_port }}"
+    environment:
+      NODE_ENV: development
+      PORT: "{{ server_port }}"
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4318"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ project_slug }}.rule=Host(`app.localhost`) && PathPrefix(`/api/{{ project_slug }}`)"
+      - "traefik.http.routers.{{ project_slug }}.middlewares={{ project_slug }}-rewrite"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.regex=^/api/{{ project_slug }}/(.*)"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.replacement=/api/$$1"
+      - "traefik.http.services.{{ project_slug }}.loadbalancer.server.port={{ server_port }}"
+    depends_on:
+      {{ project_slug }}-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    networks: [app-network]

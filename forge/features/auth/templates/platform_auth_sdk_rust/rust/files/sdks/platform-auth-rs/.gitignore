@@ -1,0 +1,6 @@
+# Cargo build output. Without this, `git add .` in the generated
+# project recurses through hundreds of MB of cargo artifacts (the
+# cross-SDK parity gate runs ``cargo test`` against the SDK before
+# forge's own tests in CI). On Windows the 30-second `git add` timeout
+# inside forge.generator's git-init step trips.
+/target

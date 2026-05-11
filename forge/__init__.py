@@ -1,6 +1,6 @@
 """forge: Full-stack project generator."""
 
-__version__ = "1.0.0"
+__version__ = "1.2.0-alpha.1"
 
 # Eagerly import built-in feature subpackages so OPTION_REGISTRY and
 # FRAGMENT_REGISTRY are fully populated by the time any caller reaches

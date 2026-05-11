@@ -1,0 +1,29 @@
+# events_core: register the EventBus provider in the Dishka container and
+# wire startup/shutdown into the lifespan so PostgresNotifyBus.start()/
+# .stop() runs at the right time.
+
+- target: src/app/core/ioc/infra.py
+  marker: FORGE:IOC_INFRA_IMPORTS
+  position: before
+  snippet: "from app.events import build_event_bus"
+
+- target: src/app/core/ioc/infra.py
+  marker: FORGE:IOC_INFRA_PROVIDERS
+  position: before
+  snippet: |
+    @provide(scope=Scope.APP)
+    async def event_bus(self, settings: Settings, engine: AsyncEngine) -> EventBus:
+        return await build_event_bus(settings, engine)
+
+- target: src/app/core/config/domain.py
+  marker: FORGE:CONFIG_DOMAIN_FIELDS
+  position: before
+  snippet: |
+    class EventsSettings(BaseModel):
+        bus: Literal["none", "postgres_notify", "memory"] = "postgres_notify"
+        channel: str = "domain_events"
+
+- target: src/app/core/config/domain.py
+  marker: FORGE:CONFIG_DOMAIN_ROOT
+  position: before
+  snippet: "events: EventsSettings = EventsSettings()"

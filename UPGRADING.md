@@ -2,6 +2,122 @@
 
 This document lists breaking changes per version and the migration steps for each.
 
+## 1.1 → 1.2
+
+The 1.2 series aligns forge templates with the platform's **10-SDK
+restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
+dependency DAG, May 2026). The Python service template now imports
+weld-* SDKs directly instead of vendoring the duplicate `src/service/`
+shim that shipped through 1.0/1.1.
+
+### 1.2.0-alpha.1 — weld-* SDKs
+
+#### Breaking changes
+
+1. **`src/service/` removed from the Python template.** Every import
+   that previously reached into the in-tree shim now resolves directly
+   to its weld-* equivalent. Generated services regenerated against
+   1.2 will not include the shim — services that haven't migrated
+   their hand-written code stay on 1.1.x or pick `sdk_consumption=none`
+   in the new copier prompt (see below).
+
+   Import mapping for services migrating by hand:
+
+   | Old (`service.*`) | New (`weld.*`) |
+   |---|---|
+   | `service.db.aio.AsyncDatabase` | `weld.core.persistence.db.aio.AsyncDatabase` |
+   | `service.repository.{aio,mixins}` | `weld.core.persistence.repository.{aio,mixins}` |
+   | `service.uow.aio.AsyncUnitOfWork` | `weld.core.persistence.uow.aio.AsyncUnitOfWork` |
+   | `service.security.auth.{authenticate_request, oauth2_scheme}` | `weld.fastapi.security.auth.{authenticate_request, oauth2_scheme}` |
+   | `service.security.platform_auth_setup.build_auth_guard` | `weld.fastapi.security.platform_auth_setup.build_auth_guard` |
+   | `service.security (auth)` | `weld.fastapi.security (auth)` |
+   | `service.core.context` | `weld.core.context` |
+   | `service.domain.{account,user,config}` | `weld.core.domain.{account,user,config}` |
+   | `service.discovery.Discovery` | `weld.core.discovery.Discovery` |
+   | `service.utils.fastapiutils.{ErrorEnvelope,ErrorBody}` | `weld.fastapi.api.errors.Error` (see note below) |
+   | `service.observability.{correlation,json_logging}` | `weld.observability.{correlation,…}` |
+   | `service.client.*` | `weld.http_client.*` |
+   | `service.api.{filtering,pagination}` | `weld.fastapi.api.{filtering,pagination}` |
+   | `service.tasks.*` | (removed from base — enable `async.task_queue` for an equivalent runner) |
+
+   The `Error` shape from `weld.fastapi.api.errors` has fields
+   `(message, type, detail)` instead of the older
+   `ErrorEnvelope(error=ErrorBody(code, message, type, context, correlation_id))`.
+   The RFC-007 `code` and `correlation_id` now ride inside `detail` so
+   existing tooling can still extract them — they're just one level
+   deeper. See `forge/templates/services/python-service-template/template/src/app/core/errors.py`
+   for the canonical rewrite.
+
+2. **`background_tasks` endpoint removed from the base Python template.**
+   The previous template scaffolded `src/app/api/v1/endpoints/tasks.py`
+   + `src/service/tasks/*`. The new shape defers background-work
+   scaffolding to the `async.task_queue` option (Taskiq fragment).
+   Enable `async.task_queue=true` to get an equivalent runner +
+   endpoint without the in-tree code.
+
+3. **Auth feature option default flipping (deferred).** `auth.mode`
+   default remains `"generate"` in 1.2.0-alpha.1; the upcoming
+   `"weld"` mode that drops the per-service auth SDK in favor of a
+   direct `weld-auth` dependency will land in a follow-up alpha.
+
+#### New copier prompts (Python template)
+
+| Prompt | Default | Purpose |
+|---|---|---|
+| `sdk_consumption` | `"monorepo"` | `monorepo` → weld-* path deps to `../../sdks/weld-*`; `standalone` → pinned PyPI versions (requires weld-* to be published); `none` → preserve the legacy 1.1.x behavior and keep `src/service/`. |
+| `weld_base_sdks` | `"auth,core,fastapi,observability,http-client,events"` | Comma-separated weld-* SDKs declared in the generated pyproject. Default covers the common base used by every platform service. |
+| `service_path_prefix` | `"/api/{{ project_slug }}"` | Traefik PathPrefix used by the generated `docker-compose.fragment.yaml`. |
+
+#### New feature modules
+
+Five new options register fragments scaffolding the remaining weld-*
+SDKs. All Python-only (tier 3), all additive:
+
+| Option | Default | Fragment | What it scaffolds |
+|---|---|---|---|
+| `events.bus` | `"none"` | `events_core` | `weld.events.EventBus` factory + DI provider |
+| `events.outbox` | `true` | `events_outbox` | Outbox table migration + `OutboxRelay` lifespan hooks |
+| `streaming.sse` | `false` | `streaming_sse` | `/api/v1/stream` SSE endpoint via `weld.streaming.CloudEventStreamer` |
+| `connectors.enabled` + `connectors.backends` | `false` / `[]` | `connectors_registry` | `weld.connectors.ConnectorRegistry` with selected `[http,fs,sql,s3,mcp]` extras |
+| `airlock.client` | `false` | `airlock_client` | `weld.airlock.AsyncAirlockClient` DI provider + shutdown hook |
+| `mcp_template.server` | `false` | `mcp_template_server` | First-party MCP server via `weld.mcp_template.build_server()` |
+| `mcp_template.openapi_to_tools` | `false` | `mcp_template_openapi_tools` | Codegen step turning the service's OpenAPI into MCP tool defs |
+
+#### New scaffolding shape
+
+- `Dockerfile.jinja` is now multi-stage: the builder copies weld-*
+  SDK source from the `sdks` build context, builds wheels into
+  `/wheels`, strips `[tool.uv.sources]` from the project pyproject so
+  uv resolves from `/wheels` at install time. Runtime stage runs as
+  non-root `appuser` (uid 10001) with a urllib healthcheck against
+  `/api/v1/health/live`.
+- `entrypoint.sh.jinja` runs `alembic upgrade head` (advisory-lock
+  serialized) before exec-ing the server.
+- `docker-compose.fragment.yaml.jinja` is a new artifact merged into
+  the platform's `docker-compose.yaml` at generation time: separate
+  migrate-job + runtime service, Traefik labels with path-rewrite
+  middleware, `depends_on` chain on postgres-healthy +
+  keycloak-healthy.
+- Node and Rust templates inherit the same shape (multi-stage, non-
+  root, healthcheck, migrate-job + Traefik fragment) so platform
+  orchestration is uniform across language backends.
+
+#### Vue frontend template
+
+The Vue template gains `@hey-api/client-fetch`, `@tanstack/vue-virtual`,
+and `@sentry/vue` (gated by the new `include_sentry` prompt). A new
+`consumed_services` prompt drives a multi-spec `openapi-ts.config.ts`
+that mirrors `apps/web` — each backend service gets its own subfolder
+under `src/shared/api/generated/<svc>/` to avoid type collisions.
+
+#### Latent bug fixed
+
+`forge.capability_resolver._collect_fragments` crashed on LIST-typed
+options because `dict.get(value, ())` raised on the unhashable list
+value. The resolver now short-circuits when `spec.enables` is empty —
+this had no observable impact in 1.1 because no LIST option was
+registered until `connectors.backends`.
+
 ## 1.0 → 1.1
 
 The 1.1 series opens the 12-month post-1.0 roadmap. Early alphas are additive except where called out below.

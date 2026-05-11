@@ -1,0 +1,56 @@
+"""Create the outbox table.
+
+The schema matches :data:`weld.events.OUTBOX_TABLE` exactly so the
+:class:`OutboxRelay` can poll without per-service column mapping. Each
+service owns its own outbox in its own database.
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+
+revision = "0002_outbox"
+down_revision = "0001_initial"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "outbox",
+        sa.Column("id", sa.Uuid, primary_key=True),
+        sa.Column("event_type", sa.String(255), nullable=False),
+        sa.Column("source", sa.String(255), nullable=False),
+        sa.Column("subject", sa.String(255), nullable=True),
+        sa.Column("tenant_id", sa.Uuid, nullable=False),
+        sa.Column("actor_id", sa.Uuid, nullable=True),
+        sa.Column("data", sa.JSON, nullable=False),
+        sa.Column("traceparent", sa.String(255), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "attempt_count",
+            sa.SmallInteger,
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column("last_error", sa.Text, nullable=True),
+    )
+    op.create_index(
+        "ix_outbox_unpublished",
+        "outbox",
+        ["created_at"],
+        postgresql_where=sa.text("published_at IS NULL"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("ix_outbox_unpublished", table_name="outbox")
+    op.drop_table("outbox")

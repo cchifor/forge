@@ -72,6 +72,22 @@ include = ["forge*"]
 ]
 "forge.features" = [
     "**/__pycache__/*",
+    "**/.mypy_cache/*",
+    "**/.ruff_cache/*",
+    "**/.pytest_cache/*",
+    "**/node_modules/*",
+    "**/.venv/*",
+    "**/htmlcov/*",
+    "**/.next/*",
+    "**/.svelte-kit/*",
+    "**/.dart_tool/*",
+    # Cargo build output from the auth Rust SDK's cross-SDK parity gate.
+    # Without this exclude, the cargo target/ tree (which the parity gate
+    # leaves behind when run before the package-integrity gate) gets
+    # included in the sdist + wheel, blowing past Windows MAX_PATH and
+    # causing ``uv build`` to time out after 5 min on CI.
+    "**/target/*",
+    "**/target/**/*",
     "**/*.pyc",
     "**/*.pyo",
     "**/.DS_Store",
@@ -150,7 +166,18 @@ python-version = "3.13"
 
 [tool.ty.src]
 include = ["forge"]
-exclude = ["forge/templates", "**/__pycache__", "**/.venv"]
+# Exclude both the legacy top-level template tree and the colocated
+# feature template trees under forge/features/<name>/templates/. Those
+# contain *scaffold sources* that import the generated project's
+# namespace (``app.*``, third-party deps that aren't forge's own deps);
+# type-checking them as forge source produces hundreds of false
+# unresolved-import errors and has no signal value.
+exclude = [
+    "forge/templates",
+    "forge/features/*/templates",
+    "**/__pycache__",
+    "**/.venv",
+]
 
 [tool.ty.rules]
 unresolved-import = "error"

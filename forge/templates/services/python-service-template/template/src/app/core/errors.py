@@ -5,7 +5,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from service.utils.fastapiutils import ErrorEnvelope, ErrorBody
+from weld.fastapi.api.errors import Error
 
 logger = logging.getLogger("app.errors")
 
@@ -235,14 +235,18 @@ def _envelope(
     context: dict | None = None,
     status_code: int,
 ) -> JSONResponse:
-    body = ErrorEnvelope(
-        error=ErrorBody(
-            code=code,
-            message=message,
-            type=type_name,
-            context=context or {},
-            correlation_id=_correlation_id(request),
-        )
+    # weld.fastapi.api.errors.Error has shape (message, type, detail). The
+    # platform-wide RFC-007 code + correlation id ride in `detail` so
+    # tooling that grew up around the older ErrorEnvelope shape can still
+    # extract them — they're just one level deeper now.
+    body = Error(
+        message=message,
+        type=type_name,
+        detail={
+            "code": code,
+            "correlation_id": _correlation_id(request),
+            **(context or {}),
+        },
     )
     return JSONResponse(status_code=status_code, content=body.model_dump())
 

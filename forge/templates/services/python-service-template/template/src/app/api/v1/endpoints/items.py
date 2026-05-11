@@ -25,7 +25,7 @@ from app.domain.item import (
     PaginatedItemResponse,
 )
 from app.services.item_service import ItemService
-from service.security.auth import oauth2_scheme
+from weld.fastapi.security.auth import oauth2_scheme
 
 router = APIRouter(route_class=DishkaRoute, dependencies=[Depends(oauth2_scheme)])
 

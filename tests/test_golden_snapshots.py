@@ -96,6 +96,24 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
             or rel.startswith("node_modules/")
             or rel.endswith("/package-lock.json")
             or rel == "package-lock.json"
+            # Cargo build artifacts. The auth Wave 1 Rust SDK ships
+            # tests; when the cross-SDK parity gate (test_rust_runner.py)
+            # runs before the snapshot test in the same CI job, cargo
+            # leaves a target/ tree inside the SDK source dir. forge's
+            # generator then copies that tree into every generated
+            # project that includes the auth fragment, producing
+            # non-deterministic snapshot drift across runs (hashes
+            # depend on the host's libc, rustc version, etc.).
+            or "/target/" in rel
+            or rel.startswith("target/")
+            # ruff cache directories — same class of issue as target/.
+            # Local snapshot regeneration can produce them inside the
+            # auth Python SDK / gatekeeper templates if ruff has run
+            # against those trees before the snapshot test (e.g. via a
+            # pre-commit hook). CI never runs ruff against those source
+            # paths, so the cache is asymmetric across runs.
+            or "/.ruff_cache/" in rel
+            or rel.startswith(".ruff_cache/")
             # Vue auto-import declarations are produced at first ``npm run dev``
             # / ``vue-tsc`` only; whether they exist on the snapshot host
             # depends on Node availability.
