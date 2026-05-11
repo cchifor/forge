@@ -7,9 +7,8 @@ to MCP clients. Register additional plugins by appending to the
 
 from __future__ import annotations
 
-from weld.mcp_template import IntegrationPlugin
-
 from app.mcp.plugins.ping import PingPlugin
+from weld.mcp_template import IntegrationPlugin
 
 
 def default_plugins() -> tuple[IntegrationPlugin, ...]:

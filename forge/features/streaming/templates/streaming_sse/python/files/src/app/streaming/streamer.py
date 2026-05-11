@@ -14,9 +14,8 @@ from typing import TYPE_CHECKING
 from weld.streaming import CloudEventStreamer, StreamConfig
 
 if TYPE_CHECKING:
-    from weld.events import EventBus
-
     from app.core.config.domain import Settings
+    from weld.events import EventBus
 
 
 def default_stream_config(settings: Settings) -> StreamConfig:
