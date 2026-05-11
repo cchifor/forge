@@ -72,6 +72,22 @@ include = ["forge*"]
 ]
 "forge.features" = [
     "**/__pycache__/*",
+    "**/.mypy_cache/*",
+    "**/.ruff_cache/*",
+    "**/.pytest_cache/*",
+    "**/node_modules/*",
+    "**/.venv/*",
+    "**/htmlcov/*",
+    "**/.next/*",
+    "**/.svelte-kit/*",
+    "**/.dart_tool/*",
+    # Cargo build output from the auth Rust SDK's cross-SDK parity gate.
+    # Without this exclude, the cargo target/ tree (which the parity gate
+    # leaves behind when run before the package-integrity gate) gets
+    # included in the sdist + wheel, blowing past Windows MAX_PATH and
+    # causing ``uv build`` to time out after 5 min on CI.
+    "**/target/*",
+    "**/target/**/*",
     "**/*.pyc",
     "**/*.pyo",
     "**/.DS_Store",

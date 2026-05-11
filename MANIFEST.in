@@ -10,20 +10,29 @@ recursive-include forge/features *
 # working tree and would otherwise leak into the sdist/wheel. Epic DD's
 # tests/test_package_integrity.py enforces the same exclusion list against
 # the built artefacts — keep these two in sync when adding entries.
-recursive-exclude forge/templates */__pycache__/*
-recursive-exclude forge/templates */.mypy_cache/*
-recursive-exclude forge/templates */.ruff_cache/*
-recursive-exclude forge/templates */.pytest_cache/*
-recursive-exclude forge/templates */node_modules/*
-recursive-exclude forge/templates */.venv/*
-recursive-exclude forge/templates */htmlcov/*
-recursive-exclude forge/templates */.next/*
-recursive-exclude forge/templates */.svelte-kit/*
+#
+# Note: MANIFEST.in fnmatch patterns don't honor `**`; `*` doesn't cross
+# directory separators. To exclude cache dirs at arbitrary depth we use
+# `prune` (recursive) and additionally global-exclude entries below.
+prune **/__pycache__
+prune **/.mypy_cache
+prune **/.ruff_cache
+prune **/.pytest_cache
+prune **/node_modules
+prune **/.venv
+prune **/htmlcov
+prune **/.next
+prune **/.svelte-kit
+prune **/.dart_tool
+# Cargo target/ from the auth Rust SDK's cross-SDK parity gate. Without
+# this, `uv build` times out at 5 min trying to enumerate the target/
+# tree (esp. on Windows MAX_PATH). Keep in sync with the matching
+# [tool.setuptools.exclude-package-data] entry in pyproject.toml.
+prune **/target
+# Stray local build outputs under template subdirs (legacy entries kept
+# for parity with templates).
 recursive-exclude forge/templates */dist/*
 recursive-exclude forge/templates */build/*
-recursive-exclude forge/templates */.dart_tool/*
-recursive-exclude forge/features */__pycache__/*
-recursive-exclude forge/features */.mypy_cache/*
-recursive-exclude forge/features */.ruff_cache/*
-recursive-exclude forge/features */.pytest_cache/*
+recursive-exclude forge/features */dist/*
+recursive-exclude forge/features */build/*
 global-exclude *.pyc *.pyo .DS_Store
