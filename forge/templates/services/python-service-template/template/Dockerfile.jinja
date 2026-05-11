@@ -1,40 +1,83 @@
+# Multi-stage build: a wheel-building "builder" stage that resolves the
+# service's deps + builds the weld-* SDKs from the `sdks` build context,
+# and a thin runtime stage that copies only the .venv and source.
+#
+# Required at build time (with sdk_consumption=monorepo):
+#   docker build \
+#     --build-context sdks=../../sdks \
+#     -t {{ project_slug }} .
+# docker-compose.yaml at the repo root already declares this via
+# `additional_contexts: { sdks: ./sdks }` on each service.
+
 # --- Builder Stage ---
 FROM python:{{ python_version }}-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc libffi-dev libssl-dev \
+    build-essential gcc libffi-dev libssl-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+{%- if sdk_consumption == "monorepo" %}
+# Build the weld-* SDKs as wheels so the runtime image resolves from
+# /wheels instead of needing the source path baked in.
+{%- for sdk in weld_base_sdks.split(',') %}
+COPY --from=sdks weld-{{ sdk|trim }} /tmp/sdks/weld-{{ sdk|trim }}
+{%- endfor %}
+RUN {% for sdk in weld_base_sdks.split(',') %}cd /tmp/sdks/weld-{{ sdk|trim }} && uv build --wheel --out-dir /wheels{% if not loop.last %} \
+    && {% endif %}{% endfor %}
+{%- endif %}
+
 WORKDIR /project
 
-# Cache dependency layer
+{%- if sdk_consumption == "monorepo" %}
+# Strip [tool.uv.sources] from the project pyproject so uv resolves
+# weld-* from /wheels rather than the source path that only exists in
+# the build context.
+COPY pyproject.toml uv.lock* ./
+RUN awk 'BEGIN { skip = 0 } \
+    /^\[tool\.uv\.sources\]/ { skip = 1; next } \
+    /^\[/ { skip = 0 } \
+    skip == 0 { print }' pyproject.toml > pyproject.toml.stripped \
+    && mv pyproject.toml.stripped pyproject.toml
+RUN uv sync --no-dev --no-editable --find-links=/wheels
+{%- else %}
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --no-editable
+{%- endif %}
 
 # Copy source
 COPY src/ src/
 COPY config/ config/
 COPY alembic/ alembic/
 COPY alembic.ini .
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 # --- Runtime Stage ---
 FROM python:{{ python_version }}-slim
 
 WORKDIR /project
 
-# Copy installed venv and source
+# Copy installed venv + source from the builder
 COPY --from=builder /project/.venv /project/.venv
 COPY --from=builder /project/src /project/src
 COPY --from=builder /project/config /project/config
 COPY --from=builder /project/alembic /project/alembic
 COPY --from=builder /project/alembic.ini /project/alembic.ini
+COPY --from=builder /project/entrypoint.sh /project/entrypoint.sh
 
 ENV PATH="/project/.venv/bin:$PATH"
 ENV PYTHONPATH=/project/src
 ENV ENV=production
 
+RUN adduser --disabled-password --no-create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /project
+USER appuser
+
 EXPOSE {{ server_port }}
 
-CMD ["python", "-m", "app", "server", "run"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:{{ server_port }}/api/v1/health/live',timeout=3).status==200 else 1)"
+
+CMD ["/project/entrypoint.sh"]
