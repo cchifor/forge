@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.models.base import JSON_TYPE, Base
 from app.domain.item import ItemStatus
-from service.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
+from weld.core.persistence.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
 
 
 class ItemModel(Base, TenantMixin, UserOwnedMixin, TimestampMixin):

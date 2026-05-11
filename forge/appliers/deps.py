@@ -39,17 +39,28 @@ class FragmentDepsApplier:
     def apply(self, ctx: FragmentContext, plan: FragmentPlan) -> None:
         if not plan.dependencies:
             return
-        _add_dependencies(ctx.backend_config.language, ctx.backend_dir, plan.dependencies)
+        _add_dependencies(
+            ctx.backend_config.language,
+            ctx.backend_dir,
+            plan.dependencies,
+            project_root=ctx.project_root,
+        )
 
 
-def _add_dependencies(lang: BackendLanguage, backend_dir: Path, deps: tuple[str, ...]) -> None:
+def _add_dependencies(
+    lang: BackendLanguage,
+    backend_dir: Path,
+    deps: tuple[str, ...],
+    *,
+    project_root: Path | None = None,
+) -> None:
     """Dispatch ``deps`` into the right per-language manifest editor."""
     if not deps:
         return
     if lang is BackendLanguage.PYTHON:
         _add_python_deps(backend_dir / "pyproject.toml", deps)
     elif lang is BackendLanguage.NODE:
-        _add_node_deps(backend_dir / "package.json", deps)
+        _add_node_deps(backend_dir / "package.json", deps, project_root=project_root)
     elif lang is BackendLanguage.RUST:
         _add_rust_deps(backend_dir / "Cargo.toml", deps)
 
@@ -89,7 +100,12 @@ def _py_dep_name(dep: str) -> str:
     return dep.strip().lower()
 
 
-def _add_node_deps(package_json: Path, deps: tuple[str, ...]) -> None:
+def _add_node_deps(
+    package_json: Path,
+    deps: tuple[str, ...],
+    *,
+    project_root: Path | None = None,
+) -> None:
     if not package_json.is_file():
         raise FragmentError(
             f"package.json not found at {package_json}",
@@ -112,9 +128,69 @@ def _add_node_deps(package_json: Path, deps: tuple[str, ...]) -> None:
                 name, version = dep, "latest"
         else:
             name, version = dep, "latest"
+        if version.startswith("workspace:"):
+            # npm (≤ v10) doesn't support the `workspace:` URL protocol —
+            # only pnpm and yarn berry do. Rewrite to a relative ``file:``
+            # path pointing at the conventional in-tree SDK location at
+            # ``<project>/sdks/<unscoped-name>/``. The path is computed
+            # *unconditionally* (no on-disk existence check) because
+            # project-scoped SDK fragments are applied AFTER backend-
+            # scoped middleware fragments in the generator pipeline —
+            # the SDK directory doesn't exist yet when this applier runs,
+            # but it will by the time ``npm install`` runs in
+            # ``toolchain.install``.
+            rewritten = _rewrite_workspace_spec(package_json, name, project_root)
+            if rewritten is not None:
+                version = rewritten
         if name not in deps_obj:
             deps_obj[name] = version
     package_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _rewrite_workspace_spec(
+    package_json: Path,
+    name: str,
+    project_root: Path | None,
+) -> str | None:
+    """Resolve ``workspace:*`` to ``file:<relative-path>`` against an in-tree SDK.
+
+    Convention: SDKs live at ``<project_root>/sdks/<unscoped-name>/``.
+    When ``project_root`` is supplied (the normal path from
+    :class:`FragmentDepsApplier`), the SDK path is computed
+    unconditionally — the SDK fragment is project-scoped and applied
+    *after* this backend-scoped middleware fragment, so the directory
+    doesn't exist on disk at this moment.
+
+    The fallback path (``project_root=None``, kept for direct callers and
+    legacy tests) walks up from the consuming ``package.json`` looking
+    for ``<ancestor>/sdks/<unscoped-name>/`` on disk. Returns ``None``
+    if it can't find it — preserving the original ``workspace:*`` spec
+    so ``npm install`` fails loudly with the same EUNSUPPORTEDPROTOCOL
+    rather than silently writing a broken ``file:./missing`` path.
+
+    Returns the file-protocol spec with a forward-slash-normalized
+    relative path (npm and pnpm both accept POSIX-style separators on
+    Windows).
+    """
+    import os  # noqa: PLC0415
+
+    unscoped = name.split("/", 1)[1] if name.startswith("@") else name
+    backend_dir = package_json.parent.resolve()
+
+    if project_root is not None:
+        candidate = project_root.resolve() / "sdks" / unscoped
+        rel = os.path.relpath(candidate, backend_dir)
+        return "file:" + rel.replace(os.sep, "/")
+
+    current = backend_dir
+    while True:
+        candidate = current / "sdks" / unscoped
+        if candidate.is_dir():
+            rel = os.path.relpath(candidate, backend_dir)
+            return "file:" + rel.replace(os.sep, "/")
+        if current.parent == current:
+            return None
+        current = current.parent
 
 
 def _add_rust_deps(cargo_toml: Path, deps: tuple[str, ...]) -> None:

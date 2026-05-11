@@ -1,3 +1,8 @@
+# Multi-stage build. Runtime image runs as non-root, exposes a
+# curl-based healthcheck against /api/v1/health/live, and defers the
+# database migration to a separate compose job (see
+# docker-compose.fragment.yaml.jinja).
+
 # --- Builder Stage ---
 FROM rust:slim AS builder
 
@@ -19,14 +24,22 @@ RUN touch src/main.rs src/bin/migrate.rs && cargo build --release
 # --- Runtime Stage ---
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates libssl3 curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY --from=builder /app/target/release/{{ project_name }} /app/{{ project_name }}
 COPY --from=builder /app/target/release/migrate /app/migrate
 
+RUN groupadd --gid 10001 appuser \
+    && useradd --uid 10001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 ENV PORT={{ server_port }}
 EXPOSE {{ server_port }}
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -fsS "http://localhost:{{ server_port }}/api/v1/health/live" || exit 1
 
 CMD ["/app/{{ project_name }}"]

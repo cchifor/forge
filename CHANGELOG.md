@@ -5,6 +5,83 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Added — weld-* SDK alignment (1.2.0-alpha.1)
+
+Aligns forge templates with the platform's 2026-05 SDK restructure
+(10 `weld-*` packages under `platform/sdks/`, Tier 0 → Tier 2 acyclic
+DAG). See [`docs/architecture-decisions/ADR-005-weld-sdks.md`](docs/architecture-decisions/ADR-005-weld-sdks.md)
+for the design rationale and [`UPGRADING.md`](UPGRADING.md) §"1.1 → 1.2 — weld-* SDKs"
+for the migration playbook.
+
+- **`__version__` bumped to `1.2.0-alpha.1`**.
+- **Five new feature modules** (all Python-only, tier 3, all additive):
+  - `events.bus` / `events.outbox` → `events_core`, `events_outbox`
+    fragments. Scaffolds `src/app/events/` (bus factory + publish
+    helper) and the alembic outbox migration via `weld-events`.
+    `events_outbox` injects start/stop hooks for `OutboxRelay` into
+    the lifespan via new `FORGE:LIFESPAN_STARTUP` / `FORGE:LIFESPAN_SHUTDOWN`
+    markers in `core/lifecycle.py`.
+  - `streaming.sse` → `streaming_sse` fragment. SSE endpoint at
+    `/api/v1/stream` backed by `weld.streaming.CloudEventStreamer`.
+    `depends_on=("events_core",)`.
+  - `connectors.enabled` + `connectors.backends` (LIST) →
+    `connectors_registry` fragment. Scaffolds `src/app/connectors/`
+    with `build_default_connector_registry()`; reads the
+    `connectors.backends` LIST option at render time so only selected
+    `weld-connectors[<bk>]` extras land in the generated pyproject.
+  - `airlock.client` → `airlock_client` fragment.
+    `weld.airlock.AsyncAirlockClient` factory in DI with a
+    lifespan shutdown hook.
+  - `mcp_template.server` / `mcp_template.openapi_to_tools` →
+    `mcp_template_server`, `mcp_template_openapi_tools` fragments.
+    Hosts first-party MCP integrations via
+    `weld.mcp_template.build_server()`; coexists with the
+    consumer-side `platform.mcp` option (distinct namespace).
+- **Python service template rewrite**: drops the in-tree `src/service/`
+  shim (36 files, ~2000 LOC) and rewires `src/app/` onto direct
+  `weld.*` imports. Import mapping is in `UPGRADING.md`. The base
+  template no longer scaffolds the background-tasks endpoint or
+  `TaskService`/`BackgroundTaskRunner` — services that need
+  background work enable the existing `async.task_queue` option.
+- **Three new copier prompts** on the Python service template:
+  `sdk_consumption` (`monorepo` | `standalone` | `none`, default
+  `monorepo`), `weld_base_sdks` (comma-separated, default covers
+  the common base of every platform service), `service_path_prefix`
+  (Traefik PathPrefix, default `/api/{{ project_slug }}`).
+- **Multi-stage Dockerfile + compose fragment + entrypoint** across
+  all three backend templates (Python, Node, Rust):
+  - Builder copies weld-* SDK source from the `sdks` build context,
+    builds wheels, strips `[tool.uv.sources]` from project pyproject
+    so the runtime image resolves from `/wheels`.
+  - Runtime stage runs as non-root `appuser` (uid 10001) with a
+    urllib/curl healthcheck against `/api/v1/health/live`.
+  - `docker-compose.fragment.yaml.jinja` is merged into the platform
+    `docker-compose.yaml`: separate `<svc>-migrate` job + runtime
+    service, Traefik labels with path-rewrite middleware, depends_on
+    chain on postgres-healthy + keycloak-healthy.
+  - `entrypoint.sh.jinja` runs migrations (`alembic upgrade head` /
+    `prisma migrate deploy` / `/app/migrate`) before exec-ing the
+    server. Advisory-lock serialized so concurrent replicas race
+    safely.
+- **Vue frontend template alignment** with `platform/apps/web`:
+  adds `@hey-api/client-fetch`, `@tanstack/vue-virtual`, plus
+  (under `include_chat`) `@microsoft/fetch-event-source` + `shiki`.
+  New `include_sentry` copier prompt gates `@sentry/vue`. New
+  `consumed_services` prompt drives a multi-spec
+  `openapi-ts.config.ts` — each listed backend service gets its own
+  `src/shared/api/generated/<svc>/` subfolder to avoid type
+  collisions. Pinned `@hey-api/openapi-ts` to 0.56.3.
+
+### Fixed — capability resolver crash on LIST options
+
+`forge.capability_resolver._collect_fragments` raised `TypeError:
+unhashable type: 'list'` when an option's value was a list, because
+`spec.enables.get(value, ())` couldn't hash the list. Short-circuits
+when `spec.enables` is empty (which is always the case for LIST /
+STR / INT / OBJECT options — `_validate_enables_shape` forbids
+`enables` on those types). Latent until the first LIST option
+(`connectors.backends`) registered.
+
 ### Added — auth-stack rebuild
 
 Replaces the legacy Keycloak-direct auth stack with the platform-auth model. See [`docs/auth-architecture.md`](docs/auth-architecture.md) for the architectural reference and [`UPGRADING.md`](UPGRADING.md) §"1.1 → 1.2 — auth-stack rebuild" for the migration playbook.

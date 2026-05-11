@@ -1,0 +1,66 @@
+# docker-compose fragment for the {{ project_slug }} service.
+#
+# When forge generates this service into a monorepo (sdk_consumption=monorepo),
+# the generator merges this fragment into the platform's docker-compose.yaml.
+# The result mirrors how every other platform service (airlock, profile,
+# knowledge, …) is wired:
+#
+#   * <svc>-migrate: separate job that runs `alembic upgrade head` and exits.
+#     Service `depends_on` it with `condition: service_completed_successfully`
+#     so the API never comes up against a stale schema.
+#   * <svc>: the runtime container.
+#     - additional_contexts pins the `sdks` build context to ../../sdks so
+#       the Dockerfile's `COPY --from=sdks` resolves correctly.
+#     - traefik labels expose the service behind `{{ service_path_prefix }}`
+#       with path-rewrite middleware that strips the prefix before forwarding.
+#     - depends_on includes keycloak so the auth middleware can verify tokens
+#       from the moment the container is healthy.
+
+services:
+  {{ project_slug }}-migrate:
+    build:
+      context: ./services/{{ project_slug }}
+      dockerfile: Dockerfile
+{%- if sdk_consumption == "monorepo" %}
+      additional_contexts:
+        sdks: ./sdks
+{%- endif %}
+    environment:
+      ENV: development
+      APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ db_name }}"
+    command: ["python", "-m", "app", "db", "upgrade"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [app-network]
+
+  {{ project_slug }}:
+    build:
+      context: ./services/{{ project_slug }}
+      dockerfile: Dockerfile
+{%- if sdk_consumption == "monorepo" %}
+      additional_contexts:
+        sdks: ./sdks
+{%- endif %}
+    ports:
+      - "{{ server_port }}:{{ server_port }}"
+    environment:
+      ENV: development
+      APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ db_name }}"
+      APP__SECURITY__AUTH__ENABLED: "true"
+      APP__SECURITY__AUTH__SERVER_URL: "http://gatekeeper:5000"
+      OTEL_TRACES_ENABLED: "${OTEL_TRACES_ENABLED:-true}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4318"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ project_slug }}.rule=Host(`app.localhost`) && PathPrefix(`{{ service_path_prefix }}`)"
+      - "traefik.http.routers.{{ project_slug }}.middlewares={{ project_slug }}-rewrite"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.regex=^{{ service_path_prefix }}/(.*)"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.replacement=/api/$$1"
+      - "traefik.http.services.{{ project_slug }}.loadbalancer.server.port={{ server_port }}"
+    depends_on:
+      {{ project_slug }}-migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    networks: [app-network]

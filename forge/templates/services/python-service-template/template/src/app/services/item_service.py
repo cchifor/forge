@@ -10,7 +10,7 @@ from app.domain.item import (
     ItemUpdate,
     PaginatedItemResponse,
 )
-from service.uow.aio import AsyncUnitOfWork
+from weld.core.persistence.uow.aio import AsyncUnitOfWork
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, Index, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.models.base import JSON_TYPE, Base
-from service.repository.mixins import TenantMixin
+from weld.core.persistence.repository.mixins import TenantMixin
 
 
 class AuditLog(Base, TenantMixin):

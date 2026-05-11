@@ -1,0 +1,40 @@
+import { defineConfig } from '@hey-api/openapi-ts'
+
+{% if consumed_services -%}
+// Multi-spec setup: each backend gets its own subfolder under
+// `src/shared/api/generated/<service>/` so type collisions across
+// services (each service exports its own domain types) are scoped per
+// import. Each entry below can also be run individually via
+// `openapi-ts -f openapi-ts.<service>.ts`.
+export default defineConfig([
+{%- for svc in consumed_services.split(',') %}
+  {
+    client: '@hey-api/client-fetch',
+    input: '../../services/{{ svc|trim }}/openapi.json',
+    output: {
+      path: 'src/shared/api/generated/{{ svc|trim }}',
+      format: 'prettier',
+    },
+    types: {
+      enums: 'typescript',
+    },
+  },
+{%- endfor %}
+])
+{%- else -%}
+// Single-spec snapshot mode — generates from a checked-in
+// openapi-snapshot.json. Switch to multi-spec by regenerating the
+// project with consumed_services="svc1,svc2,..." or by editing this
+// file by hand to point at live service specs.
+export default defineConfig({
+  client: '@hey-api/client-fetch',
+  input: process.env.OPENAPI_SPEC || './openapi-snapshot.json',
+  output: {
+    path: 'src/shared/api/generated',
+    format: 'prettier',
+  },
+  types: {
+    enums: 'typescript',
+  },
+})
+{%- endif %}

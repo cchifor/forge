@@ -153,6 +153,13 @@ def _collect_fragments(option_values: dict[str, object]) -> set[str]:
     fragments: set[str] = set()
     for path, value in option_values.items():
         spec = OPTION_REGISTRY[path]
+        # LIST / STR / INT / OBJECT options never map values to fragments —
+        # validation in `_validate_enables_shape` already forbids it. Skip
+        # the dict lookup for two reasons: (1) LIST values are unhashable
+        # and would raise here, and (2) the lookup is pointless when the
+        # map is empty.
+        if not spec.enables:
+            continue
         fragments.update(spec.enables.get(value, ()))
     return fragments
 
@@ -332,6 +339,11 @@ def _is_user_selected(user_options: dict[str, object], fragment_name: str) -> bo
     for path, value in user_options.items():
         spec = OPTION_REGISTRY.get(path)
         if spec is None:
+            continue
+        # LIST / STR / INT / OBJECT options never map values to fragments
+        # (see _collect_fragments for the same short-circuit). Skipping
+        # here also avoids dict.get() raising on unhashable list values.
+        if not spec.enables:
             continue
         enabled_set = spec.enables.get(value, ())
         if fragment_name not in enabled_set:

@@ -29,7 +29,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 27470,
+      "size": 28885,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -308,6 +308,10 @@
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
+    "sdks/platform-auth-rs/.gitignore": {
+      "size": 325,
+      "sha256": "12df8d084c4122f9"
+    },
     "sdks/platform-auth-rs/Cargo.lock": {
       "size": 62733,
       "sha256": "69eccf950609877e"
@@ -424,13 +428,17 @@
       "size": 110,
       "sha256": "850f3272a17446e4"
     },
+    "services/api/docker-compose.fragment.yaml": {
+      "size": 1326,
+      "sha256": "1a82e804192c2c14"
+    },
     "services/api/docker-compose.yaml": {
       "size": 836,
       "sha256": "c242f2f5c34d0194"
     },
     "services/api/Dockerfile": {
-      "size": 1005,
-      "sha256": "43e83f6b05a53432"
+      "size": 1540,
+      "sha256": "5c458aa25c2e8f37"
     },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,

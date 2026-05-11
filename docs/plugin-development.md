@@ -2,6 +2,17 @@
 
 This guide walks through building a forge plugin — a pip-installable package that extends forge with new options, fragments, backends, frontends, commands, or emitters.
 
+> **Compatibility note (1.2.0-alpha.1).** The public plugin SDK contract
+> — `register_option`, `register_fragment`, `Option`, `Fragment`,
+> `FragmentImplSpec`, the `forge.plugins` entry-point group — is
+> unchanged. The 1.2 cutover that drops `src/service/` from the Python
+> service template and routes consumer-side code through `weld.*`
+> affects template internals only. Plugins that registered options or
+> fragments under 1.0 / 1.1 keep working without edits. If your plugin
+> generates Python source that imports from `service.*`, you'll want to
+> point at the matching `weld.*` symbols (see the import table in
+> `UPGRADING.md`) before users with `sdk_consumption=monorepo` regenerate.
+
 ## Quickstart (10 minutes)
 
 The fastest path from zero to a working plugin. Copy the reference plugin, change the names, install in dev-mode, verify with `forge --plugins list`.
