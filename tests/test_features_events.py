@@ -26,7 +26,10 @@ def test_events_bus_option_registered() -> None:
 def test_events_outbox_option_registered() -> None:
     assert "events.outbox" in OPTION_REGISTRY
     opt = OPTION_REGISTRY["events.outbox"]
-    assert opt.default is True
+    # Default off: enabling the outbox without events.bus configured
+    # would scaffold a relay that has no bus to publish through.
+    # Users opt in to both together.
+    assert opt.default is False
     assert opt.enables[True] == ("events_outbox",)
 
 
