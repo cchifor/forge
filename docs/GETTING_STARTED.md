@@ -21,6 +21,37 @@ forge
 
 Answer the prompts. Pick a backend (Python, Node, or Rust), a frontend (Vue, Svelte, Flutter, or none), a project name, and off you go. forge writes the project under the current directory and optionally runs `docker compose up`.
 
+## Drop a new service into the platform monorepo
+
+Since 1.2.0-alpha.1, the Python service template is wired to drop straight into `platform/services/`. The generated service consumes the platform's [10 weld-* SDKs](https://github.com/your-org/platform/blob/main/sdks/README.md) via monorepo path deps and inherits the same Dockerfile, docker-compose fragment, and Traefik routing conventions as every existing platform service.
+
+```bash
+cd /path/to/platform
+forge --template python-service \
+      --set project_name=widget \
+      --set service_port=5042 \
+      --set sdk_consumption=monorepo \
+      --output services/widget
+```
+
+What you get out of the box:
+
+- `pyproject.toml` declaring the default weld-* base (`auth, core, fastapi, observability, http-client, events`) with `[tool.uv.sources]` pointing at `../../sdks/weld-*`.
+- Multi-stage `Dockerfile` that copies weld-* source from the `sdks` build context, builds wheels, and strips `[tool.uv.sources]` so the runtime image resolves from `/wheels`.
+- `docker-compose.fragment.yaml` merged into the platform compose file: separate `widget-migrate` job + `widget` runtime service, Traefik path-rewrite for `/api/widget`, `depends_on` on postgres-healthy + keycloak-healthy.
+- `src/app/` skeleton already importing from `weld.core.persistence.*`, `weld.fastapi.security.*`, `weld.fastapi.api.errors.Error`, `weld.core.discovery`. No `src/service/` shim.
+
+Then enable any of the opt-in feature modules with `--set`:
+
+```bash
+--set events.bus=postgres_notify   # CloudEvents bus + transactional outbox
+--set streaming.sse=true           # /api/v1/stream SSE endpoint
+--set connectors.enabled=true      # weld-connectors registry
+--set connectors.backends='["http","sql"]'
+--set airlock.client=true          # Airlock sandbox-orchestrator client
+--set mcp_template.server=true     # First-party MCP integration server
+```
+
 ## Headless mode (the AI-agent / CI path)
 
 Hand forge a YAML and let it run unattended:
