@@ -29,7 +29,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 28693,
+      "size": 28885,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -307,6 +307,10 @@
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
+    },
+    "sdks/platform-auth-rs/.gitignore": {
+      "size": 325,
+      "sha256": "12df8d084c4122f9"
     },
     "sdks/platform-auth-rs/Cargo.lock": {
       "size": 62733,

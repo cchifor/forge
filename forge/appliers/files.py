@@ -86,6 +86,15 @@ def copy_files(
         if not src_path.is_file():
             continue
         rel = src_path.relative_to(src)
+        # Skip build artefacts that occasionally land in the source tree
+        # during local dev (cargo `target/`, ruff `.ruff_cache/`, etc.).
+        # Without this filter, the auth Wave 1 Rust SDK's target/ tree
+        # (left over by the cross-SDK parity gate that runs before
+        # forge's own tests in the same CI runner) gets copied into
+        # every generated project, blowing up `git add .` runtime on
+        # Windows. Mirrors the MANIFEST.in / pyproject exclude lists.
+        if _is_ephemeral_path(rel):
+            continue
         dst_path = dst_root / rel
 
         outcome = _apply_one_file(
@@ -211,6 +220,34 @@ def _apply_merge(
             tag=tag,
         )
     return FileMergeOutcome(action="conflict", target=dst_path, sidecar_path=sidecar)
+
+
+# Path-segment names that mark ephemeral build artefacts. If any path
+# component in a fragment template's relative path matches one of these,
+# the file is skipped during copy. Keep in sync with MANIFEST.in's
+# ``prune **/<name>`` entries and pyproject.toml's
+# ``[tool.setuptools.exclude-package-data]``.
+_EPHEMERAL_PATH_SEGMENTS: frozenset[str] = frozenset(
+    {
+        "__pycache__",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "node_modules",
+        ".venv",
+        "htmlcov",
+        ".next",
+        ".svelte-kit",
+        ".dart_tool",
+        "target",  # cargo build output (auth Rust SDK parity gate residue)
+    }
+)
+
+
+def _is_ephemeral_path(rel: Path) -> bool:
+    """True when ``rel`` traverses a build-artefact directory."""
+
+    return any(seg in _EPHEMERAL_PATH_SEGMENTS for seg in rel.parts)
 
 
 def _write(src_path: Path, dst_path: Path) -> None:
