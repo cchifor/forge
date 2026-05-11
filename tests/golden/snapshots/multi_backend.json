@@ -33,7 +33,7 @@
       "sha256": "9c0878c6afdc15c6"
     },
     "forge.toml": {
-      "size": 64702,
+      "size": 61489,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -540,13 +540,21 @@
       "size": 115,
       "sha256": "b200da072454e7fe"
     },
+    "services/api-node/docker-compose.fragment.yaml": {
+      "size": 1379,
+      "sha256": "4c02768e85a8e1b5"
+    },
     "services/api-node/docker-compose.yaml": {
       "size": 853,
       "sha256": "f06c0e04ecc8de65"
     },
     "services/api-node/Dockerfile": {
-      "size": 774,
-      "sha256": "26238d0022cd5d6d"
+      "size": 1282,
+      "sha256": "5561e40d01672663"
+    },
+    "services/api-node/entrypoint.sh": {
+      "size": 298,
+      "sha256": "74f9a7761be19e3f"
     },
     "services/api-node/package.json": {
       "size": 1145,
@@ -768,17 +776,25 @@
       "size": 148,
       "sha256": "c0859dec5b712b9b"
     },
+    "services/api-py/docker-compose.fragment.yaml": {
+      "size": 2495,
+      "sha256": "96caf4d1ebd951c6"
+    },
     "services/api-py/docker-compose.yaml": {
       "size": 877,
       "sha256": "7228bb9b2e539a51"
     },
     "services/api-py/Dockerfile": {
-      "size": 974,
-      "sha256": "f5e52961e8a59df3"
+      "size": 3167,
+      "sha256": "cd6b7590388d0491"
+    },
+    "services/api-py/entrypoint.sh": {
+      "size": 418,
+      "sha256": "19554330f3b7e0c0"
     },
     "services/api-py/pyproject.toml": {
-      "size": 3454,
-      "sha256": "c8ea794e7dd31fe9"
+      "size": 4347,
+      "sha256": "9aed87c2f33bd3d2"
     },
     "services/api-py/README.md": {
       "size": 33689,
@@ -801,8 +817,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/api/v1/api.py": {
-      "size": 535,
-      "sha256": "9ac448f67c0244a3"
+      "size": 455,
+      "sha256": "dae7e436261107ab"
     },
     "services/api-py/src/app/api/v1/endpoints/__init__.py": {
       "size": 0,
@@ -821,12 +837,8 @@
       "sha256": "bfb0586626078b40"
     },
     "services/api-py/src/app/api/v1/endpoints/items.py": {
-      "size": 3366,
-      "sha256": "b56da4ca9b457b48"
-    },
-    "services/api-py/src/app/api/v1/endpoints/tasks.py": {
-      "size": 3314,
-      "sha256": "7a0804ddd5e8036e"
+      "size": 3371,
+      "sha256": "cf53af97da845701"
     },
     "services/api-py/src/app/cli/__init__.py": {
       "size": 306,
@@ -853,8 +865,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api-py/src/app/core/config/domain.py": {
-      "size": 3656,
-      "sha256": "3ee23a5f42b482f7"
+      "size": 3658,
+      "sha256": "b836beff2a71eb18"
     },
     "services/api-py/src/app/core/config/loader.py": {
       "size": 3530,
@@ -877,28 +889,28 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api-py/src/app/core/errors.py": {
-      "size": 11666,
-      "sha256": "3e5c5352d10473ba"
+      "size": 11900,
+      "sha256": "e58dd65423be6ad7"
     },
     "services/api-py/src/app/core/ioc/__init__.py": {
       "size": 437,
       "sha256": "e1e94703a680e8c6"
     },
     "services/api-py/src/app/core/ioc/infra.py": {
-      "size": 1817,
-      "sha256": "5d0e904f27903f20"
+      "size": 1833,
+      "sha256": "e1dcb39b60db2c91"
     },
     "services/api-py/src/app/core/ioc/security.py": {
-      "size": 1706,
-      "sha256": "9444f0fa3ff27de2"
+      "size": 1726,
+      "sha256": "8ed2580db0dd0b4c"
     },
     "services/api-py/src/app/core/ioc/services.py": {
-      "size": 902,
-      "sha256": "1744f5d64be0678f"
+      "size": 616,
+      "sha256": "ec360ce5bde7f803"
     },
     "services/api-py/src/app/core/lifecycle.py": {
-      "size": 5912,
-      "sha256": "8f5792645c313696"
+      "size": 5566,
+      "sha256": "44efb7e79b8eb508"
     },
     "services/api-py/src/app/core/pii_redaction.py": {
       "size": 2600,
@@ -909,32 +921,32 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/data/models/__init__.py": {
-      "size": 235,
-      "sha256": "504fa6f636ffd225"
+      "size": 169,
+      "sha256": "0fb981f34efe923e"
     },
     "services/api-py/src/app/data/models/audit.py": {
-      "size": 1493,
-      "sha256": "db7223f3001722f7"
+      "size": 1507,
+      "sha256": "69b496791d4220e4"
     },
     "services/api-py/src/app/data/models/base.py": {
       "size": 216,
       "sha256": "f5597f6c68472bed"
     },
     "services/api-py/src/app/data/models/item.py": {
-      "size": 1039,
-      "sha256": "4beb54ad3394325a"
+      "size": 1053,
+      "sha256": "f8ec8993095f4bdf"
     },
     "services/api-py/src/app/data/repositories/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/data/repositories/base_tenant_aware.py": {
-      "size": 2337,
-      "sha256": "934e7f5f186e0098"
+      "size": 2339,
+      "sha256": "e0bb914b562cc421"
     },
     "services/api-py/src/app/data/repositories/item_repository.py": {
-      "size": 2563,
-      "sha256": "c2af04a94973c534"
+      "size": 2579,
+      "sha256": "212519aac0159ceb"
     },
     "services/api-py/src/app/domain/__init__.py": {
       "size": 0,
@@ -965,8 +977,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api-py/src/app/main.py": {
-      "size": 4225,
-      "sha256": "5d9b7fc86ef10ed4"
+      "size": 4190,
+      "sha256": "b843aacbe759adbd"
     },
     "services/api-py/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1001,132 +1013,20 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/services/health_service.py": {
-      "size": 1102,
-      "sha256": "33164fd9b97da430"
+      "size": 1116,
+      "sha256": "ae687df52da17718"
     },
     "services/api-py/src/app/services/item_service.py": {
-      "size": 2526,
-      "sha256": "6c42302e138d8fc7"
-    },
-    "services/api-py/src/service/__init__.py": {
-      "size": 109,
-      "sha256": "e1fe920c8d5a0774"
-    },
-    "services/api-py/src/service/api/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/api/filtering.py": {
-      "size": 2116,
-      "sha256": "014d8c0dc15b6f00"
-    },
-    "services/api-py/src/service/api/pagination.py": {
-      "size": 2909,
-      "sha256": "6985279deb1b952c"
-    },
-    "services/api-py/src/service/client/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
+      "size": 2540,
+      "sha256": "281734053841f8de"
     },
     "services/api-py/src/service/client/auth.py": {
       "size": 2305,
       "sha256": "ecd6e0b353befaf6"
     },
-    "services/api-py/src/service/client/base.py": {
-      "size": 5693,
-      "sha256": "73c0de84a226a9a9"
-    },
-    "services/api-py/src/service/client/circuit_breaker.py": {
-      "size": 2348,
-      "sha256": "fb0b70c74307786c"
-    },
-    "services/api-py/src/service/client/errors.py": {
-      "size": 1315,
-      "sha256": "67d8f452ffd678dc"
-    },
-    "services/api-py/src/service/client/retry.py": {
-      "size": 2657,
-      "sha256": "1c3704c9e5aa62e1"
-    },
-    "services/api-py/src/service/core/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
     "services/api-py/src/service/core/context.py": {
       "size": 889,
       "sha256": "5667d36eb9d86bbf"
-    },
-    "services/api-py/src/service/core/errors.py": {
-      "size": 730,
-      "sha256": "ae36ae0a34a28d93"
-    },
-    "services/api-py/src/service/db/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/db/aio.py": {
-      "size": 2333,
-      "sha256": "cb5dfa6f5ba083eb"
-    },
-    "services/api-py/src/service/db/config.py": {
-      "size": 1690,
-      "sha256": "9617c30555194735"
-    },
-    "services/api-py/src/service/discovery.py": {
-      "size": 1859,
-      "sha256": "b1180668b4a19be1"
-    },
-    "services/api-py/src/service/domain/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/domain/account.py": {
-      "size": 778,
-      "sha256": "2b0a16e5c82489a7"
-    },
-    "services/api-py/src/service/domain/config.py": {
-      "size": 1468,
-      "sha256": "7770bd87d6d51591"
-    },
-    "services/api-py/src/service/domain/user.py": {
-      "size": 262,
-      "sha256": "07d9a7a9fcb66740"
-    },
-    "services/api-py/src/service/observability/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/observability/correlation.py": {
-      "size": 637,
-      "sha256": "df0347cf7d16eda9"
-    },
-    "services/api-py/src/service/observability/json_logging.py": {
-      "size": 2242,
-      "sha256": "e789fc3c21573a5b"
-    },
-    "services/api-py/src/service/repository/__init__.py": {
-      "size": 72,
-      "sha256": "da81df18ed794f0a"
-    },
-    "services/api-py/src/service/repository/aio.py": {
-      "size": 7367,
-      "sha256": "4be148b6246f241c"
-    },
-    "services/api-py/src/service/repository/base.py": {
-      "size": 4961,
-      "sha256": "13dd35b77dc4b786"
-    },
-    "services/api-py/src/service/repository/errors.py": {
-      "size": 1141,
-      "sha256": "a1438be9eedc227d"
-    },
-    "services/api-py/src/service/repository/mixins.py": {
-      "size": 1564,
-      "sha256": "d07daff0ac2d241c"
-    },
-    "services/api-py/src/service/security/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/service/security/auth.py": {
       "size": 6642,
@@ -1135,42 +1035,6 @@
     "services/api-py/src/service/security/platform_auth_setup.py": {
       "size": 2108,
       "sha256": "68b8c542c046e4bc"
-    },
-    "services/api-py/src/service/tasks/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/tasks/models.py": {
-      "size": 1902,
-      "sha256": "cc484da6e2644b7f"
-    },
-    "services/api-py/src/service/tasks/registry.py": {
-      "size": 1327,
-      "sha256": "ac55205b82691f10"
-    },
-    "services/api-py/src/service/tasks/runner.py": {
-      "size": 7138,
-      "sha256": "b8c2fb315c3c0689"
-    },
-    "services/api-py/src/service/tasks/service.py": {
-      "size": 2385,
-      "sha256": "1eb127344a863e58"
-    },
-    "services/api-py/src/service/uow/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/uow/aio.py": {
-      "size": 3958,
-      "sha256": "cd7e406a2af81888"
-    },
-    "services/api-py/src/service/utils/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/src/service/utils/fastapiutils.py": {
-      "size": 1125,
-      "sha256": "028715457a1807d2"
     },
     "services/api-py/tests/__init__.py": {
       "size": 0,

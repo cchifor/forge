@@ -29,7 +29,7 @@
       "sha256": "6e376e78216f8a26"
     },
     "forge.toml": {
-      "size": 29255,
+      "size": 29791,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -416,13 +416,21 @@
       "size": 110,
       "sha256": "850f3272a17446e4"
     },
+    "services/api/docker-compose.fragment.yaml": {
+      "size": 1369,
+      "sha256": "d4da69ffd1f47703"
+    },
     "services/api/docker-compose.yaml": {
       "size": 843,
       "sha256": "1a530bf3ab0e8ae8"
     },
     "services/api/Dockerfile": {
-      "size": 774,
-      "sha256": "0ff63d728d5677c1"
+      "size": 1282,
+      "sha256": "53f6b439f42e9323"
+    },
+    "services/api/entrypoint.sh": {
+      "size": 298,
+      "sha256": "74f9a7761be19e3f"
     },
     "services/api/package.json": {
       "size": 1140,

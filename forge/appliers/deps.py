@@ -112,9 +112,47 @@ def _add_node_deps(package_json: Path, deps: tuple[str, ...]) -> None:
                 name, version = dep, "latest"
         else:
             name, version = dep, "latest"
+        if version.startswith("workspace:"):
+            # npm (≤ v10) doesn't support the `workspace:` URL protocol —
+            # only pnpm and yarn berry do. Rewrite to a relative ``file:``
+            # path pointing at the in-tree SDK. Convention: SDKs live at
+            # ``<project>/sdks/<unscoped-name>/``; we walk up from the
+            # backend's package.json until we find that directory.
+            #
+            # If the SDK can't be located on disk (e.g. the SDK fragment
+            # wasn't applied), the original spec is preserved so the
+            # subsequent ``npm install`` fails loudly rather than silently
+            # producing a broken dependency.
+            rewritten = _rewrite_workspace_spec(package_json, name)
+            if rewritten is not None:
+                version = rewritten
         if name not in deps_obj:
             deps_obj[name] = version
     package_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _rewrite_workspace_spec(package_json: Path, name: str) -> str | None:
+    """Resolve ``workspace:*`` to ``file:<relative-path>`` against an in-tree SDK.
+
+    Walks up the directory tree from the consuming ``package.json`` looking
+    for ``<ancestor>/sdks/<unscoped-name>/``. Returns the file-protocol spec
+    with a forward-slash-normalized relative path (npm and pnpm both
+    accept POSIX-style separators on Windows), or ``None`` when the SDK
+    isn't found on disk.
+    """
+    import os  # noqa: PLC0415
+
+    unscoped = name.split("/", 1)[1] if name.startswith("@") else name
+    backend_dir = package_json.parent.resolve()
+    current = backend_dir
+    while True:
+        candidate = current / "sdks" / unscoped
+        if candidate.is_dir():
+            rel = os.path.relpath(candidate, backend_dir)
+            return "file:" + rel.replace(os.sep, "/")
+        if current.parent == current:
+            return None
+        current = current.parent
 
 
 def _add_rust_deps(cargo_toml: Path, deps: tuple[str, ...]) -> None:
