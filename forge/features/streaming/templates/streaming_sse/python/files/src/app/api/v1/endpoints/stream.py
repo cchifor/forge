@@ -7,10 +7,9 @@ replay from the streamer's history.
 
 from __future__ import annotations
 
+from app.streaming import default_stream_config
 from fastapi import APIRouter, Depends, Request
 from weld.streaming import CloudEventStreamer, SubscriberCtx
-
-from app.streaming import default_stream_config
 
 router = APIRouter(tags=["stream"])
 

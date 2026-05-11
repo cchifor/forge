@@ -119,6 +119,34 @@ def test_existing_dep_not_overwritten(tmp_path: Path) -> None:
     assert spec == "1.2.3", "user-pinned version should win over workspace:* rewrite"
 
 
+def test_project_root_supplied_resolves_unconditionally(tmp_path: Path) -> None:
+    """When project_root is passed, the SDK path is computed without a disk check.
+
+    This is the canonical path from FragmentDepsApplier: project-scoped
+    SDK fragments are applied *after* backend-scoped middleware fragments,
+    so the on-disk SDK directory doesn't exist yet when the deps applier
+    runs. We must trust the convention and emit the file: path anyway —
+    by the time toolchain.install runs npm install, the SDK is in place.
+    """
+    project = tmp_path / "proj"
+    backend_pkg = project / "services" / "node-svc" / "package.json"
+    _write_pkg(backend_pkg)
+    # Deliberately do NOT create sdks/ — the rewrite should still emit
+    # the file: path because project_root is supplied.
+    assert not (project / "sdks").exists()
+
+    _add_node_deps(
+        backend_pkg,
+        ("@forge/platform-auth-node@workspace:*",),
+        project_root=project,
+    )
+
+    spec = json.loads(backend_pkg.read_text(encoding="utf-8"))["dependencies"][
+        "@forge/platform-auth-node"
+    ]
+    assert spec == "file:../../sdks/platform-auth-node"
+
+
 def test_non_workspace_specs_unchanged(tmp_path: Path) -> None:
     """Regular ``name@1.2.3`` specs go through the existing path unchanged."""
     project = tmp_path / "proj"

@@ -22,9 +22,8 @@ from weld.events import (
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncEngine
-
     from app.core.config.domain import Settings
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 
 async def build_event_bus(settings: Settings, engine: AsyncEngine) -> EventBus:

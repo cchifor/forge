@@ -48,4 +48,7 @@ def test_connectors_registry_scaffolds_app_connectors_tree() -> None:
     impl = frag.implementations[BackendLanguage.PYTHON]
     files_root = Path(impl.fragment_dir) / "files"
     assert (files_root / "src" / "app" / "connectors" / "__init__.py").is_file()
-    assert (files_root / "src" / "app" / "connectors" / "registry.py").is_file()
+    # registry.py.jinja (not .py) because the body has `{%- for %}` blocks
+    # that resolve only at render time; ruff would refuse to parse the raw
+    # template if it had a .py extension.
+    assert (files_root / "src" / "app" / "connectors" / "registry.py.jinja").is_file()

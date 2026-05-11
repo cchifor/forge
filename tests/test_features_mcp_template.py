@@ -61,7 +61,8 @@ def test_mcp_template_server_files_present() -> None:
     assert (files_root / "src" / "app" / "mcp" / "server.py").is_file()
     plugins = files_root / "src" / "app" / "mcp" / "plugins"
     assert (plugins / "__init__.py").is_file()
-    assert (plugins / "ping.py").is_file()
+    # ping.py.jinja — the plugin slug interpolates ``{{ project_slug }}``.
+    assert (plugins / "ping.py.jinja").is_file()
 
 
 def test_mcp_template_server_inject_mounts_on_main_app() -> None:

@@ -10,9 +10,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from weld.mcp_template import PluginContextResolver, build_server
-
 from app.mcp.plugins import default_plugins
+from weld.mcp_template import PluginContextResolver, build_server
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
