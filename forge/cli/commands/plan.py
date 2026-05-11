@@ -210,6 +210,12 @@ def _render_mermaid(config, plan) -> str:
     option_node_ids: dict[str, str] = {}
     for path, opt in sorted(OPTION_REGISTRY.items()):
         chosen = plan.option_values.get(path, opt.default)
+        # LIST / STR / INT / OBJECT options can't map values to
+        # fragments (see capability_resolver._collect_fragments for the
+        # same short-circuit). Skipping here also avoids dict.get raising
+        # TypeError on the unhashable list values that LIST options use.
+        if not opt.enables:
+            continue
         triggered = opt.enables.get(chosen, ())
         if not triggered:
             continue
@@ -237,6 +243,8 @@ def _render_mermaid(config, plan) -> str:
     for path, opt_node_id in option_node_ids.items():
         opt = OPTION_REGISTRY[path]
         chosen = plan.option_values.get(path, opt.default)
+        # ``option_node_ids`` is only populated when ``opt.enables`` is
+        # non-empty (the previous loop's gate), so dict.get is safe here.
         for fragment_name in opt.enables.get(chosen, ()):
             if fragment_name not in frag_node_ids:
                 continue
