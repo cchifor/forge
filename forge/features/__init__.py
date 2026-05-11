@@ -24,6 +24,7 @@ from forge.features import (  # noqa: F401, E402
     async_work,
     auth,
     conversation,
+    events,
     middleware,
     object_store,
     observability,
