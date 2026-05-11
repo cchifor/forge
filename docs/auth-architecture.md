@@ -9,6 +9,20 @@ full implementation plan and rollout phasing, see the design doc at
 For the BFF + session-timeout RFC that drives the SPA half, see
 `~/.claude/plans/analyze-the-following-issue-lovely-sonnet.md`.
 
+> **1.2 update.** The architecture below — Keycloak as IdP, Gatekeeper
+> as token authority, ES256 JWTs, ForwardAuth, opaque session cookies
+> — is unchanged. What changed in 1.2.0-alpha.1 is the *consumer-side
+> library*: generated Python services now import directly from
+> `weld.fastapi.security` + `weld.auth` instead of receiving a vendored
+> `platform_auth` SDK tree. `AuthGuard`, `IdentityContext`, `JWKSCache`,
+> `S2SClient`, `IssuerTrustMap`, and the scope matcher live in
+> `weld.auth`; the FastAPI integration (`initialize_auth`,
+> `authenticate_request`, `oauth2_scheme`, `AuthGuardBundle`,
+> `AuthContextMiddleware`) lives in `weld.fastapi.security`. The
+> Node and Rust per-service SDKs (`platform_auth_sdk_node` /
+> `platform_auth_sdk_rust`) are still scaffolded — only the Python
+> path has been delegated to weld-*.
+
 ## TL;DR
 
 - **Keycloak** is the identity provider — login form, user store, OIDC
