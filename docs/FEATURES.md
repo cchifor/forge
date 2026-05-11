@@ -552,7 +552,7 @@ DEPENDENCY: weld-events
 
 ### `events.outbox`
 
-**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** python
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
 
 _Transactional outbox table — never-lost CloudEvents on the producer side._
 
@@ -562,6 +562,10 @@ table and publishes pending rows through the configured ``EventBus``.
 Producers append rows to ``outbox`` in the same transaction as their
 domain writes — no dual-write race, no lost events on listener
 downtime.
+
+Default is off because turning the outbox on without ``events.bus``
+configured would pull in the bus + relay scaffolding for a service
+that never publishes. Enable both together when adopting the bus.
 
 REQUIRES: ``events.bus`` ≠ ``none``.
 BACKENDS: python
