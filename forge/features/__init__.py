@@ -23,6 +23,7 @@ from forge.features import (  # noqa: F401, E402
     agent,
     async_work,
     auth,
+    connectors,
     conversation,
     events,
     middleware,
