@@ -64,6 +64,16 @@ include_openapi:
   default: true
   help: "Include OpenAPI TypeScript codegen"
 
+include_sentry:
+  type: bool
+  default: false
+  help: "Include @sentry/vue for error tracking"
+
+consumed_services:
+  type: str
+  default: ""
+  help: "Comma-separated backend services to codegen OpenAPI types for (e.g. 'workflow,notification'). Each gets its own subfolder under src/shared/api/generated/<service>/ to avoid type collisions."
+
 api_base_url:
   type: str
   default: "http://localhost:5173"

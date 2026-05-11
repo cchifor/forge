@@ -153,6 +153,13 @@ def _collect_fragments(option_values: dict[str, object]) -> set[str]:
     fragments: set[str] = set()
     for path, value in option_values.items():
         spec = OPTION_REGISTRY[path]
+        # LIST / STR / INT / OBJECT options never map values to fragments —
+        # validation in `_validate_enables_shape` already forbids it. Skip
+        # the dict lookup for two reasons: (1) LIST values are unhashable
+        # and would raise here, and (2) the lookup is pointless when the
+        # map is empty.
+        if not spec.enables:
+            continue
         fragments.update(spec.enables.get(value, ()))
     return fragments
 
