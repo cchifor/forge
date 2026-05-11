@@ -1,0 +1,33 @@
+# airlock_client: register an AsyncAirlockClient provider in DI and wire
+# graceful shutdown into the lifespan.
+
+- target: src/app/core/ioc/infra.py
+  marker: FORGE:IOC_INFRA_IMPORTS
+  position: before
+  snippet: "from app.clients.airlock import build_airlock_client"
+
+- target: src/app/core/ioc/infra.py
+  marker: FORGE:IOC_INFRA_PROVIDERS
+  position: before
+  snippet: |
+    @provide(scope=Scope.APP)
+    def airlock_client(self, settings: Settings) -> AsyncAirlockClient:
+        return build_airlock_client(settings)
+
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFESPAN_SHUTDOWN
+  position: before
+  snippet: "await container.get(AsyncAirlockClient).aclose()"
+
+- target: src/app/core/config/domain.py
+  marker: FORGE:CONFIG_DOMAIN_FIELDS
+  position: before
+  snippet: |
+    class AirlockSettings(BaseModel):
+        base_url: str = "http://airlock:5100"
+        token: str = ""
+
+- target: src/app/core/config/domain.py
+  marker: FORGE:CONFIG_DOMAIN_ROOT
+  position: before
+  snippet: "airlock: AirlockSettings = AirlockSettings()"
