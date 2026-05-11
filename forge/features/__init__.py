@@ -27,6 +27,7 @@ from forge.features import (  # noqa: F401, E402
     connectors,
     conversation,
     events,
+    mcp_template,
     middleware,
     streaming,
     object_store,

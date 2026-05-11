@@ -1,0 +1,8 @@
+# mcp_server: mount the MCP ASGI sub-app on /mcp inside the main FastAPI app.
+
+- target: src/app/main.py
+  marker: FORGE:APP_MOUNTS
+  position: before
+  snippet: |
+    from app.mcp import build_mcp_app
+    app.mount("/mcp", build_mcp_app(context_resolver=container.get(PluginContextResolver)))
