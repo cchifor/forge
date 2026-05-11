@@ -36,22 +36,6 @@
       "size": 494,
       "sha256": "f27b7dd313f5239b"
     },
-    "infra/gatekeeper/.ruff_cache/.gitignore": {
-      "size": 35,
-      "sha256": "9e3a60f1e6ec4ae6"
-    },
-    "infra/gatekeeper/.ruff_cache/0.9.9/10567318478136778141": {
-      "size": 312,
-      "sha256": "9bb6d53f1c14bef3"
-    },
-    "infra/gatekeeper/.ruff_cache/0.9.9/8348002227877865746": {
-      "size": 3758,
-      "sha256": "58a3f56b9c39e8fb"
-    },
-    "infra/gatekeeper/.ruff_cache/CACHEDIR.TAG": {
-      "size": 43,
-      "sha256": "5953156d7e0c564a"
-    },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
       "sha256": "c8926c3bb62484b7"
