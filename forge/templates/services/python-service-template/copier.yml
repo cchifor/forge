@@ -45,6 +45,29 @@ python_version:
     - "3.14"
 
 # ---------------------------------------------------------------------------
+# 1.2.0 — weld-* SDK consumption
+# ---------------------------------------------------------------------------
+
+sdk_consumption:
+  type: str
+  help: "How should the generated service consume weld-* SDKs?"
+  default: "monorepo"
+  choices:
+    - "monorepo"   # path deps to ../../sdks/weld-* — drop into platform/services/
+    - "standalone" # pinned PyPI versions — requires weld-* to be published
+    - "none"       # don't declare weld-* deps (legacy 1.1.x behavior, vendors src/service/)
+
+weld_base_sdks:
+  type: str
+  help: "Comma-separated weld-* SDKs to declare in pyproject (used when sdk_consumption != none)"
+  default: "auth,core,fastapi,observability,http-client,events"
+
+service_path_prefix:
+  type: str
+  help: "Traefik PathPrefix used for routing this service (e.g. /api/{{ project_slug }})"
+  default: "/api/{{ project_slug }}"
+
+# ---------------------------------------------------------------------------
 # Derived variables (not prompted)
 # ---------------------------------------------------------------------------
 

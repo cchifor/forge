@@ -36,7 +36,27 @@ dependencies = [
     "email-validator>=2.2.0",
     "python-multipart>=0.0.20",
     "cachetools>=5.5.0",
+{%- if sdk_consumption != "none" %}
+    # ---------------------------------------------------------------------
+    # weld-* SDKs (1.2.0+) — replace the in-tree src/service shim. See
+    # docs/auth-architecture.md, docs/ARCHITECTURE.md for the dependency
+    # tier diagram. The Dockerfile strips [tool.uv.sources] when building
+    # wheels so the runtime image resolves from /wheels rather than the
+    # source path.
+    # ---------------------------------------------------------------------
+{%- for sdk in weld_base_sdks.split(',') %}
+    "weld-{{ sdk|trim }}",
+{%- endfor %}
+{%- endif %}
 ]
+
+{%- if sdk_consumption == "monorepo" %}
+
+[tool.uv.sources]
+{%- for sdk in weld_base_sdks.split(',') %}
+weld-{{ sdk|trim }} = { path = "../../sdks/weld-{{ sdk|trim }}" }
+{%- endfor %}
+{%- endif %}
 
 [dependency-groups]
 dev = [
@@ -55,7 +75,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
+{%- if sdk_consumption == "none" %}
 packages = ["src/app", "src/service"]
+{%- else %}
+packages = ["src/app"]
+{%- endif %}
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -109,7 +133,11 @@ invalid-raise = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.coverage.run]
+{%- if sdk_consumption == "none" %}
 source = ["src/app", "src/service"]
+{%- else %}
+source = ["src/app"]
+{%- endif %}
 omit = [
     "*/migrations/*",
     "*/alembic/*",
