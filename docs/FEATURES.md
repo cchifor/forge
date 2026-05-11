@@ -526,6 +526,49 @@ REQUIRES: TASKIQ_BROKER_URL → Redis.
 **Enables fragments:**
 - on `true` → `background_tasks`
 
+### `events.bus`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `postgres_notify`, `memory`
+
+_CloudEvents bus — domain-event fanout between services (weld-events)._
+
+Selects the :class:`weld.events.EventBus` transport. ``postgres_notify``
+uses Postgres ``LISTEN/NOTIFY`` (the default platform transport — one
+``domain_events`` channel per database, no extra infra). ``memory`` is
+for tests and local dev (subscribers in the same process). ``none``
+disables the feature.
+
+Pairs with the transactional outbox (``events.outbox``) so producers
+never lose events on listener downtime.
+
+BACKENDS: python
+DEPENDENCY: weld-events
+
+**Enables fragments:**
+- on `postgres_notify` → `events_core`
+- on `memory` → `events_core`
+
+### `events.outbox`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** python
+
+_Transactional outbox table — never-lost CloudEvents on the producer side._
+
+Adds the ``outbox`` table (via Alembic migration) and an
+:class:`weld.events.OutboxRelay` background worker that polls the
+table and publishes pending rows through the configured ``EventBus``.
+Producers append rows to ``outbox`` in the same transaction as their
+domain writes — no dual-write race, no lost events on listener
+downtime.
+
+REQUIRES: ``events.bus`` ≠ ``none``.
+BACKENDS: python
+
+**Enables fragments:**
+- on `true` → `events_outbox`
+
 ### `queue.backend`
 
 **Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
@@ -546,6 +589,25 @@ ENV: REDIS_URL / AWS_REGION
 **Enables fragments:**
 - on `redis` → `queue_port`, `queue_redis`
 - on `sqs` → `queue_port`, `queue_sqs`
+
+### `streaming.sse`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_SSE endpoint that fans CloudEvents to browser subscribers (weld-streaming)._
+
+Adds ``/api/v1/stream`` backed by :class:`weld.streaming.CloudEventStreamer`.
+Browsers connect with an ``EventSource``; the streamer manages
+subscription, filter, replay (``Last-Event-ID`` handshake) and
+heartbeats. Requires ``events.bus ≠ none`` because the streamer pulls
+events off the configured :class:`weld.events.EventBus`.
+
+BACKENDS: python
+DEPENDENCY: weld-streaming, sse-starlette
+ENV: STREAMING_HEARTBEAT_S, STREAMING_QUEUE_MAX
+
+**Enables fragments:**
+- on `true` → `streaming_sse`
 
 ## Conversational AI
 
@@ -695,6 +757,37 @@ DOCS: docs/mcp.md.
 
 _Vector storage and retrieval — the RAG stack with pluggable backends._
 
+### `connectors.backends`
+
+**Type:** `list` · **Default:** `[]` · **Stability:** `stable` · **Backends:** —
+
+_Built-in connector backends to enable — subset of {http,fs,sql,s3,mcp}._
+
+Each listed backend pulls ``weld-connectors[<backend>]`` into the
+service's pyproject and registers a factory in the
+:class:`ConnectorRegistry`. Empty list keeps the registry callable but
+empty — handlers then register their own adapters at startup.
+
+BACKENDS: python
+ALLOWED: http, fs, sql, s3, mcp
+
+### `connectors.enabled`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Pluggable read/write data-plane adapters (weld-connectors)._
+
+Adds a service-local :class:`weld.connectors.ConnectorRegistry` wired
+into Dishka DI so handlers can look up adapters by name and type.
+Builtins are selectable via ``connectors.backends`` — each enabled
+backend pulls the matching extra.
+
+BACKENDS: python
+DEPENDENCY: weld-connectors (+ per-backend extras)
+
+**Enables fragments:**
+- on `true` → `connectors_registry`
+
 ### `rag.backend`
 
 **Type:** `enum` · **Default:** `none` · **Stability:** `experimental` · **Backends:** python
@@ -777,6 +870,59 @@ tool. Written into .env.example as RAG_TOP_K.
 ## Platform
 
 _Operator-facing tooling: admin UI, outbound webhooks, CLI extensions, AI-agent docs._
+
+### `airlock.client`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Async client for the Airlock sandbox orchestrator (weld-airlock)._
+
+Adds the :class:`weld.airlock.AsyncAirlockClient` to DI plus a startup
+hook that closes the underlying httpx session on shutdown. Use for
+services that need to spin up ephemeral sandboxes (MCP integrations,
+agent-driven workflows, browser automation).
+
+BACKENDS: python
+DEPENDENCY: weld-airlock
+ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN
+
+**Enables fragments:**
+- on `true` → `airlock_client`
+
+### `mcp_template.openapi_to_tools`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
+
+_Generate MCP tool definitions from the service's OpenAPI spec._
+
+Adds a build step (``mise run mcp:codegen``) that runs
+:func:`weld.mcp_template.openapi_to_tools` against the service's own
+OpenAPI spec, producing a ``tools.generated.py`` consumed by the
+default plugin. Useful when the service already exposes a REST surface
+that should be 1:1 visible to MCP clients.
+
+REQUIRES: ``mcp_template.server`` = true
+BACKENDS: python
+
+**Enables fragments:**
+- on `true` → `mcp_template_openapi_tools`
+
+### `mcp_template.server`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_Host a first-party MCP server inside this service (weld-mcp-template)._
+
+Scaffolds ``src/app/mcp/`` with a sample :class:`IntegrationPlugin`,
+``build_server()`` factory, and an ASGI mount on ``/mcp``. Use for
+services that expose first-party SaaS integrations to MCP clients
+(the platform gateway connects to this endpoint).
+
+BACKENDS: python
+DEPENDENCY: weld-mcp-template, mcp
+
+**Enables fragments:**
+- on `true` → `mcp_template_server`
 
 ### `object_store.backend`
 
