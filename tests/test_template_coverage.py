@@ -39,7 +39,11 @@ class TestTemplateCoverageConfig:
     def test_coverage_run_source(self, rendered_toml):
         run = rendered_toml["tool"]["coverage"]["run"]
         assert "src/app" in run["source"]
-        assert "src/service" in run["source"]
+        # src/service was dropped in c0e5289 ("drop src/service/ shim, rewire
+        # src/app onto weld-*"); the auth middleware fragment still writes
+        # into src/service/security/ at generate time but those modules are
+        # runtime contributions, not a coverage target on their own.
+        assert "src/service" not in run["source"]
 
     def test_coverage_omit_patterns(self, rendered_toml):
         omit = rendered_toml["tool"]["coverage"]["run"]["omit"]
