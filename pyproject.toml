@@ -189,12 +189,20 @@ unknown-argument = "error"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Mirror [tool.ty.src].exclude — the colocated feature template trees under
+# forge/features/<name>/templates/ contain scaffold sources that import the
+# generated project's namespace (``app.*`` and third-party deps that aren't
+# forge's own deps); ruff lints them as forge source and surfaces
+# template-only violations (I001, UP037, F541) that don't apply in context.
+# The ty exclude landed in 7356792; this matches it for ruff.
 exclude = [
     "forge/templates",
+    "forge/features/*/templates",
     ".venv",
     "build",
     "dist",
     "htmlcov",
+    "**/__pycache__",
 ]
 
 [tool.ruff.lint]

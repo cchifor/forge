@@ -19,3 +19,6 @@ package-lock.json
 # run inside the templated rust/ subtree; uv build picks them up and
 # trips on Windows path lengths if they're left behind).
 target/
+
+# Local debug scratch dir from CI-failure investigation
+tmp-forge-debug-py/

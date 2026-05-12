@@ -160,9 +160,7 @@ class _LegacySignals:
         # earlier codemod run partially applied — let the user resolve
         # via forge --plan-update.
         return (
-            self.has_keycloak_dep
-            or self.has_legacy_provider
-            or self.has_old_env_keys
+            self.has_keycloak_dep or self.has_legacy_provider or self.has_old_env_keys
         ) and not self.has_platform_auth_sdk
 
 
@@ -188,7 +186,9 @@ def _detect_legacy(project_root: Path) -> _LegacySignals:
     has_legacy_provider = False
     if services_root.is_dir():
         for service_dir in services_root.iterdir():
-            if (service_dir / "src" / "service" / "security" / "providers" / "keycloak.py").is_file():
+            if (
+                service_dir / "src" / "service" / "security" / "providers" / "keycloak.py"
+            ).is_file():
                 has_legacy_provider = True
                 break
 
@@ -200,7 +200,9 @@ def _detect_legacy(project_root: Path) -> _LegacySignals:
         if any(re.search(rf"^{re.escape(old)}=", text, re.MULTILINE) for old, _ in ENV_RENAMES):
             has_old_env_keys = True
             break
-        if any(re.search(rf"^{re.escape(removed)}=", text, re.MULTILINE) for removed in ENV_REMOVALS):
+        if any(
+            re.search(rf"^{re.escape(removed)}=", text, re.MULTILINE) for removed in ENV_REMOVALS
+        ):
             has_old_env_keys = True
             break
 
@@ -260,9 +262,7 @@ def _rewrite_env_file(
                 # file? Drop the alias without overwriting — the user's
                 # explicit canonical wins.
                 if new in pre_existing_keys:
-                    changes.append(
-                        f"{path.name}: dropped {old}= (canonical {new}= already set)"
-                    )
+                    changes.append(f"{path.name}: dropped {old}= (canonical {new}= already set)")
                 else:
                     new_lines.append(re.sub(rf"^{re.escape(old)}=", f"{new}=", line))
                     written_keys.add(new)
@@ -389,17 +389,13 @@ def _remove_legacy_provider_files(
                 continue
             if not dry_run:
                 target.unlink()
-            changes.append(
-                f"{service_dir.name}: removed legacy {relative}"
-            )
+            changes.append(f"{service_dir.name}: removed legacy {relative}")
         # Try to remove the now-empty providers/ dir.
         providers_dir = service_dir / "src" / "service" / "security" / "providers"
         if providers_dir.is_dir() and not any(providers_dir.iterdir()):
             if not dry_run:
                 providers_dir.rmdir()
-            changes.append(
-                f"{service_dir.name}: removed empty providers/ directory"
-            )
+            changes.append(f"{service_dir.name}: removed empty providers/ directory")
 
 
 def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
@@ -442,9 +438,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
 
     changes: list[str] = []
     if not quiet:
-        print(
-            f"  [{NAME}] Migrating {project_root} from Keycloak-direct → platform-auth"
-        )
+        print(f"  [{NAME}] Migrating {project_root} from Keycloak-direct → platform-auth")
     if dry_run and not quiet:
         print(f"  [{NAME}] DRY RUN — no files will be modified")
 
@@ -459,27 +453,24 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
     services_root = project_root / "services"
     if services_root.is_dir():
         for service_dir in services_root.iterdir():
-            _strip_python_keycloak_dep(
-                service_dir / "pyproject.toml", dry_run, changes
-            )
+            _strip_python_keycloak_dep(service_dir / "pyproject.toml", dry_run, changes)
 
     # 3. Remove legacy provider modules.
     _remove_legacy_provider_files(services_root, dry_run, changes)
 
     # 4. Final guidance — what to do next.
     next_steps = (
-        f"Run `forge --update` to ship the new sdks/platform-auth*/ trees, "
-        f"the upgraded infra/gatekeeper/, and the per-language middleware "
-        f"fragments. Then `docker compose up --build` to boot the new stack. "
-        f"See UPGRADING.md §'1.1 → 1.2' for the full playbook."
+        "Run `forge --update` to ship the new sdks/platform-auth*/ trees, "
+        "the upgraded infra/gatekeeper/, and the per-language middleware "
+        "fragments. Then `docker compose up --build` to boot the new stack. "
+        "See UPGRADING.md §'1.1 → 1.2' for the full playbook."
     )
     if not changes:
         return MigrationReport(
             name=NAME,
             applied=False,
             skipped_reason=(
-                f"detected legacy signals but no rewrites applied — "
-                f"investigate: {signals!r}"
+                f"detected legacy signals but no rewrites applied — investigate: {signals!r}"
             ),
         )
 

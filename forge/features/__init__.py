@@ -29,11 +29,11 @@ from forge.features import (  # noqa: F401, E402
     events,
     mcp_template,
     middleware,
-    streaming,
     object_store,
     observability,
     platform,
     rag,
     reliability,
     security,
+    streaming,
 )
