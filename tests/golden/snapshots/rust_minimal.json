@@ -33,7 +33,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 27990,
+      "size": 28142,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -465,8 +465,8 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8345,
-      "sha256": "48222bd12b684e4e"
+      "size": 8347,
+      "sha256": "844c5eb33e3791a6"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
@@ -484,17 +484,21 @@
       "size": 9508,
       "sha256": "bbb3e7e29255f01d"
     },
+    "services/api/src/identity.rs": {
+      "size": 1510,
+      "sha256": "aa8431689a7e3f4e"
+    },
     "services/api/src/lib.rs": {
-      "size": 1156,
-      "sha256": "886d0b7807f78385"
+      "size": 1174,
+      "sha256": "54e4a1f2ba7fe59b"
     },
     "services/api/src/main.rs": {
-      "size": 2173,
-      "sha256": "d9b427946a341c8b"
+      "size": 2187,
+      "sha256": "90da6695fa93db1e"
     },
     "services/api/src/middleware/auth.rs": {
-      "size": 7745,
-      "sha256": "6b33f22b16dc7e51"
+      "size": 8755,
+      "sha256": "4548549075d66b31"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
@@ -537,16 +541,16 @@
       "sha256": "600e9e01a075a179"
     },
     "services/api/src/routes/items.rs": {
-      "size": 1992,
-      "sha256": "1bae65efb342cdc4"
+      "size": 1994,
+      "sha256": "51d42da7a979d931"
     },
     "services/api/src/routes/mod.rs": {
       "size": 542,
       "sha256": "907d248303776cf4"
     },
     "services/api/src/services/item_service.rs": {
-      "size": 2257,
-      "sha256": "507837676575798d"
+      "size": 2259,
+      "sha256": "8b054789ff9e56ae"
     },
     "services/api/src/services/mod.rs": {
       "size": 57,

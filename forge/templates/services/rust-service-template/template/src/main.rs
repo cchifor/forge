@@ -26,6 +26,7 @@ mod config;
 mod data;
 mod db;
 mod errors;
+mod identity;
 mod middleware;
 mod models;
 mod routes;
