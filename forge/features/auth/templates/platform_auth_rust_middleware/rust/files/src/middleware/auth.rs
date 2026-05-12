@@ -137,8 +137,27 @@ pub async fn auth_middleware(
         Err(err) => return Err(map_auth_error(&err)),
     };
 
+    // Convert the SDK's IdentityContext to the consumer's local type
+    // before stashing in request extensions. Handlers in the base
+    // service template extract ``&crate::identity::IdentityContext``;
+    // inserting the SDK's nominal type would leave them looking up a
+    // different ``TypeId`` from the same extension map. The two shapes
+    // are field-by-field aligned by design.
+    // SDK uses ``HashSet<String>`` for scopes/roles (set semantics for
+    // wildcard scope-match). The local type uses ``Vec<String>`` for
+    // ergonomic iteration order in handler code. Collect once at the
+    // boundary so neither side has to convert per-access.
+    let local = crate::identity::IdentityContext {
+        tenant_id: identity.tenant_id,
+        tenant_slug: identity.tenant_slug.clone(),
+        subject: identity.subject.clone(),
+        scopes: identity.scopes.iter().cloned().collect(),
+        roles: identity.roles.iter().cloned().collect(),
+        actor: identity.actor.clone(),
+    };
+
     let mut request = request;
-    request.extensions_mut().insert(identity);
+    request.extensions_mut().insert(local);
     Ok(next.run(request).await)
 }
 

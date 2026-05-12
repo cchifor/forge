@@ -4,7 +4,7 @@
 //! including in-memory test doubles, satisfies the bound. The default
 //! wiring uses [`PgItemRepository`].
 
-use platform_auth::IdentityContext;
+use crate::identity::IdentityContext;
 use sqlx::PgPool;
 use uuid::Uuid;
 

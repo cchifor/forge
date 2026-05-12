@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use platform_auth::IdentityContext;
+use crate::identity::IdentityContext;
 
 use crate::errors::AppError;
 use crate::models::{CreateItem, Item, ListParams, PaginatedResponse, UpdateItem};

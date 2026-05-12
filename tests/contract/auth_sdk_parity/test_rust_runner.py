@@ -52,6 +52,21 @@ RUST_SDK_DIR = (
 )
 
 
+@pytest.fixture(scope="module")
+def rust_sdk_sandbox(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Copy the SDK template to a per-module tempdir so cargo can write
+    its ``Cargo.lock`` + ``target/`` without polluting the in-repo
+    template tree. ``test_golden_snapshots`` would otherwise flag the
+    artefacts as drift (CI runs ``test_rust_runner`` before the snapshot
+    pass when cargo is on PATH). Module-scoped so the three cargo
+    invocations share a warm target dir.
+    """
+    sandbox = tmp_path_factory.mktemp("platform-auth-rs-sandbox")
+    dest = sandbox / "platform-auth-rs"
+    shutil.copytree(str(RUST_SDK_DIR), str(dest))
+    return dest
+
+
 def _toolchain_ready() -> tuple[bool, str]:
     """Return (ready, reason). Reason explains why we're skipping."""
     if not RUST_SDK_DIR.is_dir():
@@ -68,7 +83,7 @@ _ready, _skip_reason = _toolchain_ready()
 pytestmark = pytest.mark.skipif(not _ready, reason=_skip_reason)
 
 
-def test_rust_sdk_passes_all_parity_scenarios(tmp_path: Path) -> None:
+def test_rust_sdk_passes_all_parity_scenarios(tmp_path: Path, rust_sdk_sandbox: Path) -> None:
     """Every cross-SDK scenario must verify identically in the Rust
     SDK as in Python and Node. Caught Rust-side drifts (e.g. the
     Phase 6 `StaticMayActPolicy` keying alignment) surface here as
@@ -93,7 +108,7 @@ def test_rust_sdk_passes_all_parity_scenarios(tmp_path: Path) -> None:
             "--",
             "--nocapture",
         ],
-        cwd=RUST_SDK_DIR,
+        cwd=rust_sdk_sandbox,
         env=env,
         capture_output=True,
         text=True,
@@ -109,7 +124,7 @@ def test_rust_sdk_passes_all_parity_scenarios(tmp_path: Path) -> None:
         )
 
 
-def test_rust_sdk_axum_layer_integration() -> None:
+def test_rust_sdk_axum_layer_integration(rust_sdk_sandbox: Path) -> None:
     """The Tower layer composition (`AuthLayer` + `RequireScope` + the
     `IdentityContext` extractor) must hold end-to-end. The bare-verifier
     parity runner doesn't exercise this path — it only drives
@@ -132,7 +147,7 @@ def test_rust_sdk_axum_layer_integration() -> None:
             "--test",
             "integration_axum",
         ],
-        cwd=RUST_SDK_DIR,
+        cwd=rust_sdk_sandbox,
         env={**subprocess.os.environ, "CARGO_TERM_COLOR": "never"},
         capture_output=True,
         text=True,
@@ -148,7 +163,7 @@ def test_rust_sdk_axum_layer_integration() -> None:
         )
 
 
-def test_rust_sdk_audit_callback_integration() -> None:
+def test_rust_sdk_audit_callback_integration(rust_sdk_sandbox: Path) -> None:
     """The audit-callback hook fires on the allow path with the
     cross-language record shape (matching Python ``_emit_audit`` and
     Node ``_emitAudit``).
@@ -174,7 +189,7 @@ def test_rust_sdk_audit_callback_integration() -> None:
             "--test",
             "audit_callback",
         ],
-        cwd=RUST_SDK_DIR,
+        cwd=rust_sdk_sandbox,
         env={**subprocess.os.environ, "CARGO_TERM_COLOR": "never"},
         capture_output=True,
         text=True,

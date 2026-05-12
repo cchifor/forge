@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
-use platform_auth::IdentityContext;
+use crate::identity::IdentityContext;
 use sqlx::PgPool;
 use uuid::Uuid;
 
