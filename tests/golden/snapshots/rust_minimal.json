@@ -20,6 +20,10 @@
       "size": 2577,
       "sha256": "27cb9957eec7caf9"
     },
+    "Cargo.toml": {
+      "size": 649,
+      "sha256": "884c369a3d3c9a14"
+    },
     "CLAUDE.md": {
       "size": 1912,
       "sha256": "ae83d48b4638adaf"
@@ -29,7 +33,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 28885,
+      "size": 28142,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -312,29 +316,25 @@
       "size": 325,
       "sha256": "12df8d084c4122f9"
     },
-    "sdks/platform-auth-rs/Cargo.lock": {
-      "size": 62733,
-      "sha256": "69eccf950609877e"
-    },
     "sdks/platform-auth-rs/Cargo.toml": {
       "size": 3163,
       "sha256": "8dbbe7b44ce28ef1"
     },
     "sdks/platform-auth-rs/README.md": {
-      "size": 3701,
-      "sha256": "7415d53e97b8ec20"
+      "size": 3707,
+      "sha256": "a17a43dbf25c971f"
     },
     "sdks/platform-auth-rs/src/audit.rs": {
       "size": 3824,
       "sha256": "3d6662fbd0fa59bd"
     },
     "sdks/platform-auth-rs/src/auth_guard.rs": {
-      "size": 18681,
-      "sha256": "e593c30ed4c4e956"
+      "size": 18758,
+      "sha256": "b3c6d1d7470c471b"
     },
     "sdks/platform-auth-rs/src/errors.rs": {
-      "size": 4358,
-      "sha256": "432a6c2f2b168c76"
+      "size": 4303,
+      "sha256": "3662a815ecb9fe03"
     },
     "sdks/platform-auth-rs/src/extractor.rs": {
       "size": 3065,
@@ -345,59 +345,59 @@
       "sha256": "b69bc801c3ff6587"
     },
     "sdks/platform-auth-rs/src/jwks.rs": {
-      "size": 9846,
-      "sha256": "53adbbda2a3cef6f"
+      "size": 10104,
+      "sha256": "547a22bab361996a"
     },
     "sdks/platform-auth-rs/src/layer.rs": {
-      "size": 7325,
-      "sha256": "7ffcb886c87090a0"
+      "size": 7337,
+      "sha256": "1a5d6746ac611cf2"
     },
     "sdks/platform-auth-rs/src/lib.rs": {
-      "size": 3216,
-      "sha256": "f8fa799e1344fda6"
+      "size": 3222,
+      "sha256": "29e0b6000c49456a"
     },
     "sdks/platform-auth-rs/src/may_act.rs": {
       "size": 3603,
       "sha256": "f0701603f6ab7f21"
     },
     "sdks/platform-auth-rs/src/require_scope.rs": {
-      "size": 4314,
-      "sha256": "0035fbb6e8e4636a"
+      "size": 4320,
+      "sha256": "3a9d74e72e07efc3"
     },
     "sdks/platform-auth-rs/src/revocation.rs": {
       "size": 2216,
       "sha256": "90d7591d0fe3c5e0"
     },
     "sdks/platform-auth-rs/src/s2s_client.rs": {
-      "size": 17772,
-      "sha256": "921970c8ac6a652c"
+      "size": 17869,
+      "sha256": "38fdf789c2b3c1cd"
     },
     "sdks/platform-auth-rs/src/scopes.rs": {
       "size": 1691,
       "sha256": "54915799b5c3b168"
     },
     "sdks/platform-auth-rs/src/testing.rs": {
-      "size": 11037,
-      "sha256": "4059199c5393e1c7"
+      "size": 11005,
+      "sha256": "22afd1b4bb0daa83"
     },
     "sdks/platform-auth-rs/src/trust.rs": {
       "size": 4232,
       "sha256": "82e6651dd9bfba51"
     },
     "sdks/platform-auth-rs/tests/audit_callback.rs": {
-      "size": 8162,
-      "sha256": "f1eb725812956dbe"
+      "size": 8146,
+      "sha256": "7b49dad5e05303db"
     },
     "sdks/platform-auth-rs/tests/integration_axum.rs": {
-      "size": 8754,
-      "sha256": "46625b3ba40c29af"
+      "size": 8807,
+      "sha256": "530377409d81f301"
     },
     "sdks/platform-auth-rs/tests/parity_runner.rs": {
-      "size": 20765,
-      "sha256": "4143b3079b44017f"
+      "size": 20983,
+      "sha256": "f16fe827196c43c2"
     },
     "services/api/.copier-answers.yml": {
-      "size": 440,
+      "size": 482,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -409,8 +409,8 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 926,
-      "sha256": "946a3b47af2fc8a0"
+      "size": 929,
+      "sha256": "a5ad4f2c2ac0626e"
     },
     "services/api/config/defaults.yaml": {
       "size": 378,
@@ -429,16 +429,16 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1326,
-      "sha256": "1a82e804192c2c14"
+      "size": 1809,
+      "sha256": "1e9ea78f62d0c47c"
     },
     "services/api/docker-compose.yaml": {
       "size": 836,
       "sha256": "c242f2f5c34d0194"
     },
     "services/api/Dockerfile": {
-      "size": 1540,
-      "sha256": "5c458aa25c2e8f37"
+      "size": 3083,
+      "sha256": "2caea605ff9f1587"
     },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,
@@ -465,8 +465,8 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8281,
-      "sha256": "8974d3967dbaa868"
+      "size": 8347,
+      "sha256": "844c5eb33e3791a6"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
@@ -484,17 +484,21 @@
       "size": 9508,
       "sha256": "bbb3e7e29255f01d"
     },
+    "services/api/src/identity.rs": {
+      "size": 1510,
+      "sha256": "aa8431689a7e3f4e"
+    },
     "services/api/src/lib.rs": {
-      "size": 1172,
-      "sha256": "1f6a025f6e3cd0e4"
+      "size": 1174,
+      "sha256": "54e4a1f2ba7fe59b"
     },
     "services/api/src/main.rs": {
-      "size": 2185,
-      "sha256": "d69992c969f097be"
+      "size": 2205,
+      "sha256": "bde99d72acacb9f2"
     },
     "services/api/src/middleware/auth.rs": {
-      "size": 7759,
-      "sha256": "6b677d3fb4b7b8ee"
+      "size": 8758,
+      "sha256": "0bd058fdf57e027b"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
@@ -537,16 +541,16 @@
       "sha256": "600e9e01a075a179"
     },
     "services/api/src/routes/items.rs": {
-      "size": 1992,
-      "sha256": "1bae65efb342cdc4"
+      "size": 1994,
+      "sha256": "21a843a6e1d7532e"
     },
     "services/api/src/routes/mod.rs": {
       "size": 542,
       "sha256": "907d248303776cf4"
     },
     "services/api/src/services/item_service.rs": {
-      "size": 2257,
-      "sha256": "507837676575798d"
+      "size": 2244,
+      "sha256": "7301464f759242e1"
     },
     "services/api/src/services/mod.rs": {
       "size": 57,

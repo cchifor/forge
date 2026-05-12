@@ -39,6 +39,8 @@ from forge.docker_manager import (
     render_init_db,
     render_keycloak_realm,
     render_nginx_conf,
+    render_workspace_cargo_toml,
+    render_workspace_package_json,
 )
 from forge.errors import (
     FILESYSTEM_IO_ERROR,
@@ -203,6 +205,12 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         )
 
         register_fragment_services(fragment_roots_from_plan(plan.ordered))
+        # Workspace root manifests (npm + Cargo). Render before compose so
+        # the compose entries' ``additional_contexts: { project_root: . }``
+        # references resolve. Each renderer is a no-op when the project
+        # has no consumer of its language (Python+Flutter-only skips both).
+        render_workspace_package_json(config, project_root, plan=plan)
+        render_workspace_cargo_toml(config, project_root, plan=plan)
         with phase_timer(_logger, "generate.compose.render"):
             render_compose(config, project_root, plan=plan)
         # init-db creates a database per backend plus keycloak's own db.
@@ -667,7 +675,14 @@ def _git_init(project_root: Path) -> None:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=30,
+                # 120s timeout — ``git add`` on a freshly-scaffolded project
+                # with the workspace SDK trees runs a few thousand
+                # ``hashAndCacheFile`` calls under cold I/O. Windows
+                # runners with NTFS + AV scanning have been observed
+                # taking 60s+ on first staging pass (30s tripped first,
+                # then 60s). 120s gives margin without inflating the test
+                # budget — the matrix CI per-cell wall-clock is 5min+.
+                timeout=120,
                 check=True,
                 env=step_env,
             )
@@ -676,7 +691,7 @@ def _git_init(project_root: Path) -> None:
                 "git executable not found on PATH; install git to scaffold a project"
             ) from e
         except subprocess.TimeoutExpired as e:
-            raise GeneratorError(f"git {step} timed out after 30s") from e
+            raise GeneratorError(f"git {step} timed out after 120s") from e
         except subprocess.CalledProcessError as e:
             stderr_tail = ""
             if e.stderr:

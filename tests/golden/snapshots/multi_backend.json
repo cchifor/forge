@@ -33,7 +33,7 @@
       "sha256": "9c0878c6afdc15c6"
     },
     "forge.toml": {
-      "size": 63170,
+      "size": 59062,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -316,6 +316,10 @@
       "size": 343,
       "sha256": "72fe8243235d907b"
     },
+    "package.json": {
+      "size": 492,
+      "sha256": "a61f953d38587e4c"
+    },
     "sdks/platform-auth/pyproject.toml": {
       "size": 1368,
       "sha256": "4d9c7acb2299e4fb"
@@ -433,16 +437,16 @@
       "sha256": "d776524c5649390a"
     },
     "sdks/platform-auth-node/package.json": {
-      "size": 1315,
-      "sha256": "0e0cb7a0233dc082"
+      "size": 1362,
+      "sha256": "a7f7e16c21df2ad0"
     },
     "sdks/platform-auth-node/README.md": {
       "size": 3762,
       "sha256": "43f0e786b8a5a746"
     },
     "sdks/platform-auth-node/src/AuthGuard.ts": {
-      "size": 18853,
-      "sha256": "08a6ca08b5dd2dee"
+      "size": 18862,
+      "sha256": "6bfb8ac25fa30b2b"
     },
     "sdks/platform-auth-node/src/context.ts": {
       "size": 3380,
@@ -481,8 +485,8 @@
       "sha256": "a03eaafabdb13e82"
     },
     "sdks/platform-auth-node/src/S2SClient.ts": {
-      "size": 13961,
-      "sha256": "6f33012ccb41dd81"
+      "size": 13985,
+      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/scopes.ts": {
       "size": 1770,
@@ -505,11 +509,11 @@
       "sha256": "ab68d15cfdf9c1f6"
     },
     "sdks/platform-auth-node/tsconfig.json": {
-      "size": 540,
-      "sha256": "4272da876034d6b1"
+      "size": 462,
+      "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 449,
+      "size": 491,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -541,24 +545,24 @@
       "sha256": "b200da072454e7fe"
     },
     "services/api-node/docker-compose.fragment.yaml": {
-      "size": 1379,
-      "sha256": "4c02768e85a8e1b5"
+      "size": 1884,
+      "sha256": "e92152750b943aee"
     },
     "services/api-node/docker-compose.yaml": {
       "size": 853,
       "sha256": "f06c0e04ecc8de65"
     },
     "services/api-node/Dockerfile": {
-      "size": 1282,
-      "sha256": "5561e40d01672663"
+      "size": 3132,
+      "sha256": "e0eddaee13a23f50"
     },
     "services/api-node/entrypoint.sh": {
       "size": 298,
       "sha256": "74f9a7761be19e3f"
     },
     "services/api-node/package.json": {
-      "size": 1168,
-      "sha256": "a67635563b083865"
+      "size": 1230,
+      "sha256": "bd8a67a0b765b3c6"
     },
     "services/api-node/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -637,8 +641,8 @@
       "sha256": "86c7677f63a270e0"
     },
     "services/api-node/src/middleware/logging.ts": {
-      "size": 620,
-      "sha256": "dc604326f61b395a"
+      "size": 942,
+      "sha256": "b0cd47769dceb8e2"
     },
     "services/api-node/src/routes/health.ts": {
       "size": 639,
@@ -681,8 +685,8 @@
       "sha256": "89ca92bcfd47d4c3"
     },
     "services/api-node/src/types/auth.ts": {
-      "size": 1238,
-      "sha256": "75a06d4d59545314"
+      "size": 2366,
+      "sha256": "13617898a495428a"
     },
     "services/api-node/tests/integration/health.test.ts": {
       "size": 1330,
@@ -704,17 +708,13 @@
       "size": 3363,
       "sha256": "d38d5b45b2511067"
     },
-    "services/api-node/tests/unit/http-client.test.ts": {
-      "size": 3131,
-      "sha256": "3f55e41cf4ee5ed0"
-    },
     "services/api-node/tests/unit/item.service.test.ts": {
-      "size": 5297,
-      "sha256": "7d476324f1555695"
+      "size": 5295,
+      "sha256": "98c0beedb49d6d7b"
     },
     "services/api-node/tests/unit/repositories.test.ts": {
-      "size": 2777,
-      "sha256": "7863bde099cc9278"
+      "size": 2775,
+      "sha256": "c6a45caf8de13a3f"
     },
     "services/api-node/tests/utils/errors.ts": {
       "size": 1412,
@@ -729,11 +729,11 @@
       "sha256": "7aed9f41bf232c59"
     },
     "services/api-node/vitest.config.ts": {
-      "size": 473,
-      "sha256": "0fa0aa4a35095faf"
+      "size": 697,
+      "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 450,
+      "size": 492,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {

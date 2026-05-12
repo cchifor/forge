@@ -16,11 +16,11 @@
 #![allow(clippy::derivable_impls)]
 
 pub mod app;
-pub mod client;
 pub mod config;
 pub mod data;
 pub mod db;
 pub mod errors;
+pub mod identity;
 pub mod middleware;
 pub mod models;
 pub mod routes;

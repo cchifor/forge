@@ -230,12 +230,11 @@ impl AuthGuard {
 
         let mut validation = Validation::new(header.alg);
         validation.set_audience(&self.config.audiences);
-        validation.set_required_spec_claims(&REQUIRED_CLAIMS.iter().copied().collect::<Vec<_>>());
+        validation.set_required_spec_claims(REQUIRED_CLAIMS);
         validation.leeway = self.config.clock_skew_seconds;
         validation.algorithms = self.config.algorithms.clone();
 
-        let token_data =
-            decode::<Value>(token, &key, &validation).map_err(AuthError::from)?;
+        let token_data = decode::<Value>(token, &key, &validation).map_err(AuthError::from)?;
         let claims = token_data.claims;
 
         let tenant_id = self.extract_tenant_id(&claims)?;
@@ -287,7 +286,13 @@ impl AuthGuard {
         // Emit the audit record on the allow path. Mirrors Python's
         // `_emit_audit(decision="allow", identity=..., jti=..., iss=...)`
         // and Node's `_emitAudit({decision: "allow", ...})`.
-        self.emit_audit(AuthDecision::Allow, Some(&identity), Some(&jti), Some(iss), None);
+        self.emit_audit(
+            AuthDecision::Allow,
+            Some(&identity),
+            Some(&jti),
+            Some(iss),
+            None,
+        );
 
         Ok(identity)
     }
@@ -364,9 +369,10 @@ impl AuthGuard {
         tenant_id: &Uuid,
         iss: &str,
     ) -> Result<(), AuthError> {
-        let record = trust_map.get(&tenant_id.to_string()).await.ok_or_else(|| {
-            AuthError::InvalidToken(format!("unknown tenant {}", tenant_id))
-        })?;
+        let record = trust_map
+            .get(&tenant_id.to_string())
+            .await
+            .ok_or_else(|| AuthError::InvalidToken(format!("unknown tenant {}", tenant_id)))?;
         if record.expected_issuer != iss {
             return Err(AuthError::IssuerNotTrusted(format!(
                 "tenant {} expects issuer {:?}, token presents {:?}",
@@ -471,7 +477,11 @@ fn extract_string_set(
         return Ok(HashSet::new());
     }
     if let Some(s) = raw.as_str() {
-        let normalized = if roles_compat { s.replace(',', " ") } else { s.to_string() };
+        let normalized = if roles_compat {
+            s.replace(',', " ")
+        } else {
+            s.to_string()
+        };
         return Ok(normalized
             .split_whitespace()
             .filter(|s| !s.is_empty())

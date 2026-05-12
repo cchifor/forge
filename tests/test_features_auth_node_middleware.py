@@ -26,7 +26,12 @@ from forge.fragments import FRAGMENT_REGISTRY
 
 EXPECTED_FILES = (
     "src/middleware/auth.ts",
-    "src/types/auth.ts",
+    # ``src/types/auth.ts`` now ships from the base node-service-template
+    # as a stub that compiles when auth.mode=none; the auth middleware
+    # fragment used to ship its own copy but that triggered
+    # ``FRAGMENT_FILES_OVERLAP`` in strict update mode. Handlers cast
+    # ``req.identity`` via ``(req as unknown as { identity?: IdentityContext }).identity``
+    # so they don't depend on the SDK being installed for typecheck.
 )
 
 
@@ -117,19 +122,24 @@ def test_auth_bootstrap_pins_es256() -> None:
     assert '"ES256"' in text, "bootstrapAuth must pin algorithms to ES256"
 
 
-def test_types_auth_re_exports_identity_context() -> None:
-    """``src/types/auth.ts`` must re-export the SDK's IdentityContext
-    + the narrowed AuthenticatedRequest type so handlers don't
-    couple to the SDK's package name.
+def test_types_auth_stub_ships_in_base_template() -> None:
+    """``src/types/auth.ts`` ships from the base node-service-template
+    so the generated project compiles under both ``auth.mode=generate``
+    (SDK installed) and ``auth.mode=none`` (no SDK).
+
+    The stub provides ``IdentityContext``, ``AuthenticatedRequest``,
+    ``AuthError``, and a ``buildIdentity`` helper API-compatible with
+    the SDK's. Handlers + tests import from ``../types/auth.js``;
+    the SDK's plugin.ts provides the actual ``FastifyRequest.identity``
+    augmentation when present.
     """
-    text = (_files_root() / "src" / "types" / "auth.ts").read_text(encoding="utf-8")
-    assert "IdentityContext" in text, "types/auth.ts must re-export IdentityContext"
-    assert "AuthenticatedRequest" in text, (
-        "types/auth.ts must define AuthenticatedRequest for handler signatures"
-    )
-    assert "@forge/platform-auth-node" in text, (
-        "types/auth.ts must import from @forge/platform-auth-node"
-    )
+    from forge.generator import TEMPLATES_DIR  # noqa: PLC0415
+
+    stub = TEMPLATES_DIR / "services" / "node-service-template" / "template" / "src" / "types" / "auth.ts"
+    assert stub.is_file(), f"base-template auth.ts stub missing at {stub}"
+    text = stub.read_text(encoding="utf-8")
+    for symbol in ("IdentityContext", "AuthenticatedRequest", "AuthError", "buildIdentity"):
+        assert symbol in text, f"base-template auth.ts must declare/export {symbol}"
 
 
 def test_inject_yaml_wires_app_ts_markers() -> None:

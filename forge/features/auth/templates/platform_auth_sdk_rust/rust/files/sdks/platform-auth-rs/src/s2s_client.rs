@@ -38,11 +38,7 @@
 //! # }
 //! ```
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use moka::future::Cache;
@@ -189,7 +185,9 @@ impl S2SClient {
             .timeout(config.request_timeout)
             .build()
             .map_err(|e| AuthError::S2SAuthError(format!("HTTP client init: {e}")))?;
-        let tokens = Cache::builder().max_capacity(config.max_cache_entries).build();
+        let tokens = Cache::builder()
+            .max_capacity(config.max_cache_entries)
+            .build();
         Ok(Self {
             config,
             http,
@@ -206,7 +204,10 @@ impl S2SClient {
     }
 
     /// Return a cached or freshly-obtained token for this client's audience.
-    pub async fn get_token(&self, options: Option<&S2SRequestOptions>) -> Result<String, AuthError> {
+    pub async fn get_token(
+        &self,
+        options: Option<&S2SRequestOptions>,
+    ) -> Result<String, AuthError> {
         let on_behalf_of = options.and_then(|o| o.on_behalf_of.as_deref());
         let tenant_id = options.and_then(|o| o.tenant_id.as_deref());
         let cache_key = self.cache_key(on_behalf_of, tenant_id);
@@ -231,7 +232,8 @@ impl S2SClient {
             // don't busy-spin if the fetch is still in flight; bound the
             // wait at 1.5× the request timeout to surface ringbuffer
             // hangs as a clear S2SAuthError rather than a deadlock.
-            let deadline = Instant::now() + self.config.request_timeout + self.config.request_timeout / 2;
+            let deadline =
+                Instant::now() + self.config.request_timeout + self.config.request_timeout / 2;
             while Instant::now() < deadline {
                 if let Some(fresh) = existing.get().cloned() {
                     *self.hits.lock().await += 1;
@@ -375,13 +377,15 @@ impl S2SClient {
                 req = req.header(key, value);
             }
         }
-        req.send().await.map_err(|err| {
-            AuthError::S2SAuthError(format!("downstream call failed: {err}"))
-        })
+        req.send()
+            .await
+            .map_err(|err| AuthError::S2SAuthError(format!("downstream call failed: {err}")))
     }
 
     fn cache_key(&self, on_behalf_of: Option<&str>, tenant_id: Option<&str>) -> String {
-        let suffix = tenant_id.map(|t| format!(":tenant:{t}")).unwrap_or_default();
+        let suffix = tenant_id
+            .map(|t| format!(":tenant:{t}"))
+            .unwrap_or_default();
         match on_behalf_of {
             None => format!("{CLIENT_CREDENTIALS_KEY}{suffix}"),
             Some(token) => match unverified_jti(token) {
@@ -424,13 +428,14 @@ impl S2SClient {
             .form(&form)
             .send()
             .await
-            .map_err(|err| {
-                AuthError::S2SAuthError(format!("token endpoint unreachable: {err}"))
-            })?;
+            .map_err(|err| AuthError::S2SAuthError(format!("token endpoint unreachable: {err}")))?;
 
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_else(|_| "<unreadable>".into());
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<unreadable>".into());
             return Err(AuthError::S2SAuthError(format!(
                 "token endpoint returned HTTP {status}: {}",
                 body.chars().take(200).collect::<String>()

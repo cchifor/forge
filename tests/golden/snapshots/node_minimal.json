@@ -29,7 +29,7 @@
       "sha256": "6e376e78216f8a26"
     },
     "forge.toml": {
-      "size": 30628,
+      "size": 29717,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -308,17 +308,21 @@
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
+    "package.json": {
+      "size": 490,
+      "sha256": "00c3328620ea0718"
+    },
     "sdks/platform-auth-node/package.json": {
-      "size": 1315,
-      "sha256": "0e0cb7a0233dc082"
+      "size": 1362,
+      "sha256": "a7f7e16c21df2ad0"
     },
     "sdks/platform-auth-node/README.md": {
       "size": 3762,
       "sha256": "43f0e786b8a5a746"
     },
     "sdks/platform-auth-node/src/AuthGuard.ts": {
-      "size": 18853,
-      "sha256": "08a6ca08b5dd2dee"
+      "size": 18862,
+      "sha256": "6bfb8ac25fa30b2b"
     },
     "sdks/platform-auth-node/src/context.ts": {
       "size": 3380,
@@ -357,8 +361,8 @@
       "sha256": "a03eaafabdb13e82"
     },
     "sdks/platform-auth-node/src/S2SClient.ts": {
-      "size": 13961,
-      "sha256": "6f33012ccb41dd81"
+      "size": 13985,
+      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/scopes.ts": {
       "size": 1770,
@@ -381,11 +385,11 @@
       "sha256": "ab68d15cfdf9c1f6"
     },
     "sdks/platform-auth-node/tsconfig.json": {
-      "size": 540,
-      "sha256": "4272da876034d6b1"
+      "size": 462,
+      "sha256": "501d4cab52c61fd6"
     },
     "services/api/.copier-answers.yml": {
-      "size": 438,
+      "size": 480,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -417,24 +421,24 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1369,
-      "sha256": "d4da69ffd1f47703"
+      "size": 1874,
+      "sha256": "9d333ed0f35950c1"
     },
     "services/api/docker-compose.yaml": {
       "size": 843,
       "sha256": "1a530bf3ab0e8ae8"
     },
     "services/api/Dockerfile": {
-      "size": 1282,
-      "sha256": "53f6b439f42e9323"
+      "size": 3132,
+      "sha256": "341788a576a8445d"
     },
     "services/api/entrypoint.sh": {
       "size": 298,
       "sha256": "74f9a7761be19e3f"
     },
     "services/api/package.json": {
-      "size": 1163,
-      "sha256": "3a329f3f533beb0e"
+      "size": 1225,
+      "sha256": "2f69f500a37310f2"
     },
     "services/api/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -513,8 +517,8 @@
       "sha256": "86c7677f63a270e0"
     },
     "services/api/src/middleware/logging.ts": {
-      "size": 620,
-      "sha256": "dc604326f61b395a"
+      "size": 942,
+      "sha256": "b0cd47769dceb8e2"
     },
     "services/api/src/routes/health.ts": {
       "size": 639,
@@ -557,8 +561,8 @@
       "sha256": "89ca92bcfd47d4c3"
     },
     "services/api/src/types/auth.ts": {
-      "size": 1238,
-      "sha256": "75a06d4d59545314"
+      "size": 2366,
+      "sha256": "13617898a495428a"
     },
     "services/api/tests/integration/health.test.ts": {
       "size": 1330,
@@ -580,17 +584,13 @@
       "size": 3363,
       "sha256": "d38d5b45b2511067"
     },
-    "services/api/tests/unit/http-client.test.ts": {
-      "size": 3131,
-      "sha256": "3f55e41cf4ee5ed0"
-    },
     "services/api/tests/unit/item.service.test.ts": {
-      "size": 5297,
-      "sha256": "7d476324f1555695"
+      "size": 5295,
+      "sha256": "98c0beedb49d6d7b"
     },
     "services/api/tests/unit/repositories.test.ts": {
-      "size": 2777,
-      "sha256": "7863bde099cc9278"
+      "size": 2775,
+      "sha256": "c6a45caf8de13a3f"
     },
     "services/api/tests/utils/errors.ts": {
       "size": 1412,
@@ -605,8 +605,8 @@
       "sha256": "7aed9f41bf232c59"
     },
     "services/api/vitest.config.ts": {
-      "size": 473,
-      "sha256": "0fa0aa4a35095faf"
+      "size": 697,
+      "sha256": "d9a9fd079970435c"
     }
   }
 }
