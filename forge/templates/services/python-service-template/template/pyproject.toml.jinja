@@ -75,11 +75,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-{%- if (sdk_consumption | default("none")) == "none" %}
-packages = ["src/app", "src/service"]
-{%- else %}
 packages = ["src/app"]
-{%- endif %}
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -133,11 +129,7 @@ invalid-raise = "ignore"
 unused-type-ignore-comment = "ignore"
 
 [tool.coverage.run]
-{%- if (sdk_consumption | default("none")) == "none" %}
-source = ["src/app", "src/service"]
-{%- else %}
 source = ["src/app"]
-{%- endif %}
 omit = [
     "*/migrations/*",
     "*/alembic/*",
