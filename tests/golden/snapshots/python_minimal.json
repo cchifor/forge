@@ -33,7 +33,7 @@
       "sha256": "ee64c65a24499b20"
     },
     "forge.toml": {
-      "size": 49367,
+      "size": 45338,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 444,
+      "size": 486,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {

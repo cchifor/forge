@@ -71,9 +71,9 @@ impl AuthError {
             | Self::TokenExpired(_)
             | Self::TokenRevoked(_)
             | Self::IssuerNotTrusted(_) => 401,
-            Self::ActorNotAuthorized(_)
-            | Self::ScopeRequired { .. }
-            | Self::TenantSuspended(_) => 403,
+            Self::ActorNotAuthorized(_) | Self::ScopeRequired { .. } | Self::TenantSuspended(_) => {
+                403
+            }
             Self::S2SAuthError(_) => 503,
         }
     }
@@ -90,13 +90,9 @@ impl From<jsonwebtoken::errors::Error> for AuthError {
             ErrorKind::ImmatureSignature => {
                 Self::InvalidToken(format!("token not yet valid (nbf in future): {err}"))
             }
-            ErrorKind::InvalidAudience => {
-                Self::InvalidToken(format!("audience mismatch: {err}"))
-            }
+            ErrorKind::InvalidAudience => Self::InvalidToken(format!("audience mismatch: {err}")),
             ErrorKind::InvalidIssuer => Self::InvalidToken(format!("issuer mismatch: {err}")),
-            ErrorKind::InvalidSignature => {
-                Self::InvalidToken(format!("signature mismatch: {err}"))
-            }
+            ErrorKind::InvalidSignature => Self::InvalidToken(format!("signature mismatch: {err}")),
             ErrorKind::MissingRequiredClaim(claim) => {
                 Self::InvalidToken(format!("missing required claim: {claim}"))
             }

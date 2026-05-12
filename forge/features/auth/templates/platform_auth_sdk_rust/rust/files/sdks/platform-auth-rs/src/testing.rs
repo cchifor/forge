@@ -261,11 +261,7 @@ pub fn fresh_keypair_and_token(
 ) -> Result<(TestEcdsaKeypair, String), AuthError> {
     let keypair = TestEcdsaKeypair::generate()?;
     let token = build_test_token(BuildTestTokenOptions::new(
-        &keypair,
-        issuer,
-        audience,
-        subject,
-        tenant_id,
+        &keypair, issuer, audience, subject, tenant_id,
     ))?;
     Ok((keypair, token))
 }

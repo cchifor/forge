@@ -20,6 +20,10 @@
       "size": 2577,
       "sha256": "27cb9957eec7caf9"
     },
+    "Cargo.toml": {
+      "size": 649,
+      "sha256": "884c369a3d3c9a14"
+    },
     "CLAUDE.md": {
       "size": 1912,
       "sha256": "ae83d48b4638adaf"
@@ -29,7 +33,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 28885,
+      "size": 28182,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -397,7 +401,7 @@
       "sha256": "4143b3079b44017f"
     },
     "services/api/.copier-answers.yml": {
-      "size": 440,
+      "size": 482,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -409,8 +413,8 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 926,
-      "sha256": "946a3b47af2fc8a0"
+      "size": 929,
+      "sha256": "a5ad4f2c2ac0626e"
     },
     "services/api/config/defaults.yaml": {
       "size": 378,
@@ -429,16 +433,16 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1326,
-      "sha256": "1a82e804192c2c14"
+      "size": 1809,
+      "sha256": "1e9ea78f62d0c47c"
     },
     "services/api/docker-compose.yaml": {
       "size": 836,
       "sha256": "c242f2f5c34d0194"
     },
     "services/api/Dockerfile": {
-      "size": 1540,
-      "sha256": "5c458aa25c2e8f37"
+      "size": 3083,
+      "sha256": "2caea605ff9f1587"
     },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,
@@ -465,8 +469,8 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8281,
-      "sha256": "8974d3967dbaa868"
+      "size": 8345,
+      "sha256": "48222bd12b684e4e"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
@@ -485,16 +489,16 @@
       "sha256": "bbb3e7e29255f01d"
     },
     "services/api/src/lib.rs": {
-      "size": 1172,
-      "sha256": "1f6a025f6e3cd0e4"
+      "size": 1156,
+      "sha256": "886d0b7807f78385"
     },
     "services/api/src/main.rs": {
-      "size": 2185,
-      "sha256": "d69992c969f097be"
+      "size": 2173,
+      "sha256": "d9b427946a341c8b"
     },
     "services/api/src/middleware/auth.rs": {
-      "size": 7759,
-      "sha256": "6b677d3fb4b7b8ee"
+      "size": 7745,
+      "sha256": "6b33f22b16dc7e51"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,

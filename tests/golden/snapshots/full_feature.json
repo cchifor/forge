@@ -25,7 +25,7 @@
       "sha256": "27cb9957eec7caf9"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1106,
+      "size": 1148,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -957,7 +957,7 @@
       "sha256": "d41ef1a7e81c9946"
     },
     "forge.toml": {
-      "size": 5466187,
+      "size": 5377735,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1252,6 +1252,10 @@
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
+    "package.json": {
+      "size": 490,
+      "sha256": "ad4b41688ef6d746"
+    },
     "sdks/platform-auth/pyproject.toml": {
       "size": 1368,
       "sha256": "4d9c7acb2299e4fb"
@@ -1369,7 +1373,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 444,
+      "size": 486,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -2025,7 +2029,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 569,
+      "size": 611,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
