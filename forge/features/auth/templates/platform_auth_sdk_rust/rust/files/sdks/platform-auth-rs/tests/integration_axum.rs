@@ -100,7 +100,10 @@ fn build_app(guard: Arc<AuthGuard>) -> Router {
         )
         .route(
             "/things/admin",
-            get(things_handler).layer(RequireScope::new(["things:admin", "platform:support:write"])),
+            get(things_handler).layer(RequireScope::new([
+                "things:admin",
+                "platform:support:write",
+            ])),
         )
         .route("/health", get(health_handler))
         .layer(AuthLayer::new(guard))

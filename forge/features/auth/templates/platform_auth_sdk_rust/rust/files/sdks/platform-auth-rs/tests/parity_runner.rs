@@ -35,9 +35,9 @@ use std::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use platform_auth::{
+    testing::{build_test_token, BuildTestTokenOptions, TestEcdsaKeypair},
     AuthGuard, AuthGuardConfig, InMemoryIssuerTrustMap, InMemoryRevocationStore, JwksCache,
     StaticMayActPolicy, TenantTrust,
-    testing::{build_test_token, BuildTestTokenOptions, TestEcdsaKeypair},
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -153,8 +153,7 @@ async fn cross_sdk_parity_rust() {
     };
     let raw = std::fs::read_to_string(&fixtures_path)
         .unwrap_or_else(|e| panic!("read scenarios at {fixtures_path}: {e}"));
-    let scenarios: Vec<Scenario> =
-        serde_json::from_str(&raw).expect("parse scenarios JSON dump");
+    let scenarios: Vec<Scenario> = serde_json::from_str(&raw).expect("parse scenarios JSON dump");
 
     let mut failed: Vec<(String, String)> = Vec::new();
     for scenario in &scenarios {
@@ -185,17 +184,14 @@ async fn cross_sdk_parity_rust() {
 
 async fn run_scenario(scenario: &Scenario) -> Result<(), String> {
     // Fresh keypair per scenario so test order doesn't matter.
-    let keypair = TestEcdsaKeypair::generate()
-        .map_err(|e| format!("generate keypair: {e}"))?;
+    let keypair = TestEcdsaKeypair::generate().map_err(|e| format!("generate keypair: {e}"))?;
 
     // Stand up wiremock to serve the JWKS at <mock>/auth/jwks. Map
     // the canonical SPEC_ISSUER to the mock's URL via JwksCache's
     // register_issuer (issuer `iss` claim stays the spec value;
     // only the JWKS-fetch URL points at wiremock).
     let mock_server = MockServer::start().await;
-    let jwks_doc = keypair
-        .jwks()
-        .map_err(|e| format!("build JWKS doc: {e}"))?;
+    let jwks_doc = keypair.jwks().map_err(|e| format!("build JWKS doc: {e}"))?;
     Mock::given(matchers::method("GET"))
         .and(matchers::path("/auth/jwks"))
         .respond_with(ResponseTemplate::new(200).set_body_json(jwks_doc))
@@ -204,9 +200,12 @@ async fn run_scenario(scenario: &Scenario) -> Result<(), String> {
 
     // Build verifier-side config from the scenario.
     let jwks = Arc::new(JwksCache::with_defaults().map_err(|e| format!("jwks init: {e}"))?);
-    jwks.register_issuer(SPEC_ISSUER.to_string(), format!("{}/auth/jwks", mock_server.uri()))
-        .await
-        .map_err(|e| format!("register issuer: {e}"))?;
+    jwks.register_issuer(
+        SPEC_ISSUER.to_string(),
+        format!("{}/auth/jwks", mock_server.uri()),
+    )
+    .await
+    .map_err(|e| format!("register issuer: {e}"))?;
 
     let mut config = AuthGuardConfig::new(
         scenario
@@ -245,7 +244,9 @@ async fn run_scenario(scenario: &Scenario) -> Result<(), String> {
             }
         }
         config.may_act = Some(Arc::new(StaticMayActPolicy::new(
-            inverted.into_iter().map(|(k, v)| (k, v.into_iter().collect::<Vec<_>>())),
+            inverted
+                .into_iter()
+                .map(|(k, v)| (k, v.into_iter().collect::<Vec<_>>())),
         )));
     }
 
@@ -325,9 +326,9 @@ async fn run_scenario(scenario: &Scenario) -> Result<(), String> {
         }
         (None, Some(expected_slug)) => {
             // Failure path.
-            let err = result.err().ok_or_else(|| {
-                format!("expected error {expected_slug:?} but verify succeeded")
-            })?;
+            let err = result
+                .err()
+                .ok_or_else(|| format!("expected error {expected_slug:?} but verify succeeded"))?;
             if err.reason() != expected_slug {
                 return Err(format!(
                     "reason slug mismatch: expected {expected_slug:?} got {:?}",
@@ -394,7 +395,11 @@ fn mint_token(scenario: &Scenario, keypair: &TestEcdsaKeypair) -> Result<String,
     if scenario.omit_claims.iter().any(|c| c == "kid") {
         return Ok(craft_unsigned_or_hs(scenario, keypair));
     }
-    if scenario.omit_claims.iter().any(|c| c == &scenario.tenant_id_claim) {
+    if scenario
+        .omit_claims
+        .iter()
+        .any(|c| c == &scenario.tenant_id_claim)
+    {
         // Mint without the tenant claim — sign manually with the
         // SDK's keypair to avoid threading "omit" through the helper.
         return craft_signed_omitting_tenant(scenario, keypair);
@@ -403,7 +408,12 @@ fn mint_token(scenario: &Scenario, keypair: &TestEcdsaKeypair) -> Result<String,
     let mut opts = BuildTestTokenOptions::new(
         keypair,
         scenario.issuer.clone(),
-        scenario.audience.as_vec().into_iter().next().unwrap_or_default(),
+        scenario
+            .audience
+            .as_vec()
+            .into_iter()
+            .next()
+            .unwrap_or_default(),
         scenario.subject.clone(),
         scenario.tenant_id.clone(),
     );
@@ -468,9 +478,12 @@ fn craft_unsigned_or_hs(scenario: &Scenario, keypair: &TestEcdsaKeypair) -> Stri
     payload_map.insert("exp".into(), Value::Number(expires_at.into()));
     payload_map.insert(
         "jti".into(),
-        Value::String(scenario.jti.clone().unwrap_or_else(|| {
-            format!("test-jti-{:x}", (now as u64) ^ 0xdead_beef)
-        })),
+        Value::String(
+            scenario
+                .jti
+                .clone()
+                .unwrap_or_else(|| format!("test-jti-{:x}", (now as u64) ^ 0xdead_beef)),
+        ),
     );
     payload_map.insert(
         scenario.tenant_id_claim.clone(),
@@ -530,9 +543,12 @@ fn craft_signed_omitting_tenant(
     payload.insert("exp".into(), Value::Number(expires_at.into()));
     payload.insert(
         "jti".into(),
-        Value::String(scenario.jti.clone().unwrap_or_else(|| {
-            format!("test-jti-{:x}", (now as u64) ^ 0xfeed_face)
-        })),
+        Value::String(
+            scenario
+                .jti
+                .clone()
+                .unwrap_or_else(|| format!("test-jti-{:x}", (now as u64) ^ 0xfeed_face)),
+        ),
     );
     // INTENTIONALLY NOT inserting tenant_id_claim — that's the
     // negative-test scenario's whole point.

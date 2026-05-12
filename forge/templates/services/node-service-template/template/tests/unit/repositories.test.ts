@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildIdentity } from "@forge/platform-auth-node";
+import { buildIdentity } from "../../src/types/auth.js";
 import { PrismaItemRepository } from "../../src/data/repositories/item-repository.js";
 
 const identity = buildIdentity({
