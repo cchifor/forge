@@ -18,7 +18,7 @@
 //! use platform_auth::{AuthGuard, AuthGuardConfig, JwksCache, InMemoryIssuerTrustMap, TenantTrust};
 //!
 //! # async fn _example() -> Result<(), platform_auth::AuthError> {
-//! let jwks = Arc::new(JwksCache::default()?);
+//! let jwks = Arc::new(JwksCache::with_defaults()?);
 //! jwks.register_issuer(
 //!     "http://gatekeeper:5000",
 //!     "http://gatekeeper:5000/auth/jwks",
@@ -63,27 +63,27 @@ mod trust;
 pub use audit::{AuthAuditCallback, AuthAuditRecord, AuthDecision};
 pub use auth_guard::{
     default_algorithms, AuthGuard, AuthGuardConfig, ACT_CHAIN_MAX_DEPTH,
-    DEFAULT_CLOCK_SKEW_SECONDS, DEFAULT_ROLES_CLAIM, DEFAULT_SCOPE_CLAIM,
-    DEFAULT_TENANT_ID_CLAIM, DEFAULT_TENANT_SLUG_CLAIM, REQUIRED_CLAIMS,
+    DEFAULT_CLOCK_SKEW_SECONDS, DEFAULT_ROLES_CLAIM, DEFAULT_SCOPE_CLAIM, DEFAULT_TENANT_ID_CLAIM,
+    DEFAULT_TENANT_SLUG_CLAIM, REQUIRED_CLAIMS,
 };
 pub use errors::AuthError;
 #[cfg(feature = "axum")]
 pub use extractor::{IdentityRejection, OptionalIdentity};
-#[cfg(feature = "axum")]
-pub use layer::{AuthLayer, AuthService, DEFAULT_EXCLUDED_PATHS};
-#[cfg(feature = "axum")]
-pub use require_scope::{RequireScope, RequireScopeService};
 pub use identity::{IdentityContext, PLATFORM_SUPPORT_READ, PLATFORM_SUPPORT_WRITE};
 pub use jwks::{
     JwksCache, JwksCacheOptions, DEFAULT_HTTP_TIMEOUT_SECONDS as DEFAULT_JWKS_HTTP_TIMEOUT_SECONDS,
     DEFAULT_LIFESPAN_SECONDS, DEFAULT_STALE_MAX_SECONDS,
 };
+#[cfg(feature = "axum")]
+pub use layer::{AuthLayer, AuthService, DEFAULT_EXCLUDED_PATHS};
 pub use may_act::{AllowAllMayActPolicy, MayActPolicy, StaticMayActPolicy};
+#[cfg(feature = "axum")]
+pub use require_scope::{RequireScope, RequireScopeService};
 pub use revocation::{InMemoryRevocationStore, NeverRevokedStore, RevocationStore};
 pub use s2s_client::{
     CacheStats, S2SClient, S2SClientConfig, S2SRequestOptions,
-    DEFAULT_HTTP_TIMEOUT_SECONDS as DEFAULT_S2S_HTTP_TIMEOUT_SECONDS,
-    DEFAULT_MAX_CACHE_ENTRIES, DEFAULT_SAFETY_MARGIN_SECONDS,
+    DEFAULT_HTTP_TIMEOUT_SECONDS as DEFAULT_S2S_HTTP_TIMEOUT_SECONDS, DEFAULT_MAX_CACHE_ENTRIES,
+    DEFAULT_SAFETY_MARGIN_SECONDS,
 };
 pub use scopes::{scope_satisfies, ROOT_WILDCARD};
 pub use trust::{CachingIssuerTrustMap, InMemoryIssuerTrustMap, IssuerTrustMap, TenantTrust};

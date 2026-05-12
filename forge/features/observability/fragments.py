@@ -50,11 +50,21 @@ register_fragment(
             ),
             BackendLanguage.RUST: FragmentImplSpec(
                 fragment_dir=_impl("observability", "rust"),
+                # opentelemetry-otlp 0.27's ``grpc-tonic`` feature pulls in
+                # tonic 0.12 → tower 0.4.13. tower 0.4 writes
+                # ``IndexMap<K, V>`` in its ready_cache module, relying on
+                # the ``S = RandomState`` default that only exists when
+                # indexmap-1's non-default ``std`` feature is on. With
+                # cargo's resolver=2, no other dep in this graph activates
+                # std, so tower 0.4 fails to compile under ``cargo clippy``.
+                # Force-enable here so the upstream API regression doesn't
+                # surface as a CI failure.
                 dependencies=(
                     "opentelemetry@0.27",
                     'opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }',
                     'opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"] }',
                     "tracing-opentelemetry@0.28",
+                    'indexmap = { version = "1", features = ["std"] }',
                 ),
                 env_vars=(
                     ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
@@ -132,11 +142,14 @@ register_fragment(
             ),
             BackendLanguage.RUST: FragmentImplSpec(
                 fragment_dir=_impl("observability_otel", "rust"),
+                # See the ``observability`` fragment above for why indexmap
+                # is force-enabled — same tower 0.4 ready_cache transitive.
                 dependencies=(
                     "opentelemetry@0.27",
                     "opentelemetry_sdk@0.27",
                     "opentelemetry-otlp@0.27",
                     "tracing-opentelemetry@0.28",
+                    'indexmap = { version = "1", features = ["std"] }',
                 ),
                 env_vars=(
                     ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),

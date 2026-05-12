@@ -13,7 +13,7 @@
 //! use platform_auth::{AuthGuard, AuthGuardConfig, AuthLayer, JwksCache};
 //!
 //! # async fn _example() -> Result<(), Box<dyn std::error::Error>> {
-//! let jwks = Arc::new(JwksCache::default()?);
+//! let jwks = Arc::new(JwksCache::with_defaults()?);
 //! jwks.register_issuer("http://gatekeeper:5000",
 //!                       "http://gatekeeper:5000/auth/jwks").await?;
 //! let auth = Arc::new(AuthGuard::new(AuthGuardConfig::new("svc-things", jwks))?);
@@ -175,9 +175,9 @@ fn extract_bearer(request: &Request<Body>) -> Result<String, AuthError> {
     let raw = value
         .to_str()
         .map_err(|_| AuthError::InvalidToken("Authorization header is not valid UTF-8".into()))?;
-    let (prefix, token) = raw
-        .split_once(' ')
-        .ok_or_else(|| AuthError::InvalidToken("Authorization header is not a Bearer token".into()))?;
+    let (prefix, token) = raw.split_once(' ').ok_or_else(|| {
+        AuthError::InvalidToken("Authorization header is not a Bearer token".into())
+    })?;
     if !prefix.eq_ignore_ascii_case("bearer") || token.is_empty() {
         return Err(AuthError::InvalidToken(
             "Authorization header is not a Bearer token".into(),
@@ -194,7 +194,8 @@ fn extract_bearer(request: &Request<Body>) -> Result<String, AuthError> {
 /// contract preserved. `pub(crate)` so the extractor's
 /// `IdentityRejection` reuses it.
 pub(crate) fn auth_error_response(err: AuthError) -> Response {
-    let status = StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status =
+        StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let mut response = Json(json!({
         "type": format!("https://forge.dev/errors/{}", err.reason()),
         "title": err.reason(),

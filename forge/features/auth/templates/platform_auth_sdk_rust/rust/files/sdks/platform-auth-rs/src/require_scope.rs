@@ -13,7 +13,7 @@
 //! use platform_auth::{AuthGuard, AuthGuardConfig, AuthLayer, JwksCache, RequireScope};
 //!
 //! # async fn _example() -> Result<(), Box<dyn std::error::Error>> {
-//! let jwks = Arc::new(JwksCache::default()?);
+//! let jwks = Arc::new(JwksCache::with_defaults()?);
 //! let auth = Arc::new(AuthGuard::new(AuthGuardConfig::new("svc-things", jwks))?);
 //!
 //! let app = Router::<()>::new()

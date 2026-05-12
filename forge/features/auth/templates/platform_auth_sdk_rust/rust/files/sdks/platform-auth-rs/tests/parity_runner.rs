@@ -203,7 +203,7 @@ async fn run_scenario(scenario: &Scenario) -> Result<(), String> {
         .await;
 
     // Build verifier-side config from the scenario.
-    let jwks = Arc::new(JwksCache::default().map_err(|e| format!("jwks init: {e}"))?);
+    let jwks = Arc::new(JwksCache::with_defaults().map_err(|e| format!("jwks init: {e}"))?);
     jwks.register_issuer(SPEC_ISSUER.to_string(), format!("{}/auth/jwks", mock_server.uri()))
         .await
         .map_err(|e| format!("register issuer: {e}"))?;
