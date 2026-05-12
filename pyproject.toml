@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "forge"
 version = "1.0.0"
 description = "CLI tool to generate and orchestrate full-stack projects."
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "copier>=9.0.0",
     "questionary>=2.0.0",
@@ -188,7 +188,7 @@ unknown-argument = "error"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 # Mirror [tool.ty.src].exclude — the colocated feature template trees under
 # forge/features/<name>/templates/ contain scaffold sources that import the
 # generated project's namespace (``app.*`` and third-party deps that aren't

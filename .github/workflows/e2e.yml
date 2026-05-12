@@ -34,7 +34,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        # Forge declares ``requires-python = ">=3.13"``; older versions
+        # would expand CI runtime without protecting any contract we owe
+        # downstream users.
+        python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
