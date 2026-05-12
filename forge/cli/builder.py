@@ -240,6 +240,16 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
     options = _build_options(args, cfg)
 
     include_keycloak = include_auth
+    # ``auth.mode=generate`` enables the platform-auth stack, which needs
+    # both Keycloak (for human login) and Redis (for BFF sessions + gatekeeper).
+    # When the project disables Keycloak the platform-auth model can't run —
+    # specifically, the platform_auth_gatekeeper fragment's compose entry
+    # declares ``depends_on: { redis, keycloak }`` and base
+    # docker-compose.yml.j2 only renders those services under ``include_keycloak``.
+    # Without this coercion, ``docker compose up`` fails validation with
+    # ``service "gatekeeper" depends on undefined service "redis"``.
+    if not include_keycloak and options.get("auth.mode", "generate") != "none":
+        options["auth.mode"] = "none"
     keycloak_port = r.get("keycloak_port", "keycloak", "port", default=18080)
     kc_realm = r.get("keycloak_realm", "keycloak", "realm", default=DEFAULT_REALM)
     kc_client_id = r.get(
