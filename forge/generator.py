@@ -39,6 +39,8 @@ from forge.docker_manager import (
     render_init_db,
     render_keycloak_realm,
     render_nginx_conf,
+    render_workspace_cargo_toml,
+    render_workspace_package_json,
 )
 from forge.errors import (
     FILESYSTEM_IO_ERROR,
@@ -203,6 +205,12 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         )
 
         register_fragment_services(fragment_roots_from_plan(plan.ordered))
+        # Workspace root manifests (npm + Cargo). Render before compose so
+        # the compose entries' ``additional_contexts: { project_root: . }``
+        # references resolve. Each renderer is a no-op when the project
+        # has no consumer of its language (Python+Flutter-only skips both).
+        render_workspace_package_json(config, project_root, plan=plan)
+        render_workspace_cargo_toml(config, project_root, plan=plan)
         with phase_timer(_logger, "generate.compose.render"):
             render_compose(config, project_root, plan=plan)
         # init-db creates a database per backend plus keycloak's own db.

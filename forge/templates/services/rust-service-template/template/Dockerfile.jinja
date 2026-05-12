@@ -1,35 +1,68 @@
-# Multi-stage build. Runtime image runs as non-root, exposes a
-# curl-based healthcheck against /api/v1/health/live, and defers the
-# database migration to a separate compose job (see
-# docker-compose.fragment.yaml.jinja).
+# Multi-stage build using Cargo workspaces. The build context is this
+# service directory plus two `additional_contexts:` from compose:
+#   * `project_root` — exposes the workspace-root Cargo.toml + Cargo.lock
+#     so cargo resolves the workspace topology at build time.
+#   * `sdks` — exposes the project-root sdks/ tree so `path = "../sdks/<name>"`
+#     deps resolve against /workspace/sdks/<name>/ in the builder image
+#     (BuildKit forbids paths above the main context without this).
+#
+# Build expects the workspace layout:
+#   /workspace/                       (WORKDIR)
+#     Cargo.toml + Cargo.lock            (from project_root context)
+#     sdks/...                            (from sdks context)
+#     services/{{ project_slug }}/         (this service — main context)
 
 # --- Builder Stage ---
 FROM rust:slim AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency manifests for layer caching
-COPY Cargo.toml Cargo.lock* ./
-COPY migrations ./migrations/
+# Workspace root: Cargo.toml + Cargo.lock declare the workspace topology.
+COPY --from=project_root Cargo.toml Cargo.lock* ./
 
-# Build dummy to cache dependencies (migrations dir must exist for sqlx::migrate! macro)
-RUN mkdir src && mkdir -p src/bin && echo "fn main() {}" > src/main.rs && echo "fn main() {}" > src/bin/migrate.rs && cargo build --release && rm -rf src
+# In-tree SDK source — path deps in Cargo.toml resolve against
+# /workspace/sdks/<name>/ at build time.
+COPY --from=sdks . ./sdks/
 
-# Copy real source and force rebuild (touch ensures sqlx::migrate! re-embeds migrations)
-COPY src ./src/
-RUN touch src/main.rs src/bin/migrate.rs && cargo build --release
+# This service's manifest + migrations ahead of source so the cargo dep
+# layer caches independently from src/ edits. sqlx::migrate! requires
+# the migrations dir to exist for compile-time validation.
+COPY Cargo.toml ./services/{{ project_slug }}/
+COPY migrations ./services/{{ project_slug }}/migrations/
+
+# Dep-priming dummy build at the workspace level. Cargo resolves every
+# path = "../sdks/<name>" against the workspace root, downloads + builds
+# every transitive dep once, and caches the resulting target/ tree.
+RUN mkdir -p services/{{ project_slug }}/src/bin \
+    && echo "fn main() {}" > services/{{ project_slug }}/src/main.rs \
+    && echo "fn main() {}" > services/{{ project_slug }}/src/bin/migrate.rs \
+    && cargo build --release --workspace \
+    && rm -rf services/{{ project_slug }}/src
+
+# Copy real source and force rebuild only the binaries we ship — the
+# workspace deps (incl. the SDK) stay cached. ``touch`` invalidates the
+# bin targets so sqlx::migrate! re-embeds the migrations.
+COPY src ./services/{{ project_slug }}/src/
+RUN touch services/{{ project_slug }}/src/main.rs services/{{ project_slug }}/src/bin/migrate.rs \
+    && cargo build --release -p {{ project_name }}
 
 # --- Runtime Stage ---
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates libssl3 curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/{{ project_name }} /app/{{ project_name }}
-COPY --from=builder /app/target/release/migrate /app/migrate
+# Binaries live at /workspace/target/release/ — cargo workspaces use a
+# shared target/ directory at the workspace root, not per-package.
+COPY --from=builder /workspace/target/release/{{ project_name }} /app/{{ project_name }}
+COPY --from=builder /workspace/target/release/migrate /app/migrate
 
 RUN groupadd --gid 10001 appuser \
     && useradd --uid 10001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser \

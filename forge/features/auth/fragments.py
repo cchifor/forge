@@ -378,9 +378,13 @@ register_fragment(
         implementations={
             BackendLanguage.RUST: FragmentImplSpec(
                 fragment_dir=_impl("platform_auth_rust_middleware", "rust"),
-                # Backend-scoped (default).
+                # Backend-scoped (default). Path is two levels up from
+                # ``<project>/services/<name>/Cargo.toml``: ``..`` →
+                # ``services/``, ``../..`` → project root, then ``sdks/``.
+                # Earlier shipped as one level which only worked when
+                # services/ was the project root.
                 dependencies=(
-                    'platform-auth = { path = "../sdks/platform-auth-rs" }',
+                    'platform-auth = { path = "../../sdks/platform-auth-rs" }',
                     'serde_json = "1"',
                 ),
             ),
