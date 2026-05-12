@@ -68,11 +68,7 @@ pub async fn update(
     repo.update(identity, id, data).await
 }
 
-pub async fn delete(
-    pool: &PgPool,
-    identity: &IdentityContext,
-    id: Uuid,
-) -> Result<(), AppError> {
+pub async fn delete(pool: &PgPool, identity: &IdentityContext, id: Uuid) -> Result<(), AppError> {
     let repo = PgItemRepository::new(pool.clone());
     repo.get_by_id(identity, id)
         .await?

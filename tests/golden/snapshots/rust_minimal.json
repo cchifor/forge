@@ -542,15 +542,15 @@
     },
     "services/api/src/routes/items.rs": {
       "size": 1994,
-      "sha256": "51d42da7a979d931"
+      "sha256": "21a843a6e1d7532e"
     },
     "services/api/src/routes/mod.rs": {
       "size": 542,
       "sha256": "907d248303776cf4"
     },
     "services/api/src/services/item_service.rs": {
-      "size": 2259,
-      "sha256": "8b054789ff9e56ae"
+      "size": 2244,
+      "sha256": "7301464f759242e1"
     },
     "services/api/src/services/mod.rs": {
       "size": 57,
