@@ -355,12 +355,11 @@ export class S2SClient {
         grant: params.get("grant_type"),
       });
     }
-    let expiresIn = payload.expires_in;
-    if (typeof expiresIn !== "number" || expiresIn <= 0) {
-      // Spec-compliant servers always return expires_in; default
-      // defensively rather than refusing to cache.
-      expiresIn = 300;
-    }
+    const rawExpiresIn = payload.expires_in;
+    // Spec-compliant servers always return expires_in; default
+    // defensively rather than refusing to cache.
+    const expiresIn: number =
+      typeof rawExpiresIn === "number" && rawExpiresIn > 0 ? rawExpiresIn : 300;
     const ttlMs = Math.max(0, (expiresIn - this.safetyMarginSeconds) * 1000);
     return {
       token: accessToken,

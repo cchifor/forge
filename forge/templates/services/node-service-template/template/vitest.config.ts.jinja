@@ -1,0 +1,19 @@
+import { defineConfig } from "vitest/config";
+
+// Vitest config — defaults the ``test`` script (and the matrix-verify
+// lane's ``vitest run``) to unit tests only. Integration tests under
+// ``tests/integration/`` require running infra (postgres, gatekeeper,
+// keycloak) and run in the docker-compose-driven smoke lane instead.
+//
+// Run integration tests with ``npm run test:integration`` once your
+// local ``docker compose up`` stack is healthy.
+
+export default defineConfig({
+  test: {
+    include: ["tests/unit/**/*.test.ts", "src/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "tests/integration/**"],
+    environment: "node",
+    globals: false,
+    passWithNoTests: true,
+  },
+});

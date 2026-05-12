@@ -17,6 +17,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check src/ test/",
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.10.0",
+    "fastify": "^5.0.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },

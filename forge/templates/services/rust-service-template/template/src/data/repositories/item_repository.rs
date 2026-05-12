@@ -21,7 +21,11 @@ pub trait ItemRepository: Send + Sync {
         params: ListParams,
     ) -> Result<PaginatedResponse<Item>, AppError>;
 
-    async fn get_by_id(&self, identity: &IdentityContext, id: Uuid) -> Result<Option<Item>, AppError>;
+    async fn get_by_id(
+        &self,
+        identity: &IdentityContext,
+        id: Uuid,
+    ) -> Result<Option<Item>, AppError>;
 
     async fn find_by_name(
         &self,
@@ -126,7 +130,11 @@ impl ItemRepository for PgItemRepository {
         })
     }
 
-    async fn get_by_id(&self, identity: &IdentityContext, id: Uuid) -> Result<Option<Item>, AppError> {
+    async fn get_by_id(
+        &self,
+        identity: &IdentityContext,
+        id: Uuid,
+    ) -> Result<Option<Item>, AppError> {
         let item =
             sqlx::query_as::<_, Item>("SELECT * FROM items WHERE id = $1 AND customer_id = $2")
                 .bind(id)
@@ -218,7 +226,7 @@ impl ItemRepository for PgItemRepository {
         if sets.is_empty() {
             // Nothing to patch — return the row unchanged.
             return self
-                .get_by_id(tenant, id)
+                .get_by_id(identity, id)
                 .await?
                 .ok_or_else(|| AppError::not_found("Item", id.to_string()));
         }

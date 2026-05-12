@@ -22,7 +22,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, fmt};
 
 mod app;
-mod client;
 mod config;
 mod data;
 mod db;

@@ -91,13 +91,11 @@ pub async fn init_auth() -> Result<(), Box<dyn std::error::Error>> {
     AUTH_GUARD
         .set(StdArc::new(guard))
         .map_err(|_| "init_auth() called more than once")?;
-    let _ = (
-        // Suppress unused-import warnings when feature gating prunes
-        // optional types. `Arc` and `TenantTrust` show up in extensions
-        // helpers consumers reach for (e.g., wiring a real trust map).
-        Arc::clone::<()>,
-        std::marker::PhantomData::<(InMemoryIssuerTrustMap, TenantTrust)>,
-    );
+    // Suppress unused-import warnings when feature gating prunes
+    // optional types. `Arc` and `TenantTrust` show up in extensions
+    // helpers consumers reach for (e.g., wiring a real trust map).
+    let _: std::marker::PhantomData<(Arc<()>, InMemoryIssuerTrustMap, TenantTrust)> =
+        std::marker::PhantomData;
     Ok(())
 }
 

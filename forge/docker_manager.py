@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from forge.config import (
     DEFAULT_REALM,
     TRAEFIK_DASHBOARD_PORT,
+    BackendLanguage,
     FrontendFramework,
     ProjectConfig,
 )
@@ -133,6 +134,116 @@ def render_compose(
     compose_path = project_root / "docker-compose.yml"
     compose_path.write_text(output, encoding="utf-8")
     return compose_path
+
+
+# -- Workspace root manifests -------------------------------------------------
+#
+# Generated projects are flat monorepos (apps/, services/, sdks/). With
+# cross-package source deps (``file:../sdks/<name>`` for Node,
+# ``path = "../sdks/<name>"`` for Rust), they need a workspace root so:
+#
+#   - the in-tree SDK (e.g. ``sdks/platform-auth-node``) builds before
+#     its consumers run ``tsc --noEmit`` against missing ``dist/``
+#     artifacts (matrix-verify Node was tripping on this), and
+#   - the Rust SDK path-dep resolves at the workspace root rather than
+#     against the leaf service dir whose context Docker can't escape
+#     (matrix-verify + smoke Rust were tripping on this).
+#
+# Renders are conditional: emit ``package.json`` only when the project
+# has a Node consumer (Node service, Vue/Svelte frontend, or the Node
+# SDK fragment); emit ``Cargo.toml`` only when the project has a Rust
+# consumer (Rust service or the Rust SDK fragment).
+
+
+def _project_has_node(config: ProjectConfig, active_fragments: set[str]) -> bool:
+    if any(b.language == BackendLanguage.NODE for b in config.backends):
+        return True
+    if config.frontend is not None and config.frontend.framework in (
+        FrontendFramework.VUE,
+        FrontendFramework.SVELTE,
+    ):
+        return True
+    return "platform_auth_sdk_node" in active_fragments
+
+
+def _project_has_rust(config: ProjectConfig, active_fragments: set[str]) -> bool:
+    if any(b.language == BackendLanguage.RUST for b in config.backends):
+        return True
+    return "platform_auth_sdk_rust" in active_fragments
+
+
+def render_workspace_package_json(
+    config: ProjectConfig,
+    project_root: Path,
+    plan: ResolvedPlan | None = None,
+) -> Path | None:
+    """Render the workspace-root ``package.json`` for npm workspaces.
+
+    Returns the written path, or ``None`` when the project has no Node
+    consumer (Python+Flutter-only scenarios skip this).
+    """
+    active = {rf.fragment.name for rf in plan.ordered} if plan is not None else set()
+    if not _project_has_node(config, active):
+        return None
+    env = _jinja_env()
+    template = env.get_template("deploy/package.json.j2")
+    output = template.render(
+        {
+            "project_slug": config.project_slug,
+            "project_name": config.project_name,
+        }
+    )
+    pkg_path = project_root / "package.json"
+    pkg_path.write_text(output, encoding="utf-8")
+    return pkg_path
+
+
+def render_workspace_cargo_toml(
+    config: ProjectConfig,
+    project_root: Path,
+    plan: ResolvedPlan | None = None,
+) -> Path | None:
+    """Render the workspace-root ``Cargo.toml`` for Cargo workspaces.
+
+    Returns the written path, or ``None`` when the project has no Rust
+    consumer.
+    """
+    active = {rf.fragment.name for rf in plan.ordered} if plan is not None else set()
+    if not _project_has_rust(config, active):
+        return None
+
+    rust_backends = [
+        {"name": b.name} for b in config.backends if b.language == BackendLanguage.RUST
+    ]
+    # The Rust SDK ships at ``sdks/platform-auth-rs/`` per the fragment's
+    # files/ tree. Only listing one SDK today; new Rust SDKs would append
+    # to this list when their fragments enter the plan.
+    rust_sdk_members: list[str] = []
+    if "platform_auth_sdk_rust" in active:
+        rust_sdk_members.append("sdks/platform-auth-rs")
+
+    # Pick a workspace edition: the first Rust backend's edition wins. If
+    # there are no Rust backends but the SDK is present (unusual but
+    # legal), fall back to the SDK's edition.
+    edition = "2024"
+    for b in config.backends:
+        if b.language == BackendLanguage.RUST:
+            edition = b.rust_edition or "2024"
+            break
+
+    env = _jinja_env()
+    template = env.get_template("deploy/Cargo.toml.j2")
+    output = template.render(
+        {
+            "project_name": config.project_name,
+            "rust_backends": rust_backends,
+            "rust_sdk_members": rust_sdk_members,
+            "rust_edition": edition,
+        }
+    )
+    cargo_path = project_root / "Cargo.toml"
+    cargo_path.write_text(output, encoding="utf-8")
+    return cargo_path
 
 
 def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Path:

@@ -1,15 +1,41 @@
-# Multi-stage build. The runtime image runs as a non-root user, exposes a
-# Python-free urllib healthcheck against /api/v1/health/live, and defers
-# the database migration to a separate compose job (see
-# docker-compose.fragment.yaml.jinja).
+# Multi-stage build with npm workspaces. The build context is this
+# service directory, plus two `additional_contexts:` from compose:
+#   * `project_root` — exposes the workspace root's package.json +
+#     package-lock.json so `npm install --workspaces` knows the topology.
+#   * `sdks` — exposes the project-root sdks/ tree so in-tree SDK source
+#     (e.g. sdks/platform-auth-node) is reachable. Without this the
+#     generated `file:../sdks/<name>` deps fail to resolve at build time
+#     (BuildKit forbids paths above the main context).
+#
+# Build expects the workspace layout:
+#   /workspace/                       (WORKDIR)
+#     package.json + package-lock.json   (from project_root context)
+#     sdks/...                            (from sdks context)
+#     services/{{ project_slug }}/         (this service — main context)
 
 # --- Builder Stage ---
 FROM node:{{ node_version }}-slim AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY package.json package-lock.json* ./
-RUN npm install
+# Workspace root manifests — declare workspaces + lockfile topology.
+COPY --from=project_root package.json package-lock.json* ./
+
+# In-tree SDK source. Each SDK's `prepare` script runs during the
+# workspace install below to produce its dist/ artifacts.
+COPY --from=sdks . ./sdks/
+
+# This service's manifest, ahead of source, so the dep layer caches
+# independently from src/ edits.
+COPY package.json ./services/{{ project_slug }}/
+
+# Workspace install: links every workspace member into the shared
+# node_modules/ at the root and runs each member's `prepare` hook —
+# the SDK's `prepare: tsc` produces sdks/platform-auth-node/dist/
+# before this service's downstream `tsc` ever runs.
+RUN npm install --workspaces --include-workspace-root
+
+WORKDIR /workspace/services/{{ project_slug }}
 
 COPY prisma ./prisma/
 RUN npx prisma generate
@@ -25,21 +51,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Mirror the workspace layout in the runtime image so the workspace
+# symlinks in node_modules/ resolve correctly. node_modules is copied
+# verbatim from the builder rather than re-installed — workspace
+# packages live inside the workspace tree, not in a public registry.
+WORKDIR /workspace/services/{{ project_slug }}
 
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+COPY --from=builder /workspace/package.json /workspace/package-lock.json* /workspace/
+COPY --from=builder /workspace/node_modules /workspace/node_modules/
+COPY --from=builder /workspace/sdks /workspace/sdks/
+COPY --from=builder /workspace/services/{{ project_slug }}/node_modules ./node_modules/
+COPY --from=builder /workspace/services/{{ project_slug }}/dist ./dist/
+COPY --from=builder /workspace/services/{{ project_slug }}/prisma ./prisma/
+COPY --from=builder /workspace/services/{{ project_slug }}/package.json ./
 
-COPY --from=builder /app/dist ./dist/
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY prisma ./prisma/
 COPY config ./config/
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
 RUN groupadd --gid 10001 appuser \
     && useradd --uid 10001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /workspace
 USER appuser
 
 ENV NODE_ENV=production
@@ -48,4 +80,4 @@ EXPOSE {{ server_port }}
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -fsS "http://localhost:{{ server_port }}/api/v1/health/live" || exit 1
 
-CMD ["/app/entrypoint.sh"]
+CMD ["/workspace/services/{{ project_slug }}/entrypoint.sh"]
