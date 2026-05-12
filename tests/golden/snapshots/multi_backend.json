@@ -33,7 +33,7 @@
       "sha256": "9c0878c6afdc15c6"
     },
     "forge.toml": {
-      "size": 59105,
+      "size": 59062,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -641,8 +641,8 @@
       "sha256": "86c7677f63a270e0"
     },
     "services/api-node/src/middleware/logging.ts": {
-      "size": 620,
-      "sha256": "dc604326f61b395a"
+      "size": 942,
+      "sha256": "b0cd47769dceb8e2"
     },
     "services/api-node/src/routes/health.ts": {
       "size": 639,
@@ -685,8 +685,8 @@
       "sha256": "89ca92bcfd47d4c3"
     },
     "services/api-node/src/types/auth.ts": {
-      "size": 1238,
-      "sha256": "75a06d4d59545314"
+      "size": 2366,
+      "sha256": "13617898a495428a"
     },
     "services/api-node/tests/integration/health.test.ts": {
       "size": 1330,
@@ -709,12 +709,12 @@
       "sha256": "d38d5b45b2511067"
     },
     "services/api-node/tests/unit/item.service.test.ts": {
-      "size": 5297,
-      "sha256": "7d476324f1555695"
+      "size": 5295,
+      "sha256": "98c0beedb49d6d7b"
     },
     "services/api-node/tests/unit/repositories.test.ts": {
-      "size": 2777,
-      "sha256": "7863bde099cc9278"
+      "size": 2775,
+      "sha256": "c6a45caf8de13a3f"
     },
     "services/api-node/tests/utils/errors.ts": {
       "size": 1412,

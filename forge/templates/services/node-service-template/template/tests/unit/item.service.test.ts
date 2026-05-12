@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildIdentity } from "@forge/platform-auth-node";
+import { buildIdentity } from "../../src/types/auth.js";
 import { prisma } from "../../src/lib/prisma.js";
 import * as itemService from "../../src/services/item.service.js";
 import { NotFoundError, AlreadyExistsError } from "../../src/lib/errors.js";
