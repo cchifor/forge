@@ -380,8 +380,8 @@ register_fragment(
                 fragment_dir=_impl("platform_auth_rust_middleware", "rust"),
                 # Backend-scoped (default).
                 dependencies=(
-                    "platform-auth = { path = \"../sdks/platform-auth-rs\" }",
-                    "serde_json = \"1\"",
+                    'platform-auth = { path = "../sdks/platform-auth-rs" }',
+                    'serde_json = "1"',
                 ),
             ),
         },
