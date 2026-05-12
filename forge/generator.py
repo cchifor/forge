@@ -675,12 +675,14 @@ def _git_init(project_root: Path) -> None:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                # 60s timeout — ``git add`` on a freshly-scaffolded project
-                # with the workspace SDK trees can run a few thousand
-                # ``hashAndCacheFile`` calls under cold I/O. The previous
-                # 30s ceiling tripped on Windows-3.11 CI runners where
-                # NTFS + AV scanning makes the first staging pass slow.
-                timeout=60,
+                # 120s timeout — ``git add`` on a freshly-scaffolded project
+                # with the workspace SDK trees runs a few thousand
+                # ``hashAndCacheFile`` calls under cold I/O. Windows
+                # runners with NTFS + AV scanning have been observed
+                # taking 60s+ on first staging pass (30s tripped first,
+                # then 60s). 120s gives margin without inflating the test
+                # budget — the matrix CI per-cell wall-clock is 5min+.
+                timeout=120,
                 check=True,
                 env=step_env,
             )
@@ -689,7 +691,7 @@ def _git_init(project_root: Path) -> None:
                 "git executable not found on PATH; install git to scaffold a project"
             ) from e
         except subprocess.TimeoutExpired as e:
-            raise GeneratorError(f"git {step} timed out after 60s") from e
+            raise GeneratorError(f"git {step} timed out after 120s") from e
         except subprocess.CalledProcessError as e:
             stderr_tail = ""
             if e.stderr:
