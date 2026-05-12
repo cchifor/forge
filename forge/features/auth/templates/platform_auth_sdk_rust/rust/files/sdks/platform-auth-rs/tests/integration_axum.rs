@@ -56,7 +56,7 @@ async fn setup() -> (Arc<AuthGuard>, TestEcdsaKeypair, MockServer) {
         .mount(&mock)
         .await;
 
-    let jwks = Arc::new(JwksCache::default().expect("jwks init"));
+    let jwks = Arc::new(JwksCache::with_defaults().expect("jwks init"));
     jwks.register_issuer(TEST_ISSUER.to_string(), format!("{}/auth/jwks", mock.uri()))
         .await
         .expect("register issuer");
@@ -100,7 +100,10 @@ fn build_app(guard: Arc<AuthGuard>) -> Router {
         )
         .route(
             "/things/admin",
-            get(things_handler).layer(RequireScope::new(["things:admin", "platform:support:write"])),
+            get(things_handler).layer(RequireScope::new([
+                "things:admin",
+                "platform:support:write",
+            ])),
         )
         .route("/health", get(health_handler))
         .layer(AuthLayer::new(guard))

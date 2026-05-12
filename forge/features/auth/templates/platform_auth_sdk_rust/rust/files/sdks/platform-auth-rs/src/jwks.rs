@@ -73,9 +73,7 @@ pub struct JwksCache {
 impl JwksCache {
     pub fn new(options: JwksCacheOptions) -> Result<Self, AuthError> {
         if options.lifespan.is_zero() {
-            return Err(AuthError::InvalidToken(
-                "lifespan must be positive".into(),
-            ));
+            return Err(AuthError::InvalidToken("lifespan must be positive".into()));
         }
         if options.stale_max < options.lifespan {
             return Err(AuthError::InvalidToken(
@@ -93,8 +91,12 @@ impl JwksCache {
         })
     }
 
-    /// Construct with default lifetimes.
-    pub fn default() -> Result<Self, AuthError> {
+    /// Construct with default lifetimes. Named ``with_defaults`` rather
+    /// than ``default`` because the standard ``Default::default()`` trait
+    /// returns ``Self`` (infallible); this returns ``Result<Self,
+    /// AuthError>``, so a Default impl would be a footgun (the panic
+    /// would only fire at runtime when the options are bad).
+    pub fn with_defaults() -> Result<Self, AuthError> {
         Self::new(JwksCacheOptions::default())
     }
 
@@ -112,9 +114,7 @@ impl JwksCache {
             return Err(AuthError::InvalidToken("issuer must be non-empty".into()));
         }
         if jwks_uri.is_empty() {
-            return Err(AuthError::InvalidToken(
-                "jwks_uri must be non-empty".into(),
-            ));
+            return Err(AuthError::InvalidToken("jwks_uri must be non-empty".into()));
         }
         let mut issuers = self.issuers.write().await;
         if let Some(existing) = issuers.get(&issuer) {
@@ -145,16 +145,14 @@ impl JwksCache {
     /// Returns the `DecodingKey` for `(issuer, kid)`. Refreshes the
     /// JWKS document on miss or staleness; serves stale on upstream
     /// failure for up to `stale_max`.
-    pub async fn get_signing_key(
-        &self,
-        issuer: &str,
-        kid: &str,
-    ) -> Result<DecodingKey, AuthError> {
+    pub async fn get_signing_key(&self, issuer: &str, kid: &str) -> Result<DecodingKey, AuthError> {
         let entry = {
             let issuers = self.issuers.read().await;
             issuers
                 .get(issuer)
-                .ok_or_else(|| AuthError::InvalidToken(format!("issuer not registered: {issuer:?}")))?
+                .ok_or_else(|| {
+                    AuthError::InvalidToken(format!("issuer not registered: {issuer:?}"))
+                })?
                 .clone()
         };
 

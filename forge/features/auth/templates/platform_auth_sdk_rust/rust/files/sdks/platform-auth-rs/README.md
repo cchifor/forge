@@ -28,7 +28,7 @@ platform-auth = { path = "../sdks/platform-auth-rs", features = ["axum"] }
 use std::sync::Arc;
 use platform_auth::{AuthGuard, AuthGuardConfig, JwksCache, InMemoryIssuerTrustMap, TenantTrust};
 
-let jwks = Arc::new(JwksCache::default()?);
+let jwks = Arc::new(JwksCache::with_defaults()?);
 jwks.register_issuer(
     "http://gatekeeper:5000",
     "http://gatekeeper:5000/auth/jwks",

@@ -24,7 +24,7 @@ use std::sync::{Arc, OnceLock};
 use axum::{
     body::Body,
     extract::Request,
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Json, Response},
 };
@@ -72,7 +72,8 @@ pub async fn init_auth() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| "SERVICE_AUDIENCE environment variable is required for auth wiring")?;
 
     let jwks = StdArc::new(JwksCache::new(JwksCacheOptions::default())?);
-    jwks.register_issuer(issuer.clone(), format!("{issuer}/auth/jwks")).await?;
+    jwks.register_issuer(issuer.clone(), format!("{issuer}/auth/jwks"))
+        .await?;
 
     let mut config = AuthGuardConfig::new(audience, jwks);
     if let Ok(claim) = std::env::var("TENANT_ID_CLAIM") {
@@ -83,21 +84,20 @@ pub async fn init_auth() -> Result<(), Box<dyn std::error::Error>> {
     // deny-all (no actor authorized for any audience). Same defaults
     // as the Node `bootstrapAuth`.
     config.trust_map = Some(StdArc::new(InMemoryIssuerTrustMap::new()));
-    config.may_act = Some(StdArc::new(StaticMayActPolicy::new(
-        std::iter::empty::<(String, Vec<String>)>(),
-    )));
+    config.may_act = Some(StdArc::new(StaticMayActPolicy::new(std::iter::empty::<(
+        String,
+        Vec<String>,
+    )>())));
 
     let guard = AuthGuard::new(config)?;
     AUTH_GUARD
         .set(StdArc::new(guard))
         .map_err(|_| "init_auth() called more than once")?;
-    let _ = (
-        // Suppress unused-import warnings when feature gating prunes
-        // optional types. `Arc` and `TenantTrust` show up in extensions
-        // helpers consumers reach for (e.g., wiring a real trust map).
-        Arc::clone::<()>,
-        std::marker::PhantomData::<(InMemoryIssuerTrustMap, TenantTrust)>,
-    );
+    // Suppress unused-import warnings when feature gating prunes
+    // optional types. `Arc` and `TenantTrust` show up in extensions
+    // helpers consumers reach for (e.g., wiring a real trust map).
+    let _: std::marker::PhantomData<(Arc<()>, InMemoryIssuerTrustMap, TenantTrust)> =
+        std::marker::PhantomData;
     Ok(())
 }
 
@@ -108,10 +108,7 @@ pub async fn init_auth() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// On verification failure, returns an RFC 7807 problem response
 /// with the `AuthError`'s status code and reason slug.
-pub async fn auth_middleware(
-    request: Request<Body>,
-    next: Next,
-) -> Result<Response, Response> {
+pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Response, Response> {
     // Skip the predefined paths so probes work without auth.
     let path = request.uri().path();
     if EXCLUDED_PATHS.contains(&path) {
@@ -139,8 +136,27 @@ pub async fn auth_middleware(
         Err(err) => return Err(map_auth_error(&err)),
     };
 
+    // Convert the SDK's IdentityContext to the consumer's local type
+    // before stashing in request extensions. Handlers in the base
+    // service template extract ``&crate::identity::IdentityContext``;
+    // inserting the SDK's nominal type would leave them looking up a
+    // different ``TypeId`` from the same extension map. The two shapes
+    // are field-by-field aligned by design.
+    // SDK uses ``HashSet<String>`` for scopes/roles (set semantics for
+    // wildcard scope-match). The local type uses ``Vec<String>`` for
+    // ergonomic iteration order in handler code. Collect once at the
+    // boundary so neither side has to convert per-access.
+    let local = crate::identity::IdentityContext {
+        tenant_id: identity.tenant_id,
+        tenant_slug: identity.tenant_slug.clone(),
+        subject: identity.subject.clone(),
+        scopes: identity.scopes.iter().cloned().collect(),
+        roles: identity.roles.iter().cloned().collect(),
+        actor: identity.actor.clone(),
+    };
+
     let mut request = request;
-    request.extensions_mut().insert(identity);
+    request.extensions_mut().insert(local);
     Ok(next.run(request).await)
 }
 
@@ -152,9 +168,9 @@ fn extract_bearer(request: &Request<Body>) -> Result<String, AuthError> {
     let raw = value
         .to_str()
         .map_err(|_| AuthError::InvalidToken("Authorization header is not valid UTF-8".into()))?;
-    let (prefix, token) = raw
-        .split_once(' ')
-        .ok_or_else(|| AuthError::InvalidToken("Authorization header is not a Bearer token".into()))?;
+    let (prefix, token) = raw.split_once(' ').ok_or_else(|| {
+        AuthError::InvalidToken("Authorization header is not a Bearer token".into())
+    })?;
     if !prefix.eq_ignore_ascii_case("bearer") || token.is_empty() {
         return Err(AuthError::InvalidToken(
             "Authorization header is not a Bearer token".into(),
@@ -164,8 +180,8 @@ fn extract_bearer(request: &Request<Body>) -> Result<String, AuthError> {
 }
 
 fn map_auth_error(err: &AuthError) -> Response {
-    let status = StatusCode::from_u16(err.status_code())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status =
+        StatusCode::from_u16(err.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let mut response = problem_response(status, err.reason(), &err.to_string(), None);
     if status == StatusCode::UNAUTHORIZED {
         response

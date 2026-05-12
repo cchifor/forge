@@ -35,7 +35,7 @@ async fn setup() -> (Arc<JwksCache>, TestEcdsaKeypair, MockServer) {
         .mount(&mock)
         .await;
 
-    let jwks = Arc::new(JwksCache::default().expect("jwks init"));
+    let jwks = Arc::new(JwksCache::with_defaults().expect("jwks init"));
     jwks.register_issuer(TEST_ISSUER.to_string(), format!("{}/auth/jwks", mock.uri()))
         .await
         .expect("register issuer");
@@ -92,10 +92,7 @@ async fn audit_callback_fires_with_full_record_on_allow() {
         record.scopes,
         Some(vec!["things:read".to_string(), "things:write".to_string()])
     );
-    assert!(
-        record.jti.is_some(),
-        "jti must be populated on allow"
-    );
+    assert!(record.jti.is_some(), "jti must be populated on allow");
     assert_eq!(record.iss.as_deref(), Some(TEST_ISSUER));
     assert_eq!(record.reason, None, "reason is reserved for deny path");
 }

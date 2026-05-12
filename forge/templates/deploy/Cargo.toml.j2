@@ -1,0 +1,24 @@
+# Workspace root for {{ project_name }} — declares the Rust services and
+# in-tree SDKs as a Cargo workspace so ``path = "../sdks/<name>"`` deps
+# resolve at the workspace root and ``cargo build --workspace`` compiles
+# everything once with shared target/.
+#
+# Members are listed explicitly (not globbed) because Cargo errors on
+# workspace members that aren't valid crate roots — Python and Node
+# service dirs sit alongside Rust ones under services/ and would break
+# the workspace if matched by a glob.
+
+[workspace]
+resolver = "2"
+members = [
+{%- for be in rust_backends %}
+    "services/{{ be.name }}",
+{%- endfor %}
+{%- for sdk_member in rust_sdk_members %}
+    "{{ sdk_member }}",
+{%- endfor %}
+]
+
+[workspace.package]
+edition = "{{ rust_edition }}"
+rust-version = "1.83"

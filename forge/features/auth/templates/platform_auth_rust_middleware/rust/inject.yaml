@@ -26,4 +26,11 @@
 - target: src/main.rs
   marker: FORGE:STARTUP_INIT
   position: before
-  snippet: "crate::middleware::auth::init_auth().await.expect(\"auth init failed — check GATEKEEPER_ISSUER + SERVICE_AUDIENCE env vars\");"
+  # Pre-formatted to match rustfmt's preferred line-break for chained
+  # ``.await.expect(...)`` — the single-line form trips
+  # ``cargo fmt --check`` because the panic message pushes the call
+  # past the 100-column width budget.
+  snippet: |-
+    crate::middleware::auth::init_auth()
+        .await
+        .expect("auth init failed — check GATEKEEPER_ISSUER + SERVICE_AUDIENCE env vars");

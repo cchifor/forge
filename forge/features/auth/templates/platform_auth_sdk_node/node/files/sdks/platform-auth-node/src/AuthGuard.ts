@@ -418,7 +418,7 @@ export class AuthGuard {
             `${JSON.stringify(this._audiences[0])}`,
         );
       }
-      const nested = current.act;
+      const nested: unknown = current.act;
       current =
         nested !== null && typeof nested === "object" && !Array.isArray(nested)
           ? (nested as Record<string, unknown>)
