@@ -39,4 +39,12 @@ class FragmentInjectionApplier:
                 collector=ctx.provenance,
             )
             if applied and ctx.provenance is not None:
-                ctx.provenance.record(target, origin="fragment", fragment_name=plan.feature_key)
+                # fragment_version is None today — Fragment has no version
+                # field. TODO: thread fragment_version through FragmentPlan
+                # once the fragment registry adopts semver per fragment.
+                ctx.provenance.record(
+                    target,
+                    origin="fragment",
+                    fragment_name=plan.feature_key,
+                    fragment_version=None,
+                )

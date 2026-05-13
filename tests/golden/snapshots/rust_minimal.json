@@ -33,7 +33,7 @@
       "sha256": "1a66d8ae769cc20e"
     },
     "forge.toml": {
-      "size": 28142,
+      "size": 34986,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -449,8 +449,8 @@
       "sha256": "62c13b9b99ad7620"
     },
     "services/api/src/app.rs": {
-      "size": 1937,
-      "sha256": "5caee3752473e491"
+      "size": 2009,
+      "sha256": "0334e553fd3c981a"
     },
     "services/api/src/bin/migrate.rs": {
       "size": 511,
@@ -489,12 +489,12 @@
       "sha256": "aa8431689a7e3f4e"
     },
     "services/api/src/lib.rs": {
-      "size": 1174,
-      "sha256": "54e4a1f2ba7fe59b"
+      "size": 1186,
+      "sha256": "bd6b9c6d47a89f38"
     },
     "services/api/src/main.rs": {
-      "size": 2205,
-      "sha256": "bde99d72acacb9f2"
+      "size": 2217,
+      "sha256": "3f60189fd03340ef"
     },
     "services/api/src/middleware/auth.rs": {
       "size": 8758,
@@ -505,8 +505,8 @@
       "sha256": "19537a6542a7852c"
     },
     "services/api/src/middleware/mod.rs": {
-      "size": 409,
-      "sha256": "fc1223ecbb40de84"
+      "size": 445,
+      "sha256": "f2b89565141e820a"
     },
     "services/api/src/middleware/rate_limit.rs": {
       "size": 2872,

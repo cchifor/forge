@@ -206,4 +206,18 @@ def _write(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     if collector is not None:
-        collector.record(target, origin="base-template")
+        # Codegen outputs are derived from authoritative schemas under
+        # ``forge/templates/_shared/`` (UI protocol JSON Schemas, canvas
+        # component definitions, shared enum YAMLs) — they aren't a
+        # Copier template and have no version field today. Tag them with
+        # a synthetic name so harvest can distinguish codegen outputs
+        # from backend/frontend template outputs; leave template_version
+        # None until the underlying schemas grow semver.
+        # TODO: thread schema-set version once
+        # ``forge/templates/_shared/`` adopts a manifest with a version.
+        collector.record(
+            target,
+            origin="base-template",
+            template_name="_codegen",
+            template_version=None,
+        )
