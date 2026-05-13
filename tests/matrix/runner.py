@@ -12,13 +12,29 @@ more lanes:
 - **Lane C — compose-up smoke**: sprint 2 deliverable. Runs
   ``docker compose up``, waits on healthchecks, runs the RFC-006 HTTP
   contract, tears down.
+- **Lane D — bidirectional round-trip** (Phase 5 deliverable). For
+  each opted-in scenario: generate → assert FR1 (zero block/files
+  harvest candidates on the fresh project) → stage a synthetic block
+  edit → harvest → apply-back smoke against a tmp clone of the forge
+  tree. The full project-a vs. project-b directory diff is parked
+  for Phase 6 (it needs a generator forge-root override flag); v1
+  lane D enforces FR1 + apply-back orchestration only. ~30-90s per
+  scenario, nightly only. See ``docs/round-trip.md`` for the contract.
 
 CLI usage (from the repo root)::
 
-    uv run python tests/matrix/runner.py --all                 # all scenarios, lane A
+    uv run python tests/matrix/runner.py --all                  # all scenarios, lane A
     uv run python tests/matrix/runner.py --scenario py_vue_full
-    uv run python tests/matrix/runner.py --list                # list scenarios + lanes
-    uv run python tests/matrix/runner.py --all --lane generate # explicit lane
+    uv run python tests/matrix/runner.py --list                 # list scenarios + lanes
+    uv run python tests/matrix/runner.py --all --lane generate  # explicit lane
+    uv run python tests/matrix/runner.py --scenario py_only_headless --lane roundtrip
+
+Lane D (``roundtrip``) — Phase 5 deliverable. v1 enforces the FR1
+invariant (fresh-generate emits zero block/files harvest candidates)
+and smokes the apply-back orchestration on the opted-in scenarios.
+The full project-a vs project-b directory diff is parked until Phase
+6 lands the generator forge-root override. Runs nightly only via
+``.github/workflows/matrix-nightly.yml``.
 
 Exit codes::
 
@@ -46,8 +62,8 @@ from typing import Any, Literal
 
 import yaml
 
-Lane = Literal["generate", "verify", "smoke"]
-ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke")
+Lane = Literal["generate", "verify", "smoke", "roundtrip"]
+ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip")
 
 SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
 WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
@@ -496,10 +512,201 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
+    """Lane D: bidirectional round-trip CI gate (Phase 5).
+
+    v1 contract — what lane D actually enforces today:
+      1. **Generate** the scenario into ``project-a``.
+      2. **FR1** — :func:`harvest_project` on the fresh project MUST
+         emit zero ``"block"`` and zero ``"files"`` candidates. Lane
+         D fails on a positive count; the rationale + offending
+         candidates surface in ``details``.
+      3. **Apply-back substrate smoke** — when the project ships at
+         least one FORGE sentinel block, stage a synthetic edit,
+         harvest, apply the bundle to a tmp clone of the forge tree.
+         The bundle's block candidates land as ``deferred`` in v1
+         (see :func:`apply_bundle_to_fragments`); the smoke just
+         exercises the orchestration without exploding. The full
+         project-a vs. project-b diff is *not* asserted in v1 — that
+         contract requires Phase 6's forge-root override flag so the
+         second generate can use the apply-back-modified clone.
+
+    Phase 6 extensions:
+      * Plumb ``CandidatePatch.current_body`` so the block apply-back
+        rewrites ``inject.yaml`` entries.
+      * Add a generator forge-root override so the second generate
+        actually re-emits the user's edit.
+      * Re-enable the full ``project_a == project_b`` assertion below.
+
+    Lane D opts in per-scenario via ``scenarios.yaml``. Nightly CI
+    runs the opted-in set; PR CI doesn't touch this lane unless a
+    contributor explicitly invokes it (``--scenario X --lane roundtrip``).
+    A scenario that emits no FORGE-sentinel block lands as ``skip``
+    for the apply-back smoke step — the round-trip contract is
+    vacuously true for block-less scenarios, and we don't flag that
+    as a regression.
+    """
+    from forge.errors import ForgeError  # noqa: PLC0415
+    from forge.generator import generate  # noqa: PLC0415
+    from forge.sync.project_to_forge import (  # noqa: PLC0415
+        apply_bundle_to_fragments,
+        harvest_project,
+    )
+
+    start = perf_counter()
+    tmp = Path(tempfile.mkdtemp(prefix=f"forge-matrix-{scenario.name}-roundtrip-"))
+    try:
+        cfg_copy = dict(scenario.config)
+        cfg_copy["output_dir"] = str(tmp / "project-a")
+        try:
+            project_config = _project_config_from_dict(cfg_copy)
+            project_config.validate()
+            project_a = generate(project_config, quiet=True, dry_run=False)
+        except (ValueError, ForgeError) as e:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=f"first generate failed: {e}",
+            )
+
+        # FR1 — fresh-generate harvest must produce zero block/files
+        # candidates. ``deps`` + ``env`` legitimately surface base-
+        # template names that no fragment claims; scope the assertion
+        # to the kinds that ``apply_bundle_to_fragments`` covers.
+        bundle_pre = harvest_project(project_a, quiet=True)
+        fr1_offenders = [c for c in bundle_pre.candidates if c.kind in ("block", "files")]
+        if fr1_offenders:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"FR1 violation: fresh-generate produced "
+                    f"{len(fr1_offenders)} block/files candidate(s); "
+                    f"first: {fr1_offenders[0].fragment}/{fr1_offenders[0].rel_path}"
+                ),
+            )
+
+        # Apply-back substrate smoke. Edits a synthetic block, harvests,
+        # applies to a clone of forge/. If the project ships no FORGE
+        # sentinel block, the round-trip contract is vacuous for this
+        # scenario — surface as ``ok`` rather than ``skip`` since FR1
+        # (the only contract lane D currently enforces) did pass.
+        edited_path = _edit_one_sentinel_block(project_a)
+        if edited_path is None:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="ok",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    "FR1 passed; no FORGE sentinel block to exercise the "
+                    "apply-back smoke (vacuously round-trippable)"
+                ),
+            )
+
+        forge_clone = tmp / "forge-clone"
+        _mirror_forge_source(forge_clone)
+
+        bundle_post = harvest_project(project_a, quiet=True)
+        report = apply_bundle_to_fragments(bundle_post, forge_clone, quiet=True)
+
+        # Verify the apply-back orchestration didn't throw and that
+        # the block-candidate disposition is the expected ``deferred``
+        # (Phase 5 helper is files-only). An ``errored`` block
+        # candidate is the only red flag we surface in v1 — the rest
+        # is the Phase 6 contract.
+        block_errors = [e for e in report.entries if e.kind == "block" and e.status == "errored"]
+        if block_errors:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"apply-back errored on {len(block_errors)} block "
+                    f"candidate(s); first: {block_errors[0].fragment}/"
+                    f"{block_errors[0].rel_path}: {block_errors[0].error}"
+                ),
+            )
+
+        return LaneResult(
+            scenario=scenario.name,
+            lane="roundtrip",
+            status="ok",
+            duration_ms=int((perf_counter() - start) * 1000),
+            details=(
+                f"FR1 passed; apply-back smoke ok "
+                f"(applied={report.applied} deferred={report.deferred})"
+            ),
+        )
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _edit_one_sentinel_block(project_root: Path) -> Path | None:
+    """Inject a synthetic edit inside the first FORGE-bracketed block found.
+
+    Walks ``project_root`` for the first text file containing a
+    ``FORGE:BEGIN`` / ``FORGE:END`` pair, then inserts a marker line
+    inside the block. Returns the path edited, or ``None`` when no
+    block was found.
+
+    Inlined here rather than reused from
+    :mod:`tests.test_harvest_invariants` so the runner stays
+    self-sufficient (the matrix runner is invoked as a script from
+    CI, not via pytest's import machinery).
+    """
+    for ext in (".py", ".ts", ".js", ".rs"):
+        for path in sorted(project_root.rglob(f"*{ext}")):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            idx_begin = text.find("FORGE:BEGIN ")
+            idx_end = text.find("FORGE:END ")
+            if idx_begin == -1 or idx_end == -1 or idx_end <= idx_begin:
+                continue
+            before_end = text.rfind("\n", 0, idx_end)
+            if before_end == -1:
+                continue
+            # Pick the comment prefix off the BEGIN sentinel line so
+            # the injected marker matches the surrounding syntax.
+            before_begin = text.rfind("\n", 0, idx_begin) + 1
+            begin_line = text[before_begin:idx_begin]
+            comment_prefix = begin_line.rstrip().rstrip("FORGE:").rstrip()
+            if not comment_prefix:
+                comment_prefix = "# "
+            injection = f"{comment_prefix}forge round-trip CI marker\n"
+            new_text = text[: before_end + 1] + injection + text[before_end + 1 :]
+            path.write_text(new_text, encoding="utf-8")
+            return path
+    return None
+
+
+def _mirror_forge_source(dst: Path) -> None:
+    """Copy the forge source tree into ``dst`` for apply-bundle testing.
+
+    Only ``forge/`` is mirrored — the only subtree
+    :func:`apply_bundle_to_fragments` writes into. The matrix runner
+    is invoked from the repo root via ``uv run python tests/...``, so
+    the source tree is two directories up from this file.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    dst.mkdir(parents=True, exist_ok=True)
+    src = repo_root / "forge"
+    if src.is_dir():
+        shutil.copytree(str(src), str(dst / "forge"))
+
+
 LANE_DISPATCH = {
     "generate": run_lane_generate,
     "verify": run_lane_verify,
     "smoke": run_lane_smoke,
+    "roundtrip": run_lane_roundtrip,
 }
 
 
