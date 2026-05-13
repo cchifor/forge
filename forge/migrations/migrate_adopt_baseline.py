@@ -76,7 +76,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
 
     import tomlkit  # noqa: PLC0415
 
-    from forge.merge import sha256_of_file  # noqa: PLC0415
+    from forge.sync.merge import sha256_of_file  # noqa: PLC0415
 
     body = manifest.read_text(encoding="utf-8")
     doc = tomlkit.parse(body)

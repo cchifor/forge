@@ -100,7 +100,7 @@ class ProvenanceCollector:
     the manifest is portable across OSes.
 
     ``merge_blocks`` holds per-block baselines for merge-zone injections
-    (see ``forge/merge.py``). Keyed by
+    (see :mod:`forge.sync.merge`). Keyed by
     ``{rel_path}::{feature_key}:{marker}``.
     """
 
@@ -164,7 +164,7 @@ class ProvenanceCollector:
         ``snippet_sha256`` lets harvest detect fragment-template drift.
         ``line_range`` is an emit-time line span (1-indexed, inclusive).
         """
-        from forge.merge import MergeBlockCollector  # noqa: PLC0415
+        from forge.sync.merge import MergeBlockCollector  # noqa: PLC0415
 
         key = MergeBlockCollector.key_for(rel_posix_path, feature_key, marker)
         self.merge_blocks[key] = MergeBlockRecord(

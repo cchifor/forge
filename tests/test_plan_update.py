@@ -15,7 +15,7 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.errors import GeneratorError
-from forge.plan_update import plan_update
+from forge.sync.forge_to_project.plan import plan_update
 
 
 @pytest.fixture
@@ -61,8 +61,8 @@ class TestPlanUpdate:
         self, tmp_path: Path
     ) -> None:
         """Forced conflict: drift the manifest baseline + edit the file."""
-        from forge.forge_toml import read_forge_toml, write_forge_toml
         from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml, write_forge_toml
 
         cfg = ProjectConfig(
             project_name="planu-conflict",

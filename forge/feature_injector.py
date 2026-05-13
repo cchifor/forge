@@ -18,6 +18,14 @@ P1.1 (Epic 1b) split this module: sentinel primitives moved into
 :mod:`forge.appliers.deps`. The names are re-exported here for one
 minor as backward-compat for callers that imported them from this
 module before the split.
+
+Phase 3 (1.2.0-alpha.1) of the bidirectional-sync plan moved the
+manifest / merge / provenance / lock / sentinel-audit substrate into
+the ``forge.sync.*`` package. This module's internal imports were
+updated to the new locations; the public surface here is unchanged.
+External callers should prefer ``from forge.sync.forge_to_project
+import update_project`` (etc.) for new code — see
+:mod:`forge.sync.forge_to_project` for the canonical public surface.
 """
 
 from __future__ import annotations
@@ -63,7 +71,7 @@ from forge.injectors.sentinels import (
     _sentinel_tag,
 )
 from forge.middleware_spec import MiddlewareSpec
-from forge.provenance import ProvenanceCollector
+from forge.sync.provenance import ProvenanceCollector
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 FRAGMENTS_DIR = TEMPLATES_DIR / FRAGMENTS_DIRNAME
@@ -498,7 +506,11 @@ def _apply_merge_zone(
     collector: ProvenanceCollector | None,
 ) -> bool:
     """Three-way merge path for ``merge``-zone injections."""
-    from forge.merge import MergeBlockCollector, three_way_decide, write_sidecar  # noqa: PLC0415
+    from forge.sync.merge import (  # noqa: PLC0415
+        MergeBlockCollector,
+        three_way_decide,
+        write_sidecar,
+    )
 
     try:
         rel_path = target.relative_to(project_root).as_posix()
@@ -548,7 +560,7 @@ def _record_merge_baseline(
     collector: ProvenanceCollector,
 ) -> None:
     """Record the SHA of the block we just wrote — baseline for next compare."""
-    from forge.merge import sha256_of_text  # noqa: PLC0415
+    from forge.sync.merge import sha256_of_text  # noqa: PLC0415
 
     body = _read_block_body(target, inj.feature_key, inj.marker)
     if body is None:
@@ -593,7 +605,7 @@ def _load_merge_baseline(project_root: Path, key: str) -> str | None:
     if not manifest.is_file():
         return None
     try:
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         data = read_forge_toml(manifest)
     except Exception:  # noqa: BLE001

@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 from forge.errors import EXIT_VERIFY_CONFLICT, EXIT_VERIFY_DRIFT
-from forge.verify import VerifyFailOn, VerifyReport, verify_project
+from forge.sync.project_to_forge.verify import VerifyFailOn, VerifyReport, verify_project
 
 # Exit code for the manifest-missing path. The rest of the CLI maps
 # :class:`forge.errors.ProvenanceError` to 5 via ``_exit_code_for``;

@@ -6,16 +6,11 @@ applying any changes. It's the read-only half of the bidirectional-sync
 plan — the safe sibling of ``forge --update`` (forward) and the harvest
 flow (reverse, Phase 4).
 
-This module lives at ``forge/verify.py`` temporarily. Phase 3 of the
-bidirectional-sync plan moves it under
-``forge/sync/project_to_forge/verify.py`` as part of the module
-reorganization — leave that move for the dedicated refactor PR.
-
 Two record kinds participate:
 
 * **File-level provenance** — every file the generator emitted, tracked
   in ``[forge.provenance]``. Compared via
-  :func:`forge.provenance.classify`.
+  :func:`forge.sync.provenance.classify`.
 * **Merge-block baselines** — every inline injection forge made into a
   base-template file, tracked in ``[forge.merge_blocks]``. The current
   block body is read between BEGIN/END sentinels and hashed.
@@ -52,29 +47,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any, Literal
 
-from forge.forge_toml import read_forge_toml
 from forge.injectors.sentinels import _read_block_body
-from forge.merge import MergeBlockCollector, sha256_of_text
-from forge.provenance import ProvenanceOrigin, ProvenanceRecord, classify, sha256_of
+from forge.sync.direction import VerifyFailOn, VerifyScope
+from forge.sync.manifest import read_forge_toml
+from forge.sync.merge import MergeBlockCollector, sha256_of_text
+from forge.sync.provenance import ProvenanceOrigin, ProvenanceRecord, classify, sha256_of
 
-VerifyScope = Literal["all", "files", "blocks", "fragments"]
-"""Which record kinds ``verify_project`` should walk.
-
-* ``"all"`` — provenance entries + merge blocks (default).
-* ``"files"`` — file-level provenance only; skip merge blocks.
-* ``"blocks"`` — merge blocks only; skip file provenance.
-* ``"fragments"`` — both kinds, but in principle could later filter to
-  ``origin == "fragment"`` records. Treated as ``"all"`` today.
-"""
-
-VerifyFailOn = Literal["drift", "conflict", "never"]
-"""Threshold for non-zero exit at the CLI layer.
-
-* ``"drift"`` (default) — exit non-zero on any drift OR conflict.
-* ``"conflict"`` — exit non-zero only on conflict; drift alone passes.
-* ``"never"`` — always exit zero (use the JSON output for downstream
-  branching).
-"""
+# ``VerifyScope`` / ``VerifyFailOn`` live canonically in
+# :mod:`forge.sync.direction` — they're shared between forward (Phase 4
+# harvest) and reverse (verify) call sites. Re-imported above so they're
+# still importable from this module's old path for back-compat.
 
 RecordStatus = Literal["unchanged", "user-modified", "missing", "sentinel-corrupt"]
 """Per-record classification surfaced in the verify report."""

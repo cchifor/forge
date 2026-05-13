@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from forge.codegen.pipeline import run_codegen
 from forge.config import (
     BackendConfig,
@@ -134,7 +132,7 @@ class TestSharedEnums:
 
 class TestProvenance:
     def test_codegen_writes_provenance_records(self, tmp_path: Path) -> None:
-        from forge.provenance import ProvenanceCollector  # noqa: PLC0415
+        from forge.sync.provenance import ProvenanceCollector  # noqa: PLC0415
 
         config, project_root = _make_python_project(tmp_path, FrontendFramework.VUE)
         collector = ProvenanceCollector(project_root=project_root)

@@ -23,16 +23,16 @@ import pytest
 
 from forge.cli.commands.verify import _run_verify, _verify_exit_code
 from forge.errors import EXIT_VERIFY_CONFLICT, EXIT_VERIFY_DRIFT
-from forge.forge_toml import write_forge_toml
 from forge.fragments import MARKER_PREFIX
-from forge.merge import MergeBlockCollector, sha256_of_text
-from forge.provenance import sha256_of
-from forge.verify import (
+from forge.sync.manifest import write_forge_toml
+from forge.sync.merge import MergeBlockCollector, sha256_of_text
+from forge.sync.project_to_forge.verify import (
     BlockVerifyEntry,
     FileVerifyEntry,
     VerifyReport,
     verify_project,
 )
+from forge.sync.provenance import sha256_of
 
 # ---------------------------------------------------------------------------
 # Test fixtures — small helpers to build a minimal forge-tracked project tree

@@ -309,7 +309,7 @@ def check_forge_toml(project_path: Path) -> CheckResult:
             detail=f"no forge.toml at {project_path} (not a forge-generated project)",
         )
     try:
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         data = read_forge_toml(manifest)
     except Exception as e:  # noqa: BLE001
