@@ -99,6 +99,10 @@ def _run_remove_fragment(args: argparse.Namespace) -> None:
             options=new_options,
             provenance=dict(data.provenance),
             merge_blocks=dict(data.merge_blocks),
+            # Preserve the manifest's existing template_versions table on
+            # an option flip — this command only mutates one option value,
+            # not the per-template attribution.
+            template_versions=dict(data.template_versions),
         )
 
     try:

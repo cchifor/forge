@@ -137,7 +137,18 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
                 quiet,
                 include_platform_auth=includes_platform_auth,
             )
-        _record_tree(backend_dir, collector, origin="base-template")
+        # We know which backend template produced this tree (spec.template_dir
+        # is e.g. "services/python-service-template"). Pass it as template_name
+        # so harvest / drift-verify can attribute each file to its emitting
+        # template. template_version is None today — BackendSpec doesn't carry
+        # a version field, and copier.yml doesn't declare one. When templates
+        # gain semver, lift the version onto BackendSpec and thread it here.
+        _record_tree(
+            backend_dir,
+            collector,
+            origin="base-template",
+            template_name=spec.template_dir,
+        )
         with phase_timer(
             _logger,
             "generate.apply_features",
@@ -282,6 +293,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     # the provenance manifest covers the full project tree, not just
     # backends. We scan everything outside services/ to avoid double-recording
     # backend files already tagged per-backend above.
+    #
+    # template_name is intentionally None here: this catch-all pass covers a
+    # mix of templates (frontend, e2e, infra, common files written via
+    # ``apply_common_files`` and codegen pipeline outputs that landed before
+    # this scan). Attribution per-template happens in the dedicated record
+    # paths (codegen.pipeline, common_files.apply_common_files). When the
+    # frontend tree is reached here, the framework-specific template_name
+    # could be threaded — TODO: split this catch-all into per-template
+    # passes (frontend / e2e / infra) once those paths grow explicit
+    # provenance hooks.
     _record_tree(
         project_root,
         collector,
@@ -339,6 +360,8 @@ def _record_tree(
     origin: str,
     skip_dirs: tuple[str, ...] = (),
     skip_if_recorded: bool = False,
+    template_name: str | None = None,
+    template_version: str | None = None,
 ) -> None:
     """Walk ``root`` and record every file as ``origin`` in the collector.
 
@@ -349,6 +372,11 @@ def _record_tree(
     When ``skip_if_recorded=True``, paths already in the collector are
     not overwritten — useful for idempotent top-up scans after an earlier
     per-subtree pass already tagged some files with more specific origins.
+
+    ``template_name`` / ``template_version`` are forwarded to each
+    ``collector.record(...)`` call so per-file entries carry the
+    emitting-template attribution. Pass ``None`` when the caller cannot
+    cheaply identify a single template (e.g. mixed catch-all sweeps).
     """
     from forge.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
 
@@ -372,7 +400,12 @@ def _record_tree(
             key = p.relative_to(collector.project_root).as_posix()
             if key in collector.records:
                 continue
-        collector.record(p, origin=origin_typed)
+        collector.record(
+            p,
+            origin=origin_typed,
+            template_name=template_name,
+            template_version=template_version,
+        )
 
 
 def _write_forge_toml(
@@ -411,6 +444,12 @@ def _write_forge_toml(
     provenance = collector.as_dict() if collector is not None else None
     merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
 
+    # TODO: thread per-template versions through BackendSpec / FrontendSpec
+    # once templates carry semver. Pass an empty dict for now so the
+    # ``[forge.template_versions]`` sub-table is omitted (write_forge_toml
+    # treats empty/None as absent — schema v2 manifests remain valid).
+    template_versions: dict[str, str] = {}
+
     write_forge_toml(
         project_root / "forge.toml",
         version=forge_version,
@@ -419,6 +458,7 @@ def _write_forge_toml(
         options=options,
         provenance=provenance,
         merge_blocks=merge_blocks,
+        template_versions=template_versions,
     )
 
 

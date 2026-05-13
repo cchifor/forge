@@ -303,6 +303,11 @@ def _update_locked(
         current_version=current_version,
         provenance=collector.as_dict(),
         merge_blocks=collector.merge_blocks_as_dict(),
+        # Carry forward whatever template_versions the project recorded on
+        # generate. We don't have a fresh source of versions during update
+        # (BackendSpec doesn't carry a version field yet), but preserving
+        # the read-side map keeps the manifest informative across updates.
+        template_versions=dict(data.template_versions),
     )
 
     return {
@@ -492,8 +497,16 @@ def _restamp_forge_toml(
     current_version: str,
     provenance: dict[str, dict[str, str]] | None = None,
     merge_blocks: dict[str, dict[str, str]] | None = None,
+    template_versions: dict[str, str] | None = None,
 ) -> None:
-    """Write forge.toml with the current version + options + provenance + merge blocks."""
+    """Write forge.toml with the current version + options + provenance + merge blocks.
+
+    ``template_versions`` is forwarded as-is to :func:`write_forge_toml`.
+    On update we don't have a fresh source of per-template semver yet
+    (BackendSpec has no version field today), so callers typically pass
+    through whatever the manifest already recorded. ``None`` / empty
+    omits the ``[forge.template_versions]`` table.
+    """
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
         templates[lang.value] = BACKEND_REGISTRY[lang].template_dir
@@ -506,4 +519,5 @@ def _restamp_forge_toml(
         options=dict(option_values),
         provenance=provenance,
         merge_blocks=merge_blocks,
+        template_versions=template_versions,
     )
