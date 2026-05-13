@@ -452,8 +452,13 @@ class TestCollectInputs:
             return next(text_order)
 
         with patch("forge.cli.interactive._ask_text", side_effect=fake_text):
-            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+            with patch(
+                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+            ):
+                with patch(
+                    "forge.cli.interactive._ask_confirm",
+                    side_effect=lambda *a, **kw: next(confirms),
+                ):
                     config = cli._collect_inputs()
 
         assert config is not None
@@ -491,9 +496,16 @@ class TestCollectInputs:
             ]
         )
 
-        with patch("forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)):
-            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+        with patch(
+            "forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)
+        ):
+            with patch(
+                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+            ):
+                with patch(
+                    "forge.cli.interactive._ask_confirm",
+                    side_effect=lambda *a, **kw: next(confirms),
+                ):
                     result = cli._collect_inputs()
 
         assert result is None
@@ -529,9 +541,16 @@ class TestCollectInputs:
             ]
         )
 
-        with patch("forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)):
-            with patch("forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)):
-                with patch("forge.cli.interactive._ask_confirm", side_effect=lambda *a, **kw: next(confirms)):
+        with patch(
+            "forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)
+        ):
+            with patch(
+                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+            ):
+                with patch(
+                    "forge.cli.interactive._ask_confirm",
+                    side_effect=lambda *a, **kw: next(confirms),
+                ):
                     config = cli._collect_inputs()
 
         assert config is not None
@@ -539,3 +558,153 @@ class TestCollectInputs:
         assert config.frontend.framework.value == "flutter"
         assert config.frontend.org_name == "com.myco"
         assert config.include_keycloak is False
+
+
+# -- main() --verify dispatch ----------------------------------------------
+#
+# End-to-end coverage that ``forge --verify`` reaches ``verify_project``
+# with the right project root + scope + fail_on knobs. The detailed
+# algorithm cases live in tests/test_verify.py; here we only assert the
+# argparse → dispatcher → exit-code chain.
+
+
+class TestMainVerifyDispatch:
+    def test_verify_dispatch_clean_exit_zero(self, tmp_path, monkeypatch) -> None:
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.provenance import sha256_of  # noqa: PLC0415
+
+        (tmp_path / "a.py").write_text("hello\n")
+        sha = sha256_of(tmp_path / "a.py")
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.0.0",
+            project_name="t",
+            templates={"python": "p"},
+            options={},
+            provenance={"a.py": {"origin": "base-template", "sha256": sha}},
+        )
+        monkeypatch.setattr(sys, "argv", ["forge", "--verify", "--project-path", str(tmp_path)])
+        with pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 0
+
+    def test_verify_dispatch_drift_exit_ten(self, tmp_path, monkeypatch) -> None:
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.provenance import sha256_of  # noqa: PLC0415
+
+        (tmp_path / "a.py").write_text("hello\n")
+        sha = sha256_of(tmp_path / "a.py")
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.0.0",
+            project_name="t",
+            templates={"python": "p"},
+            options={},
+            provenance={"a.py": {"origin": "base-template", "sha256": sha}},
+        )
+        (tmp_path / "a.py").write_text("user edit\n")
+        monkeypatch.setattr(sys, "argv", ["forge", "--verify", "--project-path", str(tmp_path)])
+        with pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 10
+
+    def test_verify_scope_propagates_to_verify_project(self, tmp_path, monkeypatch) -> None:
+        """--verify-scope files must reach verify_project as scope='files'."""
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.0.0",
+            project_name="t",
+            templates={"python": "p"},
+            options={},
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "forge",
+                "--verify",
+                "--verify-scope",
+                "files",
+                "--project-path",
+                str(tmp_path),
+            ],
+        )
+        captured: dict = {}
+
+        def fake_verify(project_root, *, scope, fail_on):
+            captured["scope"] = scope
+            captured["fail_on"] = fail_on
+            captured["root"] = project_root
+            from forge.verify import VerifyReport  # noqa: PLC0415
+
+            return VerifyReport(
+                worst="clean",
+                summary={
+                    "unchanged": 0,
+                    "user-modified": 0,
+                    "missing": 0,
+                    "sentinel-corrupt": 0,
+                },
+            )
+
+        with (
+            patch("forge.cli.commands.verify.verify_project", side_effect=fake_verify),
+            pytest.raises(SystemExit),
+        ):
+            cli.main()
+        assert captured["scope"] == "files"
+        assert captured["fail_on"] == "drift"
+
+    def test_fail_on_conflict_propagates_to_verify_project(self, tmp_path, monkeypatch) -> None:
+        """--fail-on conflict must reach verify_project as fail_on='conflict'."""
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.0.0",
+            project_name="t",
+            templates={"python": "p"},
+            options={},
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "forge",
+                "--verify",
+                "--fail-on",
+                "conflict",
+                "--project-path",
+                str(tmp_path),
+            ],
+        )
+        captured: dict = {}
+
+        def fake_verify(project_root, *, scope, fail_on):
+            captured["fail_on"] = fail_on
+            from forge.verify import VerifyReport  # noqa: PLC0415
+
+            return VerifyReport(
+                worst="clean",
+                summary={
+                    "unchanged": 0,
+                    "user-modified": 0,
+                    "missing": 0,
+                    "sentinel-corrupt": 0,
+                },
+            )
+
+        with (
+            patch("forge.cli.commands.verify.verify_project", side_effect=fake_verify),
+            pytest.raises(SystemExit),
+        ):
+            cli.main()
+        assert captured["fail_on"] == "conflict"
+
+    def test_verify_missing_forge_toml_exits_5(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "argv", ["forge", "--verify", "--project-path", str(tmp_path)])
+        with pytest.raises(SystemExit) as exc:
+            cli.main()
+        assert exc.value.code == 5
