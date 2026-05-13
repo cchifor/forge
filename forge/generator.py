@@ -128,8 +128,7 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             # non-auth Python services don't ship sdks/platform-auth/ so
             # they'd uv-sync-fail if we always emitted the entry.
             includes_platform_auth = any(
-                rf.fragment.name == "platform_auth_python_middleware"
-                for rf in plan.ordered
+                rf.fragment.name == "platform_auth_python_middleware" for rf in plan.ordered
             )
             _generate_single_backend(
                 bc,
@@ -565,9 +564,7 @@ def _generate_single_backend(
     include_platform_auth: bool = False,
 ) -> Path:
     """Generate a single backend using Copier."""
-    ctx = variable_mapper.backend_context(
-        bc, include_platform_auth=include_platform_auth
-    )
+    ctx = variable_mapper.backend_context(bc, include_platform_auth=include_platform_auth)
     dst.mkdir(parents=True, exist_ok=True)
     _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
     return dst

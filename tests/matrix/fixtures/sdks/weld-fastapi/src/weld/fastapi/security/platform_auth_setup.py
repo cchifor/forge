@@ -1,4 +1,5 @@
 """``weld.fastapi.security.platform_auth_setup.build_auth_guard`` stub."""
+
 from typing import Any
 
 

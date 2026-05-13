@@ -1,4 +1,5 @@
 """weld.connectors stub."""
+
 from typing import Any
 
 

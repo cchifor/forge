@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
 
 ModelT = TypeVar("ModelT")
 EntityT = TypeVar("EntityT")
@@ -90,9 +91,7 @@ class AsyncBaseRepository(Generic[ModelT, EntityT, CreateT, UpdateT]):
         obj = result.scalar_one_or_none()
         return self._to_schema(obj) if obj is not None else None
 
-    async def list(
-        self, *, skip: int = 0, limit: int = 50, **kwargs: Any
-    ) -> list[EntityT]:
+    async def list(self, *, skip: int = 0, limit: int = 50, **kwargs: Any) -> list[EntityT]:
         query = self._get_base_query().offset(skip).limit(limit)
         result = await self.session.execute(query)
         return [self._to_schema(obj) for obj in result.scalars().all()]
@@ -115,9 +114,7 @@ class AsyncBaseRepository(Generic[ModelT, EntityT, CreateT, UpdateT]):
         return self._to_schema(obj)
 
     async def update(self, id: Any, data: UpdateT) -> EntityT | None:
-        result = await self.session.execute(
-            self._get_base_query().where(self.model.id == id)
-        )
+        result = await self.session.execute(self._get_base_query().where(self.model.id == id))
         obj = result.scalar_one_or_none()
         if obj is None:
             return None
