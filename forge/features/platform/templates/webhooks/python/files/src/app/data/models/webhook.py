@@ -15,7 +15,7 @@ from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.models.base import JSON_TYPE, Base
-from service.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
+from weld.core.persistence.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
 
 
 class Webhook(Base, TenantMixin, UserOwnedMixin, TimestampMixin):

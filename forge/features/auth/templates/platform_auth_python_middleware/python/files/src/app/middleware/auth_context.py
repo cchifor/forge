@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from service.core import context
+from weld.core import context
 from service.security.auth import authenticate_request
 
 log = logging.getLogger(__name__)

@@ -50,6 +50,42 @@ Lane = Literal["generate", "verify", "smoke"]
 ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke")
 
 SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
+WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
+
+
+def _inject_weld_stubs(project_root: Path) -> None:
+    """Drop matrix-CI weld-* SDK stub packages into ``<project>/sdks/``.
+
+    Generated Python services declare ``[tool.uv.sources]`` entries
+    pointing at ``../../sdks/weld-<name>/`` — the platform monorepo's
+    in-tree SDK paths. Matrix CI has no platform sibling tree, so the
+    real weld-* sources are unavailable and ``uv sync`` fails. These
+    minimal namespace-package stubs (defined under
+    ``tests/matrix/fixtures/sdks/``) let the verify lane run end-to-end
+    (uv sync → ruff → ty → pytest) without the real weld monorepo.
+
+    The stubs expose the same import surface as ``weld-*`` and contain
+    just enough behavior for the template's tests to pass against
+    ``sqlite+aiosqlite``: TenantMixin/UserOwnedMixin/TimestampMixin
+    register SQLAlchemy columns, AsyncBaseRepository implements
+    ``_get_base_query`` / ``_to_schema`` / CRUD verbs, the auth
+    fragment's ``Error`` envelope round-trips, ``Account`` normalizes
+    UUID strings, and so on.
+
+    Idempotent — ``weld-*`` sub-dirs are skipped if already present
+    (the auth fragment ships its own ``sdks/platform-auth/``).
+    """
+    if not WELD_STUBS_DIR.is_dir():
+        return
+    sdks_dir = project_root / "sdks"
+    sdks_dir.mkdir(parents=True, exist_ok=True)
+    for stub in WELD_STUBS_DIR.iterdir():
+        if not stub.is_dir() or not stub.name.startswith("weld-"):
+            continue
+        target = sdks_dir / stub.name
+        if target.exists():
+            continue
+        shutil.copytree(str(stub), str(target))
 
 
 @dataclass(frozen=True)
@@ -291,6 +327,11 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 details=f"generate raised {type(e).__name__}({e.code}): {e.message}",
             )
 
+        # Drop minimal weld-* stub SDKs into <project>/sdks/ so Python
+        # services' [tool.uv.sources] entries resolve. See
+        # _inject_weld_stubs docstring for the rationale.
+        _inject_weld_stubs(project_root)
+
         failures: list[str] = []
         for bc in project_config.backends:
             spec = BACKEND_REGISTRY[bc.language]
@@ -375,6 +416,11 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 duration_ms=int((perf_counter() - start) * 1000),
                 details=f"generate failed: {e}",
             )
+
+        # Drop weld-* stubs into <project>/sdks/ so Python-service Docker
+        # builds (which run ``uv sync`` against the same [tool.uv.sources])
+        # have something to resolve against. Same hook as the verify lane.
+        _inject_weld_stubs(project_root)
 
         compose_file = project_root / "docker-compose.yml"
         if not compose_file.exists():

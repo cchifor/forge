@@ -31,12 +31,19 @@ def _primary_feature(bc: BackendConfig) -> str:
     return bc.features[0] if bc.features else "items"
 
 
-def backend_context(bc: BackendConfig) -> dict[str, Any]:
+def backend_context(
+    bc: BackendConfig, *, include_platform_auth: bool = False
+) -> dict[str, Any]:
     """Build a Copier data dict for any backend template.
 
     Shared keys go to every backend; the language-specific version field
     (`python_version` / `node_version` / `rust_edition`) is read from
     BACKEND_REGISTRY so adding a 4th backend doesn't require editing here.
+
+    ``include_platform_auth`` flips on the ``platform-auth`` SDK
+    references in pyproject.toml.jinja (dependency + ``[tool.uv.sources]``
+    path-dep). Set by the generator when the
+    ``platform_auth_python_middleware`` fragment is in the active plan.
     """
     spec = BACKEND_REGISTRY[bc.language]
     return {
@@ -46,6 +53,7 @@ def backend_context(bc: BackendConfig) -> dict[str, Any]:
         "db_name": bc.name.replace("-", "_"),
         spec.version_field: getattr(bc, spec.version_field),
         "entity_plural": _primary_feature(bc),
+        "include_platform_auth": include_platform_auth,
     }
 
 

@@ -239,7 +239,12 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
     frontend, include_auth = _build_frontend_from_cfg(r, project_name, description)
     options = _build_options(args, cfg)
 
-    include_keycloak = include_auth
+    # ``include_keycloak`` follows ``frontend.include_auth`` by default,
+    # but config files (and matrix scenarios) can override at the top
+    # level — e.g. a headless service that wants the keycloak sidecar
+    # for S2S token issuance even though there's no SPA. CLI flag wins
+    # over config-file value, which wins over the frontend-derived default.
+    include_keycloak = r.get("include_keycloak", "include_keycloak", default=include_auth)
     # ``auth.mode=generate`` enables the platform-auth stack, which needs
     # both Keycloak (for human login) and Redis (for BFF sessions + gatekeeper).
     # When the project disables Keycloak the platform-auth model can't run —

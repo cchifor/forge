@@ -1,0 +1,16 @@
+# Stub for matrix CI — see tests/matrix/fixtures/sdks/README.md.
+# Contributes ``weld.connectors`` to the ``weld`` namespace package.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "weld-connectors"
+version = "0.0.0"
+description = "Stub weld-* SDK package for matrix CI."
+requires-python = ">=3.13"
+
+[tool.hatch.build.targets.wheel]
+# PEP 420 namespace package — no ``src/weld/__init__.py``; each
+# weld-* distribution contributes one subpackage.
+packages = ["src/weld"]
