@@ -57,6 +57,8 @@ def _list_plugins(*, json_output: bool = False) -> None:
                 parts.append(f"{reg.commands_added} command(s)")
             if reg.emitters_added:
                 parts.append(f"{reg.emitters_added} emitter(s)")
+            if reg.extractors_added:
+                parts.append(f"{len(reg.extractors_added)} extractor(s)")
             if parts:
                 print(f"      adds: {', '.join(parts)}")
 

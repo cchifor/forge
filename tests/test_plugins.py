@@ -29,6 +29,8 @@ class TestPluginRegistration:
         assert data["options_added"] == 2
         assert data["fragments_added"] == 1
         assert data["commands_added"] == 0
+        # Extractor scaffolding (Phase 3): empty by default.
+        assert data["extractors_added"] == []
 
 
 class TestForgeAPI:
@@ -87,6 +89,71 @@ class TestForgeAPI:
         api.add_emitter("dart", fn)
         assert reg.emitters_added == 1
         assert api._emitters["dart"] is fn
+
+    def test_add_extractor_records_registration(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "files"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        api.add_extractor("files", _StubExtractor())
+        assert reg.extractors_added == (("files", None),)
+
+    def test_add_extractor_supports_fragment_scope(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "block"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        api.add_extractor("block", _StubExtractor(), fragment="auth_jwt")
+        assert reg.extractors_added == (("block", "auth_jwt"),)
+
+    def test_add_extractor_accumulates_across_calls(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "deps"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        api.add_extractor("deps", _StubExtractor())
+        api.add_extractor("env", _StubExtractor(), fragment="rag_pgvector")
+        assert reg.extractors_added == (
+            ("deps", None),
+            ("env", "rag_pgvector"),
+        )
+
+    def test_add_extractor_rejects_unknown_kind(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+        with pytest.raises(PluginError, match="unknown kind"):
+            api.add_extractor("bogus", object())
+        assert reg.extractors_added == ()
+
+    def test_as_dict_surfaces_extractor_registrations(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "files"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        api.add_extractor("files", _StubExtractor())
+        api.add_extractor("block", _StubExtractor(), fragment="auth")
+        payload = reg.as_dict()
+        assert payload["extractors_added"] == [["files", None], ["block", "auth"]]
 
     def test_add_service_registers_template(self) -> None:
         from forge.services import ServiceTemplate
