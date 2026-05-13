@@ -56,12 +56,16 @@ class ModuleGate(NamedTuple):
 MODULE_FLOORS: dict[str, ModuleGate] = {
     "forge/capability_resolver.py": ModuleGate(floor_pct=96.0, target_pct=98.0),
     "forge/feature_injector.py": ModuleGate(floor_pct=88.0, target_pct=95.0),
-    "forge/merge.py": ModuleGate(floor_pct=92.0, target_pct=95.0),
-    "forge/provenance.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
+    # Phase 3 of the bidirectional-sync rebuild (forge.sync package) moved
+    # merge / provenance / updater / plan_update under ``forge/sync/`` and
+    # ``forge/sync/forge_to_project/``. The floors carry over unchanged —
+    # the rename was pure relocation, not a coverage regression.
+    "forge/sync/merge.py": ModuleGate(floor_pct=92.0, target_pct=95.0),
+    "forge/sync/provenance.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/python_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/ts_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
-    "forge/updater.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
-    "forge/plan_update.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
+    "forge/sync/forge_to_project/updater.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
+    "forge/sync/forge_to_project/plan.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
 }
 
 
