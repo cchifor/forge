@@ -253,6 +253,46 @@ def _build_parser() -> argparse.ArgumentParser:
         help="What --verify treats as exit-non-zero.",
     )
 
+    # Harvest — Phase 4 of the bidirectional-sync plan. Reverse-direction
+    # extraction of user edits from a generated project as candidate
+    # fragment patches. ``--verify`` reports drift; ``--harvest`` proposes
+    # how that drift could be back-ported upstream.
+    p.add_argument(
+        "--harvest",
+        action="store_true",
+        help=(
+            "Extract user edits as candidate fragment patches. Writes a bundle "
+            "(default .forge-harvest/) the maintainer can review or auto-apply."
+        ),
+    )
+    p.add_argument(
+        "--harvest-out",
+        dest="harvest_out",
+        default=".forge-harvest",
+        help="Bundle output dir, or '-' for stdout JSON.",
+    )
+    p.add_argument(
+        "--harvest-scope",
+        dest="harvest_scope",
+        default=None,
+        help=(
+            "Comma-separated fragment names. Default: every fragment with user-modified records."
+        ),
+    )
+    p.add_argument(
+        "--harvest-include",
+        dest="harvest_include",
+        choices=["files", "blocks", "deps", "env", "all"],
+        default="all",
+        help="Which extractor kinds to run. Symmetric to the applier set.",
+    )
+    p.add_argument(
+        "--harvest-interactive",
+        dest="harvest_interactive",
+        action="store_true",
+        help="Prompt accept/reject per candidate (TODO Phase 4b — currently no-op).",
+    )
+
     # new-entity — add a CRUD entity YAML to the project.
     p.add_argument(
         "--new-entity-name",
