@@ -1,6 +1,6 @@
 """weld.airlock stub."""
-from typing import Any
 
+from typing import Any
 
 DEFAULT_RETRY_POLICY: dict[str, Any] = {
     "max_attempts": 3,

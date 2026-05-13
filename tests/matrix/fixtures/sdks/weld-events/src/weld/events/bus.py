@@ -1,4 +1,5 @@
 """``weld.events.bus`` — explicit-import path for the in-memory bus."""
+
 from typing import Any
 
 from . import EventBus

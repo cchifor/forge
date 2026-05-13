@@ -1,4 +1,5 @@
 """``weld.mcp_template.openapi`` stub."""
+
 from dataclasses import dataclass
 from typing import Any
 

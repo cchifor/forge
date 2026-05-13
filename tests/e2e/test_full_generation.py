@@ -41,6 +41,7 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     ``PATHEXT`` for bare tool names.
     """
     import shutil as _shutil
+
     resolved = _shutil.which(cmd[0])
     if resolved is not None:
         cmd = [resolved, *cmd[1:]]
@@ -93,11 +94,7 @@ def _make_frontend(
     with_openapi: bool | None = None,
 ) -> FrontendConfig:
     # Flutter requires openapi (see FrontendConfig.validate); default others to off.
-    openapi = (
-        with_openapi
-        if with_openapi is not None
-        else (framework == FrontendFramework.FLUTTER)
-    )
+    openapi = with_openapi if with_openapi is not None else (framework == FrontendFramework.FLUTTER)
     return FrontendConfig(
         framework=framework,
         project_name="E2E Project",

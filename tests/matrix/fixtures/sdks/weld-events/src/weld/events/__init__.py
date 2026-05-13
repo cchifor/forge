@@ -1,4 +1,5 @@
 """weld.events namespace stub."""
+
 from typing import Any
 
 

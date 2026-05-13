@@ -1,4 +1,5 @@
 """weld.mcp_template stub."""
+
 from typing import Any
 
 

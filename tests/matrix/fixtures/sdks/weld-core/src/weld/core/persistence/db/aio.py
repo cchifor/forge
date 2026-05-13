@@ -1,4 +1,5 @@
 """``weld.core.persistence.db.aio.AsyncDatabase`` stub."""
+
 from typing import Any
 
 

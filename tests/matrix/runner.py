@@ -156,8 +156,7 @@ def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
         for lane in lanes_raw:
             if lane not in ALL_LANES:
                 raise ValueError(
-                    f"scenario {name!r} has unknown lane {lane!r}; "
-                    f"expected one of {ALL_LANES}"
+                    f"scenario {name!r} has unknown lane {lane!r}; expected one of {ALL_LANES}"
                 )
 
         expected = raw.get("expected_files", [])
@@ -459,9 +458,7 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
             base_url = f"http://localhost:{bc.server_port}"
             result = assert_contract(base_url, scenario.name, bc.name)
             if not result.passed:
-                violations.extend(
-                    f"{bc.name}:{v.endpoint}: {v.reason}" for v in result.violations
-                )
+                violations.extend(f"{bc.name}:{v.endpoint}: {v.reason}" for v in result.violations)
 
         if violations:
             return LaneResult(
@@ -469,7 +466,8 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 lane="smoke",
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
-                details="contract violations: " + "; ".join(violations[:5])
+                details="contract violations: "
+                + "; ".join(violations[:5])
                 + (f" (+{len(violations) - 5} more)" if len(violations) > 5 else ""),
             )
         return LaneResult(

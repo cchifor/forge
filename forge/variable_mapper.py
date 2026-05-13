@@ -31,9 +31,7 @@ def _primary_feature(bc: BackendConfig) -> str:
     return bc.features[0] if bc.features else "items"
 
 
-def backend_context(
-    bc: BackendConfig, *, include_platform_auth: bool = False
-) -> dict[str, Any]:
+def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -> dict[str, Any]:
     """Build a Copier data dict for any backend template.
 
     Shared keys go to every backend; the language-specific version field

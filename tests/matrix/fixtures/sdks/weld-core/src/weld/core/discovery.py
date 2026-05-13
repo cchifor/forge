@@ -1,4 +1,5 @@
 """``weld.core.discovery`` — service-registry client stub."""
+
 from typing import Any
 
 
