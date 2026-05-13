@@ -264,7 +264,20 @@ def _record(
     """Record a fragment-origin provenance entry for ``dst_path``."""
     if collector is None:
         return
-    collector.record(dst_path, origin="fragment", fragment_name=fragment_name)
+    # fragment_version is None today: ``Fragment`` / ``FragmentImplSpec``
+    # have no version field, and the registry doesn't carry one either.
+    # Provenance schema v2 accepts None here; once fragments gain a
+    # ``version`` field (planned for the fragment-registry hardening
+    # epic), thread it through ``FragmentContext`` / ``FragmentPlan`` and
+    # pass the resolved value here.
+    # TODO: thread fragment_version through FragmentPlan once Fragment
+    # acquires a version field.
+    collector.record(
+        dst_path,
+        origin="fragment",
+        fragment_name=fragment_name,
+        fragment_version=None,
+    )
 
 
 def _rel_key(dst_path: Path, project_root: Path | None) -> str:

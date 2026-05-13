@@ -45,6 +45,7 @@ def discover_migrations() -> list[AvailableMigration]:
         migrate_auth_keycloak_to_platform_auth,
         migrate_entities,
         migrate_layer_modes,
+        migrate_provenance_v2,
         migrate_rename_options,
         migrate_ui_protocol,
     )
@@ -94,6 +95,18 @@ def discover_migrations() -> list[AvailableMigration]:
             to_version=migrate_adopt_baseline.TO,
             description=migrate_adopt_baseline.DESCRIPTION,
             runner=migrate_adopt_baseline.run,
+        ),
+        # 1.1.x → 1.2.0 (provenance schema v2): enrich pre-1.2 manifests
+        # with fragment_version, fragment_name, template_versions, and
+        # add fp:<hex8> fingerprints to BEGIN sentinels. Runs after
+        # adopt-baseline so any newly-stamped records also get
+        # version enrichment in this single pass.
+        AvailableMigration(
+            name=migrate_provenance_v2.NAME,
+            from_version=migrate_provenance_v2.FROM,
+            to_version=migrate_provenance_v2.TO,
+            description=migrate_provenance_v2.DESCRIPTION,
+            runner=migrate_provenance_v2.run,
         ),
         # 1.1 → 1.2 (auth-stack rebuild): swap legacy Keycloak-direct
         # for the platform-auth model. Order: runs LAST so prior

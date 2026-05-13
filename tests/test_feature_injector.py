@@ -21,6 +21,7 @@ from forge.feature_injector import (
     apply_features,
 )
 from forge.fragments import Fragment, FragmentImplSpec
+from forge.injectors.sentinels import _block_fingerprint
 
 # -- _inject_snippet ----------------------------------------------------------
 
@@ -35,20 +36,27 @@ class TestInjectSnippet:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
         _inject_snippet(file, "feat_a", "FORGE:X", "mid", "after")
         text = file.read_text(encoding="utf-8")
-        assert text == ("foo\n# FORGE:X\n# FORGE:BEGIN feat_a:X\nmid\n# FORGE:END feat_a:X\nbar\n")
+        fp = _block_fingerprint("mid")
+        assert text == (
+            f"foo\n# FORGE:X\n# FORGE:BEGIN feat_a:X fp:{fp}\nmid\n# FORGE:END feat_a:X\nbar\n"
+        )
 
     def test_before_marker_inserts_above(self, tmp_path) -> None:
         file = self._write(tmp_path, "foo\n# FORGE:X\nbar\n")
         _inject_snippet(file, "feat_a", "FORGE:X", "mid", "before")
         text = file.read_text(encoding="utf-8")
-        assert text == ("foo\n# FORGE:BEGIN feat_a:X\nmid\n# FORGE:END feat_a:X\n# FORGE:X\nbar\n")
+        fp = _block_fingerprint("mid")
+        assert text == (
+            f"foo\n# FORGE:BEGIN feat_a:X fp:{fp}\nmid\n# FORGE:END feat_a:X\n# FORGE:X\nbar\n"
+        )
 
     def test_preserves_marker_indentation(self, tmp_path) -> None:
         file = self._write(tmp_path, "def f():\n    # FORGE:X\n    return 1\n")
         _inject_snippet(file, "feat_a", "FORGE:X", "step()", "after")
         text = file.read_text(encoding="utf-8")
         # Sentinels + snippet all inherit the marker's 4-space indent.
-        assert "    # FORGE:BEGIN feat_a:X\n" in text
+        fp = _block_fingerprint("step()")
+        assert f"    # FORGE:BEGIN feat_a:X fp:{fp}\n" in text
         assert "    step()\n" in text
         assert "    # FORGE:END feat_a:X\n" in text
 
@@ -109,14 +117,16 @@ class TestInjectSnippet:
         file = self._write(tmp_path, "line\n// FORGE:X\nend\n", name="main.ts")
         _inject_snippet(file, "feat_a", "FORGE:X", "console.log('ok');", "after")
         text = file.read_text(encoding="utf-8")
-        assert "// FORGE:BEGIN feat_a:X\n" in text
+        fp = _block_fingerprint("console.log('ok');")
+        assert f"// FORGE:BEGIN feat_a:X fp:{fp}\n" in text
         assert "// FORGE:END feat_a:X\n" in text
 
     def test_rust_uses_slash_comments(self, tmp_path) -> None:
         file = self._write(tmp_path, "line\n// FORGE:X\nend\n", name="main.rs")
         _inject_snippet(file, "feat_a", "FORGE:X", 'println!("ok");', "after")
         text = file.read_text(encoding="utf-8")
-        assert "// FORGE:BEGIN feat_a:X\n" in text
+        fp = _block_fingerprint('println!("ok");')
+        assert f"// FORGE:BEGIN feat_a:X fp:{fp}\n" in text
 
     def test_missing_end_sentinel_raises(self, tmp_path) -> None:
         """A BEGIN without matching END signals a corrupt/hand-edited file."""

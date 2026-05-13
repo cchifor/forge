@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from forge.migrations import apply_migrations, discover_migrations
 
 
@@ -25,6 +23,7 @@ class TestDiscoverMigrations:
             "layer-modes",
             "adopt-baseline",
             "auth-keycloak-to-platform-auth",
+            "provenance-v2",
         }
 
     def test_migrations_have_required_fields(self) -> None:
@@ -114,6 +113,7 @@ class TestApplyMigrations:
             "layer-modes",
             "adopt-baseline",
             "auth-keycloak-to-platform-auth",
+            "provenance-v2",
         }
 
     def test_only_filter_limits_run(self, tmp_path: Path) -> None:

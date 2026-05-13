@@ -67,4 +67,17 @@ def _copy_if_absent(src: Path, dst: Path, collector: ProvenanceCollector | None)
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
     if collector is not None:
-        collector.record(dst, origin="base-template")
+        # template_name points at the shared "_common" tree under
+        # forge/templates/_common/, which isn't a Copier template (no
+        # copier.yml, no version field) — it's a flat directory of
+        # fallback quality-signal files. template_version is None for
+        # the same reason; harvest can still distinguish these from
+        # backend-template files by template_name.
+        # TODO: revisit when forge gains a formal "asset bundle" concept
+        # with its own semver.
+        collector.record(
+            dst,
+            origin="base-template",
+            template_name="_common",
+            template_version=None,
+        )

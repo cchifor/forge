@@ -22,6 +22,7 @@ module before the split.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -556,11 +557,33 @@ def _record_merge_baseline(
         rel = target.relative_to(project_root).as_posix()
     except ValueError:
         rel = target.as_posix()
+    # Trade-off note: ``inj.snippet`` is the POST-Jinja-render text.
+    # ``_load_injections`` renders ``render: true`` snippets in place
+    # before the ``_Injection`` is constructed; the pre-render template
+    # source is no longer available at this call site. Harvest can still
+    # detect fragment-template drift when the rendered snippet changes
+    # (which happens whenever the underlying template OR an option value
+    # the template reads changes). The blended signal is acceptable for
+    # Phase 1 — Phase 4 harvest can recompute against the live fragment
+    # at compare time.
+    # TODO: preserve the raw pre-render snippet on _Injection (e.g.
+    # snippet_raw: str | None) so this hash isolates template drift from
+    # option-value drift.
+    # TODO: thread fragment_version through _Injection once fragments
+    # carry semver — today the field has no source.
+    # line_range is None at the call site (the injection layer doesn't
+    # surface the post-write line span). Harvest will recompute the
+    # actual span from disk anyway.
+    snippet_sha256 = hashlib.sha256(inj.snippet.encode("utf-8")).hexdigest()
     collector.record_merge_block(
         rel_posix_path=rel,
         feature_key=inj.feature_key,
         marker=inj.marker,
         block_sha=sha256_of_text(body),
+        fragment_name=inj.feature_key,
+        fragment_version=None,
+        snippet_sha256=snippet_sha256,
+        line_range=None,
     )
 
 
