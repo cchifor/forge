@@ -111,6 +111,10 @@ class TestBackendContext:
             "db_name",
             "python_version",
             "entity_plural",
+            # PR #22 — flipped on when ``platform_auth_python_middleware``
+            # is in the active plan; renders the ``platform-auth`` dep +
+            # ``[tool.uv.sources]`` entry in pyproject.toml.jinja.
+            "include_platform_auth",
         }
 
 

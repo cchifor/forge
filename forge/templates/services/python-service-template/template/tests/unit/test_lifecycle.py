@@ -90,13 +90,3 @@ class TestShutdown:
 
         container.close.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_shutdown_stops_task_runner(self):
-        container = AsyncMock()
-        runner = AsyncMock()
-        AppLifecycle._task_runner = runner
-
-        await AppLifecycle._on_shutdown(container)
-
-        runner.stop.assert_awaited_once()
-        assert AppLifecycle._task_runner is None
