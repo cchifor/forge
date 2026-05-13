@@ -96,7 +96,7 @@ class TestFullGeneration:
 
     def test_forge_toml_captures_options(self, config_with_reliability: ProjectConfig) -> None:
         project_root = generate(config_with_reliability, quiet=True, dry_run=True)
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         data = read_forge_toml(project_root / "forge.toml")
         assert data.options.get("reliability.connection_pool") is True
@@ -105,7 +105,7 @@ class TestFullGeneration:
 
     def test_provenance_records_all_written_files(self, config_with_reliability: ProjectConfig) -> None:
         project_root = generate(config_with_reliability, quiet=True, dry_run=True)
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         data = read_forge_toml(project_root / "forge.toml")
         # Fragment-written files must be tagged as fragment-origin.

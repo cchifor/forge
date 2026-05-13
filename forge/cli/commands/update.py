@@ -14,7 +14,7 @@ from forge.fragment_context import UpdateMode
 def _run_update(args: argparse.Namespace) -> None:
     """Run `forge update` against the given project and exit."""
     from forge.errors import GeneratorError as _GeneratorError  # noqa: PLC0415
-    from forge.updater import update_project  # noqa: PLC0415
+    from forge.sync.forge_to_project.updater import update_project  # noqa: PLC0415
 
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))

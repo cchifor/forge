@@ -451,15 +451,13 @@ class TestCollectInputs:
         def fake_text(msg, default="", **_):
             return next(text_order)
 
-        with patch("forge.cli.interactive._ask_text", side_effect=fake_text):
-            with patch(
-                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
-            ):
-                with patch(
-                    "forge.cli.interactive._ask_confirm",
-                    side_effect=lambda *a, **kw: next(confirms),
-                ):
-                    config = cli._collect_inputs()
+        with patch("forge.cli.interactive._ask_text", side_effect=fake_text), patch(
+            "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+        ), patch(
+            "forge.cli.interactive._ask_confirm",
+            side_effect=lambda *a, **kw: next(confirms),
+        ):
+            config = cli._collect_inputs()
 
         assert config is not None
         assert config.project_name == "My App"
@@ -498,15 +496,13 @@ class TestCollectInputs:
 
         with patch(
             "forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)
+        ), patch(
+            "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+        ), patch(
+            "forge.cli.interactive._ask_confirm",
+            side_effect=lambda *a, **kw: next(confirms),
         ):
-            with patch(
-                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
-            ):
-                with patch(
-                    "forge.cli.interactive._ask_confirm",
-                    side_effect=lambda *a, **kw: next(confirms),
-                ):
-                    result = cli._collect_inputs()
+            result = cli._collect_inputs()
 
         assert result is None
 
@@ -543,15 +539,13 @@ class TestCollectInputs:
 
         with patch(
             "forge.cli.interactive._ask_text", side_effect=lambda *a, **kw: next(text_order)
+        ), patch(
+            "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
+        ), patch(
+            "forge.cli.interactive._ask_confirm",
+            side_effect=lambda *a, **kw: next(confirms),
         ):
-            with patch(
-                "forge.cli.interactive._ask_select", side_effect=lambda *a, **kw: next(selects)
-            ):
-                with patch(
-                    "forge.cli.interactive._ask_confirm",
-                    side_effect=lambda *a, **kw: next(confirms),
-                ):
-                    config = cli._collect_inputs()
+            config = cli._collect_inputs()
 
         assert config is not None
         assert config.frontend is not None
@@ -570,8 +564,8 @@ class TestCollectInputs:
 
 class TestMainVerifyDispatch:
     def test_verify_dispatch_clean_exit_zero(self, tmp_path, monkeypatch) -> None:
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
-        from forge.provenance import sha256_of  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
+        from forge.sync.provenance import sha256_of  # noqa: PLC0415
 
         (tmp_path / "a.py").write_text("hello\n")
         sha = sha256_of(tmp_path / "a.py")
@@ -589,8 +583,8 @@ class TestMainVerifyDispatch:
         assert exc.value.code == 0
 
     def test_verify_dispatch_drift_exit_ten(self, tmp_path, monkeypatch) -> None:
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
-        from forge.provenance import sha256_of  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
+        from forge.sync.provenance import sha256_of  # noqa: PLC0415
 
         (tmp_path / "a.py").write_text("hello\n")
         sha = sha256_of(tmp_path / "a.py")
@@ -610,7 +604,7 @@ class TestMainVerifyDispatch:
 
     def test_verify_scope_propagates_to_verify_project(self, tmp_path, monkeypatch) -> None:
         """--verify-scope files must reach verify_project as scope='files'."""
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
 
         write_forge_toml(
             tmp_path / "forge.toml",
@@ -637,7 +631,7 @@ class TestMainVerifyDispatch:
             captured["scope"] = scope
             captured["fail_on"] = fail_on
             captured["root"] = project_root
-            from forge.verify import VerifyReport  # noqa: PLC0415
+            from forge.sync.project_to_forge.verify import VerifyReport  # noqa: PLC0415
 
             return VerifyReport(
                 worst="clean",
@@ -659,7 +653,7 @@ class TestMainVerifyDispatch:
 
     def test_fail_on_conflict_propagates_to_verify_project(self, tmp_path, monkeypatch) -> None:
         """--fail-on conflict must reach verify_project as fail_on='conflict'."""
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
 
         write_forge_toml(
             tmp_path / "forge.toml",
@@ -684,7 +678,7 @@ class TestMainVerifyDispatch:
 
         def fake_verify(project_root, *, scope, fail_on):
             captured["fail_on"] = fail_on
-            from forge.verify import VerifyReport  # noqa: PLC0415
+            from forge.sync.project_to_forge.verify import VerifyReport  # noqa: PLC0415
 
             return VerifyReport(
                 worst="clean",

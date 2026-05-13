@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from forge.forge_toml import ForgeTomlData, read_forge_toml, write_forge_toml
+from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
 
 
 class TestWriteForgeToml:

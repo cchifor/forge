@@ -49,7 +49,7 @@ from forge.frontends import FrontendLayout, get_frontend_layout
 
 if TYPE_CHECKING:
     from forge.config import ProjectConfig
-    from forge.provenance import ProvenanceCollector
+    from forge.sync.provenance import ProvenanceCollector
 
 
 _TEMPLATES_ROOT = Path(__file__).resolve().parent.parent / "templates"
