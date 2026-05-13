@@ -53,6 +53,7 @@ breaking change to this surface surfaces before release.
 | ``ForgeAPI.add_command``       | 1.0.0a4      | stable            |
 | ``ForgeAPI.add_service``       | 1.1.0-alpha.1| stable            |
 | ``ForgeAPI.add_emitter``       | 1.0.0a1      | provisional       |
+| ``ForgeAPI.add_extractor``     | 1.2.0-alpha.1| provisional       |
 | ``PluginRegistration``         | 1.0.0a1      | stable            |
 +--------------------------------+--------------+-------------------+
 
@@ -149,7 +150,16 @@ def _check_sdk_requirement(spec: str) -> bool:
 
 @dataclass
 class PluginRegistration:
-    """Record of a single loaded plugin for introspection by `forge --plugins list`."""
+    """Record of a single loaded plugin for introspection by `forge --plugins list`.
+
+    ``extractors_added`` records each ``(kind, fragment)`` pair passed to
+    :meth:`ForgeAPI.add_extractor` — kind is one of ``"files"`` /
+    ``"block"`` / ``"deps"`` / ``"env"`` and fragment is the fragment
+    name the override is scoped to (or ``None`` for "apply to every
+    fragment of this kind"). Phase 4 of the bidirectional-sync plan
+    consumes this list when assembling the :class:`forge.extractors.pipeline.ExtractorPipeline`
+    for a harvest run.
+    """
 
     name: str
     module: str
@@ -159,6 +169,7 @@ class PluginRegistration:
     backends_added: int = 0
     commands_added: int = 0
     emitters_added: int = 0
+    extractors_added: tuple[tuple[str, str | None], ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -170,6 +181,7 @@ class PluginRegistration:
             "backends_added": self.backends_added,
             "commands_added": self.commands_added,
             "emitters_added": self.emitters_added,
+            "extractors_added": [list(pair) for pair in self.extractors_added],
         }
 
 
@@ -487,3 +499,57 @@ class ForgeAPI:
         """
         self._emitters[target] = emitter
         self._registration.emitters_added += 1
+
+    # -- Extractor registration (hook for Phase 4 forge --harvest) ----------
+
+    def add_extractor(
+        self,
+        kind: str,
+        extractor: Any,
+        *,
+        fragment: str | None = None,
+    ) -> None:
+        """Register a custom extractor for a kind, optionally fragment-scoped.
+
+        Plugins that ship custom appliers should ship paired extractors
+        so their fragments survive round-trip (Phase 4
+        ``forge --harvest``). The built-in pipeline ships extractors for
+        kind ``"files"`` / ``"block"`` / ``"deps"`` / ``"env"`` —
+        register one of those values to swap the default for the
+        matching kind. ``fragment=None`` (default) makes the extractor
+        apply to every fragment of the matching kind; pass a fragment
+        name to scope the override to that fragment alone.
+
+        ``extractor`` should satisfy
+        :class:`forge.extractors.pipeline.ExtractorProtocol`. The Phase
+        3 scaffolding only records the registration on
+        :attr:`PluginRegistration.extractors_added` — the Phase 4
+        harvester reads that list when assembling its pipeline.
+
+        Raises :class:`PluginError` when ``kind`` is not one of the
+        built-in kinds. Plugins that need a new extraction kind should
+        bump the SDK rather than smuggling a string through here.
+        """
+        from forge.errors import PluginError  # noqa: PLC0415
+
+        valid_kinds = {"files", "block", "deps", "env"}
+        if kind not in valid_kinds:
+            raise PluginError(
+                f"Plugin '{self._registration.name}' tried to register an "
+                f"extractor for unknown kind {kind!r}. Valid kinds: "
+                f"{sorted(valid_kinds)}.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "extractor",
+                    "value": kind,
+                },
+            )
+        # The extractor object itself is held by reference on the plugin
+        # side; Phase 4's pipeline assembler walks LOADED_PLUGINS and
+        # reaches back into the plugin's module for the live instance.
+        # Phase 3 only records the (kind, fragment) tag.
+        del extractor  # explicit: not consumed by Phase 3 scaffolding
+        self._registration.extractors_added = self._registration.extractors_added + (
+            (kind, fragment),
+        )

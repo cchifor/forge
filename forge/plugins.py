@@ -98,6 +98,7 @@ def load_all() -> list[PluginRegistration]:
             fragments_added=registration.fragments_added,
             backends_added=registration.backends_added,
             commands_added=registration.commands_added,
+            extractors_added=len(registration.extractors_added),
         )
 
     # Epic I (1.1.0-alpha.1) — lock the fragment registry after every
