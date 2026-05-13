@@ -101,6 +101,98 @@ class TestProvenanceCollector:
         assert "fragment_name" not in entry
         assert "fragment_version" not in entry
 
+    def test_as_dict_includes_all_v2_fields_when_present(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text("# routes")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(
+            tmp_path / "main.py",
+            origin="base-template",
+            template_name="python-service-template",
+            template_version="0.6.1",
+        )
+        entry = c.as_dict()["main.py"]
+        assert entry["template_name"] == "python-service-template"
+        assert entry["template_version"] == "0.6.1"
+        assert "emitted_at" in entry
+        # Fragment fields stay absent for base-template origin.
+        assert "fragment_name" not in entry
+        assert "fragment_version" not in entry
+
+    def test_as_dict_includes_fragment_version_when_present(self, tmp_path: Path) -> None:
+        (tmp_path / "f.py").write_text("# fragment")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(
+            tmp_path / "f.py",
+            origin="fragment",
+            fragment_name="cors",
+            fragment_version="2.3.4",
+        )
+        entry = c.as_dict()["f.py"]
+        assert entry["fragment_version"] == "2.3.4"
+
+    def test_record_skips_when_file_not_present(self, tmp_path: Path) -> None:
+        # Fragment declared a file but it didn't actually land — record() must no-op.
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(tmp_path / "missing.py", origin="fragment", fragment_name="x")
+        assert c.records == {}
+
+
+class TestRecordMergeBlock:
+    def test_records_minimum_baseline(self, tmp_path: Path) -> None:
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record_merge_block(
+            rel_posix_path="src/app/main.py",
+            feature_key="middleware_cors",
+            marker="MIDDLEWARE_REGISTRATION",
+            block_sha="abc123",
+        )
+        from forge.merge import MergeBlockCollector
+
+        key = MergeBlockCollector.key_for(
+            "src/app/main.py", "middleware_cors", "MIDDLEWARE_REGISTRATION"
+        )
+        rec = c.merge_blocks[key]
+        assert rec.sha256 == "abc123"
+        # Optional fields default to None.
+        assert rec.fragment_name is None
+        assert rec.fragment_version is None
+        assert rec.snippet_sha256 is None
+        assert rec.line_range is None
+
+    def test_records_with_full_metadata(self, tmp_path: Path) -> None:
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record_merge_block(
+            rel_posix_path="src/app/main.py",
+            feature_key="middleware_cors",
+            marker="MIDDLEWARE_REGISTRATION",
+            block_sha="abc",
+            fragment_name="middleware_cors",
+            fragment_version="1.2.0",
+            snippet_sha256="def",
+            line_range=(44, 46),
+        )
+        d = c.merge_blocks_as_dict()
+        (entry,) = d.values()
+        assert entry["sha256"] == "abc"
+        assert entry["fragment_name"] == "middleware_cors"
+        assert entry["fragment_version"] == "1.2.0"
+        assert entry["snippet_sha256"] == "def"
+        # line_range is serialized as a list (TOML doesn't have tuples).
+        assert entry["line_range"] == [44, 46]
+
+    def test_merge_blocks_as_dict_omits_none_fields(self, tmp_path: Path) -> None:
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record_merge_block(
+            rel_posix_path="src/a.py",
+            feature_key="feat",
+            marker="X",
+            block_sha="z",
+        )
+        d = c.merge_blocks_as_dict()
+        (entry,) = d.values()
+        # v1-shape entry — only sha256 emitted; richer fields skipped.
+        assert set(entry) == {"sha256"}
+
 
 class TestClassify:
     def test_unchanged_when_sha_matches(self, tmp_path: Path) -> None:
