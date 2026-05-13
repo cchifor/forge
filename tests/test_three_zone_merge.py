@@ -9,9 +9,9 @@ import yaml
 
 from forge.errors import GeneratorError
 from forge.feature_injector import (
-    _Injection,
     _apply_zoned_injection,
     _has_sentinel_block,
+    _Injection,
     _load_injections,
 )
 
