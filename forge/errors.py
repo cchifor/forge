@@ -224,6 +224,25 @@ FILESYSTEM_IO_ERROR = "FILESYSTEM_IO_ERROR"
 
 
 # ----------------------------------------------------------------------------
+# CLI exit codes (process-level signals; orthogonal to the ForgeError codes
+# above which live inside the JSON error envelope).
+#
+# 0-1 are reserved by convention (success / generic Python crash). 2-8 are
+# claimed by ``forge.cli.main._exit_code_for`` for the generation-error
+# hierarchy. 10/11 belong to ``forge --verify`` — a read-only drift-detection
+# verb that never raises, so its exit signals live outside the ForgeError
+# axis entirely. See ``forge.cli.commands.verify._verify_exit_code``.
+# ----------------------------------------------------------------------------
+
+EXIT_VERIFY_DRIFT = 10
+"""``forge --verify`` detected drift (user-modified or missing records)."""
+
+EXIT_VERIFY_CONFLICT = 11
+"""``forge --verify`` detected drift AND fragment moved upstream (sentinel
+corruption today; cross-registry comparison in Phase 4)."""
+
+
+# ----------------------------------------------------------------------------
 # Backward-compatibility alias — deprecated since 1.1.0, scheduled removal 2.0
 # ----------------------------------------------------------------------------
 #
@@ -318,4 +337,7 @@ __all__ = [
     "TEMPLATE_NOT_FOUND",
     # FilesystemError codes
     "FILESYSTEM_IO_ERROR",
+    # CLI exit codes
+    "EXIT_VERIFY_DRIFT",
+    "EXIT_VERIFY_CONFLICT",
 ]
