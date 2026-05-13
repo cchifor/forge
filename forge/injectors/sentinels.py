@@ -29,6 +29,7 @@ either location keep working through the shim re-exports in
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -40,6 +41,20 @@ from forge.errors import (
     InjectionError,
 )
 from forge.fragments import MARKER_PREFIX
+
+# Block fingerprint: 8 hex chars of sha256(rendered_snippet). Appended
+# to the BEGIN sentinel as ``fp:<hex8>`` so the reverse-direction
+# harvester (Phase 4) can recover an anchor even when a fragment author
+# has renamed the marker upstream. Not consulted by forward re-injection
+# (which matches by tag); legacy v1 projects without fingerprints keep
+# working via substring-tolerant matchers below.
+_FINGERPRINT_BYTES = 4
+
+
+def _block_fingerprint(snippet: str) -> str:
+    """4-byte content fingerprint of a rendered snippet (8 hex chars)."""
+    return hashlib.sha256(snippet.encode("utf-8")).hexdigest()[: _FINGERPRINT_BYTES * 2]
+
 
 # File-extension → single-line comment prefix. Only line-comment forms are
 # supported (never `/* */` or `<!-- -->`); in practice every injection
@@ -105,8 +120,21 @@ def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: s
 
 
 def _render_block(indent: str, prefix: str, tag: str, snippet: str) -> str:
-    """Produce ``{indent}{prefix} BEGIN ...\\n<snippet>\\n{indent}{prefix} END ...\\n``."""
-    begin = f"{indent}{prefix} {MARKER_PREFIX}BEGIN {tag}\n"
+    """Produce ``{indent}{prefix} BEGIN ... fp:<hex8>\\n<snippet>\\n{indent}{prefix} END ...\\n``.
+
+    The BEGIN sentinel carries a content fingerprint of the rendered
+    snippet (``fp:<8 hex chars>``) so harvest can re-anchor blocks
+    whose marker has been renamed. The END sentinel stays minimal —
+    one anchor per block is enough for recovery, and a clean END line
+    matches the v1 grammar so legacy parsers keep working.
+
+    Matchers in this module (``_has_sentinel_block``, ``_read_block_body``,
+    ``_inject_snippet``) use prefix-style substring matching on the
+    canonical tag, so the trailing fingerprint is naturally tolerated
+    and v1-shape sentinels without a fingerprint are still recognized.
+    """
+    fp = _block_fingerprint(snippet)
+    begin = f"{indent}{prefix} {MARKER_PREFIX}BEGIN {tag} fp:{fp}\n"
     end = f"{indent}{prefix} {MARKER_PREFIX}END {tag}\n"
     body = "".join(f"{indent}{line}\n" for line in snippet.splitlines())
     return begin + body + end
