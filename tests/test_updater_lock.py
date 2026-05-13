@@ -14,13 +14,13 @@ from forge.errors import (
     InjectionError,
     ProvenanceError,
 )
-from forge.sentinel_audit import (
+from forge.sync.lock import _is_alive, _lock_path, acquire_lock
+from forge.sync.sentinel_audit import (
     SentinelIssue,
     audit_file,
     audit_targets,
     raise_if_corrupt,
 )
-from forge.updater_lock import _is_alive, _lock_path, acquire_lock
 
 # ---------------------------------------------------------------------------
 # Lock acquisition + release

@@ -26,11 +26,11 @@ from forge.appliers.plan import FragmentPlan
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, ProjectConfig
 from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
-from forge.forge_toml import read_forge_toml
 from forge.fragment_context import UpdateMode
-from forge.merge import file_three_way_decide, sha256_of_file
-from forge.uninstaller import disabled_fragments
-from forge.updater import _infer_backends
+from forge.sync.forge_to_project.uninstaller import disabled_fragments
+from forge.sync.forge_to_project.updater import _infer_backends
+from forge.sync.manifest import read_forge_toml
+from forge.sync.merge import file_three_way_decide, sha256_of_file
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class FilePlanEntry:
     """One file-level decision the next ``--update`` would make.
 
     ``rel_path`` is POSIX, relative to the project root. ``action`` is
-    one of the strings :func:`forge.merge.file_three_way_decide` returns
+    one of the strings :func:`forge.sync.merge.file_three_way_decide` returns
     plus ``"new"`` for files that don't yet exist on disk. ``reason``
     is a short human-readable explanation suitable for CLI output.
     """
@@ -102,7 +102,7 @@ def plan_update(
 
     Reads the manifest, runs the resolver, and walks each fragment's
     ``files/`` tree without writing. Produces a per-file decision using
-    :func:`forge.merge.file_three_way_decide` so the user sees what the
+    :func:`forge.sync.merge.file_three_way_decide` so the user sees what the
     real update would do — applied / conflict / preserved — before
     committing.
 

@@ -15,8 +15,8 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.errors import GeneratorError
-from forge.forge_toml import read_forge_toml, write_forge_toml
-from forge.updater import _infer_backends, update_project
+from forge.sync.forge_to_project.updater import _infer_backends, update_project
+from forge.sync.manifest import read_forge_toml, write_forge_toml
 
 
 @pytest.fixture
@@ -207,7 +207,7 @@ def _find_fragment_file(project_root: Path) -> Path | None:
     Returns ``None`` if no such file exists in the generated project
     (the test should xfail/skip rather than misreport).
     """
-    from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+    from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
     data = read_forge_toml(project_root / "forge.toml")
     for rel, entry in data.provenance.items():
@@ -325,8 +325,8 @@ class TestUpdateModeConflict:
         Yields the project root and the rel-path of the file we
         engineered a conflict on.
         """
-        from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
         from forge.generator import generate  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml, write_forge_toml  # noqa: PLC0415
 
         cfg = ProjectConfig(
             project_name="conflict-test",
@@ -465,8 +465,8 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_merge_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.forge_toml import read_forge_toml, write_forge_toml
         from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
             project_name="usermod",
@@ -508,8 +508,8 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_skip_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.forge_toml import read_forge_toml
         from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
             project_name="usermod-skip",
@@ -549,8 +549,8 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_overwrite_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.forge_toml import read_forge_toml
         from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
             project_name="usermod-over",
@@ -600,8 +600,8 @@ class TestUpdateUninstallPath:
     def test_uninstall_logs_when_fragment_disabled(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.forge_toml import read_forge_toml, write_forge_toml
         from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml, write_forge_toml
 
         cfg = ProjectConfig(
             project_name="uninst",

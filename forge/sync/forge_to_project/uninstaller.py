@@ -41,7 +41,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from forge.provenance import ProvenanceCollector, ProvenanceRecord, classify
+from forge.sync.provenance import ProvenanceCollector, ProvenanceRecord, classify
 
 
 @dataclass

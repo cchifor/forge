@@ -13,7 +13,7 @@ def _run_plan_update(args: argparse.Namespace) -> None:
     """Compute and print a dry-run plan for ``forge --update``."""
     from forge.errors import GeneratorError as _GeneratorError  # noqa: PLC0415
     from forge.fragment_context import UpdateMode  # noqa: PLC0415
-    from forge.plan_update import plan_update  # noqa: PLC0415
+    from forge.sync.forge_to_project.plan import plan_update  # noqa: PLC0415
 
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))

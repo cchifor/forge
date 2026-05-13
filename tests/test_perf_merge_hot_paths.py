@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.merge import (
+from forge.sync.merge import (
     file_three_way_decide,
     is_binary_file,
     sha256_of_file,
@@ -162,7 +162,7 @@ class TestPlanUpdateWalkSpeed:
             ProjectConfig,
         )
         from forge.generator import generate
-        from forge.plan_update import plan_update
+        from forge.sync.forge_to_project.plan import plan_update
 
         cfg = ProjectConfig(
             project_name="bench",

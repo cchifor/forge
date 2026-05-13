@@ -54,7 +54,7 @@ from forge.errors import (
 )
 from forge.feature_injector import apply_features, apply_project_features
 from forge.logging import get_logger, phase_timer
-from forge.provenance import ProvenanceCollector
+from forge.sync.provenance import ProvenanceCollector
 
 _logger = get_logger("generator")
 
@@ -378,7 +378,7 @@ def _record_tree(
     emitting-template attribution. Pass ``None`` when the caller cannot
     cheaply identify a single template (e.g. mixed catch-all sweeps).
     """
-    from forge.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
+    from forge.sync.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
 
     origin_typed: _PO = origin  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
     if not root.is_dir():
@@ -424,7 +424,7 @@ def _write_forge_toml(
     """
     from importlib import metadata  # noqa: PLC0415
 
-    from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+    from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
 
     try:
         forge_version = metadata.version("forge")

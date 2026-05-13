@@ -1,0 +1,36 @@
+"""Forward direction: forge → project (the existing forge --update flow).
+
+The forward flow re-applies fragment intent to a generated project:
+copy files, run injections, add deps, append env vars. Phase 3 of the
+bidirectional-sync plan moves the forward modules here from the
+top-level ``forge/`` package.
+"""
+
+from forge.sync.forge_to_project.plan import (
+    FilePlanEntry,
+    UpdatePlanReport,
+    plan_update,
+)
+from forge.sync.forge_to_project.uninstaller import (
+    UninstallOutcome,
+    disabled_fragments,
+    uninstall_fragment,
+)
+from forge.sync.forge_to_project.updater import (
+    classify_project_state,
+    update_project,
+)
+
+__all__ = [
+    # plan
+    "FilePlanEntry",
+    "UpdatePlanReport",
+    "plan_update",
+    # uninstaller
+    "UninstallOutcome",
+    "disabled_fragments",
+    "uninstall_fragment",
+    # updater
+    "classify_project_state",
+    "update_project",
+]

@@ -22,27 +22,20 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
+
+# ``UpdateMode`` is canonically defined in :mod:`forge.sync.direction`
+# (Phase 3 of the bidirectional-sync plan) so the forward + reverse flow
+# call sites share a single Literal. Re-exported here for back-compat
+# with the pre-reorg import path (``from forge.fragment_context import
+# UpdateMode``); the canonical home is one ``import`` hop away.
+from forge.sync.direction import UpdateMode
 
 if TYPE_CHECKING:
     from forge.config import BackendConfig
-    from forge.provenance import ProvenanceCollector
+    from forge.sync.provenance import ProvenanceCollector
 
-
-# Drives :class:`forge.appliers.files.FragmentFileApplier`'s collision
-# behaviour. ``strict`` is fresh generation — fragments must not overlap
-# the base template or each other, so the applier raises on any
-# pre-existing destination. The other three are ``forge --update`` modes
-# exposed via the ``--mode`` CLI flag (P0.1, 1.1.0-alpha.2):
-#
-#   * ``merge``     — three-way decide via ``file_three_way_decide``;
-#                     emit a ``.forge-merge`` sidecar on conflict.
-#   * ``skip``      — pre-1.1 update behaviour: preserve any pre-existing
-#                     destination unconditionally.
-#   * ``overwrite`` — clobber pre-existing destinations regardless of
-#                     user edits. The escape hatch for "I really want
-#                     fragment state, my edits be damned".
-UpdateMode = Literal["strict", "merge", "skip", "overwrite"]
+__all__ = ["FragmentContext", "UpdateMode"]
 
 
 @dataclass(frozen=True)

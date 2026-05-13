@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.provenance import ProvenanceCollector, sha256_of
-from forge.uninstaller import (
+from forge.sync.forge_to_project.uninstaller import (
     UninstallOutcome,
     _remove_sentinel_block,
     disabled_fragments,
     uninstall_fragment,
 )
+from forge.sync.provenance import ProvenanceCollector, sha256_of
 
 
 def _write(path: Path, body: str) -> None:
@@ -155,7 +155,7 @@ class TestUninstallFragmentFiles:
         }
         coll = _collector(tmp_path)
         # Seed the collector as if it had been mid-update.
-        from forge.provenance import ProvenanceRecord
+        from forge.sync.provenance import ProvenanceRecord
 
         coll.records["src/frag.py"] = ProvenanceRecord(
             origin="fragment", sha256=sha256_of(f), fragment_name="my_frag"
@@ -312,13 +312,13 @@ class TestNoUninstallFlag:
         return f
 
     def test_flag_absent_returns_false(self, tmp_path: Path) -> None:
-        from forge.updater import _no_uninstall_flag
+        from forge.sync.forge_to_project.updater import _no_uninstall_flag
 
         manifest = self._toml(tmp_path, '[forge]\nversion = "1.0.0"\n')
         assert _no_uninstall_flag(manifest) is False
 
     def test_flag_true_returns_true(self, tmp_path: Path) -> None:
-        from forge.updater import _no_uninstall_flag
+        from forge.sync.forge_to_project.updater import _no_uninstall_flag
 
         manifest = self._toml(
             tmp_path,
@@ -327,7 +327,7 @@ class TestNoUninstallFlag:
         assert _no_uninstall_flag(manifest) is True
 
     def test_flag_false_returns_false(self, tmp_path: Path) -> None:
-        from forge.updater import _no_uninstall_flag
+        from forge.sync.forge_to_project.updater import _no_uninstall_flag
 
         manifest = self._toml(
             tmp_path,
@@ -336,7 +336,7 @@ class TestNoUninstallFlag:
         assert _no_uninstall_flag(manifest) is False
 
     def test_corrupt_toml_returns_false(self, tmp_path: Path) -> None:
-        from forge.updater import _no_uninstall_flag
+        from forge.sync.forge_to_project.updater import _no_uninstall_flag
 
         manifest = self._toml(tmp_path, "this is not valid TOML @@@ = [")
         assert _no_uninstall_flag(manifest) is False
@@ -349,7 +349,7 @@ class TestNoUninstallFlag:
 
 class TestMergeBlockKeyParse:
     def test_round_trip(self) -> None:
-        from forge.merge import MergeBlockCollector
+        from forge.sync.merge import MergeBlockCollector
 
         key = MergeBlockCollector.key_for(
             "src/app/main.py", "rate_limit", "FORGE:MIDDLEWARE_REGISTRATION"
@@ -362,7 +362,7 @@ class TestMergeBlockKeyParse:
         )
 
     def test_malformed_returns_none(self) -> None:
-        from forge.merge import MergeBlockCollector
+        from forge.sync.merge import MergeBlockCollector
 
         assert MergeBlockCollector.parse_key("no separator here") is None
         assert MergeBlockCollector.parse_key("src/a.py::no_feature_marker") is None

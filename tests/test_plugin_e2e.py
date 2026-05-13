@@ -243,7 +243,7 @@ class TestPluginGeneration:
             assert "print_banner()" in body
 
             # Provenance recorded the file as fragment-authored.
-            from forge.forge_toml import read_forge_toml  # noqa: PLC0415
+            from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
             data = read_forge_toml(project_root / "forge.toml")
             rel = "services/backend/src/app/hello.py"
@@ -275,7 +275,7 @@ class TestPluginUpdateFlow:
             ProjectConfig,
         )
         from forge.generator import generate  # noqa: PLC0415
-        from forge.updater import update_project  # noqa: PLC0415
+        from forge.sync.forge_to_project.updater import update_project  # noqa: PLC0415
 
         cfg = ProjectConfig(
             project_name="plugin-update",
