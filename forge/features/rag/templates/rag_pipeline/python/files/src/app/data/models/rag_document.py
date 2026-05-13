@@ -14,7 +14,7 @@ from sqlalchemy import Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.data.models.base import JSON_TYPE, Base
-from service.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
+from weld.core.persistence.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
 
 
 EMBEDDING_DIM = 1536  # matches text-embedding-3-small; override in env for other models

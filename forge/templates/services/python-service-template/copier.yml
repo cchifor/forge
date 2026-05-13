@@ -73,6 +73,16 @@ weld_base_sdks:
   help: "Comma-separated weld-* SDKs to declare in pyproject (used when sdk_consumption != none)"
   default: "auth,core,fastapi,observability,http-client,events"
 
+include_platform_auth:
+  type: bool
+  help: |
+    Add the ``platform-auth`` runtime SDK as a dependency (with a
+    [tool.uv.sources] path-dep against ``../../sdks/platform-auth``).
+    Set by the generator when the ``platform_auth_python_middleware``
+    fragment is in the active plan. Non-auth Python services default to
+    false and don't reference platform-auth at all.
+  default: false
+
 service_path_prefix:
   type: str
   help: "Traefik PathPrefix used for routing this service (e.g. /api/{{ project_slug }})"

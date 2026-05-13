@@ -25,6 +25,7 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.generator import generate
+from tests.matrix.runner import _inject_weld_stubs
 
 TEST_TIMEOUT_S = 600  # 10 min per scaffold-and-run cycle
 
@@ -126,6 +127,7 @@ def test_python_vue_scaffolds_and_pytest_passes(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     backend_dir = project_root / "services" / "backend"
     assert backend_dir.exists(), "python backend not generated"
 
@@ -156,6 +158,7 @@ def test_node_svelte_scaffolds_and_vitest_passes(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     backend_dir = project_root / "services" / "backend-node"
     assert (backend_dir / "package.json").exists(), "node backend package.json missing"
     assert (backend_dir / "package-lock.json").exists(), (
@@ -184,6 +187,7 @@ def test_rust_no_frontend_compiles(tmp_path: Path, require_cargo: None, require_
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     backend_dir = project_root / "services" / "backend-rust"
     assert (backend_dir / "Cargo.toml").exists(), "rust backend Cargo.toml missing"
 
@@ -222,6 +226,7 @@ def test_multi_backend_with_keycloak_scaffolds(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
 
     # All three backends must exist with their toolchain manifests.
     assert (project_root / "services" / "api-py" / "pyproject.toml").exists()
@@ -265,6 +270,7 @@ def test_vue_auth_off_typechecks(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
 
@@ -303,6 +309,7 @@ def test_svelte_chat_on_typechecks(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
 
@@ -339,6 +346,7 @@ def test_flutter_minimal_analyzes(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "pubspec.yaml").exists()
 
@@ -380,6 +388,7 @@ def test_flutter_full_analyzes(
     config.validate()
 
     project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "pubspec.yaml").exists()
 

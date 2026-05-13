@@ -118,7 +118,26 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             backend=bc.name,
             language=bc.language.value,
         ):
-            _generate_single_backend(bc, spec.template_dir, backend_dir, quiet)
+            # ``platform-auth`` is the runtime SDK the auth middleware
+            # fragment imports from. It lives at ``sdks/platform-auth/``
+            # (shipped by ``platform_auth_sdk_python``) and needs both a
+            # ``"platform-auth"`` ``[project] dependencies`` entry and a
+            # ``[tool.uv.sources]`` path-dep so ``uv sync`` resolves it
+            # against the in-tree source. Flip the copier var only when
+            # the Python middleware fragment is actually in the plan —
+            # non-auth Python services don't ship sdks/platform-auth/ so
+            # they'd uv-sync-fail if we always emitted the entry.
+            includes_platform_auth = any(
+                rf.fragment.name == "platform_auth_python_middleware"
+                for rf in plan.ordered
+            )
+            _generate_single_backend(
+                bc,
+                spec.template_dir,
+                backend_dir,
+                quiet,
+                include_platform_auth=includes_platform_auth,
+            )
         _record_tree(backend_dir, collector, origin="base-template")
         with phase_timer(
             _logger,
@@ -538,10 +557,17 @@ def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool =
 
 
 def _generate_single_backend(
-    bc: BackendConfig, template_name: str, dst: Path, quiet: bool = False
+    bc: BackendConfig,
+    template_name: str,
+    dst: Path,
+    quiet: bool = False,
+    *,
+    include_platform_auth: bool = False,
 ) -> Path:
     """Generate a single backend using Copier."""
-    ctx = variable_mapper.backend_context(bc)
+    ctx = variable_mapper.backend_context(
+        bc, include_platform_auth=include_platform_auth
+    )
     dst.mkdir(parents=True, exist_ok=True)
     _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
     return dst
