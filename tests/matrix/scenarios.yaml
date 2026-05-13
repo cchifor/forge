@@ -50,7 +50,9 @@ scenarios:
 
   - name: py_svelte_min
     description: Python + Svelte, no auth, no options
-    lanes: [generate, verify, smoke]
+    # Cross-stack opt-in for lane D (roundtrip) — covers a Python +
+    # frontend scenario in addition to py_only_headless (Python-only).
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8020
     expected_files:
       - services/api/pyproject.toml
@@ -303,7 +305,11 @@ scenarios:
 
   - name: py_only_headless
     description: Python-only, no frontend, agent + RAG (qdrant) enabled
-    lanes: [generate, verify]
+    # Lane D (roundtrip) is opt-in per Phase 5 — py_only_headless is
+    # the fastest scenario (~30s/generate) so it carries the round-trip
+    # CI signal in the nightly matrix. See tests/matrix/runner.py
+    # docstring + docs/round-trip.md.
+    lanes: [generate, verify, roundtrip]
     port_base: 8120
     expected_files:
       - services/api/pyproject.toml

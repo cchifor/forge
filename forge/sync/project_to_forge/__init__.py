@@ -9,8 +9,16 @@ candidate fragment patches (via ``harvest_project``).
   fragment patches. The harvester walks the manifest, runs the
   :class:`forge.extractors.ExtractorPipeline`, and bundles the result
   into a :class:`HarvestBundle` the maintainer can review.
+* Phase 5: :func:`apply_bundle_to_fragments` — write a harvest bundle's
+  candidates back into the forge fragment tree. Files-only in v1; block
+  / deps / env are deferred to Phase 6.
 """
 
+from forge.sync.project_to_forge.apply_bundle import (
+    ApplyBundleEntry,
+    ApplyBundleReport,
+    apply_bundle_to_fragments,
+)
 from forge.sync.project_to_forge.harvester import (
     HarvestBundle,
     harvest_project,
@@ -24,11 +32,14 @@ from forge.sync.project_to_forge.verify import (
 )
 
 __all__ = [
+    "ApplyBundleEntry",
+    "ApplyBundleReport",
     "BlockVerifyEntry",
     "FileVerifyEntry",
     "HarvestBundle",
     "VerifyReport",
     "VerifyWorst",
+    "apply_bundle_to_fragments",
     "harvest_project",
     "verify_project",
 ]

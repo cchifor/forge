@@ -1,14 +1,21 @@
-name: Matrix nightly (lane C — compose-up smoke)
+name: Matrix nightly (lane C smoke + lane D roundtrip)
 
-# Runs the RFC-006 HTTP smoke contract against every scenario nightly.
-# Each scenario spins up its own docker-compose stack, hits the contract
-# endpoints, and tears down. Lane C is excluded from PR runs because
-# per-scenario wall-clock runs ~10 min (Docker pull + compose up + tests
-# + teardown); nightly budget is ~2 hours max total.
+# Runs nightly heavyweight matrix lanes:
+#
+# * Lane C — RFC-006 HTTP smoke contract. Each scenario spins up its own
+#   docker-compose stack, hits the contract endpoints, and tears down.
+#   Excluded from PR runs because per-scenario wall-clock runs ~10 min
+#   (Docker pull + compose up + tests + teardown).
+# * Lane D — bidirectional-sync round-trip (Phase 5). Each opted-in
+#   scenario generates twice (project-a + project-b) with a harvest /
+#   apply-back cycle in between; ~2 min/scenario. Exercises the FR1
+#   invariant (fresh-generate emits zero block/files candidates) and
+#   stages a synthetic block edit when the scenario surface allows.
 #
 # Also triggerable manually (workflow_dispatch) or when a PR is labeled
-# ``ci:matrix-smoke`` so contributors can exercise lane C on demand for
-# changes that touch fragment templates or docker-compose rendering.
+# ``ci:matrix-smoke`` so contributors can exercise these lanes on
+# demand for changes that touch fragment templates, docker-compose
+# rendering, or the harvest / apply-back substrate.
 
 on:
   schedule:
@@ -30,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       scenarios: ${{ steps.load.outputs.scenarios }}
+      roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -38,14 +46,19 @@ jobs:
       - name: Install
         run: uv sync --all-extras --dev
       - id: load
-        name: Emit scenario list as JSON
+        name: Emit scenario lists as JSON
         run: |
           uv run python -c '
           import json, yaml
           data = yaml.safe_load(open("tests/matrix/scenarios.yaml"))
-          # Lane C only — skip scenarios that opt out via ``lanes``.
-          names = [s["name"] for s in data["scenarios"] if "smoke" in s.get("lanes", [])]
-          print(f"scenarios={json.dumps(names)}")
+          # Lane C — scenarios opted into ``smoke``.
+          smoke_names = [s["name"] for s in data["scenarios"] if "smoke" in s.get("lanes", [])]
+          # Lane D — scenarios opted into ``roundtrip`` (Phase 5).
+          roundtrip_names = [
+              s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
+          ]
+          print(f"scenarios={json.dumps(smoke_names)}")
+          print(f"roundtrip_scenarios={json.dumps(roundtrip_names)}")
           ' >> "$GITHUB_OUTPUT"
 
   smoke:
@@ -97,6 +110,47 @@ jobs:
             fi
           done
 
+  # Lane D — round-trip CI gate (Phase 5). Generates each opted-in
+  # scenario twice with a harvest/apply-back cycle in between and asserts
+  # the directory match (FR1 invariant + full forward→reverse→forward
+  # round-trip). Each scenario runs ~2 min so the nightly wall-clock
+  # stays bounded even with a half-dozen opted-in scenarios.
+  roundtrip:
+    needs: gate
+    if: needs.gate.outputs.roundtrip_scenarios != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.gate.outputs.roundtrip_scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install rustup stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane D (roundtrip) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane roundtrip
+      - name: Upload per-scenario JSON status artifact
+        if: always()
+        run: |
+          mkdir -p matrix-status
+          uv run python tests/matrix/runner.py \
+            --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
+            matrix-status/${{ matrix.scenario }}-roundtrip.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-status-roundtrip-${{ matrix.scenario }}
+          path: matrix-status/
+          if-no-files-found: ignore
+
   # Aggregate per-scenario JSON artifacts into a single markdown grid
   # and publish it to the workflow summary page (no auto-commit to the
   # repo). Runs after every scenario has finished (success or failure)
@@ -104,7 +158,7 @@ jobs:
   # ``docs/matrix-status.md`` manually if they want to lock a specific
   # snapshot.
   publish-dashboard:
-    needs: smoke
+    needs: [smoke, roundtrip]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -145,7 +199,7 @@ jobs:
           grid = _format_markdown_grid(results, scenarios)
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           with summary.open("a", encoding="utf-8") as fh:
-              fh.write("## Matrix lane C — nightly smoke contract\n\n")
+              fh.write("## Matrix nightly — lane C (smoke) + lane D (round-trip)\n\n")
               fh.write(grid)
               fh.write("\nSee individual scenario logs above for details.\n")
           Path("matrix-status.md").write_text(grid, encoding="utf-8")
