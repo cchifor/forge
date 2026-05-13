@@ -13,8 +13,8 @@ import logging
 
 from fastapi import HTTPException, Request, status
 
-from service.domain.account import Account
-from service.domain.user import User
+from weld.core.domain.account import Account
+from weld.core.domain.user import User
 
 logger = logging.getLogger(__name__)
 

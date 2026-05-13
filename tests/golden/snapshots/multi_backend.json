@@ -33,7 +33,7 @@
       "sha256": "9c0878c6afdc15c6"
     },
     "forge.toml": {
-      "size": 59062,
+      "size": 52694,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -513,7 +513,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 491,
+      "size": 519,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -733,7 +733,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 492,
+      "size": 520,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
@@ -793,8 +793,8 @@
       "sha256": "19554330f3b7e0c0"
     },
     "services/api-py/pyproject.toml": {
-      "size": 4347,
-      "sha256": "9aed87c2f33bd3d2"
+      "size": 5148,
+      "sha256": "6764bbc504e2f010"
     },
     "services/api-py/README.md": {
       "size": 33689,
@@ -857,8 +857,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/core/auth.py": {
-      "size": 1917,
-      "sha256": "b5198c5fee767f49"
+      "size": 1921,
+      "sha256": "ca5fd2c0ee8fdbe8"
     },
     "services/api-py/src/app/core/config/__init__.py": {
       "size": 605,
@@ -989,12 +989,12 @@
       "sha256": "239e47e157cbde86"
     },
     "services/api-py/src/app/middleware/auth_context.py": {
-      "size": 2372,
-      "sha256": "3c2af71359faa7e3"
+      "size": 2369,
+      "sha256": "3dc4801a7a2cfe7c"
     },
     "services/api-py/src/app/middleware/correlation.py": {
-      "size": 1272,
-      "sha256": "3fd729ed9e584c39"
+      "size": 1269,
+      "sha256": "d3cd3c78f97a73cd"
     },
     "services/api-py/src/app/middleware/logging.py": {
       "size": 4820,
@@ -1029,12 +1029,12 @@
       "sha256": "5667d36eb9d86bbf"
     },
     "services/api-py/src/service/security/auth.py": {
-      "size": 6642,
-      "sha256": "9486210b9638c88f"
+      "size": 6641,
+      "sha256": "814ffe38f7cad128"
     },
     "services/api-py/src/service/security/platform_auth_setup.py": {
-      "size": 2108,
-      "sha256": "68b8c542c046e4bc"
+      "size": 2110,
+      "sha256": "eedd498758e3a111"
     },
     "services/api-py/tests/__init__.py": {
       "size": 0,
@@ -1043,74 +1043,6 @@
     "services/api-py/tests/conftest.py": {
       "size": 587,
       "sha256": "48dac8b69543cab8"
-    },
-    "services/api-py/tests/docker/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/tests/docker/conftest.py": {
-      "size": 2522,
-      "sha256": "f44f05bee08b4b05"
-    },
-    "services/api-py/tests/docker/test_health_docker.py": {
-      "size": 1207,
-      "sha256": "8bfa3124311ab665"
-    },
-    "services/api-py/tests/docker/test_items_docker.py": {
-      "size": 3845,
-      "sha256": "1bb9fd616ddffa61"
-    },
-    "services/api-py/tests/docker/test_migrations.py": {
-      "size": 2189,
-      "sha256": "8fc0c6b1750e0e3d"
-    },
-    "services/api-py/tests/docker/test_tasks_docker.py": {
-      "size": 2309,
-      "sha256": "6d6a7cadfe79c966"
-    },
-    "services/api-py/tests/integration/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api-py/tests/integration/conftest.py": {
-      "size": 4601,
-      "sha256": "c15d5325a82fb489"
-    },
-    "services/api-py/tests/integration/test_admin_api.py": {
-      "size": 649,
-      "sha256": "96576d90665c76fb"
-    },
-    "services/api-py/tests/integration/test_db_aio.py": {
-      "size": 1043,
-      "sha256": "e29a15110a98fddc"
-    },
-    "services/api-py/tests/integration/test_health_api.py": {
-      "size": 528,
-      "sha256": "098e49ffb60137ff"
-    },
-    "services/api-py/tests/integration/test_home_api.py": {
-      "size": 423,
-      "sha256": "17c5386efafa7fc2"
-    },
-    "services/api-py/tests/integration/test_item_repository_integration.py": {
-      "size": 3905,
-      "sha256": "05931a563400b30f"
-    },
-    "services/api-py/tests/integration/test_items_api.py": {
-      "size": 4379,
-      "sha256": "400875fc05df398c"
-    },
-    "services/api-py/tests/integration/test_middleware.py": {
-      "size": 4820,
-      "sha256": "6c7309825611eab4"
-    },
-    "services/api-py/tests/integration/test_tasks_api.py": {
-      "size": 3341,
-      "sha256": "c90dc1604bb7f49b"
-    },
-    "services/api-py/tests/integration/test_uow.py": {
-      "size": 3179,
-      "sha256": "a4cfa46ce7b641b5"
     },
     "services/api-py/tests/unit/__init__.py": {
       "size": 0,
@@ -1128,14 +1060,6 @@
       "size": 1796,
       "sha256": "ffb377d5c15b6d0f"
     },
-    "services/api-py/tests/unit/test_circuit_breaker.py": {
-      "size": 2164,
-      "sha256": "c723fa655ac71c3b"
-    },
-    "services/api-py/tests/unit/test_client_errors.py": {
-      "size": 1541,
-      "sha256": "30cd3a5731ec203d"
-    },
     "services/api-py/tests/unit/test_config.py": {
       "size": 1494,
       "sha256": "7698911ed45d1d0d"
@@ -1143,18 +1067,6 @@
     "services/api-py/tests/unit/test_config_sources.py": {
       "size": 3335,
       "sha256": "9f6b4525a92bdece"
-    },
-    "services/api-py/tests/unit/test_context.py": {
-      "size": 1102,
-      "sha256": "5716ec42f244bcb5"
-    },
-    "services/api-py/tests/unit/test_correlation.py": {
-      "size": 619,
-      "sha256": "f9456c366a732ba9"
-    },
-    "services/api-py/tests/unit/test_db_config.py": {
-      "size": 3167,
-      "sha256": "d91fad0946189013"
     },
     "services/api-py/tests/unit/test_domain_models.py": {
       "size": 5807,
@@ -1164,33 +1076,21 @@
       "size": 2896,
       "sha256": "65eaad53c78de5e9"
     },
-    "services/api-py/tests/unit/test_fastapi_utils.py": {
-      "size": 1147,
-      "sha256": "cb3ae45850a158be"
-    },
-    "services/api-py/tests/unit/test_filtering.py": {
-      "size": 1545,
-      "sha256": "1d9ec3133252d745"
-    },
     "services/api-py/tests/unit/test_health_service.py": {
       "size": 1294,
       "sha256": "e2fb712da9e6456e"
     },
     "services/api-py/tests/unit/test_item_repository.py": {
-      "size": 4163,
-      "sha256": "ad44b2157d331365"
+      "size": 4165,
+      "sha256": "bfa5acc0afe94cf8"
     },
     "services/api-py/tests/unit/test_item_service.py": {
       "size": 4175,
       "sha256": "563726c53a3c031d"
     },
-    "services/api-py/tests/unit/test_json_logging.py": {
-      "size": 2466,
-      "sha256": "816e1666716aaa2f"
-    },
     "services/api-py/tests/unit/test_lifecycle.py": {
-      "size": 3082,
-      "sha256": "24c2a79053ee0705"
+      "size": 2756,
+      "sha256": "4a07bf04e2f29db3"
     },
     "services/api-py/tests/unit/test_middleware_unit.py": {
       "size": 10485,
@@ -1199,54 +1099,6 @@
     "services/api-py/tests/unit/test_orm_models.py": {
       "size": 3155,
       "sha256": "16ce90a72edf7425"
-    },
-    "services/api-py/tests/unit/test_pagination.py": {
-      "size": 1591,
-      "sha256": "cbaac6b3bf9335d2"
-    },
-    "services/api-py/tests/unit/test_repository_aio.py": {
-      "size": 5825,
-      "sha256": "49bb8717a72dcf0c"
-    },
-    "services/api-py/tests/unit/test_repository_errors.py": {
-      "size": 1174,
-      "sha256": "61090cfd37f30d22"
-    },
-    "services/api-py/tests/unit/test_retry.py": {
-      "size": 2002,
-      "sha256": "b3d62a93d6dbfcaa"
-    },
-    "services/api-py/tests/unit/test_s2s_tenant_propagation.py": {
-      "size": 3998,
-      "sha256": "30d1167a157e25c8"
-    },
-    "services/api-py/tests/unit/test_service_client.py": {
-      "size": 4313,
-      "sha256": "fbc02baf774fbc11"
-    },
-    "services/api-py/tests/unit/test_service_domain.py": {
-      "size": 3760,
-      "sha256": "c238a3d5491545a1"
-    },
-    "services/api-py/tests/unit/test_service_errors.py": {
-      "size": 1988,
-      "sha256": "90523bfec560958a"
-    },
-    "services/api-py/tests/unit/test_task_models.py": {
-      "size": 1616,
-      "sha256": "7befd5b9699e9529"
-    },
-    "services/api-py/tests/unit/test_task_registry.py": {
-      "size": 1303,
-      "sha256": "6fe8ba79195d2bf2"
-    },
-    "services/api-py/tests/unit/test_task_runner.py": {
-      "size": 6240,
-      "sha256": "41f9d0fdeddd2303"
-    },
-    "services/api-py/tests/unit/test_task_service.py": {
-      "size": 2645,
-      "sha256": "26b5fc39676b8835"
     },
     "services/api-py/tests/utils/__init__.py": {
       "size": 459,

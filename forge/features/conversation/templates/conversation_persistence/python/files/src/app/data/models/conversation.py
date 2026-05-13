@@ -18,7 +18,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.data.models.base import JSON_TYPE, Base
-from service.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
+from weld.core.persistence.repository.mixins import TenantMixin, TimestampMixin, UserOwnedMixin
 
 
 class Conversation(Base, TenantMixin, UserOwnedMixin, TimestampMixin):

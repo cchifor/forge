@@ -17,7 +17,7 @@ from platform_auth import (
     StaticMayActPolicy,
 )
 
-from service.domain.config import AuthConfig
+from weld.core.domain.config import AuthConfig
 
 
 def issuer_url(config: AuthConfig) -> str:

@@ -30,8 +30,8 @@ from fastapi.openapi.models import OAuth2 as OAuth2Model
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from platform_auth import AuthError, IdentityContext
 
-from service.core import context
-from service.domain.user import User
+from weld.core import context
+from weld.core.domain.user import User
 from service.security.platform_auth_setup import AuthGuardBundle
 
 _logger = logging.getLogger(__name__)
