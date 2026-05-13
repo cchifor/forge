@@ -47,8 +47,8 @@ def _dispatch_add_backend(args) -> None:
         BackendConfig,
         BackendLanguage,
     )
-    from forge.forge_toml import read_forge_toml  # noqa: PLC0415
     from forge.generator import _generate_single_backend  # noqa: PLC0415
+    from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
     manifest = project_path / "forge.toml"
     if not manifest.is_file():

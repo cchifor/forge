@@ -22,13 +22,12 @@ from pathlib import Path
 import pytest
 
 from forge.appliers.files import copy_files
-from forge.merge import (
+from forge.sync.merge import (
     file_three_way_decide,
     is_binary_file,
     sha256_of_file,
     sha256_of_text,
 )
-
 
 # 6 path components × short segments = ~50 chars added on top of
 # tmp_path. Stays comfortably under Windows' 260-char MAX_PATH default

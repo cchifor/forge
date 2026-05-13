@@ -19,7 +19,7 @@ File-level three-way merge (P0.1, 1.1.0-alpha.2):
   The default ``update_mode="merge"`` extends the merge-zone semantics
   (which already three-way-decide injection blocks) to whole-file
   updates from a fragment's ``files/`` tree. Pre-existing destinations
-  go through :func:`forge.merge.file_three_way_decide` against the
+  go through :func:`forge.sync.merge.file_three_way_decide` against the
   ``[forge.provenance]`` baseline; a user-edit + fragment-bump produces
   a ``.forge-merge`` sidecar instead of being silently skipped.
   ``--mode skip`` reproduces pre-1.1 behaviour; ``--mode overwrite``
@@ -47,16 +47,16 @@ from forge.errors import (
     ProvenanceError,
 )
 from forge.feature_injector import apply_features, apply_project_features
-from forge.forge_toml import ForgeTomlData, read_forge_toml, write_forge_toml
 from forge.fragment_context import UpdateMode
-from forge.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
-from forge.sentinel_audit import audit_targets, raise_if_corrupt
-from forge.uninstaller import (
+from forge.sync.forge_to_project.uninstaller import (
     UninstallOutcome,
     disabled_fragments,
     uninstall_fragment,
 )
-from forge.updater_lock import acquire_lock
+from forge.sync.lock import acquire_lock
+from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
+from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
+from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
 logger = logging.getLogger(__name__)
 
@@ -418,7 +418,7 @@ def _disabled_fragment_blocks(
     to remove on re-apply (the next ``--update`` that runs the full
     applier pipeline handles it naturally).
     """
-    from forge.merge import MergeBlockCollector  # noqa: PLC0415
+    from forge.sync.merge import MergeBlockCollector  # noqa: PLC0415
 
     out: list[tuple[str, str, str]] = []
     for key in data.merge_blocks:
@@ -441,7 +441,7 @@ def classify_project_state(
     provenance table is empty (old pre-1.0 project), returns an empty
     classification; ``update_mode="merge"`` then resolves every
     pre-existing file to ``no-baseline`` (preserved like a user file)
-    via :func:`forge.merge.file_three_way_decide`.
+    via :func:`forge.sync.merge.file_three_way_decide`.
     """
     out: dict[str, FileState] = {}
     for rel, entry in provenance_tbl.items():

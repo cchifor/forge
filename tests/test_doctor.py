@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from forge.doctor import (
     CheckResult,
     DoctorReport,
@@ -86,7 +84,7 @@ class TestCheckForgeToml:
         assert "no forge.toml" in result.detail
 
     def test_valid_forge_toml(self, tmp_path: Path) -> None:
-        from forge.forge_toml import write_forge_toml
+        from forge.sync.manifest import write_forge_toml
 
         write_forge_toml(
             tmp_path / "forge.toml",
@@ -165,8 +163,8 @@ class TestCheckTsMorphToolchain:
 
     def test_warn_when_ts_morph_not_reachable(self) -> None:
         # Node present but `require('ts-morph')` exits non-zero — warn.
-        from forge.injectors import ts_morph_sidecar
         from forge.doctor import subprocess as doctor_subprocess
+        from forge.injectors import ts_morph_sidecar
 
         class _FakeProc:
             def __init__(self) -> None:
@@ -186,8 +184,8 @@ class TestCheckTsMorphToolchain:
         assert "regex" in result.detail.lower() or "fallback" in result.detail.lower()
 
     def test_ok_when_reachable_and_env_set(self, monkeypatch) -> None:
-        from forge.injectors import ts_morph_sidecar
         from forge.doctor import subprocess as doctor_subprocess
+        from forge.injectors import ts_morph_sidecar
 
         class _FakeProc:
             def __init__(self) -> None:
@@ -207,8 +205,8 @@ class TestCheckTsMorphToolchain:
         assert "active" in result.detail.lower() or "FORGE_TS_AST=1" in result.detail
 
     def test_ok_when_reachable_but_env_unset(self, monkeypatch) -> None:
-        from forge.injectors import ts_morph_sidecar
         from forge.doctor import subprocess as doctor_subprocess
+        from forge.injectors import ts_morph_sidecar
 
         class _FakeProc:
             def __init__(self) -> None:

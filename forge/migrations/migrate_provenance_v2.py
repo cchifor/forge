@@ -72,9 +72,9 @@ import tomlkit
 import forge
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.injectors.sentinels import _block_fingerprint
-from forge.merge import MergeBlockCollector
 from forge.migrations.base import MigrationReport
-from forge.updater_lock import acquire_lock
+from forge.sync.lock import acquire_lock
+from forge.sync.merge import MergeBlockCollector
 
 logger = logging.getLogger(__name__)
 

@@ -131,7 +131,7 @@ class TestMigrateAdoptBaseline:
     """P0.1 — adopt-baseline codemod."""
 
     def _seed_manifest(self, project_root: Path) -> None:
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
 
         project_root.mkdir(exist_ok=True)
         write_forge_toml(
@@ -143,9 +143,9 @@ class TestMigrateAdoptBaseline:
         )
 
     def test_stamps_files_under_source_roots(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
-        from forge.merge import sha256_of_file  # noqa: PLC0415
         from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
+        from forge.sync.merge import sha256_of_file  # noqa: PLC0415
 
         self._seed_manifest(tmp_path)
         target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
@@ -163,8 +163,8 @@ class TestMigrateAdoptBaseline:
         assert data.provenance[rel]["sha256"] == sha256_of_file(target)
 
     def test_skips_node_modules_and_caches(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
         from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         self._seed_manifest(tmp_path)
         # Files under skip-listed dirs should NOT be stamped.
@@ -183,8 +183,8 @@ class TestMigrateAdoptBaseline:
         assert "apps/frontend/node_modules/lib/x.js" not in data.provenance
 
     def test_does_not_overwrite_existing_records(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
         from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml, write_forge_toml  # noqa: PLC0415
 
         self._seed_manifest(tmp_path)
         target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"
@@ -217,8 +217,8 @@ class TestMigrateAdoptBaseline:
         assert rec["fragment_name"] == "rate_limit"
 
     def test_dry_run_reports_without_writing(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml  # noqa: PLC0415
         from forge.migrations.migrate_adopt_baseline import run  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
 
         self._seed_manifest(tmp_path)
         target = tmp_path / "services" / "backend" / "src" / "app" / "main.py"

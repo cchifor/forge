@@ -29,14 +29,14 @@ from typing import TYPE_CHECKING
 
 from forge.errors import FRAGMENT_FILES_OVERLAP, FragmentError
 from forge.fragment_context import UpdateMode
-from forge.merge import (
+from forge.sync.merge import (
     FileMergeOutcome,
     file_three_way_decide,
     is_binary_file,
     sha256_of_file,
     write_file_sidecar,
 )
-from forge.provenance import ProvenanceCollector
+from forge.sync.provenance import ProvenanceCollector
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

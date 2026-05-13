@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.provenance import (
+from forge.sync.provenance import (
     ProvenanceCollector,
     ProvenanceRecord,
     classify,
@@ -146,7 +146,7 @@ class TestRecordMergeBlock:
             marker="MIDDLEWARE_REGISTRATION",
             block_sha="abc123",
         )
-        from forge.merge import MergeBlockCollector
+        from forge.sync.merge import MergeBlockCollector
 
         key = MergeBlockCollector.key_for(
             "src/app/main.py", "middleware_cors", "MIDDLEWARE_REGISTRATION"
@@ -219,7 +219,7 @@ class TestForgeTomlRoundtrip:
     """Integration: write_forge_toml + read_forge_toml preserves provenance."""
 
     def test_provenance_survives_roundtrip(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import read_forge_toml, write_forge_toml  # noqa: PLC0415
 
         manifest = tmp_path / "forge.toml"
         provenance = {
@@ -247,7 +247,7 @@ class TestForgeTomlRoundtrip:
         assert data.provenance["src/app/middleware.py"]["fragment_name"] == "rate_limit"
 
     def test_no_provenance_key_when_empty(self, tmp_path: Path) -> None:
-        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
+        from forge.sync.manifest import write_forge_toml  # noqa: PLC0415
 
         manifest = tmp_path / "forge.toml"
         write_forge_toml(

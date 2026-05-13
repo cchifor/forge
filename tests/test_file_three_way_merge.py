@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from forge.merge import (
+from forge.sync.merge import (
     FileMergeOutcome,
     file_three_way_decide,
     is_binary_file,

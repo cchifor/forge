@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from forge.config import BackendConfig, ProjectConfig
-    from forge.provenance import ProvenanceCollector
+    from forge.sync.provenance import ProvenanceCollector
 
 
 COMMON_DIR = Path(__file__).resolve().parent / "templates" / "_common"

@@ -28,10 +28,10 @@ from typing import Any, cast
 def _run_remove_fragment(args: argparse.Namespace) -> None:
     """Disable the named fragment then re-run update."""
     from forge.errors import GeneratorError as _GeneratorError  # noqa: PLC0415
-    from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
     from forge.fragment_context import UpdateMode  # noqa: PLC0415
     from forge.options import OPTION_REGISTRY  # noqa: PLC0415
-    from forge.updater import update_project  # noqa: PLC0415
+    from forge.sync.forge_to_project.updater import update_project  # noqa: PLC0415
+    from forge.sync.manifest import read_forge_toml, write_forge_toml  # noqa: PLC0415
 
     fragment_name = str(getattr(args, "remove_fragment", "") or "")
     if not fragment_name:
