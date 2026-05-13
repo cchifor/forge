@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from forge.provenance import (
     ProvenanceCollector,
     ProvenanceRecord,
@@ -85,13 +83,15 @@ class TestProvenanceCollector:
             fragment_name="rate_limit",
         )
         d = c.as_dict()
-        assert d == {
-            "a.py": {
-                "origin": "fragment",
-                "sha256": pytest.approx(d["a.py"]["sha256"]),
-                "fragment_name": "rate_limit",
-            }
-        }
+        # ``emitted_at`` is auto-populated; it's a non-empty ISO-8601 string but
+        # we don't assert the exact timestamp.
+        entry = d["a.py"]
+        assert entry["origin"] == "fragment"
+        assert entry["sha256"]
+        assert entry["fragment_name"] == "rate_limit"
+        assert "emitted_at" in entry and entry["emitted_at"]
+        # Only fields above plus emitted_at; no fragment_version / template_*.
+        assert set(entry) == {"origin", "sha256", "fragment_name", "emitted_at"}
 
     def test_as_dict_omits_none_fields(self, tmp_path: Path) -> None:
         (tmp_path / "a.py").write_text("pass")
@@ -155,7 +155,7 @@ class TestForgeTomlRoundtrip:
         assert data.provenance["src/app/middleware.py"]["fragment_name"] == "rate_limit"
 
     def test_no_provenance_key_when_empty(self, tmp_path: Path) -> None:
-        from forge.forge_toml import read_forge_toml, write_forge_toml  # noqa: PLC0415
+        from forge.forge_toml import write_forge_toml  # noqa: PLC0415
 
         manifest = tmp_path / "forge.toml"
         write_forge_toml(
