@@ -121,8 +121,17 @@ class TestCandidatePatch:
         assert patch.baseline_sha is None
 
 
-class TestBuiltinStubsReturnEmpty:
-    """Phase 3 guarantee: every built-in extractor is a no-op."""
+class TestBuiltinExtractorsOnEmptyPlan:
+    """Phase 4: every built-in extractor returns ``[]`` for an empty plan.
+
+    Phase 3 had this assert that the stubs were no-ops. With Phase 4
+    landing the concrete extractors for files / deps / env (and the
+    parallel agent's injection extractor), the "no-op" guarantee now
+    reads "no candidates when there's nothing in the plan to harvest"
+    — i.e. an empty ``ExtractionPlan`` produces an empty list. The
+    test name change reflects the contract; the assertions are
+    structurally identical.
+    """
 
     def test_file_extractor_returns_empty(self, tmp_path: Path) -> None:
         assert FileExtractor().extract(_mk_ctx(tmp_path), _empty_plan()) == []
