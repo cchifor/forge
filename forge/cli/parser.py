@@ -227,6 +227,32 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run environment diagnostics (Python/Node/Rust/Flutter toolchains, Docker, ports, forge.toml).",
     )
 
+    # Verify — read-only drift detection against forge.toml baselines.
+    # Phase 2 of the bidirectional-sync plan. ``--update`` re-applies
+    # forward; ``--verify`` reports drift without touching disk.
+    p.add_argument(
+        "--verify",
+        action="store_true",
+        help=(
+            "Drift detection only. Compare on-disk project against forge.toml baselines. "
+            "Exit 0 = clean; 10 = drift; 11 = drift AND fragment moved upstream. Pair with --json."
+        ),
+    )
+    p.add_argument(
+        "--verify-scope",
+        dest="verify_scope",
+        choices=["all", "files", "blocks", "fragments"],
+        default="all",
+        help="Limit --verify to one record kind.",
+    )
+    p.add_argument(
+        "--fail-on",
+        dest="verify_fail_on",
+        choices=["drift", "conflict", "never"],
+        default="drift",
+        help="What --verify treats as exit-non-zero.",
+    )
+
     # new-entity — add a CRUD entity YAML to the project.
     p.add_argument(
         "--new-entity-name",

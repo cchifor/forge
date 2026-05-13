@@ -166,6 +166,11 @@ def main() -> None:
             json_output=getattr(args, "json_output", False),
         )
 
+    if getattr(args, "verify", False):
+        from forge.cli.commands.verify import _run_verify  # noqa: PLC0415
+
+        sys.exit(_run_verify(args))
+
     if getattr(args, "new_entity_name", None):
         from forge.cli.commands.new_entity import _dispatch_new_entity  # noqa: PLC0415
 
