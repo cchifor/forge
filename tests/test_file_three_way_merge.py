@@ -15,11 +15,12 @@ from forge.merge import (
     FileMergeOutcome,
     file_three_way_decide,
     is_binary_file,
+    reverse_file_three_way_decide,
     sha256_of_file,
     sha256_of_text,
+    symmetric_file_three_way_decide,
     write_file_sidecar,
 )
-
 
 # ---------------------------------------------------------------------------
 # file_three_way_decide — exhaustive decision table
@@ -109,6 +110,185 @@ class TestFileThreeWayDecide:
                 baseline_sha=sha256_of_text("v1\n"),
                 current_sha=sha256_of_text("user edit\n"),
                 new_sha=sha256_of_text("v2\n"),
+            )
+            == "conflict"
+        )
+
+
+# ---------------------------------------------------------------------------
+# symmetric_file_three_way_decide / reverse_file_three_way_decide
+# Direction-agnostic core + harvest wrapper (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+class TestSymmetricFileThreeWayDecide:
+    """File-level direction-agnostic core.
+
+    Operates on three pre-computed SHAs (no ``None`` baseline / current
+    handled here — those are direction-specific wrapper edge cases).
+    """
+
+    def test_converged_at_baseline(self) -> None:
+        h = sha256_of_text("body\n")
+        assert (
+            symmetric_file_three_way_decide(
+                baseline_sha=h,
+                a_sha=h,
+                b_sha=h,
+            )
+            == "converged"
+        )
+
+    def test_converged_off_baseline(self) -> None:
+        # A and B coincidentally agree on a value that differs from
+        # baseline — still converged.
+        baseline = sha256_of_text("old\n")
+        moved = sha256_of_text("both here\n")
+        assert (
+            symmetric_file_three_way_decide(
+                baseline_sha=baseline,
+                a_sha=moved,
+                b_sha=moved,
+            )
+            == "converged"
+        )
+
+    def test_a_only_changed(self) -> None:
+        baseline = sha256_of_text("base\n")
+        assert (
+            symmetric_file_three_way_decide(
+                baseline_sha=baseline,
+                a_sha=sha256_of_text("a moved\n"),
+                b_sha=baseline,
+            )
+            == "a-only-changed"
+        )
+
+    def test_b_only_changed(self) -> None:
+        baseline = sha256_of_text("base\n")
+        assert (
+            symmetric_file_three_way_decide(
+                baseline_sha=baseline,
+                a_sha=baseline,
+                b_sha=sha256_of_text("b moved\n"),
+            )
+            == "b-only-changed"
+        )
+
+    def test_conflict_when_both_moved(self) -> None:
+        baseline = sha256_of_text("base\n")
+        assert (
+            symmetric_file_three_way_decide(
+                baseline_sha=baseline,
+                a_sha=sha256_of_text("a moved\n"),
+                b_sha=sha256_of_text("b moved differently\n"),
+            )
+            == "conflict"
+        )
+
+
+class TestReverseFileThreeWayDecide:
+    """File-level harvest-direction wrapper (Phase 4).
+
+    Adds the file-level edge cases on top of the inline-block contract:
+
+    * ``baseline_sha is None`` → ``no-baseline``.
+    * ``current_sha is None`` (user deleted the file) → ``safe-apply``,
+      with the understanding that the call site tags this as
+      "needs review" before promoting.
+    """
+
+    def test_no_baseline_returns_sentinel(self) -> None:
+        # Without a baseline we cannot tell user edits from legacy files.
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=None,
+                current_sha=sha256_of_text("anything\n"),
+                upstream_sha=sha256_of_text("other\n"),
+            )
+            == "no-baseline"
+        )
+
+    def test_no_baseline_no_current_still_no_baseline(self) -> None:
+        # No baseline AND no current — still nothing to classify in the
+        # harvest direction. The forward direction would treat this as
+        # "fresh emit", but reverse has no signal to act on.
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=None,
+                current_sha=None,
+                upstream_sha=sha256_of_text("any\n"),
+            )
+            == "no-baseline"
+        )
+
+    def test_user_deleted_file_is_safe_apply(self) -> None:
+        # Baseline tracked, current is None — user removed the file.
+        # Harvest surfaces this as a candidate; CALLER tags as needs-review.
+        baseline = sha256_of_text("body\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=baseline,
+                current_sha=None,
+                upstream_sha=baseline,
+            )
+            == "safe-apply"
+        )
+
+    def test_converged_at_baseline_skips_idempotent(self) -> None:
+        h = sha256_of_text("body\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=h,
+                current_sha=h,
+                upstream_sha=h,
+            )
+            == "skipped-idempotent"
+        )
+
+    def test_converged_off_baseline_skips_idempotent(self) -> None:
+        # User and upstream coincidentally landed on the same content.
+        baseline = sha256_of_text("old\n")
+        moved = sha256_of_text("both here\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=baseline,
+                current_sha=moved,
+                upstream_sha=moved,
+            )
+            == "skipped-idempotent"
+        )
+
+    def test_user_only_edit_is_safe_apply(self) -> None:
+        # The harvest target: user moved, upstream didn't.
+        baseline = sha256_of_text("base\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=baseline,
+                current_sha=sha256_of_text("user edit\n"),
+                upstream_sha=baseline,
+            )
+            == "safe-apply"
+        )
+
+    def test_upstream_only_change_skips_no_change(self) -> None:
+        baseline = sha256_of_text("base\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=baseline,
+                current_sha=baseline,
+                upstream_sha=sha256_of_text("fragment moved\n"),
+            )
+            == "skipped-no-change"
+        )
+
+    def test_conflict_when_both_moved_divergently(self) -> None:
+        baseline = sha256_of_text("base\n")
+        assert (
+            reverse_file_three_way_decide(
+                baseline_sha=baseline,
+                current_sha=sha256_of_text("user edit\n"),
+                upstream_sha=sha256_of_text("fragment moved\n"),
             )
             == "conflict"
         )

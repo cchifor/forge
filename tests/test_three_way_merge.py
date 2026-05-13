@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from forge.feature_injector import _Injection, _apply_zoned_injection
+from forge.feature_injector import _apply_zoned_injection, _Injection
 from forge.forge_toml import read_forge_toml, write_forge_toml
 from forge.merge import (
     MergeBlockCollector,
+    reverse_three_way_decide,
     sha256_of_text,
+    symmetric_three_way_decide,
     three_way_decide,
     write_sidecar,
 )
@@ -58,6 +58,132 @@ class TestThreeWayDecide:
             current_body="current\n",
             new_body="new\n",
         ) == "no-baseline"
+
+
+class TestSymmetricThreeWayDecide:
+    """Direction-agnostic core for bidirectional sync (Phase 2).
+
+    Five quadrants of ``(A vs baseline, B vs baseline)`` plus the
+    ``no-baseline`` sentinel. The wrappers ``three_way_decide`` and
+    ``reverse_three_way_decide`` translate these to direction-specific
+    actions.
+    """
+
+    def test_no_baseline_returns_sentinel(self) -> None:
+        # Baseline absent — neither direction can classify.
+        assert symmetric_three_way_decide(
+            baseline_sha=None,
+            a_body="anything\n",
+            b_body="other\n",
+        ) == "no-baseline"
+
+    def test_converged_when_a_equals_b_at_baseline(self) -> None:
+        # Both sides match each other (and baseline) — trivially converged.
+        body = "shared\n"
+        assert symmetric_three_way_decide(
+            baseline_sha=sha256_of_text(body),
+            a_body=body,
+            b_body=body,
+        ) == "converged"
+
+    def test_converged_when_a_equals_b_off_baseline(self) -> None:
+        # Both sides moved to the SAME new content — still converged,
+        # nothing to reconcile.
+        baseline = "old\n"
+        moved = "both moved here\n"
+        assert symmetric_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            a_body=moved,
+            b_body=moved,
+        ) == "converged"
+
+    def test_a_only_changed(self) -> None:
+        # A diverged from baseline, B still at baseline.
+        baseline = "base\n"
+        assert symmetric_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            a_body="a moved\n",
+            b_body=baseline,
+        ) == "a-only-changed"
+
+    def test_b_only_changed(self) -> None:
+        # B diverged from baseline, A still at baseline.
+        baseline = "base\n"
+        assert symmetric_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            a_body=baseline,
+            b_body="b moved\n",
+        ) == "b-only-changed"
+
+    def test_conflict_when_both_moved_divergently(self) -> None:
+        baseline = "base\n"
+        assert symmetric_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            a_body="a moved\n",
+            b_body="b moved differently\n",
+        ) == "conflict"
+
+
+class TestReverseThreeWayDecide:
+    """Harvest-direction wrapper (Phase 4 consumer).
+
+    The mapping flips the role of "moved" — a user-only edit is the
+    candidate for harvest (``safe-apply``), an upstream-only change is
+    a benign skip.
+    """
+
+    def test_no_baseline_returns_sentinel(self) -> None:
+        assert reverse_three_way_decide(
+            baseline_sha=None,
+            current_body="anything\n",
+            upstream_body="other\n",
+        ) == "no-baseline"
+
+    def test_converged_at_baseline_skips_idempotent(self) -> None:
+        body = "shared\n"
+        assert reverse_three_way_decide(
+            baseline_sha=sha256_of_text(body),
+            current_body=body,
+            upstream_body=body,
+        ) == "skipped-idempotent"
+
+    def test_converged_off_baseline_skips_idempotent(self) -> None:
+        # User and upstream landed on the same content independently —
+        # still nothing to harvest, the two zones already agree.
+        baseline = "old\n"
+        moved = "both moved here\n"
+        assert reverse_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            current_body=moved,
+            upstream_body=moved,
+        ) == "skipped-idempotent"
+
+    def test_user_only_edit_is_safe_apply(self) -> None:
+        # User edited locally, upstream hasn't moved — the harvest
+        # planner has a clean signal to promote the user's edit.
+        baseline = "base\n"
+        assert reverse_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            current_body="user wrote this\n",
+            upstream_body=baseline,
+        ) == "safe-apply"
+
+    def test_upstream_only_change_skips_no_change(self) -> None:
+        # Upstream moved, user didn't — nothing for harvest to do.
+        baseline = "base\n"
+        assert reverse_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            current_body=baseline,
+            upstream_body="fragment moved\n",
+        ) == "skipped-no-change"
+
+    def test_conflict_when_both_moved_divergently(self) -> None:
+        baseline = "base\n"
+        assert reverse_three_way_decide(
+            baseline_sha=sha256_of_text(baseline),
+            current_body="user wrote this\n",
+            upstream_body="fragment moved\n",
+        ) == "conflict"
 
 
 class TestSidecar:

@@ -9,7 +9,7 @@ On re-apply, we compare three hashes:
                           sentinels), after any user edits
     * ``new_sha``       — what the fragment would emit this time
 
-Decision table:
+Decision table (forward / ``forge --update`` direction):
 
     current_sha == baseline_sha  → safe overwrite (user didn't touch this block)
     new_sha      == baseline_sha  → no change in fragment; skip (keep user edits)
@@ -22,6 +22,41 @@ The sidecar ``.forge-merge`` file lets the user diff both versions and
 resolve by hand. Since forge knows the block boundaries (BEGIN/END
 sentinels) and each block's baseline, the sidecar contains only the
 block body — not the whole file.
+
+Direction-agnostic core (Phase 2 of the bidirectional-sync plan)
+-----------------------------------------------------------------
+
+The decision is fundamentally symmetric: given a common baseline and two
+candidate bodies (call them A and B), the question is which of the two
+moved away from baseline. The asymmetry sits in the policy mapping, not
+the comparison.
+
+``symmetric_three_way_decide`` (and its file-level twin) returns one of
+five direction-neutral outcomes:
+
+    * ``no-baseline``        — baseline_sha is None
+    * ``converged``          — A == B (both moved together, or both at
+                                baseline)
+    * ``a-only-changed``     — A != baseline, B == baseline
+    * ``b-only-changed``     — A == baseline, B != baseline
+    * ``conflict``           — A != B, both != baseline
+
+Forward direction (``forge --update``, ``three_way_decide``): A is the
+user's current on-disk body, B is what the fragment would emit. We
+preserve user edits (``a-only-changed → skipped-no-change``) and apply
+fragment changes (``b-only-changed → applied``).
+
+Reverse direction (``forge --harvest``, Phase 4, ``reverse_three_way_decide``):
+A is the user's current on-disk body, B is the upstream fragment body.
+The roles flip — a user edit is now the candidate for harvest
+(``a-only-changed → safe-apply``), and an upstream-only change is a
+benign skip (``b-only-changed → skipped-no-change``). ``conflict``
+remains conflict in both directions; ``converged`` and ``no-baseline``
+are direction-neutral.
+
+This module exposes both wrappers so the call sites stay declarative —
+the forward applier doesn't think about harvest, the harvest planner
+doesn't think about applies.
 """
 
 from __future__ import annotations
@@ -29,6 +64,62 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
+
+# Public symbolic outcomes returned by the direction-agnostic core. Each
+# corresponds to one quadrant of (A vs baseline, B vs baseline) with the
+# diagonal ``A == B`` collapsed into ``converged``.
+SymmetricDecision = Literal[
+    "no-baseline",
+    "converged",
+    "a-only-changed",
+    "b-only-changed",
+    "conflict",
+]
+
+# Outcomes the forward (``forge --update``) wrapper returns. Existing
+# applier call sites pattern-match against these strings.
+ForwardDecision = Literal[
+    "no-baseline",
+    "skipped-idempotent",
+    "applied",
+    "skipped-no-change",
+    "conflict",
+]
+
+# Outcomes the reverse (``forge --harvest``, Phase 4) wrapper returns.
+# ``safe-apply`` is the candidate-for-promotion case — the user moved,
+# the fragment didn't, so the harvest planner has a clean signal.
+ReverseDecision = Literal[
+    "no-baseline",
+    "skipped-idempotent",
+    "safe-apply",
+    "skipped-no-change",
+    "conflict",
+]
+
+
+# Forward-direction policy mapping: how the symmetric outcomes translate
+# to the language existing appliers speak. Kept as a module-level table
+# so ``three_way_decide`` is literally one dict lookup over the core.
+_FORWARD_MAP: dict[SymmetricDecision, ForwardDecision] = {
+    "no-baseline": "no-baseline",
+    "converged": "skipped-idempotent",
+    "a-only-changed": "skipped-no-change",  # user edited, fragment didn't
+    "b-only-changed": "applied",  # fragment moved, user didn't
+    "conflict": "conflict",
+}
+
+# Reverse-direction policy mapping: roles of "A moved" and "B moved" flip
+# relative to ``_FORWARD_MAP``. A user-only edit becomes a candidate for
+# harvest; an upstream-only change becomes a benign skip.
+_REVERSE_MAP: dict[SymmetricDecision, ReverseDecision] = {
+    "no-baseline": "no-baseline",
+    "converged": "skipped-idempotent",
+    "a-only-changed": "safe-apply",  # user edited, upstream didn't
+    "b-only-changed": "skipped-no-change",  # upstream moved, user didn't
+    "conflict": "conflict",
+}
 
 
 def sha256_of_text(text: str) -> str:
@@ -121,30 +212,101 @@ class MergeOutcome:
     sidecar_path: Path | None = None
 
 
+def symmetric_three_way_decide(
+    *,
+    baseline_sha: str | None,
+    a_body: str,
+    b_body: str,
+) -> SymmetricDecision:
+    """Direction-agnostic three-way classification for two text bodies.
+
+    Returns one of the five :data:`SymmetricDecision` outcomes:
+
+    * ``no-baseline`` — ``baseline_sha`` is ``None`` (the manifest has no
+      record for this block); both directions treat this as
+      "not enough information".
+    * ``converged`` — A and B have the same content hash (whether or not
+      that hash equals the baseline). Nothing to reconcile.
+    * ``a-only-changed`` — A has moved off baseline; B still matches it.
+    * ``b-only-changed`` — B has moved off baseline; A still matches it.
+    * ``conflict`` — both moved divergently.
+
+    The mapping to forward (apply) and reverse (harvest) policy lives in
+    the wrappers :func:`three_way_decide` and :func:`reverse_three_way_decide`.
+    Callers that want raw symmetry — Phase 4 planners, diagnostics —
+    should call this directly.
+
+    Pure over the inputs; no disk I/O.
+    """
+    if baseline_sha is None:
+        return "no-baseline"
+
+    a_sha = sha256_of_text(a_body)
+    b_sha = sha256_of_text(b_body)
+
+    # Idempotent: both sides agree. Whether or not they match baseline
+    # is irrelevant — there's nothing to reconcile.
+    if a_sha == b_sha:
+        return "converged"
+
+    a_moved = a_sha != baseline_sha
+    b_moved = b_sha != baseline_sha
+
+    if a_moved and not b_moved:
+        return "a-only-changed"
+    if b_moved and not a_moved:
+        return "b-only-changed"
+    # Both moved, and (since a_sha != b_sha) they disagree.
+    return "conflict"
+
+
 def three_way_decide(
     *,
     baseline_sha: str | None,
     current_body: str,
     new_body: str,
-) -> str:
-    """Return the three-way decision (``applied`` / ``skipped-*`` / ``conflict``)
-    without touching disk. Callers do the I/O; this function is pure.
+) -> ForwardDecision:
+    """Forward (``forge --update``) wrapper around :func:`symmetric_three_way_decide`.
+
+    Returns the existing forward-direction vocabulary
+    (``applied`` / ``skipped-*`` / ``conflict`` / ``no-baseline``) so all
+    existing appliers keep working byte-identically. ``current_body`` is
+    the user's on-disk text; ``new_body`` is what the fragment wants to
+    emit. See module docstring for the direction-asymmetry rationale.
     """
-    new_sha = sha256_of_text(new_body)
-    current_sha = sha256_of_text(current_body)
+    decision = symmetric_three_way_decide(
+        baseline_sha=baseline_sha,
+        a_body=current_body,
+        b_body=new_body,
+    )
+    return _FORWARD_MAP[decision]
 
-    if baseline_sha is None:
-        # First time this merge-zone block is applied for this project —
-        # no baseline to compare against. Behave like generated (apply).
-        return "no-baseline"
 
-    if current_sha == new_sha:
-        return "skipped-idempotent"
-    if current_sha == baseline_sha:
-        return "applied"
-    if new_sha == baseline_sha:
-        return "skipped-no-change"
-    return "conflict"
+def reverse_three_way_decide(
+    *,
+    baseline_sha: str | None,
+    current_body: str,
+    upstream_body: str,
+) -> ReverseDecision:
+    """Reverse (``forge --harvest``, Phase 4) wrapper.
+
+    The arguments mirror :func:`three_way_decide` but the policy mapping
+    flips: a user-only edit (``current`` diverged, ``upstream`` didn't)
+    is the **candidate for harvest** (``safe-apply``); an upstream-only
+    change (``upstream`` diverged, ``current`` didn't) is the safe skip
+    (``skipped-no-change``) because the user has no local work to
+    promote. See :data:`_REVERSE_MAP` for the full table.
+
+    Pure; no disk I/O. The harvest planner decides what to do with
+    ``safe-apply`` candidates — write a proposal, surface to the user,
+    etc. — at the call site.
+    """
+    decision = symmetric_three_way_decide(
+        baseline_sha=baseline_sha,
+        a_body=current_body,
+        b_body=upstream_body,
+    )
+    return _REVERSE_MAP[decision]
 
 
 def write_sidecar(target: Path, new_block: str, tag: str) -> Path:
@@ -255,35 +417,72 @@ class FileMergeOutcome:
     sidecar_path: Path | None = None
 
 
+def symmetric_file_three_way_decide(
+    *,
+    baseline_sha: str,
+    a_sha: str,
+    b_sha: str,
+) -> SymmetricDecision:
+    """Direction-agnostic file-level classification.
+
+    The all-present (no missing file) analogue of
+    :func:`symmetric_three_way_decide` operating on pre-computed SHAs.
+    Both ``a_sha`` and ``b_sha`` are non-``None`` strings, and
+    ``baseline_sha`` is the recorded baseline. ``None`` baselines and
+    ``None`` ``current_sha`` (user-deleted) are direction-specific edge
+    cases handled by the wrappers; the symmetric core takes the clean
+    three-hash case only.
+
+    Returns one of :data:`SymmetricDecision` minus ``no-baseline``
+    (callers gate on that case before calling).
+    """
+    if a_sha == b_sha:
+        return "converged"
+
+    a_moved = a_sha != baseline_sha
+    b_moved = b_sha != baseline_sha
+
+    if a_moved and not b_moved:
+        return "a-only-changed"
+    if b_moved and not a_moved:
+        return "b-only-changed"
+    return "conflict"
+
+
 def file_three_way_decide(
     *,
     baseline_sha: str | None,
     current_sha: str | None,
     new_sha: str,
-) -> str:
-    """Three-way decision for a fragment-authored file on ``forge --update``.
+) -> ForwardDecision:
+    """Forward (``forge --update``) three-way decision for a fragment-authored file.
 
     Pure function over content hashes — caller does the file I/O. The
     decision table covers all 7 (baseline × current × new) combinations
     that matter:
 
-    +-------------+-------------+-------+----------------------+
-    | baseline    | current     | new   | action               |
-    +=============+=============+=======+======================+
-    | None        | None        | *     | applied              |
-    | None        | exists      | *     | no-baseline          |
-    | sha         | None        | *     | applied              |
-    | sha         | == baseline | == base | skipped-idempotent |
-    | sha         | == baseline | new   | applied              |
-    | sha         | other       | == base | skipped-no-change  |
-    | sha         | other       | other | conflict             |
-    +-------------+-------------+-------+----------------------+
+    +-------------+-------------+---------+----------------------+
+    | baseline    | current     | new     | action               |
+    +=============+=============+=========+======================+
+    | None        | None        | *       | applied              |
+    | None        | exists      | *       | no-baseline          |
+    | sha         | None        | *       | applied              |
+    | sha         | == baseline | == base | skipped-idempotent   |
+    | sha         | == baseline | new     | applied              |
+    | sha         | other       | == base | skipped-no-change    |
+    | sha         | other       | other   | conflict             |
+    +-------------+-------------+---------+----------------------+
 
     The ``no-baseline`` row is the file-level analogue of the same
     branch in :func:`three_way_decide`: a file the manifest doesn't
     track is treated as user-authored and preserved. This makes the
     flip from ``skip_existing_files=True`` (pre-1.1) to ``--mode merge``
     (1.1+) safe for projects that haven't yet adopted SHA baselines.
+
+    Only the all-three-present case delegates to
+    :func:`symmetric_file_three_way_decide`; the missing-baseline and
+    missing-current rows are file-level edge cases the inline-block path
+    doesn't have.
     """
     # No baseline tracked at all. If nothing on disk, fresh emit.
     # Otherwise the file pre-dates SHA tracking — preserve it.
@@ -297,14 +496,58 @@ def file_three_way_decide(
     if current_sha is None:
         return "applied"
 
-    # All three present — same logic as the inline-block path.
-    if current_sha == new_sha:
-        return "skipped-idempotent"
-    if current_sha == baseline_sha:
-        return "applied"
-    if new_sha == baseline_sha:
-        return "skipped-no-change"
-    return "conflict"
+    # All three present — delegate to the symmetric core, then map.
+    decision = symmetric_file_three_way_decide(
+        baseline_sha=baseline_sha,
+        a_sha=current_sha,
+        b_sha=new_sha,
+    )
+    return _FORWARD_MAP[decision]
+
+
+def reverse_file_three_way_decide(
+    *,
+    baseline_sha: str | None,
+    current_sha: str | None,
+    upstream_sha: str,
+) -> ReverseDecision:
+    """Reverse (``forge --harvest``) three-way decision for a fragment-authored file.
+
+    Mirror of :func:`file_three_way_decide` for the harvest direction.
+    Edge cases:
+
+    * ``baseline_sha is None`` → ``no-baseline`` — without a baseline we
+      cannot identify what's a user edit vs. an untracked legacy file,
+      so we surface nothing to harvest.
+    * ``current_sha is None`` (user deleted the file) → ``safe-apply``
+      — the deletion is itself a candidate signal; harvest may propose
+      removing the fragment file. The decide function classifies this
+      as a safe candidate to surface; the **call site** in Phase 4 is
+      responsible for tagging the proposal as "needs review" (this is
+      the most destructive harvest outcome).
+    * All-present → delegate to :func:`symmetric_file_three_way_decide`
+      with ``a_sha=current_sha``, ``b_sha=upstream_sha``, then map via
+      :data:`_REVERSE_MAP` (``a-only-changed → safe-apply``,
+      ``b-only-changed → skipped-no-change``,
+      ``converged → skipped-idempotent``, ``conflict → conflict``).
+
+    Returns one of :data:`ReverseDecision`.
+    """
+    if baseline_sha is None:
+        return "no-baseline"
+
+    if current_sha is None:
+        # User deleted a fragment-tracked file. Harvest can surface this
+        # as a candidate for removal; the call site decides whether to
+        # auto-promote or tag for review.
+        return "safe-apply"
+
+    decision = symmetric_file_three_way_decide(
+        baseline_sha=baseline_sha,
+        a_sha=current_sha,
+        b_sha=upstream_sha,
+    )
+    return _REVERSE_MAP[decision]
 
 
 def write_file_sidecar(
