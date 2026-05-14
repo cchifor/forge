@@ -181,6 +181,11 @@ def main() -> None:
 
         sys.exit(_run_accept_harvested(args))
 
+    if getattr(args, "reapply_baseline", False):
+        from forge.cli.commands.reapply_baseline import _run_reapply_baseline  # noqa: PLC0415
+
+        sys.exit(_run_reapply_baseline(args))
+
     if getattr(args, "new_entity_name", None):
         from forge.cli.commands.new_entity import _dispatch_new_entity  # noqa: PLC0415
 
