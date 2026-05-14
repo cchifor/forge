@@ -146,6 +146,15 @@ def _emit_harvest_telemetry(project_root: Path, bundle: HarvestBundle) -> None:
     in ``minimal`` mode can answer "how often did harvest emit X?"
     without ever seeing fragment names. Per-candidate events carry the
     fragment name in ``full`` mode; ``minimal`` mode drops it.
+
+    Item 6: emit ``harvest.option_promotion_suggested`` for every
+    candidate carrying a non-empty ``option_promotion`` payload — one
+    event per detected :class:`LiteralEdit`, with the literal's
+    ``kind`` + ``new_value`` so a maintainer can aggregate "which kinds
+    of literals do users most often patch in this fragment?" The
+    ``new_value`` field is dropped by the ``minimal`` field filter
+    because it's not on the allowlist; only the ``kind`` aggregate
+    survives a remote-friendly emission.
     """
     by_kind: dict[str, int] = {}
     by_risk: dict[str, int] = {}
@@ -169,6 +178,14 @@ def _emit_harvest_telemetry(project_root: Path, bundle: HarvestBundle) -> None:
             fragment=c.fragment,
             rel_path=c.rel_path,
         )
+        for edit in c.option_promotion:
+            telemetry.emit(
+                telemetry.EVENT_HARVEST_OPTION_PROMOTION_SUGGESTED,
+                project_root=project_root,
+                fragment=c.fragment,
+                kind=edit.kind,
+                value=edit.new_value,
+            )
 
 
 def _run_emit_pr_chain(
