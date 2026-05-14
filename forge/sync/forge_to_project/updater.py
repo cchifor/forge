@@ -25,10 +25,17 @@ File-level three-way merge (P0.1, 1.1.0-alpha.2):
   ``--mode skip`` reproduces pre-1.1 behaviour; ``--mode overwrite``
   is the "I want fragment state, my edits be damned" escape hatch.
 
-Out of scope (still):
-  - Template-level Copier updates (base template changes). Users who want
-    those can ``cd <backend>/`` and run ``copier update`` directly —
-    ``.copier-answers.yml`` is the input.
+Template-level updates (1.2.0+):
+  Before re-applying fragments, the updater compares
+  ``[forge.template_versions]`` (recorded at generate time) against the
+  live template's resolved version. A delta triggers
+  :func:`forge.sync.forge_to_project.template_update.run_template_update`
+  per backend / frontend, which wraps :func:`copier.run_update` and
+  converts Copier's ``.rej`` output into the standard ``.forge-merge``
+  sidecar shape. Fragments re-apply on top of the freshly re-rendered
+  base, so marker sentinels in the new template body are present when
+  the injection pass runs. The CLI flag ``--no-template-update`` opts
+  out: only the fragment loop runs, preserving the pre-1.2 behaviour.
 """
 
 from __future__ import annotations
@@ -228,6 +235,7 @@ def update_project(
     *,
     no_lock: bool = False,
     update_mode: UpdateMode = "merge",
+    no_template_update: bool = False,
 ) -> dict[str, object]:
     """Re-apply option-driven fragments to the project at ``project_root``.
 
@@ -243,6 +251,12 @@ def update_project(
     Note: ``"strict"`` is not a valid update mode (it's the fresh-
     generation default that raises on overlap); the CLI ``--mode`` flag
     only exposes the three update values.
+
+    ``no_template_update`` (Phase 5, 1.2.0-alpha.1) skips the Copier
+    base-template re-render phase. Fragments still re-apply on top of
+    whatever's on disk; only the upstream-template diff is suppressed.
+    Default is False — template updates run automatically when
+    ``[forge.template_versions]`` and the live template disagree.
 
     Returns a summary dict with ``backends``, ``fragments_applied``,
     ``forge_version_before`` / ``forge_version_after``, and
@@ -261,7 +275,13 @@ def update_project(
 
     # Epic H (1.1.0-alpha.1) — serialise concurrent updates via .forge/lock.
     with acquire_lock(project_root, no_lock=no_lock):
-        return _update_locked(project_root, manifest, quiet=quiet, update_mode=update_mode)
+        return _update_locked(
+            project_root,
+            manifest,
+            quiet=quiet,
+            update_mode=update_mode,
+            no_template_update=no_template_update,
+        )
 
 
 def _update_locked(
@@ -270,6 +290,7 @@ def _update_locked(
     *,
     quiet: bool,
     update_mode: UpdateMode,
+    no_template_update: bool = False,
 ) -> dict[str, object]:
     """Main update body, called with the .forge/lock held."""
     data = read_forge_toml(manifest)
@@ -373,6 +394,102 @@ def _update_locked(
             print(f"  [update] sentinel audit found {len(issues)} structural issue(s) — aborting")
         raise_if_corrupt(issues)
 
+    # Phase 5 — Copier-driven base-template re-renders. Detect deltas
+    # between the manifest's recorded ``template_versions`` and the live
+    # template versions resolved from ``_forge_template.toml`` (or the
+    # spec default). Each delta enqueues one ``TemplateUpdateTask``.
+    # ``no_template_update`` short-circuits the phase entirely. Runs
+    # BEFORE the fragment loop so injection sentinels in the newly
+    # re-rendered base files are present when the appliers walk them.
+    template_update_outcomes: list[dict[str, object]] = []
+    if not no_template_update:
+        from forge.sync.forge_to_project.template_update import (  # noqa: PLC0415
+            restamp_base_template_provenance,
+            run_template_update,
+        )
+
+        base_template_user_modified = tuple(
+            rel
+            for rel, state in classification.items()
+            if state == "user-modified"
+            and data.provenance.get(rel, {}).get("origin") == "base-template"
+        )
+
+        tasks = _build_template_update_tasks(
+            project_root=project_root,
+            data=data,
+            backends=config.backends,
+        )
+        for task in tasks:
+            if not quiet:
+                print(
+                    f"  [update] re-rendering base template '{task.language}' "
+                    f"({task.project_version} → {task.current_version}) ..."
+                )
+            outcome = run_template_update(
+                task,
+                quiet=quiet,
+                base_template_paths=base_template_user_modified,
+                project_root=project_root,
+            )
+            template_update_outcomes.append(
+                {
+                    "language": outcome.task.language,
+                    "project_version": outcome.task.project_version,
+                    "current_version": outcome.task.current_version,
+                    "status": outcome.status,
+                    "rej_files": [str(p) for p in outcome.rej_files],
+                    "sidecar_files": [str(p) for p in outcome.sidecar_files],
+                    "presurfaced_sidecars": [str(p) for p in outcome.presurfaced_sidecars],
+                    "error_message": outcome.error_message,
+                }
+            )
+            if outcome.status == "error":
+                raise ProvenanceError(
+                    f"Copier re-render failed for language '{task.language}': "
+                    f"{outcome.error_message}. Fragment re-apply was skipped — fix "
+                    "the template error or pass --no-template-update to bypass.",
+                    context={
+                        "language": task.language,
+                        "target_dir": str(task.target_dir),
+                        "project_root": str(project_root),
+                    },
+                )
+            # Update collector's seeded base-template records so the
+            # subsequent re-stamp picks up the new SHA + version. This
+            # mutates the dict view of the collector's records — the
+            # records were seeded from data.provenance at the start, so
+            # we round-trip through that shape.
+            provenance_view = {
+                rel: {
+                    "origin": rec.origin,
+                    "sha256": rec.sha256,
+                    **({"fragment_name": rec.fragment_name} if rec.fragment_name else {}),
+                    **({"fragment_version": rec.fragment_version} if rec.fragment_version else {}),
+                }
+                for rel, rec in collector.records.items()
+            }
+            mutated = restamp_base_template_provenance(
+                project_root,
+                provenance=provenance_view,  # type: ignore[arg-type]
+                language=task.language,
+                target_dir=task.target_dir,
+                new_version=task.current_version,
+            )
+            if mutated:
+                for rel, entry in provenance_view.items():
+                    if entry.get("origin") != "base-template":
+                        continue
+                    rec = collector.records.get(rel)
+                    if rec is None:
+                        continue
+                    collector.records[rel] = ProvenanceRecord(
+                        origin=rec.origin,
+                        sha256=str(entry.get("sha256", rec.sha256)),
+                        fragment_name=rec.fragment_name,
+                        fragment_version=rec.fragment_version,
+                    )
+
     # Epic F — provenance-driven uninstall. Any fragment present in the
     # previous run's provenance but missing from the current plan gets
     # its files deleted (or preserved when user-modified). Opt out by
@@ -456,6 +573,15 @@ def _update_locked(
             "(.forge-merge.bin for binary) sidecars and resolve by hand."
         )
 
+    # Phase 5 — fold any successful Copier re-renders into the next
+    # manifest's ``[forge.template_versions]`` so a subsequent update
+    # sees no delta (until the next bump). Failed / skipped tasks leave
+    # the project's recorded version untouched.
+    next_template_versions: dict[str, str] = dict(data.template_versions)
+    for entry in template_update_outcomes:
+        if entry["status"] in ("applied", "conflict"):
+            next_template_versions[str(entry["language"])] = str(entry["current_version"])
+
     _restamp_forge_toml(
         manifest=manifest,
         project_name=data.project_name or project_root.name,
@@ -464,11 +590,7 @@ def _update_locked(
         current_version=current_version,
         provenance=collector.as_dict(),
         merge_blocks=collector.merge_blocks_as_dict(),
-        # Carry forward whatever template_versions the project recorded on
-        # generate. We don't have a fresh source of versions during update
-        # (BackendSpec doesn't carry a version field yet), but preserving
-        # the read-side map keeps the manifest informative across updates.
-        template_versions=dict(data.template_versions),
+        template_versions=next_template_versions,
     )
 
     return {
@@ -481,6 +603,7 @@ def _update_locked(
         "uninstalled": [o.as_dict() for o in uninstall_outcomes],
         "update_mode": update_mode,
         "file_conflicts": file_conflicts,
+        "template_updates": template_update_outcomes,
     }
 
 
@@ -615,6 +738,137 @@ def classify_project_state(
     return out
 
 
+def _build_template_update_tasks(
+    *,
+    project_root: Path,
+    data: ForgeTomlData,
+    backends: list[BackendConfig],
+) -> list[Any]:
+    """Compare recorded vs. live template versions and enqueue tasks.
+
+    For each language in :attr:`ForgeTomlData.template_versions`, look
+    up the current template version from the registry (preferring
+    ``_forge_template.toml`` under ``forge/templates/<dir>``). If the
+    recorded version differs from the current, build a
+    :class:`TemplateUpdateTask` for the corresponding target directory
+    on disk. Frontends use ``apps/<framework>/`` (or the conventional
+    ``apps/<framework_slug>/``); backends use ``services/<backend>/``.
+
+    Returns the (possibly empty) list of tasks. The list is empty when
+    every recorded version matches the live one — no Copier work is
+    required in that case.
+    """
+    # Importing the generator's TEMPLATES_DIR + TEMPLATE_DIRS would
+    # create a circular import (generator → updater hooks via the CLI),
+    # so we resolve the templates root and the frontend dispatch
+    # table from forge.templates directly.
+    import forge as _forge  # noqa: PLC0415
+    from forge.config import (  # noqa: PLC0415
+        BACKEND_REGISTRY,
+        FRONTEND_SPECS,
+        BackendLanguage,
+        FrontendFramework,
+    )
+    from forge.sync.forge_to_project.template_update import (  # noqa: PLC0415
+        TemplateUpdateTask,
+    )
+    from forge.sync.template_version import resolve_template_version  # noqa: PLC0415
+
+    templates_root = Path(_forge.__file__).parent / "templates"
+    # Mirror the generator's frontend dispatch so we resolve framework
+    # → template_dir without importing the generator.
+    frontend_dispatch: dict[str, str] = {
+        FrontendFramework.VUE.value: "apps/vue-frontend-template",
+        FrontendFramework.SVELTE.value: "apps/svelte-frontend-template",
+        FrontendFramework.FLUTTER.value: "apps/flutter-frontend-template",
+    }
+
+    tasks: list[Any] = []
+    backend_languages = {bc.language.value for bc in backends}
+
+    for lang, recorded_version in sorted(data.template_versions.items()):
+        # Resolve the template's path + current version.
+        template_path: Path | None = None
+        spec_default = "1.0.0"
+
+        # Backend language?
+        try:
+            backend_lang = BackendLanguage(lang)
+        except ValueError:
+            backend_lang = None  # type: ignore[assignment]
+        if backend_lang is not None and lang in backend_languages:
+            spec = BACKEND_REGISTRY[backend_lang]
+            template_path = templates_root / spec.template_dir
+            spec_default = spec.version
+        elif lang in frontend_dispatch:
+            template_path = templates_root / frontend_dispatch[lang]
+        elif lang in FRONTEND_SPECS:
+            fspec = FRONTEND_SPECS[lang]
+            template_path = templates_root / fspec.template_dir
+            spec_default = fspec.version
+
+        if template_path is None or not template_path.is_dir():
+            # Plugin template the registry no longer ships, or the
+            # path drifted — leave the recorded version untouched and
+            # skip silently. The verify command surfaces this kind of
+            # drift separately.
+            continue
+
+        current_version = resolve_template_version(template_path, spec_default=spec_default)
+        if current_version == recorded_version:
+            continue
+
+        # Resolve the target directory on disk.
+        target_dir: Path | None = None
+        if backend_lang is not None:
+            # Find the matching backend by language.
+            for bc in backends:
+                if bc.language.value == lang:
+                    candidate = project_root / "services" / bc.name
+                    if candidate.is_dir():
+                        target_dir = candidate
+                        break
+        else:
+            # Frontend: conventional path is ``apps/<framework_slug>/``.
+            # The frontend may live under apps/<slug>/ where slug is the
+            # frontend's project slug rather than the framework name.
+            # Look for ``.copier-answers.yml`` to pinpoint it; if not
+            # found, scan apps/ for any directory carrying one.
+            apps = project_root / "apps"
+            if apps.is_dir():
+                # Try the direct framework subdir first, then fall back
+                # to scanning for the first apps/<dir>/.copier-answers.yml.
+                framework_dir = apps / lang
+                if (framework_dir / ".copier-answers.yml").is_file():
+                    target_dir = framework_dir
+                else:
+                    for sub in sorted(apps.iterdir()):
+                        if not sub.is_dir():
+                            continue
+                        if (sub / ".copier-answers.yml").is_file():
+                            target_dir = sub
+                            break
+
+        if target_dir is None or not target_dir.is_dir():
+            continue
+        if not (target_dir / ".copier-answers.yml").is_file():
+            # Without answers, ``copier update`` has no input. Skip
+            # silently — the project predates answer-file emission, or
+            # the user removed it.
+            continue
+
+        tasks.append(
+            TemplateUpdateTask(
+                language=lang,
+                project_version=recorded_version,
+                current_version=current_version,
+                target_dir=target_dir,
+                template_src=template_path,
+            )
+        )
+    return tasks
+
+
 def _infer_backends(project_root: Path) -> list[BackendConfig]:
     """Discover backends from on-disk layout.
 
@@ -663,10 +917,11 @@ def _restamp_forge_toml(
     """Write forge.toml with the current version + options + provenance + merge blocks.
 
     ``template_versions`` is forwarded as-is to :func:`write_forge_toml`.
-    On update we don't have a fresh source of per-template semver yet
-    (BackendSpec has no version field today), so callers typically pass
-    through whatever the manifest already recorded. ``None`` / empty
-    omits the ``[forge.template_versions]`` table.
+    From 1.2.0+ the updater folds Copier-driven template re-renders into
+    this map (each successful run updates one language's entry to the
+    live template version). Callers that didn't run the template-update
+    phase pass through whatever the manifest already recorded. ``None``
+    / empty omits the ``[forge.template_versions]`` table.
     """
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
