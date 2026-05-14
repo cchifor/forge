@@ -170,6 +170,30 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # Resolve — interactively walk every .forge-merge sidecar produced by
+    # a prior ``forge --update`` and prompt the operator to accept /
+    # reject / edit / skip each one. The canonical "after-conflict"
+    # workflow: ``forge --update`` produces sidecars, ``forge --resolve``
+    # processes them. Re-stamps forge.toml on accept/edit so the
+    # resolved content becomes the new manifest baseline.
+    p.add_argument(
+        "--resolve",
+        action="store_true",
+        help=(
+            "Interactively walk every .forge-merge sidecar and resolve each. "
+            "Per sidecar: accept (apply sidecar to target), reject (delete "
+            "sidecar), edit ($EDITOR), or skip. Re-stamps forge.toml on each "
+            "accept/edit."
+        ),
+    )
+    p.add_argument(
+        "--resolve-path",
+        dest="resolve_path",
+        metavar="DIR",
+        default=None,
+        help="Project root to scan for sidecars. Default: --project-path or current dir.",
+    )
+
     # Reapply-baseline — discard user edits to fragment-owned records and
     # reset them to current fragment content. The targeted "escape hatch"
     # symmetric to ``--update --mode overwrite``, scoped to records the
