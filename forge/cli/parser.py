@@ -319,6 +319,58 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Prompt accept/reject per candidate (TODO Phase 4b — currently no-op).",
     )
 
+    # Emit-PR — Phase 6 close of the Story B round-trip. After harvest
+    # writes a bundle, ``--emit-pr`` commits the candidates to a fresh
+    # branch in $FORGE_REPO so a maintainer can open the upstream PR
+    # without copy-pasting the bundle by hand. ``branch`` mode stops at
+    # the branch + commits; ``github`` mode additionally invokes
+    # ``gh pr create``. ``off`` (the default) preserves the legacy
+    # bundle-on-disk behaviour.
+    p.add_argument(
+        "--emit-pr",
+        dest="emit_pr",
+        choices=["off", "branch", "github"],
+        default="off",
+        help=(
+            "After harvest, commit candidates to $FORGE_REPO. "
+            "'branch' creates a local branch and stops; "
+            "'github' additionally runs `gh pr create`. "
+            "Requires --forge-repo or $FORGE_REPO and a clean working tree there."
+        ),
+    )
+    p.add_argument(
+        "--forge-repo",
+        dest="forge_repo",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Path to a local clone of the forge repo (where fragments live). "
+            "Falls back to $FORGE_REPO env var. Required when --emit-pr is set."
+        ),
+    )
+    p.add_argument(
+        "--pr-title",
+        dest="pr_title",
+        default=None,
+        help="Override the auto-generated PR title (--emit-pr=github only).",
+    )
+    p.add_argument(
+        "--pr-body",
+        dest="pr_body",
+        default=None,
+        help="Override the auto-generated PR body (--emit-pr=github only).",
+    )
+    p.add_argument(
+        "--emit-pr-risk-filter",
+        dest="emit_pr_risk_filter",
+        default=None,
+        help=(
+            "Comma-separated risk classifications to commit. Default: "
+            "'safe-apply'. Pass 'safe-apply,needs-review' to land needs-review "
+            "candidates as well (rare; the operator should know what they're doing)."
+        ),
+    )
+
     # Accept-harvested — Phase 6 close of the Story B round-trip. After
     # ``forge --harvest`` produced a bundle and the candidates landed
     # upstream (via ``--emit-pr`` or by hand), this verb re-stamps the
