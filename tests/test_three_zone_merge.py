@@ -7,13 +7,10 @@ from pathlib import Path
 import pytest
 import yaml
 
+from forge.appliers.injection import _apply_zoned_injection
+from forge.appliers.plan import _Injection, _load_injections
 from forge.errors import GeneratorError
-from forge.feature_injector import (
-    _apply_zoned_injection,
-    _has_sentinel_block,
-    _Injection,
-    _load_injections,
-)
+from forge.injectors.sentinels import _has_sentinel_block
 
 
 class TestLoadInjectionsZone:

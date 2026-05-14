@@ -197,7 +197,7 @@ def _fragment_files_dir(ctx: FragmentContext, fragment_name: str) -> Path | None
     """
     # Lazy import to avoid the registry's startup-audit being hit on
     # extractor module load — same shape the appliers use.
-    from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+    from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
 
     fragment = FRAGMENT_REGISTRY.get(fragment_name)
     if fragment is None:

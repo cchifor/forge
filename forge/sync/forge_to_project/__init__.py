@@ -22,6 +22,8 @@ from forge.sync.forge_to_project.uninstaller import (
     uninstall_fragment,
 )
 from forge.sync.forge_to_project.updater import (
+    apply_features,
+    apply_project_features,
     classify_project_state,
     update_project,
 )
@@ -35,6 +37,8 @@ __all__ = [
     "UninstallOutcome",
     "UpdatePlanReport",
     # updater
+    "apply_features",
+    "apply_project_features",
     "classify_project_state",
     "disabled_fragments",
     "plan_update",

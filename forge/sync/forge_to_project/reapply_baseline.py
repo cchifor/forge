@@ -817,24 +817,24 @@ def _matches_target_tail(impl_target: str, manifest_target: str) -> bool:
 
 
 def _get_fragment_dir_resolver():
-    """Lazily import :func:`forge.feature_injector._resolve_fragment_dir`.
+    """Lazily import :func:`forge.fragments._resolve_fragment_dir`.
 
-    The injector module is heavy and pulls in YAML / Jinja; deferring
-    the import keeps this module's load cost cheap for callers that
-    only use the dataclasses (e.g. tests that build the report shape
-    directly).
+    The plan module is heavy and pulls in YAML / Jinja transitively;
+    deferring the import keeps this module's load cost cheap for
+    callers that only use the dataclasses (e.g. tests that build the
+    report shape directly).
     """
     try:
-        from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+        from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
     except ImportError:
         return None
     return _resolve_fragment_dir
 
 
 def _get_load_injections():
-    """Lazily import :func:`forge.feature_injector._load_injections`."""
+    """Lazily import :func:`forge.appliers.plan._load_injections`."""
     try:
-        from forge.feature_injector import _load_injections  # noqa: PLC0415
+        from forge.appliers.plan import _load_injections  # noqa: PLC0415
     except ImportError:
         return None
     return _load_injections

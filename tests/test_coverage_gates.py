@@ -55,7 +55,12 @@ class ModuleGate(NamedTuple):
 # 1.x. See docs/coverage-policy.md for the ratchet rules.
 MODULE_FLOORS: dict[str, ModuleGate] = {
     "forge/capability_resolver.py": ModuleGate(floor_pct=96.0, target_pct=98.0),
-    "forge/feature_injector.py": ModuleGate(floor_pct=88.0, target_pct=95.0),
+    # 1.2.0-alpha.1: forge/feature_injector.py was removed; its bodies
+    # split across forge.appliers.plan / forge.appliers.injection /
+    # forge.sync.forge_to_project.updater. Per-module floors for the
+    # destinations live below where they already had entries
+    # (sync.forge_to_project.updater) or rely on the package floor
+    # until calibration data lands.
     # Phase 3 of the bidirectional-sync rebuild (forge.sync package) moved
     # merge / provenance / updater / plan_update under ``forge/sync/`` and
     # ``forge/sync/forge_to_project/``. The floors carry over unchanged —

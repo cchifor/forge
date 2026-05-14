@@ -169,7 +169,7 @@ def fragment_roots_from_plan(plan_ordered: Iterable[Any]) -> list[Path]:
     implementation directory present and walk up — fragments with no
     implementations don't reach this code path.
     """
-    from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+    from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
 
     roots: list[Path] = []
     seen: set[Path] = set()

@@ -665,7 +665,7 @@ def _resolve_impl_for_candidate(
         return None
     # First pass: prefer an impl whose files_dir already carries the
     # rel_path. That's the typical "fragment file the user edited" case.
-    from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+    from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
 
     for impl in impls.values():
         try:

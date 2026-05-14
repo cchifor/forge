@@ -9,6 +9,12 @@ back into the filesystem.
 The separation makes dry-run + provenance-driven uninstall
 (Epic F) natural: reusing the same plan against an "inverse" applier
 deletes what a forward applier would have written.
+
+This module also owns :class:`_Injection` (the per-injection record),
+:func:`_load_injections` (``inject.yaml`` → ``_Injection`` records), and
+:func:`_render_snippet` (Jinja rendering of ``render: true`` snippets).
+They moved here from :mod:`forge.feature_injector` in 1.2.0-alpha.1
+when the shim was deleted.
 """
 
 from __future__ import annotations
@@ -18,13 +24,137 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from forge.errors import FRAGMENT_DIR_MISSING, FragmentError
+import yaml
+
+from forge.errors import (
+    FRAGMENT_DIR_MISSING,
+    FRAGMENT_INJECT_YAML_BAD_POSITION,
+    FRAGMENT_INJECT_YAML_BAD_SHAPE,
+    FRAGMENT_INJECT_YAML_BAD_ZONE,
+    FRAGMENT_INJECT_YAML_MISSING_KEY,
+    FragmentError,
+)
+from forge.fragments import FragmentImplSpec, _resolve_fragment_dir
 
 if TYPE_CHECKING:
     from forge.config import BackendLanguage
-    from forge.feature_injector import _Injection
-    from forge.fragments import FragmentImplSpec
     from forge.middleware_spec import MiddlewareSpec
+
+
+@dataclass(frozen=True)
+class _Injection:
+    feature_key: str  # the owning FeatureSpec.key, used in BEGIN/END sentinels
+    target: str  # path relative to backend_dir
+    marker: str  # e.g. "FORGE:MIDDLEWARE_REGISTRATION"
+    snippet: str
+    # "after" (default) places snippet on the line after the marker;
+    # "before" on the line before. Marker line is preserved either way.
+    position: str = "after"
+    # Zone determines the idempotent-reapply semantics for this injection:
+    #   * "generated" — default; re-generation overwrites (current behavior).
+    #   * "user"      — emit on first apply; subsequent `forge --update`
+    #                   passes leave the block untouched even if the
+    #                   fragment snippet has changed. Use for sections the
+    #                   user is expected to customize after generation.
+    #   * "merge"     — attempt a three-way merge against the provenance
+    #                   baseline. On conflict, emit `.forge-merge` markers
+    #                   and return non-zero from update. Requires a
+    #                   non-empty provenance entry for the target file.
+    zone: str = "generated"
+
+
+def _render_snippet(snippet: str, options: Mapping[str, Any]) -> str:
+    """Jinja-render a snippet with ``options`` as the template context.
+
+    Opt-in per-injection via ``render: true`` in ``inject.yaml``. Undeclared
+    variables raise — a typo in ``{{ rag.top_k }}`` should not silently
+    inject an empty string. ``StrictUndefined`` handles this.
+    """
+    import jinja2  # noqa: PLC0415 — lazy so pure-copy fragments don't pay the import
+
+    env = jinja2.Environment(
+        autoescape=False,
+        undefined=jinja2.StrictUndefined,
+        keep_trailing_newline=True,
+    )
+    try:
+        return env.from_string(snippet).render(options=dict(options), **dict(options))
+    except jinja2.UndefinedError as e:
+        raise FragmentError(
+            f"inject.yaml snippet renders an undefined variable: {e}. "
+            f"Declare the option path in FragmentImplSpec.reads_options so "
+            f"the resolver can validate it at resolve time.",
+            code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+            context={"undefined_error": str(e)},
+        ) from e
+
+
+def _load_injections(
+    path: Path,
+    feature_key: str,
+    *,
+    options: Mapping[str, Any] | None = None,
+) -> list[_Injection]:
+    """Parse ``inject.yaml`` into typed :class:`_Injection` records.
+
+    Epic E adds optional Jinja rendering of the ``snippet`` field. When a
+    YAML entry sets ``render: true`` and ``options`` is non-empty, the
+    snippet is Jinja-rendered with ``options`` in scope before injection.
+    Fragments that don't need templating (most of them) leave ``render``
+    unset and the snippet is used verbatim.
+    """
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    if not isinstance(data, list):
+        raise FragmentError(
+            f"{path}: expected a YAML list of injections, got {type(data).__name__}",
+            code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+            context={"path": str(path), "got_type": type(data).__name__},
+        )
+    out: list[_Injection] = []
+    for i, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise FragmentError(
+                f"{path}[{i}]: injection must be a mapping",
+                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                context={"path": str(path), "index": i},
+            )
+        try:
+            target = str(entry["target"])
+            marker = str(entry["marker"])
+            snippet = str(entry["snippet"])
+        except KeyError as e:
+            raise FragmentError(
+                f"{path}[{i}]: missing required key {e}",
+                code=FRAGMENT_INJECT_YAML_MISSING_KEY,
+                context={"path": str(path), "index": i, "missing_key": str(e).strip("'")},
+            ) from e
+        if entry.get("render"):
+            snippet = _render_snippet(snippet, options or {})
+        position = str(entry.get("position", "after"))
+        if position not in ("before", "after"):
+            raise FragmentError(
+                f"{path}[{i}]: position must be 'before' or 'after'",
+                code=FRAGMENT_INJECT_YAML_BAD_POSITION,
+                context={"path": str(path), "index": i, "position": position},
+            )
+        zone = str(entry.get("zone", "generated"))
+        if zone not in ("generated", "user", "merge"):
+            raise FragmentError(
+                f"{path}[{i}]: zone must be 'generated' | 'user' | 'merge' (got {zone!r})",
+                code=FRAGMENT_INJECT_YAML_BAD_ZONE,
+                context={"path": str(path), "index": i, "zone": zone},
+            )
+        out.append(
+            _Injection(
+                feature_key=feature_key,
+                target=target,
+                marker=marker,
+                snippet=snippet,
+                position=position,
+                zone=zone,
+            )
+        )
+    return out
 
 
 @dataclass(frozen=True)
@@ -77,12 +207,9 @@ class FragmentPlan:
         Synth'd injections are appended after ``inject.yaml`` ones;
         they share the same zoned-dispatch pipeline downstream.
         """
-        # Lazy imports to avoid a circular: feature_injector imports
-        # from forge.appliers at module-load time post-Epic-A.
-        from forge.feature_injector import (  # noqa: PLC0415
-            _load_injections,
-            _resolve_fragment_dir,
-        )
+        # Lazy import — forge.middleware_spec imports _Injection from
+        # this module at function-scope, so a top-level import would
+        # create a cycle on first load.
         from forge.middleware_spec import (  # noqa: PLC0415
             render_middleware_injections,
         )
