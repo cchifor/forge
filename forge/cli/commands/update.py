@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from forge import telemetry
 from forge.fragment_context import UpdateMode
 
 
@@ -46,4 +47,43 @@ def _run_update(args: argparse.Namespace) -> None:
         if file_conflicts:
             print(f"  file conflicts: {file_conflicts} — resolve .forge-merge sidecar(s) by hand.")
         print("Update complete.")
+
+    _emit_update_telemetry(project_path, summary)
     sys.exit(0)
+
+
+def _emit_update_telemetry(project_path: Path, summary: dict) -> None:
+    """Emit ``update.ran`` plus per-conflict ``update.conflict_emitted``.
+
+    Aggregate fields (``files_applied``, ``blocks_applied``,
+    ``conflicts``) survive the ``minimal`` field filter; the
+    per-conflict events carry the sidecar path which ``minimal`` mode
+    redacts.
+    """
+    fragments_applied = cast("list[str]", summary.get("fragments_applied", []) or [])
+    file_conflicts = int(cast("int", summary.get("file_conflicts", 0) or 0))
+    user_modified = int(cast("int", summary.get("user_modified_count", 0) or 0))
+    uninstalled = summary.get("uninstalled", []) or []
+
+    telemetry.emit(
+        telemetry.EVENT_UPDATE_RAN,
+        project_root=project_path,
+        files_applied=len(fragments_applied),
+        blocks_applied=user_modified,
+        conflicts=file_conflicts,
+        entry_count=len(fragments_applied),
+        mode=str(summary.get("update_mode", "")),
+        uninstalled=len(uninstalled),
+    )
+    # We don't have per-sidecar metadata in the summary today; the
+    # update_project return value carries the count only. A future PR can
+    # extend ``update_project`` to yield per-conflict shapes — until then
+    # we emit one conflict event per sidecar count for symmetry with
+    # harvest's per-candidate events.
+    for _ in range(file_conflicts):
+        telemetry.emit(
+            telemetry.EVENT_UPDATE_CONFLICT,
+            project_root=project_path,
+            kind="file",
+            action="conflict",
+        )

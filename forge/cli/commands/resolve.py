@@ -39,6 +39,7 @@ import json
 import sys
 from pathlib import Path
 
+from forge import telemetry
 from forge.sync.forge_to_project.resolver import resolve_sidecars
 
 # Exit code when the project root is missing / unreadable, or when any
@@ -82,6 +83,21 @@ def _run_resolve(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
     else:
         report.render_human(sys.stdout)
+
+    entries_by_action: dict[str, int] = {}
+    for e in report.entries:
+        entries_by_action[e.action] = entries_by_action.get(e.action, 0) + 1
+    telemetry.emit(
+        telemetry.EVENT_RESOLVE_RAN,
+        project_root=project_root,
+        entries_by_action=entries_by_action,
+        entry_count=len(report.entries),
+        accepted=report.accepted,
+        rejected=report.rejected,
+        edited=report.edited,
+        skipped=report.skipped,
+        errored=report.error_count,
+    )
 
     # Per-sidecar errors trip the failure exit code. Project-level
     # errors do too (currently empty — handled via FileNotFoundError

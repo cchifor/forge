@@ -522,6 +522,39 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # Telemetry (Item 4 of the post-plan follow-ups). OFF by default —
+    # opt-in only. Local mode writes structured events to
+    # ``~/.forge/telemetry.jsonl``; remote mode additionally POSTs to
+    # ``$FORGE_TELEMETRY_ENDPOINT``. See ``docs/telemetry.md`` for the
+    # full schema and the privacy contract.
+    p.add_argument(
+        "--telemetry",
+        dest="telemetry",
+        choices=["off", "local", "remote"],
+        default=None,
+        help=(
+            "Telemetry mode override. Defaults to $FORGE_TELEMETRY (default: off). "
+            "'local' writes to ~/.forge/telemetry.jsonl; 'remote' also POSTs to "
+            "$FORGE_TELEMETRY_ENDPOINT. See docs/telemetry.md."
+        ),
+    )
+    p.add_argument(
+        "--telemetry-fields",
+        dest="telemetry_fields",
+        choices=["minimal", "full"],
+        default=None,
+        help=(
+            "Telemetry field scope. 'minimal' strips fragment names and paths "
+            "(remote-friendly); 'full' keeps everything. Default: full."
+        ),
+    )
+    p.add_argument(
+        "--telemetry-export",
+        dest="telemetry_export",
+        action="store_true",
+        help="Write the local telemetry JSONL to stdout and exit.",
+    )
+
     # Plugin-registered commands. Each is exposed as ``--<name>`` with
     # dest ``plugin_cmd_<name>`` (hyphens → underscores). Dispatch in
     # ``forge.cli.main`` walks the same registry and calls the handler

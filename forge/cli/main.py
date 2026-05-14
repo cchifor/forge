@@ -135,6 +135,18 @@ def main() -> None:
             fmt="json" if getattr(args, "log_json", False) else None,
         )
 
+    # Resolve telemetry config (CLI flag > env var > default=off). Installs
+    # the module-level singleton; command modules call ``telemetry.emit(...)``
+    # which is a no-op when mode is off. See ``docs/telemetry.md`` for the
+    # opt-in contract.
+    from forge import telemetry as _telemetry  # noqa: PLC0415
+
+    _telemetry.configure(_telemetry.load_config(args))
+
+    if getattr(args, "telemetry_export", False):
+        _telemetry.export_local(sys.stdout)
+        sys.exit(0)
+
     if getattr(args, "list", False):
         fmt = getattr(args, "format", None) or "text"
         _dispatch_list(fmt)

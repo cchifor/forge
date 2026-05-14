@@ -28,9 +28,10 @@ import sys
 from pathlib import Path
 from typing import Literal, cast
 
+from forge import telemetry
 from forge.errors import EXIT_VERIFY_CONFLICT, PROVENANCE_MANIFEST_MISSING, ProvenanceError
 from forge.sync.project_to_forge.emit_pr import emit_pr
-from forge.sync.project_to_forge.harvester import harvest_project
+from forge.sync.project_to_forge.harvester import HarvestBundle, harvest_project
 
 # Exit code when the harvest target has no forge.toml. Mirrors the
 # ``--verify`` dispatcher so the harvest verb's exit codes stay
@@ -114,6 +115,8 @@ def _run_harvest(args: argparse.Namespace) -> int:
     if out_dir is None and emit_pr_mode == "off":
         sys.stdout.write(json.dumps(bundle.to_dict(), indent=2) + "\n")
 
+    _emit_harvest_telemetry(project_root, bundle)
+
     # --emit-pr chain: optionally commit candidates to a branch in the
     # forge clone (and open a PR in ``github`` mode).
     if emit_pr_mode != "off":
@@ -134,6 +137,38 @@ def _run_harvest(args: argparse.Namespace) -> int:
         return EXIT_VERIFY_CONFLICT
 
     return 0
+
+
+def _emit_harvest_telemetry(project_root: Path, bundle: HarvestBundle) -> None:
+    """Emit ``harvest.ran`` + per-candidate ``harvest.candidate_emitted``.
+
+    Aggregate counts go on the ``harvest.ran`` event so a remote ingest
+    in ``minimal`` mode can answer "how often did harvest emit X?"
+    without ever seeing fragment names. Per-candidate events carry the
+    fragment name in ``full`` mode; ``minimal`` mode drops it.
+    """
+    by_kind: dict[str, int] = {}
+    by_risk: dict[str, int] = {}
+    for c in bundle.candidates:
+        by_kind[c.kind] = by_kind.get(c.kind, 0) + 1
+        by_risk[c.risk] = by_risk.get(c.risk, 0) + 1
+
+    telemetry.emit(
+        telemetry.EVENT_HARVEST_RAN,
+        project_root=project_root,
+        candidate_count_by_kind=by_kind,
+        candidate_count_by_risk=by_risk,
+        entry_count=len(bundle.candidates),
+    )
+    for c in bundle.candidates:
+        telemetry.emit(
+            telemetry.EVENT_HARVEST_CANDIDATE,
+            project_root=project_root,
+            kind=c.kind,
+            risk=c.risk,
+            fragment=c.fragment,
+            rel_path=c.rel_path,
+        )
 
 
 def _run_emit_pr_chain(
@@ -189,6 +224,19 @@ def _run_emit_pr_chain(
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
     else:
         report.render_human(sys.stdout)
+
+    telemetry.emit(
+        telemetry.EVENT_EMIT_PR_RAN,
+        project_root=bundle.project_root,
+        mode=emit_pr_mode,
+        branch=report.branch_name,
+        pr_url=report.pr_url,
+        entry_count=len(report.entries),
+        accepted=report.committed,
+        skipped=report.skipped,
+        deferred=report.deferred,
+        errored=report.errored,
+    )
 
     if report.errors:
         return _EXIT_EMIT_PR_PRECONDITION
