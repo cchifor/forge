@@ -293,6 +293,38 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Prompt accept/reject per candidate (TODO Phase 4b — currently no-op).",
     )
 
+    # Accept-harvested — Phase 6 close of the Story B round-trip. After
+    # ``forge --harvest`` produced a bundle and the candidates landed
+    # upstream (via ``--emit-pr`` or by hand), this verb re-stamps the
+    # project's forge.toml so the user's edits become the new manifest
+    # baseline. Without it, every subsequent ``forge --verify`` would
+    # re-classify the user's blocks as user-modified against the new
+    # fragment baseline.
+    p.add_argument(
+        "--accept-harvested",
+        dest="accept_harvested",
+        metavar="BUNDLE",
+        default=None,
+        help=(
+            "Re-stamp forge.toml baselines after a harvest bundle landed "
+            "upstream. Reads <BUNDLE>/manifest.json and updates the "
+            "project's per-block/per-file baselines to match the user's "
+            "edits, but only for candidates whose upstream fragment now "
+            "ships the same body (i.e. the round-trip actually completed)."
+        ),
+    )
+    p.add_argument(
+        "--accept-risk-filter",
+        dest="accept_risk_filter",
+        default=None,
+        help=(
+            "Comma-separated risk classifications to re-stamp. Default: "
+            "'safe-apply'. Pass 'safe-apply,needs-review' to accept "
+            "needs-review candidates as well (rare; the operator should "
+            "know what they're doing)."
+        ),
+    )
+
     # new-entity — add a CRUD entity YAML to the project.
     p.add_argument(
         "--new-entity-name",
