@@ -15,6 +15,9 @@ candidate fragment patches (via ``harvest_project``).
 * Phase 6 close: :func:`accept_harvested` — re-stamp the project's
   ``forge.toml`` baselines after a harvest bundle landed upstream, so
   the user's edits become the new manifest baseline rather than drift.
+* Phase 6 close: :func:`emit_pr` — commit harvest candidates to a fresh
+  branch in a local clone of the forge repo (and optionally open a PR
+  via ``gh``), automating the harvest → upstream-PR step.
 """
 
 from forge.sync.project_to_forge.accept import (
@@ -26,6 +29,11 @@ from forge.sync.project_to_forge.apply_bundle import (
     ApplyBundleEntry,
     ApplyBundleReport,
     apply_bundle_to_fragments,
+)
+from forge.sync.project_to_forge.emit_pr import (
+    EmitPrEntry,
+    EmitPrReport,
+    emit_pr,
 )
 from forge.sync.project_to_forge.harvester import (
     HarvestBundle,
@@ -45,12 +53,15 @@ __all__ = [
     "ApplyBundleEntry",
     "ApplyBundleReport",
     "BlockVerifyEntry",
+    "EmitPrEntry",
+    "EmitPrReport",
     "FileVerifyEntry",
     "HarvestBundle",
     "VerifyReport",
     "VerifyWorst",
     "accept_harvested",
     "apply_bundle_to_fragments",
+    "emit_pr",
     "harvest_project",
     "verify_project",
 ]
