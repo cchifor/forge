@@ -20,11 +20,18 @@ def _run_update(args: argparse.Namespace) -> None:
     project_path = Path(getattr(args, "project_path", ".")).resolve()
     quiet = bool(getattr(args, "quiet", False))
     update_mode = cast("UpdateMode", getattr(args, "update_mode", "merge"))
+    no_template_update = bool(getattr(args, "no_template_update", False))
 
     if not quiet:
-        print(f"forge update: {project_path} (mode={update_mode})")
+        suffix = ", no-template-update" if no_template_update else ""
+        print(f"forge update: {project_path} (mode={update_mode}{suffix})")
     try:
-        summary = update_project(project_path, quiet=quiet, update_mode=update_mode)
+        summary = update_project(
+            project_path,
+            quiet=quiet,
+            update_mode=update_mode,
+            no_template_update=no_template_update,
+        )
     except _GeneratorError as exc:
         if getattr(args, "json_output", False):
             print(json.dumps({"error": str(exc)}))
@@ -41,8 +48,16 @@ def _run_update(args: argparse.Namespace) -> None:
         fragments_applied = cast("list[str]", summary["fragments_applied"])
         file_conflicts = int(cast("int", summary.get("file_conflicts", 0)))
         frags = ", ".join(fragments_applied) or "(none)"
+        template_updates = cast("list[dict]", summary.get("template_updates") or [])
         print(f"  forge {before} -> {after}")
         print(f"  backends: {', '.join(backends)}")
+        if template_updates:
+            for tu in template_updates:
+                lang = tu.get("language", "?")
+                pv = tu.get("project_version", "?")
+                cv = tu.get("current_version", "?")
+                status = tu.get("status", "?")
+                print(f"  template {lang}: {pv} -> {cv} ({status})")
         print(f"  fragments: {frags}")
         if file_conflicts:
             print(f"  file conflicts: {file_conflicts} — resolve .forge-merge sidecar(s) by hand.")
