@@ -29,6 +29,7 @@ import json
 import sys
 from pathlib import Path
 
+from forge import telemetry
 from forge.sync.forge_to_project.reapply_baseline import reapply_baseline
 
 # Exit code for run-level / per-record failures. Mirrors the rest of
@@ -68,6 +69,19 @@ def _run_reapply_baseline(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
     else:
         report.render_human(sys.stdout)
+
+    entries_by_action: dict[str, int] = {}
+    for e in report.entries:
+        entries_by_action[e.action] = entries_by_action.get(e.action, 0) + 1
+    telemetry.emit(
+        telemetry.EVENT_REAPPLY_BASELINE_RAN,
+        project_root=project_root,
+        entries_by_action=entries_by_action,
+        entry_count=len(report.entries),
+        accepted=report.reset_count,
+        skipped=report.skipped_count,
+        errored=report.error_count,
+    )
 
     # Run-level errors (missing forge.toml, malformed TOML) trip the
     # exit signal — same code the rest of the CLI uses for manifest /

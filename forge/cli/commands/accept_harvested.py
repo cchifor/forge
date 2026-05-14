@@ -33,6 +33,7 @@ import json
 import sys
 from pathlib import Path
 
+from forge import telemetry
 from forge.sync.project_to_forge.accept import accept_harvested
 
 # Exit code when the bundle / manifest can't be opened. Mirrors the
@@ -84,6 +85,19 @@ def _run_accept_harvested(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
     else:
         report.render_human(sys.stdout)
+
+    entries_by_action: dict[str, int] = {}
+    for e in report.entries:
+        entries_by_action[e.action] = entries_by_action.get(e.action, 0) + 1
+    telemetry.emit(
+        telemetry.EVENT_ACCEPT_HARVESTED_RAN,
+        project_root=project_root,
+        entries_by_action=entries_by_action,
+        entry_count=len(report.entries),
+        accepted=report.restamped,
+        skipped=report.skipped,
+        errored=report.errored,
+    )
 
     # Bundle-level errors (missing manifest.json, malformed forge.toml,
     # etc.) map to the manifest-IO exit code — same as ``--verify`` /
