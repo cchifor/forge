@@ -117,7 +117,8 @@ class TestFeatureInjectorDispatch:
     def test_ts_file_uses_ts_injector(self, tmp_path: Path) -> None:
         src = tmp_path / "app.ts"
         src.write_text("// FORGE:X\nconst a = 1;\n", encoding="utf-8")
-        from forge.feature_injector import _Injection, _dispatch_injector  # noqa: PLC0415
+        from forge.appliers.injection import _dispatch_injector  # noqa: PLC0415
+        from forge.appliers.plan import _Injection  # noqa: PLC0415
 
         inj = _Injection(
             feature_key="f",
@@ -135,7 +136,8 @@ class TestFeatureInjectorDispatch:
     def test_py_file_uses_python_injector(self, tmp_path: Path) -> None:
         src = tmp_path / "main.py"
         src.write_text("# FORGE:Y\npass\n", encoding="utf-8")
-        from forge.feature_injector import _Injection, _dispatch_injector  # noqa: PLC0415
+        from forge.appliers.injection import _dispatch_injector  # noqa: PLC0415
+        from forge.appliers.plan import _Injection  # noqa: PLC0415
 
         inj = _Injection(
             feature_key="f",

@@ -364,10 +364,10 @@ def _resolve_upstream_body(inj: Any, *, options: dict[str, Any]) -> tuple[str, b
         return raw_snippet, False
 
     # Re-render with the current options. The forward applier uses
-    # :func:`forge.feature_injector._render_snippet`; we delegate so
+    # :func:`forge.appliers.plan._render_snippet`; we delegate so
     # the rendering semantics stay identical.
     try:
-        from forge.feature_injector import _render_snippet  # noqa: PLC0415
+        from forge.appliers.plan import _render_snippet  # noqa: PLC0415
 
         return _render_snippet(raw_snippet, options), False
     except FragmentError:

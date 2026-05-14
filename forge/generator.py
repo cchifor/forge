@@ -52,8 +52,8 @@ from forge.errors import (
     GeneratorError,
     TemplateError,
 )
-from forge.feature_injector import apply_features, apply_project_features
 from forge.logging import get_logger, phase_timer
+from forge.sync.forge_to_project import apply_features, apply_project_features
 from forge.sync.provenance import ProvenanceCollector
 
 _logger = get_logger("generator")

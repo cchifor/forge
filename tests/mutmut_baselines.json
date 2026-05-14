@@ -15,7 +15,11 @@
     "entry + RFC-002 justification."
   ],
   "modules": {
-    "forge/feature_injector.py": {
+    "forge/appliers/injection.py": {
+      "kill_rate_min": 0.95,
+      "survivors_max": 5
+    },
+    "forge/appliers/plan.py": {
       "kill_rate_min": 0.95,
       "survivors_max": 5
     },

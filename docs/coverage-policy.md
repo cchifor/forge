@@ -30,7 +30,6 @@ deciding how much headroom a PR has.
 | Module                           | Measured | Floor | Target  | Why it matters                                                      |
 | -------------------------------- | -------- | ----- | ------- | ------------------------------------------------------------------- |
 | `forge/capability_resolver.py`   | 98.3%    | 96%   | 98%     | Single choke-point: options → fragments → ordered plan              |
-| `forge/feature_injector.py`      | 89.1%    | 88%   | 95%     | Applier orchestration; most complex module in the core              |
 | `forge/sync/merge.py`            | 94.1%    | 92%   | 95%     | Three-way merge decision table; silent bugs here lose user edits    |
 | `forge/sync/provenance.py`       | 96.7%    | 95%   | 98%     | File classification drives `--update` safety                        |
 | `forge/injectors/python_ast.py`  | 97.8%    | 95%   | 98%     | Fragment injection into Python templates via LibCST                 |
@@ -38,6 +37,12 @@ deciding how much headroom a PR has.
 | `forge/sync/forge_to_project/updater.py` | 85.2%    | 83%   | 90%     | `forge --update` — re-apply + classification + re-stamp             |
 | `forge/sync/forge_to_project/plan.py`    | 85.5%    | 83%   | 90%     | `forge --plan-update` dry-run + UpdatePlanReport (P0.1 follow-on)   |
 | **Project-wide**                 | 83.9%    | 75%   | 85%     | Whole-package safety net; excludes `forge/templates/` by design     |
+
+Note (1.2.0-alpha.1): `forge/feature_injector.py` was removed; its bodies moved into
+`forge/appliers/plan.py`, `forge/appliers/injection.py`, and
+`forge/sync/forge_to_project/updater.py`. The updater entry above already covers
+the orchestration code path that previously made up most of `feature_injector`'s
+coverage budget.
 
 ## Ratchet policy
 
