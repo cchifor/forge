@@ -23,6 +23,7 @@ import json
 import sys
 from pathlib import Path
 
+from forge import telemetry
 from forge.errors import EXIT_VERIFY_CONFLICT, EXIT_VERIFY_DRIFT
 from forge.sync.project_to_forge.verify import VerifyFailOn, VerifyReport, verify_project
 
@@ -64,7 +65,54 @@ def _run_verify(args: argparse.Namespace) -> int:
     else:
         report.render_human(sys.stdout)
 
-    return _verify_exit_code(report, fail_on)
+    exit_code = _verify_exit_code(report, fail_on)
+    _emit_verify_telemetry(project_root, report, scope, exit_code)
+    return exit_code
+
+
+def _emit_verify_telemetry(
+    project_root: Path,
+    report: VerifyReport,
+    scope: str,
+    exit_code: int,
+) -> None:
+    """Emit one ``verify.ran`` event plus one ``verify.drift_detected`` per drifted record.
+
+    No-op when telemetry is off (the ``emit`` function short-circuits).
+    Per-record events carry only the bounded-vocabulary ``status`` field
+    plus the record's ``rel_path`` (or block ``key``) — both are dropped
+    in ``minimal`` field scope so remote sinks only see the aggregate.
+    """
+    telemetry.emit(
+        telemetry.EVENT_VERIFY_RAN,
+        project_root=project_root,
+        worst=report.worst,
+        summary_counts=dict(report.summary),
+        scope=scope,
+        exit_code=exit_code,
+    )
+    for rec in report.records:
+        if rec.status == "unchanged":
+            continue
+        telemetry.emit(
+            telemetry.EVENT_VERIFY_DRIFT,
+            project_root=project_root,
+            kind="file",
+            action=rec.status,
+            rel_path=rec.rel_path,
+            fragment=rec.fragment_name or "",
+        )
+    for blk in report.merge_blocks:
+        if blk.status == "unchanged":
+            continue
+        telemetry.emit(
+            telemetry.EVENT_VERIFY_DRIFT,
+            project_root=project_root,
+            kind="block",
+            action=blk.status,
+            target_path=blk.key,
+            fragment=blk.fragment_name or "",
+        )
 
 
 def _verify_exit_code(report: VerifyReport, fail_on: VerifyFailOn) -> int:
