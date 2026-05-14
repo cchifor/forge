@@ -110,6 +110,13 @@ class BackendSpec:
     ``forge.toolchains.BackendToolchain`` Protocol. Typed as ``Any`` to keep
     ``forge.config`` free of the ``forge.toolchains`` import (the factory
     resolves it lazily).
+
+    ``version`` is the template's own semver — bumped when the base
+    template's emitted shape changes in a way that warrants a Copier
+    re-render on ``forge --update``. Resolution at generate time prefers
+    ``_forge_template.toml``'s ``[template].version`` when present, falling
+    back to this field (so the spec carries a typed default and individual
+    templates can drift independently of spec edits).
     """
 
     template_dir: str  # path under forge/templates/, e.g. "services/python-service-template"
@@ -117,6 +124,7 @@ class BackendSpec:
     version_field: str  # name of the BackendConfig attribute holding the version
     version_choices: tuple[str, ...]  # interactive prompt choices, first is default
     toolchain: Any = field(default_factory=_default_toolchain_factory)
+    version: str = "1.0.0"  # template semver; see :mod:`forge.sync.template_version`
 
 
 def _python_toolchain_factory() -> Any:
@@ -147,6 +155,7 @@ BACKEND_REGISTRY: dict[BackendLanguage | _PluginLanguage, BackendSpec] = {
         version_field="python_version",
         version_choices=("3.13", "3.12", "3.11"),
         toolchain=_python_toolchain_factory(),
+        version="1.0.0",
     ),
     BackendLanguage.NODE: BackendSpec(
         template_dir="services/node-service-template",
@@ -154,6 +163,7 @@ BACKEND_REGISTRY: dict[BackendLanguage | _PluginLanguage, BackendSpec] = {
         version_field="node_version",
         version_choices=("22", "20", "18"),
         toolchain=_node_toolchain_factory(),
+        version="1.0.0",
     ),
     BackendLanguage.RUST: BackendSpec(
         template_dir="services/rust-service-template",
@@ -161,6 +171,7 @@ BACKEND_REGISTRY: dict[BackendLanguage | _PluginLanguage, BackendSpec] = {
         version_field="rust_edition",
         version_choices=("2024", "2021"),
         toolchain=_rust_toolchain_factory(),
+        version="1.0.0",
     ),
 }
 
