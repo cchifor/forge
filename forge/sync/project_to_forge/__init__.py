@@ -12,8 +12,16 @@ candidate fragment patches (via ``harvest_project``).
 * Phase 5: :func:`apply_bundle_to_fragments` — write a harvest bundle's
   candidates back into the forge fragment tree. Files-only in v1; block
   / deps / env are deferred to Phase 6.
+* Phase 6 close: :func:`accept_harvested` — re-stamp the project's
+  ``forge.toml`` baselines after a harvest bundle landed upstream, so
+  the user's edits become the new manifest baseline rather than drift.
 """
 
+from forge.sync.project_to_forge.accept import (
+    AcceptHarvestedEntry,
+    AcceptHarvestedReport,
+    accept_harvested,
+)
 from forge.sync.project_to_forge.apply_bundle import (
     ApplyBundleEntry,
     ApplyBundleReport,
@@ -32,6 +40,8 @@ from forge.sync.project_to_forge.verify import (
 )
 
 __all__ = [
+    "AcceptHarvestedEntry",
+    "AcceptHarvestedReport",
     "ApplyBundleEntry",
     "ApplyBundleReport",
     "BlockVerifyEntry",
@@ -39,6 +49,7 @@ __all__ = [
     "HarvestBundle",
     "VerifyReport",
     "VerifyWorst",
+    "accept_harvested",
     "apply_bundle_to_fragments",
     "harvest_project",
     "verify_project",
