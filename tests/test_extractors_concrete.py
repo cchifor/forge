@@ -656,3 +656,35 @@ def test_candidate_patch_carries_all_required_fields(tmp_path: Path) -> None:
     )
     assert p.fragment == "frag"
     assert p.rationale == ""
+    # Phase 6 additions — defaults preserve backward-compat for callers
+    # that don't populate the apply-back surface.
+    assert p.current_body == ""
+    assert p.feature_key == ""
+    assert p.marker == ""
+
+
+def test_candidate_patch_apply_back_fields_round_trip(tmp_path: Path) -> None:
+    """Phase 6 apply-back fields populate + round-trip through hash/eq."""
+    p = CandidatePatch(
+        fragment="frag",
+        backend="api",
+        kind="block",
+        rel_path="src/main.py",
+        target_path=str(tmp_path / "main.py"),
+        diff="@@\n-old\n+new\n",
+        baseline_sha="abc",
+        current_sha="def",
+        risk="safe-apply",
+        rationale="user edit",
+        current_body="from foo import bar\n",
+        feature_key="middleware_cors",
+        marker="FORGE:MIDDLEWARE_REGISTRATION",
+    )
+    assert p.current_body == "from foo import bar\n"
+    assert p.feature_key == "middleware_cors"
+    assert p.marker == "FORGE:MIDDLEWARE_REGISTRATION"
+    # Frozen + hashable still hold with the new fields.
+    fields = {f.name for f in __import__("dataclasses").fields(CandidatePatch)}
+    assert "current_body" in fields
+    assert "feature_key" in fields
+    assert "marker" in fields

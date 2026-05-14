@@ -48,7 +48,12 @@ jobs:
       - name: Sync dependencies
         run: uv sync --all-groups
       - name: Run forge's own test suite (non-e2e)
-        run: uv run pytest --no-cov --ignore=tests/e2e
+        # ``--ignore=tests/e2e`` skips the directory; ``-m "not e2e"`` skips
+        # tests outside that dir tagged with the marker (FR2/RF1 round-trip
+        # tests in tests/test_harvest_invariants.py spin up full projects
+        # and would blow past the 15-min timeout otherwise — they run in
+        # the e2e-generated job below + the matrix-nightly roundtrip lane).
+        run: uv run pytest --no-cov --ignore=tests/e2e -m "not e2e"
 
   e2e-generated:
     name: generated-project suites (${{ matrix.preset }})

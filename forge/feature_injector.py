@@ -490,10 +490,14 @@ def _apply_zoned_injection(
         return _apply_merge_zone(target, inj, project_root=project_root, collector=collector)
 
     _dispatch_injector(target, inj)
-    # For merge-zone on first apply (no baseline), record the block so
-    # the next re-apply can three-way-merge. This also covers the
-    # project_root-is-None fallback path when merge can't run.
-    if inj.zone == "merge" and collector is not None and project_root is not None:
+    # Record the block baseline regardless of zone (Phase 6, bidirectional
+    # sync). The forward applier's three-way-merge logic only reads
+    # baselines for ``zone="merge"`` blocks, but the REVERSE direction
+    # (``forge --harvest``) needs a per-block baseline for EVERY emitted
+    # block so it can detect user edits. Recording baselines for
+    # generated/user zones too is purely additive — no forward-path
+    # behaviour changes.
+    if collector is not None and project_root is not None:
         _record_merge_baseline(target, inj, project_root=project_root, collector=collector)
     return True
 
