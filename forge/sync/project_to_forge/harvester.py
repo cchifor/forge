@@ -99,26 +99,40 @@ class HarvestBundle:
     candidates: list[CandidatePatch]
 
     def to_dict(self) -> dict[str, Any]:
-        """JSON-friendly view for ``forge --harvest --harvest-out=-``."""
+        """JSON-friendly view for ``forge --harvest --harvest-out=-``.
+
+        ``current_body`` / ``feature_key`` / ``marker`` are only emitted
+        when populated — keeping the JSON shape minimal for the common
+        ``files`` / ``deps`` / ``env`` cases that don't carry them. The
+        apply-back path reads these fields directly off the in-memory
+        bundle, so on-disk serialisation is for review/diagnostics only.
+        """
+        out: list[dict[str, Any]] = []
+        for c in self.candidates:
+            row: dict[str, Any] = {
+                "fragment": c.fragment,
+                "backend": c.backend,
+                "kind": c.kind,
+                "rel_path": c.rel_path,
+                "target_path": c.target_path,
+                "diff": c.diff,
+                "baseline_sha": c.baseline_sha,
+                "current_sha": c.current_sha,
+                "risk": c.risk,
+                "rationale": c.rationale,
+            }
+            if c.current_body:
+                row["current_body"] = c.current_body
+            if c.feature_key:
+                row["feature_key"] = c.feature_key
+            if c.marker:
+                row["marker"] = c.marker
+            out.append(row)
         return {
             "bundle_id": self.bundle_id,
             "project_root": str(self.project_root),
             "forge_version": self.forge_version,
-            "candidates": [
-                {
-                    "fragment": c.fragment,
-                    "backend": c.backend,
-                    "kind": c.kind,
-                    "rel_path": c.rel_path,
-                    "target_path": c.target_path,
-                    "diff": c.diff,
-                    "baseline_sha": c.baseline_sha,
-                    "current_sha": c.current_sha,
-                    "risk": c.risk,
-                    "rationale": c.rationale,
-                }
-                for c in self.candidates
-            ],
+            "candidates": out,
         }
 
     def write(self, out_dir: Path) -> None:
@@ -468,8 +482,16 @@ def _make_injection_records(
         # dir so ``ctx.backend_dir / inj.target`` resolves correctly
         # in the extractor.
         target_rel = _rebase_target(rel_path, backend_dir, project_root)
-        snippet_key = (marker, feature_key)
-        snippet = upstream_snippets.get(snippet_key, "")
+        # Look up the upstream snippet under (marker, feature_key) first;
+        # ``_load_injections`` (called via ``_load_upstream_snippets``)
+        # stamps records with the placeholder feature_key ``"<harvest>"``,
+        # so the manifest's own feature_key won't match directly. Fall
+        # back to the wildcard ``"*"`` entry that ``_load_upstream_snippets``
+        # also indexes — it carries the upstream body keyed by marker
+        # alone, which is unique enough for round-trip.
+        snippet = upstream_snippets.get((marker, feature_key)) or upstream_snippets.get(
+            (marker, "*"), ""
+        )
         records.append(
             _InjectionRecord(
                 feature_key=feature_key,

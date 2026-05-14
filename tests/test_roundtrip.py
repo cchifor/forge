@@ -1,4 +1,4 @@
-"""End-to-end round-trip test for the bidirectional-sync cycle (Phase 5).
+"""End-to-end round-trip test for the bidirectional-sync cycle (Phase 5/6).
 
 This file covers the headline user-visible guarantee:
 
@@ -28,70 +28,69 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Phase 5 ships apply_bundle_to_fragments as files-only; block "
-        "apply-back lands in Phase 6. The full forward→reverse→forward "
-        "cycle currently fails on block-edited scenarios because the "
-        "bundle's block candidates land as ``deferred`` and the edit "
-        "is lost on regenerate. The test runs and demonstrates the gap; "
-        "remove this xfail once Phase 6 wires block harvest application."
-    ),
-    strict=False,
-)
 def test_roundtrip_py_only_headless(tmp_path: Path) -> None:
     """End-to-end forward→reverse→forward cycle for py_only_headless.
 
     Detailed steps:
 
     1. Generate the scenario into ``tmp_path/project-a``.
-    2. Edit a known FORGE-sentinel block inline (the harvester's bread-
-       and-butter target).
+    2. Edit a known literal (non-Jinja) FORGE-sentinel block inline —
+       the harvester's bread-and-butter target.
     3. Harvest the edited project into a :class:`HarvestBundle`.
-    4. Apply the bundle to a tmp-path clone of the forge source tree.
-       Block candidates emit ``deferred`` entries in v1 — this is the
-       crux of the xfail.
+    4. Apply the bundle to the LIVE forge tree (snapshotted + reverted
+       in ``finally`` so the mutation doesn't bleed into other tests).
+       This is necessary because the generator's fragment registry is
+       a module-level singleton; applying to a clone has no effect on
+       the second ``generate()``.
     5. Regenerate the scenario into ``tmp_path/project-b``.
-    6. Assert ``project-a`` and ``project-b`` match byte-for-byte
-       (CRLF/LF normalized). Failure means the user's edit was lost
-       on regenerate — the round-trip didn't close.
+    6. Assert ``project-a`` and ``project-b`` match modulo documented
+       noise: emitted_at timestamps, sentinel fingerprints, derived
+       sha256 fields, .git/ + .copier-answers.yml. See
+       :func:`tests.test_harvest_invariants._diff_project_trees`.
     """
     from forge.sync.project_to_forge import (  # noqa: PLC0415
         apply_bundle_to_fragments,
         harvest_project,
     )
 
-    # Import the helpers from the invariants module so we share one
-    # canonical edit-and-compare implementation across the test surface.
+    # Reuse the FR2 helpers so the end-to-end smoke and the invariant
+    # decomposition share a single canonical edit-and-compare
+    # implementation.
     from tests.test_harvest_invariants import (  # noqa: PLC0415
         _build_project,
-        _clone_forge_source,
-        _dirs_match_lf_normalized,
-        _edit_a_known_block,
+        _diff_project_trees,
+        _edit_a_known_literal_block,
+        _live_forge_apply_back_guard,
+        _live_forge_root,
     )
-
-    forge_repo_clone = tmp_path / "forge-clone"
-    _clone_forge_source(forge_repo_clone)
 
     project_a_root = tmp_path / "project-a"
     project_a_root.mkdir()
     project_a = _build_project("py_only_headless", project_a_root)
 
-    edited_path, edit_meta = _edit_a_known_block(project_a)
+    edited_path, edit_meta = _edit_a_known_literal_block(project_a)
     if edited_path is None:
         pytest.skip(
-            "py_only_headless emitted no FORGE-sentinel block; "
+            "py_only_headless emitted no FORGE-sentinel literal block; "
             "scenarios must ship at least one block to exercise round-trip"
         )
 
     bundle = harvest_project(project_a, quiet=True)
-    apply_bundle_to_fragments(bundle, forge_repo_clone, quiet=True)
+    bundle.candidates[:] = [c for c in bundle.candidates if c.kind == "block"]
+    if not any(c.risk == "safe-apply" for c in bundle.candidates):
+        pytest.skip("no safe-apply block candidates after edit")
 
-    project_b_root = tmp_path / "project-b"
-    project_b_root.mkdir()
-    project_b = _build_project("py_only_headless", project_b_root)
+    with _live_forge_apply_back_guard():
+        report = apply_bundle_to_fragments(bundle, _live_forge_root(), quiet=True)
+        assert report.errored == 0, f"apply-back errored on {report.errored} candidate(s)"
 
-    assert _dirs_match_lf_normalized(project_a, project_b), (
-        f"Round-trip failure: project-a (edited) and project-b (regenerated) "
-        f"don't match. Edit was {edit_meta!r}."
-    )
+        project_b_root = tmp_path / "project-b"
+        project_b_root.mkdir()
+        project_b = _build_project("py_only_headless", project_b_root)
+
+        differing = _diff_project_trees(project_a, project_b)
+        assert differing == [], (
+            f"Round-trip failure: project-a (edited) and project-b (regenerated) "
+            f"differ on {len(differing)} file(s); first: {differing[:5]}. "
+            f"Edit was {edit_meta!r}."
+        )
