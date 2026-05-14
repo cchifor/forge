@@ -73,6 +73,30 @@ class CandidatePatch:
         rationale: Free-form note from the extractor explaining the
             classification. Surfaced in ``forge --harvest`` review UI;
             omitted from non-interactive bundle output.
+        current_body: Post-edit body the patch would write back. Populated
+            differently per ``kind`` so the apply-back path can rewrite
+            the upstream source without re-reading the project tree:
+
+            * ``"block"`` — the on-disk body between the BEGIN/END
+              sentinels (exclusive of the sentinel lines themselves).
+              Required by :func:`apply_bundle_to_fragments` to rewrite
+              the fragment's ``inject.yaml`` ``snippet:`` entry.
+            * ``"files"`` — the full post-edit file content as a string
+              (text files only). Empty for binary files; the apply-back
+              path falls back to reading ``target_path`` directly in
+              that case.
+            * ``"new-file"`` — the user-authored file content.
+            * ``"deps"`` / ``"env"`` — left empty. Those kinds emit
+              structural-JSON diffs and reason about the manifest
+              shape, not raw content.
+        feature_key: For ``kind="block"`` candidates, the feature key
+            recorded in the BEGIN/END sentinel (e.g. ``"middleware_cors"``).
+            Combined with ``marker`` it pins the exact ``inject.yaml``
+            entry the apply-back step rewrites. Empty for non-block
+            kinds.
+        marker: For ``kind="block"`` candidates, the sentinel marker
+            (e.g. ``"FORGE:MIDDLEWARE_REGISTRATION"``). Empty for
+            non-block kinds.
     """
 
     fragment: str
@@ -85,6 +109,9 @@ class CandidatePatch:
     current_sha: str
     risk: str
     rationale: str = ""
+    current_body: str = ""
+    feature_key: str = ""
+    marker: str = ""
 
 
 class ExtractorProtocol(Protocol):

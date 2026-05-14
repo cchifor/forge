@@ -12,14 +12,13 @@ more lanes:
 - **Lane C — compose-up smoke**: sprint 2 deliverable. Runs
   ``docker compose up``, waits on healthchecks, runs the RFC-006 HTTP
   contract, tears down.
-- **Lane D — bidirectional round-trip** (Phase 5 deliverable). For
-  each opted-in scenario: generate → assert FR1 (zero block/files
-  harvest candidates on the fresh project) → stage a synthetic block
-  edit → harvest → apply-back smoke against a tmp clone of the forge
-  tree. The full project-a vs. project-b directory diff is parked
-  for Phase 6 (it needs a generator forge-root override flag); v1
-  lane D enforces FR1 + apply-back orchestration only. ~30-90s per
-  scenario, nightly only. See ``docs/round-trip.md`` for the contract.
+- **Lane D — bidirectional round-trip** (Phase 5/6). For each opted-in
+  scenario: generate → assert FR1 (zero block/files harvest candidates
+  on the fresh project) → stage a synthetic literal-block edit →
+  harvest → apply the bundle to the live forge tree (snapshotted +
+  reverted in ``finally``) → regenerate → assert FR2 (project_a ==
+  project_b modulo documented noise). ~30-90s per scenario, nightly
+  only. See ``docs/round-trip.md`` for the contract.
 
 CLI usage (from the repo root)::
 
@@ -29,11 +28,12 @@ CLI usage (from the repo root)::
     uv run python tests/matrix/runner.py --all --lane generate  # explicit lane
     uv run python tests/matrix/runner.py --scenario py_only_headless --lane roundtrip
 
-Lane D (``roundtrip``) — Phase 5 deliverable. v1 enforces the FR1
-invariant (fresh-generate emits zero block/files harvest candidates)
-and smokes the apply-back orchestration on the opted-in scenarios.
-The full project-a vs project-b directory diff is parked until Phase
-6 lands the generator forge-root override. Runs nightly only via
+Lane D (``roundtrip``) — Phase 5/6. Enforces FR1 (fresh-generate emits
+zero block/files harvest candidates) AND FR2 (the full forward→reverse
+→forward cycle reaches a project tree byte-equal to the user's edit,
+modulo documented noise). Phase 6 wired the block apply-back surface
+and the live-forge snapshot+restore guard so the second generate
+re-emits the harvested edit. Runs nightly only via
 ``.github/workflows/matrix-nightly.yml``.
 
 Exit codes::
@@ -51,6 +51,7 @@ the CLI suite covers. Lane C will shell out.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import shutil
 import sys
@@ -513,38 +514,30 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
 
 
 def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
-    """Lane D: bidirectional round-trip CI gate (Phase 5).
+    """Lane D: bidirectional round-trip CI gate (Phase 5/6).
 
-    v1 contract — what lane D actually enforces today:
+    v2 contract — what lane D enforces today:
       1. **Generate** the scenario into ``project-a``.
       2. **FR1** — :func:`harvest_project` on the fresh project MUST
          emit zero ``"block"`` and zero ``"files"`` candidates. Lane
          D fails on a positive count; the rationale + offending
          candidates surface in ``details``.
-      3. **Apply-back substrate smoke** — when the project ships at
-         least one FORGE sentinel block, stage a synthetic edit,
-         harvest, apply the bundle to a tmp clone of the forge tree.
-         The bundle's block candidates land as ``deferred`` in v1
-         (see :func:`apply_bundle_to_fragments`); the smoke just
-         exercises the orchestration without exploding. The full
-         project-a vs. project-b diff is *not* asserted in v1 — that
-         contract requires Phase 6's forge-root override flag so the
-         second generate can use the apply-back-modified clone.
-
-    Phase 6 extensions:
-      * Plumb ``CandidatePatch.current_body`` so the block apply-back
-        rewrites ``inject.yaml`` entries.
-      * Add a generator forge-root override so the second generate
-        actually re-emits the user's edit.
-      * Re-enable the full ``project_a == project_b`` assertion below.
+      3. **Apply-back round-trip** — when the project ships at least
+         one literal-text FORGE sentinel block, stage a synthetic edit,
+         harvest, apply the bundle to the LIVE forge tree (with
+         snapshot+restore in ``finally`` so other parallel lanes don't
+         see polluted fragments), regenerate into ``project-b``, and
+         assert that the two project trees match modulo documented
+         noise (emitted_at timestamps, sentinel fingerprints, manifest
+         sha256 fields, .git/, .copier-answers.yml).
+      4. **Vacuously-true scenarios** — projects without any literal
+         sentinel block (no Jinja-free apply-back-capable site) land
+         as ``ok`` with a note. The round-trip contract is empty for
+         block-less scenarios.
 
     Lane D opts in per-scenario via ``scenarios.yaml``. Nightly CI
     runs the opted-in set; PR CI doesn't touch this lane unless a
     contributor explicitly invokes it (``--scenario X --lane roundtrip``).
-    A scenario that emits no FORGE-sentinel block lands as ``skip``
-    for the apply-back smoke step — the round-trip contract is
-    vacuously true for block-less scenarios, and we don't flag that
-    as a regression.
     """
     from forge.errors import ForgeError  # noqa: PLC0415
     from forge.generator import generate  # noqa: PLC0415
@@ -590,12 +583,10 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 ),
             )
 
-        # Apply-back substrate smoke. Edits a synthetic block, harvests,
-        # applies to a clone of forge/. If the project ships no FORGE
-        # sentinel block, the round-trip contract is vacuous for this
-        # scenario — surface as ``ok`` rather than ``skip`` since FR1
-        # (the only contract lane D currently enforces) did pass.
-        edited_path = _edit_one_sentinel_block(project_a)
+        # Edit a non-Jinja sentinel block (apply-back literalizes the
+        # user's body; Jinja-bearing blocks round-trip incorrectly and
+        # are flagged needs-review at harvest anyway).
+        edited_path = _edit_one_literal_block(project_a)
         if edited_path is None:
             return LaneResult(
                 scenario=scenario.name,
@@ -603,35 +594,85 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 status="ok",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details=(
-                    "FR1 passed; no FORGE sentinel block to exercise the "
-                    "apply-back smoke (vacuously round-trippable)"
+                    "FR1 passed; no literal FORGE sentinel block to exercise "
+                    "the apply-back round-trip (vacuously round-trippable)"
                 ),
             )
 
-        forge_clone = tmp / "forge-clone"
-        _mirror_forge_source(forge_clone)
-
+        # Harvest the user-edit. Filter to block candidates only —
+        # deps/env are legitimately deferred (not part of FR2's
+        # contract).
         bundle_post = harvest_project(project_a, quiet=True)
-        report = apply_bundle_to_fragments(bundle_post, forge_clone, quiet=True)
-
-        # Verify the apply-back orchestration didn't throw and that
-        # the block-candidate disposition is the expected ``deferred``
-        # (Phase 5 helper is files-only). An ``errored`` block
-        # candidate is the only red flag we surface in v1 — the rest
-        # is the Phase 6 contract.
-        block_errors = [e for e in report.entries if e.kind == "block" and e.status == "errored"]
-        if block_errors:
+        bundle_post.candidates[:] = [c for c in bundle_post.candidates if c.kind == "block"]
+        if not any(c.risk == "safe-apply" for c in bundle_post.candidates):
             return LaneResult(
                 scenario=scenario.name,
                 lane="roundtrip",
-                status="fail",
+                status="ok",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details=(
-                    f"apply-back errored on {len(block_errors)} block "
-                    f"candidate(s); first: {block_errors[0].fragment}/"
-                    f"{block_errors[0].rel_path}: {block_errors[0].error}"
+                    "FR1 passed; no safe-apply block candidate after edit "
+                    "(fragment must be Jinja-templated)"
                 ),
             )
+
+        # Snapshot every inject.yaml under the live forge package, apply
+        # the bundle in place, regenerate, compare, and revert in
+        # ``finally``. This pattern is necessary because the generator
+        # imports its fragment registry at module load; pointing it at
+        # a clone would have no effect on the second generate.
+        forge_repo = _live_forge_root()
+        inject_yamls = list((forge_repo / "forge").rglob("inject.yaml"))
+        snapshots = {p: p.read_bytes() for p in inject_yamls}
+        try:
+            report = apply_bundle_to_fragments(bundle_post, forge_repo, quiet=True)
+            if report.errored:
+                first_err = next((e.error for e in report.entries if e.status == "errored"), "")
+                return LaneResult(
+                    scenario=scenario.name,
+                    lane="roundtrip",
+                    status="fail",
+                    duration_ms=int((perf_counter() - start) * 1000),
+                    details=(
+                        f"apply-back errored on {report.errored} block "
+                        f"candidate(s); first: {first_err}"
+                    ),
+                )
+
+            cfg_b = dict(scenario.config)
+            cfg_b["output_dir"] = str(tmp / "project-b")
+            try:
+                project_config_b = _project_config_from_dict(cfg_b)
+                project_config_b.validate()
+                project_b = generate(project_config_b, quiet=True, dry_run=False)
+            except (ValueError, ForgeError) as e:
+                return LaneResult(
+                    scenario=scenario.name,
+                    lane="roundtrip",
+                    status="fail",
+                    duration_ms=int((perf_counter() - start) * 1000),
+                    details=f"second generate failed: {e}",
+                )
+
+            differing = _diff_project_trees_normalized(project_a, project_b)
+            if differing:
+                return LaneResult(
+                    scenario=scenario.name,
+                    lane="roundtrip",
+                    status="fail",
+                    duration_ms=int((perf_counter() - start) * 1000),
+                    details=(
+                        f"project_a vs project_b: {len(differing)} file(s) "
+                        f"differ after normalisation; first: {differing[0]}"
+                    ),
+                )
+        finally:
+            # Best-effort restore — if a snapshot path disappeared (apply-
+            # back wrote elsewhere) we don't want to mask the original lane
+            # failure with a teardown OSError.
+            for path, content in snapshots.items():
+                with contextlib.suppress(OSError):
+                    path.write_bytes(content)
 
         return LaneResult(
             scenario=scenario.name,
@@ -639,26 +680,24 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
             status="ok",
             duration_ms=int((perf_counter() - start) * 1000),
             details=(
-                f"FR1 passed; apply-back smoke ok "
-                f"(applied={report.applied} deferred={report.deferred})"
+                f"FR1 passed; FR2 round-trip passed (applied={report.applied} block candidate(s))"
             ),
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def _edit_one_sentinel_block(project_root: Path) -> Path | None:
-    """Inject a synthetic edit inside the first FORGE-bracketed block found.
+def _edit_one_literal_block(project_root: Path) -> Path | None:
+    """Inject a synthetic edit inside the first NON-JINJA FORGE block found.
 
-    Walks ``project_root`` for the first text file containing a
-    ``FORGE:BEGIN`` / ``FORGE:END`` pair, then inserts a marker line
-    inside the block. Returns the path edited, or ``None`` when no
-    block was found.
-
-    Inlined here rather than reused from
-    :mod:`tests.test_harvest_invariants` so the runner stays
-    self-sufficient (the matrix runner is invoked as a script from
-    CI, not via pytest's import machinery).
+    Walks ``project_root`` for a text file containing a ``FORGE:BEGIN``
+    / ``FORGE:END`` pair whose body has no ``{{ }}`` / ``{% %}`` tokens
+    (Jinja-bearing blocks round-trip incorrectly through apply-back —
+    they'd re-render to a different body on the second generate, and
+    the harvest already filters them to ``needs-review`` so they
+    wouldn't apply under the default risk filter anyway). Inserts a
+    comment line at the START of the block body and returns the edited
+    path. ``None`` when no eligible block is found.
     """
     for ext in (".py", ".ts", ".js", ".rs"):
         for path in sorted(project_root.rglob(f"*{ext}")):
@@ -670,9 +709,20 @@ def _edit_one_sentinel_block(project_root: Path) -> Path | None:
             idx_end = text.find("FORGE:END ")
             if idx_begin == -1 or idx_end == -1 or idx_end <= idx_begin:
                 continue
-            before_end = text.rfind("\n", 0, idx_end)
-            if before_end == -1:
+
+            begin_line_end = text.find("\n", idx_begin)
+            if begin_line_end == -1:
                 continue
+            body_start = begin_line_end + 1
+            end_line_start = text.rfind("\n", 0, idx_end) + 1
+            body = text[body_start:end_line_start]
+
+            # Skip blocks with Jinja syntax — apply-back literalizes
+            # the body and round-trip would diverge on the second
+            # generate's re-render.
+            if "{{" in body or "{%" in body:
+                continue
+
             # Pick the comment prefix off the BEGIN sentinel line so
             # the injected marker matches the surrounding syntax.
             before_begin = text.rfind("\n", 0, idx_begin) + 1
@@ -680,26 +730,112 @@ def _edit_one_sentinel_block(project_root: Path) -> Path | None:
             comment_prefix = begin_line.rstrip().rstrip("FORGE:").rstrip()
             if not comment_prefix:
                 comment_prefix = "# "
+            if not comment_prefix.endswith(" "):
+                comment_prefix = comment_prefix + " "
+
             injection = f"{comment_prefix}forge round-trip CI marker\n"
-            new_text = text[: before_end + 1] + injection + text[before_end + 1 :]
+            new_text = text[:body_start] + injection + text[body_start:]
             path.write_text(new_text, encoding="utf-8")
             return path
     return None
 
 
-def _mirror_forge_source(dst: Path) -> None:
-    """Copy the forge source tree into ``dst`` for apply-bundle testing.
+def _live_forge_root() -> Path:
+    """Return the directory containing the live ``forge/`` package.
 
-    Only ``forge/`` is mirrored — the only subtree
-    :func:`apply_bundle_to_fragments` writes into. The matrix runner
-    is invoked from the repo root via ``uv run python tests/...``, so
-    the source tree is two directories up from this file.
+    Used by lane D's apply-back step to write into the live forge
+    tree (with snapshot+restore in ``finally``) so a subsequent
+    ``generate()`` re-emits the user's edit. The runner is invoked
+    from the repo root, so the parent of this file's grand-parent
+    is the directory containing ``forge/``.
     """
-    repo_root = Path(__file__).resolve().parents[2]
-    dst.mkdir(parents=True, exist_ok=True)
-    src = repo_root / "forge"
-    if src.is_dir():
-        shutil.copytree(str(src), str(dst / "forge"))
+    return Path(__file__).resolve().parents[2]
+
+
+def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
+    """Compare two project trees with the FR2-normalisation pipeline.
+
+    Returns a sorted list of POSIX rel-paths that differ. An empty
+    list means the trees match modulo:
+
+    * ``.git/...`` — different sha objects across two ``git init`` runs.
+    * ``.copier-answers.yml`` — Copier internals (``_commit`` /
+      ``_src_path`` may drift).
+    * ``emitted_at = "..."`` — UTC-second granularity timestamps in
+      ``forge.toml`` provenance entries.
+    * ``sha256 = "..."`` / ``snippet_sha256 = "..."`` — derived from
+      file/snippet content; project_a's manifest was recorded before
+      the user's edit (so it's stale relative to the on-disk file),
+      while project_b's is fresh. The contract is about CONTENT
+      equality, not manifest metadata.
+    * ``fp:<hex8>`` in FORGE BEGIN sentinels — fingerprint of the
+      rendered snippet; project_a has the OLD fingerprint (user only
+      edited the body), project_b has the NEW one (regenerate
+      re-stamps).
+
+    LF/CRLF normalization is applied to every text file so the
+    comparison is platform-tolerant.
+    """
+    import re  # noqa: PLC0415
+
+    def is_excluded(rel: str) -> bool:
+        if rel.startswith(".git/") or "/.git/" in rel or rel == ".git":
+            return True
+        return rel.endswith(".copier-answers.yml")
+
+    def normalize(rel: str, text: str) -> str:
+        out = text
+        if rel.endswith("forge.toml"):
+            out = re.sub(r'emitted_at\s*=\s*"[^"]*"', 'emitted_at = "<NORM>"', out)
+            out = re.sub(r'sha256\s*=\s*"[0-9a-f]+"', 'sha256 = "<NORM>"', out)
+            out = re.sub(
+                r'snippet_sha256\s*=\s*"[0-9a-f]+"',
+                'snippet_sha256 = "<NORM>"',
+                out,
+            )
+        out = re.sub(r"FORGE:BEGIN ([^\n]*?) fp:[0-9a-f]{8}", r"FORGE:BEGIN \1 fp:<NORM>", out)
+        return out
+
+    def is_text_bytes(data: bytes) -> bool:
+        if b"\x00" in data[:8192]:
+            return False
+        try:
+            data[:8192].decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+        return True
+
+    files_a = {
+        p.relative_to(a).as_posix(): p
+        for p in a.rglob("*")
+        if p.is_file() and not is_excluded(p.relative_to(a).as_posix())
+    }
+    files_b = {
+        p.relative_to(b).as_posix(): p
+        for p in b.rglob("*")
+        if p.is_file() and not is_excluded(p.relative_to(b).as_posix())
+    }
+
+    differing: list[str] = []
+    for rel in sorted(set(files_a) | set(files_b)):
+        pa = files_a.get(rel)
+        pb = files_b.get(rel)
+        if pa is None or pb is None:
+            differing.append(rel)
+            continue
+        ba = pa.read_bytes()
+        bb = pb.read_bytes()
+        if ba == bb:
+            continue
+        if not (is_text_bytes(ba) and is_text_bytes(bb)):
+            differing.append(rel)
+            continue
+        sa = normalize(rel, ba.decode("utf-8", errors="replace"))
+        sb = normalize(rel, bb.decode("utf-8", errors="replace"))
+        if sa == sb or sa.replace("\r\n", "\n") == sb.replace("\r\n", "\n"):
+            continue
+        differing.append(rel)
+    return differing
 
 
 LANE_DISPATCH = {
