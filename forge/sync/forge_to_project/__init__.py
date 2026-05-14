@@ -11,6 +11,11 @@ from forge.sync.forge_to_project.plan import (
     UpdatePlanReport,
     plan_update,
 )
+from forge.sync.forge_to_project.reapply_baseline import (
+    ReapplyBaselineEntry,
+    ReapplyBaselineReport,
+    reapply_baseline,
+)
 from forge.sync.forge_to_project.uninstaller import (
     UninstallOutcome,
     disabled_fragments,
@@ -24,13 +29,17 @@ from forge.sync.forge_to_project.updater import (
 __all__ = [
     # plan
     "FilePlanEntry",
-    "UpdatePlanReport",
-    "plan_update",
-    # uninstaller
+    # reapply-baseline
+    "ReapplyBaselineEntry",
+    "ReapplyBaselineReport",
     "UninstallOutcome",
-    "disabled_fragments",
-    "uninstall_fragment",
+    "UpdatePlanReport",
     # updater
     "classify_project_state",
+    "disabled_fragments",
+    "plan_update",
+    "reapply_baseline",
+    # uninstaller
+    "uninstall_fragment",
     "update_project",
 ]
