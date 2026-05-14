@@ -47,8 +47,10 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from forge.capability_resolver import resolve
-from forge.config import BackendConfig, ProjectConfig
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
 from forge.extractors.pipeline import CandidatePatch, ExtractorPipeline
 from forge.extractors.plan import ExtractionPlan
@@ -273,6 +275,19 @@ def harvest_project(
         ):
             patches = pipeline.run(ctx, plan)
             candidates.extend(patches)
+
+    # RFC-006 cross-language parity pass — for each ``block`` candidate
+    # harvested off a tier-1 fragment, emit synthetic ``cross-lang-suggest``
+    # entries for the parallel impls on every OTHER built-in backend.
+    # This is purely additive: the existing candidates are untouched,
+    # and the new entries carry no diff (apply-back defers them; emit-pr
+    # surfaces them in the reviewer checklist rather than committing
+    # them).
+    project_backends: set[BackendLanguage] = {
+        b.language for b in config.backends if isinstance(b.language, BackendLanguage)
+    }
+    suggestions = _emit_cross_lang_suggestions(candidates, FRAGMENT_REGISTRY, project_backends)
+    candidates.extend(suggestions)
 
     bundle_id = _make_bundle_id(project_root)
     bundle = HarvestBundle(
@@ -688,6 +703,215 @@ def _make_pipeline(selected_kinds: set[str]) -> ExtractorPipeline:
     default = ExtractorPipeline.default()
     filtered = tuple(e for e in default.extractors if e.kind in selected_kinds)
     return ExtractorPipeline(extractors=filtered)
+
+
+# ---------------------------------------------------------------------------
+# Cross-language parity pass (RFC-006)
+# ---------------------------------------------------------------------------
+
+
+def _emit_cross_lang_suggestions(
+    candidates: list[CandidatePatch],
+    fragment_registry: Mapping[str, Fragment],
+    project_backends: set[BackendLanguage],  # noqa: ARG001 — see note below.
+) -> list[CandidatePatch]:
+    """For each ``block`` candidate from a tier-1 fragment, emit synthetic
+    ``cross-lang-suggest`` candidates for the parallel impls in OTHER
+    backends.
+
+    ``Other`` = every :class:`BackendLanguage` in ``fragment.implementations``
+    that ISN'T the candidate's source backend. Includes:
+
+    * Backends not present in the project (e.g. a Python-only project with a
+      tier-1 fragment — Node + Rust impls still get suggestions).
+    * Backends present in the project but with no edits to this fragment.
+
+    Why both: a tier-1 fragment's parity is enforced at the fragment level,
+    not the project level (see ``tests/test_fragment_parity.py``). If the
+    user edits the Python impl of a tier-1 middleware fragment, the
+    maintainer should review the Node + Rust impls too even if those
+    backends aren't in this specific project — otherwise the parity
+    contract drifts the moment a downstream project picks up the merged
+    change.
+
+    The ``project_backends`` arg is accepted for symmetry with the helper's
+    documented semantics, but the function deliberately does NOT filter
+    by it — both classes of sibling are surfaced. The parameter is kept
+    for callers that may want to introspect which suggestions name a
+    backend the project doesn't ship.
+    """
+    suggestions: list[CandidatePatch] = []
+    for cand in candidates:
+        # Only block-kind candidates have cross-lang parallels — deps/env
+        # are language-specific by definition (different manifest format
+        # per backend) and ``files`` carries no marker for sibling
+        # lookup.
+        if cand.kind != "block":
+            continue
+        frag = fragment_registry.get(cand.fragment)
+        if frag is None or frag.parity_tier != 1:
+            continue
+        source_lang = _lang_from_backend(
+            cand.backend, frag, rel_path=cand.rel_path, marker=cand.marker
+        )
+        if source_lang is None:
+            # The backend label couldn't be resolved to a registered
+            # BackendLanguage — most likely because the fragment's
+            # impls don't carry one matching the candidate's source.
+            # Without a source, "other" is ambiguous; bail safely.
+            continue
+        for impl_lang in frag.implementations:
+            if impl_lang == source_lang:
+                continue
+            sibling_target = _find_sibling_target(frag, impl_lang, cand.feature_key, cand.marker)
+            if sibling_target is None:
+                # No matching marker on the sibling impl's inject.yaml —
+                # don't fabricate a target. The fragment may genuinely
+                # not have a parallel block for this edit (different
+                # injection topology per backend).
+                continue
+            lang_value = impl_lang.value if hasattr(impl_lang, "value") else str(impl_lang)
+            suggestions.append(
+                CandidatePatch(
+                    fragment=cand.fragment,
+                    backend=lang_value,
+                    kind="cross-lang-suggest",
+                    rel_path=sibling_target,
+                    target_path=sibling_target,
+                    diff=(
+                        f"Mirror the change from {cand.backend}/{cand.target_path} "
+                        f"(markers share feature_key + marker name across impls)."
+                    ),
+                    baseline_sha=None,
+                    current_sha="",
+                    risk="needs-review",
+                    rationale=(
+                        f"Tier-1 fragment {cand.fragment!r} has parallel impls for "
+                        f"{sorted(_lang_value(lang) for lang in frag.implementations)}. "
+                        "Cross-stack parity is enforced by tests/test_fragment_parity.py; "
+                        "please mirror the edit."
+                    ),
+                    current_body="",
+                    feature_key=cand.feature_key,
+                    marker=cand.marker,
+                )
+            )
+    return suggestions
+
+
+def _lang_value(lang: object) -> str:
+    """Return a sortable string for a BackendLanguage-like enum member."""
+    return getattr(lang, "value", None) or str(lang)
+
+
+def _lang_from_backend(
+    backend: str,  # noqa: ARG001 — kept for callers; primary lookup is on rel_path+marker.
+    fragment: Fragment,
+    *,
+    rel_path: str = "",
+    marker: str = "",
+) -> BackendLanguage | None:
+    """Identify which of the fragment's impls a candidate originated from.
+
+    The candidate's ``backend`` field is the BackendConfig name (e.g.
+    ``api``) — free-form per project, not a language value — so we
+    can't go directly from that to a :class:`BackendLanguage`. The
+    most reliable mapping is to walk the fragment's impls and find
+    which one's ``inject.yaml`` carries an entry matching the
+    candidate's ``rel_path`` + ``marker``. That entry's impl is the
+    source.
+
+    Falls back to a direct ``backend == lang.value`` match (so callers
+    that pass a language label as the backend, e.g. test fixtures, still
+    work) and finally returns ``None`` when neither path matches.
+
+    Only :class:`BackendLanguage` members are returned —
+    plugin-registered language sentinels are skipped, because the
+    cross-lang pass only knows how to talk about the built-in trio.
+    """
+    # Try the rel_path+marker match against each impl's inject.yaml.
+    if rel_path and marker:
+        for lang, impl in fragment.implementations.items():
+            if not isinstance(lang, BackendLanguage):
+                continue
+            try:
+                from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
+            except ImportError:
+                continue
+            fragment_dir = _resolve_fragment_dir(impl.fragment_dir)
+            inject_yaml = fragment_dir / "inject.yaml"
+            if not inject_yaml.is_file():
+                continue
+            try:
+                doc = yaml.safe_load(inject_yaml.read_text(encoding="utf-8"))
+            except (yaml.YAMLError, OSError):
+                continue
+            if not isinstance(doc, list):
+                continue
+            for entry in doc:
+                if not isinstance(entry, dict):
+                    continue
+                if (
+                    str(entry.get("marker", "")) == marker
+                    and str(entry.get("target", "")) == rel_path
+                ):
+                    return lang
+
+    # Direct match — caller passed a language label as the backend.
+    for lang in fragment.implementations:
+        if isinstance(lang, BackendLanguage) and _lang_value(lang) == backend:
+            return lang
+
+    return None
+
+
+def _find_sibling_target(
+    fragment: Fragment,
+    lang: BackendLanguage,
+    feature_key: str,  # noqa: ARG001 — surfaced for callers that may filter on it.
+    marker: str,
+) -> str | None:
+    """Resolve the parallel ``inject.yaml`` target for ``lang``.
+
+    Reads ``<fragment_dir>/inject.yaml`` for the sibling impl and finds
+    the entry whose ``marker`` matches the candidate's marker. Returns
+    the entry's ``target`` field (a backend-rooted POSIX rel-path).
+    Returns ``None`` when no matching entry exists — the fragment may
+    legitimately not ship a parallel block for this marker on the
+    sibling backend.
+
+    The match is on ``marker`` alone (not ``feature_key``) because
+    markers are conventionally shared across the per-language impls of
+    a tier-1 fragment (e.g. ``FORGE:MIDDLEWARE_REGISTRATION`` appears
+    in the Python, Node, and Rust ``inject.yaml`` files of the
+    ``rate_limit`` fragment). ``feature_key`` is accepted in the
+    signature so callers can opt into a stricter match later without an
+    API break.
+    """
+    impl = fragment.implementations.get(lang)
+    if impl is None:
+        return None
+    # Lazy import — keeps the orchestrator's import surface stable.
+    from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
+
+    fragment_dir = _resolve_fragment_dir(impl.fragment_dir)
+    inject_yaml = fragment_dir / "inject.yaml"
+    if not inject_yaml.is_file():
+        return None
+    try:
+        doc = yaml.safe_load(inject_yaml.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return None
+    if not isinstance(doc, list):
+        return None
+    for entry in doc:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("marker", "")) == marker:
+            target = entry.get("target")
+            if isinstance(target, str) and target:
+                return target
+    return None
 
 
 # ---------------------------------------------------------------------------

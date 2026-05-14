@@ -81,7 +81,7 @@ class ApplyBundleEntry:
     Attributes:
         fragment: Fragment name (matches :attr:`CandidatePatch.fragment`).
         kind: Candidate kind (``"files"`` / ``"block"`` / ``"deps"`` /
-            ``"env"``).
+            ``"env"`` / ``"cross-lang-suggest"``).
         rel_path: POSIX rel-path identifying the patch target inside the
             fragment tree (or the project tree, for ``"block"`` /
             ``"deps"`` / ``"env"``).
@@ -89,8 +89,9 @@ class ApplyBundleEntry:
             (filtered out by ``risk_filter``),
             ``"skipped-unchanged"`` (idempotent re-run — the change
             was already in the fragment source on disk),
-            ``"deferred"`` (kind not supported in v1, or non-literal
-            expression that needs a manual edit — see module
+            ``"deferred"`` (kind not supported in v1, non-literal
+            expression that needs a manual edit, or RFC-006
+            ``cross-lang-suggest`` informational entry — see module
             docstring), or ``"errored"`` (apply attempted but failed;
             see :attr:`error`).
         target: Absolute path on disk that was (or would have been)
@@ -232,6 +233,21 @@ def apply_bundle_to_fragments(
             entry = _apply_deps_candidate(cand, forge_repo=forge_repo, quiet=quiet)
         elif cand.kind == "env":
             entry = _apply_env_candidate(cand, forge_repo=forge_repo, quiet=quiet)
+        elif cand.kind == "cross-lang-suggest":
+            # RFC-006 cross-language parity hint — never applied
+            # automatically. The candidate carries the path of a
+            # sibling-language impl that the maintainer should mirror
+            # by hand. emit-pr surfaces these in the reviewer
+            # checklist; apply-back records the deferral so the
+            # operator's report stays honest.
+            entry = ApplyBundleEntry(
+                fragment=cand.fragment,
+                kind=cand.kind,
+                rel_path=cand.rel_path,
+                target=cand.target_path or None,
+                status="deferred",
+                error="cross-lang suggestion; apply manually to the named impl",
+            )
         else:
             # Unknown kind — record + continue rather than crash. The
             # operator's harvest tooling and the apply lane must agree
