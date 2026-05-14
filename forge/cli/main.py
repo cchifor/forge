@@ -176,6 +176,11 @@ def main() -> None:
 
         sys.exit(_run_harvest(args))
 
+    if getattr(args, "accept_harvested", None):
+        from forge.cli.commands.accept_harvested import _run_accept_harvested  # noqa: PLC0415
+
+        sys.exit(_run_accept_harvested(args))
+
     if getattr(args, "new_entity_name", None):
         from forge.cli.commands.new_entity import _dispatch_new_entity  # noqa: PLC0415
 
