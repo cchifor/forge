@@ -148,7 +148,8 @@ directory = "htmlcov"
 # Run with `uvx mutmut run` and inspect with `uvx mutmut results`.
 [tool.mutmut]
 paths_to_mutate = [
-    "forge/feature_injector.py",
+    "forge/appliers/injection.py",
+    "forge/appliers/plan.py",
     "forge/merge.py",
     "forge/provenance.py",
     "forge/injectors/python_ast.py",

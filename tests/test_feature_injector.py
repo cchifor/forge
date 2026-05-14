@@ -8,20 +8,19 @@ from pathlib import Path
 import pytest
 import tomlkit
 
+from forge.appliers.deps import (
+    _add_node_deps,
+    _add_python_deps,
+    _add_rust_deps,
+)
+from forge.appliers.env import append_env_var as _add_env_var
 from forge.appliers.files import copy_files
 from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
 from forge.errors import GeneratorError
-from forge.feature_injector import (
-    _add_env_var,
-    _add_node_deps,
-    _add_python_deps,
-    _add_rust_deps,
-    _inject_snippet,
-    apply_features,
-)
 from forge.fragments import Fragment, FragmentImplSpec
-from forge.injectors.sentinels import _block_fingerprint
+from forge.injectors.sentinels import _block_fingerprint, _inject_snippet
+from forge.sync.forge_to_project import apply_features
 
 # -- _inject_snippet ----------------------------------------------------------
 
@@ -346,62 +345,6 @@ class TestCopyFiles:
         outcomes = copy_files(src, dst, update_mode="overwrite")
         assert (dst / "a.py").read_text(encoding="utf-8") == "new\n"
         assert outcomes[0].action == "applied"
-
-
-# -- Deprecated _copy_files shim ----------------------------------------------
-
-
-class TestDeprecatedCopyFilesShim:
-    """The ``forge.feature_injector._copy_files`` shim translates the
-    legacy ``skip_existing`` boolean to the new ``update_mode`` enum and
-    emits a DeprecationWarning. Scheduled removal: 2.0. Until then the
-    shim must keep working for any external caller still on the old
-    signature."""
-
-    def test_shim_emits_deprecation_warning_and_delegates(self, tmp_path):
-        from forge.feature_injector import _copy_files
-
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "a.py").write_text("body\n", encoding="utf-8")
-        dst = tmp_path / "dst"
-        dst.mkdir()
-
-        with pytest.warns(DeprecationWarning, match="deprecated"):
-            _copy_files(src, dst)
-        # File copied via the new copy_files dispatch.
-        assert (dst / "a.py").read_text(encoding="utf-8") == "body\n"
-
-    def test_shim_skip_existing_true_maps_to_skip_mode(self, tmp_path):
-        from forge.feature_injector import _copy_files
-
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "a.py").write_text("new\n", encoding="utf-8")
-        dst = tmp_path / "dst"
-        dst.mkdir()
-        (dst / "a.py").write_text("existing\n", encoding="utf-8")
-
-        with pytest.warns(DeprecationWarning):
-            _copy_files(src, dst, skip_existing=True)
-        # skip_existing=True → update_mode="skip" → existing preserved.
-        assert (dst / "a.py").read_text(encoding="utf-8") == "existing\n"
-
-    def test_shim_skip_existing_false_maps_to_strict_mode(self, tmp_path):
-        from forge.feature_injector import _copy_files
-
-        src = tmp_path / "src"
-        src.mkdir()
-        (src / "a.py").write_text("new\n", encoding="utf-8")
-        dst = tmp_path / "dst"
-        dst.mkdir()
-        (dst / "a.py").write_text("existing\n", encoding="utf-8")
-
-        # skip_existing=False (default) → update_mode="strict" → raises
-        # on collision.
-        with pytest.warns(DeprecationWarning):
-            with pytest.raises(GeneratorError, match="tried to overwrite"):
-                _copy_files(src, dst, skip_existing=False)
 
 
 # -- apply_features orchestration --------------------------------------------

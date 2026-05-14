@@ -23,6 +23,7 @@ each backend's directory (use for cross-cutting files like AGENTS.md).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from forge.config import BackendLanguage, FrontendFramework
@@ -36,6 +37,36 @@ MARKER_PREFIX = "FORGE:"
 
 # Root directory under forge/templates where all fragments live.
 FRAGMENTS_DIRNAME = "_fragments"
+
+# Absolute path to the built-in fragments root. Computed once at import
+# time so callers can branch on "fragment under built-in tree" vs.
+# "plugin fragment outside the tree" without re-deriving the path. Sibling
+# constant ``fragments_root()`` in ``_registry`` returns the same value
+# via a function; both forms exist for historical reasons.
+_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+FRAGMENTS_DIR = _TEMPLATES_DIR / FRAGMENTS_DIRNAME
+
+
+def _resolve_fragment_dir(fragment_dir: str) -> Path:
+    """Resolve a fragment's directory path.
+
+    Relative paths are interpreted relative to forge's ``_fragments/``
+    directory (the canonical location for built-in fragments). Absolute
+    paths are used verbatim — this is the path plugins take: they ship
+    fragments inside their own package tree and pass
+    ``str(Path(__file__).parent / "fragments" / "my_thing")``.
+
+    Plugin authors who want the automatic resolution can wrap their
+    fragment directory in a helper like:
+
+        from pathlib import Path
+        MY_FRAGMENT_ROOT = Path(__file__).resolve().parent / "fragments"
+        spec = FragmentImplSpec(fragment_dir=str(MY_FRAGMENT_ROOT / "audit_log/python"))
+    """
+    path = Path(fragment_dir)
+    if path.is_absolute():
+        return path
+    return FRAGMENTS_DIR / fragment_dir
 
 
 FragmentScope = Literal["backend", "project"]

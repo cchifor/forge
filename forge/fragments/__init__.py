@@ -24,16 +24,19 @@ from forge.fragments._registry import (
     register_fragment,
 )
 from forge.fragments._spec import (
+    FRAGMENTS_DIR,
     FRAGMENTS_DIRNAME,
     MARKER_PREFIX,
     Fragment,
     FragmentImplSpec,
     FragmentScope,
     ParityTier,
+    _resolve_fragment_dir,
 )
 
 __all__ = [
     "FRAGMENT_REGISTRY",
+    "FRAGMENTS_DIR",
     "FRAGMENTS_DIRNAME",
     "Fragment",
     "FragmentImplSpec",
@@ -41,6 +44,7 @@ __all__ = [
     "MARKER_PREFIX",
     "ParityTier",
     "_FragmentRegistry",
+    "_resolve_fragment_dir",
     "fragments_root",
     "register_fragment",
 ]

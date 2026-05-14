@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Removed
+
+- The `forge.feature_injector` deprecation shim. Migrate to
+  `forge.sync.forge_to_project` for `apply_features` /
+  `apply_project_features`; `forge.appliers.plan` for `_Injection`
+  / `_load_injections` / `_render_snippet`; `forge.appliers.injection`
+  for `_apply_zoned_injection` / `_dispatch_injector` and the rest of
+  the zoned-injection runtime; `forge.fragments` for
+  `_resolve_fragment_dir` / `FRAGMENTS_DIR`; `forge.injectors.sentinels`
+  for marker primitives; `forge.appliers.files.copy_files` for file
+  copy (the legacy `_copy_files` deprecation shim is also gone — use
+  `copy_files(..., update_mode=...)` directly). See plan in
+  `.claude/plans/happy-inventing-eclipse.md` Item 1.
+
 ### Added — weld-* SDK alignment (1.2.0-alpha.1)
 
 Aligns forge templates with the platform's 2026-05 SDK restructure

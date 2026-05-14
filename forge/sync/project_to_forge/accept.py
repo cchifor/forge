@@ -966,7 +966,8 @@ def _resolve_upstream_block_snippet(
         pass
 
     try:
-        from forge.feature_injector import _load_injections, _resolve_fragment_dir
+        from forge.appliers.plan import _load_injections
+        from forge.fragments import _resolve_fragment_dir
     except ImportError:
         return None
 
@@ -1052,7 +1053,7 @@ def _resolve_upstream_file_sha(
         return None
 
     try:
-        from forge.feature_injector import _resolve_fragment_dir
+        from forge.fragments import _resolve_fragment_dir
     except ImportError:
         return None
 

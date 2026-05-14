@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.feature_injector import _apply_zoned_injection, _Injection
+from forge.appliers.injection import _apply_zoned_injection
+from forge.appliers.plan import _Injection
 from forge.sync.manifest import read_forge_toml, write_forge_toml
 from forge.sync.merge import (
     MergeBlockCollector,

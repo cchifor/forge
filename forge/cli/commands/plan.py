@@ -65,7 +65,7 @@ def _build_preview(config, plan) -> dict[str, Any]:
         per_backend_injections: dict[str, list[dict[str, str]]] = {}
         for lang in rf.target_backends:
             impl = frag.implementations[lang]
-            from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+            from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
 
             fragment_dir = _resolve_fragment_dir(impl.fragment_dir)
             files_dir = fragment_dir / "files"
