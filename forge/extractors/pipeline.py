@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+from forge.codegen.literal_finder import LiteralEdit
+
 if TYPE_CHECKING:
     from forge.extractors.plan import ExtractionPlan
     from forge.fragment_context import FragmentContext
@@ -122,6 +124,16 @@ class CandidatePatch:
         marker: For ``kind="block"`` candidates, the sentinel marker
             (e.g. ``"FORGE:MIDDLEWARE_REGISTRATION"``). Empty for
             non-block kinds.
+        option_promotion: For ``kind="block"`` candidates whose user edit
+            is detected as a pure literal-value swap (see
+            :mod:`forge.codegen.literal_finder`), the tuple of
+            :class:`~forge.codegen.literal_finder.LiteralEdit` records
+            describing each changed literal. Drives the side-car
+            ``option-promote`` patch the bundle emits next to the main
+            candidate file — see
+            :func:`forge.sync.project_to_forge.bundle._write_patches`.
+            Empty tuple for every other case (structural diffs, deps /
+            env / files kinds, Jinja-overlapping edits).
     """
 
     fragment: str
@@ -137,6 +149,7 @@ class CandidatePatch:
     current_body: str = ""
     feature_key: str = ""
     marker: str = ""
+    option_promotion: tuple[LiteralEdit, ...] = field(default_factory=tuple)
 
 
 class ExtractorProtocol(Protocol):

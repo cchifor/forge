@@ -24,6 +24,13 @@ The trickier classification cases live here:
   ``"needs-review"`` when the upstream snippet contains a Jinja
   interpolation site (``{{ }}`` / ``{% %}``); the harvester can't safely
   back-port literal edits into a template that re-renders at apply time.
+* **AST-level literal edits** (item 6) — when an upstream snippet is
+  literal-only (no Jinja) and the user's edit is a pure literal-value
+  swap (``120`` → ``60``, ``"foo"`` → ``"bar"``, ``True`` → ``False``),
+  the extractor emits ``"safe-apply"`` *plus* an
+  ``option_promotion`` payload of :class:`LiteralEdit` records that
+  the bundle layer turns into an `option-promote` side-car patch.
+  See :mod:`forge.codegen.literal_finder`.
 * Missing sentinel pair — when forward provenance says a block was
   applied but the project no longer contains the markers — emits
   ``"conflict"``: the user (or another tool) stripped the markers
@@ -38,6 +45,8 @@ import difflib
 import re
 from typing import TYPE_CHECKING, Any
 
+from forge.codegen.literal_finder import LiteralEdit, SupportedLanguage, find_literal_edits
+from forge.config import BackendLanguage
 from forge.errors import FragmentError
 from forge.extractors.pipeline import CandidatePatch
 from forge.injectors.sentinels import _read_block_body
@@ -54,6 +63,14 @@ if TYPE_CHECKING:
 # because the upstream template re-renders at apply time — the literal
 # string the user saw on disk is not what the fragment ships.
 _JINJA_PATTERN = re.compile(r"\{\{|\{%")
+
+# Map :class:`BackendLanguage` enum members to the language string the
+# literal-finder expects. ``NODE`` covers TypeScript / JavaScript impls.
+_LANGUAGE_BY_BACKEND: dict[BackendLanguage, SupportedLanguage] = {
+    BackendLanguage.PYTHON: "python",
+    BackendLanguage.NODE: "typescript",
+    BackendLanguage.RUST: "rust",
+}
 
 
 class InjectionExtractor:
@@ -268,15 +285,32 @@ class InjectionExtractor:
             )
 
         # decision == "safe-apply" — user edited, upstream unchanged.
-        # Downgrade to needs-review when the (successfully-rendered)
-        # upstream snippet still contains Jinja interpolation: a
-        # literal edit harvested into a template would round-trip
-        # incorrectly on re-render. The ``render_failed`` case was
-        # already handled via the ``upstream_unavailable`` short-circuit
-        # above; ``_JINJA_PATTERN.search`` here catches the rarer case
-        # of a fragment whose rendered output legitimately includes
-        # ``{{ }}`` (e.g. a code generator emitting Jinja).
-        if _JINJA_PATTERN.search(upstream_body):
+        #
+        # Item 6: try AST-level literal detection. If the user's edit is
+        # a pure literal-value swap AND none of the changed literals
+        # overlap a Jinja site, surface a ``safe-apply`` with an
+        # ``option_promotion`` payload so the bundle can emit a
+        # side-car ``option-promote`` patch suggesting an
+        # :class:`forge.options.Option` declaration.
+        #
+        # When literals overlap Jinja sites (or the upstream itself is a
+        # Jinja template that survived rendering), fall back to the
+        # legacy needs-review rule — a literal back-port would corrupt
+        # the template at re-render time.
+        language = _LANGUAGE_BY_BACKEND.get(ctx.backend_config.language, "python")
+        literal_edits = find_literal_edits(
+            upstream_body=_strip_indent(upstream_body),
+            current_body=_strip_indent(current_body),
+            language=language,
+        )
+        upstream_has_jinja = bool(_JINJA_PATTERN.search(upstream_body))
+        literals_touch_jinja = literal_edits and _any_literal_touches_jinja(
+            upstream_body=upstream_body,
+            literal_edits=literal_edits,
+        )
+
+        if upstream_has_jinja and (not literal_edits or literals_touch_jinja):
+            # No usable literal-promotion signal; keep the legacy downgrade.
             return CandidatePatch(
                 fragment=fragment_name,
                 backend=ctx.backend_config.name,
@@ -296,6 +330,17 @@ class InjectionExtractor:
                 marker=marker,
             )
 
+        # Non-empty literal_edits + no Jinja overlap → safe-apply +
+        # option_promotion payload. The ``rationale`` reads as a single
+        # sentence so the harvest review UI doesn't need a special
+        # render path for the promotion case.
+        rationale = "user edited block; upstream fragment template unchanged"
+        if literal_edits:
+            rationale = (
+                "user edit is a pure literal-value swap; "
+                f"option-promotion suggestion attached ({len(literal_edits)} literal(s))"
+            )
+
         return CandidatePatch(
             fragment=fragment_name,
             backend=ctx.backend_config.name,
@@ -306,10 +351,11 @@ class InjectionExtractor:
             baseline_sha=baseline_sha,
             current_sha=current_sha,
             risk="safe-apply",
-            rationale="user edited block; upstream fragment template unchanged",
+            rationale=rationale,
             current_body=snippet_form_body,
             feature_key=feature_key,
             marker=marker,
+            option_promotion=literal_edits,
         )
 
 
@@ -462,6 +508,86 @@ def _to_snippet_form(
     if out.endswith("\n"):
         out = out[:-1]
     return out
+
+
+def _strip_indent(text: str) -> str:
+    """Strip the common leading indent from ``text``.
+
+    The on-disk body and the re-indented upstream body both carry the
+    BEGIN line's indent prefix (e.g. four spaces inside a function). The
+    literal-finder's libcst-based walk wants module-level snippets — a
+    block of indented code parses as an :class:`IndentedBlock` body,
+    which has a different shape than a freestanding statement.
+
+    We compute the minimum leading-whitespace prefix shared by every
+    non-blank line and strip it from each line. Blank lines pass through
+    unchanged. When the input has no common prefix, returns it verbatim.
+    """
+    if not text:
+        return text
+    lines = text.splitlines(keepends=True)
+    non_blank = [ln for ln in lines if ln.strip()]
+    if not non_blank:
+        return text
+    common = _common_prefix_ws(non_blank)
+    if not common:
+        return text
+    out: list[str] = []
+    for ln in lines:
+        if ln.startswith(common):
+            out.append(ln[len(common) :])
+        else:
+            out.append(ln)
+    return "".join(out)
+
+
+def _common_prefix_ws(lines: list[str]) -> str:
+    """Return the longest whitespace-only prefix common to every line."""
+    if not lines:
+        return ""
+    # Take the first line's leading whitespace as the seed.
+    prefix = ""
+    for ch in lines[0]:
+        if ch not in (" ", "\t"):
+            break
+        prefix += ch
+    if not prefix:
+        return ""
+    for ln in lines[1:]:
+        # Shrink prefix until ln starts with it.
+        while prefix and not ln.startswith(prefix):
+            prefix = prefix[:-1]
+        if not prefix:
+            return ""
+    return prefix
+
+
+def _any_literal_touches_jinja(
+    *,
+    upstream_body: str,
+    literal_edits: tuple[LiteralEdit, ...],
+) -> bool:
+    """Return ``True`` if any literal-edit lives on a line carrying Jinja.
+
+    The literal-finder reports positions in the CURRENT body; the Jinja
+    pattern is searched in the (post-indent-strip) UPSTREAM body. Because
+    the two trees are structurally identical when a :class:`LiteralEdit`
+    is reported, the literal-edit's 1-indexed line number maps directly
+    to the upstream body's line set.
+
+    A literal counts as touching Jinja when ``_JINJA_PATTERN`` matches
+    anywhere on the upstream line at the literal's position. We're
+    conservative: even if the Jinja is in a comment on the same line, we
+    treat the edit as unsafe to back-port.
+    """
+    if not literal_edits:
+        return False
+    upstream_lines = _strip_indent(upstream_body).splitlines()
+    for edit in literal_edits:
+        idx = edit.line - 1
+        if 0 <= idx < len(upstream_lines) and _JINJA_PATTERN.search(upstream_lines[idx]):
+            return True
+    return False
 
 
 def _reindent_for_block(

@@ -106,6 +106,16 @@ def _write_patches(candidates: list[CandidatePatch], patches_dir: Path) -> None:
     (the candidate's ``diff`` hint + ``rationale``, no header).
     Suggestions emit AFTER the real patches so the numeric prefix
     sorts them last in directory listings.
+
+    Item-6 ``option-promote`` side-cars: when a ``block`` candidate
+    carries a non-empty ``option_promotion`` field
+    (see :mod:`forge.codegen.literal_finder`), an extra
+    ``NNNN-option-promote-<safe_key>.patch`` file is written
+    alongside the main candidate using the same ``NNNN`` index. The
+    file is a textual hint — a proposed :class:`Option` declaration
+    plus an ``inject.yaml`` diff swapping the literal for
+    ``{{ options["..."] }}`` — so the maintainer can review and
+    convert the hardcoded value to a typed option.
     """
     grouped: dict[str, list[CandidatePatch]] = defaultdict(list)
     for cand in candidates:
@@ -122,6 +132,13 @@ def _write_patches(candidates: list[CandidatePatch], patches_dir: Path) -> None:
         for index, cand in enumerate(real, start=1):
             patch_name = _patch_filename(index, cand)
             (frag_dir / patch_name).write_text(_patch_body(cand), encoding="utf-8")
+            # Side-car option-promote patch — same index, different
+            # filename pattern. Only emitted when the candidate carries
+            # a non-empty ``option_promotion`` payload (block kinds with
+            # detected literal swaps).
+            if cand.option_promotion:
+                promote_name = _option_promote_filename(index, cand)
+                (frag_dir / promote_name).write_text(_option_promote_body(cand), encoding="utf-8")
         # Number suggestions from 0099 onward so they sort after the
         # real patches but still carry a stable order. Disambiguate by
         # backend (e.g. ``0099-cross-lang-suggest-node.txt``,
@@ -199,6 +216,125 @@ def _patch_body(cand: CandidatePatch) -> str:
     header = "\n".join(header_lines) + "\n\n"
     body = cand.diff if cand.diff else "# (no diff available — see rationale)\n"
     return header + body
+
+
+def _option_promote_filename(index: int, cand: CandidatePatch) -> str:
+    """Build a ``NNNN-option-promote-<safe_key>.patch`` filename.
+
+    Uses the same ``NNNN`` index as the corresponding main patch so the
+    pair sorts next to each other in a directory listing. The
+    ``.patch`` suffix is retained for consistency with ``git apply``
+    expectations, even though the body is a structured textual hint
+    rather than a unified diff — the comment header marks it clearly so
+    a reviewer doesn't try to ``git apply`` it directly.
+    """
+    safe_key = _safe_filename(cand.rel_path)
+    return f"{index:04d}-option-promote-{safe_key}.patch"
+
+
+def _option_promote_body(cand: CandidatePatch) -> str:
+    """Render an option-promote side-car patch body.
+
+    The body is a structured comment-block + a proposed
+    :class:`forge.options.Option` declaration + an ``inject.yaml`` diff
+    swapping the literal for ``{{ options["<key>"] }}``. Maintainers
+    read this, pick the final key name, and copy the snippet into the
+    fragment's options module — the harvester deliberately doesn't
+    apply it automatically (the key namespace + summary text are
+    judgement calls the human owns).
+
+    When the candidate carries multiple :class:`LiteralEdit` records,
+    each gets its own ``Option(...)`` + ``inject.yaml`` diff block in
+    the order the finder emitted them.
+    """
+    header_lines = [
+        "# Option-promotion suggestion — needs-review",
+        f"# Fragment: {cand.fragment} ({cand.backend} impl)",
+        f"# Target file: {cand.target_path}",
+        f"# Marker: {cand.marker}",
+        "#",
+        "# The user changed one or more literal values in this block.",
+        "# Promoting each to an Option lets the same setting flow",
+        "# through to every sibling-language impl of the fragment.",
+        "",
+    ]
+
+    section_lines: list[str] = []
+    for n, edit in enumerate(cand.option_promotion, start=1):
+        proposed_key = _propose_option_key(cand, edit, n)
+        option_type = _option_type_token(edit.kind)
+        default_repr = _default_repr(edit)
+        section_lines.extend(
+            [
+                f"# ----- Literal #{n}: {edit.kind} swap "
+                f"({edit.old_value} → {edit.new_value}) -----",
+                f"# Detected at line {edit.line}, column {edit.col} of the block body.",
+                "",
+                "# Proposed Option declaration (add to forge/<feature>/options.py):",
+                "",
+                "Option(",
+                f'    path="{proposed_key}",',
+                f"    type=OptionType.{option_type},",
+                f"    default={default_repr},",
+                f'    summary="TODO: one-sentence summary of {edit.kind} option.",',
+                '    description="TODO: longer description of why this option exists.",',
+                "    category=FeatureCategory.TODO,",
+                ")",
+                "",
+                "# inject.yaml diff for ALL parallel impls:",
+                "",
+                f"-    {edit.old_value}",
+                f'+    {{{{ options["{proposed_key}"] }}}}',
+                "",
+            ]
+        )
+    return "\n".join(header_lines + section_lines).rstrip("\n") + "\n"
+
+
+def _option_type_token(kind: str) -> str:
+    """Map a :class:`LiteralKind` to the canonical ``OptionType`` member."""
+    return {
+        "int": "INT",
+        "float": "INT",  # forge currently models numeric options as INT.
+        "str": "STR",
+        "bool": "BOOL",
+    }.get(kind, "STR")
+
+
+def _default_repr(edit: object) -> str:
+    """Render the suggested Option's ``default=`` value as Python source.
+
+    For ``bool`` literals the libcst-reported value is ``"True"`` /
+    ``"False"`` — already valid Python. For ``str`` literals the value
+    carries its own quoting (libcst preserves the original delimiter).
+    Numeric literals are emitted verbatim.
+    """
+    kind = getattr(edit, "kind", "str")
+    value = getattr(edit, "new_value", "")
+    if kind == "str":
+        # Already self-quoted by libcst (e.g. ``'"world"'``).
+        return value
+    return value
+
+
+def _propose_option_key(cand: CandidatePatch, edit: object, n: int) -> str:
+    """Suggest a dotted option key for the promotion patch.
+
+    The proposed key is ``<feature_key>.<edit_slug>`` where ``edit_slug``
+    derives from the literal's position and kind — e.g.
+    ``middleware_cors.literal_3``. The numeric suffix disambiguates
+    multiple literals on the same block; the human reviewer will pick
+    the final name.
+    """
+    feature = _option_key_slug(cand.feature_key or cand.fragment or "fragment")
+    kind = getattr(edit, "kind", "literal")
+    return f"{feature}.literal_{kind}_{n}"
+
+
+def _option_key_slug(text: str) -> str:
+    """Lower-case identifier slug suitable for the leading path segment."""
+    cleaned = re.sub(r"[^a-zA-Z0-9_]+", "_", text).strip("_").lower()
+    return cleaned or "fragment"
 
 
 def _safe_filename(key: str) -> str:
