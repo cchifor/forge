@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.feature_injector import FRAGMENTS_DIR, _resolve_fragment_dir
+from forge.fragments import FRAGMENTS_DIR, _resolve_fragment_dir
 
 
 class TestResolveFragmentDir:
@@ -35,9 +35,9 @@ class TestPluginFragmentE2E:
         """Smoke test: a plugin-style fragment dir on an absolute path
         is handled by _apply_fragment via the resolver."""
         from forge.config import BackendConfig, BackendLanguage
-        from forge.feature_injector import _apply_fragment
         from forge.fragment_context import FragmentContext
         from forge.fragments import FragmentImplSpec
+        from forge.sync.forge_to_project.updater import _apply_fragment
 
         # Set up a plugin fragment dir outside FRAGMENTS_DIR.
         plugin_frag = tmp_path / "plugin_pkg" / "my_fragment" / "python"

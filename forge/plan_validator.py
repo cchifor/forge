@@ -26,7 +26,7 @@ import yaml
 from forge.capability_resolver import ResolvedFragment, ResolvedPlan
 from forge.config import BackendLanguage
 from forge.errors import ForgeError
-from forge.feature_injector import _resolve_fragment_dir
+from forge.fragments import _resolve_fragment_dir
 
 
 class PlanValidationError(ForgeError):

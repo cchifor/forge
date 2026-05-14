@@ -57,7 +57,7 @@ from typing import TYPE_CHECKING
 from forge.config import BackendLanguage
 
 if TYPE_CHECKING:
-    from forge.feature_injector import _Injection
+    from forge.appliers.plan import _Injection
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,7 @@ def render_fastapi_middleware(spec: MiddlewareSpec, feature_key: str) -> tuple[_
     Both injections land at ``src/app/main.py`` with ``position=before`` —
     that's the canonical layout every ``middleware_*`` fragment already uses.
     """
-    from forge.feature_injector import _Injection  # noqa: PLC0415 — late import
+    from forge.appliers.plan import _Injection  # noqa: PLC0415 — late import
 
     return (
         _Injection(
@@ -143,7 +143,7 @@ def render_fastapi_middleware(spec: MiddlewareSpec, feature_key: str) -> tuple[_
 
 def render_fastify_plugin(spec: MiddlewareSpec, feature_key: str) -> tuple[_Injection, ...]:
     """Emit _Injection records for a Node/Fastify plugin registration."""
-    from forge.feature_injector import _Injection  # noqa: PLC0415
+    from forge.appliers.plan import _Injection  # noqa: PLC0415
 
     return (
         _Injection(
@@ -169,7 +169,7 @@ def render_axum_layer(spec: MiddlewareSpec, feature_key: str) -> tuple[_Injectio
     Adds the mod declaration at ``src/middleware/mod.rs`` (position=after)
     before the ``src/app.rs`` import + layer registration.
     """
-    from forge.feature_injector import _Injection  # noqa: PLC0415
+    from forge.appliers.plan import _Injection  # noqa: PLC0415
 
     out: list[_Injection] = []
     if spec.rust_mod_snippet is not None:

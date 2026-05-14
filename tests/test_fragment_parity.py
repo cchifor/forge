@@ -136,7 +136,7 @@ def test_tier_one_has_filesystem_dirs_for_all_built_ins(fragment: Fragment) -> N
     no-op for that backend, which violates the parity contract more
     quietly than the impl-key check above.
     """
-    from forge.feature_injector import _resolve_fragment_dir
+    from forge.fragments import _resolve_fragment_dir
 
     missing: list[tuple[str, str]] = []
     for lang in BUILT_INS:

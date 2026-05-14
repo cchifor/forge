@@ -536,7 +536,8 @@ def _load_upstream_snippets(
     if impl is None:
         return {}
     try:
-        from forge.feature_injector import _load_injections, _resolve_fragment_dir  # noqa: PLC0415
+        from forge.appliers.plan import _load_injections  # noqa: PLC0415
+        from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
     except ImportError:
         return {}
 
@@ -590,7 +591,7 @@ def _files_pairs(
     if impl is None:
         return ()
     try:
-        from forge.feature_injector import _resolve_fragment_dir  # noqa: PLC0415
+        from forge.fragments import _resolve_fragment_dir  # noqa: PLC0415
     except ImportError:
         return ()
 

@@ -10,7 +10,7 @@ import pytest
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import FragmentError, OptionsError
-from forge.feature_injector import _load_injections, _render_snippet
+from forge.appliers.plan import _load_injections, _render_snippet
 from forge.fragment_context import FragmentContext
 from forge.fragments import Fragment, FragmentImplSpec
 from forge.options import FeatureCategory, Option, OptionType
@@ -244,7 +244,7 @@ class TestApplyFeaturesThreadsOptions:
         behaviour is the ``FragmentContext`` shape, not the copy/inject
         I/O which is well-covered elsewhere.
         """
-        import forge.feature_injector as fi
+        import forge.sync.forge_to_project.updater as updater
 
         captured: list[FragmentContext] = []
 
@@ -274,9 +274,9 @@ class TestApplyFeaturesThreadsOptions:
         backend_dir = tmp_path / "services" / "api"
         backend_dir.mkdir(parents=True)
 
-        with _isolated_registries(fragments, options), patch.object(fi, "_apply_fragment", _capture):
+        with _isolated_registries(fragments, options), patch.object(updater, "_apply_fragment", _capture):
             plan = resolve(ProjectConfig(project_name="p", backends=[_mk_backend()]))
-            fi.apply_features(
+            updater.apply_features(
                 _mk_backend(),
                 backend_dir,
                 plan.ordered,
