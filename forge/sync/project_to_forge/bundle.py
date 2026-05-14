@@ -98,6 +98,14 @@ def _write_patches(candidates: list[CandidatePatch], patches_dir: Path) -> None:
     candidate. The four-digit prefix preserves emission order from
     the pipeline so a maintainer can apply patches in the same order
     the extractor produced them.
+
+    RFC-006 ``cross-lang-suggest`` candidates land alongside the real
+    patches but use a different filename pattern
+    (``0099-cross-lang-suggest-<lang>.txt`` — no ``.patch`` suffix
+    because they're textual hints, not patches) and a different body
+    (the candidate's ``diff`` hint + ``rationale``, no header).
+    Suggestions emit AFTER the real patches so the numeric prefix
+    sorts them last in directory listings.
     """
     grouped: dict[str, list[CandidatePatch]] = defaultdict(list)
     for cand in candidates:
@@ -107,9 +115,20 @@ def _write_patches(candidates: list[CandidatePatch], patches_dir: Path) -> None:
         frag_dir = patches_dir / _safe_dirname(fragment_name)
         frag_dir.mkdir(parents=True, exist_ok=True)
         _write_fragment_meta(frag_dir / "meta.json", fragment_name, fragment_candidates)
-        for index, cand in enumerate(fragment_candidates, start=1):
+        # Split into real patches + suggestions so each gets its own
+        # filename pattern + body shape.
+        real = [c for c in fragment_candidates if c.kind != "cross-lang-suggest"]
+        suggestions = [c for c in fragment_candidates if c.kind == "cross-lang-suggest"]
+        for index, cand in enumerate(real, start=1):
             patch_name = _patch_filename(index, cand)
             (frag_dir / patch_name).write_text(_patch_body(cand), encoding="utf-8")
+        # Number suggestions from 0099 onward so they sort after the
+        # real patches but still carry a stable order. Disambiguate by
+        # backend (e.g. ``0099-cross-lang-suggest-node.txt``,
+        # ``0100-cross-lang-suggest-rust.txt``).
+        for index, cand in enumerate(suggestions, start=99):
+            suggest_name = _suggest_filename(index, cand)
+            (frag_dir / suggest_name).write_text(_suggest_body(cand), encoding="utf-8")
 
 
 def _write_fragment_meta(
@@ -133,6 +152,32 @@ def _patch_filename(index: int, cand: CandidatePatch) -> str:
     """Build a deterministic ``NNNN-<kind>-<safe_key>.patch`` filename."""
     safe_key = _safe_filename(cand.rel_path)
     return f"{index:04d}-{cand.kind}-{safe_key}.patch"
+
+
+def _suggest_filename(index: int, cand: CandidatePatch) -> str:
+    """Build a ``NNNN-cross-lang-suggest-<lang>.txt`` filename.
+
+    The ``.txt`` suffix distinguishes suggestions from real patches:
+    ``.patch`` files imply a ``git apply``-able diff; suggestions are
+    textual hints the maintainer reads and acts on manually.
+    """
+    lang = _safe_filename(cand.backend) or "unknown"
+    return f"{index:04d}-cross-lang-suggest-{lang}.txt"
+
+
+def _suggest_body(cand: CandidatePatch) -> str:
+    """Render a cross-lang-suggest file's body.
+
+    Carries the candidate's diff text (the human-readable hint emitted
+    by the harvester's parity pass) followed by the rationale on a
+    separate line. No header — suggestions are short enough to keep
+    legibility without one.
+    """
+    lines = [cand.diff or "(no hint provided)"]
+    if cand.rationale:
+        lines.append("")
+        lines.append(cand.rationale)
+    return "\n".join(lines).rstrip("\n") + "\n"
 
 
 def _patch_body(cand: CandidatePatch) -> str:
