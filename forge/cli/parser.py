@@ -170,6 +170,32 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # Reapply-baseline — discard user edits to fragment-owned records and
+    # reset them to current fragment content. The targeted "escape hatch"
+    # symmetric to ``--update --mode overwrite``, scoped to records the
+    # manifest classifies as user-modified at run time. ``--update`` is
+    # additive (re-apply fragment intent on top of user edits where
+    # safe); ``--reapply-baseline`` is destructive (throw away user
+    # edits and snap back to fragment content).
+    p.add_argument(
+        "--reapply-baseline",
+        dest="reapply_baseline",
+        action="store_true",
+        help=(
+            "Discard user edits to fragment-owned files / blocks; reset to "
+            "current fragment content. Scope: --reapply-scope (default both)."
+        ),
+    )
+    p.add_argument(
+        "--reapply-scope",
+        dest="reapply_scope",
+        metavar="KINDS",
+        default=None,
+        help=(
+            "Comma-separated kinds to reapply: 'files', 'blocks', or 'files,blocks'. Default: both."
+        ),
+    )
+
     # Plan / dry-run — resolve and preview without writing.
     p.add_argument(
         "--plan",
