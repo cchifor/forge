@@ -38,9 +38,34 @@ class CandidatePatch:
             ``project`` backend label, matching ``BackendConfig.name``
             for project-scope fragments.
         kind: One of ``"files"`` / ``"block"`` / ``"deps"`` / ``"env"``
-            / ``"new-file"``. Drives the harvest bundle's per-section
-            grouping and the apply-side dispatch when the patch lands
-            back in a fragment.
+            / ``"new-file"`` / ``"cross-lang-suggest"``. Drives the harvest
+            bundle's per-section grouping and the apply-side dispatch when
+            the patch lands back in a fragment.
+
+            Emitted by extractor:
+
+            * ``"files"`` — :class:`forge.extractors.files.FileExtractor`
+              detects a fragment-shipped file that the user has edited
+              under the project tree.
+            * ``"block"`` —
+              :class:`forge.extractors.injection.InjectionExtractor`
+              detects a user edit between BEGIN/END sentinels for a
+              ``inject.yaml``-managed snippet.
+            * ``"deps"`` / ``"env"`` — the matching pair extractors
+              detect drift between the fragment's declared deps/env
+              and the project's manifest.
+            * ``"new-file"`` — emitted when the user added a file that
+              ought to ship with the fragment (covered by the
+              :class:`FileExtractor` discovery path).
+            * ``"cross-lang-suggest"`` — synthetic candidate emitted by
+              the harvester's cross-language parity pass (RFC-006). For
+              each ``"block"`` candidate harvested from a tier-1
+              fragment, sibling candidates are emitted naming the
+              parallel impls on every OTHER built-in backend so the
+              maintainer can mirror the edit. These candidates carry no
+              applicable diff and are not committed by ``forge
+              --emit-pr``; the PR body's reviewer checklist surfaces
+              them instead.
         rel_path: POSIX rel-path identifying the patch target. For
             ``"files"`` this is the fragment-relative path; for
             ``"block"`` it is the inject.yaml target; for ``"deps"`` it
