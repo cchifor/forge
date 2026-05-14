@@ -131,6 +131,12 @@ class InjectionExtractor:
         ) or render_failed
 
         # Read the on-disk block body. Missing sentinels → ``conflict``.
+        # ``current_body`` here is the INDENTED, fully-formed file body
+        # (the bytes between BEGIN/END sentinels, exclusive). Used for
+        # the three-way sha comparison and the diff payload.
+        # ``snippet_form_body`` is the same content normalised back to
+        # the inject.yaml ``snippet:`` shape — leading indent stripped,
+        # trailing newline trimmed — and is what apply-back writes.
         current_body = _read_block_body(target_path, feature_key, marker)
         if current_body is None:
             # The forward applier recorded a block here but the user (or
@@ -151,9 +157,25 @@ class InjectionExtractor:
                     "block sentinels missing or corrupt; cannot anchor harvest "
                     "against the recorded baseline"
                 ),
+                current_body="",
+                feature_key=feature_key,
+                marker=marker,
             )
 
         current_sha = sha256_of_text(current_body)
+
+        # The forward applier records ``baseline_sha`` over the
+        # INDENTED body that lands in the file (see
+        # ``feature_injector._record_merge_baseline``). The upstream
+        # snippet we read from ``inject.yaml`` has no indent. Re-indent
+        # the upstream body to the same prefix the on-disk BEGIN line
+        # uses so the three-way decide compares apples-to-apples.
+        # Empty indent (top-level injection) is fine — the helper
+        # returns the snippet unchanged.
+        upstream_body = _reindent_for_block(target_path, marker, feature_key, upstream_body)
+        # Snippet-form body for apply-back: indent stripped + trailing
+        # newline trimmed so it matches inject.yaml's ``snippet:`` shape.
+        snippet_form_body = _to_snippet_form(target_path, marker, feature_key, current_body)
 
         # When the orchestrator couldn't reach the upstream snippet
         # (fragment unregistered / inject.yaml missing), fall back to
@@ -199,6 +221,9 @@ class InjectionExtractor:
                 current_sha=current_sha,
                 risk="needs-review",
                 rationale=rationale,
+                current_body=snippet_form_body,
+                feature_key=feature_key,
+                marker=marker,
             )
 
         decision = reverse_three_way_decide(
@@ -237,6 +262,9 @@ class InjectionExtractor:
                 current_sha=current_sha,
                 risk="conflict",
                 rationale="user and upstream both diverged from the recorded baseline",
+                current_body=snippet_form_body,
+                feature_key=feature_key,
+                marker=marker,
             )
 
         # decision == "safe-apply" — user edited, upstream unchanged.
@@ -263,6 +291,9 @@ class InjectionExtractor:
                     "user edit overlaps an upstream Jinja interpolation site; "
                     "literal back-port would corrupt the template"
                 ),
+                current_body=snippet_form_body,
+                feature_key=feature_key,
+                marker=marker,
             )
 
         return CandidatePatch(
@@ -276,6 +307,9 @@ class InjectionExtractor:
             current_sha=current_sha,
             risk="safe-apply",
             rationale="user edited block; upstream fragment template unchanged",
+            current_body=snippet_form_body,
+            feature_key=feature_key,
+            marker=marker,
         )
 
 
@@ -367,3 +401,116 @@ def _project_rel_path(*, target_path: Path, project_root: Path) -> str:
         return target_path.relative_to(project_root).as_posix()
     except ValueError:
         return target_path.as_posix()
+
+
+def _to_snippet_form(
+    target_path: Path,
+    marker: str,
+    feature_key: str,
+    current_body: str,
+) -> str:
+    """Convert an on-disk block body back to inject.yaml ``snippet:`` shape.
+
+    The on-disk body is the indented, fully-rendered text between the
+    BEGIN/END sentinels. The inject.yaml ``snippet:`` field stores the
+    raw snippet — no leading indent, no forced trailing newline. To
+    apply-back the user's edit cleanly, we reverse the two
+    transformations the forward path applies:
+
+    1. **Strip the leading indent** — every line that's prefixed with
+       the BEGIN line's indent has the prefix removed. Lines that
+       don't carry the full indent (e.g. blank lines emitted as
+       ``\\n`` only) pass through unchanged.
+    2. **Trim ONE trailing newline** — the forward path appends ``\\n``
+       to every line, including the last. inject.yaml snippets don't
+       end with a stray newline. Trimming one ``\\n`` restores the
+       round-trip-able shape.
+
+    Empty / corrupt-sentinel cases fall through to ``current_body``
+    untouched.
+    """
+    if not current_body:
+        return current_body
+    try:
+        text = target_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return current_body.rstrip("\n")
+    naked_marker = _naked_marker(marker)
+    tag = f"{feature_key}:{naked_marker}"
+    begin_needle = f"BEGIN {tag}"
+    indent = ""
+    for line in text.splitlines():
+        if begin_needle not in line:
+            continue
+        for ch in line:
+            if ch in (" ", "\t"):
+                indent += ch
+            else:
+                break
+        break
+    if indent:
+        stripped_lines = []
+        for body_line in current_body.splitlines(keepends=True):
+            if body_line.startswith(indent):
+                stripped_lines.append(body_line[len(indent) :])
+            else:
+                stripped_lines.append(body_line)
+        out = "".join(stripped_lines)
+    else:
+        out = current_body
+    # Trim exactly one trailing newline — the forward path appended it.
+    if out.endswith("\n"):
+        out = out[:-1]
+    return out
+
+
+def _reindent_for_block(
+    target_path: Path,
+    marker: str,
+    feature_key: str,
+    upstream_body: str,
+) -> str:
+    """Prepend the on-disk BEGIN line's indent to every snippet line.
+
+    The forward applier indents every snippet line with the marker
+    line's whitespace prefix (see
+    :func:`forge.injectors.sentinels._render_block`). Harvest reads
+    the indented body back from disk; the upstream snippet we load
+    from ``inject.yaml`` has no indent. To make
+    :func:`forge.sync.merge.reverse_three_way_decide` compare like-
+    for-like, we re-indent the upstream body using the indent we
+    observe on the BEGIN line.
+
+    When the file isn't readable, the BEGIN line can't be found, or
+    the indent is empty, the body passes through unchanged.
+
+    Note: the body returned by ``_render_block`` ends each indented
+    line with a literal ``\\n`` regardless of the snippet's original
+    line endings. We mirror that here so the sha matches the recorded
+    baseline exactly.
+    """
+    if not upstream_body:
+        return upstream_body
+    try:
+        text = target_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return upstream_body
+    naked_marker = _naked_marker(marker)
+    tag = f"{feature_key}:{naked_marker}"
+    begin_needle = f"BEGIN {tag}"
+    indent = ""
+    for line in text.splitlines():
+        if begin_needle not in line:
+            continue
+        # Indent = leading whitespace before the comment character.
+        for ch in line:
+            if ch in (" ", "\t"):
+                indent += ch
+            else:
+                break
+        break
+    # Mirror _render_block's exact formatting: each snippet line
+    # becomes ``{indent}{line}\n``. Empty indent reduces to the
+    # snippet's plain lines + a per-line ``\n`` re-stamp — matching
+    # how _render_block emits at the top level.
+    return "".join(f"{indent}{snippet_line}\n" for snippet_line in upstream_body.splitlines())

@@ -131,7 +131,9 @@ class FileExtractor:
         # Binary files: cannot produce a meaningful unified diff. Surface
         # the candidate as needs-review with a placeholder so the
         # reviewer at least sees the path; the actual byte-level diff is
-        # the reviewer's job (likely outside forge).
+        # the reviewer's job (likely outside forge). ``current_body`` is
+        # left empty for binary candidates — the apply-back path reads
+        # ``target_path`` directly to preserve bytes.
         fragment_is_binary = is_binary_file(fragment_file)
         project_is_binary = project_file.is_file() and is_binary_file(project_file)
         if fragment_is_binary or project_is_binary:
@@ -146,6 +148,7 @@ class FileExtractor:
                 current_sha=current_sha or "",
                 risk="needs-review",
                 rationale="binary file diverges from fragment baseline",
+                current_body="",
             )
 
         # Text path: render upstream→current unified diff. When the user
@@ -179,6 +182,7 @@ class FileExtractor:
             current_sha=current_sha or "",
             risk=risk,
             rationale=rationale,
+            current_body=current_text,
         )
 
 
