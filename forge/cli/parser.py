@@ -147,6 +147,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--no-template-update",
+        dest="no_template_update",
+        action="store_true",
+        help=(
+            "Skip the Copier base-template re-render step; only re-apply fragments. "
+            "Default: template updates run automatically if versions differ "
+            "(see [forge.template_versions] in forge.toml)."
+        ),
+    )
+    p.add_argument(
         "--plan-update",
         dest="plan_update",
         action="store_true",

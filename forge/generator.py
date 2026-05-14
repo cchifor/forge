@@ -140,14 +140,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         # We know which backend template produced this tree (spec.template_dir
         # is e.g. "services/python-service-template"). Pass it as template_name
         # so harvest / drift-verify can attribute each file to its emitting
-        # template. template_version is None today — BackendSpec doesn't carry
-        # a version field, and copier.yml doesn't declare one. When templates
-        # gain semver, lift the version onto BackendSpec and thread it here.
+        # template. ``template_version`` is the resolved semver from
+        # ``_forge_template.toml`` (or the BackendSpec default), so per-file
+        # provenance entries record the version too — the updater compares
+        # this against the live template at update time.
         _record_tree(
             backend_dir,
             collector,
             origin="base-template",
             template_name=spec.template_dir,
+            template_version=_resolve_template_version_for(spec.template_dir, spec.version),
         )
         with phase_timer(
             _logger,
@@ -408,6 +410,22 @@ def _record_tree(
         )
 
 
+def _resolve_template_version_for(template_dir_rel: str, spec_default: str) -> str:
+    """Resolve the template's effective version, preferring ``_forge_template.toml``.
+
+    ``template_dir_rel`` is the path-under-``forge/templates/`` recorded
+    on the spec (e.g. ``"services/python-service-template"``). The
+    resolver reads that template's metadata file when present, falling
+    back to ``spec_default`` (the spec's typed default).
+    """
+    from forge.sync.template_version import resolve_template_version  # noqa: PLC0415
+
+    return resolve_template_version(
+        TEMPLATES_DIR / template_dir_rel,
+        spec_default=spec_default,
+    )
+
+
 def _write_forge_toml(
     config: ProjectConfig,
     project_root: Path,
@@ -432,23 +450,30 @@ def _write_forge_toml(
         forge_version = "0.0.0+unknown"
 
     templates: dict[str, str] = {}
+    template_versions: dict[str, str] = {}
     for lang in sorted({bc.language.value for bc in config.backends}):
-        templates[lang] = BACKEND_REGISTRY[BackendLanguage(lang)].template_dir
+        spec = BACKEND_REGISTRY[BackendLanguage(lang)]
+        templates[lang] = spec.template_dir
+        template_versions[lang] = _resolve_template_version_for(spec.template_dir, spec.version)
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         fw = config.frontend.framework
         template_dir = TEMPLATE_DIRS.get(fw)
         if template_dir:
             templates[fw.value] = template_dir
+            # Built-in frontends don't carry a FrontendSpec (the generator
+            # dispatches via TEMPLATE_DIRS, not FRONTEND_SPECS). Plugin
+            # frontends do — look them up, otherwise treat as "1.0.0" so
+            # the on-disk ``_forge_template.toml`` (or its absence) drives
+            # resolution.
+            from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+            frontend_spec = FRONTEND_SPECS.get(fw.value)
+            spec_default = frontend_spec.version if frontend_spec is not None else "1.0.0"
+            template_versions[fw.value] = _resolve_template_version_for(template_dir, spec_default)
 
     options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
     provenance = collector.as_dict() if collector is not None else None
     merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
-
-    # TODO: thread per-template versions through BackendSpec / FrontendSpec
-    # once templates carry semver. Pass an empty dict for now so the
-    # ``[forge.template_versions]`` sub-table is omitted (write_forge_toml
-    # treats empty/None as absent — schema v2 manifests remain valid).
-    template_versions: dict[str, str] = {}
 
     write_forge_toml(
         project_root / "forge.toml",

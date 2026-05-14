@@ -39,11 +39,18 @@ class FrontendSpec:
     generator points Copier at ``apps/`` and lets the template create
     the inner directory. Defaults to True because that's the Copier
     default and the majority of plugin templates follow it.
+
+    ``version`` is the template's own semver — bumped when the base
+    template's emitted shape changes in a way that warrants a Copier
+    re-render on ``forge --update``. Resolution at generate time prefers
+    ``_forge_template.toml``'s ``[template].version`` when present, falling
+    back to this field.
     """
 
     template_dir: str  # path under forge/templates/, e.g. "apps/solid-frontend-template"
     display_label: str  # shown in CLI prompts and log messages
     uses_subdirectory: bool = True
+    version: str = "1.0.0"  # template semver; see :mod:`forge.sync.template_version`
 
 
 def frontend_uses_subdirectory(
