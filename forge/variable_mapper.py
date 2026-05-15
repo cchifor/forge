@@ -44,7 +44,7 @@ def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -
     ``platform_auth_python_middleware`` fragment is in the active plan.
     """
     spec = BACKEND_REGISTRY[bc.language]
-    return {
+    ctx: dict[str, Any] = {
         "project_name": bc.name,
         "project_description": bc.description,
         "server_port": bc.server_port,
@@ -53,6 +53,14 @@ def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -
         "entity_plural": _primary_feature(bc),
         "include_platform_auth": include_platform_auth,
     }
+    # Only thread sdk_consumption when the caller set it. Leaving the
+    # key absent lets copier.yml's own default (``monorepo``) apply,
+    # preserving the production-platform shape; CI and standalone
+    # generators pass ``"none"`` to short-circuit the ``COPY --from=sdks``
+    # build stage when there's no sibling ``sdks/`` tree.
+    if bc.sdk_consumption is not None:
+        ctx["sdk_consumption"] = bc.sdk_consumption
+    return ctx
 
 
 # Backward-compatible aliases — the unified function handles all three languages,
