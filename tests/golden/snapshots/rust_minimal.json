@@ -29,11 +29,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 5670,
-      "sha256": "1a66d8ae769cc20e"
+      "size": 6167,
+      "sha256": "965993c47d4dedd3"
     },
     "forge.toml": {
-      "size": 34986,
+      "size": 39128,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
