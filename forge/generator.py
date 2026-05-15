@@ -355,6 +355,35 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     return project_root
 
 
+# Directories that frontend / backend toolchains create AFTER forge has
+# finished generating — populated by ``npm install`` / ``cargo build`` /
+# ``uv sync`` running inside the templates' ``post_generate.py``. None of
+# their contents are forge-tracked artefacts, so the provenance manifest
+# should not include them. Walking them is also extremely expensive
+# (``node_modules`` alone can be 30k+ files post-install, each requiring
+# a SHA-256 read).
+_PROVENANCE_PRUNE_DIRS: frozenset[str] = frozenset(
+    {
+        "node_modules",
+        ".svelte-kit",
+        ".next",
+        "build",
+        "dist",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".git",
+        "target",  # rust cargo build output
+        ".dart_tool",  # flutter
+        ".idea",
+        ".vscode",
+    }
+)
+
+
 def _record_tree(
     root: Path,
     collector: ProvenanceCollector,
@@ -371,6 +400,12 @@ def _record_tree(
     excluded (e.g. ``services`` when recording top-level non-backend
     writes, since backends are recorded per-backend).
 
+    :data:`_PROVENANCE_PRUNE_DIRS` is applied at ANY depth — these are
+    toolchain build artefacts (``node_modules``, ``target``, ``build``,
+    ``__pycache__``, ``.git``, etc.) that frontend / backend
+    post_generate hooks create *after* forge has finished, so they're
+    not forge-tracked and should never enter the provenance manifest.
+
     When ``skip_if_recorded=True``, paths already in the collector are
     not overwritten — useful for idempotent top-up scans after an earlier
     per-subtree pass already tagged some files with more specific origins.
@@ -380,34 +415,46 @@ def _record_tree(
     emitting-template attribution. Pass ``None`` when the caller cannot
     cheaply identify a single template (e.g. mixed catch-all sweeps).
     """
+    import os  # noqa: PLC0415
+
     from forge.sync.provenance import ProvenanceOrigin as _PO  # noqa: PLC0415
 
     origin_typed: _PO = origin  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
     if not root.is_dir():
         return
-    for p in root.rglob("*"):
-        if not p.is_file():
-            continue
-        # Never record forge.toml itself — the provenance table references it.
-        try:
-            rel = p.relative_to(root)
-        except ValueError:
-            continue
-        parts = rel.parts
-        if parts and parts[0] in skip_dirs:
-            continue
-        if parts and parts[-1] == "forge.toml" and len(parts) == 1:
-            continue
-        if skip_if_recorded:
-            key = p.relative_to(collector.project_root).as_posix()
-            if key in collector.records:
+    # ``os.walk`` with in-place ``dirnames`` mutation prunes whole
+    # subtrees from traversal — orders of magnitude faster than
+    # ``rglob`` + post-filter when ``node_modules`` (~30k files) is
+    # present, since rglob descends into pruned directories and only
+    # then drops their results.
+    skip_top: set[str] = set(skip_dirs)
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune build-artefact directories at any depth.
+        dirnames[:] = [d for d in dirnames if d not in _PROVENANCE_PRUNE_DIRS]
+        # Prune top-level-only skips (relative to ``root``).
+        current = Path(dirpath)
+        if current == root:
+            dirnames[:] = [d for d in dirnames if d not in skip_top]
+        for name in filenames:
+            p = current / name
+            try:
+                rel = p.relative_to(root)
+            except ValueError:
                 continue
-        collector.record(
-            p,
-            origin=origin_typed,
-            template_name=template_name,
-            template_version=template_version,
-        )
+            parts = rel.parts
+            # Never record forge.toml itself — the provenance table references it.
+            if parts and parts[-1] == "forge.toml" and len(parts) == 1:
+                continue
+            if skip_if_recorded:
+                key = p.relative_to(collector.project_root).as_posix()
+                if key in collector.records:
+                    continue
+            collector.record(
+                p,
+                origin=origin_typed,
+                template_name=template_name,
+                template_version=template_version,
+            )
 
 
 def _resolve_template_version_for(template_dir_rel: str, spec_default: str) -> str:
