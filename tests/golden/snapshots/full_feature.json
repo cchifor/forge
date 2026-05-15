@@ -953,11 +953,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 6626,
-      "sha256": "d41ef1a7e81c9946"
+      "size": 7123,
+      "sha256": "dea0477b7d706e08"
     },
     "forge.toml": {
-      "size": 6383876,
+      "size": 117524,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
