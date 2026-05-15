@@ -18,6 +18,7 @@
 
 > **What's new?**
 >
+> - **Unreleased (1.2.0 draft) — bidirectional sync** — `forge --update` (forge → project) is now paired with `forge --harvest` (project → forge), so user edits to fragment-emitted blocks round-trip back as candidate patches against the live forge tree. Closes the FR1 / FR2 / RF1 round-trip invariants with a matrix nightly lane D gate. New CLI surface: `--harvest`, `--verify`, `--accept-harvested`, `--reapply-baseline`, `--emit-pr={github,branch}`, `--resolve` (interactive `.forge-merge` resolver). Tier-1 fragments emit cross-language parity suggestions on harvest; literal-only edits surface an `Option(...)` promotion suggestion via libcst AST analysis. Opt-in telemetry (`--telemetry={local,remote}`) writes JSONL events for verify / harvest / update / resolve. `forge --update` now also re-renders base templates when `_forge_template.toml` version differs (opt out with `--no-template-update`). See [`CHANGELOG.md`](CHANGELOG.md) for the per-verb breakdown.
 > - **Unreleased (1.2.0 draft)** — auth-stack rebuild: Gatekeeper as sole token authority (mints ES256 internal JWTs); per-language `platform-auth` SDKs for Python / Node / Rust with cross-SDK parity gate; BFF Redis sessions with two-key TTL atomicity; inactivity-driven session timeout (Vue / Svelte / Flutter composables); RFC 8693 token-exchange for on-behalf-of S2S delegation. See [`docs/auth-architecture.md`](docs/auth-architecture.md) for the model and [`UPGRADING.md`](UPGRADING.md#11--12--auth-stack-rebuild-unreleased) for the migration playbook.
 > - **Unreleased (post-1.1.0-alpha.2)** — built-in features colocate under `forge/features/<ns>/`, so authoring a built-in feature uses the same on-disk layout as third-party plugins.
 > - **1.1.0-alpha.2** — file-level three-way merge for `forge --update` (default `--mode merge`, `.forge-merge` sidecars on conflict), declarative `compose.yaml` fragment snippets, the plugin-SDK e2e gate, and six new CLI verbs: `--plan-update`, `--remove-fragment`, `--mode={merge,skip,overwrite}`, `--graph`, `--log-json`, `--log-level`.
@@ -501,7 +502,33 @@ forge --update --mode overwrite  # the escape hatch: fragment content wins
 
 Preview before committing — `forge --plan-update` walks the same logic without writing, returning a per-file decision report (also `--json` and `--graph`-aware). Surgically remove a fragment with `forge --remove-fragment NAME` (flips its enabling option to default and runs the provenance-driven uninstaller). Schema-breaking upgrades across forge minors are handled by the registered codemods at `forge --migrate` (`rename-options`, `layer-modes`, `ui-protocol`, `entities`, `adapters`, plus `adopt-baseline` for projects from before SHA tracking).
 
-For template-level changes (base-template Jinja rewrites rather than fragment updates), `cd services/<backend> && copier update` re-renders that subtree from its saved `.copier-answers.yml`.
+Conflict review — `forge --resolve` walks every `.forge-merge` sidecar interactively (`accept` / `reject` / `edit` via `$EDITOR` with diff3 markers / `skip` / `quit` per sidecar). Re-stamps `forge.toml`'s `[forge.merge_blocks]` / `[forge.provenance]` for each resolution.
+
+Template-level changes (base-template Jinja rewrites rather than fragment updates) now flow through `forge --update` automatically. Each built-in template ships `_forge_template.toml` with a `[template].version`; when the project's recorded version differs from the live template, the updater invokes `copier.run_update` per affected backend / frontend, then re-applies fragments on top. Copier-emitted `.rej` files are converted to `.forge-merge` sidecars so `forge --resolve` covers them too. Opt out with `forge --update --no-template-update` to preserve pre-1.2 fragment-only behavior.
+
+### Harvesting user edits back into forge
+
+`forge --update` keeps a project on the **latest** forge templates. The reverse direction — propagating a user's edits to fragment-emitted blocks back into forge's source tree — is `forge --harvest`. It walks `forge.toml`'s `[forge.provenance]` and `[forge.merge_blocks]`, three-way-decides each block against its recorded baseline + the upstream template, and emits a bundle of candidate patches (`bundle.json` + per-candidate diff files under `.forge-bundle/`):
+
+```bash forge-harvest
+cd my_platform
+forge --harvest                       # text summary + bundle on disk
+forge --harvest --json                # machine-readable bundle path on stdout
+forge --emit-pr=github                # pushes the bundle to a branch + opens a PR against $FORGE_REPO
+```
+
+Each candidate is tagged `safe-apply` / `needs-review` / `cross-lang-suggest` / `option-promote`:
+
+| Tag | What forge thinks |
+|----|----|
+| `safe-apply` | Pure text change to a non-Jinja block; the user's edit can land verbatim into `inject.yaml`. |
+| `needs-review` | Block contains Jinja interpolation; a literal back-port would corrupt the template on re-render. Human review required. |
+| `cross-lang-suggest` | Source fragment is tier-1 (all three backends covered); harvest emits a sibling-impl suggestion to mirror the change to Node / Rust impls. Surfaced in the PR reviewer checklist. |
+| `option-promote` | The user's edit was a pure literal swap (`120 → 60`, `"foo" → "bar"`). libcst-based AST analysis emits a proposed `Option(...)` declaration alongside the diff so the maintainer can ratchet the hardcoded value into a typed Option. |
+
+`forge --verify` checks the project against forge's current view without producing a bundle — fast drift detection. `forge --accept-harvested` re-stamps the project's `forge.toml` after the bundle has been merged upstream so the next `forge --update` doesn't re-conflict. `forge --reapply-baseline` discards user edits to fragment-owned records.
+
+Round-trip invariants (FR1: fresh-generate emits zero block/files candidates; FR2: harvest → apply-back → regenerate matches; RF1: re-stamp preserves baseline) are codified as pytest assertions and gated by the matrix nightly's lane D.
 
 Looking for more sophisticated examples? See [`examples/`](examples/) for curated sample configs and [`docs/FEATURES.md`](docs/FEATURES.md) for the deep feature catalogue.
 
@@ -526,6 +553,7 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 | Plugin SDK changelog | [`docs/SDK_CHANGELOG.md`](docs/SDK_CHANGELOG.md) |
 | Coverage policy + per-module floors | [`docs/coverage-policy.md`](docs/coverage-policy.md) |
 | Tier 1/2/3 backend parity status | [`docs/matrix-status.md`](docs/matrix-status.md) |
+| Telemetry privacy contract + event schema | [`docs/telemetry.md`](docs/telemetry.md) |
 
 ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/architecture-decisions/); RFCs under [`docs/rfcs/`](docs/rfcs/).
 
@@ -557,6 +585,9 @@ ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/a
 | **Considered** | Alternative embeddings providers | Cohere, local `sentence-transformers`; same pattern as `rag_embeddings_voyage`. |
 | **Considered** | Kubernetes manifests | Helm chart or Kustomize bundle generated alongside `docker-compose.yml`. |
 | **Considered** | Template render cache | Memoise repeated `_common/` template renders across multi-backend projects to cut wall-clock on big stacks. |
+| **Shipped** | Bidirectional sync — `forge --harvest` / `--verify` / `--resolve` / `--emit-pr` | Reverse-direction sync: user edits to fragment-emitted blocks round-trip back as candidate patches against the live forge tree. Three-way merge with symbolic outcomes; `.forge-merge` sidecars on conflict; interactive resolver TUI. Cross-language harvest parity emits sibling-impl suggestions for tier-1 fragments. AST-level literal detection (libcst) flags pure literal swaps as Option-promotion candidates with proposed `Option(...)` declarations. Round-trip invariants FR1 / FR2 / RF1 codified as pytest tests + matrix lane D nightly gate. Six new CLI verbs (`--harvest`, `--verify`, `--accept-harvested`, `--reapply-baseline`, `--emit-pr`, `--resolve`). (1.2.0 unreleased) |
+| **Shipped** | Copier base-template re-renders in `forge --update` | Each built-in template now ships `_forge_template.toml` with a `[template].version`. `forge --update` detects version drift and invokes `copier.run_update` per affected backend / frontend, converting Copier `.rej` output to `.forge-merge` sidecars consumable by `forge --resolve`. Opt out with `--no-template-update`. Closes the last "out of scope" item that left users running `cd backend && copier update` manually. (1.2.0 unreleased) |
+| **Shipped** | Opt-in telemetry | `--telemetry={off,local,remote}` activates per-verb event emission (verify / harvest / update / accept-harvested / reapply-baseline / emit-pr / resolve). Local sink writes `~/.forge/telemetry.jsonl`; remote POSTs to `$FORGE_TELEMETRY_ENDPOINT` (2s timeout, fire-and-forget). `--telemetry-fields={minimal,full}` filters PII-bearing fields for remote sinks. Schema documented in [`docs/telemetry.md`](docs/telemetry.md). Default OFF. (1.2.0 unreleased) |
 | **Shipped** | Auth-stack rebuild — `platform-auth` model | Gatekeeper as sole token authority (mints ES256 internal JWTs, ``/auth/jwks`` endpoint, BFF Redis sessions with two-key TTL, `/auth/token` for client_credentials + RFC 8693 token-exchange). Per-language verifier SDKs — Python (`platform-auth`), Node (`@forge/platform-auth-node`), Rust (`platform-auth`) — each with `AuthGuard`, multi-issuer `JWKSCache` with stale-serve, scope matching with wildcards, `MayActPolicy`, `IssuerTrustMap`, per-decision audit callback (cross-language record shape pinned), test-token minter. Backend service-template middleware fragments wire each SDK into FastAPI / Fastify / Axum. Frontend session-timeout composables for Vue / Svelte / Flutter implement the BFF + inactivity-timeout SPA pattern (drift-immune countdown, BroadcastChannel cross-tab dedup, visibility gating, 30s activity debounce). Frontend fragments framework-gated via the new `Fragment.target_frontends` field — no orphan files in non-matching projects. Cross-language correctness gated by 21-scenario shared parity spec at `forge/tests/contract/auth_sdk_parity/`. See [`docs/auth-architecture.md`](docs/auth-architecture.md). (1.2.0 unreleased) |
 | **Shipped** | Cross-SDK parity contract | Single canonical scenario spec (`forge/tests/contract/auth_sdk_parity/scenarios.py`) — 21 frozen-dataclass scenarios covering happy paths, alg/kid rejection, expiry, audience mismatch, multi-audience accept, issuer trust + tenant suspension, missing/non-UUID tenant claim, jti revocation, RFC 8693 act-chain (one-hop / unauthorized actor / too-deep), custom-claim-name configurability, claim-name-mismatch rejection, optional tenant-slug extraction. Per-language runners (Python / Node / Rust) consume the spec and assert their SDK matches; the Rust orchestrator also drives a Tower-stack integration test (`integration_axum.rs`) and an audit-callback test (`audit_callback.rs`, 5 cases including tenant-slug propagation) for layer-composition + record-shape coverage the bare verifier can't exercise. Caught: cross-SDK `StaticMayActPolicy` keying drift (Node + Rust rekeyed to Python's `audience → actors`); three testing-helper drifts (Rust `role_claim` → `roles_claim`, Node `roleClaim` → `rolesClaim`, Python missing configurability — all aligned to plural). (1.2.0 unreleased) |
 | **Shipped** | File-level three-way merge for `--update` | `forge.merge.file_three_way_decide` extends the merge-zone semantics to whole `files/` trees; `.forge-merge` sidecars on conflict; `--mode={merge,skip,overwrite}` opt-out. (1.1.0-alpha.2) |
