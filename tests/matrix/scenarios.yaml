@@ -35,11 +35,6 @@ scenarios:
       backends:
         - name: api
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["items"]
           server_port: 8010
           python_version: "3.13"
@@ -69,11 +64,6 @@ scenarios:
       backends:
         - name: api
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["items"]
           server_port: 8020
           python_version: "3.13"
@@ -193,11 +183,6 @@ scenarios:
       backends:
         - name: api
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["items"]
           server_port: 8070
           python_version: "3.13"
@@ -245,11 +230,6 @@ scenarios:
       backends:
         - name: py-svc
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["invoices"]
           server_port: 8090
           python_version: "3.13"
@@ -280,11 +260,6 @@ scenarios:
       backends:
         - name: py-svc
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["invoices"]
           server_port: 8100
           python_version: "3.13"
@@ -320,11 +295,6 @@ scenarios:
       backends:
         - name: api
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["items"]
           server_port: 8110
           python_version: "3.13"
@@ -351,11 +321,6 @@ scenarios:
       backends:
         - name: api
           language: python
-          # Forge CI has no sibling sdks/ tree — short-circuit the
-          # multi-stage Dockerfile's `COPY --from=sdks` build stage.
-          # Platform users on the monorepo leave this at the copier
-          # default (monorepo).
-          sdk_consumption: "none"
           features: ["items"]
           server_port: 8120
           python_version: "3.13"
