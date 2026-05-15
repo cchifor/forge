@@ -189,6 +189,13 @@ class BackendConfig:
     node_version: str = "22"
     rust_edition: str = "2024"
     server_port: int = 5000
+    # Python-only Copier prompt — `monorepo` (default), `standalone`,
+    # or `none`. Threaded into ``variable_mapper.backend_context`` only
+    # when non-None, so the copier.yml default (`monorepo`) still wins
+    # when the caller doesn't care. Forge's own CI sets ``none`` because
+    # there's no sibling ``sdks/`` tree to mount; production users in
+    # the platform monorepo leave it at the default.
+    sdk_consumption: str | None = None
 
     def validate(self) -> None:
         validate_port(self.server_port, f"Backend '{self.name}' port")
