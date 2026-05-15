@@ -35,6 +35,7 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.label.name == 'ci:matrix-smoke'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       scenarios: ${{ steps.load.outputs.scenarios }}
       roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
@@ -64,6 +65,10 @@ jobs:
   smoke:
     needs: gate
     runs-on: ubuntu-latest
+    # Cap individual smoke scenarios — a hung docker compose stack will
+    # otherwise idle for github's 6-hour default. ~10 min/scenario in
+    # the happy path; 25 leaves slack for cold caches.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +83,15 @@ jobs:
           node-version: "22"
       - name: Install rustup stable
         run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      # Generated projects' post_generate.py runs `git init && git commit`
+      # to seed an initial commit; without a configured identity the
+      # commit fails with "empty ident name" and floods the log with
+      # `[FAIL] git commit` noise (the script swallows it, but the noise
+      # masks real failures). Mirror e2e.yml's identity step.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
@@ -119,6 +133,10 @@ jobs:
     needs: gate
     if: needs.gate.outputs.roundtrip_scenarios != '[]'
     runs-on: ubuntu-latest
+    # Round-trip is pure-Python (two generates + harvest + apply-back).
+    # ~2 min/scenario in the happy path; 15 caps any hang at a tolerable
+    # 4 runner-hours-vs-the-prior-36 (6 scenarios × 6h default timeout).
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -133,6 +151,12 @@ jobs:
           node-version: "22"
       - name: Install rustup stable
         run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      # See smoke job's note — round-trip also exercises generate(),
+      # which runs the template's post_generate.py.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
       - name: Run lane D (roundtrip) for ${{ matrix.scenario }}
@@ -161,6 +185,7 @@ jobs:
     needs: [smoke, roundtrip]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
