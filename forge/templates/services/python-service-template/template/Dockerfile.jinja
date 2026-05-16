@@ -24,8 +24,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 {%- for sdk in weld_base_sdks.split(',') %}
 COPY --from=sdks weld-{{ sdk|trim }} /tmp/sdks/weld-{{ sdk|trim }}
 {%- endfor %}
-RUN {% for sdk in weld_base_sdks.split(',') %}cd /tmp/sdks/weld-{{ sdk|trim }} && uv build --wheel --out-dir /wheels{% if not loop.last %} \
-    && {% endif %}{% endfor %}
+{%- if include_platform_auth | default(false) %}
+# platform-auth is a separate runtime SDK (not in the weld-* namespace);
+# the platform_auth_python_middleware fragment adds it as a path-dep to
+# pyproject.toml. Mirror the weld-* pattern: COPY the source then build
+# a wheel so uv sync resolves it from /wheels after [tool.uv.sources]
+# is stripped.
+COPY --from=sdks platform-auth /tmp/sdks/platform-auth
+{%- endif %}
+RUN {% for sdk in weld_base_sdks.split(',') %}cd /tmp/sdks/weld-{{ sdk|trim }} && uv build --wheel --out-dir /wheels \
+    && {% endfor %}{% if include_platform_auth | default(false) %}cd /tmp/sdks/platform-auth && uv build --wheel --out-dir /wheels{% else %}true{% endif %}
 {%- endif %}
 
 WORKDIR /project
