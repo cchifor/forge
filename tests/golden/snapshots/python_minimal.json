@@ -481,8 +481,8 @@
       "sha256": "59e84d0358509122"
     },
     "services/api/Dockerfile": {
-      "size": 3164,
-      "sha256": "6d17988f6059743d"
+      "size": 3590,
+      "sha256": "0f2f598735186ce9"
     },
     "services/api/entrypoint.sh": {
       "size": 415,
