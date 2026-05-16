@@ -785,8 +785,8 @@
       "sha256": "7228bb9b2e539a51"
     },
     "services/api-py/Dockerfile": {
-      "size": 3167,
-      "sha256": "cd6b7590388d0491"
+      "size": 3593,
+      "sha256": "677f34cc6f655d58"
     },
     "services/api-py/entrypoint.sh": {
       "size": 418,
