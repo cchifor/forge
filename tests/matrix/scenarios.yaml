@@ -101,7 +101,7 @@ scenarios:
 
   - name: node_svelte_min
     description: Node + Svelte, no auth, no options
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8040
     expected_files:
       - services/api/package.json
@@ -149,7 +149,7 @@ scenarios:
 
   - name: rust_svelte_min
     description: Rust + Svelte, no auth, no options
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8060
     expected_files:
       - services/api/Cargo.toml
@@ -216,7 +216,7 @@ scenarios:
 
   - name: multi_py_node
     description: Python + Node + Vue + Keycloak (multi-backend with mixed options)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8090
     expected_files:
       - services/py-svc/pyproject.toml
@@ -326,3 +326,63 @@ scenarios:
           python_version: "3.13"
       options:
         rag.backend: qdrant
+
+  - name: node_only_headless
+    description: Node-only, no frontend, Keycloak, rate_limit + OTel
+    lanes: [generate, verify, roundtrip]
+    port_base: 8130
+    expected_files:
+      - services/api/package.json
+      - docker-compose.yml
+    config:
+      project_name: "Node Only Headless"
+      include_keycloak: true
+      keycloak_port: 18087
+      backends:
+        - name: api
+          language: node
+          features: ["items"]
+          server_port: 8130
+          node_version: "22"
+      options:
+        middleware.rate_limit: true
+        observability.otel: true
+
+  - name: rust_only_headless
+    description: Rust-only, no frontend, rate_limit + OTel
+    lanes: [generate, verify, roundtrip]
+    port_base: 8140
+    expected_files:
+      - services/api/Cargo.toml
+      - docker-compose.yml
+    config:
+      project_name: "Rust Only Headless"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: rust
+          features: ["items"]
+          server_port: 8140
+          rust_edition: "2024"
+      options:
+        middleware.rate_limit: true
+        observability.otel: true
+
+  - name: stateless_py
+    description: Python-only, database.mode=none (no postgres/alembic)
+    lanes: [generate, verify, roundtrip]
+    port_base: 8160
+    expected_files:
+      - services/api/pyproject.toml
+      - docker-compose.yml
+    config:
+      project_name: "Stateless Py"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: python
+          features: ["items"]
+          server_port: 8160
+          python_version: "3.13"
+      options:
+        database.mode: "none"
