@@ -47,8 +47,8 @@ jobs:
       roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
       update_scenarios: ${{ steps.load.outputs.update_scenarios }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -89,11 +89,11 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -130,13 +130,13 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane smoke --json > \
             matrix-status/${{ matrix.scenario }}.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: compose-logs-${{ matrix.scenario }}
@@ -166,11 +166,11 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.roundtrip_scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -192,7 +192,7 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
             matrix-status/${{ matrix.scenario }}-roundtrip.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
@@ -222,11 +222,11 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.update_scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -249,7 +249,7 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane update --json > \
             matrix-status/${{ matrix.scenario }}-update.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: matrix-status-update-${{ matrix.scenario }}
@@ -273,13 +273,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: matrix-status-raw
           pattern: matrix-status-*
@@ -318,7 +318,7 @@ jobs:
               fh.write("\nSee individual scenario logs above for details.\n")
           Path("matrix-status.md").write_text(grid, encoding="utf-8")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: matrix-status-grid
           path: matrix-status.md
