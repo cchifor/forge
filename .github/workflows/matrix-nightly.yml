@@ -90,6 +90,12 @@ jobs:
         scenario: ${{ fromJSON(needs.gate.outputs.scenarios) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # Wall-clock anchor for the "Append timing summary" step at the end
+      # of this job. We stash a Unix timestamp because each ``run:`` block
+      # spawns a new shell — ``$SECONDS`` resets per step, so the naive
+      # ``$((SECONDS / 60))m`` would always print 0s.
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
@@ -145,8 +151,9 @@ jobs:
       - name: Append timing summary
         if: always()
         run: |
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
           echo "### Timings — ${{ matrix.scenario }} (smoke)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Lane D — round-trip CI gate (Phase 5). Generates each opted-in
   # scenario twice with a harvest/apply-back cycle in between and asserts
@@ -167,6 +174,8 @@ jobs:
         scenario: ${{ fromJSON(needs.gate.outputs.roundtrip_scenarios) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
@@ -201,8 +210,9 @@ jobs:
       - name: Append timing summary
         if: always()
         run: |
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
           echo "### Timings — ${{ matrix.scenario }} (roundtrip)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Lane E — forge --update + --harvest CLI e2e (WS4). For every
   # scenario, shells out to ``python -m forge --update --mode
@@ -223,6 +233,8 @@ jobs:
         scenario: ${{ fromJSON(needs.gate.outputs.update_scenarios) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
@@ -258,8 +270,9 @@ jobs:
       - name: Append timing summary
         if: always()
         run: |
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
           echo "### Timings — ${{ matrix.scenario }} (update)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Aggregate per-scenario JSON artifacts into a single markdown grid
   # and publish it to the workflow summary page (no auto-commit to the
