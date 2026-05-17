@@ -109,7 +109,15 @@ jobs:
           git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
+      # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
+      # logs + ps to a known directory BEFORE it tears the stack down
+      # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
+      # this env var, the runner cleans up its tmpdirs and post-job log
+      # capture would race against teardown. Mirrors ci.yml's
+      # matrix-smoke-fast job pattern.
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        env:
+          FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
       - name: Upload per-scenario JSON status artifact
         # Each smoke job emits a one-row JSON file; the aggregator job
@@ -128,16 +136,17 @@ jobs:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
-      - name: Dump docker compose logs on failure
+      - uses: actions/upload-artifact@v4
         if: failure()
+        with:
+          name: compose-logs-${{ matrix.scenario }}
+          path: compose-logs/
+          if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
         run: |
-          for f in /tmp/forge-matrix-*/${{ matrix.scenario }}*/docker-compose.yml; do
-            if [ -f "$f" ]; then
-              echo "=== docker compose logs for $f ==="
-              docker compose -f "$f" logs --tail 200 || true
-              docker compose -f "$f" down -v --remove-orphans || true
-            fi
-          done
+          echo "### Timings — ${{ matrix.scenario }} (smoke)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Lane D — round-trip CI gate (Phase 5). Generates each opted-in
   # scenario twice with a harvest/apply-back cycle in between and asserts
@@ -189,6 +198,11 @@ jobs:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
+        run: |
+          echo "### Timings — ${{ matrix.scenario }} (roundtrip)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Lane E — forge --update + --harvest CLI e2e (WS4). For every
   # scenario, shells out to ``python -m forge --update --mode
@@ -241,6 +255,11 @@ jobs:
           name: matrix-status-update-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
+        run: |
+          echo "### Timings — ${{ matrix.scenario }} (update)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((SECONDS / 60))m $((SECONDS % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Aggregate per-scenario JSON artifacts into a single markdown grid
   # and publish it to the workflow summary page (no auto-commit to the
