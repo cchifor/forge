@@ -1,6 +1,6 @@
 .PHONY: install-dev test test-fast test-serial test-cov lint format format-check typecheck check e2e fuzz \
         snapshots validate-matrix validate-matrix-quick validate-matrix-scenario \
-        validate-matrix-list validate-matrix-e2e
+        validate-matrix-list validate-matrix-e2e validate-matrix-update
 
 install-dev:
 	uv sync --all-extras --dev
@@ -76,3 +76,11 @@ validate-matrix-list:
 
 validate-matrix-e2e:
 	uv run python tests/matrix/runner.py --all --lane smoke
+
+# Lane E (WS4) — shells out to `python -m forge --update --mode
+# {merge,skip,overwrite}` for each scenario plus a single
+# `forge --harvest --harvest-out=-` JSON probe. Nightly-only in CI;
+# locally use this target to exercise the full matrix or pair with
+# `--scenario` for a single-scenario run.
+validate-matrix-update:
+	uv run python tests/matrix/runner.py --all --lane update

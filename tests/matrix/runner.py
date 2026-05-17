@@ -19,6 +19,13 @@ more lanes:
   reverted in ``finally``) → regenerate → assert FR2 (project_a ==
   project_b modulo documented noise). ~30-90s per scenario, nightly
   only. See ``docs/round-trip.md`` for the contract.
+- **Lane E — forge --update + --harvest e2e** (WS4). For each scenario,
+  shells out to ``python -m forge --update --mode {merge,skip,overwrite}``
+  against an edited project (per-mode contract validated) plus a single
+  ``forge --harvest --harvest-out=-`` JSON-on-stdout probe. Exercises
+  the argparse + builder + dispatcher path real users hit, complementing
+  lane D's direct-Python-API round-trip. Nightly only; see
+  ``tests/matrix/update_contract.py`` for the per-mode assertion details.
 
 CLI usage (from the repo root)::
 
@@ -63,8 +70,8 @@ from typing import Any, Literal
 
 import yaml
 
-Lane = Literal["generate", "verify", "smoke", "roundtrip"]
-ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip")
+Lane = Literal["generate", "verify", "smoke", "roundtrip", "update"]
+ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip", "update")
 
 SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
 WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
@@ -117,9 +124,7 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
         return None  # No JS runtime on this runner — skip silently.
     return _run_frontend_step(
         pm, pm_exe, fe_dir, ["install", "--no-fund", "--no-audit"], _INSTALL_TIMEOUT_SECONDS
-    ) or _run_frontend_step(
-        pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS
-    )
+    ) or _run_frontend_step(pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS)
 
 
 def _run_frontend_step(
@@ -935,16 +940,51 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
     return differing
 
 
+def run_lane_update(scenario: Scenario) -> LaneResult:
+    """Lane E: generate, edit, run forge --update for each mode, verify outcome.
+
+    Drives the three merge modes (``merge`` / ``skip`` / ``overwrite``)
+    against an edited file in a fragment-managed zone, then runs
+    ``forge --harvest --harvest-out=-`` once and asserts a parseable
+    JSON bundle is emitted on stdout. Delegates the per-mode contract
+    to :mod:`tests.matrix.update_contract`.
+
+    Unlike lane D (which uses the Python API directly), lane E shells
+    out to ``python -m forge`` so the argparse, builder and dispatcher
+    path real users hit is exercised end-to-end on every nightly run.
+    """
+    # When the runner is invoked as a script (``uv run python
+    # tests/matrix/runner.py``), only the script directory lands on
+    # sys.path — the absolute ``from tests.matrix.update_contract``
+    # import below would ``ModuleNotFoundError``. Add the repo root
+    # once, idempotently, before the absolute import. Same pattern as
+    # ``run_lane_smoke``.
+    _repo_root = str(Path(__file__).resolve().parents[2])
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
+    from tests.matrix.update_contract import run_update_contract  # noqa: PLC0415
+
+    return run_update_contract(scenario, _project_config_from_dict, _inject_weld_stubs)
+
+
 LANE_DISPATCH = {
     "generate": run_lane_generate,
     "verify": run_lane_verify,
     "smoke": run_lane_smoke,
     "roundtrip": run_lane_roundtrip,
+    "update": run_lane_update,
 }
 
 
 def run_scenario(scenario: Scenario, lane: Lane) -> LaneResult:
-    if lane not in scenario.lanes:
+    # Lane E (``update``) is universal — every scenario goes through the
+    # ``--update`` / ``--harvest`` CLI surface regardless of whether
+    # scenarios.yaml lists it under ``lanes:``. The per-mode contract
+    # in tests/matrix/update_contract.py self-skips on scenarios with no
+    # fragment-authored file, so opt-in noise in scenarios.yaml would
+    # be redundant. Lanes A-D keep the explicit opt-in check.
+    if lane != "update" and lane not in scenario.lanes:
         return LaneResult(
             scenario=scenario.name,
             lane=lane,
