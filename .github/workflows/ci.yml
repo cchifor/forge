@@ -230,3 +230,74 @@ jobs:
         run: uv sync --all-extras --dev
       - name: Run lane B (verify) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane verify
+
+  # WS3 — fast smoke subset on every PR. Lane C (docker compose up +
+  # RFC-006 HTTP contract) otherwise runs only nightly via
+  # matrix-nightly.yml, which means the median PR ships with no compose
+  # signal at all. This job exercises the two fastest smoke-eligible
+  # scenarios (py_svelte_min + node_svelte_min) so compose drift and
+  # health-check regressions surface before they land on main. The full
+  # 11-scenario smoke set stays in matrix-nightly.yml — see WS3 in
+  # docs/superpowers/plans/immutable-napping-bear.md for the rationale.
+  matrix-smoke-fast:
+    needs: matrix-setup
+    runs-on: ubuntu-latest
+    # Smoke is ~10 min/scenario (Docker pull + compose up + tests +
+    # teardown). 20 min cap leaves slack for cold caches without
+    # blocking a runner for hours on a hung compose stack.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The two fastest smoke-opted-in scenarios from
+        # tests/matrix/scenarios.yaml — both are min-config single-
+        # backend stacks (no Keycloak, no options) which keeps the PR
+        # critical path bounded. Do not fan out to the full smoke set
+        # here; that's nightly's job.
+        scenario: [py_svelte_min, node_svelte_min]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Generated projects' post_generate.py runs `git init && git commit`
+      # to seed an initial commit; without a configured identity the
+      # commit fails with "empty ident name" and floods the log with
+      # `[FAIL] git commit` noise (the script swallows it, but the noise
+      # masks real failures). Mirror matrix-nightly.yml's identity step.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
+      # Capture compose logs to a directory + upload as an artifact when
+      # smoke fails. Lane C failures without logs are unactionable; the
+      # runner tears the stack down before the job exits, so we have to
+      # grab logs in-job. We dump to ./compose-logs/ then upload so the
+      # PR author can download the archive from the failed job page.
+      - name: Capture docker compose logs on failure
+        if: failure()
+        run: |
+          mkdir -p compose-logs
+          for f in /tmp/forge-matrix-*/${{ matrix.scenario }}*/docker-compose.yml; do
+            if [ -f "$f" ]; then
+              dir=$(dirname "$f")
+              name=$(basename "$dir")
+              echo "=== docker compose logs for $f ===" | tee "compose-logs/${name}.log"
+              docker compose -f "$f" logs --tail 500 >> "compose-logs/${name}.log" 2>&1 || true
+              docker compose -f "$f" ps >> "compose-logs/${name}.log" 2>&1 || true
+              docker compose -f "$f" down -v --remove-orphans || true
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: compose-logs-${{ matrix.scenario }}
+          path: compose-logs/
+          if-no-files-found: ignore
