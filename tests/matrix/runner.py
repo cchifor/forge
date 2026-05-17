@@ -70,6 +70,69 @@ SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
 WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
 
 
+def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
+    """Run a build/analyze check against the generated frontend.
+
+    Lane B's frontend complement to ``BackendToolchain.verify`` — runs
+    ``<pm> install`` + ``<pm> run build`` in the generated
+    ``apps/frontend/`` so vue-tsc / svelte-check / vite build regressions
+    surface on PR rather than waiting for nightly compose-up (lane C).
+
+    Returns ``None`` on success, an error label on failure. Uses the
+    package manager from ``fe_cfg.package_manager`` when present;
+    falls back to ``npm``.
+
+    Skips silently (returns ``None``) when:
+
+    * The frontend framework is Flutter — ``subosito/flutter-action`` is
+      heavy and lane B targets <5 min/scenario; Flutter is covered by
+      ``tests/e2e/test_full_generation.py::test_flutter_*``.
+    * No frontend framework is set on the FrontendConfig (defensive —
+      callers gate on this too).
+    * The configured package manager (and the ``npm`` fallback) is not
+      on PATH — developer machines without a Node toolchain shouldn't
+      see spurious failures; same pattern as ``run_lane_smoke``'s
+      docker-availability check.
+    """
+    import subprocess  # noqa: PLC0415
+
+    from forge.config import FrontendFramework  # noqa: PLC0415
+
+    framework = getattr(fe_cfg, "framework", None)
+    if framework is None or framework == FrontendFramework.NONE:
+        return None
+    if getattr(framework, "value", None) == "flutter":
+        # Flutter handled by e2e suite (subosito/flutter-action heavy install).
+        return None
+    pm = getattr(fe_cfg, "package_manager", "npm") or "npm"
+    pm_exe = shutil.which(pm) or shutil.which("npm")
+    if pm_exe is None:
+        return None  # No JS runtime on this runner — skip silently.
+    install = subprocess.run(
+        [pm_exe, "install", "--no-fund", "--no-audit"],
+        cwd=fe_dir,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if install.returncode != 0:
+        tail = install.stderr.strip().splitlines()[-3:]
+        return f"{pm} install failed: {tail}"
+    build = subprocess.run(
+        [pm_exe, "run", "build"],
+        cwd=fe_dir,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if build.returncode != 0:
+        tail = build.stderr.strip().splitlines()[-3:]
+        return f"{pm} run build failed: {tail}"
+    return None
+
+
 def _inject_weld_stubs(project_root: Path) -> None:
     """Drop matrix-CI weld-* SDK stub packages into ``<project>/sdks/``.
 
@@ -361,6 +424,17 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
             for check in checks:
                 if check.status == "fail":
                     failures.append(f"{bc.name}:{check.name}")
+
+        # Frontend build check — catches vue-tsc / svelte-check / vite build
+        # regressions on PR rather than waiting for nightly compose-up (lane
+        # C). ``frontend_mode`` is the project-level option discriminator
+        # (``options["frontend.mode"]``); ``_validate_frontend_mode_coherence``
+        # already keeps it in lock-step with ``FrontendConfig.framework``.
+        if project_config.frontend is not None and project_config.frontend_mode != "none":
+            fe_dir = project_root / "apps" / "frontend"
+            fe_result = _verify_frontend(project_config.frontend, fe_dir)
+            if fe_result is not None:
+                failures.append(f"frontend:{fe_result}")
 
         if failures:
             return LaneResult(
