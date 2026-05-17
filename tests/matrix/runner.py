@@ -60,6 +60,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -598,6 +599,16 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
     finally:
         if compose_up and project_root is not None:
             compose_file = project_root / "docker-compose.yml"
+            # Capture compose logs + ps into FORGE_MATRIX_LOG_DIR (if set)
+            # BEFORE tearing the stack down. CI jobs read these as artifact
+            # input — see .github/workflows/{ci,matrix-nightly}.yml. Doing
+            # it inside the runner avoids the race where a post-job step
+            # tries to read /tmp dirs we've already removed.
+            log_dir = os.environ.get("FORGE_MATRIX_LOG_DIR")
+            if log_dir:
+                _dump_compose_diagnostics(
+                    docker_exe, compose_file, Path(log_dir), scenario.name
+                )
             subprocess.run(
                 [
                     docker_exe,
@@ -613,6 +624,47 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 check=False,
             )
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _dump_compose_diagnostics(
+    docker_exe: str, compose_file: Path, log_dir: Path, scenario_name: str
+) -> None:
+    """Write ``docker compose logs`` + ``ps`` into ``log_dir`` for triage.
+
+    Best-effort: a failure to capture must not mask the upstream lane
+    failure, so all subprocesses run with ``check=False`` and short
+    timeouts and any OSError on the file write is swallowed.
+    """
+    import subprocess  # noqa: PLC0415
+
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    log_path = log_dir / f"{scenario_name}.log"
+    ps_path = log_dir / f"{scenario_name}.ps"
+    with (
+        contextlib.suppress(OSError, subprocess.TimeoutExpired),
+        log_path.open("w", encoding="utf-8") as fh,
+    ):
+        subprocess.run(
+            [docker_exe, "compose", "-f", str(compose_file), "logs", "--no-color"],
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            timeout=60,
+            check=False,
+        )
+    with (
+        contextlib.suppress(OSError, subprocess.TimeoutExpired),
+        ps_path.open("w", encoding="utf-8") as fh,
+    ):
+        subprocess.run(
+            [docker_exe, "compose", "-f", str(compose_file), "ps"],
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+            check=False,
+        )
 
 
 def run_lane_roundtrip(scenario: Scenario) -> LaneResult:

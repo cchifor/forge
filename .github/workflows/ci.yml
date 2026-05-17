@@ -274,27 +274,15 @@ jobs:
           git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
+      # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
+      # logs + ps to a known directory BEFORE it tears the stack down
+      # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
+      # this env var, the runner cleans up its tmpdirs and post-job log
+      # capture would race against teardown.
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        env:
+          FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
-      # Capture compose logs to a directory + upload as an artifact when
-      # smoke fails. Lane C failures without logs are unactionable; the
-      # runner tears the stack down before the job exits, so we have to
-      # grab logs in-job. We dump to ./compose-logs/ then upload so the
-      # PR author can download the archive from the failed job page.
-      - name: Capture docker compose logs on failure
-        if: failure()
-        run: |
-          mkdir -p compose-logs
-          for f in /tmp/forge-matrix-*/${{ matrix.scenario }}*/docker-compose.yml; do
-            if [ -f "$f" ]; then
-              dir=$(dirname "$f")
-              name=$(basename "$dir")
-              echo "=== docker compose logs for $f ===" | tee "compose-logs/${name}.log"
-              docker compose -f "$f" logs --tail 500 >> "compose-logs/${name}.log" 2>&1 || true
-              docker compose -f "$f" ps >> "compose-logs/${name}.log" 2>&1 || true
-              docker compose -f "$f" down -v --remove-orphans || true
-            fi
-          done
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
