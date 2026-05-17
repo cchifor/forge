@@ -1,6 +1,6 @@
 .PHONY: install-dev test test-fast test-serial test-cov lint format format-check typecheck check e2e fuzz \
         snapshots validate-matrix validate-matrix-quick validate-matrix-scenario \
-        validate-matrix-list validate-matrix-e2e validate-matrix-update
+        validate-matrix-list validate-matrix-e2e validate-matrix-update validate-matrix-fast
 
 install-dev:
 	uv sync --all-extras --dev
@@ -84,3 +84,12 @@ validate-matrix-e2e:
 # `--scenario` for a single-scenario run.
 validate-matrix-update:
 	uv run python tests/matrix/runner.py --all --lane update
+
+# Lane C (WS3) — fast smoke subset that mirrors the PR-time
+# `matrix-smoke-fast` job in .github/workflows/ci.yml. Runs the two
+# fastest smoke-opted scenarios (py_svelte_min + node_svelte_min) so
+# contributors can reproduce PR-time compose failures locally without
+# spinning up the full 11-scenario nightly smoke set. Requires Docker.
+validate-matrix-fast:
+	uv run python tests/matrix/runner.py --scenario py_svelte_min --lane smoke
+	uv run python tests/matrix/runner.py --scenario node_svelte_min --lane smoke
