@@ -1,4 +1,4 @@
-name: Matrix nightly (lane C smoke + lane D roundtrip)
+name: Matrix nightly (lane C smoke + lane D roundtrip + lane E update)
 
 # Runs nightly heavyweight matrix lanes:
 #
@@ -11,6 +11,12 @@ name: Matrix nightly (lane C smoke + lane D roundtrip)
 #   apply-back cycle in between; ~2 min/scenario. Exercises the FR1
 #   invariant (fresh-generate emits zero block/files candidates) and
 #   stages a synthetic block edit when the scenario surface allows.
+# * Lane E — forge --update + forge --harvest e2e (WS4). For every
+#   scenario, shells out to ``python -m forge --update --mode
+#   {merge,skip,overwrite}`` against an edited fragment-authored file
+#   plus a single ``forge --harvest --harvest-out=-`` JSON probe.
+#   Exercises the argparse / builder / dispatcher path real users hit,
+#   complementing lane D's direct Python-API round-trip.
 #
 # Also triggerable manually (workflow_dispatch) or when a PR is labeled
 # ``ci:matrix-smoke`` so contributors can exercise these lanes on
@@ -39,6 +45,7 @@ jobs:
     outputs:
       scenarios: ${{ steps.load.outputs.scenarios }}
       roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
+      update_scenarios: ${{ steps.load.outputs.update_scenarios }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -58,8 +65,14 @@ jobs:
           roundtrip_names = [
               s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
           ]
+          # Lane E (WS4) — runs on every scenario; ``--update`` +
+          # ``--harvest`` are universally applicable, the per-mode
+          # contract self-skips on scenarios with no fragment-authored
+          # file. No lane opt-in in scenarios.yaml, just the full set.
+          all_names = [s["name"] for s in data["scenarios"]]
           print(f"scenarios={json.dumps(smoke_names)}")
           print(f"roundtrip_scenarios={json.dumps(roundtrip_names)}")
+          print(f"update_scenarios={json.dumps(all_names)}")
           ' >> "$GITHUB_OUTPUT"
 
   smoke:
@@ -175,6 +188,58 @@ jobs:
           path: matrix-status/
           if-no-files-found: ignore
 
+  # Lane E — forge --update + --harvest CLI e2e (WS4). For every
+  # scenario, shells out to ``python -m forge --update --mode
+  # {merge,skip,overwrite}`` against an edited fragment-authored file
+  # plus a single ``forge --harvest --harvest-out=-`` JSON probe.
+  # Complements lane D (which uses the Python API directly): lane E
+  # exercises the argparse / builder / dispatcher path real users hit.
+  # Per-scenario wall-clock ~2-4 min on cold caches (two generates,
+  # three updates with potential uv sync, one harvest).
+  update:
+    needs: gate
+    if: needs.gate.outputs.update_scenarios != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.gate.outputs.update_scenarios) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install rustup stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      # Lane E generate()s twice and runs ``forge --update`` three
+      # times; the template's post_generate.py executes ``git init &&
+      # git commit`` each time, which fails noisily without an identity.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane E (update + harvest) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane update
+      - name: Upload per-scenario JSON status artifact
+        if: always()
+        run: |
+          mkdir -p matrix-status
+          uv run python tests/matrix/runner.py \
+            --scenario ${{ matrix.scenario }} --lane update --json > \
+            matrix-status/${{ matrix.scenario }}-update.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-status-update-${{ matrix.scenario }}
+          path: matrix-status/
+          if-no-files-found: ignore
+
   # Aggregate per-scenario JSON artifacts into a single markdown grid
   # and publish it to the workflow summary page (no auto-commit to the
   # repo). Runs after every scenario has finished (success or failure)
@@ -182,7 +247,7 @@ jobs:
   # ``docs/matrix-status.md`` manually if they want to lock a specific
   # snapshot.
   publish-dashboard:
-    needs: [smoke, roundtrip]
+    needs: [smoke, roundtrip, update]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -224,7 +289,10 @@ jobs:
           grid = _format_markdown_grid(results, scenarios)
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           with summary.open("a", encoding="utf-8") as fh:
-              fh.write("## Matrix nightly — lane C (smoke) + lane D (round-trip)\n\n")
+              fh.write(
+                  "## Matrix nightly — lane C (smoke) + lane D (round-trip) "
+                  "+ lane E (update + harvest)\n\n"
+              )
               fh.write(grid)
               fh.write("\nSee individual scenario logs above for details.\n")
           Path("matrix-status.md").write_text(grid, encoding="utf-8")
