@@ -978,13 +978,7 @@ LANE_DISPATCH = {
 
 
 def run_scenario(scenario: Scenario, lane: Lane) -> LaneResult:
-    # Lane E (``update``) is universal — every scenario goes through the
-    # ``--update`` / ``--harvest`` CLI surface regardless of whether
-    # scenarios.yaml lists it under ``lanes:``. The per-mode contract
-    # in tests/matrix/update_contract.py self-skips on scenarios with no
-    # fragment-authored file, so opt-in noise in scenarios.yaml would
-    # be redundant. Lanes A-D keep the explicit opt-in check.
-    if lane != "update" and lane not in scenario.lanes:
+    if lane not in scenario.lanes:
         return LaneResult(
             scenario=scenario.name,
             lane=lane,

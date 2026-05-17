@@ -2,13 +2,19 @@
 #
 # Each scenario describes one configuration forge is expected to generate
 # cleanly. The runner in ``tests/matrix/runner.py`` consumes this file and
-# drives each scenario through up to four lanes:
+# drives each scenario through up to five lanes:
 #
 #   A — generate (always; runs on every PR, ~1 min/scenario)
 #   B — toolchain verify (every PR, parallel matrix, ~5 min/scenario)
 #   C — compose-up smoke (nightly or label-gated, ~10 min/scenario)
 #   D — roundtrip (nightly, opt-in; exercises harvest + apply-back FR1/FR2
 #       invariants — see docs/round-trip.md)
+#   E — update (nightly, opt-in; exercises ``forge --update`` in all three
+#       merge modes + ``forge --harvest`` JSON probe via the CLI. Today
+#       only Python-backend scenarios are opted in — Node-only / Rust-only
+#       projects trip a pre-existing resolver bug where the Python-only
+#       ``correlation_id`` fragment is persisted into forge.toml and
+#       re-resolves on ``--update``. Opt those in once that bug is fixed.)
 #
 # ``lanes`` lists which lanes are applicable. Scenarios on a backend whose
 # toolchain can't be invoked in CI (e.g. a plugin backend without a linter
@@ -23,7 +29,7 @@ schema_version: 1
 scenarios:
   - name: py_vue_full
     description: Python + Vue + Keycloak + agent + RAG (chroma) + rate limit + OTel
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8010
     expected_files:
       - services/api/pyproject.toml
@@ -54,7 +60,7 @@ scenarios:
     description: Python + Svelte, no auth, no options
     # Cross-stack opt-in for lane D (roundtrip) — covers a Python +
     # frontend scenario in addition to py_only_headless (Python-only).
-    lanes: [generate, verify, smoke, roundtrip]
+    lanes: [generate, verify, smoke, roundtrip, update]
     port_base: 8020
     expected_files:
       - services/api/pyproject.toml
@@ -223,7 +229,7 @@ scenarios:
 
   - name: multi_py_node
     description: Python + Node + Vue + Keycloak (multi-backend with mixed options)
-    lanes: [generate, verify, smoke, roundtrip]
+    lanes: [generate, verify, smoke, roundtrip, update]
     port_base: 8090
     expected_files:
       - services/py-svc/pyproject.toml
@@ -252,7 +258,7 @@ scenarios:
 
   - name: multi_all_three
     description: Python + Node + Rust + Vue stress test (tier-1 fragments only)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8100
     expected_files:
       - services/py-svc/pyproject.toml
@@ -290,7 +296,7 @@ scenarios:
 
   - name: py_vue_noauth
     description: Python + Vue without Keycloak (dev-auth fallback)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8110
     expected_files:
       - services/api/pyproject.toml
@@ -316,7 +322,7 @@ scenarios:
     # the fastest scenario (~30s/generate) so it carries the round-trip
     # CI signal in the nightly matrix. See tests/matrix/runner.py
     # docstring + docs/round-trip.md.
-    lanes: [generate, verify, roundtrip]
+    lanes: [generate, verify, roundtrip, update]
     port_base: 8120
     expected_files:
       - services/api/pyproject.toml
@@ -382,7 +388,7 @@ scenarios:
   # reuse 8150 until the scenario lands.
   - name: stateless_py
     description: Python-only, database.mode=none (no postgres/alembic)
-    lanes: [generate, verify, roundtrip]
+    lanes: [generate, verify, roundtrip, update]
     port_base: 8160
     expected_files:
       - services/api/pyproject.toml
