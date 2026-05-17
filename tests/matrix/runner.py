@@ -70,6 +70,10 @@ SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
 WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
 
 
+_INSTALL_TIMEOUT_SECONDS = 300
+_BUILD_TIMEOUT_SECONDS = 180
+
+
 def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
     """Run a build/analyze check against the generated frontend.
 
@@ -81,6 +85,11 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
     Returns ``None`` on success, an error label on failure. Uses the
     package manager from ``fe_cfg.package_manager`` when present;
     falls back to ``npm``.
+
+    Budget (worst-case wall-clock per scenario): install 5 min +
+    build 3 min = 8 min. Lane B aims for ~5 min average across the
+    matrix; the upper bound covers cold CI caches without letting a
+    runaway process stall the whole runner.
 
     Skips silently (returns ``None``) when:
 
@@ -94,8 +103,6 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
       see spurious failures; same pattern as ``run_lane_smoke``'s
       docker-availability check.
     """
-    import subprocess  # noqa: PLC0415
-
     from forge.config import FrontendFramework  # noqa: PLC0415
 
     framework = getattr(fe_cfg, "framework", None)
@@ -108,29 +115,45 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
     pm_exe = shutil.which(pm) or shutil.which("npm")
     if pm_exe is None:
         return None  # No JS runtime on this runner — skip silently.
-    install = subprocess.run(
-        [pm_exe, "install", "--no-fund", "--no-audit"],
-        cwd=fe_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-        check=False,
+    return _run_frontend_step(
+        pm, pm_exe, fe_dir, ["install", "--no-fund", "--no-audit"], _INSTALL_TIMEOUT_SECONDS
+    ) or _run_frontend_step(
+        pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS
     )
-    if install.returncode != 0:
-        tail = install.stderr.strip().splitlines()[-3:]
-        return f"{pm} install failed: {tail}"
-    build = subprocess.run(
-        [pm_exe, "run", "build"],
-        cwd=fe_dir,
-        capture_output=True,
-        text=True,
-        timeout=300,
-        check=False,
-    )
-    if build.returncode != 0:
-        tail = build.stderr.strip().splitlines()[-3:]
-        return f"{pm} run build failed: {tail}"
-    return None
+
+
+def _run_frontend_step(
+    pm: str, pm_exe: str, fe_dir: Path, args: list[str], timeout: int
+) -> str | None:
+    """Run a single package-manager step; return failure label or None.
+
+    Translates :class:`subprocess.TimeoutExpired` and
+    :class:`FileNotFoundError` into failure labels rather than letting
+    them propagate out of the runner — a runaway ``npm install`` must
+    not take out the whole matrix run by crashing ``main()``. Mirrors
+    the pattern in ``forge.toolchains._runner._run_check``.
+    """
+    import subprocess  # noqa: PLC0415
+
+    label = f"{pm} {' '.join(args)}"
+    try:
+        result = subprocess.run(
+            [pm_exe, *args],
+            cwd=fe_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return f"{label} timed out after {timeout}s"
+    except FileNotFoundError as e:
+        return f"{label} could not exec {pm_exe}: {e}"
+    if result.returncode == 0:
+        return None
+    stream = result.stderr.strip() or result.stdout.strip()
+    tail = "\n".join(stream.splitlines()[-3:]) if stream else "<no output>"
+    return f"{label} failed (exit {result.returncode}): {tail}"
 
 
 def _inject_weld_stubs(project_root: Path) -> None:
