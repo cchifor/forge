@@ -2,11 +2,13 @@
 #
 # Each scenario describes one configuration forge is expected to generate
 # cleanly. The runner in ``tests/matrix/runner.py`` consumes this file and
-# drives each scenario through up to three lanes:
+# drives each scenario through up to four lanes:
 #
 #   A — generate (always; runs on every PR, ~1 min/scenario)
 #   B — toolchain verify (every PR, parallel matrix, ~5 min/scenario)
 #   C — compose-up smoke (nightly or label-gated, ~10 min/scenario)
+#   D — roundtrip (nightly, opt-in; exercises harvest + apply-back FR1/FR2
+#       invariants — see docs/round-trip.md)
 #
 # ``lanes`` lists which lanes are applicable. Scenarios on a backend whose
 # toolchain can't be invoked in CI (e.g. a plugin backend without a linter
@@ -99,6 +101,11 @@ scenarios:
         middleware.rate_limit: true
         observability.otel: true
 
+  # Roundtrip broadened in WS1 to one scenario per backend × frontend-
+  # presence axis: Node+frontend (here), Rust+frontend (rust_svelte_min),
+  # multi-backend+frontend (multi_py_node), Node-only/Rust-only/stateless
+  # (the new *_only_headless + stateless_py blocks below). See
+  # docs/round-trip.md.
   - name: node_svelte_min
     description: Node + Svelte, no auth, no options
     lanes: [generate, verify, smoke, roundtrip]
@@ -349,7 +356,7 @@ scenarios:
         observability.otel: true
 
   - name: rust_only_headless
-    description: Rust-only, no frontend, rate_limit + OTel
+    description: Rust-only, no frontend, no Keycloak (dev-auth), rate_limit + OTel
     lanes: [generate, verify, roundtrip]
     port_base: 8140
     expected_files:
@@ -368,6 +375,11 @@ scenarios:
         middleware.rate_limit: true
         observability.otel: true
 
+  # port_base 8150 reserved for frontend_only_vue (backend.mode=none) —
+  # deferred pending a forge/cli/builder.py fix to honor `backends: []`
+  # (today the truthiness check at _build_backends_from_cfg drops the
+  # empty list into the single-backend placeholder fallback). Do not
+  # reuse 8150 until the scenario lands.
   - name: stateless_py
     description: Python-only, database.mode=none (no postgres/alembic)
     lanes: [generate, verify, roundtrip]
