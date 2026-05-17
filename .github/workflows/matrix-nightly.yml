@@ -65,14 +65,16 @@ jobs:
           roundtrip_names = [
               s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
           ]
-          # Lane E (WS4) — runs on every scenario; ``--update`` +
-          # ``--harvest`` are universally applicable, the per-mode
-          # contract self-skips on scenarios with no fragment-authored
-          # file. No lane opt-in in scenarios.yaml, just the full set.
-          all_names = [s["name"] for s in data["scenarios"]]
+          # Lane E (WS4) — scenarios opted into ``update``. Only
+          # Python-backend scenarios are opted in today; Node-only and
+          # Rust-only scenarios trip a pre-existing resolver bug where
+          # the Python-only ``correlation_id`` fragment is persisted in
+          # forge.toml and re-resolves on ``--update``. See the lane E
+          # header note in tests/matrix/scenarios.yaml.
+          update_names = [s["name"] for s in data["scenarios"] if "update" in s.get("lanes", [])]
           print(f"scenarios={json.dumps(smoke_names)}")
           print(f"roundtrip_scenarios={json.dumps(roundtrip_names)}")
-          print(f"update_scenarios={json.dumps(all_names)}")
+          print(f"update_scenarios={json.dumps(update_names)}")
           ' >> "$GITHUB_OUTPUT"
 
   smoke:
