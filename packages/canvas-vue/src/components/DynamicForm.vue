@@ -17,6 +17,17 @@ interface Field {
   description?: string
 }
 
+// v2 Theme 8-C1 — map each declared `field.type` literal to the TS type
+// its `v-model` should carry. Text-like inputs and selects bind strings,
+// number inputs bind numbers, checkboxes bind booleans. The mapped type
+// powers the per-binding `as` casts below; they replace the previous
+// `as any` escape hatches with honest narrow casts driven by the schema.
+type FormFieldValue = string | number | boolean
+type FieldValueByType<T extends Field['type']> =
+  T extends 'checkbox' ? boolean :
+  T extends 'number' ? number :
+  string
+
 interface Props {
   title?: string
   fields: Field[]
@@ -26,15 +37,15 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  submit: [values: Record<string, unknown>]
+  submit: [values: Record<string, FormFieldValue>]
   cancel: []
 }>()
 
-const values = reactive<Record<string, unknown>>(
-  Object.fromEntries(props.fields.map((f) => [f.name, f.default ?? _defaultFor(f.type)])),
+const values = reactive<Record<string, FormFieldValue>>(
+  Object.fromEntries(props.fields.map((f) => [f.name, f.default as FormFieldValue ?? _defaultFor(f.type)])),
 )
 
-function _defaultFor(type: Field['type']): unknown {
+function _defaultFor(type: Field['type']): FormFieldValue {
   if (type === 'checkbox') return false
   if (type === 'number') return 0
   return ''
@@ -63,7 +74,7 @@ function onSubmit(e: Event) {
         :type="field.type"
         :name="field.name"
         :required="field.required"
-        v-model="values[field.name] as any"
+        v-model="values[field.name] as FieldValueByType<'text'>"
       />
       <input
         v-else-if="field.type === 'number'"
@@ -71,7 +82,7 @@ function onSubmit(e: Event) {
         type="number"
         :name="field.name"
         :required="field.required"
-        v-model.number="values[field.name]"
+        v-model.number="values[field.name] as FieldValueByType<'number'>"
       />
       <textarea
         v-else-if="field.type === 'textarea'"
@@ -79,14 +90,14 @@ function onSubmit(e: Event) {
         :name="field.name"
         :required="field.required"
         rows="4"
-        v-model="values[field.name] as any"
+        v-model="values[field.name] as FieldValueByType<'textarea'>"
       />
       <select
         v-else-if="field.type === 'select'"
         :id="`dform-${field.name}`"
         :name="field.name"
         :required="field.required"
-        v-model="values[field.name] as any"
+        v-model="values[field.name] as FieldValueByType<'select'>"
       >
         <option v-for="opt in (field.options ?? [])" :key="opt" :value="opt">{{ opt }}</option>
       </select>
@@ -95,7 +106,7 @@ function onSubmit(e: Event) {
           :id="`dform-${field.name}`"
           type="checkbox"
           :name="field.name"
-          v-model="values[field.name] as any"
+          v-model="values[field.name] as FieldValueByType<'checkbox'>"
         />
         <span>{{ field.description || field.label }}</span>
       </label>

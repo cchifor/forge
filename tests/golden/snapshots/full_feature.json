@@ -24,8 +24,12 @@
       "size": 2577,
       "sha256": "27cb9957eec7caf9"
     },
+    "CLAUDE.md": {
+      "size": 1912,
+      "sha256": "ae83d48b4638adaf"
+    },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1156,
+      "size": 1095,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -40,13 +44,17 @@
       "size": 343,
       "sha256": "3ee819008690beca"
     },
-    "apps/frontend/components.json": {
-      "size": 430,
-      "sha256": "15821e8bc7371908"
-    },
     "apps/frontend/Dockerfile": {
       "size": 300,
       "sha256": "b111e771b45b6c55"
+    },
+    "apps/frontend/README.md": {
+      "size": 1182,
+      "sha256": "7ba6c525b10d7ce6"
+    },
+    "apps/frontend/components.json": {
+      "size": 430,
+      "sha256": "15821e8bc7371908"
     },
     "apps/frontend/env.d.ts": {
       "size": 396,
@@ -80,10 +88,6 @@
       "size": 2063,
       "sha256": "15364db2361335f5"
     },
-    "apps/frontend/README.md": {
-      "size": 1182,
-      "sha256": "7ba6c525b10d7ce6"
-    },
     "apps/frontend/scripts/post_generate.py": {
       "size": 18561,
       "sha256": "62495a4a093db9eb"
@@ -92,13 +96,13 @@
       "size": 622,
       "sha256": "193967146c5d33c9"
     },
-    "apps/frontend/src/app/main.ts": {
-      "size": 1527,
-      "sha256": "f97b98687eef6844"
-    },
     "apps/frontend/src/app/NotFoundPage.vue": {
       "size": 532,
       "sha256": "63ff21f0422cace2"
+    },
+    "apps/frontend/src/app/main.ts": {
+      "size": 1527,
+      "sha256": "f97b98687eef6844"
     },
     "apps/frontend/src/app/providers/query-client.test.ts": {
       "size": 883,
@@ -128,6 +132,10 @@
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
     },
+    "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
+      "size": 2878,
+      "sha256": "d4d1c834a9546bd3"
+    },
     "apps/frontend/src/features/ai_chat/canvas/CanvasFallback.vue": {
       "size": 1009,
       "sha256": "7005a82c335d4caa"
@@ -137,8 +145,8 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2497,
-      "sha256": "afd6a4e1d0e87249"
+      "size": 2825,
+      "sha256": "9a961a8a61e1960a"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
@@ -152,10 +160,6 @@
       "size": 4806,
       "sha256": "d0c0d2aa00a451b3"
     },
-    "apps/frontend/src/features/ai_chat/canvas/registry.ts": {
-      "size": 1301,
-      "sha256": "fc7fa326dfbebdf0"
-    },
     "apps/frontend/src/features/ai_chat/canvas/Report.vue": {
       "size": 4653,
       "sha256": "a7409cf59044f5d4"
@@ -163,6 +167,10 @@
     "apps/frontend/src/features/ai_chat/canvas/WorkflowDiagram.vue": {
       "size": 4117,
       "sha256": "2ef430f09aecf93c"
+    },
+    "apps/frontend/src/features/ai_chat/canvas/registry.ts": {
+      "size": 1301,
+      "sha256": "fc7fa326dfbebdf0"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
       "size": 13735,
@@ -201,8 +209,8 @@
       "sha256": "6e4b72b152c36197"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
-      "size": 1307,
-      "sha256": "dab98c959989b69f"
+      "size": 1115,
+      "sha256": "adf39be514746325"
     },
     "apps/frontend/src/features/ai_chat/ui/AgentStatusBar.test.ts": {
       "size": 2718,
@@ -256,26 +264,6 @@
       "size": 2627,
       "sha256": "fb8bf3a01da805f3"
     },
-    "apps/frontend/src/features/ai_chat/workspace/engines/AgUiEngine.test.ts": {
-      "size": 1359,
-      "sha256": "191a7806b574ce4b"
-    },
-    "apps/frontend/src/features/ai_chat/workspace/engines/AgUiEngine.vue": {
-      "size": 598,
-      "sha256": "4efd8645781c375b"
-    },
-    "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
-      "size": 118,
-      "sha256": "fee20cba6e4af506"
-    },
-    "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.test.ts": {
-      "size": 3453,
-      "sha256": "c8c61f4290a202f2"
-    },
-    "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
-      "size": 3056,
-      "sha256": "d3ec8702cc1de873"
-    },
     "apps/frontend/src/features/ai_chat/workspace/FallbackActivity.test.ts": {
       "size": 1275,
       "sha256": "61f8759866810ce2"
@@ -292,14 +280,6 @@
       "size": 2595,
       "sha256": "1b16622f92fe4cb3"
     },
-    "apps/frontend/src/features/ai_chat/workspace/registry.test.ts": {
-      "size": 2827,
-      "sha256": "a179f7937e3952db"
-    },
-    "apps/frontend/src/features/ai_chat/workspace/registry.ts": {
-      "size": 1263,
-      "sha256": "46b1af86b07391ec"
-    },
     "apps/frontend/src/features/ai_chat/workspace/UserPromptReview.vue": {
       "size": 2971,
       "sha256": "5c25fac92c6bf682"
@@ -307,6 +287,34 @@
     "apps/frontend/src/features/ai_chat/workspace/WorkspacePane.vue": {
       "size": 2680,
       "sha256": "83a6b5348eac9799"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/engines/AgUiEngine.test.ts": {
+      "size": 1359,
+      "sha256": "191a7806b574ce4b"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/engines/AgUiEngine.vue": {
+      "size": 598,
+      "sha256": "4efd8645781c375b"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.test.ts": {
+      "size": 3453,
+      "sha256": "c8c61f4290a202f2"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
+      "size": 3056,
+      "sha256": "d3ec8702cc1de873"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
+      "size": 118,
+      "sha256": "fee20cba6e4af506"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/registry.test.ts": {
+      "size": 2827,
+      "sha256": "a179f7937e3952db"
+    },
+    "apps/frontend/src/features/ai_chat/workspace/registry.ts": {
+      "size": 1263,
+      "sha256": "46b1af86b07391ec"
     },
     "apps/frontend/src/features/auth/index.ts": {
       "size": 164,
@@ -732,29 +740,21 @@
       "size": 495,
       "sha256": "a6f07b8e34ee0196"
     },
-    "apps/frontend/src/shared/ui/input/index.ts": {
-      "size": 47,
-      "sha256": "09ebfb7b7805ec2c"
-    },
     "apps/frontend/src/shared/ui/input/Input.vue": {
       "size": 897,
       "sha256": "0bdd70bc6d63acd4"
     },
-    "apps/frontend/src/shared/ui/label/index.ts": {
+    "apps/frontend/src/shared/ui/input/index.ts": {
       "size": 47,
-      "sha256": "4f6cdf31660b5464"
+      "sha256": "09ebfb7b7805ec2c"
     },
     "apps/frontend/src/shared/ui/label/Label.vue": {
       "size": 511,
       "sha256": "844e28d25386aa4e"
     },
-    "apps/frontend/src/shared/ui/segmented-button/context.ts": {
-      "size": 252,
-      "sha256": "44721b8b8eab3d3a"
-    },
-    "apps/frontend/src/shared/ui/segmented-button/index.ts": {
-      "size": 142,
-      "sha256": "15b8e753db153324"
+    "apps/frontend/src/shared/ui/label/index.ts": {
+      "size": 47,
+      "sha256": "4f6cdf31660b5464"
     },
     "apps/frontend/src/shared/ui/segmented-button/SegmentedButton.vue": {
       "size": 532,
@@ -764,9 +764,13 @@
       "size": 778,
       "sha256": "5322e97a3d548741"
     },
-    "apps/frontend/src/shared/ui/select/index.ts": {
-      "size": 407,
-      "sha256": "30f10701ee4ba78c"
+    "apps/frontend/src/shared/ui/segmented-button/context.ts": {
+      "size": 252,
+      "sha256": "44721b8b8eab3d3a"
+    },
+    "apps/frontend/src/shared/ui/segmented-button/index.ts": {
+      "size": 142,
+      "sha256": "15b8e753db153324"
     },
     "apps/frontend/src/shared/ui/select/SelectContent.vue": {
       "size": 1537,
@@ -788,21 +792,17 @@
       "size": 1014,
       "sha256": "f8381d40b0d88774"
     },
-    "apps/frontend/src/shared/ui/separator/index.ts": {
-      "size": 55,
-      "sha256": "5e79dd5256c2212b"
+    "apps/frontend/src/shared/ui/select/index.ts": {
+      "size": 407,
+      "sha256": "30f10701ee4ba78c"
     },
     "apps/frontend/src/shared/ui/separator/Separator.vue": {
       "size": 686,
       "sha256": "6009c05ffcc58631"
     },
-    "apps/frontend/src/shared/ui/sidebar/context.ts": {
-      "size": 207,
-      "sha256": "fe79a38dc6bddb15"
-    },
-    "apps/frontend/src/shared/ui/sidebar/index.ts": {
-      "size": 839,
-      "sha256": "d2d35eb49df61c10"
+    "apps/frontend/src/shared/ui/separator/index.ts": {
+      "size": 55,
+      "sha256": "5e79dd5256c2212b"
     },
     "apps/frontend/src/shared/ui/sidebar/Sidebar.vue": {
       "size": 634,
@@ -856,21 +856,25 @@
       "size": 458,
       "sha256": "4954a878dc2635b4"
     },
-    "apps/frontend/src/shared/ui/skeleton/index.ts": {
-      "size": 53,
-      "sha256": "63c46cdea19ddec2"
+    "apps/frontend/src/shared/ui/sidebar/context.ts": {
+      "size": 207,
+      "sha256": "fe79a38dc6bddb15"
+    },
+    "apps/frontend/src/shared/ui/sidebar/index.ts": {
+      "size": 839,
+      "sha256": "d2d35eb49df61c10"
     },
     "apps/frontend/src/shared/ui/skeleton/Skeleton.vue": {
       "size": 284,
       "sha256": "91f3ff78c79f1b6c"
     },
+    "apps/frontend/src/shared/ui/skeleton/index.ts": {
+      "size": 53,
+      "sha256": "63c46cdea19ddec2"
+    },
     "apps/frontend/src/shared/ui/sonner/index.ts": {
       "size": 37,
       "sha256": "6109de62b5340d3c"
-    },
-    "apps/frontend/src/shared/ui/table/index.ts": {
-      "size": 324,
-      "sha256": "e4868e3d2ba0e055"
     },
     "apps/frontend/src/shared/ui/table/Table.vue": {
       "size": 360,
@@ -896,17 +900,17 @@
       "size": 383,
       "sha256": "473a493a8004d106"
     },
-    "apps/frontend/src/shared/ui/textarea/index.ts": {
-      "size": 53,
-      "sha256": "1b7316231e53ee33"
+    "apps/frontend/src/shared/ui/table/index.ts": {
+      "size": 324,
+      "sha256": "e4868e3d2ba0e055"
     },
     "apps/frontend/src/shared/ui/textarea/Textarea.vue": {
       "size": 791,
       "sha256": "43468ffd6a96fda1"
     },
-    "apps/frontend/src/shared/ui/toggle-group/index.ts": {
-      "size": 126,
-      "sha256": "4ed073394cbea01b"
+    "apps/frontend/src/shared/ui/textarea/index.ts": {
+      "size": 53,
+      "sha256": "1b7316231e53ee33"
     },
     "apps/frontend/src/shared/ui/toggle-group/ToggleGroup.vue": {
       "size": 566,
@@ -916,13 +920,17 @@
       "size": 987,
       "sha256": "484e865a8f6b31b8"
     },
-    "apps/frontend/src/shared/ui/tooltip/index.ts": {
-      "size": 173,
-      "sha256": "0dcdb8605fd8f9b6"
+    "apps/frontend/src/shared/ui/toggle-group/index.ts": {
+      "size": 126,
+      "sha256": "4ed073394cbea01b"
     },
     "apps/frontend/src/shared/ui/tooltip/TooltipContent.vue": {
       "size": 1040,
       "sha256": "1623eaecac536644"
+    },
+    "apps/frontend/src/shared/ui/tooltip/index.ts": {
+      "size": 173,
+      "sha256": "0dcdb8605fd8f9b6"
     },
     "apps/frontend/src/test/setup.ts": {
       "size": 238,
@@ -948,21 +956,21 @@
       "size": 1317,
       "sha256": "f7a9e2a4dc889d0a"
     },
-    "CLAUDE.md": {
-      "size": 1912,
-      "sha256": "ae83d48b4638adaf"
-    },
     "docker-compose.yml": {
       "size": 7349,
       "sha256": "f3c92053e424d5ee"
     },
     "forge.toml": {
-      "size": 119022,
+      "size": 120117,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
       "size": 7130,
       "sha256": "d73104adb44ccb05"
+    },
+    "frontend/src/features/ai_chat/events.gen.ts": {
+      "size": 3950,
+      "sha256": "1f33a624e35dc387"
     },
     "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
       "size": 2159,
@@ -979,6 +987,14 @@
     "infra/gatekeeper/.gitignore": {
       "size": 494,
       "sha256": "f27b7dd313f5239b"
+    },
+    "infra/gatekeeper/Dockerfile": {
+      "size": 1436,
+      "sha256": "a4236d33286cd8ac"
+    },
+    "infra/gatekeeper/README.md": {
+      "size": 549,
+      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
@@ -1000,17 +1016,9 @@
       "size": 1222,
       "sha256": "4245b692a1baee92"
     },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
-    },
     "infra/gatekeeper/pyproject.toml": {
       "size": 2951,
       "sha256": "955c6604957e47cc"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2171,
@@ -1256,13 +1264,13 @@
       "size": 490,
       "sha256": "ad4b41688ef6d746"
     },
-    "sdks/platform-auth/pyproject.toml": {
-      "size": 1368,
-      "sha256": "4d9c7acb2299e4fb"
-    },
     "sdks/platform-auth/README.md": {
       "size": 1468,
       "sha256": "9c06875bd132381d"
+    },
+    "sdks/platform-auth/pyproject.toml": {
+      "size": 1368,
+      "sha256": "4d9c7acb2299e4fb"
     },
     "sdks/platform-auth/src/platform_auth/__init__.py": {
       "size": 1490,
@@ -1308,6 +1316,10 @@
       "size": 5793,
       "sha256": "08d3cad0ab84903e"
     },
+    "sdks/platform-auth/tests/README.md": {
+      "size": 1245,
+      "sha256": "0afc5d668d2a43a1"
+    },
     "sdks/platform-auth/tests/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
@@ -1315,10 +1327,6 @@
     "sdks/platform-auth/tests/conftest.py": {
       "size": 442,
       "sha256": "f02ef1b9a90a1070"
-    },
-    "sdks/platform-auth/tests/README.md": {
-      "size": 1245,
-      "sha256": "0afc5d668d2a43a1"
     },
     "sdks/platform-auth/tests/unit/__init__.py": {
       "size": 0,
@@ -1373,7 +1381,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 522,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1383,6 +1391,14 @@
     "services/api/.gitignore": {
       "size": 174,
       "sha256": "31910a941b109f81"
+    },
+    "services/api/Dockerfile": {
+      "size": 3590,
+      "sha256": "0f2f598735186ce9"
+    },
+    "services/api/README.md": {
+      "size": 33686,
+      "sha256": "b891350fb641d6b2"
     },
     "services/api/alembic/env.py": {
       "size": 1699,
@@ -1436,10 +1452,6 @@
       "size": 871,
       "sha256": "59e84d0358509122"
     },
-    "services/api/Dockerfile": {
-      "size": 3590,
-      "sha256": "0f2f598735186ce9"
-    },
     "services/api/entrypoint.sh": {
       "size": 415,
       "sha256": "941241dd501b2eb9"
@@ -1447,10 +1459,6 @@
     "services/api/pyproject.toml": {
       "size": 4112,
       "sha256": "d20f09185ed8346a"
-    },
-    "services/api/README.md": {
-      "size": 33686,
-      "sha256": "b891350fb641d6b2"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,
@@ -1680,6 +1688,14 @@
       "size": 384,
       "sha256": "c65d6235b6631cea"
     },
+    "services/api/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
+    },
+    "services/api/src/app/domain/canvas_props.py": {
+      "size": 1601,
+      "sha256": "b5578609c8b014d1"
+    },
     "services/api/src/app/domain/chat_file.py": {
       "size": 591,
       "sha256": "7d2856bb4811e6fe"
@@ -1881,7 +1897,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 619,
+      "size": 558,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

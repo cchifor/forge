@@ -14,7 +14,12 @@ For TypeScript: routed through :mod:`forge.injectors.ts_morph_sidecar`
 when ``FORGE_TS_AST=1``; otherwise returns ``()`` (no literal edits
 detectable; caller treats the diff as structural).
 
-For Rust: out of scope for v1. Returns ``()``.
+For Rust: :mod:`tree_sitter` + :mod:`tree_sitter_rust` parallel walk.
+Same protocol as the Python finder — both bodies must parse cleanly,
+the two trees must have identical structure (same node types in the
+same in-order positions), and only literal-leaf differences are
+collected as :class:`LiteralEdit` records. Unblocks option-promotion
+suggestions for Axum (and any other tree-sitter-rust target).
 
 Used downstream by the harvester to:
 
@@ -89,7 +94,6 @@ def find_literal_edits(
 
     * The two bodies have different AST shapes (structural diff).
     * Parsing fails on either side (e.g. mid-edit / mid-rename text).
-    * The language is ``rust`` (v1 limitation).
     * The language is ``typescript`` and the ``ts_morph`` sidecar is
       disabled (``FORGE_TS_AST != "1"``).
 
@@ -102,9 +106,8 @@ def find_literal_edits(
         return _find_python_literal_edits(upstream_body, current_body)
     if language == "typescript":
         return _find_typescript_literal_edits(upstream_body, current_body)
-    # TODO(item-6b): Rust support is deferred until a tree-sitter-rust
-    # (or syn-via-subprocess) bridge lands. For v1 we treat any Rust
-    # edit as structural and let the existing needs-review path handle it.
+    if language == "rust":
+        return _find_rust_literal_edits(upstream_body, current_body)
     return ()
 
 
@@ -310,3 +313,196 @@ def _find_typescript_literal_edits(
     # branches stay Python-only.
     _ = (upstream_body, current_body)
     return ()
+
+
+# ---------------------------------------------------------------------------
+# Rust: tree-sitter-rust parallel walk
+# ---------------------------------------------------------------------------
+
+
+# tree-sitter-rust literal node kinds we recognise as promotion candidates.
+#
+# Mapping rationale:
+#   integer_literal / float_literal / boolean_literal — direct
+#     correspondents of Python's Integer / Float / True|False.
+#   string_literal / raw_string_literal — both surface as ``kind="str"``;
+#     the bundle writer doesn't distinguish raw-vs-cooked when it emits
+#     the Option declaration. The grammar represents these as parent
+#     nodes wrapping ``"`` / ``string_content`` children, so the parallel
+#     walk has to treat them as literal LEAVES (i.e. don't recurse into
+#     their children — the value comparison is over the full source span).
+#   char_literal — folded into ``kind="str"``. ``LiteralKind`` doesn't
+#     carry a dedicated ``char`` variant, and an Option promoted from a
+#     ``char`` literal sensibly maps to a single-character string in the
+#     cross-language Option declaration.
+_RUST_LITERAL_KINDS: frozenset[str] = frozenset(
+    {
+        "integer_literal",
+        "float_literal",
+        "boolean_literal",
+        "string_literal",
+        "raw_string_literal",
+        "char_literal",
+    }
+)
+
+_RUST_LITERAL_KIND_MAP: dict[str, LiteralKind] = {
+    "integer_literal": "int",
+    "float_literal": "float",
+    "boolean_literal": "bool",
+    "string_literal": "str",
+    "raw_string_literal": "str",
+    "char_literal": "str",
+}
+
+
+def _rust_parser():  # type: ignore[no-untyped-def]
+    """Return a cached :class:`tree_sitter.Parser` configured for Rust.
+
+    Built lazily so the cost of loading the C extension is paid once per
+    process — and only when a Rust block actually shows up. The parser
+    object is thread-safe for ``parse()`` calls in tree-sitter ≥0.21.
+    """
+    global _RUST_PARSER_CACHE  # noqa: PLW0603 — module-level memo
+    cached = _RUST_PARSER_CACHE
+    if cached is not None:
+        return cached
+    import tree_sitter  # noqa: PLC0415 — lazy import (heavy C extension)
+    import tree_sitter_rust  # noqa: PLC0415
+
+    language = tree_sitter.Language(tree_sitter_rust.language())
+    parser = tree_sitter.Parser(language)
+    _RUST_PARSER_CACHE = parser
+    return parser
+
+
+_RUST_PARSER_CACHE = None  # type: ignore[var-annotated]
+
+
+def _find_rust_literal_edits(
+    upstream_body: str,
+    current_body: str,
+) -> tuple[LiteralEdit, ...]:
+    """Rust implementation of :func:`find_literal_edits`.
+
+    Parses both bodies with tree-sitter-rust. Walks the two trees in
+    lock-step, comparing every node's ``type``. Literal-leaf differences
+    (``integer_literal`` / ``float_literal`` / ``string_literal`` /
+    ``raw_string_literal`` / ``boolean_literal`` / ``char_literal``) are
+    collected as :class:`LiteralEdit` records; any structural divergence
+    (different node types at the same position, different child counts,
+    non-literal-leaf text mismatch outside whitespace) bails to ``()``.
+
+    Parse failures (``has_error`` set on the root) on either side also
+    bail to ``()`` — mid-edit / partial Rust shouldn't crash the
+    harvester. The byte→str column conversion uses the CURRENT body's
+    bytes since that's the position surfaced to the maintainer.
+    """
+    try:
+        parser = _rust_parser()
+    except Exception:  # noqa: BLE001 — tree-sitter import / load failure.
+        return ()
+
+    upstream_bytes = upstream_body.encode("utf-8")
+    current_bytes = current_body.encode("utf-8")
+    try:
+        upstream_tree = parser.parse(upstream_bytes)
+        current_tree = parser.parse(current_bytes)
+    except Exception:  # noqa: BLE001 — defensive: parser shouldn't raise, but…
+        return ()
+
+    if upstream_tree.root_node.has_error or current_tree.root_node.has_error:
+        return ()
+
+    edits: list[LiteralEdit] = []
+    structural_ok = _walk_parallel_rust(
+        upstream_tree.root_node,
+        current_tree.root_node,
+        upstream_bytes=upstream_bytes,
+        current_bytes=current_bytes,
+        edits=edits,
+    )
+    if not structural_ok:
+        return ()
+    return tuple(edits)
+
+
+def _walk_parallel_rust(
+    upstream,  # type: ignore[no-untyped-def] — tree_sitter.Node
+    current,  # type: ignore[no-untyped-def]
+    *,
+    upstream_bytes: bytes,
+    current_bytes: bytes,
+    edits: list[LiteralEdit],
+) -> bool:
+    """Parallel walk over two tree-sitter Rust nodes.
+
+    Mirrors :func:`_walk_parallel` for libcst. The key shape differences:
+
+    * tree-sitter exposes ``type`` (the grammar rule name) instead of
+      Python ``type()``; equality is by string match.
+    * Children come from :attr:`Node.children` (named + anonymous).
+      Anonymous children are tokens like ``"{"`` / ``"="`` — they carry
+      structural meaning and must agree, but they have no sub-children.
+    * Source text is recovered via ``bytes[start_byte:end_byte]`` —
+      tree-sitter's bytes-only model means the caller passed the
+      utf-8-encoded bodies down.
+    """
+    if upstream.type != current.type:
+        return False
+
+    # Literal-leaf comparison — recognised kinds short-circuit the
+    # recursion (the parent literal node owns the value text; descending
+    # into ``string_literal`` children would re-fire on the inner
+    # ``string_content`` and double-count).
+    if upstream.type in _RUST_LITERAL_KINDS:
+        kind = _RUST_LITERAL_KIND_MAP[upstream.type]
+        upstream_value = upstream_bytes[upstream.start_byte : upstream.end_byte].decode(
+            "utf-8", errors="replace"
+        )
+        current_value = current_bytes[current.start_byte : current.end_byte].decode(
+            "utf-8", errors="replace"
+        )
+        if upstream_value != current_value:
+            start_point = current.start_point
+            # tree-sitter rows are 0-indexed; LiteralEdit.line is
+            # 1-indexed to match the libcst convention.
+            line = (start_point[0] if isinstance(start_point, tuple) else start_point.row) + 1
+            col = start_point[1] if isinstance(start_point, tuple) else start_point.column
+            edits.append(
+                LiteralEdit(
+                    line=line,
+                    col=col,
+                    old_value=upstream_value,
+                    new_value=current_value,
+                    kind=kind,
+                )
+            )
+        return True
+
+    # Non-literal leaves with no children: compare their source text.
+    # ``identifier`` / keyword tokens / punctuation all live here —
+    # divergence is structural (rename, keyword swap), NOT a literal
+    # promotion candidate.
+    upstream_children = list(upstream.children)
+    current_children = list(current.children)
+    if not upstream_children and not current_children:
+        upstream_value = upstream_bytes[upstream.start_byte : upstream.end_byte]
+        current_value = current_bytes[current.start_byte : current.end_byte]
+        # Anonymous punctuation tokens have identical text by definition
+        # when ``type`` matches — but identifier renames slip through
+        # here and must be classified as structural.
+        return upstream_value == current_value
+
+    if len(upstream_children) != len(current_children):
+        return False
+    for u_child, c_child in zip(upstream_children, current_children, strict=True):
+        if not _walk_parallel_rust(
+            u_child,
+            c_child,
+            upstream_bytes=upstream_bytes,
+            current_bytes=current_bytes,
+            edits=edits,
+        ):
+            return False
+    return True
