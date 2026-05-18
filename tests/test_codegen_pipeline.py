@@ -164,6 +164,72 @@ class TestCanvasPropsPydantic:
         assert target.read_bytes() == first
 
 
+class TestCanvasEventsUnion:
+    """Theme 2B — discriminated event-union Pydantic module + per-frontend TS.
+
+    The event union lands in ``services/<backend>/src/app/domain/canvas_events.py``
+    for every Python backend. The Vue template is the canonical adopter on
+    the frontend side; Svelte/Flutter follow in a later PR (their
+    ``FrontendLayout.event_union_path`` is empty).
+    """
+
+    def test_emits_canvas_events_into_python_backend(self, tmp_path: Path) -> None:
+        config, project_root = _make_python_project(tmp_path)
+        run_codegen(config, project_root)
+        target = (
+            project_root / "services" / "api" / "src" / "app" / "domain" / "canvas_events.py"
+        )
+        assert target.is_file()
+        body = target.read_text(encoding="utf-8")
+        assert "AgUiEvent = Annotated[" in body
+        assert "AgUiEventAdapter" in body
+        # Every shipped ui-protocol schema must appear as an Event wrapper.
+        for cls in (
+            "AgUiPayloadEvent",
+            "AgentStateEvent",
+            "HitlResponseEvent",
+            "McpExtPayloadEvent",
+            "ToolCallInfoEvent",
+            "UserPromptPayloadEvent",
+            "WorkspaceActivityEvent",
+        ):
+            assert f"class {cls}(BaseModel):" in body, f"missing {cls}"
+
+    def test_emits_events_gen_ts_into_vue_template(self, tmp_path: Path) -> None:
+        config, project_root = _make_python_project(tmp_path, FrontendFramework.VUE)
+        run_codegen(config, project_root)
+        target = (
+            project_root / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
+        )
+        assert target.is_file()
+        body = target.read_text(encoding="utf-8")
+        assert "export type AgUiEvent =" in body
+        assert "export function assertUnreachable" in body
+
+    def test_no_events_gen_ts_for_svelte_yet(self, tmp_path: Path) -> None:
+        # Theme 2B adopts Vue first; Svelte/Flutter follow in a later PR.
+        # Until their layout sets ``event_union_path``, no file is emitted.
+        config, project_root = _make_python_project(tmp_path, FrontendFramework.SVELTE)
+        run_codegen(config, project_root)
+        # No events.gen.ts (the path is empty for Svelte).
+        assert not any(project_root.rglob("events.gen.ts"))
+
+    def test_idempotent_across_two_runs(self, tmp_path: Path) -> None:
+        config, project_root = _make_python_project(tmp_path, FrontendFramework.VUE)
+        run_codegen(config, project_root)
+        py_target = (
+            project_root / "services" / "api" / "src" / "app" / "domain" / "canvas_events.py"
+        )
+        ts_target = (
+            project_root / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
+        )
+        first_py = py_target.read_bytes()
+        first_ts = ts_target.read_bytes()
+        run_codegen(config, project_root)
+        assert py_target.read_bytes() == first_py
+        assert ts_target.read_bytes() == first_ts
+
+
 class TestSharedEnums:
     def test_item_status_lands_in_python_backend(self, tmp_path: Path) -> None:
         config, project_root = _make_python_project(tmp_path)
