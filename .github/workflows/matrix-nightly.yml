@@ -22,6 +22,16 @@ name: Matrix nightly (lane C smoke + lane D roundtrip + lane E update)
 # ``ci:matrix-smoke`` so contributors can exercise these lanes on
 # demand for changes that touch fragment templates, docker-compose
 # rendering, or the harvest / apply-back substrate.
+#
+# Theme 3C — a narrower label, ``ci:compose-smoke``, fires only the
+# lane C smoke job against the fast subset (``py_svelte_min`` +
+# ``node_svelte_min``). This mirrors ``make validate-matrix-fast`` and
+# is intended for PRs that touch the compose stack but do not warrant
+# the full nightly fan-out. The unconditional PR-time
+# ``ci.yml::matrix-smoke-fast`` job covers the same scenarios on every
+# PR; ``ci:compose-smoke`` is the on-demand re-run hook (e.g. after a
+# flaky teardown) or a deliberate signal that compose drift is the
+# focus of review. Default PRs (no label) trigger neither variant.
 
 on:
   schedule:
@@ -35,11 +45,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Gate the label-triggered variant so random labels don't fire this.
+  # Gate the label-triggered variants so random labels don't fire this.
+  # Two recognised labels:
+  #   * ``ci:matrix-smoke``   — full fan-out (smoke + roundtrip + update
+  #     across every opted-in scenario), same shape as the nightly run.
+  #   * ``ci:compose-smoke``  — Theme 3C fast subset: only the lane C
+  #     smoke job against ``[py_svelte_min, node_svelte_min]``. Roundtrip
+  #     and update lanes are suppressed by emitting empty scenario lists
+  #     (their job-level ``if:`` already short-circuits on ``'[]'``).
   gate:
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:matrix-smoke'
+      github.event.label.name == 'ci:matrix-smoke' ||
+      github.event.label.name == 'ci:compose-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -55,23 +73,45 @@ jobs:
         run: uv sync --all-extras --dev
       - id: load
         name: Emit scenario lists as JSON
+        env:
+          # Empty on schedule / workflow_dispatch — both fall through the
+          # ``if`` block below into the full-fan-out branch, which matches
+          # pre-Theme-3C behaviour.
+          FORGE_TRIGGER_LABEL: ${{ github.event.label.name }}
         run: |
           uv run python -c '
-          import json, yaml
+          import json, os, yaml
           data = yaml.safe_load(open("tests/matrix/scenarios.yaml"))
-          # Lane C — scenarios opted into ``smoke``.
-          smoke_names = [s["name"] for s in data["scenarios"] if "smoke" in s.get("lanes", [])]
-          # Lane D — scenarios opted into ``roundtrip`` (Phase 5).
-          roundtrip_names = [
-              s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
-          ]
-          # Lane E (WS4) — scenarios opted into ``update``. Only
-          # Python-backend scenarios are opted in today; Node-only and
-          # Rust-only scenarios trip a pre-existing resolver bug where
-          # the Python-only ``correlation_id`` fragment is persisted in
-          # forge.toml and re-resolves on ``--update``. See the lane E
-          # header note in tests/matrix/scenarios.yaml.
-          update_names = [s["name"] for s in data["scenarios"] if "update" in s.get("lanes", [])]
+          label = os.environ.get("FORGE_TRIGGER_LABEL", "")
+          # Theme 3C — ``ci:compose-smoke`` fires only the fast subset
+          # of lane C. Mirrors ``make validate-matrix-fast``; the two
+          # scenarios are also the PR-time critical path in
+          # ``ci.yml::matrix-smoke-fast``. Roundtrip / update lanes are
+          # suppressed via ``[]`` so their ``if:`` short-circuits.
+          if label == "ci:compose-smoke":
+              smoke_names = ["py_svelte_min", "node_svelte_min"]
+              roundtrip_names: list[str] = []
+              update_names: list[str] = []
+          else:
+              # Schedule, workflow_dispatch, or ``ci:matrix-smoke`` — full
+              # fan-out across every opted-in scenario.
+              # Lane C — scenarios opted into ``smoke``.
+              smoke_names = [
+                  s["name"] for s in data["scenarios"] if "smoke" in s.get("lanes", [])
+              ]
+              # Lane D — scenarios opted into ``roundtrip`` (Phase 5).
+              roundtrip_names = [
+                  s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
+              ]
+              # Lane E (WS4) — scenarios opted into ``update``. Only
+              # Python-backend scenarios are opted in today; Node-only
+              # and Rust-only scenarios trip a pre-existing resolver bug
+              # where the Python-only ``correlation_id`` fragment is
+              # persisted in forge.toml and re-resolves on ``--update``.
+              # See the lane E header note in tests/matrix/scenarios.yaml.
+              update_names = [
+                  s["name"] for s in data["scenarios"] if "update" in s.get("lanes", [])
+              ]
           print(f"scenarios={json.dumps(smoke_names)}")
           print(f"roundtrip_scenarios={json.dumps(roundtrip_names)}")
           print(f"update_scenarios={json.dumps(update_names)}")
