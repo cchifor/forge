@@ -67,7 +67,11 @@ def _build_backends_from_cfg(
     Supports both `backends:` (list) and `backend:` (single) for backward compatibility.
     """
     backends_raw = r.cfg.get("backends")
-    if isinstance(backends_raw, list) and backends_raw:
+    if isinstance(backends_raw, list):
+        # An explicit list — possibly empty — is the user expressing intent.
+        # An empty list means "frontend-only project (backend.mode=none)";
+        # ProjectConfig.validate() enforces coherence with options. Only the
+        # *absent* key falls through to the single-backend placeholder below.
         backends: list[BackendConfig] = []
         for i, raw in enumerate(backends_raw):
             if not isinstance(raw, dict):
@@ -144,6 +148,16 @@ def _build_frontend_from_cfg(
             "color_scheme", "frontend", "default_color_scheme", default="blue"
         ),
         org_name=r.get("org_name", "frontend", "org_name", default="com.example"),
+        # ``api_base_url`` and ``api_proxy_target`` are first-class
+        # FrontendConfig fields (see ``forge/config/_frontend.py:171``)
+        # that the cfg dict couldn't reach before. Pipe them through so
+        # YAML can express ``frontend.api_base_url`` directly — preserving
+        # the dataclass contract for consumers that read it (the Flutter
+        # post-generate task today; future Vue/Svelte direct consumers).
+        # Note: the Vue/Svelte variable mapper currently reads the
+        # equivalent option path ``frontend.api_target.url`` instead.
+        api_base_url=r.get("api_base_url", "frontend", "api_base_url", default=""),
+        api_proxy_target=r.get("api_proxy_target", "frontend", "api_proxy_target", default=""),
         generate_e2e_tests=r.get(
             "generate_e2e_tests", "frontend", "generate_e2e_tests", default=True
         ),

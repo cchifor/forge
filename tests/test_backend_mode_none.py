@@ -39,7 +39,6 @@ from forge.config import (
 )
 from forge.docker_manager import render_compose
 
-
 # -- Config validation -------------------------------------------------------
 
 
@@ -282,3 +281,119 @@ def test_mode_none_ignores_backendlanguage_sentinels():
     assert config.backends == []
     # Property-level consistency.
     assert isinstance(BackendLanguage.PYTHON, BackendLanguage)
+
+
+# -- CLI builder path: backends: [] -----------------------------------------
+
+
+def _empty_namespace():
+    """Argparse namespace with every CLI flag the builder reads set to ``None``.
+
+    Mirrors the helper at ``tests/matrix/runner.py::_project_config_from_dict``
+    so config-file values win uniformly — exactly what a
+    ``forge --config foo.yaml`` invocation produces.
+    """
+    import argparse  # noqa: PLC0415
+
+    ns = argparse.Namespace()
+    for attr in (
+        "project_name",
+        "frontend",
+        "yes",
+        "quiet",
+        "json_output",
+        "no_docker",
+        "backend_port",
+        "python_version",
+        "features",
+        "description",
+        "set_options",
+        "backend_language",
+        "backend_name",
+        "include_auth",
+        "include_chat",
+        "include_openapi",
+        "frontend_port",
+        "color_scheme",
+        "author_name",
+        "package_manager",
+        "org_name",
+        "api_base_url",
+        "api_proxy_target",
+        "generate_e2e_tests",
+        "include_keycloak",
+        "keycloak_port",
+        "keycloak_realm",
+        "keycloak_url",
+        "node_version",
+        "rust_edition",
+        "output_dir",
+    ):
+        setattr(ns, attr, None)
+    return ns
+
+
+def test_builder_honors_explicit_empty_backends_list():
+    """Regression: YAML ``backends: []`` must yield a frontend-only project.
+
+    Before WS1, ``_build_backends_from_cfg`` used
+    ``if isinstance(backends_raw, list) and backends_raw:`` — an explicit
+    empty list was falsy and indistinguishable from a missing key. The
+    builder synthesised a placeholder Python backend, then
+    ``ProjectConfig.validate`` rejected the config with
+    "backend.mode=none is incompatible with 1 configured backend(s)".
+    """
+    from forge.cli.builder import _build_config  # noqa: PLC0415
+
+    cfg = {
+        "project_name": "Frontend Only Vue",
+        "backends": [],
+        "frontend": {
+            "framework": "vue",
+            "include_auth": False,
+            "server_port": 5190,
+            "api_base_url": "http://localhost:9999",
+        },
+        "options": {
+            "backend.mode": "none",
+            "frontend.api_target.url": "http://localhost:9999",
+        },
+    }
+    config = _build_config(_empty_namespace(), cfg)
+    config.validate()
+    assert config.backends == []
+    assert config.backend_mode == "none"
+    assert config.frontend is not None
+    assert config.frontend.framework == FrontendFramework.VUE
+    assert config.frontend.api_base_url == "http://localhost:9999"
+
+
+def test_builder_pipes_api_proxy_target_through_frontend_cfg():
+    """Regression: ``frontend.api_proxy_target`` in YAML must reach FrontendConfig.
+
+    Companion to ``api_base_url`` — both are real ``FrontendConfig``
+    dataclass fields (see ``forge/config/_frontend.py:171-172``) that the
+    pre-WS1 builder silently dropped from the cfg dict.
+    """
+    from forge.cli.builder import _build_config  # noqa: PLC0415
+
+    cfg = {
+        "project_name": "Frontend Only Vue",
+        "backends": [],
+        "frontend": {
+            "framework": "vue",
+            "include_auth": False,
+            "server_port": 5190,
+            "api_base_url": "http://localhost:9999",
+            "api_proxy_target": "http://localhost:9999",
+        },
+        "options": {
+            "backend.mode": "none",
+            "frontend.api_target.url": "http://localhost:9999",
+        },
+    }
+    config = _build_config(_empty_namespace(), cfg)
+    config.validate()
+    assert config.frontend is not None
+    assert config.frontend.api_base_url == "http://localhost:9999"
+    assert config.frontend.api_proxy_target == "http://localhost:9999"
