@@ -7,12 +7,16 @@ services:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
       # Multi-stage Dockerfiles reference the platform's weld-* SDK
-      # source tree via ``COPY --from=sdks``. ``additional_contexts``
-      # binds that build-context name to the on-disk ``./sdks/``
-      # directory (sibling of the compose file). Unused if a backend's
-      # Dockerfile happens not to reference it; harmless overhead.
+      # source tree via ``COPY --from=sdks`` and the workspace root
+      # (workspace package.json + lockfile) via ``COPY --from=project_root``.
+      # ``additional_contexts`` binds those build-context names to the
+      # on-disk ``./sdks/`` directory and the project root (sibling /
+      # parent of the compose file). Unused contexts are harmless
+      # overhead — BuildKit ignores them for Dockerfiles that don't
+      # reference the name.
       additional_contexts:
         sdks: ./sdks
+        project_root: .
     environment:
 {% if be.language == "python" %}
       ENV: development
@@ -40,6 +44,7 @@ services:
       # See the {{ be.name }}-migrate build above — same rationale.
       additional_contexts:
         sdks: ./sdks
+        project_root: .
     # Direct host:container port so the matrix-nightly lane-C smoke
     # contract — and any local ``curl http://localhost:{{ be.port }}`` —
     # can reach the backend without going through Traefik. The Traefik
