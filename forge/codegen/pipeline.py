@@ -29,6 +29,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from forge.codegen import canvas_lint as canvas_lint_codegen
 from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen.canvas_contract import build_manifest as build_canvas_manifest
 from forge.codegen.canvas_contract import load_components as load_canvas_components
@@ -72,6 +73,7 @@ def run_codegen(
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
     _emit_canvas_props_pydantic(config, project_root, collector)
+    _emit_canvas_lint_packages(config, project_root, collector)
     _emit_shared_enums(config, project_root, collector)
 
 
@@ -152,6 +154,37 @@ def _emit_canvas_props_pydantic(
             project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_props.py"
         )
         _write(target, body, collector)
+
+
+def _emit_canvas_lint_packages(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+) -> None:
+    """Pipeline hook for the canvas lint codegen (Theme 1C).
+
+    The lint implementations live in the canvas consumer packages
+    (``packages/canvas-vue/src/lint.ts``,
+    ``packages/canvas-svelte/src/lint.ts``,
+    ``packages/forge-canvas-dart/lib/src/lint.dart``) — they are *not*
+    per-project artifacts. Generated projects depend on the canvas
+    packages from npm / pub.dev, so there is nothing to emit into
+    ``project_root`` today.
+
+    This hook is intentionally a no-op for ``forge new`` and exists for
+    symmetry with the other ``_emit_*`` dispatchers in this module —
+    future work might emit per-project lint shims (e.g. a project-local
+    component whose props schema is declared in the project, not in
+    forge) and this is the seam where that emission would land.
+
+    To regenerate the repo-side ``packages/`` lint files, run
+    ``python -m forge.codegen.canvas_lint`` (or call
+    :func:`forge.codegen.canvas_lint.regenerate_packages` directly).
+    """
+    # Touch the import so static analysis / unused-import checks don't
+    # flag this as dead code. The actual regeneration runs out-of-band.
+    _ = canvas_lint_codegen.SCHEMA_VERSION
+    return
 
 
 def _emit_shared_enums(
