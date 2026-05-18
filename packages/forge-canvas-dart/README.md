@@ -7,14 +7,14 @@ Canvas registry + AG-UI SSE client for forge-generated Flutter applications.
 ## What this package provides
 
 - `CanvasRegistry` — maps component_name strings (from backend payloads) to Flutter widget builders
-- `AgUiClient` — production-grade SSE client with exponential-backoff reconnect and `Last-Event-ID` resume
+- `AgUiClient<E>` — generic SSE client with optional exponential-backoff reconnect and `Last-Event-ID` resume; the event type and parser are caller-supplied so apps keep their own typed event union
 - `ForgeTheme` — shadcn-flavored Material 3 theme matching `@forge/canvas-vue` and `@forge/canvas-svelte`
 
 ## Installing
 
 ```yaml
 dependencies:
-  forge_canvas: ^1.0.0-alpha.1
+  forge_canvas: ^1.0.0-alpha.6
 ```
 
 ## Usage
@@ -29,13 +29,21 @@ final registry = CanvasRegistry([
   ),
 ]);
 
-final client = AgUiClient(dio: Dio());
-final subscription = client.connect(
-  url: 'https://example.com/agent/run',
-  body: {'message': 'hello'},
-).listen((event) {
+// Generated apps ship a sealed `AgUiEvent` hierarchy with a `parse(json)`
+// factory. The client is generic over it:
+final client = AgUiClient<AgUiEvent>(
+  dio: Dio(),
+  parser: AgUiEvent.parse,
+  onParseError: (raw) => UnknownEvent(type: '__parse_error__', raw: {'data': raw}),
+);
+
+await for (final event in client.runAgent(
+  threadId: 't1',
+  runId: 'r1',
+  messages: [{'role': 'user', 'content': 'hello'}],
+)) {
   // handle event
-});
+}
 ```
 
 ## Roadmap

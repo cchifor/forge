@@ -293,12 +293,23 @@ class TestJinjaOverlapNoPromotion:
         assert patch.option_promotion == ()
 
 
-class TestRustBackendNoPromotion:
-    """Rust backends skip literal promotion regardless of the edit shape."""
+class TestRustBackendPromotesLiterals:
+    """v2 Theme 3B — Rust backends now emit literal-promotion suggestions.
 
-    def test_rust_backend_does_not_emit_promotion(self, tmp_path: Path) -> None:
-        baseline = "RATE_LIMIT = 120\n"
-        edited = "RATE_LIMIT = 60\n"
+    Was ``TestRustBackendNoPromotion``: the v1 finder returned ``()``
+    for any Rust input, so the candidate fell through to a plain
+    ``safe-apply`` with an empty ``option_promotion``. Wiring
+    tree-sitter-rust into ``literal_finder.py`` flips that behaviour —
+    Axum (and any other tree-sitter-rust target) now participates in
+    the option-promotion path on a pure literal swap.
+    """
+
+    def test_rust_backend_emits_promotion_on_literal_swap(self, tmp_path: Path) -> None:
+        # A complete Rust function so tree-sitter parses cleanly. The
+        # block scaffolding wraps the body in BEGIN/END sentinel
+        # comments, which are stripped before the finder sees them.
+        baseline = "fn rate_limit() -> u32 { 120 }\n"
+        edited = "fn rate_limit() -> u32 { 60 }\n"
         meta = _scaffold_block_project(
             tmp_path,
             baseline_body=baseline,
@@ -316,10 +327,16 @@ class TestRustBackendNoPromotion:
 
         patches = InjectionExtractor().extract(ctx, plan)
         assert len(patches) == 1
-        # The Rust path returns () from the finder; the candidate
-        # falls through to plain safe-apply with no promotion.
         assert patches[0].risk == "safe-apply"
-        assert patches[0].option_promotion == ()
+        # The lit-edits surface as option_promotion entries — one per
+        # detected literal swap. The exact field shape is the same as
+        # the Python path covered above.
+        assert len(patches[0].option_promotion) == 1
+        edit = patches[0].option_promotion[0]
+        assert isinstance(edit, LiteralEdit)
+        assert edit.kind == "int"
+        assert edit.old_value == "120"
+        assert edit.new_value == "60"
 
 
 class TestTypescriptOffNoPromotion:

@@ -88,7 +88,14 @@ def main() -> None:
     # FORGE_LOG_LEVEL environment variables, plus the --log-json /
     # --log-level CLI flags via a pre-parse scan (the real argparse pass
     # happens after plugins.load_all() so plugin commands can extend it).
-    from forge.logging import configure_logging  # noqa: PLC0415
+    from forge.logging import configure_logging, new_correlation_id  # noqa: PLC0415
+
+    # Stamp a per-invocation correlation ID before any structured event is
+    # emitted. ``log_event`` and ``phase_timer`` auto-attach it via a
+    # ContextVar, so every NDJSON line from this ``forge`` process shares
+    # the same UUID — an agent consuming the trace can group events even
+    # when stderr is interleaved with concurrent invocations.
+    new_correlation_id()
 
     early_fmt = "json" if "--log-json" in sys.argv[1:] else None
     early_level: str | None = None

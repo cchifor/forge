@@ -58,21 +58,35 @@ register_option(
         path="queue.backend",
         type=OptionType.ENUM,
         default="none",
-        options=("none", "redis", "sqs"),
-        summary="Background-work queue — Redis lists or AWS SQS, behind the QueuePort.",
+        options=("none", "redis", "sqs", "bullmq", "apalis"),
+        summary="Background-work queue — selects the QueuePort adapter (per RFC-012).",
         description="""\
 Selects which queue implementation the ``QueuePort`` resolves to.
-Redis is the simple-and-cheap default for self-hosted setups; SQS
-covers AWS-native deployments with delayed delivery + FIFO.
+Each value is scoped to the backend language whose adapter ecosystem
+it belongs to — see docs/rfcs/RFC-012-forgequeue-port.md for the
+per-language mapping:
 
-OPTIONS: none | redis | sqs
-BACKENDS: python
-DEPENDENCY: redis-py (redis) or aioboto3 (sqs)
-ENV: REDIS_URL / AWS_REGION""",
+- ``redis`` / ``sqs``: Python adapters (Taskiq broker, AWS SQS).
+- ``bullmq``: Node adapter (BullMQ + ioredis).
+- ``apalis``: Rust adapter (Apalis + Redis).
+
+In a polyglot project, the resolver targets the adapter only at the
+backend language whose ecosystem it belongs to. Other backends in
+the same project receive the port (typing only, no concrete adapter)
+unless paired with their own queue.backend value via per-language
+overrides (future work; see RFC-012 §"Drawbacks").
+
+OPTIONS: none | redis | sqs | bullmq | apalis
+BACKENDS: python (redis, sqs), node (bullmq), rust (apalis)
+DEPENDENCY: redis-py (redis), aioboto3 (sqs), bullmq+ioredis
+    (bullmq), apalis+apalis-redis (apalis)
+ENV: REDIS_URL / AWS_REGION / TASKIQ_BROKER_URL""",
         category=FeatureCategory.ASYNC_WORK,
         enables={
             "redis": ("queue_port", "queue_redis"),
             "sqs": ("queue_port", "queue_sqs"),
+            "bullmq": ("queue_port", "queue_bullmq"),
+            "apalis": ("queue_port", "queue_apalis"),
         },
     )
 )

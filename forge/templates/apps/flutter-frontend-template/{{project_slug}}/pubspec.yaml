@@ -34,7 +34,7 @@ dependencies:
   # registry + shadcn-flavored theme. See packages/forge-canvas-dart/
   # in the forge repo. Replace with `path:` for local development until
   # the package is published to pub.dev.
-  forge_canvas: ^1.0.0-alpha.1
+  forge_canvas: ^1.0.0-alpha.6
 
   # Chat-specific extras still needed alongside forge_canvas:
   flutter_markdown: ^0.7.5
