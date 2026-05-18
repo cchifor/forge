@@ -9,13 +9,15 @@ import pytest
 
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
-from forge.errors import GeneratorError
+from forge.errors import GeneratorError, OptionsError
 from forge.fragments import Fragment, FragmentImplSpec
 from forge.options import FeatureCategory, Option, OptionType
 
 
 def _project(
-    langs: list[BackendLanguage], options: dict[str, object] | None = None
+    langs: list[BackendLanguage],
+    options: dict[str, object] | None = None,
+    option_origins: dict[str, str] | None = None,
 ) -> ProjectConfig:
     backends = [
         BackendConfig(name=f"svc-{i}", project_name="P", language=lang, server_port=5000 + i)
@@ -26,6 +28,7 @@ def _project(
         backends=backends,
         frontend=None,
         options=options or {},
+        option_origins=option_origins or {},
     )
 
 
@@ -239,3 +242,163 @@ class TestBackendCompatibility:
         options["p.on"] = _mk_option("p.on", fragments=("poly",), default=True)
         plan = resolve(_project([BackendLanguage.RUST, BackendLanguage.PYTHON]))
         assert plan.ordered[0].target_backends == (BackendLanguage.RUST, BackendLanguage.PYTHON)
+
+
+class TestOriginAwareSelection:
+    """WS2b — `_is_user_selected` consults ``option_origins`` to tell
+    user-set options apart from defaulted-but-persisted ones.
+
+    The bug being fixed: ``forge --update`` reads forge.toml and
+    constructs a ProjectConfig with ``options`` populated from the
+    persisted (post-defaulting) values. A Python-only option like
+    ``middleware.correlation_id`` is always-on by default, so a fresh-
+    generated Node-only project's forge.toml carries it. On re-read
+    that looks indistinguishable from a user choice — pre-WS2b the
+    resolver would raise OPTIONS_INVALID_VALUE because the fragment
+    has no Node implementation. With origins=default the resolver
+    silently skips it, matching the fresh-generate behavior.
+    """
+
+    def test_user_set_single_fragment_option_on_incompatible_backend_errors(
+        self, isolated_registries
+    ) -> None:
+        """Regression guard: explicit user selection still hard-errors.
+
+        Single-fragment options the user actively chose must continue
+        to surface the OPTIONS_INVALID_VALUE error — that's a real user
+        mistake worth telling them about.
+        """
+        options, fragments = isolated_registries
+        fragments["py_only"] = _mk_fragment(
+            "py_only",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        options["p.on"] = _mk_option("p.on", fragments=("py_only",), default=True)
+        with pytest.raises(OptionsError, match="supported backends"):
+            resolve(
+                _project(
+                    [BackendLanguage.RUST],
+                    options={"p.on": True},
+                    option_origins={"p.on": "user"},
+                )
+            )
+
+    def test_defaulted_single_fragment_option_on_incompatible_backend_skips(
+        self, isolated_registries
+    ) -> None:
+        """The lane E bug: persisted-default values don't trip the resolver.
+
+        Mirrors the real-world ``middleware.correlation_id`` scenario:
+        the manifest carries the option (default value), no Python
+        backend present, the resolver must skip the fragment silently.
+        """
+        options, fragments = isolated_registries
+        fragments["py_only"] = _mk_fragment(
+            "py_only",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        options["p.on"] = _mk_option("p.on", fragments=("py_only",), default=True)
+        plan = resolve(
+            _project(
+                [BackendLanguage.RUST],
+                options={"p.on": True},
+                option_origins={"p.on": "default"},
+            )
+        )
+        # Fragment is Python-only; with no Python backend present and
+        # origin=default, the resolved plan must not include it.
+        assert plan.ordered == ()
+
+    def test_defaulted_second_fragment_skips_when_other_user_set(
+        self, isolated_registries
+    ) -> None:
+        """Mixed origins: per-key check (not whole-config gate).
+
+        One option user-set + compatible, another defaulted + incompatible
+        — only the user-set one drives the plan; the defaulted one
+        silently skips. Guards against a regression where the origin
+        check was accidentally hoisted to a config-wide gate.
+        """
+        options, fragments = isolated_registries
+        fragments["py_only"] = _mk_fragment(
+            "py_only",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        fragments["rust_ok"] = _mk_fragment(
+            "rust_ok",
+            implementations={BackendLanguage.RUST: FragmentImplSpec(fragment_dir="r")},
+        )
+        options["p.py"] = _mk_option("p.py", fragments=("py_only",), default=True)
+        options["p.rust"] = _mk_option("p.rust", fragments=("rust_ok",), default=False)
+        plan = resolve(
+            _project(
+                [BackendLanguage.RUST],
+                options={"p.py": True, "p.rust": True},
+                option_origins={"p.py": "default", "p.rust": "user"},
+            )
+        )
+        applied = [rf.fragment.name for rf in plan.ordered]
+        assert applied == ["rust_ok"]
+
+    def test_missing_origin_falls_back_to_user(self, isolated_registries) -> None:
+        """Empty/missing origins map preserves pre-WS2 behavior.
+
+        Existing test fixtures and ad-hoc ProjectConfig construction
+        without ``option_origins`` must keep working — every option
+        present is treated as user-set, matching the pre-WS2 default.
+        """
+        options, fragments = isolated_registries
+        fragments["py_only"] = _mk_fragment(
+            "py_only",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        options["p.on"] = _mk_option("p.on", fragments=("py_only",), default=False)
+        with pytest.raises(OptionsError, match="supported backends"):
+            resolve(
+                _project(
+                    [BackendLanguage.RUST],
+                    options={"p.on": True},
+                    # No option_origins — fall back to "user".
+                )
+            )
+
+    def test_discriminator_fanout_unaffected_by_origins(
+        self, isolated_registries
+    ) -> None:
+        """Discriminator (multi-fragment) options still silently fan out.
+
+        Origins gate the user-set check; the discriminator-vs-single-
+        fragment heuristic still distinguishes bundle intent from
+        single-fragment selection. A user-set discriminator option whose
+        per-language fanout includes incompatible fragments still skips
+        them silently — origin=user doesn't escalate that to an error.
+        """
+        options, fragments = isolated_registries
+        fragments["sdk_python"] = _mk_fragment(
+            "sdk_python",
+            implementations={BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="p")},
+        )
+        fragments["sdk_node"] = _mk_fragment(
+            "sdk_node",
+            implementations={BackendLanguage.NODE: FragmentImplSpec(fragment_dir="n")},
+        )
+        options["auth.mode"] = Option(
+            path="auth.mode",
+            type=OptionType.ENUM,
+            default="generate",
+            options=("generate", "none"),
+            summary="auth.mode",
+            description="auth.mode",
+            category=FeatureCategory.PLATFORM,
+            enables={"generate": ("sdk_python", "sdk_node")},
+        )
+        # User explicitly picked generate; only Node backend present.
+        plan = resolve(
+            _project(
+                [BackendLanguage.NODE],
+                options={"auth.mode": "generate"},
+                option_origins={"auth.mode": "user"},
+            )
+        )
+        applied = sorted(rf.fragment.name for rf in plan.ordered)
+        assert applied == ["sdk_node"]

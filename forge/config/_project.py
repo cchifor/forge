@@ -31,6 +31,18 @@ class ProjectConfig:
     # explicitly set appear here; defaults are applied by the resolver
     # in `capability_resolver.resolve`.
     options: dict[str, Any] = field(default_factory=dict)
+    # Parallel-keyed origin tags: path → "user" / "default". Used by
+    # ``forge --update`` to skip fragments whose backends aren't
+    # present without erroring on persisted defaults (e.g. the
+    # Python-only ``correlation_id`` middleware on a Node-only project
+    # — the option ships with a default value that we don't want to
+    # treat as user intent). Defaulted-empty so existing test
+    # fixtures and call sites that construct ``ProjectConfig`` without
+    # origins keep working — the Stage B resolver tweak (WS2b) will
+    # treat absent / empty origins as ``"user"``, matching the
+    # pre-WS2 behavior. Populated from ``forge.toml`` schema v3+
+    # (see :mod:`forge.sync.manifest`).
+    option_origins: dict[str, str] = field(default_factory=dict)
 
     # Backward compatibility: single backend access
     @property
