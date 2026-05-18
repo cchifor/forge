@@ -519,6 +519,18 @@ def _write_forge_toml(
             template_versions[fw.value] = _resolve_template_version_for(template_dir, spec_default)
 
     options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
+    # Origins: every path the caller supplied in ``config.options`` is
+    # "user"; everything the resolver filled in (defaults) is "default".
+    # This is the v3 schema's contract — Stage B (WS2b) of the per-
+    # option-provenance fix needs the distinction so ``forge --update``
+    # can re-read forge.toml and skip incompatible-backend fragments
+    # whose option values came from defaults instead of user input.
+    # When ``plan`` is None (no-resolve fallback path), options match
+    # config.options 1:1 — every entry is by definition user-set.
+    user_set_paths = set(config.options)
+    option_origins: dict[str, str] = {
+        path: ("user" if path in user_set_paths else "default") for path in options
+    }
     provenance = collector.as_dict() if collector is not None else None
     merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
 
@@ -528,6 +540,7 @@ def _write_forge_toml(
         project_name=config.project_name,
         templates=templates,
         options=options,
+        option_origins=option_origins,
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
