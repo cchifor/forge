@@ -13,6 +13,19 @@ export type {
 export { lintProps, warnOnLintIssues } from './lint'
 export type { LintIssue } from './lint'
 
+// Canvas component props — generated from
+// forge/templates/_shared/canvas-components/*.props.schema.json.
+// The per-component `<script setup>` blocks still declare local Props
+// interfaces; deletion in favour of these is deferred to Theme 1C
+// once the codegen pipeline gates drift in CI.
+export type {
+  CodeViewerProps,
+  DataTableProps,
+  DynamicFormProps,
+  ReportProps,
+  WorkflowDiagramProps,
+} from './generated/props'
+
 // Base components — all 5 canvas components now live in the package.
 export { default as Report } from './components/Report.vue'
 export { default as CodeViewer } from './components/CodeViewer.vue'
