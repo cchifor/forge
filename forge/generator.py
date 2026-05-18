@@ -242,9 +242,7 @@ def _generate_backends(
             spec.toolchain.post_generate(backend_dir, quiet=quiet)
 
 
-def _generate_frontend_phase(
-    config: ProjectConfig, project_root: Path, *, quiet: bool
-) -> None:
+def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
     """Phase 2: render the frontend via Copier when configured."""
 
     def _log(msg: str) -> None:
@@ -334,9 +332,7 @@ def _render_docker_stack(
             validate_dst.write_bytes(validate_src.replace("\r\n", "\n").encode("utf-8"))
 
 
-def _generate_frontend_extras(
-    config: ProjectConfig, project_root: Path, *, quiet: bool
-) -> None:
+def _generate_frontend_extras(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
     """Phases 4 & 5: Playwright e2e tests + frontend Dockerfile/nginx."""
 
     def _log(msg: str) -> None:
