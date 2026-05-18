@@ -33,12 +33,20 @@
       "sha256": "57e2e73feca03705"
     },
     "forge.toml": {
-      "size": 78893,
+      "size": 79360,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
       "size": 494,
       "sha256": "f27b7dd313f5239b"
+    },
+    "infra/gatekeeper/Dockerfile": {
+      "size": 1436,
+      "sha256": "a4236d33286cd8ac"
+    },
+    "infra/gatekeeper/README.md": {
+      "size": 549,
+      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
@@ -60,17 +68,9 @@
       "size": 1222,
       "sha256": "4245b692a1baee92"
     },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
-    },
     "infra/gatekeeper/pyproject.toml": {
       "size": 2951,
       "sha256": "955c6604957e47cc"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2171,
@@ -320,13 +320,13 @@
       "size": 492,
       "sha256": "a61f953d38587e4c"
     },
-    "sdks/platform-auth/pyproject.toml": {
-      "size": 1368,
-      "sha256": "4d9c7acb2299e4fb"
-    },
     "sdks/platform-auth/README.md": {
       "size": 1468,
       "sha256": "9c06875bd132381d"
+    },
+    "sdks/platform-auth/pyproject.toml": {
+      "size": 1368,
+      "sha256": "4d9c7acb2299e4fb"
     },
     "sdks/platform-auth/src/platform_auth/__init__.py": {
       "size": 1490,
@@ -372,6 +372,10 @@
       "size": 5793,
       "sha256": "08d3cad0ab84903e"
     },
+    "sdks/platform-auth/tests/README.md": {
+      "size": 1245,
+      "sha256": "0afc5d668d2a43a1"
+    },
     "sdks/platform-auth/tests/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
@@ -379,10 +383,6 @@
     "sdks/platform-auth/tests/conftest.py": {
       "size": 442,
       "sha256": "f02ef1b9a90a1070"
-    },
-    "sdks/platform-auth/tests/README.md": {
-      "size": 1245,
-      "sha256": "0afc5d668d2a43a1"
     },
     "sdks/platform-auth/tests/unit/__init__.py": {
       "size": 0,
@@ -436,17 +436,29 @@
       "size": 140520,
       "sha256": "d776524c5649390a"
     },
-    "sdks/platform-auth-node/package.json": {
-      "size": 1362,
-      "sha256": "a7f7e16c21df2ad0"
-    },
     "sdks/platform-auth-node/README.md": {
       "size": 3762,
       "sha256": "43f0e786b8a5a746"
     },
+    "sdks/platform-auth-node/package.json": {
+      "size": 1362,
+      "sha256": "a7f7e16c21df2ad0"
+    },
     "sdks/platform-auth-node/src/AuthGuard.ts": {
       "size": 18862,
       "sha256": "6bfb8ac25fa30b2b"
+    },
+    "sdks/platform-auth-node/src/IdentityContext.ts": {
+      "size": 3840,
+      "sha256": "7846f4483e5e80c8"
+    },
+    "sdks/platform-auth-node/src/JWKSCache.ts": {
+      "size": 5996,
+      "sha256": "a4a464e08e9b4a95"
+    },
+    "sdks/platform-auth-node/src/S2SClient.ts": {
+      "size": 13985,
+      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/context.ts": {
       "size": 3380,
@@ -456,17 +468,9 @@
       "size": 2530,
       "sha256": "9f772bde8e549dea"
     },
-    "sdks/platform-auth-node/src/IdentityContext.ts": {
-      "size": 3840,
-      "sha256": "7846f4483e5e80c8"
-    },
     "sdks/platform-auth-node/src/index.ts": {
       "size": 2445,
       "sha256": "001dc1645b0563f1"
-    },
-    "sdks/platform-auth-node/src/JWKSCache.ts": {
-      "size": 5996,
-      "sha256": "a4a464e08e9b4a95"
     },
     "sdks/platform-auth-node/src/may_act.ts": {
       "size": 3121,
@@ -483,10 +487,6 @@
     "sdks/platform-auth-node/src/revocation.ts": {
       "size": 1572,
       "sha256": "a03eaafabdb13e82"
-    },
-    "sdks/platform-auth-node/src/S2SClient.ts": {
-      "size": 13985,
-      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/scopes.ts": {
       "size": 1770,
@@ -513,7 +513,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 527,
+      "size": 466,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -523,6 +523,14 @@
     "services/api-node/.gitignore": {
       "size": 50,
       "sha256": "1e5b3e6f3b0203aa"
+    },
+    "services/api-node/Dockerfile": {
+      "size": 3132,
+      "sha256": "e0eddaee13a23f50"
+    },
+    "services/api-node/README.md": {
+      "size": 1412,
+      "sha256": "389f88b89941827e"
     },
     "services/api-node/biome.json": {
       "size": 296,
@@ -552,10 +560,6 @@
       "size": 853,
       "sha256": "f06c0e04ecc8de65"
     },
-    "services/api-node/Dockerfile": {
-      "size": 3132,
-      "sha256": "e0eddaee13a23f50"
-    },
     "services/api-node/entrypoint.sh": {
       "size": 298,
       "sha256": "74f9a7761be19e3f"
@@ -575,10 +579,6 @@
     "services/api-node/prisma/schema.prisma": {
       "size": 1783,
       "sha256": "b5433a4d15df6078"
-    },
-    "services/api-node/README.md": {
-      "size": 1412,
-      "sha256": "389f88b89941827e"
     },
     "services/api-node/src/app.ts": {
       "size": 2430,
@@ -733,7 +733,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 528,
+      "size": 467,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
@@ -743,6 +743,14 @@
     "services/api-py/.gitignore": {
       "size": 174,
       "sha256": "31910a941b109f81"
+    },
+    "services/api-py/Dockerfile": {
+      "size": 3593,
+      "sha256": "677f34cc6f655d58"
+    },
+    "services/api-py/README.md": {
+      "size": 33689,
+      "sha256": "7a5a2d7522c4a366"
     },
     "services/api-py/alembic/env.py": {
       "size": 1699,
@@ -784,10 +792,6 @@
       "size": 877,
       "sha256": "7228bb9b2e539a51"
     },
-    "services/api-py/Dockerfile": {
-      "size": 3593,
-      "sha256": "677f34cc6f655d58"
-    },
     "services/api-py/entrypoint.sh": {
       "size": 418,
       "sha256": "19554330f3b7e0c0"
@@ -795,10 +799,6 @@
     "services/api-py/pyproject.toml": {
       "size": 5148,
       "sha256": "6764bbc504e2f010"
-    },
-    "services/api-py/README.md": {
-      "size": 33689,
-      "sha256": "7a5a2d7522c4a366"
     },
     "services/api-py/src/app/__init__.py": {
       "size": 0,
@@ -955,6 +955,14 @@
     "services/api-py/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
+    },
+    "services/api-py/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
+    },
+    "services/api-py/src/app/domain/canvas_props.py": {
+      "size": 1601,
+      "sha256": "b5578609c8b014d1"
     },
     "services/api-py/src/app/domain/enums/approval_mode.py": {
       "size": 312,

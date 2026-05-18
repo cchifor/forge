@@ -6,6 +6,16 @@ of backends, the optional frontend, the Keycloak switch, and the typed
 module is the ``_validate_*`` family that runs in :meth:`validate` —
 they're broken out as private methods so each invariant has a focused
 home rather than living inside one giant validate() body.
+
+Theme 5-C3: the typed surface :attr:`typed` is the read-time source of
+truth for layer-mode lookups. ``options`` remains a mutable
+``dict[str, Any]`` because ~10 call sites (CLI ``--set`` parsing, YAML
+loaders, migrations, tests) write to it post-construction; switching
+to an immutable typed-first storage would balloon C3 well past its
+budget. ``typed`` is computed on demand from ``options`` so mutations
+to the dict are reflected on the next ``typed`` read. The ``_project_*``
+properties read through ``typed`` to drop their stringly-typed
+``options.get("X", "default")`` paths.
 """
 
 from __future__ import annotations
@@ -16,6 +26,12 @@ from typing import Any
 from forge.config._backend import BackendConfig
 from forge.config._frontend import FRONTEND_RESERVED, FrontendConfig, FrontendFramework
 from forge.config._validators import TRAEFIK_DASHBOARD_PORT, validate_port
+from forge.config.typed_config import (
+    FrontendExternal,
+    FrontendGenerate,
+    TypedConfig,
+    from_legacy_options,
+)
 
 
 @dataclass
@@ -61,6 +77,23 @@ class ProjectConfig:
             self.backends.append(value)
 
     @property
+    def typed(self) -> TypedConfig:
+        """Typed view over ``self.options`` (Theme 5-C3).
+
+        Built fresh on every access so mutations to ``self.options``
+        (CLI --set, YAML loader, migrations) are picked up
+        immediately. The conversion is cheap — a single Pydantic model
+        construction over the four layer discriminators — so caching
+        isn't worth the staleness risk.
+
+        Layer-mode properties below read through this surface so the
+        stringly-typed ``options.get("X", "Y")`` paths disappear from
+        the consumer side. The dict remains the writeable canonical
+        storage; ``typed`` is a read-only typed projection.
+        """
+        return from_legacy_options(self.options)
+
+    @property
     def backend_mode(self) -> str:
         """Layer discriminator for backend generation.
 
@@ -69,27 +102,28 @@ class ProjectConfig:
         skips backend generation entirely — the project becomes a
         frontend (+ infra) pointing at an externally-hosted API.
 
-        Read from ``self.options["backend.mode"]``; defaults to
-        ``"generate"`` when the option isn't set, matching the Option's
-        registered default and preserving pre-Phase-A behavior.
+        C3: reads through the typed model. Pydantic's discriminator
+        rejects invalid values at conversion time, so the returned
+        string is always one of the registered options — pre-C3 a
+        typo'd ``options["backend.mode"]="geneate"`` would silently
+        return as ``"geneate"``.
         """
-        return str(self.options.get("backend.mode", "generate"))
+        return self.typed.backend.mode
 
     @property
     def frontend_api_target_url(self) -> str:
         """External API base URL used when ``backend_mode == "none"``.
 
         Phase B2 canonical path: ``frontend.api_target.url``. The Phase
-        A path ``frontend.api_target_url`` is a deprecated alias — the
-        resolver rewrites it transparently, but the raw ``options``
-        dict on ``ProjectConfig`` may still contain the alias form
-        (user-supplied, pre-resolve). Check both.
+        A path ``frontend.api_target_url`` is a deprecated alias —
+        ``from_legacy_options`` rewrites the alias onto the canonical
+        FrontendGenerate/External field. ``FrontendNone`` doesn't
+        carry an api_target at all; returns empty string in that case
+        to match pre-typed behaviour.
         """
-        return str(
-            self.options.get("frontend.api_target.url")
-            or self.options.get("frontend.api_target_url")
-            or ""
-        )
+        if isinstance(self.typed.frontend, (FrontendGenerate, FrontendExternal)):
+            return self.typed.frontend.api_target_url
+        return ""
 
     @property
     def frontend_mode(self) -> str:
@@ -101,7 +135,7 @@ class ProjectConfig:
         ``FrontendConfig.effective_mode`` at the framework level, and
         at the project level via ``_validate_layer_modes``.
         """
-        return str(self.options.get("frontend.mode", "generate"))
+        return self.typed.frontend.mode
 
     @property
     def frontend_api_target_type(self) -> str:
@@ -110,8 +144,29 @@ class ProjectConfig:
         ``"local"`` (default) — Vite proxy routes to the Docker-internal
         backend. ``"external"`` — the generated app points at
         ``frontend_api_target_url`` directly.
+
+        Lives on FrontendGenerate / FrontendExternal sub-models; the
+        ``none`` variant returns ``"local"`` to match the pre-typed
+        ``options.get(..., "local")`` default.
         """
-        return str(self.options.get("frontend.api_target.type", "local"))
+        if isinstance(self.typed.frontend, (FrontendGenerate, FrontendExternal)):
+            return self.typed.frontend.api_target_type
+        return "local"
+
+    @property
+    def agent_mode(self) -> str:
+        """Layer discriminator for the agentic/LLM stack.
+
+        Returns one of ``"none"`` / ``"llm_only"`` / ``"tool_calling"``
+        / ``"multi_agent"`` (Theme 2A). Default is ``"none"`` — the
+        Phase-C placeholder default is preserved.
+
+        Non-``"none"`` values fan out to ``conversational_ai`` fragments
+        via ``Option.enables`` in ``forge/options/agent``; the resolver
+        composes them with the fine-grained ``agent.streaming`` /
+        ``agent.tools`` / ``agent.llm`` flags transparently.
+        """
+        return self.typed.agent.mode
 
     @property
     def database_mode(self) -> str:
@@ -127,7 +182,7 @@ class ProjectConfig:
         future Python-template ``database_strip`` fragment will remove
         alembic + SQLAlchemy imports for a fully stateless backend.
         """
-        return str(self.options.get("database.mode", "generate"))
+        return self.typed.database.mode
 
     def validate(self) -> None:
         """Run all ProjectConfig invariants.
@@ -202,6 +257,43 @@ class ProjectConfig:
             )
         self._validate_database_mode()
         self._validate_frontend_mode_coherence()
+        self._validate_agent_mode()
+
+    def _validate_agent_mode(self) -> None:
+        """Theme 2A — coherence rules for the agent layer discriminator.
+
+        Two checks:
+
+        * ``agent.mode != "none"`` requires ``backend.mode != "none"``.
+          The agent loop (LLM port adapter, conversation persistence,
+          tool registry, MCP router) lives inside a backend service —
+          a frontend-only project has nowhere to host it.
+        * ``agent.mode == "multi_agent"`` raises ``NotImplementedError``-
+          equivalent at validate time. The enum value is registered so
+          users can declare intent in ``forge.toml`` today, but fragment
+          wiring is deferred to v2; failing fast here keeps the surface
+          honest.
+        """
+        mode = self.agent_mode
+        if mode == "none":
+            return
+        if self.backend_mode == "none":
+            raise ValueError(
+                f"agent.mode={mode!r} requires backend.mode != 'none'. "
+                "The agent stack (LLM port, conversation persistence, "
+                "tool registry, MCP router) is hosted inside a backend "
+                "service — a frontend-only project (backend.mode=none) "
+                "has nowhere to mount it. Either set backend.mode=generate "
+                "and configure a backend, or set agent.mode=none."
+            )
+        if mode == "multi_agent":
+            raise ValueError(
+                "agent.mode='multi_agent' is registered for forward "
+                "compatibility but its fragment bundle is not yet "
+                "implemented. The agent-to-agent routing layer ships in "
+                "the v2 milestone. For now, set agent.mode to "
+                "'llm_only' or 'tool_calling'."
+            )
 
     def _validate_frontend_mode_coherence(self) -> None:
         """Reject contradictions between ``frontend.mode`` and the

@@ -1,0 +1,8 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Queue port — adapter-less startup uses ``QueuePort`` for typing
+    // only; an adapter (queue.backend=bullmq) wires the concrete impl.
+    import type { QueuePort } from "./app/ports/queue.js";

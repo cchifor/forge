@@ -156,7 +156,11 @@ class TestExternalModeWithLocalBackend:
             }
         )
         config.validate()
-        assert variable_mapper._external_api_mode(config) is True
+        # Theme 5: _external_api_mode consumes the typed view. C3 added
+        # ``config.typed`` as the canonical accessor; pre-C3 this test
+        # called ``_external_api_mode(config)`` against the legacy
+        # ``ProjectConfig`` shape.
+        assert variable_mapper._external_api_mode(config.typed) is True
         ctx = variable_mapper.vue_context(config)
         assert ctx["api_base_url"] == "https://staging.example.com"
         assert ctx["env_api_base_url"] == "https://staging.example.com"
@@ -164,7 +168,7 @@ class TestExternalModeWithLocalBackend:
     def test_local_type_keeps_historical_behavior(self):
         config = _vue_config_with_backend()
         config.validate()
-        assert variable_mapper._external_api_mode(config) is False
+        assert variable_mapper._external_api_mode(config.typed) is False
         ctx = variable_mapper.vue_context(config)
         assert ctx["api_base_url"] == "http://localhost:5000"
         assert ctx["env_api_base_url"] == "http://localhost:5173"
