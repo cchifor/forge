@@ -1,0 +1,8 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: |-
+    // Queue adapter: Apalis — concrete impl plugged in behind the
+    // ``crate::ports::queue::QueuePort`` trait.
+    pub mod adapters;
