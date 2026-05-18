@@ -36,6 +36,14 @@
       "size": 494,
       "sha256": "f27b7dd313f5239b"
     },
+    "infra/gatekeeper/Dockerfile": {
+      "size": 1436,
+      "sha256": "a4236d33286cd8ac"
+    },
+    "infra/gatekeeper/README.md": {
+      "size": 549,
+      "sha256": "2feeb9c03f762d51"
+    },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
       "sha256": "c8926c3bb62484b7"
@@ -56,17 +64,9 @@
       "size": 1222,
       "sha256": "4245b692a1baee92"
     },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
-    },
     "infra/gatekeeper/pyproject.toml": {
       "size": 2951,
       "sha256": "955c6604957e47cc"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2171,
@@ -312,17 +312,29 @@
       "size": 490,
       "sha256": "00c3328620ea0718"
     },
-    "sdks/platform-auth-node/package.json": {
-      "size": 1362,
-      "sha256": "a7f7e16c21df2ad0"
-    },
     "sdks/platform-auth-node/README.md": {
       "size": 3762,
       "sha256": "43f0e786b8a5a746"
     },
+    "sdks/platform-auth-node/package.json": {
+      "size": 1362,
+      "sha256": "a7f7e16c21df2ad0"
+    },
     "sdks/platform-auth-node/src/AuthGuard.ts": {
       "size": 18862,
       "sha256": "6bfb8ac25fa30b2b"
+    },
+    "sdks/platform-auth-node/src/IdentityContext.ts": {
+      "size": 3840,
+      "sha256": "7846f4483e5e80c8"
+    },
+    "sdks/platform-auth-node/src/JWKSCache.ts": {
+      "size": 5996,
+      "sha256": "a4a464e08e9b4a95"
+    },
+    "sdks/platform-auth-node/src/S2SClient.ts": {
+      "size": 13985,
+      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/context.ts": {
       "size": 3380,
@@ -332,17 +344,9 @@
       "size": 2530,
       "sha256": "9f772bde8e549dea"
     },
-    "sdks/platform-auth-node/src/IdentityContext.ts": {
-      "size": 3840,
-      "sha256": "7846f4483e5e80c8"
-    },
     "sdks/platform-auth-node/src/index.ts": {
       "size": 2445,
       "sha256": "001dc1645b0563f1"
-    },
-    "sdks/platform-auth-node/src/JWKSCache.ts": {
-      "size": 5996,
-      "sha256": "a4a464e08e9b4a95"
     },
     "sdks/platform-auth-node/src/may_act.ts": {
       "size": 3121,
@@ -359,10 +363,6 @@
     "sdks/platform-auth-node/src/revocation.ts": {
       "size": 1572,
       "sha256": "a03eaafabdb13e82"
-    },
-    "sdks/platform-auth-node/src/S2SClient.ts": {
-      "size": 13985,
-      "sha256": "ccd6741cc8c8a4bd"
     },
     "sdks/platform-auth-node/src/scopes.ts": {
       "size": 1770,
@@ -389,7 +389,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api/.copier-answers.yml": {
-      "size": 509,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -399,6 +399,14 @@
     "services/api/.gitignore": {
       "size": 50,
       "sha256": "1e5b3e6f3b0203aa"
+    },
+    "services/api/Dockerfile": {
+      "size": 3132,
+      "sha256": "341788a576a8445d"
+    },
+    "services/api/README.md": {
+      "size": 1402,
+      "sha256": "b0f050ca11dee675"
     },
     "services/api/biome.json": {
       "size": 296,
@@ -428,10 +436,6 @@
       "size": 843,
       "sha256": "1a530bf3ab0e8ae8"
     },
-    "services/api/Dockerfile": {
-      "size": 3132,
-      "sha256": "341788a576a8445d"
-    },
     "services/api/entrypoint.sh": {
       "size": 298,
       "sha256": "74f9a7761be19e3f"
@@ -451,10 +455,6 @@
     "services/api/prisma/schema.prisma": {
       "size": 1783,
       "sha256": "b5433a4d15df6078"
-    },
-    "services/api/README.md": {
-      "size": 1402,
-      "sha256": "b0f050ca11dee675"
     },
     "services/api/src/app.ts": {
       "size": 2429,
