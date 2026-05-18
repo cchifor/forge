@@ -113,35 +113,57 @@ class TestObjectValidateValue:
 
 
 class TestAgentModePlaceholder:
+    """Theme 2A — ``agent.mode`` is no longer a placeholder. The legacy
+    placeholder assertions in this class were rewritten when the
+    discriminator went live; the full Theme 2A surface (four enum
+    values, fragment bundles, cross-layer rule) is covered by
+    ``tests/test_agent_mode.py``. These two cases survive as a smoke
+    check that the registration is still present + shaped like an enum.
+    """
+
     def test_agent_mode_registered(self):
         assert "agent.mode" in OPTION_REGISTRY
 
-    def test_agent_mode_matches_other_layer_modes(self):
-        """All four layer discriminators share the same shape:
-        ENUM, default None-or-generate, generate/none options with
-        optional external. This test locks in pattern parity."""
+    def test_agent_mode_is_layer_mode_enum(self):
+        """``agent.mode`` is an ENUM, defaults to ``none``, and offers
+        the same ``none`` escape hatch the other layer modes do. The
+        full value list + the fragment bundles live in
+        ``tests/test_agent_mode.py``."""
         agent = OPTION_REGISTRY["agent.mode"]
         assert agent.type == OptionType.ENUM
-        assert set(agent.options) >= {"generate", "none"}
         assert agent.default == "none"
-        assert agent.enables == {}  # placeholder — no fragments yet
+        assert "none" in agent.options
 
 
 class TestLayerModeParity:
     """All four layer discriminators — backend.mode, database.mode,
-    frontend.mode, agent.mode — register as ENUM Options with no
-    ``enables`` map. The discriminator orchestrates generation; it
-    doesn't enable a fragment bundle. If that ever drifts (e.g. someone
-    adds enables={}-with-fragments), the layering gets confused."""
+    frontend.mode, agent.mode — register as ENUM Options whose ``none``
+    value carries no fragment bundle. ``agent.mode`` (Theme 2A) fans out
+    to ``conversational_ai`` fragments for its non-``none`` values; the
+    other three modes orchestrate generation without enabling per-value
+    bundles. The shared invariant is "``none`` is the empty bundle"."""
 
     @pytest.mark.parametrize(
         "path",
         ["backend.mode", "database.mode", "frontend.mode", "agent.mode"],
     )
-    def test_layer_mode_is_enum_with_empty_enables(self, path):
+    def test_layer_mode_is_enum(self, path):
         opt = OPTION_REGISTRY[path]
         assert opt.type == OptionType.ENUM
-        assert opt.enables == {}
+
+    @pytest.mark.parametrize(
+        "path",
+        ["backend.mode", "database.mode", "frontend.mode", "agent.mode"],
+    )
+    def test_layer_mode_none_is_empty_bundle(self, path):
+        """``mode="none"`` enables no fragments — this is the shared
+        "no-op layer" contract across all four discriminators."""
+        opt = OPTION_REGISTRY[path]
+        # ``none`` is always a valid value, and if the option declares an
+        # ``enables`` map at all, the ``none`` entry must be empty.
+        assert "none" in opt.options
+        if opt.enables:
+            assert opt.enables.get("none", ()) == ()
 
     @pytest.mark.parametrize(
         "path",
