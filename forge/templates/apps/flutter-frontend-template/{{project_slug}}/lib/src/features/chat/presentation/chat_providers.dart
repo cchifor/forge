@@ -2,10 +2,11 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forge_canvas/forge_canvas.dart' as fc;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../chat_constants.dart';
-import '../data/ag_ui_client.dart';
+import '../data/ag_ui_event.dart';
 import '../data/agent_state_reducer.dart';
 import '../domain/chat_message.dart';
 import '../domain/user_prompt_payload.dart';
@@ -24,8 +25,13 @@ final agUiDioProvider = Provider<Dio>((ref) {
   );
 });
 
-final agUiClientProvider = Provider<AgUiClient>((ref) {
-  return AgUiClient(dio: ref.watch(agUiDioProvider));
+final agUiClientProvider = Provider<fc.AgUiClient<AgUiEvent>>((ref) {
+  return fc.AgUiClient<AgUiEvent>(
+    dio: ref.watch(agUiDioProvider),
+    parser: AgUiEvent.parse,
+    onParseError: (payload) =>
+        UnknownEvent(type: '__parse_error__', raw: {'data': payload}),
+  );
 });
 
 /// Selected LLM model (persisted to SharedPreferences).
