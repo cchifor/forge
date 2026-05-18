@@ -240,3 +240,76 @@ FORGE_TELEMETRY=local forge --telemetry=off --update    # no telemetry written
   ```
 
   Forge never writes anywhere else (no `/tmp` spool, no system journal).
+
+## 7. `--log-json` event stream (agent-facing trace)
+
+Distinct from the telemetry sink: `--log-json` (or `FORGE_LOG_FORMAT=json`)
+flips forge's own structured logger from text to NDJSON on **stderr**. This
+is the seam an agent driving `forge new …` consumes to build a live trace
+of generation — every phase wrapped in `phase_timer` emits two events
+(`phase.start` is implicit; the closing record carries `duration_ms` and
+`status`), plus ad-hoc `log_event(...)` calls scattered through plugins
+and codegen.
+
+The flag is **off by default** — nothing on stderr changes shape unless an
+operator explicitly opts in.
+
+### Envelope
+
+Every NDJSON line has the same outer shape:
+
+| Field            | Type    | Description                                                                |
+|------------------|---------|----------------------------------------------------------------------------|
+| `ts`             | string  | ISO 8601 UTC of when the record was created.                               |
+| `level`          | string  | `DEBUG` / `INFO` / `WARNING` / `ERROR`.                                    |
+| `logger`         | string  | The originating logger, e.g. `forge.generator` or `forge.plugins`.         |
+| `message`        | string  | Human-readable message (usually equal to `event`).                         |
+| `event`          | string  | Stable dotted event name. **Filter on this.**                              |
+| `correlation_id` | string  | UUID stamped once per CLI invocation; identical across every record from the same `forge` process. |
+| `duration_ms`    | integer | Present on `phase_timer` closing records.                                  |
+| `status`         | string  | `"ok"` on success or `"failed"` on exception (phase records).              |
+| `exc_info`       | string  | Traceback when the record carries an exception.                            |
+| _arbitrary_      | any     | Call-site fields (e.g. `backend=p1-svc`, `language=python`, `fragment_count=12`). |
+
+The `correlation_id` field is the v2 Theme 10 contract: an NDJSON consumer
+parsing interleaved log streams (multiple `forge` processes on the same
+stderr, plugin subprocesses, CI fan-out) groups events by this UUID.
+
+### Phase events emitted by the generator
+
+`forge.generator` wraps each phase in `phase_timer`; on exit the closing
+record is emitted at INFO (or WARNING with `status="failed"` on exception).
+
+| Event                              | Extra fields                                  | Origin                          |
+|------------------------------------|-----------------------------------------------|---------------------------------|
+| `generate.resolve`                 | —                                             | capability resolver pass        |
+| `generate.validate_plan`           | —                                             | static pre-flight validation    |
+| `generate.copier.backend`          | `backend`, `language`                         | per-backend Copier render       |
+| `generate.apply_features`          | `backend`, `language`, `fragment_count`       | per-backend fragment injection  |
+| `generate.toolchain.install`       | `backend`, `language`                         | toolchain install hook          |
+| `generate.toolchain.verify`        | `backend`, `language`                         | toolchain verify hook           |
+| `generate.copier.frontend`         | `framework`                                   | frontend Copier render          |
+| `generate.compose.render`          | —                                             | docker-compose render           |
+| `generate.apply_project_features`  | —                                             | project-scope fragment pass     |
+| `generate.codegen`                 | —                                             | schema-first codegen pipeline   |
+| `generate.write_forge_toml`        | —                                             | provenance manifest write       |
+
+Additional events fire from elsewhere in the codebase (`plugin.loaded`,
+`fragment.applied`, `injection.fallback_text`, etc.); the table above
+covers the per-phase wrappers in `forge/generator.py` so an agent can build
+a full timeline of a `forge new …` invocation.
+
+### Example
+
+```bash
+forge new --quiet --yes --no-docker --log-json \
+  --output-dir /tmp/probe --project-name probe \
+  --backend-language python 2> trace.jsonl
+```
+
+```jsonl
+{"ts":"2026-05-17T12:00:00+00:00","level":"INFO","logger":"forge.generator","message":"generate.resolve","event":"generate.resolve","duration_ms":18,"status":"ok","correlation_id":"f1a2…"}
+{"ts":"2026-05-17T12:00:00+00:00","level":"INFO","logger":"forge.generator","message":"generate.validate_plan","event":"generate.validate_plan","duration_ms":2,"status":"ok","correlation_id":"f1a2…"}
+{"ts":"2026-05-17T12:00:03+00:00","level":"INFO","logger":"forge.generator","message":"generate.copier.backend","event":"generate.copier.backend","backend":"probe","language":"python","duration_ms":3201,"status":"ok","correlation_id":"f1a2…"}
+…
+```
