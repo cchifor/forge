@@ -33,7 +33,7 @@
       "sha256": "f4ad7dd2346fb480"
     },
     "forge.toml": {
-      "size": 55590,
+      "size": 55359,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 466,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -651,10 +651,6 @@
     "services/api/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
-    },
-    "services/api/src/app/domain/canvas_events.py": {
-      "size": 2435,
-      "sha256": "139d098a8d202c69"
     },
     "services/api/src/app/domain/canvas_props.py": {
       "size": 1601,

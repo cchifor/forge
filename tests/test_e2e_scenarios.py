@@ -541,6 +541,14 @@ def test_scenario_codemod_roundtrip_on_generated_toml(
     # Swap the canonical path for the alias, simulating a legacy config.
     legacy_value = options_tbl.pop("frontend.api_target.url")
     options_tbl["frontend.api_target_url"] = legacy_value
+    # WS2: a real legacy (v2) manifest wouldn't have an option_origins
+    # table at all. Strip it here so the precondition check
+    # ("canonical path absent everywhere") + the post-condition check
+    # ("alias path absent after codemod") aren't tripped up by origin
+    # entries the layer-modes codemod doesn't touch. A future codemod
+    # pass will own the origins rename — out of scope for this test.
+    if "option_origins" in doc["forge"]:
+        del doc["forge"]["option_origins"]
     toml_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
 
     # Precondition: legacy path is in the file.

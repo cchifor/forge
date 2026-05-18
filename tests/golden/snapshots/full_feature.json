@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1100,
+      "size": 1095,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -205,8 +205,8 @@
       "sha256": "6e4b72b152c36197"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
-      "size": 1115,
-      "sha256": "adf39be514746325"
+      "size": 1307,
+      "sha256": "dab98c959989b69f"
     },
     "apps/frontend/src/features/ai_chat/ui/AgentStatusBar.test.ts": {
       "size": 2718,
@@ -957,16 +957,12 @@
       "sha256": "dea0477b7d706e08"
     },
     "forge.toml": {
-      "size": 118402,
+      "size": 117941,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
       "size": 7130,
       "sha256": "d73104adb44ccb05"
-    },
-    "frontend/src/features/ai_chat/events.gen.ts": {
-      "size": 3950,
-      "sha256": "1f33a624e35dc387"
     },
     "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
       "size": 2159,
@@ -1377,7 +1373,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 466,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1684,10 +1680,6 @@
       "size": 384,
       "sha256": "c65d6235b6631cea"
     },
-    "services/api/src/app/domain/canvas_events.py": {
-      "size": 2435,
-      "sha256": "139d098a8d202c69"
-    },
     "services/api/src/app/domain/canvas_props.py": {
       "size": 1601,
       "sha256": "b5578609c8b014d1"
@@ -1893,7 +1885,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 563,
+      "size": 558,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

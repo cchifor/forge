@@ -6,12 +6,16 @@ every Option value the user set. From schema v2 (1.2.0+) it also
 records per-language base-template versions, per-file template/fragment
 versions, and per-block emitting-fragment metadata — the substrate the
 bidirectional sync flows (forward update, reverse harvest, drift verify)
-all share.
+all share. From schema v3 (WS2) it adds a parallel
+``[forge.option_origins]`` table that records, for every persisted
+option, whether the value was user-set or defaulted by the resolver —
+the substrate ``forge --update`` uses to skip fragments whose backends
+aren't present without erroring on options the user never asked for.
 
-Canonical v2 format::
+Canonical v3 format::
 
     [forge]
-    schema_version = 2
+    schema_version = 3
     version = "1.2.0"
     project_name = "acme"
 
@@ -24,6 +28,10 @@ Canonical v2 format::
     [forge.options]
     "middleware.rate_limit" = true
     "rag.backend" = "qdrant"
+
+    [forge.option_origins]
+    "middleware.rate_limit" = "user"
+    "rag.backend" = "default"
 
     [forge.provenance."src/app/main.py"]
     origin = "base-template"
@@ -43,6 +51,16 @@ Schema v1 manifests (missing ``schema_version``) are accepted on read —
 the new fields default to absent. The next ``forge --update`` run
 upgrades the manifest in place via ``migrate_provenance_v2``.
 
+Schema v2 manifests are accepted on read — the absent
+``[forge.option_origins]`` table is synthesized as all-``"default"`` so
+the resolver silently skips fragments whose backends aren't present
+(instead of erroring on persisted defaults). After the next
+``forge --update`` (or first re-generate) the manifest is re-stamped
+to v3 with accurate origins. Other write paths (``--reapply-baseline``,
+``--accept-harvested``, ``--resolve``) preserve the on-disk schema
+version intentionally — they shouldn't surprise the user with an
+unrelated schema bump on what may be a quick fix-up command.
+
 Pre-Option shapes (legacy ``[forge.features.*]`` /
 ``[forge.parameters]`` tables) are rejected with a clear error pointing
 to ``forge.toml`` re-generation — the refactor is a hard cutover.
@@ -59,7 +77,15 @@ import tomlkit
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 2
+# Bumped from 2 to 3 in WS2 to introduce a parallel
+# ``[forge.option_origins]`` table that records, for each persisted
+# option, whether the value was user-set or defaulted by the resolver.
+# Pre-bump, ``[forge.options]`` stored resolved values without
+# distinguishing user intent — so ``forge --update`` couldn't tell
+# user-set options apart from defaults and would error on persisted
+# defaults whose fragment backends weren't present. v3 fixes that;
+# v2 manifests still read (origins synthesized as all-default).
+CURRENT_SCHEMA_VERSION = 3
 
 
 @dataclass
@@ -69,8 +95,9 @@ class ForgeTomlData:
     ``schema_version`` reflects the manifest's encoding: 1 (legacy,
     pre-1.2.0) lacks the version+timestamp fields on per-file and
     per-block entries; 2 (1.2.0+) carries the richer metadata that
-    enables drift verify and reverse-direction harvest. Manifests
-    without an explicit version are interpreted as v1.
+    enables drift verify and reverse-direction harvest; 3 (WS2) adds
+    per-option provenance via ``option_origins``. Manifests without an
+    explicit version are interpreted as v1.
     """
 
     version: str
@@ -84,6 +111,13 @@ class ForgeTomlData:
     # Dotted option path → value. Only paths the user explicitly set
     # appear here (the resolver fills in defaults).
     options: dict[str, Any] = field(default_factory=dict)
+    # Dotted option path → origin tag ("user" / "default"). Parallel
+    # to ``options`` — every key present in ``options`` should have a
+    # corresponding entry here. v2 manifests synthesize this as
+    # all-"default" on read (we can't recover the user's intent post
+    # hoc); v3 manifests parse it directly. Missing entries in a v3
+    # manifest default to "default" (tolerate partial writes).
+    option_origins: dict[str, str] = field(default_factory=dict)
     # Per-path provenance for files the generator emitted. See
     # ``forge.sync.provenance`` for the recording / classification primitives.
     # Keys are POSIX-style relative paths; values are dicts whose keys
@@ -105,7 +139,14 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
     on malformed content or legacy-shape tables. Manifests without an
     explicit ``schema_version`` are interpreted as schema v1; the
     structure they expose has empty ``template_versions`` and
-    sparse entry sub-dicts.
+    sparse entry sub-dicts. v2 manifests parse with synthesized
+    ``option_origins`` (all-"default" — see the read-time migration
+    note in the module docstring). v3 manifests parse origins from
+    the dedicated table.
+
+    ``schema_version`` is reported as found on disk — read does not
+    re-stamp. The next ``forge --update`` (or ``forge generate``)
+    re-stamps to ``CURRENT_SCHEMA_VERSION``.
     """
     if not path.is_file():
         raise FileNotFoundError(f"forge.toml not found at {path}")
@@ -147,6 +188,26 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
     options_tbl = forge.get("options") or {}
     options: dict[str, Any] = _coerce_options(dict(options_tbl))
 
+    # option_origins: parallel-keyed to options. The exact source of
+    # truth depends on schema_version:
+    #
+    # * v1/v2: no [forge.option_origins] table existed. We can't
+    #   recover the user's intent — treat every persisted option as
+    #   "default" so the Stage-B resolver tweak silently skips
+    #   fragments whose backends aren't present (instead of erroring).
+    #   The next generate/update re-stamps the manifest to v3 with
+    #   accurate origins for whatever the user actually re-sets.
+    # * v3+: read directly from [forge.option_origins]. Tolerate
+    #   partial writes — keys present in options but missing from
+    #   option_origins fall back to "default" so a hand-edited
+    #   manifest doesn't blow up the loader.
+    if schema_version < 3:
+        option_origins: dict[str, str] = dict.fromkeys(options.keys(), "default")
+    else:
+        raw_origins = forge.get("option_origins") or {}
+        coerced_origins = {str(k): str(_unwrap(v)) for k, v in dict(raw_origins).items()}
+        option_origins = {path: coerced_origins.get(path, "default") for path in options}
+
     provenance_tbl = forge.get("provenance") or {}
     provenance: dict[str, dict[str, Any]] = {}
     for rel_path, entry in dict(provenance_tbl).items():
@@ -168,6 +229,7 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
         templates=templates,
         template_versions=template_versions,
         options=options,
+        option_origins=option_origins,
         provenance=provenance,
         merge_blocks=merge_blocks,
     )
@@ -218,17 +280,34 @@ def write_forge_toml(
     project_name: str,
     templates: dict[str, str],
     options: dict[str, Any],
+    option_origins: dict[str, str] | None = None,
     provenance: dict[str, dict[str, Any]] | None = None,
     merge_blocks: dict[str, dict[str, Any]] | None = None,
     template_versions: dict[str, str] | None = None,
     schema_version: int = CURRENT_SCHEMA_VERSION,
 ) -> None:
-    """Emit ``forge.toml`` with all v2 sub-tables.
+    """Emit ``forge.toml`` with all v3 sub-tables.
 
     ``schema_version`` defaults to the current version; existing callers
-    that omit it produce a v2 manifest. ``template_versions`` may be
+    that omit it produce a v3 manifest. ``template_versions`` may be
     None or empty when the caller doesn't know per-template versions
     (legacy migration paths) — the table is omitted in that case.
+
+    ``option_origins`` is the v3 provenance table: dotted option path
+    → ``"user"`` / ``"default"``. When ``None`` (existing call sites
+    that haven't been ported yet — generator, updater, resolver,
+    reapply_baseline, accept), every entry in ``options`` is recorded
+    as ``"user"`` to preserve current behavior (the resolver in Stage B
+    will treat empty/missing origins as user-set, matching this
+    fallback). Origins for paths absent from ``options`` are silently
+    dropped — the two tables must stay parallel-keyed.
+
+    ``{}`` (empty dict) and ``None`` produce identical output today:
+    both result in every option being recorded as ``"user"`` because
+    the per-key fallback at the merge step defaults to ``"user"`` for
+    any key not in ``option_origins``. Stage B callers that need to
+    express "all defaulted" must pass a fully-populated dict with
+    explicit ``"default"`` values; ``{}`` is not a shortcut.
 
     ``merge_blocks`` stores per-block metadata used by the three-way
     merge runtime (see :mod:`forge.sync.merge`) and by the
@@ -263,6 +342,26 @@ def write_forge_toml(
     for key in sorted(options):
         options_tbl.add(key, options[key])
     forge_tbl.add("options", options_tbl)
+
+    # Backwards compat: callers that don't yet pass `option_origins`
+    # (generator, updater, resolver, reapply_baseline, accept,
+    # remove_fragment) get every option stamped as "user" — preserving
+    # the pre-WS2 behavior where every persisted value was treated as
+    # an explicit user choice. Stage B will update those call sites
+    # to pass real origins.
+    effective_origins: dict[str, str]
+    if option_origins is None:
+        effective_origins = dict.fromkeys(options.keys(), "user")
+    else:
+        # Drop origins for paths not in `options` (the two tables MUST
+        # stay parallel-keyed — Stage B's resolver relies on the
+        # invariant). Missing origins for present options fall back to
+        # "user", consistent with the None-arg path above.
+        effective_origins = {key: option_origins.get(key, "user") for key in options}
+    origins_tbl = tomlkit.table()
+    for key in sorted(effective_origins):
+        origins_tbl.add(key, effective_origins[key])
+    forge_tbl.add("option_origins", origins_tbl)
 
     if provenance:
         prov_tbl = tomlkit.table()
