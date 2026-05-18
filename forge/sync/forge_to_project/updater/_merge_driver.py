@@ -21,6 +21,21 @@ if TYPE_CHECKING:
     from forge.middleware_spec import MiddlewareSpec
 
 
+def _resolve_apply_fragment():
+    """Look up ``_apply_fragment`` via the ``updater`` package's namespace.
+
+    Tests historically ``patch.object`` the ``_apply_fragment`` attribute
+    on the ``forge.sync.forge_to_project.updater`` module (the package's
+    ``__init__``) — see ``tests/test_fragment_context.py``. Resolving the
+    callable through that namespace at call time keeps those patches
+    observable; ``__init__`` re-exports the local definition below, so
+    in the unpatched case the lookup returns the same function object.
+    """
+    from forge.sync.forge_to_project import updater  # noqa: PLC0415
+
+    return updater._apply_fragment
+
+
 def apply_features(
     bc: BackendConfig,
     backend_dir: Path,
@@ -86,7 +101,12 @@ def apply_features(
             update_mode=update_mode,
             file_baselines=file_baselines,
         )
-        _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
+        # Dispatch via the package namespace so tests that
+        # ``patch.object(updater, "_apply_fragment", ...)`` see their
+        # patch applied — see ``__init__.py``'s re-export.
+        _resolve_apply_fragment()(
+            ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
+        )
 
 
 def apply_project_features(
@@ -149,7 +169,9 @@ def apply_project_features(
                 # Project-scope fragments typically don't declare middlewares
                 # (they emit project-level files like AGENTS.md). Pass the
                 # tuple anyway so the pipeline API stays uniform.
-                _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
+                _resolve_apply_fragment()(
+                    ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
+                )
                 break
 
 
