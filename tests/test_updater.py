@@ -192,6 +192,104 @@ class TestIntegrationAgainstGenerator:
         # shutil.rmtree may need ignore_errors).
         shutil.rmtree(project_root, ignore_errors=True)
 
+    def test_node_only_project_update_succeeds_with_persisted_default(
+        self, tmp_path: Path
+    ) -> None:
+        """WS2b regression — ``forge --update`` on a Node-only project
+        whose forge.toml carries Python-only defaults (correlation_id,
+        pii_redaction) must not raise OPTIONS_INVALID_VALUE.
+
+        Pre-WS2b: the generator persisted ``middleware.correlation_id``
+        (Python-only, always-on default) into a Node-only project's
+        forge.toml. On ``--update`` the resolver re-read the manifest,
+        saw the option in ``config.options``, treated it as user-set,
+        couldn't find a Python backend, and raised. This was the
+        smoking-gun bug behind PR #45 lane E being skipped for
+        ``node_svelte_min``.
+
+        Post-WS2b: the generator stamps origins (correlation_id stays
+        default; user-set keys become "user"). The updater carries
+        origins into the resolver, which silently skips Python-only
+        defaults on Node-only projects.
+        """
+        from forge.generator import generate
+
+        cfg = ProjectConfig(
+            project_name="node_update",
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="node_update",
+                    language=BackendLanguage.NODE,
+                ),
+            ],
+            frontend=FrontendConfig(framework=FrontendFramework.NONE, project_name="node_update"),
+            # No user options — every persisted option is a default.
+            options={},
+            output_dir=str(tmp_path),
+        )
+        project_root = generate(cfg, quiet=True)
+
+        try:
+            # Confirm the manifest persisted Python-only defaults with
+            # origin=default (the precondition for the bug to manifest).
+            data = read_forge_toml(project_root / "forge.toml")
+            assert data.schema_version == 3
+            assert "middleware.correlation_id" in data.options
+            assert data.option_origins.get("middleware.correlation_id") == "default"
+            assert data.option_origins.get("middleware.pii_redaction") == "default"
+
+            # The update must succeed — no OPTIONS_INVALID_VALUE.
+            summary = update_project(project_root, quiet=True)
+            assert summary["forge_version_after"] is not None
+            assert "api" in summary["backends"]
+
+            # Re-stamp preserves the default origins (the resolver
+            # filled the values; nothing in the project elevated them).
+            after = read_forge_toml(project_root / "forge.toml")
+            assert after.option_origins.get("middleware.correlation_id") == "default"
+            assert after.option_origins.get("middleware.pii_redaction") == "default"
+        finally:
+            shutil.rmtree(project_root, ignore_errors=True)
+
+    def test_user_set_option_alias_records_canonical_origin_as_user(
+        self, tmp_path: Path
+    ) -> None:
+        """WS2b regression — ``config.options`` may use an alias path
+        (``frontend.api_target_url``) for an option whose canonical
+        form is ``frontend.api_target.url``. The resolver rewrites
+        aliases to canonical, so ``plan.option_values`` is canonical-
+        keyed. Without alias resolution, the generator's origin
+        computation would compare canonical-key membership against an
+        alias-keyed set, miss, and stamp the canonical path as
+        ``"default"`` — silently demoting the user's intent on the
+        next ``--update``.
+        """
+        from forge.generator import generate
+
+        cfg = ProjectConfig(
+            project_name="alias_origin",
+            backends=[],  # frontend-only project
+            frontend=FrontendConfig(
+                framework=FrontendFramework.VUE, project_name="alias_origin"
+            ),
+            options={
+                "backend.mode": "none",
+                "frontend.api_target_url": "http://localhost:9999",  # alias
+            },
+            output_dir=str(tmp_path),
+        )
+        project_root = generate(cfg, quiet=True)
+        try:
+            data = read_forge_toml(project_root / "forge.toml")
+            # The resolver rewrote the alias to canonical; the manifest
+            # stores the canonical path. Origin must be "user" — the
+            # user explicitly set it, even though under the alias name.
+            assert "frontend.api_target.url" in data.options
+            assert data.option_origins.get("frontend.api_target.url") == "user"
+        finally:
+            shutil.rmtree(project_root, ignore_errors=True)
+
 
 # ---------------------------------------------------------------------------
 # P0.1 — file-level three-way merge integration tests
