@@ -150,3 +150,8 @@ The lane is excluded from PR CI; it runs nightly via
 * :class:`forge.sync.merge.reverse_three_way_decide` /
   :class:`forge.sync.merge.reverse_file_three_way_decide` — the
   classification primitives the extractors call.
+* [`docs/matrix-status.md`](matrix-status.md) — broader nightly
+  scenarios × lanes grid. Lane D's round-trip status surfaces there
+  alongside lane E (``forge --update`` + ``forge --harvest`` CLI e2e),
+  which exercises the same harvest substrate via the dispatcher path
+  that real users hit.
