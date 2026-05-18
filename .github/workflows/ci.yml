@@ -14,8 +14,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -34,8 +34,8 @@ jobs:
   typecheck-forge:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -46,8 +46,8 @@ jobs:
   typecheck-ty-canary:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -66,8 +66,8 @@ jobs:
         python: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Set Python ${{ matrix.python }}
@@ -96,8 +96,8 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Set Python 3.13
@@ -131,7 +131,7 @@ jobs:
         # and the same action picks it up automatically. `fail_ci_if_error`
         # stays false so a Codecov outage doesn't block a PR on the real
         # pytest + gate signal.
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           files: coverage.xml
           fail_ci_if_error: false
@@ -146,8 +146,8 @@ jobs:
   package-integrity:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Set Python 3.13
@@ -167,8 +167,8 @@ jobs:
     outputs:
       scenarios: ${{ steps.load.outputs.scenarios }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -195,8 +195,8 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -215,11 +215,11 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -230,3 +230,62 @@ jobs:
         run: uv sync --all-extras --dev
       - name: Run lane B (verify) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane verify
+
+  # WS3 — fast smoke subset on every PR. Lane C (docker compose up +
+  # RFC-006 HTTP contract) otherwise runs only nightly via
+  # matrix-nightly.yml, which means the median PR ships with no compose
+  # signal at all. This job exercises the two fastest smoke-eligible
+  # scenarios (py_svelte_min + node_svelte_min) so compose drift and
+  # health-check regressions surface before they land on main. The full
+  # 11-scenario smoke set stays in matrix-nightly.yml — see WS3 in
+  # docs/superpowers/plans/immutable-napping-bear.md for the rationale.
+  matrix-smoke-fast:
+    needs: matrix-setup
+    runs-on: ubuntu-latest
+    # Smoke is ~10 min/scenario (Docker pull + compose up + tests +
+    # teardown). 20 min cap leaves slack for cold caches without
+    # blocking a runner for hours on a hung compose stack.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # The two fastest smoke-opted-in scenarios from
+        # tests/matrix/scenarios.yaml — both are min-config single-
+        # backend stacks (no Keycloak, no options) which keeps the PR
+        # critical path bounded. Do not fan out to the full smoke set
+        # here; that's nightly's job.
+        scenario: [py_svelte_min, node_svelte_min]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      # Generated projects' post_generate.py runs `git init && git commit`
+      # to seed an initial commit; without a configured identity the
+      # commit fails with "empty ident name" and floods the log with
+      # `[FAIL] git commit` noise (the script swallows it, but the noise
+      # masks real failures). Mirror matrix-nightly.yml's identity step.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
+      # logs + ps to a known directory BEFORE it tears the stack down
+      # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
+      # this env var, the runner cleans up its tmpdirs and post-job log
+      # capture would race against teardown.
+      - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        env:
+          FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: compose-logs-${{ matrix.scenario }}
+          path: compose-logs/
+          if-no-files-found: ignore

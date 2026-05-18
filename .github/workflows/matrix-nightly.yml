@@ -1,4 +1,4 @@
-name: Matrix nightly (lane C smoke + lane D roundtrip)
+name: Matrix nightly (lane C smoke + lane D roundtrip + lane E update)
 
 # Runs nightly heavyweight matrix lanes:
 #
@@ -11,6 +11,12 @@ name: Matrix nightly (lane C smoke + lane D roundtrip)
 #   apply-back cycle in between; ~2 min/scenario. Exercises the FR1
 #   invariant (fresh-generate emits zero block/files candidates) and
 #   stages a synthetic block edit when the scenario surface allows.
+# * Lane E — forge --update + forge --harvest e2e (WS4). For every
+#   scenario, shells out to ``python -m forge --update --mode
+#   {merge,skip,overwrite}`` against an edited fragment-authored file
+#   plus a single ``forge --harvest --harvest-out=-`` JSON probe.
+#   Exercises the argparse / builder / dispatcher path real users hit,
+#   complementing lane D's direct Python-API round-trip.
 #
 # Also triggerable manually (workflow_dispatch) or when a PR is labeled
 # ``ci:matrix-smoke`` so contributors can exercise these lanes on
@@ -39,9 +45,10 @@ jobs:
     outputs:
       scenarios: ${{ steps.load.outputs.scenarios }}
       roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
+      update_scenarios: ${{ steps.load.outputs.update_scenarios }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
@@ -58,8 +65,16 @@ jobs:
           roundtrip_names = [
               s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
           ]
+          # Lane E (WS4) — scenarios opted into ``update``. Only
+          # Python-backend scenarios are opted in today; Node-only and
+          # Rust-only scenarios trip a pre-existing resolver bug where
+          # the Python-only ``correlation_id`` fragment is persisted in
+          # forge.toml and re-resolves on ``--update``. See the lane E
+          # header note in tests/matrix/scenarios.yaml.
+          update_names = [s["name"] for s in data["scenarios"] if "update" in s.get("lanes", [])]
           print(f"scenarios={json.dumps(smoke_names)}")
           print(f"roundtrip_scenarios={json.dumps(roundtrip_names)}")
+          print(f"update_scenarios={json.dumps(update_names)}")
           ' >> "$GITHUB_OUTPUT"
 
   smoke:
@@ -74,11 +89,17 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # Wall-clock anchor for the "Append timing summary" step at the end
+      # of this job. We stash a Unix timestamp because each ``run:`` block
+      # spawns a new shell — ``$SECONDS`` resets per step, so the naive
+      # ``$((SECONDS / 60))m`` would always print 0s.
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -94,7 +115,15 @@ jobs:
           git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
+      # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
+      # logs + ps to a known directory BEFORE it tears the stack down
+      # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
+      # this env var, the runner cleans up its tmpdirs and post-job log
+      # capture would race against teardown. Mirrors ci.yml's
+      # matrix-smoke-fast job pattern.
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
+        env:
+          FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
       - name: Upload per-scenario JSON status artifact
         # Each smoke job emits a one-row JSON file; the aggregator job
@@ -107,22 +136,24 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane smoke --json > \
             matrix-status/${{ matrix.scenario }}.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
-      - name: Dump docker compose logs on failure
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
+        with:
+          name: compose-logs-${{ matrix.scenario }}
+          path: compose-logs/
+          if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
         run: |
-          for f in /tmp/forge-matrix-*/${{ matrix.scenario }}*/docker-compose.yml; do
-            if [ -f "$f" ]; then
-              echo "=== docker compose logs for $f ==="
-              docker compose -f "$f" logs --tail 200 || true
-              docker compose -f "$f" down -v --remove-orphans || true
-            fi
-          done
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
+          echo "### Timings — ${{ matrix.scenario }} (smoke)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Lane D — round-trip CI gate (Phase 5). Generates each opted-in
   # scenario twice with a harvest/apply-back cycle in between and asserts
@@ -142,11 +173,13 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.roundtrip_scenarios) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -168,12 +201,78 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
             matrix-status/${{ matrix.scenario }}-roundtrip.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
+        run: |
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
+          echo "### Timings — ${{ matrix.scenario }} (roundtrip)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
+
+  # Lane E — forge --update + --harvest CLI e2e (WS4). For every
+  # scenario, shells out to ``python -m forge --update --mode
+  # {merge,skip,overwrite}`` against an edited fragment-authored file
+  # plus a single ``forge --harvest --harvest-out=-`` JSON probe.
+  # Complements lane D (which uses the Python API directly): lane E
+  # exercises the argparse / builder / dispatcher path real users hit.
+  # Per-scenario wall-clock ~2-4 min on cold caches (two generates,
+  # three updates with potential uv sync, one harvest).
+  update:
+    needs: gate
+    if: needs.gate.outputs.update_scenarios != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.gate.outputs.update_scenarios) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Capture job start time
+        run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      - name: Install rustup stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      # Lane E generate()s twice and runs ``forge --update`` three
+      # times; the template's post_generate.py executes ``git init &&
+      # git commit`` each time, which fails noisily without an identity.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+      - name: Install forge
+        run: uv sync --all-extras --dev
+      - name: Run lane E (update + harvest) for ${{ matrix.scenario }}
+        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane update
+      - name: Upload per-scenario JSON status artifact
+        if: always()
+        run: |
+          mkdir -p matrix-status
+          uv run python tests/matrix/runner.py \
+            --scenario ${{ matrix.scenario }} --lane update --json > \
+            matrix-status/${{ matrix.scenario }}-update.json || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: matrix-status-update-${{ matrix.scenario }}
+          path: matrix-status/
+          if-no-files-found: ignore
+      - name: Append timing summary
+        if: always()
+        run: |
+          dur=$(( $(date +%s) - ${JOB_START_S:-$(date +%s)} ))
+          echo "### Timings — ${{ matrix.scenario }} (update)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Duration: $((dur / 60))m $((dur % 60))s" >> "$GITHUB_STEP_SUMMARY"
 
   # Aggregate per-scenario JSON artifacts into a single markdown grid
   # and publish it to the workflow summary page (no auto-commit to the
@@ -182,18 +281,18 @@ jobs:
   # ``docs/matrix-status.md`` manually if they want to lock a specific
   # snapshot.
   publish-dashboard:
-    needs: [smoke, roundtrip]
+    needs: [smoke, roundtrip, update]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: matrix-status-raw
           pattern: matrix-status-*
@@ -224,12 +323,15 @@ jobs:
           grid = _format_markdown_grid(results, scenarios)
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           with summary.open("a", encoding="utf-8") as fh:
-              fh.write("## Matrix nightly — lane C (smoke) + lane D (round-trip)\n\n")
+              fh.write(
+                  "## Matrix nightly — lane C (smoke) + lane D (round-trip) "
+                  "+ lane E (update + harvest)\n\n"
+              )
               fh.write(grid)
               fh.write("\nSee individual scenario logs above for details.\n")
           Path("matrix-status.md").write_text(grid, encoding="utf-8")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: matrix-status-grid
           path: matrix-status.md
