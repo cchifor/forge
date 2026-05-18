@@ -102,6 +102,21 @@ class ProjectConfig:
         return str(self.options.get("frontend.api_target.type", "local"))
 
     @property
+    def agent_mode(self) -> str:
+        """Layer discriminator for the agentic/LLM stack.
+
+        Returns one of ``"none"`` / ``"llm_only"`` / ``"tool_calling"``
+        / ``"multi_agent"`` (Theme 2A). Default is ``"none"`` — the
+        Phase-C placeholder default is preserved.
+
+        Non-``"none"`` values fan out to ``conversational_ai`` fragments
+        via ``Option.enables`` in ``forge/options/agent``; the resolver
+        composes them with the fine-grained ``agent.streaming`` /
+        ``agent.tools`` / ``agent.llm`` flags transparently.
+        """
+        return str(self.options.get("agent.mode", "none"))
+
+    @property
     def database_mode(self) -> str:
         """Layer discriminator for database provisioning.
 
@@ -190,6 +205,43 @@ class ProjectConfig:
             )
         self._validate_database_mode()
         self._validate_frontend_mode_coherence()
+        self._validate_agent_mode()
+
+    def _validate_agent_mode(self) -> None:
+        """Theme 2A — coherence rules for the agent layer discriminator.
+
+        Two checks:
+
+        * ``agent.mode != "none"`` requires ``backend.mode != "none"``.
+          The agent loop (LLM port adapter, conversation persistence,
+          tool registry, MCP router) lives inside a backend service —
+          a frontend-only project has nowhere to host it.
+        * ``agent.mode == "multi_agent"`` raises ``NotImplementedError``-
+          equivalent at validate time. The enum value is registered so
+          users can declare intent in ``forge.toml`` today, but fragment
+          wiring is deferred to v2; failing fast here keeps the surface
+          honest.
+        """
+        mode = self.agent_mode
+        if mode == "none":
+            return
+        if self.backend_mode == "none":
+            raise ValueError(
+                f"agent.mode={mode!r} requires backend.mode != 'none'. "
+                "The agent stack (LLM port, conversation persistence, "
+                "tool registry, MCP router) is hosted inside a backend "
+                "service — a frontend-only project (backend.mode=none) "
+                "has nowhere to mount it. Either set backend.mode=generate "
+                "and configure a backend, or set agent.mode=none."
+            )
+        if mode == "multi_agent":
+            raise ValueError(
+                "agent.mode='multi_agent' is registered for forward "
+                "compatibility but its fragment bundle is not yet "
+                "implemented. The agent-to-agent routing layer ships in "
+                "the v2 milestone. For now, set agent.mode to "
+                "'llm_only' or 'tool_calling'."
+            )
 
     def _validate_frontend_mode_coherence(self) -> None:
         """Reject contradictions between ``frontend.mode`` and the

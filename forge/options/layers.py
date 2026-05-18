@@ -8,10 +8,20 @@ stays empty — the discriminator orchestrates generation, it doesn't
 enable a fragment bundle.
 
 The four layer discriminators (``backend.mode`` / ``database.mode`` /
-``frontend.mode`` / ``agent.mode``) share the same ENUM shape + empty
-``enables`` contract. ``tests/test_phase_c.py::TestLayerModeParity``
-locks that invariant in. ``agent.mode`` lives in ``forge/options/agent``
-to keep every ``agent.*`` knob in one file.
+``frontend.mode`` / ``agent.mode``) share the same ENUM shape. The
+``none`` value carries an empty bundle for every mode — that's the
+"do nothing for this layer" path. Other values are layer-specific:
+``backend.mode`` / ``frontend.mode`` / ``database.mode`` still orchestrate
+generation without enabling per-value fragment bundles (they gate the
+template loops in ``generator``), while ``agent.mode`` actively fans out
+to ``conversational_ai`` fragments (Theme 2A). The parity contract in
+``tests/test_phase_c.py::TestLayerModeParity`` enforces the shared shape
+and the ``none``-empty invariant.
+
+``agent.mode`` lives in ``forge/options/agent`` alongside the other
+layer-mode registrations; the fine-grained ``agent.streaming`` /
+``agent.tools`` / ``agent.llm`` toggles stay under
+``forge/features/agent/options.py``.
 
 The Phase A flat ``frontend.api_target_url`` is preserved as a
 deprecated alias of ``frontend.api_target.url`` (see the ``aliases=``
