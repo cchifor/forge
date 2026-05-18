@@ -155,6 +155,13 @@ def _update_locked(
         project_name=data.project_name or project_root.name,
         backends=list(backends),
         options=dict(data.options),
+        # Carry origins through so the resolver can distinguish user-set
+        # options from defaulted-but-persisted ones. Without this, a
+        # Python-only default (e.g. ``middleware.correlation_id``)
+        # persisted into a Node-only project's forge.toml would trip
+        # the resolver's "fragment requested but no backends present"
+        # error on every ``forge --update``.
+        option_origins=dict(data.option_origins),
     )
 
     try:
@@ -427,11 +434,23 @@ def _update_locked(
         if entry["status"] in ("applied", "conflict"):
             next_template_versions[str(entry["language"])] = str(entry["current_version"])
 
+    # Preserve user-set origins from the existing manifest; any path
+    # the resolver introduces this run (new options added to the
+    # registry since the previous generate / update) is recorded as
+    # "default" — we didn't see the user set it. Anything that *was*
+    # recorded as "user" stays "user" so subsequent updates keep
+    # surfacing hard errors on real user mistakes.
+    next_option_origins: dict[str, str] = {
+        path: ("user" if data.option_origins.get(path) == "user" else "default")
+        for path in plan.option_values
+    }
+
     _restamp_forge_toml(
         manifest=manifest,
         project_name=data.project_name or project_root.name,
         backends=tuple(config.backends),
         option_values=plan.option_values,
+        option_origins=next_option_origins,
         current_version=current_version,
         provenance=collector.as_dict(),
         merge_blocks=collector.merge_blocks_as_dict(),
@@ -623,6 +642,7 @@ def _restamp_forge_toml(
     project_name: str,
     backends: tuple[BackendConfig, ...],
     option_values: dict[str, Any],
+    option_origins: dict[str, str] | None = None,
     current_version: str,
     provenance: dict[str, dict[str, str]] | None = None,
     merge_blocks: dict[str, dict[str, str]] | None = None,
@@ -636,6 +656,11 @@ def _restamp_forge_toml(
     live template version). Callers that didn't run the template-update
     phase pass through whatever the manifest already recorded. ``None``
     / empty omits the ``[forge.template_versions]`` table.
+
+    ``option_origins`` is the v3 provenance map (path → "user" /
+    "default"). When ``None``, :func:`write_forge_toml`'s fallback
+    stamps every entry as "user" (legacy callers; the in-tree updater
+    populates this explicitly post-WS2b).
     """
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
@@ -647,6 +672,7 @@ def _restamp_forge_toml(
         project_name=project_name,
         templates=templates,
         options=dict(option_values),
+        option_origins=option_origins,
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
