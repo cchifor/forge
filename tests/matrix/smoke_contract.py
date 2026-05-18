@@ -70,6 +70,39 @@ OPENAPI_PATHS: tuple[str, ...] = (
 )
 
 
+def _urlopen_with_retry(url: str, timeout_s: int) -> tuple[int, bytes]:
+    """``urlopen`` with a single retry on transient connect / read errors.
+
+    Returns ``(status, body)`` on success. Re-raises ``HTTPError`` (real
+    HTTP status — 404 / 500 etc are contract signals, NOT transient) on
+    the first attempt without retrying. ``URLError`` and other
+    connect/timeout failures get one retry with a 1.5s backoff before
+    re-raising, which absorbs the cold-start latency that periodically
+    flakes the nightly smoke lane while still surfacing genuinely-broken
+    services within ~3s.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout_s) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError:
+            # Real HTTP status (404/500/etc) — surface immediately,
+            # never retry. Letting the caller decide what's a contract
+            # violation vs. a missing-endpoint signal.
+            raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
+            last_exc = e
+            if attempt == 1:
+                raise
+            time.sleep(1.5)
+    # Unreachable — the loop either returns, raises HTTPError, or
+    # re-raises the captured last_exc on attempt 1. Kept for type
+    # narrowing.
+    assert last_exc is not None
+    raise last_exc
+
+
 def _get_first(base_url: str, paths: tuple[str, ...], timeout_s: int) -> tuple[str, int, bytes]:
     """Try each path in order, return the first that doesn't 404.
 
@@ -79,9 +112,8 @@ def _get_first(base_url: str, paths: tuple[str, ...], timeout_s: int) -> tuple[s
     for path in paths:
         url = base_url.rstrip("/") + path
         try:
-            with urllib.request.urlopen(url, timeout=timeout_s) as resp:
-                body = resp.read()
-                return path, resp.status, body
+            status, body = _urlopen_with_retry(url, timeout_s)
+            return path, status, body
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 last_exc = e

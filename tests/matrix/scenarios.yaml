@@ -2,11 +2,19 @@
 #
 # Each scenario describes one configuration forge is expected to generate
 # cleanly. The runner in ``tests/matrix/runner.py`` consumes this file and
-# drives each scenario through up to three lanes:
+# drives each scenario through up to five lanes:
 #
 #   A — generate (always; runs on every PR, ~1 min/scenario)
 #   B — toolchain verify (every PR, parallel matrix, ~5 min/scenario)
 #   C — compose-up smoke (nightly or label-gated, ~10 min/scenario)
+#   D — roundtrip (nightly, opt-in; exercises harvest + apply-back FR1/FR2
+#       invariants — see docs/round-trip.md)
+#   E — update (nightly, opt-in; exercises ``forge --update`` in all three
+#       merge modes + ``forge --harvest`` JSON probe via the CLI. Today
+#       only Python-backend scenarios are opted in — Node-only / Rust-only
+#       projects trip a pre-existing resolver bug where the Python-only
+#       ``correlation_id`` fragment is persisted into forge.toml and
+#       re-resolves on ``--update``. Opt those in once that bug is fixed.)
 #
 # ``lanes`` lists which lanes are applicable. Scenarios on a backend whose
 # toolchain can't be invoked in CI (e.g. a plugin backend without a linter
@@ -21,7 +29,7 @@ schema_version: 1
 scenarios:
   - name: py_vue_full
     description: Python + Vue + Keycloak + agent + RAG (chroma) + rate limit + OTel
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8010
     expected_files:
       - services/api/pyproject.toml
@@ -52,7 +60,7 @@ scenarios:
     description: Python + Svelte, no auth, no options
     # Cross-stack opt-in for lane D (roundtrip) — covers a Python +
     # frontend scenario in addition to py_only_headless (Python-only).
-    lanes: [generate, verify, smoke, roundtrip]
+    lanes: [generate, verify, smoke, roundtrip, update]
     port_base: 8020
     expected_files:
       - services/api/pyproject.toml
@@ -99,9 +107,14 @@ scenarios:
         middleware.rate_limit: true
         observability.otel: true
 
+  # Roundtrip broadened in WS1 to one scenario per backend × frontend-
+  # presence axis: Node+frontend (here), Rust+frontend (rust_svelte_min),
+  # multi-backend+frontend (multi_py_node), Node-only/Rust-only/stateless
+  # (the new *_only_headless + stateless_py blocks below). See
+  # docs/round-trip.md.
   - name: node_svelte_min
     description: Node + Svelte, no auth, no options
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8040
     expected_files:
       - services/api/package.json
@@ -149,7 +162,7 @@ scenarios:
 
   - name: rust_svelte_min
     description: Rust + Svelte, no auth, no options
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip]
     port_base: 8060
     expected_files:
       - services/api/Cargo.toml
@@ -216,7 +229,7 @@ scenarios:
 
   - name: multi_py_node
     description: Python + Node + Vue + Keycloak (multi-backend with mixed options)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, roundtrip, update]
     port_base: 8090
     expected_files:
       - services/py-svc/pyproject.toml
@@ -245,7 +258,7 @@ scenarios:
 
   - name: multi_all_three
     description: Python + Node + Rust + Vue stress test (tier-1 fragments only)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8100
     expected_files:
       - services/py-svc/pyproject.toml
@@ -283,7 +296,7 @@ scenarios:
 
   - name: py_vue_noauth
     description: Python + Vue without Keycloak (dev-auth fallback)
-    lanes: [generate, verify, smoke]
+    lanes: [generate, verify, smoke, update]
     port_base: 8110
     expected_files:
       - services/api/pyproject.toml
@@ -309,7 +322,7 @@ scenarios:
     # the fastest scenario (~30s/generate) so it carries the round-trip
     # CI signal in the nightly matrix. See tests/matrix/runner.py
     # docstring + docs/round-trip.md.
-    lanes: [generate, verify, roundtrip]
+    lanes: [generate, verify, roundtrip, update]
     port_base: 8120
     expected_files:
       - services/api/pyproject.toml
@@ -326,3 +339,68 @@ scenarios:
           python_version: "3.13"
       options:
         rag.backend: qdrant
+
+  - name: node_only_headless
+    description: Node-only, no frontend, Keycloak, rate_limit + OTel
+    lanes: [generate, verify, roundtrip]
+    port_base: 8130
+    expected_files:
+      - services/api/package.json
+      - docker-compose.yml
+    config:
+      project_name: "Node Only Headless"
+      include_keycloak: true
+      keycloak_port: 18087
+      backends:
+        - name: api
+          language: node
+          features: ["items"]
+          server_port: 8130
+          node_version: "22"
+      options:
+        middleware.rate_limit: true
+        observability.otel: true
+
+  - name: rust_only_headless
+    description: Rust-only, no frontend, no Keycloak (dev-auth), rate_limit + OTel
+    lanes: [generate, verify, roundtrip]
+    port_base: 8140
+    expected_files:
+      - services/api/Cargo.toml
+      - docker-compose.yml
+    config:
+      project_name: "Rust Only Headless"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: rust
+          features: ["items"]
+          server_port: 8140
+          rust_edition: "2024"
+      options:
+        middleware.rate_limit: true
+        observability.otel: true
+
+  # port_base 8150 reserved for frontend_only_vue (backend.mode=none) —
+  # deferred pending a forge/cli/builder.py fix to honor `backends: []`
+  # (today the truthiness check at _build_backends_from_cfg drops the
+  # empty list into the single-backend placeholder fallback). Do not
+  # reuse 8150 until the scenario lands.
+  - name: stateless_py
+    description: Python-only, database.mode=none (no postgres/alembic)
+    lanes: [generate, verify, roundtrip, update]
+    port_base: 8160
+    expected_files:
+      - services/api/pyproject.toml
+      - docker-compose.yml
+    config:
+      project_name: "Stateless Py"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: python
+          features: ["items"]
+          server_port: 8160
+          python_version: "3.13"
+      options:
+        database.mode: "none"

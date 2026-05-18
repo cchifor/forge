@@ -19,6 +19,13 @@ more lanes:
   reverted in ``finally``) → regenerate → assert FR2 (project_a ==
   project_b modulo documented noise). ~30-90s per scenario, nightly
   only. See ``docs/round-trip.md`` for the contract.
+- **Lane E — forge --update + --harvest e2e** (WS4). For each scenario,
+  shells out to ``python -m forge --update --mode {merge,skip,overwrite}``
+  against an edited project (per-mode contract validated) plus a single
+  ``forge --harvest --harvest-out=-`` JSON-on-stdout probe. Exercises
+  the argparse + builder + dispatcher path real users hit, complementing
+  lane D's direct-Python-API round-trip. Nightly only; see
+  ``tests/matrix/update_contract.py`` for the per-mode assertion details.
 
 CLI usage (from the repo root)::
 
@@ -53,6 +60,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -63,11 +71,95 @@ from typing import Any, Literal
 
 import yaml
 
-Lane = Literal["generate", "verify", "smoke", "roundtrip"]
-ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip")
+Lane = Literal["generate", "verify", "smoke", "roundtrip", "update"]
+ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip", "update")
 
 SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
 WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
+
+
+_INSTALL_TIMEOUT_SECONDS = 300
+_BUILD_TIMEOUT_SECONDS = 180
+
+
+def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
+    """Run a build/analyze check against the generated frontend.
+
+    Lane B's frontend complement to ``BackendToolchain.verify`` — runs
+    ``<pm> install`` + ``<pm> run build`` in the generated
+    ``apps/frontend/`` so vue-tsc / svelte-check / vite build regressions
+    surface on PR rather than waiting for nightly compose-up (lane C).
+
+    Returns ``None`` on success, an error label on failure. Uses the
+    package manager from ``fe_cfg.package_manager`` when present;
+    falls back to ``npm``.
+
+    Budget (worst-case wall-clock per scenario): install 5 min +
+    build 3 min = 8 min. Lane B aims for ~5 min average across the
+    matrix; the upper bound covers cold CI caches without letting a
+    runaway process stall the whole runner.
+
+    Skips silently (returns ``None``) when:
+
+    * The frontend framework is Flutter — ``subosito/flutter-action`` is
+      heavy and lane B targets <5 min/scenario; Flutter is covered by
+      ``tests/e2e/test_full_generation.py::test_flutter_*``.
+    * No frontend framework is set on the FrontendConfig (defensive —
+      callers gate on this too).
+    * The configured package manager (and the ``npm`` fallback) is not
+      on PATH — developer machines without a Node toolchain shouldn't
+      see spurious failures; same pattern as ``run_lane_smoke``'s
+      docker-availability check.
+    """
+    from forge.config import FrontendFramework  # noqa: PLC0415
+
+    framework = getattr(fe_cfg, "framework", None)
+    if framework is None or framework == FrontendFramework.NONE:
+        return None
+    if getattr(framework, "value", None) == "flutter":
+        # Flutter handled by e2e suite (subosito/flutter-action heavy install).
+        return None
+    pm = getattr(fe_cfg, "package_manager", "npm") or "npm"
+    pm_exe = shutil.which(pm) or shutil.which("npm")
+    if pm_exe is None:
+        return None  # No JS runtime on this runner — skip silently.
+    return _run_frontend_step(
+        pm, pm_exe, fe_dir, ["install", "--no-fund", "--no-audit"], _INSTALL_TIMEOUT_SECONDS
+    ) or _run_frontend_step(pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS)
+
+
+def _run_frontend_step(
+    pm: str, pm_exe: str, fe_dir: Path, args: list[str], timeout: int
+) -> str | None:
+    """Run a single package-manager step; return failure label or None.
+
+    Translates :class:`subprocess.TimeoutExpired` and
+    :class:`FileNotFoundError` into failure labels rather than letting
+    them propagate out of the runner — a runaway ``npm install`` must
+    not take out the whole matrix run by crashing ``main()``. Mirrors
+    the pattern in ``forge.toolchains._runner._run_check``.
+    """
+    import subprocess  # noqa: PLC0415
+
+    label = f"{pm} {' '.join(args)}"
+    try:
+        result = subprocess.run(
+            [pm_exe, *args],
+            cwd=fe_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return f"{label} timed out after {timeout}s"
+    except FileNotFoundError as e:
+        return f"{label} could not exec {pm_exe}: {e}"
+    if result.returncode == 0:
+        return None
+    stream = result.stderr.strip() or result.stdout.strip()
+    tail = "\n".join(stream.splitlines()[-3:]) if stream else "<no output>"
+    return f"{label} failed (exit {result.returncode}): {tail}"
 
 
 def _inject_weld_stubs(project_root: Path) -> None:
@@ -362,6 +454,17 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 if check.status == "fail":
                     failures.append(f"{bc.name}:{check.name}")
 
+        # Frontend build check — catches vue-tsc / svelte-check / vite build
+        # regressions on PR rather than waiting for nightly compose-up (lane
+        # C). ``frontend_mode`` is the project-level option discriminator
+        # (``options["frontend.mode"]``); ``_validate_frontend_mode_coherence``
+        # already keeps it in lock-step with ``FrontendConfig.framework``.
+        if project_config.frontend is not None and project_config.frontend_mode != "none":
+            fe_dir = project_root / "apps" / "frontend"
+            fe_result = _verify_frontend(project_config.frontend, fe_dir)
+            if fe_result is not None:
+                failures.append(f"frontend:{fe_result}")
+
         if failures:
             return LaneResult(
                 scenario=scenario.name,
@@ -496,6 +599,16 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
     finally:
         if compose_up and project_root is not None:
             compose_file = project_root / "docker-compose.yml"
+            # Capture compose logs + ps into FORGE_MATRIX_LOG_DIR (if set)
+            # BEFORE tearing the stack down. CI jobs read these as artifact
+            # input — see .github/workflows/{ci,matrix-nightly}.yml. Doing
+            # it inside the runner avoids the race where a post-job step
+            # tries to read /tmp dirs we've already removed.
+            log_dir = os.environ.get("FORGE_MATRIX_LOG_DIR")
+            if log_dir:
+                _dump_compose_diagnostics(
+                    docker_exe, compose_file, Path(log_dir), scenario.name
+                )
             subprocess.run(
                 [
                     docker_exe,
@@ -511,6 +624,47 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 check=False,
             )
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _dump_compose_diagnostics(
+    docker_exe: str, compose_file: Path, log_dir: Path, scenario_name: str
+) -> None:
+    """Write ``docker compose logs`` + ``ps`` into ``log_dir`` for triage.
+
+    Best-effort: a failure to capture must not mask the upstream lane
+    failure, so all subprocesses run with ``check=False`` and short
+    timeouts and any OSError on the file write is swallowed.
+    """
+    import subprocess  # noqa: PLC0415
+
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    log_path = log_dir / f"{scenario_name}.log"
+    ps_path = log_dir / f"{scenario_name}.ps"
+    with (
+        contextlib.suppress(OSError, subprocess.TimeoutExpired),
+        log_path.open("w", encoding="utf-8") as fh,
+    ):
+        subprocess.run(
+            [docker_exe, "compose", "-f", str(compose_file), "logs", "--no-color"],
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            timeout=60,
+            check=False,
+        )
+    with (
+        contextlib.suppress(OSError, subprocess.TimeoutExpired),
+        ps_path.open("w", encoding="utf-8") as fh,
+    ):
+        subprocess.run(
+            [docker_exe, "compose", "-f", str(compose_file), "ps"],
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+            check=False,
+        )
 
 
 def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
@@ -838,11 +992,40 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
     return differing
 
 
+def run_lane_update(scenario: Scenario) -> LaneResult:
+    """Lane E: generate, edit, run forge --update for each mode, verify outcome.
+
+    Drives the three merge modes (``merge`` / ``skip`` / ``overwrite``)
+    against an edited file in a fragment-managed zone, then runs
+    ``forge --harvest --harvest-out=-`` once and asserts a parseable
+    JSON bundle is emitted on stdout. Delegates the per-mode contract
+    to :mod:`tests.matrix.update_contract`.
+
+    Unlike lane D (which uses the Python API directly), lane E shells
+    out to ``python -m forge`` so the argparse, builder and dispatcher
+    path real users hit is exercised end-to-end on every nightly run.
+    """
+    # When the runner is invoked as a script (``uv run python
+    # tests/matrix/runner.py``), only the script directory lands on
+    # sys.path — the absolute ``from tests.matrix.update_contract``
+    # import below would ``ModuleNotFoundError``. Add the repo root
+    # once, idempotently, before the absolute import. Same pattern as
+    # ``run_lane_smoke``.
+    _repo_root = str(Path(__file__).resolve().parents[2])
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+
+    from tests.matrix.update_contract import run_update_contract  # noqa: PLC0415
+
+    return run_update_contract(scenario, _project_config_from_dict, _inject_weld_stubs)
+
+
 LANE_DISPATCH = {
     "generate": run_lane_generate,
     "verify": run_lane_verify,
     "smoke": run_lane_smoke,
     "roundtrip": run_lane_roundtrip,
+    "update": run_lane_update,
 }
 
 
