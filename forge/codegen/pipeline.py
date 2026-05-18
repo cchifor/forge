@@ -29,6 +29,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen.canvas_contract import build_manifest as build_canvas_manifest
 from forge.codegen.canvas_contract import load_components as load_canvas_components
 from forge.codegen.enums import emit_all as emit_enum_all
@@ -70,6 +71,7 @@ def run_codegen(
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
+    _emit_canvas_props_pydantic(config, project_root, collector)
     _emit_shared_enums(config, project_root, collector)
 
 
@@ -124,6 +126,32 @@ def _emit_canvas_manifests(
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
     target = project_root / config.frontend_slug / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
+
+
+def _emit_canvas_props_pydantic(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+) -> None:
+    """Emit Pydantic models for every canvas-component prop schema.
+
+    Generated file: ``services/<backend>/src/app/domain/canvas_props.py``
+    for each Python backend. The TS / Dart variants live in the canvas
+    packages themselves and are not per-project artifacts — they're
+    regenerated from the forge repo via ``python -m
+    forge.codegen.canvas_props``.
+    """
+    schemas = canvas_props_codegen.load_canvas_schemas()
+    if not schemas:
+        return
+    body = canvas_props_codegen.emit_pydantic(schemas)
+    for bc in config.backends:
+        if bc.language is not BackendLanguage.PYTHON:
+            continue
+        target = (
+            project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_props.py"
+        )
+        _write(target, body, collector)
 
 
 def _emit_shared_enums(
