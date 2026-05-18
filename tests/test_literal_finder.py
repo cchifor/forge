@@ -9,8 +9,9 @@ path (item 6 of the bidirectional-sync roadmap):
 * Structural diffs (added/removed lines, renamed identifiers, ``None`` →
   ``int``) → empty tuple.
 * Parse failures → empty tuple.
-* Language gates — Rust returns ``()``; TypeScript returns ``()`` unless
-  the ``ts-morph`` sidecar is enabled.
+* Language gates — TypeScript returns ``()`` unless the ``ts-morph``
+  sidecar is enabled. (Rust has its own dedicated finder; see
+  :mod:`tests.test_literal_finder_rust`.)
 
 The tests build snippet bodies inline because the finder is a pure
 function — no FragmentContext / fragment registry / inject.yaml needed.
@@ -144,9 +145,17 @@ class TestPythonCommentChanges:
 class TestLanguageGates:
     """Non-Python languages respect their gating rules."""
 
-    def test_rust_always_returns_empty(self) -> None:
-        # Rust support is out of scope for v1; any input → empty.
-        assert find_literal_edits("let x = 1;", "let x = 2;", language="rust") == ()
+    def test_rust_pure_literal_swap_emits_edit(self) -> None:
+        # v2 Theme 3B — tree-sitter-rust finder produces real
+        # LiteralEdit records. A bare ``let`` body isn't a complete
+        # Rust source unit, so we wrap in a function for clean parsing.
+        upstream = "fn main() { let x = 1; }"
+        current = "fn main() { let x = 2; }"
+        edits = find_literal_edits(upstream, current, language="rust")
+        assert len(edits) == 1
+        assert edits[0].kind == "int"
+        assert edits[0].old_value == "1"
+        assert edits[0].new_value == "2"
 
     def test_typescript_off_returns_empty(self) -> None:
         # ts_morph_sidecar.is_enabled() defaults to False unless
