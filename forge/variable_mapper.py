@@ -40,7 +40,6 @@ from forge.config.typed_config import (
     FrontendExternal,
     FrontendGenerate,
     TypedConfig,
-    from_legacy_options,
 )
 
 
@@ -122,15 +121,16 @@ def _build_vite_proxy_config(config: ProjectConfig) -> str:
 
 
 def _typed(config: ProjectConfig) -> TypedConfig:
-    """Build the typed view of ``config.options`` for layer-mode lookups.
+    """Return the typed view of ``config.options``.
 
-    Constructs a fresh :class:`TypedConfig` per call rather than caching
-    on ``config`` — variable_mapper is called once per template render,
-    so the conversion cost is negligible and avoiding cache invalidation
-    matters more. C3 will move the typed model onto ``ProjectConfig``
-    itself, at which point this helper becomes a pass-through.
+    C3 made ``ProjectConfig.typed`` the primary surface; this helper
+    is a thin alias so the rest of the module's call sites don't have
+    to choose between ``config.typed`` and a local variable named the
+    same thing. Returning the property's value is allocation-free
+    relative to ``config.typed`` directly — the typed model itself
+    is what the conversion produced.
     """
-    return from_legacy_options(config.options)
+    return config.typed
 
 
 def _frontend_api_target_url(typed: TypedConfig) -> str:
