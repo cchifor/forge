@@ -55,7 +55,11 @@ Schema v2 manifests are accepted on read — the absent
 ``[forge.option_origins]`` table is synthesized as all-``"default"`` so
 the resolver silently skips fragments whose backends aren't present
 (instead of erroring on persisted defaults). After the next
-generate/update the manifest is re-stamped to v3 with accurate origins.
+``forge --update`` (or first re-generate) the manifest is re-stamped
+to v3 with accurate origins. Other write paths (``--reapply-baseline``,
+``--accept-harvested``, ``--resolve``) preserve the on-disk schema
+version intentionally — they shouldn't surprise the user with an
+unrelated schema bump on what may be a quick fix-up command.
 
 Pre-Option shapes (legacy ``[forge.features.*]`` /
 ``[forge.parameters]`` tables) are rejected with a clear error pointing
@@ -297,6 +301,13 @@ def write_forge_toml(
     will treat empty/missing origins as user-set, matching this
     fallback). Origins for paths absent from ``options`` are silently
     dropped — the two tables must stay parallel-keyed.
+
+    ``{}`` (empty dict) and ``None`` produce identical output today:
+    both result in every option being recorded as ``"user"`` because
+    the per-key fallback at the merge step defaults to ``"user"`` for
+    any key not in ``option_origins``. Stage B callers that need to
+    express "all defaulted" must pass a fully-populated dict with
+    explicit ``"default"`` values; ``{}`` is not a shortcut.
 
     ``merge_blocks`` stores per-block metadata used by the three-way
     merge runtime (see :mod:`forge.sync.merge`) and by the
