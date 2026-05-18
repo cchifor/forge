@@ -110,6 +110,44 @@ Codified in:
   ``details``) — FR1 still passes, there's just no block to exercise
   the apply-back smoke.
 
+## Interactive review — ``--harvest-interactive``
+
+By default ``forge --harvest`` runs headless: every candidate the
+extractor pipeline emits lands in the bundle. Passing
+``--harvest-interactive`` opts into a per-candidate review loop:
+
+```
+Candidate 3 of 7
+Fragment: middleware_cors  (backend: api)
+File:     services/api/src/app/main.py
+Kind:     block  risk: safe-apply
+Diff:     +3 -1
+
+    --- a/services/api/src/app/main.py
+    +++ b/services/api/src/app/main.py
+    @@ -12,1 +12,3 @@
+    -log.info("starting")
+    +log.info("starting up", extra={"version": __version__})
+
+Decision: > accept / skip / view full diff / quit
+```
+
+Selecting ``accept`` keeps the candidate in the bundle; ``skip`` drops
+it (and any RFC-006 cross-language suggestions derived from it);
+``view full diff`` renders the untruncated unified diff and re-prompts
+on the same candidate; ``quit`` aborts the harvest cleanly — no bundle
+directory is materialised, and the CLI exits with code 130
+(SIGINT-shaped, distinguishable from the regular ``0`` / ``11``
+outcomes a CI gate may key on).
+
+The review prompt is wired through ``harvest_project``'s
+``prompt_callback`` parameter; tests substitute a deterministic stub
+to drive the loop without a real TTY (see
+``tests/test_harvest_interactive.py``). The flag is mutually
+compatible with ``--harvest-scope`` and ``--harvest-include``: those
+filter the candidate set BEFORE the prompt loop runs, so the operator
+only sees candidates inside the requested scope.
+
 ## Matrix lane D — round-trip CI gate
 
 Lane D wires the invariants into ``tests/matrix/runner.py``. v1

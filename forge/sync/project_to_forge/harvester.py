@@ -34,18 +34,23 @@ Out of scope for this PR (deferred to Phase 4b):
   * ``--emit-pr`` integration with ``gh pr create``.
   * ``--accept-harvested`` to land candidates back in the fragment tree.
   * ``--reapply-baseline`` to restamp baselines after a harvest cycle.
-  * Interactive review prompt (the flag is accepted but no-op'd).
+
+Interactive review (``--harvest-interactive``) is wired via the
+:data:`PromptCallback` parameter on :func:`harvest_project`. Callers
+inject a callback that prompts ``accept`` / ``skip`` / ``quit`` per
+candidate; the default ``None`` preserves the headless contract
+(every candidate is accepted, no prompt is shown).
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -59,6 +64,37 @@ from forge.fragments import FRAGMENT_REGISTRY, Fragment, FragmentImplSpec
 from forge.sync.forge_to_project.updater import _infer_backends
 from forge.sync.manifest import read_forge_toml
 from forge.sync.merge import MergeBlockCollector
+
+# Result tokens a ``prompt_callback`` may return per candidate. ``"quit"``
+# short-circuits the harvest: the caller receives a :class:`HarvestAborted`
+# rather than a partial :class:`HarvestBundle` (and no on-disk bundle is
+# written). ``"skip"`` drops the candidate from the bundle but lets the
+# loop continue to the next one. ``"accept"`` keeps the candidate.
+HarvestDecision = Literal["accept", "skip", "quit"]
+
+# Signature of the per-candidate prompt callback. The harvester passes the
+# candidate plus ``(index, total)`` for "N of M"-style progress display.
+# Implementations live in :mod:`forge.cli.interactive` (real TUI) and in
+# tests (deterministic deque-of-decisions stub). The default of ``None``
+# threaded through :func:`harvest_project` means "accept every candidate"
+# — preserving the legacy non-interactive contract.
+PromptCallback = Callable[[CandidatePatch, int, int], HarvestDecision]
+
+
+class HarvestAborted(Exception):
+    """Raised when the operator selects ``quit`` at the interactive prompt.
+
+    Carries the partial candidate list inspected so far purely for
+    diagnostics; callers MUST NOT persist it — the contract is "quit
+    aborts cleanly, no partial bundle written". The CLI dispatcher
+    catches this and exits cleanly.
+    """
+
+    def __init__(self, inspected_count: int) -> None:
+        super().__init__(
+            f"Harvest aborted by operator after inspecting {inspected_count} candidate(s)."
+        )
+        self.inspected_count = inspected_count
 
 # Every extractor kind the orchestrator understands. The CLI accepts a
 # subset via ``--harvest-include``; the bundle stores patches grouped
@@ -172,7 +208,8 @@ def harvest_project(
     out_dir: Path | None = None,
     scope: tuple[str, ...] | None = None,
     include: tuple[str, ...] = ("files", "blocks", "deps", "env"),
-    interactive: bool = False,  # noqa: ARG001 — accepted for CLI symmetry; TODO Phase 4b.
+    interactive: bool = False,
+    prompt_callback: PromptCallback | None = None,
     quiet: bool = False,
 ) -> HarvestBundle:
     """Walk the project's manifest and run the extractor pipeline.
@@ -191,12 +228,22 @@ def harvest_project(
     When ``out_dir`` is non-None, the bundle is also persisted via
     :meth:`HarvestBundle.write` so the CLI dispatcher doesn't have to.
 
-    ``interactive`` is accepted for CLI symmetry; non-interactive mode
-    is the primary contract for Phase 4 (a Phase 4b PR will wire the
-    review prompt).
+    ``interactive`` opts the harvest into the per-candidate review loop:
+    every real (non-cross-lang) candidate is passed to ``prompt_callback``
+    which returns ``"accept"`` / ``"skip"`` / ``"quit"``. Skipped
+    candidates are pruned from the bundle (and any derivative cross-lang
+    suggestions are pruned with them); ``"quit"`` raises
+    :class:`HarvestAborted` and no bundle is persisted. When
+    ``interactive`` is False (the default) ``prompt_callback`` is ignored
+    and every candidate is kept — preserving the legacy headless
+    contract. Passing ``prompt_callback`` without ``interactive`` is a
+    no-op, mirroring the CLI surface where ``--harvest-interactive``
+    gates the prompt wiring.
 
     Raises :class:`ProvenanceError` if ``project_root`` isn't a
     forge-generated project (missing ``forge.toml``).
+    Raises :class:`HarvestAborted` if the operator selects ``quit`` at
+    the interactive prompt.
     """
     manifest = project_root / "forge.toml"
     if not manifest.is_file():
@@ -275,6 +322,18 @@ def harvest_project(
         ):
             patches = pipeline.run(ctx, plan)
             candidates.extend(patches)
+
+    # Theme 2C — interactive review pass. We prompt on the REAL
+    # candidates only (before the cross-lang parity pass) because
+    # cross-lang suggestions are derivative: skipping a parent block
+    # candidate should drop its sibling-language suggestions too, and
+    # accepting one accepts its suggestions implicitly. When the
+    # operator picks ``quit`` mid-loop we raise :class:`HarvestAborted`
+    # and do NOT persist anything — the partial-bundle scenario isn't a
+    # valid harvest output, so the CLI exits cleanly with no on-disk
+    # artefact.
+    if interactive and prompt_callback is not None and candidates:
+        candidates = _run_interactive_review(candidates, prompt_callback)
 
     # RFC-006 cross-language parity pass — for each ``block`` candidate
     # harvested off a tier-1 fragment, emit synthetic ``cross-lang-suggest``
@@ -912,6 +971,42 @@ def _find_sibling_target(
             if isinstance(target, str) and target:
                 return target
     return None
+
+
+# ---------------------------------------------------------------------------
+# Interactive review (Theme 2C — --harvest-interactive)
+# ---------------------------------------------------------------------------
+
+
+def _run_interactive_review(
+    candidates: list[CandidatePatch],
+    prompt_callback: PromptCallback,
+) -> list[CandidatePatch]:
+    """Drive the per-candidate accept/skip/quit prompt loop.
+
+    Iterates ``candidates`` in their natural emission order, calling
+    ``prompt_callback`` once per entry with ``(index, total)`` so the UI
+    can render a "Candidate N of M" header. ``"accept"`` keeps the
+    candidate; ``"skip"`` drops it; ``"quit"`` raises
+    :class:`HarvestAborted` carrying the count of candidates inspected
+    so far.
+
+    Unknown return values from a buggy callback are treated as
+    ``"skip"`` rather than crashing — the cost of a dropped candidate
+    is recoverable (re-run harvest) where a TypeError in the middle of
+    a review pass loses operator state. We keep this defensive but
+    silent; harness tests assert the legal vocabulary.
+    """
+    accepted: list[CandidatePatch] = []
+    total = len(candidates)
+    for idx, cand in enumerate(candidates, start=1):
+        decision = prompt_callback(cand, idx, total)
+        if decision == "accept":
+            accepted.append(cand)
+        elif decision == "quit":
+            raise HarvestAborted(inspected_count=idx)
+        # "skip" (or any unknown token) → drop the candidate silently.
+    return accepted
 
 
 # ---------------------------------------------------------------------------

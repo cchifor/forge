@@ -64,6 +64,13 @@ class FrontendLayout:
     canvas_manifest_path: str
     shared_enums_dir: str
     shared_enums_emitter: EmitterFlavour
+    event_union_path: str = ""
+    """Where the generated AG-UI event-union module lands (Theme 2B).
+
+    Empty string disables emission for this frontend — useful while a
+    template is still being adopted. Vue is the canonical consumer
+    today; Svelte and Flutter follow in a later PR.
+    """
 
 
 FRONTEND_LAYOUTS: dict[FrontendFramework, FrontendLayout] = {}
@@ -99,6 +106,10 @@ register_frontend_layout(
         canvas_manifest_path="public/canvas.manifest.json",
         shared_enums_dir="src/shared/enums",
         shared_enums_emitter="typescript",
+        # Theme 2B: Vue is the canonical adopter of the event union.
+        # Svelte + Flutter follow in a separate PR; leave the path
+        # empty for them until their templates are updated.
+        event_union_path="src/features/ai_chat/events.gen.ts",
     )
 )
 

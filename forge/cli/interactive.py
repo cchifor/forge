@@ -3,11 +3,17 @@
 Uses questionary for the TUI. Tests patch ``forge.cli.questionary`` and
 the ``_ask_*`` helpers via the re-exports on ``forge.cli``; both paths
 (the re-export and the module-local name) resolve to the same callable.
+
+This module also exposes :func:`prompt_harvest_candidate` — the
+``--harvest-interactive`` review prompt wired by Theme 2C. The
+harvester injects it as a ``prompt_callback`` and tests substitute a
+deterministic deque-driven stub.
 """
 
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING, Literal
 
 import questionary
 
@@ -22,6 +28,9 @@ from forge.config import (
     keycloak_client_id_from,
     validate_features,
 )
+
+if TYPE_CHECKING:
+    from forge.extractors.pipeline import CandidatePatch
 
 
 def _ask_text(message: str, default: str = "") -> str:
@@ -281,3 +290,118 @@ def _print_summary(config: ProjectConfig) -> None:
     if config.include_keycloak:
         print(f"  Keycloak:   port {config.keycloak_port}")
     print()
+
+
+# ---------------------------------------------------------------------------
+# Theme 2C — --harvest-interactive review prompt
+# ---------------------------------------------------------------------------
+
+# Limit the in-line diff preview to a sensible number of lines so the
+# prompt stays scannable. The full diff is one keystroke away
+# ("[v]iew full diff").
+_DIFF_PREVIEW_LINES = 12
+
+
+def _short_diff_stat(diff: str) -> str:
+    """Count ``+``/``-`` data lines in a unified diff.
+
+    Skips the header lines (``+++`` / ``---``) and the hunk markers
+    (``@@``) so the stat reflects content changes only. Returns a
+    string like ``"+3 -1"`` or ``"(no diff)"`` when ``diff`` is empty.
+    """
+    if not diff:
+        return "(no diff)"
+    adds = 0
+    dels = 0
+    for line in diff.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("+"):
+            adds += 1
+        elif line.startswith("-"):
+            dels += 1
+    return f"+{adds} -{dels}"
+
+
+def _format_candidate_header(cand: CandidatePatch, index: int, total: int) -> str:
+    """Render the one-screen candidate summary shown above the prompt."""
+    lines = [
+        "",
+        f"  Candidate {index} of {total}",
+        f"  Fragment: {cand.fragment}  (backend: {cand.backend})",
+        f"  File:     {cand.target_path or cand.rel_path}",
+        f"  Kind:     {cand.kind}  risk: {cand.risk}",
+        f"  Diff:     {_short_diff_stat(cand.diff)}",
+    ]
+    if cand.rationale:
+        lines.append(f"  Note:     {cand.rationale}")
+    if cand.diff:
+        preview = cand.diff.splitlines()[:_DIFF_PREVIEW_LINES]
+        lines.append("")
+        for raw in preview:
+            lines.append(f"    {raw}")
+        if len(cand.diff.splitlines()) > _DIFF_PREVIEW_LINES:
+            remaining = len(cand.diff.splitlines()) - _DIFF_PREVIEW_LINES
+            lines.append(f"    ... ({remaining} more line(s) — choose 'view full diff')")
+    return "\n".join(lines)
+
+
+def _print_full_diff(cand: CandidatePatch) -> None:
+    """Render the full unified diff to stdout, untruncated."""
+    print()
+    print(f"  -- Full diff for {cand.target_path or cand.rel_path} --")
+    if cand.diff:
+        print(cand.diff)
+    else:
+        print("  (extractor did not emit a diff for this candidate)")
+    print()
+
+
+def prompt_harvest_candidate(
+    cand: CandidatePatch,
+    index: int,
+    total: int,
+) -> Literal["accept", "skip", "quit"]:
+    """Interactive ``--harvest-interactive`` review prompt for one candidate.
+
+    Prints a one-screen summary (file, kind, diff stat, short preview)
+    then asks accept / skip / view-full-diff / quit. Selecting
+    ``view full diff`` renders the untruncated diff and re-prompts on
+    the same candidate; the loop only terminates on one of the three
+    final decisions.
+
+    Mirrors the ``_ask_select`` UX used elsewhere in this module so a
+    headless CI environment (no TTY) surfaces the same ``sys.exit(1)``
+    path that the project-generation prompt does. Tests inject a
+    callable with the same signature directly into
+    :func:`forge.sync.project_to_forge.harvester.harvest_project` and
+    never hit this real-questionary path.
+    """
+    while True:
+        print(_format_candidate_header(cand, index, total))
+        choice = questionary.select(
+            "Decision:",
+            choices=[
+                "accept",
+                "skip",
+                "view full diff",
+                "quit",
+            ],
+        ).ask()
+        if choice is None:
+            # The user dismissed the prompt (Ctrl-C / EOF). Treat it as
+            # quit so the harvester aborts cleanly rather than skipping
+            # silently.
+            return "quit"
+        if choice == "view full diff":
+            _print_full_diff(cand)
+            continue
+        if choice == "accept":
+            return "accept"
+        if choice == "skip":
+            return "skip"
+        if choice == "quit":
+            return "quit"
+        # Defensive: unknown selection (questionary shouldn't return
+        # anything outside ``choices=``) — re-prompt rather than crash.
+        continue

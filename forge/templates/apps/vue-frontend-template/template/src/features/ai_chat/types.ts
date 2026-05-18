@@ -1,62 +1,36 @@
 import type { Message } from '@ag-ui/core'
 import { EventType } from '@ag-ui/core'
 
-export interface AgentState {
-  todos?: Array<{ content: string; status: string }>
-  files?: string[]
-  uploads?: Array<{ name: string; path: string; size: number }>
-  cost?: {
-    total_usd: number
-    total_tokens: number
-    run_usd: number
-    run_tokens: number
-  }
-  context?: {
-    usage_pct: number
-    current_tokens: number
-    max_tokens: number
-  }
-  model?: string
-  [key: string]: any
-}
+// Theme 2B — payload + event-union types come from the generated
+// ``events.gen.ts`` so adding a new ui-protocol schema automatically
+// extends this surface and the exhaustiveness check in
+// :func:`assertUnreachable` forces every consumer to handle it.
+export type {
+  AgentState,
+  WorkspaceActivity,
+  ToolCallInfo,
+  UserPromptPayload,
+  HitlResponse,
+  AgUiPayload,
+  McpExtPayload,
+  AgUiEvent,
+  AgUiEventKind,
+} from './events.gen'
+export { assertUnreachable, getEventKind } from './events.gen'
 
-export type DeepAgentCustomPayload = AgentState
+import type { AgentState as _AgentState } from './events.gen'
+
+export type DeepAgentCustomPayload = _AgentState
 
 export type WorkspaceAction = { type: string; data: Record<string, any> }
 
-export interface WorkspaceActivity {
-  engine: 'ag-ui' | 'mcp-ext'
-  activityType: string
-  messageId: string
-  content: Record<string, any>
-}
-
-// ── Tool call tracking ──
-
-export interface ToolCallInfo {
-  id: string
-  name: string
-  status: 'running' | 'completed' | 'error'
-  args?: Record<string, unknown>
-}
-
 // ── HITL (Human-in-the-Loop) ──
-
+// ``UserPromptOption`` is the element type of ``UserPromptPayload.options``;
+// keep it exported so existing consumers (forms, prompts) compile.
 export interface UserPromptOption {
   label: string
   description?: string
   recommended?: string
-}
-
-export interface UserPromptPayload {
-  tool_call_id: string
-  question: string
-  options: UserPromptOption[]
-}
-
-export interface HitlResponse {
-  tool_call_id: string
-  answer: string
 }
 
 export type { Message }
