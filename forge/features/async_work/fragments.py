@@ -56,14 +56,18 @@ register_fragment(
 register_fragment(
     Fragment(
         name="queue_port",
-        # Explicit tier=2 override: this is a committed migration target
-        # to tier 1 (Rust adapter pending — see RFC-006). Auto-derive
-        # would tag it as tier 3 (Python-only), which understates the
-        # intent.
+        # RFC-012 (Theme 7-C2/C3) — Node and Rust ports land alongside
+        # the Python one, all three behind the same domain shape. Once
+        # the Rust impl ships in C3 the auto-derivation will tag this
+        # as tier 1 cross-backend parity; the explicit ``parity_tier=2``
+        # override that used to live here is dropped in C3.
         parity_tier=2,
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir=_impl("queue_port", "python"),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("queue_port", "node"),
             ),
         },
     )
@@ -83,6 +87,27 @@ register_fragment(
                 fragment_dir=_impl("queue_redis", "python"),
                 dependencies=("redis>=5.2.0",),
                 env_vars=(("REDIS_URL", "redis://redis:6379/0"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="queue_bullmq",
+        # RFC-012 (Theme 7-C2) — BullMQ adapter for Node. Node-only by
+        # design: BullMQ is a Node-native queue library. Auto-derives as
+        # tier 3, which is the correct label — see RFC-012's
+        # "Promotion to tier-1" section: tier-3 here means "adapter is
+        # language-specific by design", not "feature is Python-only".
+        depends_on=("queue_port",),
+        capabilities=("redis",),
+        implementations={
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("queue_bullmq", "node"),
+                dependencies=("bullmq@5.30.0", "ioredis@5.4.1"),
+                env_vars=(("TASKIQ_BROKER_URL", "redis://redis:6379/2"),),
             ),
         },
     )
