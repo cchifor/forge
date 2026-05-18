@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 466,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
