@@ -78,6 +78,20 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     (never touching ``config.output_dir``) and the temp path is returned
     for inspection. The caller is responsible for cleanup.
     """
+    project_root = _create_root(config, dry_run)
+    collector = _setup_provenance(project_root)
+    plan = _resolve_and_validate(config)
+    _generate_backends(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
+    _generate_frontend_phase(config, project_root, quiet=quiet)
+    _render_docker_stack(config, plan, project_root, quiet=quiet)
+    _generate_frontend_extras(config, project_root, quiet=quiet)
+    _apply_project_scope(config, plan, project_root, collector, quiet=quiet)
+    _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
+    return project_root
+
+
+def _create_root(config: ProjectConfig, dry_run: bool) -> Path:
+    """Resolve the project root directory and ensure it exists."""
     if dry_run:
         import tempfile  # noqa: PLC0415
 
@@ -86,27 +100,51 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
     else:
         project_root = Path(config.output_dir).resolve() / config.project_slug
     project_root.mkdir(parents=True, exist_ok=True)
+    return project_root
 
-    def _log(msg: str) -> None:
-        if not quiet:
-            print(msg)
 
-    # Per-file provenance for every write this run. Stamped into forge.toml
-    # at the end; the updater uses it to distinguish user-modified from
-    # fragment-modified files on subsequent `forge --update` runs.
-    collector = ProvenanceCollector(project_root=project_root)
+def _setup_provenance(project_root: Path) -> ProvenanceCollector:
+    """Create the per-file provenance collector for this generate() run.
 
+    Per-file provenance for every write this run. Stamped into forge.toml
+    at the end; the updater uses it to distinguish user-modified from
+    fragment-modified files on subsequent `forge --update` runs.
+    """
+    return ProvenanceCollector(project_root=project_root)
+
+
+def _resolve_and_validate(config: ProjectConfig) -> ResolvedPlan:
+    """Resolve the capability plan and run static pre-flight validation.
+
+    P1.3: static pre-flight check. Catches inject.yaml / env.yaml /
+    file-overlap problems in <100ms before Copier runs (which takes
+    ~5s per backend). Failures here surface every issue at once so
+    plugin authors aren't stuck iterating through them serially.
+    """
     with phase_timer(_logger, "generate.resolve"):
         plan = resolve(config)
 
-    # P1.3: static pre-flight check. Catches inject.yaml / env.yaml /
-    # file-overlap problems in <100ms before Copier runs (which takes
-    # ~5s per backend). Failures here surface every issue at once so
-    # plugin authors aren't stuck iterating through them serially.
     from forge.plan_validator import validate_plan  # noqa: PLC0415
 
     with phase_timer(_logger, "generate.validate_plan"):
         validate_plan(plan)
+    return plan
+
+
+def _generate_backends(
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    collector: ProvenanceCollector,
+    *,
+    quiet: bool,
+    dry_run: bool,
+) -> None:
+    """Render every backend: copier, provenance, fragments, strip, toolchain."""
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            print(msg)
 
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
@@ -203,6 +241,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
                 spec.toolchain.verify(backend_dir, quiet=quiet)
             spec.toolchain.post_generate(backend_dir, quiet=quiet)
 
+
+def _generate_frontend_phase(
+    config: ProjectConfig, project_root: Path, *, quiet: bool
+) -> None:
+    """Phase 2: render the frontend via Copier when configured."""
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            print(msg)
+
     # 2. Generate frontend
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         _log(f"  Generating {config.frontend.framework.value} frontend ...")
@@ -212,6 +260,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             framework=config.frontend.framework.value,
         ):
             _generate_frontend(config, project_root, quiet=quiet)
+
+
+def _render_docker_stack(
+    config: ProjectConfig, plan: ResolvedPlan, project_root: Path, *, quiet: bool
+) -> None:
+    """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets."""
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            print(msg)
 
     # 3. Render Docker Compose
     #
@@ -275,6 +333,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
             validate_dst = project_root / "validate.sh"
             validate_dst.write_bytes(validate_src.replace("\r\n", "\n").encode("utf-8"))
 
+
+def _generate_frontend_extras(
+    config: ProjectConfig, project_root: Path, *, quiet: bool
+) -> None:
+    """Phases 4 & 5: Playwright e2e tests + frontend Dockerfile/nginx."""
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            print(msg)
+
     # 4. Generate Playwright e2e tests
     if (
         config.frontend
@@ -291,6 +359,16 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         render_frontend_dockerfile(config, frontend_dir)
         render_nginx_conf(config, frontend_dir)
 
+
+def _apply_project_scope(
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    collector: ProvenanceCollector,
+    *,
+    quiet: bool,
+) -> None:
+    """Catch-all provenance sweep, project-scope features, shared files, codegen."""
     # Record any non-backend base-template writes (frontend, e2e, infra) so
     # the provenance manifest covers the full project tree, not just
     # backends. We scan everything outside services/ to avoid double-recording
@@ -344,6 +422,22 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         if not quiet:
             print(f"  [warn] codegen pipeline emitted an error: {exc}")
 
+
+def _finalize(
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    collector: ProvenanceCollector,
+    *,
+    quiet: bool,
+    dry_run: bool,
+) -> None:
+    """Write forge.toml manifest and initialize the project git repository."""
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            print(msg)
+
     with phase_timer(_logger, "generate.write_forge_toml"):
         _write_forge_toml(config, project_root, plan, collector=collector)
 
@@ -351,8 +445,6 @@ def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) 
         _log("  Initializing git repository ...")
         _cleanup_sub_git_repos(project_root)
         _git_init(project_root)
-
-    return project_root
 
 
 # Directories that frontend / backend toolchains create AFTER forge has
