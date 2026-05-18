@@ -3,54 +3,103 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
-/// One event from an AG-UI SSE stream.
-class AgUiEvent {
-  final String type;
-  final Map<String, dynamic> data;
-
-  const AgUiEvent({required this.type, required this.data});
-
-  factory AgUiEvent.fromJson(Map<String, dynamic> json) =>
-      AgUiEvent(type: json['type'] as String, data: json);
-}
-
-/// Production-grade AG-UI SSE client with reconnect + Last-Event-ID resume.
+/// Production-grade AG-UI SSE client.
 ///
-/// Phase 3.2 upgrade over the Flutter template's hand-rolled parser:
-///   * exponential backoff on connection loss
-///   * Last-Event-ID header resumes from the last delivered event
+/// Connects to an AG-UI agent endpoint over Server-Sent Events. Each `data:`
+/// frame is parsed into a typed event by the caller-supplied [parser]. This
+/// keeps the package agnostic of the concrete event union — generated apps
+/// can ship their own `sealed class AgUiEvent` hierarchy and feed its
+/// `parse(json)` factory in.
+///
+/// Beyond the raw SSE plumbing, the client adds:
+///
+///   * exponential-backoff reconnect when [reconnect] is enabled
+///   * `Last-Event-ID` header resumes from the last delivered event id
 ///   * graceful cancellation via the returned stream
+///   * a [runAgent] convenience that matches the deepagent backend's
+///     `POST /agent/run` contract (threadId/runId/messages/state/forwardedProps)
 ///
-/// Usage:
+/// Usage with a typed event union:
 ///
-///     final client = AgUiClient(dio: Dio());
-///     final sub = client.connect(url: '/agent/run', body: payload).listen((ev) {
+///     final client = AgUiClient<AgUiEvent>(
+///       dio: Dio(),
+///       parser: AgUiEvent.parse,
+///       onParseError: (data) => UnknownEvent(type: '__parse_error__', raw: {'data': data}),
+///     );
+///     await for (final ev in client.runAgent(threadId: 't', runId: 'r', messages: [])) {
 ///       // handle ev
-///     });
-class AgUiClient {
+///     }
+class AgUiClient<E> {
   final Dio _dio;
+  final String _baseUrl;
+  final E? Function(Map<String, dynamic>) _parser;
+  final E? Function(String raw)? _onParseError;
+  final bool _reconnect;
   final Duration _initialBackoff;
   final Duration _maxBackoff;
   String? _lastEventId;
 
   AgUiClient({
     required Dio dio,
+    required E? Function(Map<String, dynamic>) parser,
+    E? Function(String raw)? onParseError,
+    String baseUrl = '/agent/',
+    bool reconnect = false,
     Duration initialBackoff = const Duration(milliseconds: 500),
     Duration maxBackoff = const Duration(seconds: 30),
   })  : _dio = dio,
+        _baseUrl = baseUrl,
+        _parser = parser,
+        _onParseError = onParseError,
+        _reconnect = reconnect,
         _initialBackoff = initialBackoff,
         _maxBackoff = maxBackoff;
 
-  /// Open the SSE stream. Events are emitted onto the returned stream;
+  /// Run an AG-UI agent against the deepagent `POST /agent/run` contract.
+  ///
+  /// Returns a one-shot stream that completes when the server closes the
+  /// SSE connection or emits RUN_FINISHED. If [reconnect] was enabled at
+  /// construction the stream resumes via Last-Event-ID on transient errors;
+  /// otherwise a transport failure is surfaced via [onParseError] (if
+  /// provided) and the stream closes.
+  Stream<E> runAgent({
+    required String threadId,
+    required String runId,
+    required List<Map<String, dynamic>> messages,
+    Map<String, dynamic> state = const {},
+    Map<String, dynamic> forwardedProps = const {},
+    String? bearerToken,
+  }) {
+    final body = <String, dynamic>{
+      'threadId': threadId,
+      'runId': runId,
+      'messages': messages,
+      'state': state,
+      'tools': const <Map<String, dynamic>>[],
+      'context': const <Map<String, dynamic>>[],
+      'forwardedProps': forwardedProps,
+    };
+    return connect(url: _baseUrl, body: body, bearerToken: bearerToken);
+  }
+
+  /// Open an SSE stream against an arbitrary URL.
+  ///
+  /// The body is JSON-encoded. Events are emitted onto the returned stream;
   /// closing the subscription cancels the HTTP request.
-  Stream<AgUiEvent> connect({
+  Stream<E> connect({
     required String url,
     required Map<String, dynamic> body,
+    String? bearerToken,
   }) async* {
+    if (!_reconnect) {
+      yield* _openOnce(url: url, body: body, bearerToken: bearerToken);
+      return;
+    }
+
     var backoff = _initialBackoff;
     while (true) {
       try {
-        await for (final ev in _openOnce(url: url, body: body)) {
+        await for (final ev in _openOnce(url: url, body: body, bearerToken: bearerToken)) {
           yield ev;
           backoff = _initialBackoff;
         }
@@ -68,58 +117,82 @@ class AgUiClient {
     }
   }
 
-  Stream<AgUiEvent> _openOnce({
+  Stream<E> _openOnce({
     required String url,
     required Map<String, dynamic> body,
+    String? bearerToken,
   }) async* {
     final headers = <String, dynamic>{
-      'accept': 'text/event-stream',
-      if (_lastEventId != null) 'last-event-id': _lastEventId!,
+      'Accept': 'text/event-stream',
+      'Content-Type': 'application/json',
+      if (_lastEventId != null) 'Last-Event-ID': _lastEventId!,
+      if (bearerToken != null && bearerToken.isNotEmpty)
+        'Authorization': 'Bearer $bearerToken',
     };
-    final response = await _dio.post<ResponseBody>(
-      url,
-      data: body,
-      options: Options(
-        headers: headers,
-        responseType: ResponseType.stream,
-      ),
-    );
 
-    final stream = response.data!.stream;
+    Response<ResponseBody> response;
+    try {
+      response = await _dio.post<ResponseBody>(
+        url,
+        data: jsonEncode(body),
+        options: Options(
+          headers: headers,
+          responseType: ResponseType.stream,
+          receiveTimeout: const Duration(minutes: 10),
+        ),
+      );
+    } on DioException {
+      // Reconnect mode catches this in connect(); non-reconnect mode lets
+      // onParseError surface a synthetic event and then closes.
+      if (_reconnect) rethrow;
+      final synthetic = _onParseError?.call('agent request failed');
+      if (synthetic != null) yield synthetic;
+      return;
+    }
+
+    final stream = response.data?.stream;
+    if (stream == null) {
+      final synthetic = _onParseError?.call('agent returned an empty stream');
+      if (synthetic != null) yield synthetic;
+      return;
+    }
+
     final buffer = StringBuffer();
-    await for (final chunk in stream) {
-      buffer.write(utf8.decode(chunk, allowMalformed: true));
+    await for (final chunk in stream.cast<List<int>>().transform(utf8.decoder)) {
+      buffer.write(chunk);
       while (true) {
-        final body = buffer.toString();
-        final boundary = body.indexOf('\n\n');
-        if (boundary < 0) break;
-        final raw = body.substring(0, boundary);
+        final text = buffer.toString();
+        final separator = text.indexOf('\n\n');
+        if (separator == -1) break;
+        final frame = text.substring(0, separator);
         buffer.clear();
-        buffer.write(body.substring(boundary + 2));
+        buffer.write(text.substring(separator + 2));
 
-        final event = _parseEvent(raw);
+        final event = _parseFrame(frame);
         if (event != null) yield event;
       }
     }
   }
 
-  AgUiEvent? _parseEvent(String raw) {
-    String? dataPayload;
-    for (final line in raw.split('\n')) {
+  E? _parseFrame(String frame) {
+    final dataLines = <String>[];
+    for (final line in const LineSplitter().convert(frame)) {
       if (line.startsWith('data:')) {
-        dataPayload = line.substring(5).trimLeft();
+        dataLines.add(line.substring(5).trimLeft());
       } else if (line.startsWith('id:')) {
         _lastEventId = line.substring(3).trim();
       }
+      // Comment lines (':' prefix) and blank lines are skipped.
     }
-    if (dataPayload == null || dataPayload.isEmpty) return null;
+    if (dataLines.isEmpty) return null;
+    final payload = dataLines.join('\n');
     try {
-      final decoded = jsonDecode(dataPayload);
+      final decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) {
-        return AgUiEvent.fromJson(decoded);
+        return _parser(decoded);
       }
     } catch (_) {
-      // Malformed event payload — skip.
+      return _onParseError?.call(payload);
     }
     return null;
   }

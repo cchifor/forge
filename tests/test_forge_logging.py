@@ -8,7 +8,14 @@ import logging
 
 import pytest
 
-from forge.logging import configure_logging, get_logger, log_event
+from forge.logging import (
+    configure_logging,
+    correlation_id_scope,
+    get_correlation_id,
+    get_logger,
+    log_event,
+    new_correlation_id,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -140,3 +147,68 @@ def test_log_json_kwarg_emits_ndjson_lines(monkeypatch):
     b = json.loads(lines[1])
     assert a["event"] == "ndjson.one" and a["k"] == 1
     assert b["event"] == "ndjson.two" and b["k"] == 2
+
+
+# ---------------------------------------------------------------------------
+# v2 Theme 10 — correlation_id ContextVar wiring
+# ---------------------------------------------------------------------------
+
+
+def test_new_correlation_id_returns_uuid_string():
+    cid = new_correlation_id()
+    assert isinstance(cid, str)
+    assert len(cid) == 36
+    assert cid.count("-") == 4
+    # Just installed -> get_correlation_id reads the same value back.
+    assert get_correlation_id() == cid
+
+
+def test_log_event_attaches_correlation_id_automatically():
+    """When a correlation ID is active, every ``log_event`` carries it."""
+    buf = io.StringIO()
+    configure_logging(stream=buf, fmt="json")
+    logger = get_logger("tests")
+    with correlation_id_scope("fixed-cid-1234"):
+        log_event(logger, "scoped.event")
+    record = json.loads(buf.getvalue().strip().splitlines()[-1])
+    assert record["correlation_id"] == "fixed-cid-1234"
+
+
+def test_correlation_id_scope_restores_previous():
+    """The scope manager resets to the prior value on exit."""
+    with correlation_id_scope("outer"):
+        assert get_correlation_id() == "outer"
+        with correlation_id_scope("inner"):
+            assert get_correlation_id() == "inner"
+        assert get_correlation_id() == "outer"
+
+
+def test_explicit_correlation_id_in_log_event_wins():
+    """Caller-supplied ``correlation_id=`` overrides the ContextVar."""
+    buf = io.StringIO()
+    configure_logging(stream=buf, fmt="json")
+    logger = get_logger("tests")
+    with correlation_id_scope("from-contextvar"):
+        log_event(logger, "explicit.event", correlation_id="from-caller")
+    record = json.loads(buf.getvalue().strip().splitlines()[-1])
+    assert record["correlation_id"] == "from-caller"
+
+
+def test_no_correlation_id_when_unset():
+    """``log_event`` outside any scope emits no ``correlation_id`` key."""
+    # The autouse fixture clears handlers; the ContextVar default is None
+    # unless an outer test seeded one — neutralise by entering a scope
+    # with None.
+    buf = io.StringIO()
+    configure_logging(stream=buf, fmt="json")
+    logger = get_logger("tests")
+    # Push None into the ContextVar via the public helper.
+    from forge.logging import _correlation_id  # noqa: PLC0415
+
+    token = _correlation_id.set(None)
+    try:
+        log_event(logger, "no.cid")
+    finally:
+        _correlation_id.reset(token)
+    record = json.loads(buf.getvalue().strip().splitlines()[-1])
+    assert "correlation_id" not in record

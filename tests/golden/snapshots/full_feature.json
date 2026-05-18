@@ -132,6 +132,10 @@
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
     },
+    "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
+      "size": 2878,
+      "sha256": "d4d1c834a9546bd3"
+    },
     "apps/frontend/src/features/ai_chat/canvas/CanvasFallback.vue": {
       "size": 1009,
       "sha256": "7005a82c335d4caa"
@@ -141,8 +145,8 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2497,
-      "sha256": "afd6a4e1d0e87249"
+      "size": 2825,
+      "sha256": "9a961a8a61e1960a"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
@@ -957,7 +961,7 @@
       "sha256": "dea0477b7d706e08"
     },
     "forge.toml": {
-      "size": 119900,
+      "size": 120117,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
