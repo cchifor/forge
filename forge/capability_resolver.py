@@ -292,7 +292,15 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
             # something that can't apply. If the fragment was pulled in
             # by a default Option value (they didn't touch it), skip
             # silently — that's just "this default isn't relevant here".
-            if _is_user_selected(config.options, name):
+            #
+            # ``option_origins`` distinguishes the two: an option with
+            # origin="user" is a real user selection; origin="default"
+            # is a resolver-filled value persisted in forge.toml on a
+            # previous run. Empty / missing origins fall back to "user"
+            # to preserve pre-WS2 behavior for ad-hoc ProjectConfig
+            # construction without origins (test fixtures, in-memory
+            # callers that haven't been ported).
+            if _is_user_selected(config.options, name, config.option_origins):
                 supported = ", ".join(sorted(lg.value for lg in frag.implementations)) or "(none)"
                 present = ", ".join(lang.value for lang in project_backends) or "(none)"
                 raise OptionsError(
@@ -317,26 +325,44 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     )
 
 
-def _is_user_selected(user_options: dict[str, object], fragment_name: str) -> bool:
-    """True if any option the user explicitly set enables this fragment.
+def _is_user_selected(
+    user_options: dict[str, object],
+    fragment_name: str,
+    origins: dict[str, str] | None = None,
+) -> bool:
+    """True if an option the user explicitly set enables this fragment.
 
     Used to distinguish "silent skip — default didn't apply here" from
     "hard error — user requested something impossible."
 
-    Discriminator options that fan out to multiple per-language fragments
-    (e.g. ``auth.mode=generate`` enables ``platform_auth_sdk_python`` +
-    ``_node`` + ``_rust``) are NOT counted as user-selecting any single
-    incompatible fragment. The user picked the *bundle*; the resolver is
-    expected to take only the per-language fragments compatible with the
-    project's backends. Hard-erroring on the unmatched ones would block
-    every Python-only / Node-only / Rust-only project from using the
-    auth stack.
+    ``origins`` maps each option path in ``user_options`` to ``"user"``
+    (explicit user choice) or ``"default"`` (resolver-filled value
+    persisted in ``forge.toml`` on a previous run). Missing keys and a
+    ``None`` argument both fall back to ``"user"`` — preserving the
+    pre-WS2 behavior where every path present in ``user_options`` was
+    treated as a real user selection. Test fixtures and in-memory
+    callers that build ``ProjectConfig`` without an origins map keep
+    working unchanged.
 
-    A single-fragment option (e.g. ``platform.admin_panel=True`` enables
-    only ``admin_panel``) still hard-errors when incompatible — that's a
-    real user typo, not a fanout intent.
+    The discriminator-vs-single-fragment heuristic is unchanged: options
+    that fan out to multiple per-language fragments (e.g.
+    ``auth.mode=generate`` enables ``platform_auth_sdk_python`` +
+    ``_node`` + ``_rust``) are NOT counted as user-selecting any single
+    incompatible fragment — the user picked the *bundle*; per-language
+    fanout is expected to be language-filtered silently. Single-fragment
+    options still hard-error on incompatibility — a real user typo
+    worth surfacing.
     """
+    if origins is None:
+        origins = {}
     for path, value in user_options.items():
+        # Only paths the user explicitly set count. Defaulted-but-
+        # persisted values look identical to user input in
+        # ``user_options`` (the manifest read populates it from
+        # forge.toml regardless of provenance); origins is the
+        # signal we use to tell them apart.
+        if origins.get(path, "user") != "user":
+            continue
         spec = OPTION_REGISTRY.get(path)
         if spec is None:
             continue

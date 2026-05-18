@@ -1153,10 +1153,17 @@ class TestAcceptHarvestedCLIDispatch:
 
 
 class TestAcceptHarvestedManifestSchema:
-    def test_manifest_remains_schema_v2_after_restamp(self, tmp_path: Path) -> None:
+    def test_manifest_remains_at_current_schema_after_restamp(
+        self, tmp_path: Path
+    ) -> None:
         """``write_forge_toml`` is used for round-trip, so schema_version
-        + template_versions + every other v2 field must survive the
-        re-stamp.
+        + template_versions + every other current-schema field must
+        survive the re-stamp.
+
+        Note (WS2): schema_version is bumped to 3 by the default
+        ``write_forge_toml`` call below — the assertion below pins it
+        to 3 to match. The semantic check is "no schema downgrade
+        across a harvest-accept round trip", not "stay at 2".
         """
         fragment_name = "test_schema_v2"
         meta = _scaffold_project_with_block(tmp_path, fragment_name=fragment_name)
@@ -1206,7 +1213,10 @@ class TestAcceptHarvestedManifestSchema:
             _unregister_fragment(fragment_name)
         assert report.restamped == 1
         data = read_forge_toml(tmp_path / "forge.toml")
-        assert data.schema_version == 2
+        # WS2 bumped CURRENT_SCHEMA_VERSION to 3. The re-stamp picks
+        # up the new default — the test's intent is "no schema
+        # downgrade across the round trip", which still holds.
+        assert data.schema_version == 3
         assert data.template_versions == {"python": "0.6.1"}
         assert data.options == {"some.path": "value"}
         # fragment_version bumped from the registry/forge.__version__
