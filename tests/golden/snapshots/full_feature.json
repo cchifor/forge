@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1100,
+      "size": 1095,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -132,6 +132,10 @@
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
     },
+    "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
+      "size": 2878,
+      "sha256": "d4d1c834a9546bd3"
+    },
     "apps/frontend/src/features/ai_chat/canvas/CanvasFallback.vue": {
       "size": 1009,
       "sha256": "7005a82c335d4caa"
@@ -141,8 +145,8 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2497,
-      "sha256": "afd6a4e1d0e87249"
+      "size": 2825,
+      "sha256": "9a961a8a61e1960a"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
@@ -957,7 +961,7 @@
       "sha256": "dea0477b7d706e08"
     },
     "forge.toml": {
-      "size": 118402,
+      "size": 118619,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1377,7 +1381,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 466,
+      "size": 461,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1893,7 +1897,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 563,
+      "size": 558,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
