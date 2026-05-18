@@ -41,12 +41,11 @@ Template-level updates (1.2.0+):
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
-from forge.capability_resolver import ResolvedFragment, ResolvedPlan, resolve
+from forge.capability_resolver import ResolvedPlan, resolve
 from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import (
     PROVENANCE_MANIFEST_MISSING,
@@ -54,179 +53,25 @@ from forge.errors import (
     OptionsError,
     ProvenanceError,
 )
-from forge.fragment_context import FragmentContext, UpdateMode
+from forge.fragment_context import UpdateMode
 from forge.sync.forge_to_project.uninstaller import (
     UninstallOutcome,
     disabled_fragments,
     uninstall_fragment,
 )
+from forge.sync.forge_to_project.updater._merge_driver import (
+    _apply_fragment,
+    apply_features,
+    apply_project_features,
+)
+from forge.sync.forge_to_project.updater._template_render import _build_template_update_tasks
 from forge.sync.lock import acquire_lock
 from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
 from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
-if TYPE_CHECKING:
-    from forge.config import FrontendFramework
-    from forge.fragments import FragmentImplSpec
-    from forge.middleware_spec import MiddlewareSpec
 
 logger = logging.getLogger(__name__)
-
-
-def apply_features(
-    bc: BackendConfig,
-    backend_dir: Path,
-    resolved: tuple[ResolvedFragment, ...],
-    quiet: bool = False,
-    *,
-    update_mode: UpdateMode = "strict",
-    file_baselines: Mapping[str, str] | None = None,
-    collector: ProvenanceCollector | None = None,
-    option_values: Mapping[str, Any] | None = None,
-    project_root: Path | None = None,
-) -> None:
-    """Apply each backend-scoped fragment that supports this backend.
-
-    Project-scoped fragments are emitted separately via
-    ``apply_project_features`` after all backends are rendered.
-
-    ``update_mode`` (P0.1, 1.1.0-alpha.2) drives the file-copy collision
-    behaviour. ``"strict"`` is fresh generation — fragments may not
-    overlap the base template or each other. ``"merge"`` / ``"skip"`` /
-    ``"overwrite"`` are the three ``forge --update`` modes; see
-    :data:`forge.fragment_context.UpdateMode`.
-
-    ``file_baselines`` is the manifest's per-file baseline SHA map
-    (POSIX rel-path → SHA-256). Required by ``"merge"`` mode for the
-    three-way decision; ignored by the other modes.
-
-    When ``collector`` is supplied, every file written by the fragment
-    layer is recorded in the provenance manifest with ``origin='fragment'``
-    and the fragment's name.
-
-    ``option_values`` (Epic E, 1.1.0-alpha.1) — the resolver's fully-
-    defaulted option map. When provided, each fragment's
-    :class:`FragmentContext` sees a filtered view restricted to the
-    impl's ``reads_options`` tuple. When omitted (backward-compat for
-    callers that haven't threaded the plan through yet), fragments see
-    ``ctx.options == {}`` — the pre-Epic-E behaviour.
-
-    ``project_root`` is needed for merge-zone injections and future
-    provenance-driven uninstall. Defaults to ``backend_dir.parent.parent``
-    on the assumption of the conventional ``<project_root>/services/<backend>/``
-    layout — the generator always passes it explicitly.
-    """
-    if option_values is None:
-        option_values = {}
-    if project_root is None:
-        project_root = backend_dir.parent.parent
-    for rf in resolved:
-        if bc.language not in rf.target_backends:
-            continue
-        impl = rf.fragment.implementations[bc.language]
-        if impl.scope != "backend":
-            continue
-        if not quiet:
-            print(f"  [frag] applying '{rf.fragment.name}' to {bc.name} ({bc.language.value})")
-        ctx = FragmentContext.filtered(
-            backend_config=bc,
-            backend_dir=backend_dir,
-            project_root=project_root,
-            option_values=option_values,
-            reads_options=impl.reads_options,
-            provenance=collector,
-            update_mode=update_mode,
-            file_baselines=file_baselines,
-        )
-        _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
-
-
-def apply_project_features(
-    project_root: Path,
-    resolved: tuple[ResolvedFragment, ...],
-    quiet: bool = False,
-    *,
-    update_mode: UpdateMode = "strict",
-    file_baselines: Mapping[str, str] | None = None,
-    collector: ProvenanceCollector | None = None,
-    option_values: Mapping[str, Any] | None = None,
-    frontend_framework: FrontendFramework | None = None,
-) -> None:
-    """Apply project-scoped fragment implementations at the project root.
-
-    See :func:`apply_features` for ``update_mode``, ``file_baselines``,
-    and ``option_values`` semantics.
-
-    ``frontend_framework`` (when provided) gates fragments whose
-    ``target_frontends`` tuple is non-empty: a fragment that declares
-    ``target_frontends=(FrontendFramework.VUE,)`` only applies when the
-    project's frontend is Vue. Pass ``FrontendFramework.NONE`` for
-    frontend-less projects so frontend-targeted fragments skip
-    explicitly. Pass ``None`` (the default) when the caller doesn't yet
-    track frontend choice (the updater path) — gating becomes a no-op
-    in that case so existing behavior is preserved until the caller is
-    wired through.
-    """
-    if option_values is None:
-        option_values = {}
-    for rf in resolved:
-        if (
-            frontend_framework is not None
-            and rf.fragment.target_frontends
-            and frontend_framework not in rf.fragment.target_frontends
-        ):
-            if not quiet:
-                print(
-                    f"  [frag] skipping '{rf.fragment.name}' — "
-                    f"target_frontends={[f.value for f in rf.fragment.target_frontends]}, "
-                    f"project frontend={frontend_framework.value}"
-                )
-            continue
-        for lang in rf.target_backends:
-            impl = rf.fragment.implementations[lang]
-            if impl.scope == "project":
-                if not quiet:
-                    print(f"  [frag] applying '{rf.fragment.name}' to project root")
-                proxy = BackendConfig(name="project", project_name="", language=lang)
-                ctx = FragmentContext.filtered(
-                    backend_config=proxy,
-                    backend_dir=project_root,
-                    project_root=project_root,
-                    option_values=option_values,
-                    reads_options=impl.reads_options,
-                    provenance=collector,
-                    update_mode=update_mode,
-                    file_baselines=file_baselines,
-                )
-                # Project-scope fragments typically don't declare middlewares
-                # (they emit project-level files like AGENTS.md). Pass the
-                # tuple anyway so the pipeline API stays uniform.
-                _apply_fragment(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
-                break
-
-
-def _apply_fragment(
-    ctx: FragmentContext,
-    impl: FragmentImplSpec,
-    feature_key: str,
-    *,
-    middlewares: tuple[MiddlewareSpec, ...] = (),
-) -> None:
-    """Apply one fragment implementation via the default :class:`FragmentPipeline`.
-
-    Epic A lands the applier decomposition: four single-responsibility
-    classes composed by :class:`FragmentPipeline`. Epic K threads any
-    :class:`MiddlewareSpec` declarations on the fragment into the plan
-    so the applier emits the middleware import + registration lines
-    without a handwritten ``inject.yaml``.
-
-    This function is a stable internal entry point — callers route
-    through it so the rest of the package doesn't need to know
-    pipelines exist.
-    """
-    from forge.appliers import FragmentPipeline  # noqa: PLC0415
-
-    FragmentPipeline.default().run(ctx, impl, feature_key, middlewares=middlewares)
 
 
 def update_project(
@@ -738,137 +583,6 @@ def classify_project_state(
     return out
 
 
-def _build_template_update_tasks(
-    *,
-    project_root: Path,
-    data: ForgeTomlData,
-    backends: list[BackendConfig],
-) -> list[Any]:
-    """Compare recorded vs. live template versions and enqueue tasks.
-
-    For each language in :attr:`ForgeTomlData.template_versions`, look
-    up the current template version from the registry (preferring
-    ``_forge_template.toml`` under ``forge/templates/<dir>``). If the
-    recorded version differs from the current, build a
-    :class:`TemplateUpdateTask` for the corresponding target directory
-    on disk. Frontends use ``apps/<framework>/`` (or the conventional
-    ``apps/<framework_slug>/``); backends use ``services/<backend>/``.
-
-    Returns the (possibly empty) list of tasks. The list is empty when
-    every recorded version matches the live one — no Copier work is
-    required in that case.
-    """
-    # Importing the generator's TEMPLATES_DIR + TEMPLATE_DIRS would
-    # create a circular import (generator → updater hooks via the CLI),
-    # so we resolve the templates root and the frontend dispatch
-    # table from forge.templates directly.
-    import forge as _forge  # noqa: PLC0415
-    from forge.config import (  # noqa: PLC0415
-        BACKEND_REGISTRY,
-        FRONTEND_SPECS,
-        BackendLanguage,
-        FrontendFramework,
-    )
-    from forge.sync.forge_to_project.template_update import (  # noqa: PLC0415
-        TemplateUpdateTask,
-    )
-    from forge.sync.template_version import resolve_template_version  # noqa: PLC0415
-
-    templates_root = Path(_forge.__file__).parent / "templates"
-    # Mirror the generator's frontend dispatch so we resolve framework
-    # → template_dir without importing the generator.
-    frontend_dispatch: dict[str, str] = {
-        FrontendFramework.VUE.value: "apps/vue-frontend-template",
-        FrontendFramework.SVELTE.value: "apps/svelte-frontend-template",
-        FrontendFramework.FLUTTER.value: "apps/flutter-frontend-template",
-    }
-
-    tasks: list[Any] = []
-    backend_languages = {bc.language.value for bc in backends}
-
-    for lang, recorded_version in sorted(data.template_versions.items()):
-        # Resolve the template's path + current version.
-        template_path: Path | None = None
-        spec_default = "1.0.0"
-
-        # Backend language?
-        try:
-            backend_lang = BackendLanguage(lang)
-        except ValueError:
-            backend_lang = None  # type: ignore[assignment]
-        if backend_lang is not None and lang in backend_languages:
-            spec = BACKEND_REGISTRY[backend_lang]
-            template_path = templates_root / spec.template_dir
-            spec_default = spec.version
-        elif lang in frontend_dispatch:
-            template_path = templates_root / frontend_dispatch[lang]
-        elif lang in FRONTEND_SPECS:
-            fspec = FRONTEND_SPECS[lang]
-            template_path = templates_root / fspec.template_dir
-            spec_default = fspec.version
-
-        if template_path is None or not template_path.is_dir():
-            # Plugin template the registry no longer ships, or the
-            # path drifted — leave the recorded version untouched and
-            # skip silently. The verify command surfaces this kind of
-            # drift separately.
-            continue
-
-        current_version = resolve_template_version(template_path, spec_default=spec_default)
-        if current_version == recorded_version:
-            continue
-
-        # Resolve the target directory on disk.
-        target_dir: Path | None = None
-        if backend_lang is not None:
-            # Find the matching backend by language.
-            for bc in backends:
-                if bc.language.value == lang:
-                    candidate = project_root / "services" / bc.name
-                    if candidate.is_dir():
-                        target_dir = candidate
-                        break
-        else:
-            # Frontend: conventional path is ``apps/<framework_slug>/``.
-            # The frontend may live under apps/<slug>/ where slug is the
-            # frontend's project slug rather than the framework name.
-            # Look for ``.copier-answers.yml`` to pinpoint it; if not
-            # found, scan apps/ for any directory carrying one.
-            apps = project_root / "apps"
-            if apps.is_dir():
-                # Try the direct framework subdir first, then fall back
-                # to scanning for the first apps/<dir>/.copier-answers.yml.
-                framework_dir = apps / lang
-                if (framework_dir / ".copier-answers.yml").is_file():
-                    target_dir = framework_dir
-                else:
-                    for sub in sorted(apps.iterdir()):
-                        if not sub.is_dir():
-                            continue
-                        if (sub / ".copier-answers.yml").is_file():
-                            target_dir = sub
-                            break
-
-        if target_dir is None or not target_dir.is_dir():
-            continue
-        if not (target_dir / ".copier-answers.yml").is_file():
-            # Without answers, ``copier update`` has no input. Skip
-            # silently — the project predates answer-file emission, or
-            # the user removed it.
-            continue
-
-        tasks.append(
-            TemplateUpdateTask(
-                language=lang,
-                project_version=recorded_version,
-                current_version=current_version,
-                target_dir=target_dir,
-                template_src=template_path,
-            )
-        )
-    return tasks
-
-
 def _infer_backends(project_root: Path) -> list[BackendConfig]:
     """Discover backends from on-disk layout.
 
@@ -937,3 +651,14 @@ def _restamp_forge_toml(
         merge_blocks=merge_blocks,
         template_versions=template_versions,
     )
+
+
+__all__ = [
+    "_apply_fragment",
+    "_infer_backends",
+    "_no_uninstall_flag",
+    "apply_features",
+    "apply_project_features",
+    "classify_project_state",
+    "update_project",
+]
