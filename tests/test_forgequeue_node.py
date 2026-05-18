@@ -39,8 +39,11 @@ def test_queue_port_now_has_node_impl() -> None:
     assert BackendLanguage.PYTHON in frag.implementations
     impl = frag.implementations[BackendLanguage.NODE]
     assert impl.scope == "backend"
-    # Until C3 lands the Rust impl, queue_port stays tier-2.
-    assert frag.parity_tier == 2
+    # After C2 alone, queue_port is tier-2 (Python + Node, no Rust).
+    # C3 lands the Rust impl and the auto-derivation flips to tier-1;
+    # this test asserts the *Node-shipped* fact, not the tier — see
+    # ``test_forgequeue_rust.py`` for the tier-1 assertion.
+    assert frag.parity_tier in (1, 2)
 
 
 def test_queue_bullmq_fragment_registered() -> None:
