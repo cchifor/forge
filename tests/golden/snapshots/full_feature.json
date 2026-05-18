@@ -205,8 +205,8 @@
       "sha256": "6e4b72b152c36197"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
-      "size": 1307,
-      "sha256": "dab98c959989b69f"
+      "size": 1115,
+      "sha256": "adf39be514746325"
     },
     "apps/frontend/src/features/ai_chat/ui/AgentStatusBar.test.ts": {
       "size": 2718,
@@ -957,12 +957,16 @@
       "sha256": "dea0477b7d706e08"
     },
     "forge.toml": {
-      "size": 117941,
+      "size": 119900,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
       "size": 7130,
       "sha256": "d73104adb44ccb05"
+    },
+    "frontend/src/features/ai_chat/events.gen.ts": {
+      "size": 3950,
+      "sha256": "1f33a624e35dc387"
     },
     "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
       "size": 2159,
@@ -1679,6 +1683,10 @@
     "services/api/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
+    },
+    "services/api/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
     },
     "services/api/src/app/domain/canvas_props.py": {
       "size": 1601,
