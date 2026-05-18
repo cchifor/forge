@@ -157,9 +157,7 @@ def _build_frontend_from_cfg(
         # Note: the Vue/Svelte variable mapper currently reads the
         # equivalent option path ``frontend.api_target.url`` instead.
         api_base_url=r.get("api_base_url", "frontend", "api_base_url", default=""),
-        api_proxy_target=r.get(
-            "api_proxy_target", "frontend", "api_proxy_target", default=""
-        ),
+        api_proxy_target=r.get("api_proxy_target", "frontend", "api_proxy_target", default=""),
         generate_e2e_tests=r.get(
             "generate_e2e_tests", "frontend", "generate_e2e_tests", default=True
         ),
