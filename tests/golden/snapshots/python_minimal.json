@@ -33,7 +33,7 @@
       "sha256": "f4ad7dd2346fb480"
     },
     "forge.toml": {
-      "size": 55359,
+      "size": 57121,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -651,6 +651,10 @@
     "services/api/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
+    },
+    "services/api/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
     },
     "services/api/src/app/domain/canvas_props.py": {
       "size": 1601,

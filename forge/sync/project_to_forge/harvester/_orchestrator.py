@@ -1,56 +1,18 @@
-"""`forge --harvest` orchestrator (Phase 4, bidirectional sync).
+"""Extractor pipeline orchestrator (the ``harvest_project`` entrypoint).
 
-Walks a generated project's ``forge.toml`` manifest, runs the
-:class:`forge.extractors.ExtractorPipeline` for every fragment with
-recorded provenance, and collects the candidate patches into a
-:class:`HarvestBundle`. The CLI dispatcher (``forge --harvest``) calls
-:func:`harvest_project` and either writes the bundle to disk or streams
-it as JSON.
-
-The orchestration is symmetric to the forward flow (apply):
-
-* Forward (``forge --update`` →
-  :func:`forge.sync.forge_to_project.updater.update_project`):
-  resolver → :class:`FragmentPlan` per fragment → applier pipeline.
-* Reverse (``forge --harvest`` → :func:`harvest_project`):
-  manifest → :class:`ExtractionPlan` per fragment → extractor pipeline.
-
-The asymmetry sits in plan construction. The forward plan resolves
-fragment metadata against the registry to know *what to write*. The
-reverse plan inverts that: it inspects what the forward direction
-recorded in the manifest (``[forge.provenance]`` /
-``[forge.merge_blocks]``) and uses that as the set of paths to inspect
-on disk.
-
-Phase 4 backbone:
-  * file-level extraction is wired (the parallel agent owns the
-    :class:`forge.extractors.files.FileExtractor` body);
-  * block-level extraction is the headline contribution of this PR
-    (:class:`forge.extractors.injection.InjectionExtractor`);
-  * deps + env extraction surface ``needs-review`` candidates via the
-    pair extractors the parallel agent wires up.
-
-Out of scope for this PR (deferred to Phase 4b):
-  * ``--emit-pr`` integration with ``gh pr create``.
-  * ``--accept-harvested`` to land candidates back in the fragment tree.
-  * ``--reapply-baseline`` to restamp baselines after a harvest cycle.
-
-Interactive review (``--harvest-interactive``) is wired via the
-:data:`PromptCallback` parameter on :func:`harvest_project`. Callers
-inject a callback that prompts ``accept`` / ``skip`` / ``quit`` per
-candidate; the default ``None`` preserves the headless contract
-(every candidate is accepted, no prompt is shown).
+Split out from the original ``harvester.py`` god module — see
+:mod:`forge.sync.project_to_forge.harvester` for the public surface.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import yaml
 
@@ -64,37 +26,12 @@ from forge.fragments import FRAGMENT_REGISTRY, Fragment, FragmentImplSpec
 from forge.sync.forge_to_project.updater import _infer_backends
 from forge.sync.manifest import read_forge_toml
 from forge.sync.merge import MergeBlockCollector
-
-# Result tokens a ``prompt_callback`` may return per candidate. ``"quit"``
-# short-circuits the harvest: the caller receives a :class:`HarvestAborted`
-# rather than a partial :class:`HarvestBundle` (and no on-disk bundle is
-# written). ``"skip"`` drops the candidate from the bundle but lets the
-# loop continue to the next one. ``"accept"`` keeps the candidate.
-HarvestDecision = Literal["accept", "skip", "quit"]
-
-# Signature of the per-candidate prompt callback. The harvester passes the
-# candidate plus ``(index, total)`` for "N of M"-style progress display.
-# Implementations live in :mod:`forge.cli.interactive` (real TUI) and in
-# tests (deterministic deque-of-decisions stub). The default of ``None``
-# threaded through :func:`harvest_project` means "accept every candidate"
-# — preserving the legacy non-interactive contract.
-PromptCallback = Callable[[CandidatePatch, int, int], HarvestDecision]
-
-
-class HarvestAborted(Exception):
-    """Raised when the operator selects ``quit`` at the interactive prompt.
-
-    Carries the partial candidate list inspected so far purely for
-    diagnostics; callers MUST NOT persist it — the contract is "quit
-    aborts cleanly, no partial bundle written". The CLI dispatcher
-    catches this and exits cleanly.
-    """
-
-    def __init__(self, inspected_count: int) -> None:
-        super().__init__(
-            f"Harvest aborted by operator after inspecting {inspected_count} candidate(s)."
-        )
-        self.inspected_count = inspected_count
+from forge.sync.project_to_forge.harvester._bundle_writer import HarvestBundle
+from forge.sync.project_to_forge.harvester._interactive import (
+    HarvestAborted,
+    PromptCallback,
+    _run_interactive_review,
+)
 
 # Every extractor kind the orchestrator understands. The CLI accepts a
 # subset via ``--harvest-include``; the bundle stores patches grouped
@@ -111,95 +48,6 @@ _INCLUDE_TO_EXTRACTOR_KIND: dict[str, str] = {
     "deps": "deps",
     "env": "env",
 }
-
-
-@dataclass(frozen=True)
-class HarvestBundle:
-    """One harvest run's output — what to write to disk.
-
-    Attributes:
-        bundle_id: Unique identifier of the form
-            ``harvest-<UTC-timestamp>-<8-char-hash>``. Stable enough to
-            disambiguate concurrent harvests of the same project root.
-        project_root: Absolute path to the project the candidates were
-            extracted from. Recorded so reviewers can trace back to the
-            source tree without re-running the harvest.
-        forge_version: ``forge``'s own package version at harvest time.
-            Lets a maintainer reject candidates from an older forge if
-            the fragment registry has moved.
-        candidates: Every :class:`CandidatePatch` the extractor pipeline
-            emitted, post-scope-filter and post-include-filter.
-    """
-
-    bundle_id: str
-    project_root: Path
-    forge_version: str
-    candidates: list[CandidatePatch]
-
-    def to_dict(self) -> dict[str, Any]:
-        """JSON-friendly view for ``forge --harvest --harvest-out=-``.
-
-        ``current_body`` / ``feature_key`` / ``marker`` are only emitted
-        when populated — keeping the JSON shape minimal for the common
-        ``files`` / ``deps`` / ``env`` cases that don't carry them. The
-        apply-back path reads these fields directly off the in-memory
-        bundle, so on-disk serialisation is for review/diagnostics only.
-        """
-        out: list[dict[str, Any]] = []
-        for c in self.candidates:
-            row: dict[str, Any] = {
-                "fragment": c.fragment,
-                "backend": c.backend,
-                "kind": c.kind,
-                "rel_path": c.rel_path,
-                "target_path": c.target_path,
-                "diff": c.diff,
-                "baseline_sha": c.baseline_sha,
-                "current_sha": c.current_sha,
-                "risk": c.risk,
-                "rationale": c.rationale,
-            }
-            if c.current_body:
-                row["current_body"] = c.current_body
-            if c.feature_key:
-                row["feature_key"] = c.feature_key
-            if c.marker:
-                row["marker"] = c.marker
-            out.append(row)
-        return {
-            "bundle_id": self.bundle_id,
-            "project_root": str(self.project_root),
-            "forge_version": self.forge_version,
-            "candidates": out,
-        }
-
-    def write(self, out_dir: Path) -> None:
-        """Write the bundle to ``out_dir`` per the round-trip spec.
-
-        Layout::
-
-            <out_dir>/
-              manifest.json
-              README.md
-              patches/
-                <fragment-name>/
-                  meta.json
-                  0001-block-<safe_key>.patch
-                  0002-files-<safe_key>.patch
-                  ...
-
-        ``manifest.json`` carries the full candidate list (same shape
-        as :meth:`to_dict`). Each per-fragment ``meta.json`` records
-        the fragment name + version (when known) and the extractor
-        kinds that produced patches. ``README.md`` is a placeholder
-        that links to ``docs/round-trip.md`` (full workflow doc is a
-        Phase 4b follow-up).
-        """
-        # Delayed import — keeps the orchestrator module light when
-        # callers only use it for the in-memory bundle (e.g. tests).
-        from forge.sync.project_to_forge.bundle import write_bundle  # noqa: PLC0415
-
-        write_bundle(self, out_dir)
 
 
 def harvest_project(
@@ -974,42 +822,6 @@ def _find_sibling_target(
 
 
 # ---------------------------------------------------------------------------
-# Interactive review (Theme 2C — --harvest-interactive)
-# ---------------------------------------------------------------------------
-
-
-def _run_interactive_review(
-    candidates: list[CandidatePatch],
-    prompt_callback: PromptCallback,
-) -> list[CandidatePatch]:
-    """Drive the per-candidate accept/skip/quit prompt loop.
-
-    Iterates ``candidates`` in their natural emission order, calling
-    ``prompt_callback`` once per entry with ``(index, total)`` so the UI
-    can render a "Candidate N of M" header. ``"accept"`` keeps the
-    candidate; ``"skip"`` drops it; ``"quit"`` raises
-    :class:`HarvestAborted` carrying the count of candidates inspected
-    so far.
-
-    Unknown return values from a buggy callback are treated as
-    ``"skip"`` rather than crashing — the cost of a dropped candidate
-    is recoverable (re-run harvest) where a TypeError in the middle of
-    a review pass loses operator state. We keep this defensive but
-    silent; harness tests assert the legal vocabulary.
-    """
-    accepted: list[CandidatePatch] = []
-    total = len(candidates)
-    for idx, cand in enumerate(candidates, start=1):
-        decision = prompt_callback(cand, idx, total)
-        if decision == "accept":
-            accepted.append(cand)
-        elif decision == "quit":
-            raise HarvestAborted(inspected_count=idx)
-        # "skip" (or any unknown token) → drop the candidate silently.
-    return accepted
-
-
-# ---------------------------------------------------------------------------
 # Bundle identity
 # ---------------------------------------------------------------------------
 
@@ -1049,8 +861,3 @@ class _InjectionRecord:
     snippet: str
     position: str = "after"
     zone: str = "merge"
-
-
-# Reserved placeholder; ``field`` is imported above for downstream call sites
-# that may extend HarvestBundle. Quiets unused-import lints.
-_ = field
