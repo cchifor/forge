@@ -44,10 +44,62 @@ import json
 import logging
 import os
 import sys
+import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
+
+# -- Correlation ID (v2 Theme 10) ------------------------------------------
+#
+# One UUID per CLI invocation, stamped into every structured event so a
+# downstream agent parsing NDJSON can stitch the events for a single
+# ``forge <verb>`` call together (the host process may interleave logs from
+# concurrent invocations, plugin subprocesses, etc.). Threaded via a
+# ``ContextVar`` rather than a positional kwarg so existing callers don't
+# need to change signatures — see ``cli/main.py`` for where it's seeded.
+_correlation_id: ContextVar[str | None] = ContextVar("forge_correlation_id", default=None)
+
+
+def new_correlation_id() -> str:
+    """Generate, install, and return a fresh correlation ID.
+
+    Called once at CLI entry; the returned UUID becomes the value
+    ``log_event`` / ``phase_timer`` auto-attach to every record emitted
+    from this thread (and any child contexts that don't explicitly reset
+    the ContextVar). Subsequent calls *do* mint a fresh UUID — the
+    function is the "start of a new logical invocation" hook, not a
+    cache.
+    """
+    cid = str(uuid.uuid4())
+    _correlation_id.set(cid)
+    return cid
+
+
+def get_correlation_id() -> str | None:
+    """Return the current invocation's correlation ID, or ``None``.
+
+    Public for tests and for plugins that want to surface the value
+    outside the logging surface (e.g. embedding it in a generated
+    project's ``forge.toml``).
+    """
+    return _correlation_id.get()
+
+
+@contextmanager
+def correlation_id_scope(value: str | None = None):
+    """Bind a correlation ID for the duration of the ``with`` block.
+
+    Mostly useful for tests; the CLI just calls ``new_correlation_id()``
+    once at the top of ``main()`` and lets it ride for the rest of the
+    process.
+    """
+    token = _correlation_id.set(value or str(uuid.uuid4()))
+    try:
+        yield _correlation_id.get()
+    finally:
+        _correlation_id.reset(token)
 
 
 class _JsonFormatter(logging.Formatter):
@@ -148,8 +200,17 @@ def log_event(
     ``fragment.applied``, ``injection.fallback_text``). ``fields``
     are attached to the record and surface in JSON as top-level keys
     or in text as ``key=value`` pairs.
+
+    When a correlation ID is active (set by ``new_correlation_id()`` at
+    CLI entry), it's stamped automatically as ``correlation_id``. An
+    explicit ``correlation_id=`` in ``fields`` wins over the ContextVar
+    — useful for tests asserting deterministic IDs.
     """
     record_fields = {"event": event, **fields}
+    if "correlation_id" not in record_fields:
+        cid = _correlation_id.get()
+        if cid is not None:
+            record_fields["correlation_id"] = cid
     logger.log(
         level,
         message or event,

@@ -164,6 +164,63 @@ class TestLogJsonEndToEnd:
                 json.loads(stripped)
 
 
-# NOTE: ``correlation_id`` threading (v2 Theme 10-C2) lives in
-# ``TestLogJsonCorrelationId`` once the per-invocation context-var is in
-# place — added in the follow-up commit alongside the docs update.
+class TestLogJsonCorrelationId:
+    """Every JSON event in a single CLI invocation shares one ``correlation_id``."""
+
+    def test_correlation_id_present_and_stable(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        project_root = tmp_path / "corrprobe"
+        monkeypatch.setattr(sys, "argv", _argv_for(tmp_path, "--log-json"))
+
+        with patch(
+            "forge.cli.main.generate",
+            side_effect=_fake_generate_emitting_phase(project_root),
+        ):
+            cli.main()
+
+        err = capsys.readouterr().err
+        parsed = [
+            json.loads(ln) for ln in err.splitlines() if ln.strip()
+        ]
+        # Every record (phase_timer + explicit log_event) must carry the
+        # correlation_id stamped at CLI entry.
+        cids = {rec.get("correlation_id") for rec in parsed if "event" in rec}
+        cids.discard(None)
+        assert len(cids) == 1, (
+            f"expected a single correlation_id across all events, got {cids!r}"
+        )
+        cid = next(iter(cids))
+        # UUID-shape sanity: hyphen-separated 36-char string.
+        assert isinstance(cid, str)
+        assert len(cid) == 36
+        assert cid.count("-") == 4
+
+    def test_each_invocation_gets_a_fresh_correlation_id(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        seen: list[str] = []
+
+        for slug in ("first", "second"):
+            project_root = tmp_path / slug
+            monkeypatch.setattr(
+                sys, "argv", _argv_for(tmp_path, "--log-json")
+            )
+            with patch(
+                "forge.cli.main.generate",
+                side_effect=_fake_generate_emitting_phase(project_root),
+            ):
+                cli.main()
+            err = capsys.readouterr().err
+            cids = {
+                json.loads(ln).get("correlation_id")
+                for ln in err.splitlines()
+                if ln.strip()
+            }
+            cids.discard(None)
+            assert len(cids) == 1
+            seen.append(next(iter(cids)))
+
+        assert seen[0] != seen[1], (
+            "correlation_id should reset per CLI invocation"
+        )
