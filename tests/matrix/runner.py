@@ -597,32 +597,47 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
             duration_ms=int((perf_counter() - start) * 1000),
         )
     finally:
-        if compose_up and project_root is not None:
+        if project_root is not None:
             compose_file = project_root / "docker-compose.yml"
-            # Capture compose logs + ps into FORGE_MATRIX_LOG_DIR (if set)
-            # BEFORE tearing the stack down. CI jobs read these as artifact
-            # input — see .github/workflows/{ci,matrix-nightly}.yml. Doing
-            # it inside the runner avoids the race where a post-job step
-            # tries to read /tmp dirs we've already removed.
-            log_dir = os.environ.get("FORGE_MATRIX_LOG_DIR")
-            if log_dir:
-                _dump_compose_diagnostics(
-                    docker_exe, compose_file, Path(log_dir), scenario.name
-                )
-            subprocess.run(
-                [
-                    docker_exe,
-                    "compose",
-                    "-f",
-                    str(compose_file),
-                    "down",
-                    "-v",
-                    "--remove-orphans",
-                ],
-                capture_output=True,
-                timeout=120,
-                check=False,
-            )
+            if compose_file.exists():
+                # Capture compose logs + ps into FORGE_MATRIX_LOG_DIR (if
+                # set) BEFORE tearing the stack down. CI jobs read these
+                # as artifact input — see .github/workflows/{ci,matrix-
+                # nightly}.yml. Doing it inside the runner avoids the
+                # race where a post-job step tries to read /tmp dirs we've
+                # already removed.
+                #
+                # NB: dumping is gated only on ``compose_file.exists()``,
+                # NOT on ``compose_up`` — when ``docker compose up`` itself
+                # fails mid-way, the containers that DID start (or
+                # partially started) hold exactly the diagnostics we need.
+                # Skipping the dump on the failure path is what made
+                # ``api container exits code 3 with no captured logs``
+                # un-debuggable in matrix-CI prior to this fix.
+                log_dir = os.environ.get("FORGE_MATRIX_LOG_DIR")
+                if log_dir:
+                    _dump_compose_diagnostics(
+                        docker_exe, compose_file, Path(log_dir), scenario.name
+                    )
+                # ``down`` is still gated on ``compose_up`` because a
+                # failed compose-up may have already aborted any
+                # partial bring-up — calling ``down`` is harmless then but
+                # adds latency to the failure path with no benefit.
+                if compose_up:
+                    subprocess.run(
+                        [
+                            docker_exe,
+                            "compose",
+                            "-f",
+                            str(compose_file),
+                            "down",
+                            "-v",
+                            "--remove-orphans",
+                        ],
+                        capture_output=True,
+                        timeout=120,
+                        check=False,
+                    )
         shutil.rmtree(tmp, ignore_errors=True)
 
 
