@@ -1,14 +1,15 @@
-"""Generate TypeScript types for **canvas component props**.
+"""Generate TypeScript / Dart types for **canvas component props**.
 
 The canonical schemas live in
 ``forge/templates/_shared/canvas-components/*.props.schema.json``. Today
-this module emits TypeScript only — Dart and Pydantic land in
-follow-on commits of the same theme.
+this module emits TypeScript and Dart; Pydantic lands in a follow-on
+commit of the same theme.
 
 Targets:
 
     * ``packages/canvas-vue/src/generated/props.ts``
     * ``packages/canvas-svelte/src/generated/props.ts``
+    * ``packages/forge-canvas-dart/lib/src/generated/props.dart``
 
 The schema → type mapping lives in :mod:`forge.codegen.ui_protocol`;
 this module rebrands the banner so the generated file points at the
@@ -25,6 +26,7 @@ from pathlib import Path
 
 from forge.codegen.ui_protocol import (
     Schema,
+    _dart_for_schema,
     _ts_for_schema,
     load_all,
 )
@@ -52,6 +54,11 @@ def _banner_lines_ts() -> list[str]:
     ]
 
 
+def _banner_lines_dart() -> list[str]:
+    """Banner emitted at the top of generated Dart files (same syntax as TS)."""
+    return _banner_lines_ts()
+
+
 def load_canvas_schemas(root: Path | None = None) -> list[Schema]:
     """Load every canvas props schema sorted by title.
 
@@ -66,6 +73,26 @@ def emit_typescript(schemas: list[Schema]) -> str:
     lines: list[str] = _banner_lines_ts()
     for schema in schemas:
         lines.append(_ts_for_schema(schema))
+        lines.append("")
+    return "\n".join(lines)
+
+
+def emit_dart(schemas: list[Schema]) -> str:
+    """Emit a Dart library with immutable classes for every canvas-props schema.
+
+    Each class has:
+        * ``final`` fields (camelCase, matching Dart conventions)
+        * a named const constructor with required/optional positional flags
+        * a ``fromJson`` factory + ``toJson`` map
+        * nullability respected per JSON Schema ``required``
+
+    Nested array-item objects collapse to ``List<Map<String, dynamic>>``
+    — matching the existing ``ui_protocol.py`` Dart emitter's strategy
+    (no recursive nested-class generation today).
+    """
+    lines: list[str] = _banner_lines_dart()
+    for schema in schemas:
+        lines.append(_dart_for_schema(schema))
         lines.append("")
     return "\n".join(lines)
 
@@ -90,6 +117,7 @@ def _repo_root() -> Path:
 _PACKAGE_TARGETS: tuple[tuple[str, str], ...] = (
     ("typescript", "packages/canvas-vue/src/generated/props.ts"),
     ("typescript", "packages/canvas-svelte/src/generated/props.ts"),
+    ("dart", "packages/forge-canvas-dart/lib/src/generated/props.dart"),
 )
 
 
@@ -101,7 +129,10 @@ def regenerate_packages(repo_root: Path | None = None) -> list[Path]:
     """
     root = repo_root or _repo_root()
     schemas = load_canvas_schemas()
-    bodies = {"typescript": emit_typescript(schemas)}
+    bodies = {
+        "typescript": emit_typescript(schemas),
+        "dart": emit_dart(schemas),
+    }
     written: list[Path] = []
     for lang, rel in _PACKAGE_TARGETS:
         target = root / rel
