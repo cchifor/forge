@@ -149,12 +149,13 @@ def _build_frontend_from_cfg(
         ),
         org_name=r.get("org_name", "frontend", "org_name", default="com.example"),
         # ``api_base_url`` and ``api_proxy_target`` are first-class
-        # FrontendConfig fields (see ``forge/config/_frontend.py``) used by
-        # the variable mapper to populate the Vue/Svelte templates' Vite
-        # proxy + axios base URL. They were silently dropped from cfg
-        # before — pipe them through so YAML can express
-        # ``frontend.api_base_url`` for frontend-only projects targeting
-        # an external API.
+        # FrontendConfig fields (see ``forge/config/_frontend.py:171``)
+        # that the cfg dict couldn't reach before. Pipe them through so
+        # YAML can express ``frontend.api_base_url`` directly — preserving
+        # the dataclass contract for consumers that read it (the Flutter
+        # post-generate task today; future Vue/Svelte direct consumers).
+        # Note: the Vue/Svelte variable mapper currently reads the
+        # equivalent option path ``frontend.api_target.url`` instead.
         api_base_url=r.get("api_base_url", "frontend", "api_base_url", default=""),
         api_proxy_target=r.get(
             "api_proxy_target", "frontend", "api_proxy_target", default=""
