@@ -252,6 +252,44 @@ class TestIntegrationAgainstGenerator:
         finally:
             shutil.rmtree(project_root, ignore_errors=True)
 
+    def test_user_set_option_alias_records_canonical_origin_as_user(
+        self, tmp_path: Path
+    ) -> None:
+        """WS2b regression — ``config.options`` may use an alias path
+        (``frontend.api_target_url``) for an option whose canonical
+        form is ``frontend.api_target.url``. The resolver rewrites
+        aliases to canonical, so ``plan.option_values`` is canonical-
+        keyed. Without alias resolution, the generator's origin
+        computation would compare canonical-key membership against an
+        alias-keyed set, miss, and stamp the canonical path as
+        ``"default"`` — silently demoting the user's intent on the
+        next ``--update``.
+        """
+        from forge.generator import generate
+
+        cfg = ProjectConfig(
+            project_name="alias_origin",
+            backends=[],  # frontend-only project
+            frontend=FrontendConfig(
+                framework=FrontendFramework.VUE, project_name="alias_origin"
+            ),
+            options={
+                "backend.mode": "none",
+                "frontend.api_target_url": "http://localhost:9999",  # alias
+            },
+            output_dir=str(tmp_path),
+        )
+        project_root = generate(cfg, quiet=True)
+        try:
+            data = read_forge_toml(project_root / "forge.toml")
+            # The resolver rewrote the alias to canonical; the manifest
+            # stores the canonical path. Origin must be "user" — the
+            # user explicitly set it, even though under the alias name.
+            assert "frontend.api_target.url" in data.options
+            assert data.option_origins.get("frontend.api_target.url") == "user"
+        finally:
+            shutil.rmtree(project_root, ignore_errors=True)
+
 
 # ---------------------------------------------------------------------------
 # P0.1 — file-level three-way merge integration tests

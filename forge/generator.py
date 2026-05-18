@@ -527,7 +527,14 @@ def _write_forge_toml(
     # whose option values came from defaults instead of user input.
     # When ``plan`` is None (no-resolve fallback path), options match
     # config.options 1:1 — every entry is by definition user-set.
-    user_set_paths = set(config.options)
+    #
+    # ``config.options`` may use alias paths (the resolver rewrites them
+    # to canonical during resolve); ``options`` is always canonical-keyed.
+    # Normalize aliases to canonical via ``resolve_alias`` so a user-set
+    # alias path still records as ``"user"`` on the canonical key.
+    from forge.options import resolve_alias  # noqa: PLC0415
+
+    user_set_paths = {resolve_alias(p) or p for p in config.options}
     option_origins: dict[str, str] = {
         path: ("user" if path in user_set_paths else "default") for path in options
     }
