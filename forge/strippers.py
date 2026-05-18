@@ -104,8 +104,9 @@ from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
-from service.discovery import Discovery
-from service.security import auth
+from weld.core.discovery import Discovery
+from weld.fastapi.security import auth
+from weld.fastapi.security.platform_auth_setup import build_auth_guard
 
 logger = logging.getLogger(__name__)
 
@@ -122,19 +123,17 @@ class AppLifecycle:
         container = make_async_container(*providers, context={Settings: config})
         setup_dishka(container, app)
 
-        if config.security.auth.enabled:
-            from service.security.providers.keycloak import KeycloakProvider
-            provider = KeycloakProvider(config.security.auth)
-        else:
-            from service.security.providers.dev import DevAuthProvider
-            provider = DevAuthProvider(config.security.auth)
-            logger.warning("Auth DISABLED — using DevAuthProvider (dev mode only)")
-
+        bundle = build_auth_guard(config.security.auth)
+        if not config.security.auth.enabled:
+            logger.warning(
+                "Auth DISABLED — dev mode (synthetic user, no JWT verification)"
+            )
         auth.initialize_auth(
             app,
-            provider=provider,
+            bundle=bundle,
             auth_url=config.security.auth.auth_url,
             token_url=config.security.auth.token_url,
+            dev_mode=not config.security.auth.enabled,
         )
 
         logger.info("Application bootstrap complete. Waiting for server startup...")
@@ -197,7 +196,7 @@ from dishka import Provider, Scope, from_context, provide
 from fastapi import Request
 
 from app.core.config import Settings
-from service.discovery import Discovery
+from weld.core.discovery import Discovery
 
 logger = logging.getLogger(__name__)
 
@@ -260,9 +259,9 @@ from __future__ import annotations
 from dishka import Provider, Scope, provide
 from fastapi import HTTPException, Request
 
-from service.core import context
-from service.domain.user import User
-from service.security.auth import authenticate_request
+from weld.core import context
+from weld.core.domain.user import User
+from weld.fastapi.security.auth import authenticate_request
 
 
 class SecurityProvider(Provider):
