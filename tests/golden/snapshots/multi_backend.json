@@ -513,7 +513,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 527,
+      "size": 550,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -545,20 +545,20 @@
       "sha256": "b200da072454e7fe"
     },
     "services/api-node/docker-compose.fragment.yaml": {
-      "size": 1884,
-      "sha256": "e92152750b943aee"
+      "size": 1996,
+      "sha256": "ce35b7b9030657d9"
     },
     "services/api-node/docker-compose.yaml": {
       "size": 853,
       "sha256": "f06c0e04ecc8de65"
     },
     "services/api-node/Dockerfile": {
-      "size": 3132,
-      "sha256": "e0eddaee13a23f50"
+      "size": 3204,
+      "sha256": "7e874c90aa4bbcad"
     },
     "services/api-node/entrypoint.sh": {
-      "size": 298,
-      "sha256": "74f9a7761be19e3f"
+      "size": 306,
+      "sha256": "54144a1431680375"
     },
     "services/api-node/package.json": {
       "size": 1230,
@@ -733,7 +733,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 528,
+      "size": 549,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
@@ -777,8 +777,8 @@
       "sha256": "c0859dec5b712b9b"
     },
     "services/api-py/docker-compose.fragment.yaml": {
-      "size": 2495,
-      "sha256": "96caf4d1ebd951c6"
+      "size": 2513,
+      "sha256": "4018c2a419df8175"
     },
     "services/api-py/docker-compose.yaml": {
       "size": 877,
@@ -786,11 +786,11 @@
     },
     "services/api-py/Dockerfile": {
       "size": 3593,
-      "sha256": "677f34cc6f655d58"
+      "sha256": "d8741caa5c379df7"
     },
     "services/api-py/entrypoint.sh": {
       "size": 418,
-      "sha256": "19554330f3b7e0c0"
+      "sha256": "1d41ef94dea036c4"
     },
     "services/api-py/pyproject.toml": {
       "size": 5148,

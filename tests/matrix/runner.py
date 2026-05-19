@@ -947,10 +947,25 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
     """
     import re  # noqa: PLC0415
 
+    # ``tests._artefact_filters`` is a sibling test-package module. When
+    # this file is invoked as a script (``uv run python tests/matrix/runner.py``)
+    # the repo root isn't initially on sys.path, mirroring the pattern at
+    # ``run_lane_smoke`` above. Add it once before the absolute import.
+    _repo_root = str(Path(__file__).resolve().parents[2])
+    if _repo_root not in sys.path:
+        sys.path.insert(0, _repo_root)
+    from tests._artefact_filters import is_generated_artefact  # noqa: PLC0415, E402
+
     def is_excluded(rel: str) -> bool:
-        if rel.startswith(".git/") or "/.git/" in rel or rel == ".git":
+        # Roundtrip-specific exclusions live in tests/_artefact_filters.py —
+        # shared with the golden snapshot tests so the two contracts can't
+        # drift. Note: FR2 is deliberately narrower than golden snapshots
+        # (package-lock.json / auto-imports.d.ts / /api/generated/ stay
+        # visible to roundtrip so we catch real lockfile-drift bugs).
+        # .copier-answers.yml is FR2-only (golden snapshots record it).
+        if rel.endswith(".copier-answers.yml"):
             return True
-        return rel.endswith(".copier-answers.yml")
+        return is_generated_artefact(rel)
 
     def normalize(rel: str, text: str) -> str:
         out = text
