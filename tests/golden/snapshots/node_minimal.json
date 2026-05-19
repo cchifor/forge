@@ -449,8 +449,8 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api/prisma/schema.prisma": {
-      "size": 1783,
-      "sha256": "b5433a4d15df6078"
+      "size": 2176,
+      "sha256": "276af302763f73f5"
     },
     "services/api/README.md": {
       "size": 1402,
