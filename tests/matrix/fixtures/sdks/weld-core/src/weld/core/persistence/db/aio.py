@@ -38,7 +38,18 @@ class AsyncDatabase:
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.session_factory: _StubSessionFactory = _StubSessionFactory()
+        self._session_factory_impl = _StubSessionFactory()
+
+    @property
+    def session_factory(self) -> Any:
+        # Typed as ``Any`` so the generated service's
+        # ``get_session_factory -> async_sessionmaker`` annotation
+        # (referencing the real sqlalchemy type) doesn't trip
+        # ``ty check`` on the stub. A property returning ``Any`` is
+        # what survives ty's attribute-type inference; a directly
+        # assigned attribute resolves to the concrete value type
+        # regardless of the declared annotation.
+        return self._session_factory_impl
 
     @classmethod
     def from_config(cls, _config: dict[str, Any]) -> "AsyncDatabase":
