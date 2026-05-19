@@ -85,42 +85,32 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
         # Skip lockfiles, OS-specific build artefacts, and codegen output
         # whose presence/content depends on which post-generate steps the
         # generator's host happened to run (Linux CI vs Windows dev box).
-        if (
-            rel == ".git"
-            or rel.startswith(".git/")
-            or "/.git/" in rel
-            or "/__pycache__/" in rel
-            or rel.startswith("__pycache__/")
-            or rel.endswith(".pyc")
-            or "/node_modules/" in rel
-            or rel.startswith("node_modules/")
-            or rel.endswith("/package-lock.json")
+        #
+        # The shared ``is_generated_artefact`` predicate covers FR2-relevant
+        # noise (.git, __pycache__, node_modules, .svelte-kit, target,
+        # .ruff_cache, etc.) — it's used by ``tests/matrix/runner.py``'s
+        # roundtrip diff too, so the two contracts can't drift.
+        #
+        # The extra entries below are SNAPSHOT-ONLY exclusions — they cover
+        # paths that are host-asymmetric across snapshot hosts but
+        # deterministic within a single CI host. FR2 deliberately keeps them
+        # visible because a roundtrip difference in lockfiles or generated
+        # client code IS a real bug.
+        from tests._artefact_filters import is_generated_artefact
+
+        if is_generated_artefact(rel) or (
+            # Snapshot-only: dependency lockfile content varies with the
+            # snapshot host's npm version / registry HEAD.
+            rel.endswith("/package-lock.json")
             or rel == "package-lock.json"
-            # Cargo build artifacts. The auth Wave 1 Rust SDK ships
-            # tests; when the cross-SDK parity gate (test_rust_runner.py)
-            # runs before the snapshot test in the same CI job, cargo
-            # leaves a target/ tree inside the SDK source dir. forge's
-            # generator then copies that tree into every generated
-            # project that includes the auth fragment, producing
-            # non-deterministic snapshot drift across runs (hashes
-            # depend on the host's libc, rustc version, etc.).
-            or "/target/" in rel
-            or rel.startswith("target/")
-            # ruff cache directories — same class of issue as target/.
-            # Local snapshot regeneration can produce them inside the
-            # auth Python SDK / gatekeeper templates if ruff has run
-            # against those trees before the snapshot test (e.g. via a
-            # pre-commit hook). CI never runs ruff against those source
-            # paths, so the cache is asymmetric across runs.
-            or "/.ruff_cache/" in rel
-            or rel.startswith(".ruff_cache/")
-            # Vue auto-import declarations are produced at first ``npm run dev``
-            # / ``vue-tsc`` only; whether they exist on the snapshot host
-            # depends on Node availability.
+            # Snapshot-only: Vue auto-import declarations are produced at
+            # first ``npm run dev`` / ``vue-tsc`` — whether they exist on
+            # the snapshot host depends on Node availability.
             or rel.endswith("/auto-imports.d.ts")
             or rel == "auto-imports.d.ts"
-            # OpenAPI generated client (``hey-api/openapi-ts``) — produced
-            # only when ``npm run codegen`` ran in post-generate.
+            # Snapshot-only: OpenAPI generated client (hey-api/openapi-ts)
+            # — produced only when ``npm run codegen`` ran in post-generate,
+            # which depends on Node + the openapi-ts toolchain being installed.
             or "/api/generated/" in rel
         ):
             continue

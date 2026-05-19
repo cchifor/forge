@@ -45,6 +45,12 @@ def test_backend_context_unified_across_languages(language, version_attr, versio
     spec = BACKEND_REGISTRY[language]
     assert ctx[spec.version_field] == version_value
     assert ctx["project_name"] == "api"
+    # project_slug must equal bc.name — it's consumed as the path component for
+    # services/<slug>/ in Rust + Node Dockerfiles, the Node compose WORKDIR, and
+    # the Python compose fragment / entrypoint paths. Without this, generated
+    # projects with non-trivial backend names (or any name on Rust/Node) emit
+    # broken Dockerfiles with empty path segments (`services//src`).
+    assert ctx["project_slug"] == "api"
     assert ctx["server_port"] == 5000
     assert ctx["db_name"] == "api"
     assert ctx["entity_plural"] == "items"
@@ -52,6 +58,22 @@ def test_backend_context_unified_across_languages(language, version_attr, versio
     other_fields = {s.version_field for s in BACKEND_REGISTRY.values()} - {spec.version_field}
     for f in other_fields:
         assert f not in ctx
+
+
+def test_backend_context_project_slug_equals_bc_name_for_hyphenated_names():
+    """Hyphenated backend names (multi_py_node uses 'py-svc' / 'node-svc') must
+    propagate verbatim so docker-compose's service path routing works."""
+    bc = BackendConfig(
+        name="py-svc",
+        project_name="P",
+        language=BackendLanguage.PYTHON,
+        description="d",
+        features=["invoices"],
+        server_port=5000,
+        python_version="3.13",
+    )
+    ctx = backend_context(bc)
+    assert ctx["project_slug"] == "py-svc"
 
 
 def _make_config(framework=FrontendFramework.VUE, **fe_overrides):
@@ -106,6 +128,10 @@ class TestBackendContext:
         ctx = backend_context(config.backend)
         assert set(ctx.keys()) == {
             "project_name",
+            # project_slug feeds services/<slug>/ paths in Rust + Node Dockerfiles
+            # and the Python compose fragment / entrypoint. See
+            # test_backend_context_unified_across_languages for the why.
+            "project_slug",
             "project_description",
             "server_port",
             "db_name",

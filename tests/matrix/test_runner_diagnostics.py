@@ -192,3 +192,73 @@ def test_diagnostics_dump_skipped_when_log_dir_unset(tmp_path, monkeypatch):
 
     result = run_lane_smoke(_make_scenario())
     assert result.status == "fail"
+
+
+class TestDiffProjectTreesNormalizedExclusions:
+    """Cluster B (matrix-nightly-fixes plan) — _diff_project_trees_normalized
+    must filter build-generated artefacts so two consecutive generates of
+    the same scenario compare byte-equal in the FR2 contract.
+
+    The shared predicate lives in tests/_artefact_filters.py and covers
+    node_modules/, .svelte-kit/, __pycache__/, .ruff_cache/, target/,
+    build/, dist/, and friends. These tests pin the integration via the
+    matrix runner so a future refactor of the helper can't silently
+    weaken the FR2 contract.
+    """
+
+    def test_returns_empty_when_only_excluded_artefacts_differ(
+        self, tmp_path: Path
+    ):
+        from tests.matrix.runner import _diff_project_trees_normalized
+
+        a = tmp_path / "a"
+        b = tmp_path / "b"
+        a.mkdir()
+        b.mkdir()
+
+        # Seed `a` with generated-artefact paths that aren't in `b`. Each
+        # is a path family the FR2 filter must skip.
+        for rel in (
+            "services/api/node_modules/.prisma/client/edge.js",
+            "apps/frontend/.svelte-kit/generated/server/internal.js",
+            "scripts/__pycache__/feature_templates.cpython-314.pyc",
+            ".ruff_cache/0.4.10/abc.cache",
+            "services/api/target/debug/build/x",
+            ".git/objects/ab/cdef",
+            "apps/frontend/build/asset-12345.js",
+        ):
+            p = a / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("nondeterministic build artefact")
+
+        # Seed `b` with empty marker files at the SAME real-content paths
+        # so an unfiltered diff would still differ on those, not just on
+        # the artefacts.
+        (a / "shared/real.py").parent.mkdir(parents=True, exist_ok=True)
+        (a / "shared/real.py").write_text("def x(): return 1\n")
+        (b / "shared/real.py").parent.mkdir(parents=True, exist_ok=True)
+        (b / "shared/real.py").write_text("def x(): return 1\n")
+
+        diff = _diff_project_trees_normalized(a, b)
+        assert diff == [], (
+            f"FR2 diff must ignore generated artefacts; got: {diff}"
+        )
+
+    def test_returns_non_empty_when_real_files_differ(self, tmp_path: Path):
+        """Regression — a real content difference must still surface,
+        even when the trees also contain ignored artefacts."""
+        from tests.matrix.runner import _diff_project_trees_normalized
+
+        a = tmp_path / "a"
+        b = tmp_path / "b"
+        for tree in (a, b):
+            tree.mkdir()
+            (tree / "node_modules").mkdir()
+            (tree / "node_modules" / "noise.txt").write_text("ignored")
+        (a / "real.py").write_text("a content\n")
+        (b / "real.py").write_text("b content\n")
+
+        diff = _diff_project_trees_normalized(a, b)
+        assert diff == ["real.py"], (
+            f"real.py difference must surface, but got: {diff}"
+        )
