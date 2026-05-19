@@ -69,7 +69,10 @@ MODULE_FLOORS: dict[str, ModuleGate] = {
     "forge/sync/provenance.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/python_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
     "forge/injectors/ts_ast.py": ModuleGate(floor_pct=95.0, target_pct=98.0),
-    "forge/sync/forge_to_project/updater.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
+    # 1.2.0-alpha.2: ``forge.sync.forge_to_project.updater`` was split into
+    # a package (``updater/__init__.py`` + helpers) during PR #58; coverage.py
+    # reports the new path. Track the package init module here.
+    "forge/sync/forge_to_project/updater/__init__.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
     "forge/sync/forge_to_project/plan.py": ModuleGate(floor_pct=83.0, target_pct=90.0),
 }
 

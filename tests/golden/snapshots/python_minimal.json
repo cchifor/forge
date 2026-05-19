@@ -653,8 +653,8 @@
       "sha256": "c65d6235b6631cea"
     },
     "services/api/src/app/domain/canvas_events.py": {
-      "size": 2435,
-      "sha256": "139d098a8d202c69"
+      "size": 2498,
+      "sha256": "5f7a08d5b974005a"
     },
     "services/api/src/app/domain/canvas_props.py": {
       "size": 1601,

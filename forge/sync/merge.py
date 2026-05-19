@@ -316,6 +316,12 @@ def write_sidecar(target: Path, new_block: str, tag: str) -> Path:
     the current target. Format is intentionally simple — no three-way
     patch syntax; just the block forge wanted to write, annotated with
     the conflict tag.
+
+    ``newline="\\n"`` is critical: ``Path.write_text`` defaults to the
+    OS line separator on write. If ``new_block`` already contains
+    ``\\r\\n`` (a CRLF-shipped fragment body), Windows would translate
+    each ``\\n`` to ``\\r\\n`` and produce ``\\r\\r\\n``. Pinning to LF
+    keeps sidecars byte-identical across platforms.
     """
     sidecar = target.with_suffix(target.suffix + ".forge-merge")
     body = (
@@ -329,7 +335,7 @@ def write_sidecar(target: Path, new_block: str, tag: str) -> Path:
         "\n"
         f"{new_block}"
     )
-    sidecar.write_text(body, encoding="utf-8")
+    sidecar.write_text(body, encoding="utf-8", newline="\n")
     return sidecar
 
 
@@ -583,5 +589,5 @@ def write_file_sidecar(
         "\n"
         f"{new_content}"
     )
-    sidecar.write_text(body, encoding="utf-8")
+    sidecar.write_text(body, encoding="utf-8", newline="\n")
     return sidecar

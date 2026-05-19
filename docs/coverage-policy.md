@@ -34,15 +34,19 @@ deciding how much headroom a PR has.
 | `forge/sync/provenance.py`       | 96.7%    | 95%   | 98%     | File classification drives `--update` safety                        |
 | `forge/injectors/python_ast.py`  | 97.8%    | 95%   | 98%     | Fragment injection into Python templates via LibCST                 |
 | `forge/injectors/ts_ast.py`      | 95.9%    | 95%   | 98%     | Fragment injection into TS/JS templates (regex + ts-morph sidecar)  |
-| `forge/sync/forge_to_project/updater.py` | 85.2%    | 83%   | 90%     | `forge --update` — re-apply + classification + re-stamp             |
+| `forge/sync/forge_to_project/updater/__init__.py` | 85.2%    | 83%   | 90%     | `forge --update` — re-apply + classification + re-stamp             |
 | `forge/sync/forge_to_project/plan.py`    | 85.5%    | 83%   | 90%     | `forge --plan-update` dry-run + UpdatePlanReport (P0.1 follow-on)   |
 | **Project-wide**                 | 83.9%    | 75%   | 85%     | Whole-package safety net; excludes `forge/templates/` by design     |
 
 Note (1.2.0-alpha.1): `forge/feature_injector.py` was removed; its bodies moved into
 `forge/appliers/plan.py`, `forge/appliers/injection.py`, and
-`forge/sync/forge_to_project/updater.py`. The updater entry above already covers
+`forge/sync/forge_to_project/updater/__init__.py`. The updater entry above already covers
 the orchestration code path that previously made up most of `feature_injector`'s
 coverage budget.
+
+Note (1.2.0-alpha.2, PR #58): `forge/sync/forge_to_project/updater.py` was
+split into a package (`updater/__init__.py` + sibling helpers); coverage.py
+now reports the new path. The table key above tracks the package init module.
 
 ## Ratchet policy
 

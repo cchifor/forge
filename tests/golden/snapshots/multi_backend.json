@@ -553,8 +553,8 @@
       "sha256": "f06c0e04ecc8de65"
     },
     "services/api-node/Dockerfile": {
-      "size": 3204,
-      "sha256": "7e874c90aa4bbcad"
+      "size": 3578,
+      "sha256": "cbf81397fc053ac4"
     },
     "services/api-node/entrypoint.sh": {
       "size": 306,
@@ -573,8 +573,8 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api-node/prisma/schema.prisma": {
-      "size": 1783,
-      "sha256": "b5433a4d15df6078"
+      "size": 2176,
+      "sha256": "276af302763f73f5"
     },
     "services/api-node/README.md": {
       "size": 1412,
@@ -957,8 +957,8 @@
       "sha256": "c65d6235b6631cea"
     },
     "services/api-py/src/app/domain/canvas_events.py": {
-      "size": 2435,
-      "sha256": "139d098a8d202c69"
+      "size": 2498,
+      "sha256": "5f7a08d5b974005a"
     },
     "services/api-py/src/app/domain/canvas_props.py": {
       "size": 1601,

@@ -152,9 +152,7 @@ def _emit_canvas_props_pydantic(
     for bc in config.backends:
         if bc.language is not BackendLanguage.PYTHON:
             continue
-        target = (
-            project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_props.py"
-        )
+        target = project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_props.py"
         _write(target, body, collector)
 
 
@@ -210,9 +208,7 @@ def _emit_event_union_pydantic(
     for bc in config.backends:
         if bc.language is not BackendLanguage.PYTHON:
             continue
-        target = (
-            project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_events.py"
-        )
+        target = project_root / "services" / bc.name / "src" / "app" / "domain" / "canvas_events.py"
         _write(target, body, collector)
 
     layout = _frontend_layout(config)
