@@ -104,9 +104,7 @@ def apply_features(
         # Dispatch via the package namespace so tests that
         # ``patch.object(updater, "_apply_fragment", ...)`` see their
         # patch applied — see ``__init__.py``'s re-export.
-        _resolve_apply_fragment()(
-            ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
-        )
+        _resolve_apply_fragment()(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
 
 
 def apply_project_features(

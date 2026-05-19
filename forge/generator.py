@@ -182,9 +182,7 @@ def _generate_backends(
         # ``_forge_template.toml`` (or the BackendSpec default), so per-file
         # provenance entries record the version too — the updater compares
         # this against the live template at update time.
-        backend_template_version = _resolve_template_version_for(
-            spec.template_dir, spec.version
-        )
+        backend_template_version = _resolve_template_version_for(spec.template_dir, spec.version)
         _record_tree(
             backend_dir,
             collector,

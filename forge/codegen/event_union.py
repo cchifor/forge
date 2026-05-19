@@ -148,10 +148,7 @@ def emit_typescript(schemas: list[Schema]) -> str:
         lines.append(_ts_for_schema(schema))
         lines.append("")
 
-    lines.append(
-        "// Synthesised `kind` discriminator: each schema's PascalCase title "
-        "kebab-cased."
-    )
+    lines.append("// Synthesised `kind` discriminator: each schema's PascalCase title kebab-cased.")
     lines.append("// Variant-with-kind aliases — intersection with the kind literal:")
     for title, kind in kinds:
         lines.append(f'export type {title}WithKind = {title} & {{ kind: "{kind}" }};')
@@ -295,9 +292,7 @@ def emit_pydantic(schemas: list[Schema]) -> str:
     for title, kind in kinds:
         wrapper = f"{title}Event"
         lines.append(f"class {wrapper}(BaseModel):")
-        lines.append(
-            f'    """`{kind}` variant of :data:`AgUiEvent` — wraps a :class:`{title}`."""'
-        )
+        lines.append(f'    """`{kind}` variant of :data:`AgUiEvent` — wraps a :class:`{title}`."""')
         lines.append("")
         lines.append(f'    kind: Literal["{kind}"] = "{kind}"')
         lines.append(f"    payload: {title}")
