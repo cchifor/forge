@@ -84,6 +84,12 @@ jobs:
         # `-n auto` parallelises within the cell using pytest-xdist; the
         # GitHub-Actions linux runner is 2-core so this typically halves
         # the cell wall-clock.
+        # PYTHONIOENCODING=utf-8 protects the Windows cell from xdist
+        # workers dying when pytest emits non-ASCII (em-dash, …) via
+        # stdout/stderr — the locale default cp1252 cannot encode the
+        # banner characters our codegen + docstrings already use.
+        env:
+          PYTHONIOENCODING: "utf-8"
         run: uv run pytest -m "not e2e and not package_integrity and not fuzz and not golden_snapshot" -n auto
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
@@ -173,6 +179,13 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
+      - name: Validate scenarios.yaml schema
+        # Front-load schema validation so malformed YAML fails this step
+        # with a useful diagnostic rather than the inline-Python emit
+        # step below silently propagating empty / wrong matrix lists.
+        # Reuses tests/matrix/test_scenarios_schema.py so the workflow
+        # and test suite agree on what counts as a valid scenario.
+        run: uv run pytest tests/matrix/test_scenarios_schema.py -v --no-cov
       - id: load
         name: Emit scenario list as JSON
         # ``yq`` isn't on the default runner image; use the Python parser

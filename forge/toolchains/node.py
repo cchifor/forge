@@ -58,6 +58,13 @@ class NodeToolchain:
         # service's tsc tries to resolve its types) and
         # --include-workspace-root installs the root's own devDependencies
         # if it ever declares any.
+        # ``timeout_s=600`` (10 min) for npm install: the default 5 min
+        # is reliably tight on Windows GitHub Actions runners — the test
+        # `test_node_only_project_update_succeeds_with_persisted_default`
+        # in `tests/test_updater.py` consistently exceeds 5 min on
+        # `test (windows-latest, 3.13)` (observed 5m+ × 2 consecutive
+        # runs on PR #62). 10 min comfortably covers Windows variance
+        # while still catching a truly stuck install.
         workspace_root = _find_npm_workspace_root(backend_dir)
         if workspace_root is not None:
             run_backend_cmd(
@@ -66,6 +73,7 @@ class NodeToolchain:
                 "Install dependencies",
                 quiet=quiet,
                 required=True,
+                timeout_s=600,
             )
         else:
             # Standalone fallback for plugin-authored Node services
@@ -78,6 +86,7 @@ class NodeToolchain:
                 "Install dependencies",
                 quiet=quiet,
                 required=True,
+                timeout_s=600,
             )
         # Generate the Prisma client; without this, ``tsc --noEmit`` can't
         # resolve ``Item`` / ``Prisma.<Model>WhereInput`` types and fails

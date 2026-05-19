@@ -40,6 +40,22 @@ permissions:
   issues: write
   pull-requests: write
 
+# Serialise scheduled runs vs a concurrent ``workflow_dispatch`` so two
+# mutmut processes don't race on the check-run write or clobber the
+# aggregated HTML report.
+#
+# ``cancel-in-progress: false`` is deliberate. A workflow-level group
+# fires BEFORE the per-job label filter, so adding any unrelated PR
+# label (eg. ``needs-review``) to a PR that already carries
+# ``breaking-change`` would otherwise cancel the in-flight mutation
+# shards. Mutmut shards are non-blocking (``continue-on-error: true``)
+# and the schedule is weekly, so the queue depth stays bounded; the
+# cost of one or two redundant setup-only runs is far less than the
+# cost of losing a real mutation report mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 # Pin once so every job — and the enforce script's baseline keys —
 # stays in sync. Bumping this requires re-keying tests/mutmut_baselines.json
 # (mutation IDs are not stable across major versions).
@@ -62,13 +78,13 @@ jobs:
       skip: ${{ steps.compute.outputs.skip }}
       mode: ${{ steps.compute.outputs.mode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Fetch enough history for ``git diff origin/main...HEAD`` on
           # PR events.
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -125,7 +141,7 @@ jobs:
 
       - name: Upload coverage data
         if: steps.compute.outputs.skip != 'true' && steps.compute.outputs.mode == 'nightly'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mutmut-coverage
           path: .coverage
@@ -154,9 +170,9 @@ jobs:
       matrix:
         path: ${{ fromJSON(needs.setup.outputs.paths) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -174,7 +190,7 @@ jobs:
         # artifact just means the shard runs without the coverage
         # speedup rather than failing.
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: mutmut-coverage
           path: .
@@ -229,7 +245,7 @@ jobs:
 
       - name: Upload shard results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.artname.outputs.name }}
           path: |
@@ -249,9 +265,9 @@ jobs:
     # async, not a workflow failure (Path C).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -262,7 +278,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Download all shard results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: mutmut-results-shard-*
           path: shard-results
@@ -296,7 +312,7 @@ jobs:
           echo "Aggregated $copied shard HTML directories into mutmut-html/"
 
       - name: Upload aggregated HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mutmut-html-report
           path: mutmut-html
