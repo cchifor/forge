@@ -351,6 +351,7 @@ def strip_python_database(backend_dir: Path) -> None:
     _strip_default_yaml(backend_dir / "config/default.yaml")
     _strip_config_domain(backend_dir / "src/app/core/config/domain.py")
     _strip_loader_db_refs(backend_dir / "src/app/core/config/loader.py")
+    _strip_cli_init(backend_dir / "src/app/cli/__init__.py")
 
 
 def _delete_targets(backend_dir: Path) -> None:
@@ -513,7 +514,20 @@ def _strip_config_domain(path: Path) -> None:
 
 
 def _strip_loader_db_refs(path: Path) -> None:
-    """Remove DbConfig imports from loader.py when present."""
+    """Remove DbConfig imports + qualified field references from loader.py.
+
+    Two cases handled:
+
+    * Direct-import shape — ``from app.core.config.domain import DbConfig``
+      (or a bundle import including ``DbConfig``). The first three regex
+      strips below cover this.
+    * Qualified-field shape — ``db: domain.DbConfig = domain.DbConfig()``
+      on the Settings class, when loader.py imports via
+      ``from . import domain, sources``. The shipped production loader.py
+      uses this pattern; without the last regex the field survives
+      ``_strip_config_domain``'s class removal and crashes at module load
+      with ``AttributeError: module 'domain' has no attribute 'DbConfig'``.
+    """
     if not path.is_file():
         return
     text = path.read_text(encoding="utf-8")
@@ -521,4 +535,31 @@ def _strip_loader_db_refs(path: Path) -> None:
     # Also strip ``, DbConfig`` out of longer import lines.
     text = re.sub(r",\s*DbConfig\b", "", text)
     text = re.sub(r"\bDbConfig,\s*", "", text)
+    # Qualified Settings field — ``db: (domain.)?DbConfig = ...``.
+    text = re.sub(r"^[ \t]+db:\s*(?:domain\.)?DbConfig[^\n]*\n", "", text, flags=re.MULTILINE)
+    path.write_text(text, encoding="utf-8")
+
+
+_CLI_DB_IMPORT_RE = re.compile(r"^from app\.cli\.db import [^\n]*\n", re.MULTILINE)
+_CLI_DB_REGISTER_RE = re.compile(r"^cli\.add_typer\(\s*db_app[^\n]*\n", re.MULTILINE)
+
+
+def _strip_cli_init(path: Path) -> None:
+    """Remove the ``app.cli.db`` import + Typer registration from cli/__init__.py.
+
+    The base template ships ``src/app/cli/__init__.py`` with::
+
+        from app.cli.db import db_app
+        ...
+        cli.add_typer(db_app, name="db", help="Database migrations")
+
+    ``_PYTHON_DB_TARGETS`` already deletes ``src/app/cli/db.py`` itself, but
+    without this complementary rewrite the import in ``cli/__init__.py``
+    raises ``ModuleNotFoundError`` on first ``python -m app`` import.
+    """
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    text = _CLI_DB_IMPORT_RE.sub("", text)
+    text = _CLI_DB_REGISTER_RE.sub("", text)
     path.write_text(text, encoding="utf-8")

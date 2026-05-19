@@ -170,6 +170,23 @@ def python_backend(tmp_path: Path) -> Path:
         "    return Settings(app=AppConfig(), db=DbConfig())\n",
     )
 
+    # cli/__init__.py — registers db_app as a typer sub-command. The stripper
+    # deletes cli/db.py wholesale; without a complementary rewrite here the
+    # generated project crashes on first ``python -m app`` import.
+    _write(
+        root / "src/app/cli/__init__.py",
+        "import typer\n"
+        "\n"
+        "from app.cli.db import db_app\n"
+        "from app.cli.server import server_app\n"
+        "# FORGE:CLI_IMPORTS\n"
+        "\n"
+        "cli = typer.Typer(name='app', help='Service CLI')\n"
+        "cli.add_typer(server_app, name='server', help='Server management')\n"
+        "cli.add_typer(db_app, name='db', help='Database migrations')\n"
+        "# FORGE:CLI_REGISTRATION\n",
+    )
+
     return root
 
 
@@ -325,6 +342,67 @@ class TestYamlAndDomainStrip:
         assert "class DbConfig" not in text
         assert "class AppConfig" in text  # siblings preserved
         assert "db: DbConfig" not in text
+
+
+class TestCliInitStrip:
+    """Cluster C1 — cli/__init__.py must lose the ``app.cli.db`` references
+    after the stripper runs. Without this, ``python -m app`` fails at first
+    import with ``ModuleNotFoundError: No module named 'app.cli.db'`` because
+    cli/db.py was already deleted by _PYTHON_DB_TARGETS.
+    """
+
+    def test_db_import_dropped(self, python_backend: Path):
+        strip_python_database(python_backend)
+        text = (python_backend / "src/app/cli/__init__.py").read_text(encoding="utf-8")
+        assert "from app.cli.db import db_app" not in text
+
+    def test_db_typer_registration_dropped(self, python_backend: Path):
+        strip_python_database(python_backend)
+        text = (python_backend / "src/app/cli/__init__.py").read_text(encoding="utf-8")
+        assert "cli.add_typer(db_app" not in text
+
+    def test_non_db_cli_surface_preserved(self, python_backend: Path):
+        strip_python_database(python_backend)
+        text = (python_backend / "src/app/cli/__init__.py").read_text(encoding="utf-8")
+        # server sub-command must survive so the runtime entrypoint still works.
+        assert "from app.cli.server import server_app" in text
+        assert "cli.add_typer(server_app" in text
+
+
+class TestLoaderQualifiedFieldStrip:
+    """Cluster C2 — _strip_loader_db_refs must also strip the qualified
+    Settings field ``db: domain.DbConfig = domain.DbConfig()`` that the
+    production loader.py declares. The existing import-only regex misses it
+    because production loader.py imports via ``from . import domain, sources``
+    (no direct ``DbConfig`` name to match), so the qualified field reference
+    survives the strip and crashes at module load with AttributeError.
+    """
+
+    def test_qualified_db_field_stripped(self, tmp_path: Path):
+        # Faithful production loader.py layout (the python_backend fixture's
+        # loader.py uses a different import shape — direct DbConfig import —
+        # which the existing regex already handles; this is the unhandled case).
+        backend = tmp_path / "api"
+        backend.mkdir()
+        _write(
+            backend / "src/app/core/config/loader.py",
+            "from . import domain, sources\n"
+            "\n"
+            "class Settings:\n"
+            "    db: domain.DbConfig = domain.DbConfig()\n"
+            "    server: domain.ServerConfig = domain.ServerConfig()\n",
+        )
+        # Minimal scaffolding so strip_python_database doesn't bail.
+        _write(backend / "src/app/cli/__init__.py", "import typer\n")
+        _write(backend / "pyproject.toml", "[project]\ndependencies = []\n")
+
+        strip_python_database(backend)
+
+        text = (backend / "src/app/core/config/loader.py").read_text(encoding="utf-8")
+        assert "domain.DbConfig" not in text, "qualified DbConfig field must be stripped"
+        assert "db:" not in text, "db: field declaration must be removed"
+        # Sibling fields preserved.
+        assert "domain.ServerConfig" in text
 
 
 class TestIdempotence:
