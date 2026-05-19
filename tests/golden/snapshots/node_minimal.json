@@ -429,8 +429,8 @@
       "sha256": "1a530bf3ab0e8ae8"
     },
     "services/api/Dockerfile": {
-      "size": 3159,
-      "sha256": "38f4c7232ada8955"
+      "size": 3533,
+      "sha256": "35da490c0f4c582b"
     },
     "services/api/entrypoint.sh": {
       "size": 301,
@@ -449,8 +449,8 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api/prisma/schema.prisma": {
-      "size": 1783,
-      "sha256": "b5433a4d15df6078"
+      "size": 2176,
+      "sha256": "276af302763f73f5"
     },
     "services/api/README.md": {
       "size": 1402,

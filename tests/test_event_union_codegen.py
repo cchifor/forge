@@ -219,9 +219,9 @@ class TestEmitPydantic:
         """
         pkg = tmp_path / "ev_pkg"
         pkg.mkdir()
-        (pkg / "__init__.py").write_text("")
-        (pkg / "ui_protocol.py").write_text(emit_ui_pydantic(load_event_schemas()))
-        (pkg / "canvas_events.py").write_text(emit_pydantic(load_event_schemas()))
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "ui_protocol.py").write_text(emit_ui_pydantic(load_event_schemas()), encoding="utf-8")
+        (pkg / "canvas_events.py").write_text(emit_pydantic(load_event_schemas()), encoding="utf-8")
 
         sys.path.insert(0, str(tmp_path))
         try:

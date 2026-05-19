@@ -151,7 +151,13 @@ class TestPlanUpdateWalkSpeed:
     Python-only projects the total walk runs in well under a second;
     this guards against accidentally O(N²) regressions."""
 
-    BUDGET_S = 30.0  # very loose — generation itself takes 5–10 s
+    # Generation itself takes 5–10 s on Linux but the GitHub Windows
+    # runner can blow past that — observed 30.73 s once at 30.0 s
+    # cap (run 26103223009). The budget is a regression guard against
+    # accidentally O(N²) walks, not a strict perf target; bump to 45 s
+    # to absorb Windows variance while still catching real regressions
+    # (an O(N²) walk would be minutes, not seconds).
+    BUDGET_S = 45.0
 
     def test_plan_update_walk(self, tmp_path: Path) -> None:
         from forge.config import (

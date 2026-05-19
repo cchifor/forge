@@ -11,7 +11,6 @@ from typing import Literal
 
 from forge.extractors.pipeline import CandidatePatch
 
-
 # Result tokens a ``prompt_callback`` may return per candidate. ``"quit"``
 # short-circuits the harvest: the caller receives a :class:`HarvestAborted`
 # rather than a partial :class:`HarvestBundle` (and no on-disk bundle is

@@ -82,6 +82,12 @@ _PYTHON_DB_TARGETS: tuple[str, ...] = (
     "tests/unit/test_repository_aio.py",
     "tests/unit/test_db_config.py",
     "tests/integration/test_uow.py",
+    # Service-test files whose entire body depends on stripped src/
+    # modules (``health_service.py`` and ``item_service.py`` above).
+    # Leaving them in place crashes pytest collection in stateless mode
+    # with ``ModuleNotFoundError: No module named 'app.services.health_service'``.
+    "tests/unit/test_health_service.py",
+    "tests/unit/test_item_service.py",
 )
 
 
@@ -402,6 +408,8 @@ def strip_python_database(
     _strip_config_domain(backend_dir / "src/app/core/config/domain.py")
     _strip_loader_db_refs(backend_dir / "src/app/core/config/loader.py")
     _strip_cli_init(backend_dir / "src/app/cli/__init__.py")
+    _strip_test_config_dbconfig(backend_dir / "tests/unit/test_config.py")
+    _strip_test_lifecycle_db_hooks(backend_dir / "tests/unit/test_lifecycle.py")
 
     if collector is not None:
         _refresh_provenance_after_strip(
@@ -630,6 +638,79 @@ def _strip_loader_db_refs(path: Path) -> None:
 
 _CLI_DB_IMPORT_RE = re.compile(r"^from app\.cli\.db import [^\n]*\n", re.MULTILINE)
 _CLI_DB_REGISTER_RE = re.compile(r"^cli\.add_typer\(\s*db_app[^\n]*\n", re.MULTILINE)
+
+
+def _strip_test_lifecycle_db_hooks(path: Path) -> None:
+    """Remove DB-hook lifecycle tests that don't apply to the stateless build.
+
+    Two test methods exercise lifecycle hooks (``_on_startup`` /
+    ``_on_shutdown``) that exist on the full DB-backed ``AppLifecycle``
+    but were dropped from the stateless replacement (the stateless
+    lifespan calls ``container.close()`` directly without a separate
+    shutdown hook):
+
+      - ``TestLifespan::test_calls_startup_and_shutdown`` — patches
+        ``AppLifecycle._on_startup`` and ``._on_shutdown`` via
+        ``patch.object``, which fails on AttributeError when the
+        targets are missing.
+      - ``TestShutdown::test_shutdown_closes_container`` — calls
+        ``AppLifecycle._on_shutdown(container)`` directly.
+
+    Surgically drop these two pieces; the rest of ``test_lifecycle.py``
+    (bootstrap + lifespan-without-container coverage) still applies.
+    """
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    # Drop the single failing TestLifespan method (decorators + multi-line
+    # signature + body). ``[\s\S]*?`` (lazy) consumes the multi-line
+    # parameter list across newlines until ``    ):`` closes it; the
+    # trailing ``(?:        [^\n]*\n|\n)+`` then consumes the function
+    # body until a less-indented line (next method or end of class).
+    text = re.sub(
+        r"\n    @pytest\.mark\.asyncio\n(?:    @patch\.object[^\n]*\n)+    async def test_calls_startup_and_shutdown\([\s\S]*?    \):\n(?:        [^\n]*\n|\n)+",
+        "\n",
+        text,
+    )
+    # Drop the entire TestShutdown class.
+    text = re.sub(
+        r"^class TestShutdown:\n(?:[ \t]+[^\n]*\n|\n)+(?=class |\Z)",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    path.write_text(text, encoding="utf-8")
+
+
+def _strip_test_config_dbconfig(path: Path) -> None:
+    """Remove ``DbConfig`` references from ``tests/unit/test_config.py``.
+
+    The test file imports ``DbConfig`` alongside ``AuditConfig`` and
+    ``CorsConfig`` from ``app.core.config.domain`` and defines a
+    ``TestDbConfig`` class. The non-DbConfig classes (``TestCorsConfig``,
+    ``TestAuditConfig``) remain valuable in stateless mode, so this
+    surgically drops only the DbConfig pieces rather than deleting the
+    whole file (the wholesale-delete approach would lose coverage of the
+    other two configs).
+    """
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    # Remove ``DbConfig`` from a bundle import like
+    # ``from ... import AuditConfig, CorsConfig, DbConfig``.
+    text = re.sub(r",\s*DbConfig\b", "", text)
+    text = re.sub(r"\bDbConfig\s*,\s*", "", text)
+    # Drop an entire ``class TestDbConfig:`` block — including any
+    # decorators, body lines, and the trailing blank line(s) before the
+    # next top-level ``class`` or end of file. Mirrors
+    # ``_strip_config_domain``'s class-removal regex.
+    text = re.sub(
+        r"^class TestDbConfig:\n(?:[ \t]+[^\n]*\n|\n)+(?=class |\Z)",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    path.write_text(text, encoding="utf-8")
 
 
 def _strip_cli_init(path: Path) -> None:

@@ -161,9 +161,7 @@ class ProvenanceCollector:
         """
         prefix_with_sep = rel_prefix.rstrip("/") + "/"
         doomed = [
-            key
-            for key in self.records
-            if key == rel_prefix or key.startswith(prefix_with_sep)
+            key for key in self.records if key == rel_prefix or key.startswith(prefix_with_sep)
         ]
         for key in doomed:
             del self.records[key]

@@ -14,7 +14,6 @@ from typing import IO, Any, Literal
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.sync.merge import sha256_of_file
 
-
 # Action vocabulary. ``restamped-baseline`` is the success case — the
 # manifest entry now reflects the user's edit. The two skip variants
 # capture the most common bundle states we encounter:

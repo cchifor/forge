@@ -70,7 +70,6 @@ from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
 from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
-
 logger = logging.getLogger(__name__)
 
 
