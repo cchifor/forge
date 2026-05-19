@@ -103,12 +103,7 @@ jobs:
               roundtrip_names = [
                   s["name"] for s in data["scenarios"] if "roundtrip" in s.get("lanes", [])
               ]
-              # Lane E (WS4) — scenarios opted into ``update``. Only
-              # Python-backend scenarios are opted in today; Node-only
-              # and Rust-only scenarios trip a pre-existing resolver bug
-              # where the Python-only ``correlation_id`` fragment is
-              # persisted in forge.toml and re-resolves on ``--update``.
-              # See the lane E header note in tests/matrix/scenarios.yaml.
+              # Lane E (WS4) — scenarios opted into ``update``.
               update_names = [
                   s["name"] for s in data["scenarios"] if "update" in s.get("lanes", [])
               ]
