@@ -145,6 +145,29 @@ class ProvenanceCollector:
             emitted_at=_utc_now_iso(),
         )
 
+    def drop_records_under(self, rel_prefix: str) -> None:
+        """Remove records whose key is ``rel_prefix`` or lives under it.
+
+        Used by post-generation rewrites (``strip_python_database`` in
+        particular) that delete a previously-recorded subtree. Without
+        pruning, the manifest retains entries pointing to files that no
+        longer exist on disk — harvest and the ``forge --update`` / ``--harvest``
+        flows then surface ghost candidates for those deleted paths.
+
+        ``rel_prefix`` is a POSIX relative path. Matching is exact at the
+        leaf (single-file deletion) and prefix-with-trailing-slash for
+        directory deletions — so ``drop_records_under("alembic")`` removes
+        ``alembic/env.py`` but leaves ``alembic.toml`` alone.
+        """
+        prefix_with_sep = rel_prefix.rstrip("/") + "/"
+        doomed = [
+            key
+            for key in self.records
+            if key == rel_prefix or key.startswith(prefix_with_sep)
+        ]
+        for key in doomed:
+            del self.records[key]
+
     def record_merge_block(
         self,
         *,
