@@ -1,6 +1,6 @@
 # Plan — Improve `cchifor/forge` CI Health
 
-<!-- codex-review-status: complete -->
+<!-- codex-review-status: finalized -->
 
 ## Context
 
