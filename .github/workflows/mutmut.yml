@@ -42,11 +42,19 @@ permissions:
 
 # Serialise scheduled runs vs a concurrent ``workflow_dispatch`` so two
 # mutmut processes don't race on the check-run write or clobber the
-# aggregated HTML report. Per-ref grouping is fine here: mutmut is
-# advisory, so cancelling an older in-progress run is acceptable.
+# aggregated HTML report.
+#
+# ``cancel-in-progress: false`` is deliberate. A workflow-level group
+# fires BEFORE the per-job label filter, so adding any unrelated PR
+# label (eg. ``needs-review``) to a PR that already carries
+# ``breaking-change`` would otherwise cancel the in-flight mutation
+# shards. Mutmut shards are non-blocking (``continue-on-error: true``)
+# and the schedule is weekly, so the queue depth stays bounded; the
+# cost of one or two redundant setup-only runs is far less than the
+# cost of losing a real mutation report mid-flight.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Pin once so every job — and the enforce script's baseline keys —
 # stays in sync. Bumping this requires re-keying tests/mutmut_baselines.json
