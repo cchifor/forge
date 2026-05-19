@@ -365,6 +365,25 @@ class ProjectConfig:
             conflicts.append("platform.admin=true")
         if self.options.get("platform.webhooks"):
             conflicts.append("platform.webhooks=true")
+        # Cluster D — matrix-nightly-fixes. The generator pipeline now runs
+        # strip_python_database BEFORE fragment application (so default-enabled
+        # fragments like pii_redaction inject into the stateless lifecycle.py
+        # instead of being silently clobbered by the stripper). That reorder
+        # is only safe when every fragment that survives to apply_features is
+        # stateless-compatible. The options below ship alembic migrations
+        # (events.outbox), open postgres pub/sub channels (events.bus=
+        # postgres_notify), require the event bus transitively (streaming.sse),
+        # or persist state in the DB (airlock.client) — all incompatible with
+        # database.mode=none.
+        if self.options.get("events.outbox"):
+            conflicts.append("events.outbox=true")
+        events_bus = self.options.get("events.bus", "none")
+        if events_bus and events_bus != "none":
+            conflicts.append(f"events.bus={events_bus!r}")
+        if self.options.get("streaming.sse"):
+            conflicts.append("streaming.sse=true")
+        if self.options.get("airlock.client"):
+            conflicts.append("airlock.client=true")
         if conflicts:
             raise ValueError(
                 "database.mode=none is incompatible with the following "

@@ -182,13 +182,37 @@ def _generate_backends(
         # ``_forge_template.toml`` (or the BackendSpec default), so per-file
         # provenance entries record the version too — the updater compares
         # this against the live template at update time.
+        backend_template_version = _resolve_template_version_for(
+            spec.template_dir, spec.version
+        )
         _record_tree(
             backend_dir,
             collector,
             origin="base-template",
             template_name=spec.template_dir,
-            template_version=_resolve_template_version_for(spec.template_dir, spec.version),
+            template_version=backend_template_version,
         )
+        # Phase B1 + Cluster D (matrix-nightly-fixes plan): strip the database
+        # stack from Python backends when ``database.mode=none`` BEFORE feature/
+        # fragment application. The earlier order (strip after apply_features)
+        # was a silent security regression — strippers write _STATELESS_LIFECYCLE
+        # over the lifecycle.py that fragments like default-on pii_redaction had
+        # just injected into, dropping the ``install_pii_filter()`` call without
+        # any signal. With the strip running first, fragments inject into the
+        # stateless lifecycle.py and the manifest correctly records each as the
+        # fragment owner. The validator (``_validate_database_mode``) blocks
+        # every stateless-incompatible fragment option so apply_features only
+        # sees fragments that survive a stripped tree.
+        if config.database_mode == "none" and bc.language == BackendLanguage.PYTHON:
+            from forge.strippers import strip_python_database  # noqa: PLC0415
+
+            _log(f"  Stripping DB stack from {bc.name} (database.mode=none) ...")
+            strip_python_database(
+                backend_dir,
+                collector=collector,
+                template_name=spec.template_dir,
+                template_version=backend_template_version,
+            )
         with phase_timer(
             _logger,
             "generate.apply_features",
@@ -205,18 +229,6 @@ def _generate_backends(
                 option_values=plan.option_values,
                 project_root=project_root,
             )
-        # Phase B1: strip the database stack from Python backends when
-        # ``database.mode=none``. Runs after fragment application so
-        # fragments see the full template (config validation has
-        # already blocked every DB-consuming fragment combo); runs
-        # before ``toolchain.install`` so ``uv sync`` operates on the
-        # already-stripped ``pyproject.toml`` and no SQLAlchemy/alembic
-        # deps are resolved.
-        if config.database_mode == "none" and bc.language == BackendLanguage.PYTHON:
-            from forge.strippers import strip_python_database  # noqa: PLC0415
-
-            _log(f"  Stripping DB stack from {bc.name} (database.mode=none) ...")
-            strip_python_database(backend_dir)
         # Toolchain dispatch: install() runs whenever we're writing to
         # disk (it's the step that produces lockfiles Docker needs),
         # verify() runs only in interactive mode (not quiet, not dry-run)

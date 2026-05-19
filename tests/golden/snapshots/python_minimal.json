@@ -40,14 +40,6 @@
       "size": 494,
       "sha256": "f27b7dd313f5239b"
     },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
-    },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
       "sha256": "c8926c3bb62484b7"
@@ -68,9 +60,17 @@
       "size": 1222,
       "sha256": "4245b692a1baee92"
     },
+    "infra/gatekeeper/Dockerfile": {
+      "size": 1436,
+      "sha256": "a4236d33286cd8ac"
+    },
     "infra/gatekeeper/pyproject.toml": {
       "size": 2951,
       "sha256": "955c6604957e47cc"
+    },
+    "infra/gatekeeper/README.md": {
+      "size": 549,
+      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2171,
@@ -312,13 +312,13 @@
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
-    "sdks/platform-auth/README.md": {
-      "size": 1468,
-      "sha256": "9c06875bd132381d"
-    },
     "sdks/platform-auth/pyproject.toml": {
       "size": 1368,
       "sha256": "4d9c7acb2299e4fb"
+    },
+    "sdks/platform-auth/README.md": {
+      "size": 1468,
+      "sha256": "9c06875bd132381d"
     },
     "sdks/platform-auth/src/platform_auth/__init__.py": {
       "size": 1490,
@@ -364,10 +364,6 @@
       "size": 5793,
       "sha256": "08d3cad0ab84903e"
     },
-    "sdks/platform-auth/tests/README.md": {
-      "size": 1245,
-      "sha256": "0afc5d668d2a43a1"
-    },
     "sdks/platform-auth/tests/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
@@ -375,6 +371,10 @@
     "sdks/platform-auth/tests/conftest.py": {
       "size": 442,
       "sha256": "f02ef1b9a90a1070"
+    },
+    "sdks/platform-auth/tests/README.md": {
+      "size": 1245,
+      "sha256": "0afc5d668d2a43a1"
     },
     "sdks/platform-auth/tests/unit/__init__.py": {
       "size": 0,
@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 461,
+      "size": 540,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -439,14 +439,6 @@
     "services/api/.gitignore": {
       "size": 174,
       "sha256": "31910a941b109f81"
-    },
-    "services/api/Dockerfile": {
-      "size": 3590,
-      "sha256": "0f2f598735186ce9"
-    },
-    "services/api/README.md": {
-      "size": 33686,
-      "sha256": "b891350fb641d6b2"
     },
     "services/api/alembic/env.py": {
       "size": 1699,
@@ -481,12 +473,16 @@
       "sha256": "c0859dec5b712b9b"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 2453,
-      "sha256": "da823a11741af641"
+      "size": 2462,
+      "sha256": "c0ebc686500089e5"
     },
     "services/api/docker-compose.yaml": {
       "size": 871,
       "sha256": "59e84d0358509122"
+    },
+    "services/api/Dockerfile": {
+      "size": 3590,
+      "sha256": "0f2f598735186ce9"
     },
     "services/api/entrypoint.sh": {
       "size": 415,
@@ -495,6 +491,10 @@
     "services/api/pyproject.toml": {
       "size": 5145,
       "sha256": "bd0aacf166d9bb46"
+    },
+    "services/api/README.md": {
+      "size": 33686,
+      "sha256": "b891350fb641d6b2"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,

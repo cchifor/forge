@@ -20,13 +20,13 @@
       "size": 2577,
       "sha256": "27cb9957eec7caf9"
     },
-    "CLAUDE.md": {
-      "size": 1912,
-      "sha256": "ae83d48b4638adaf"
-    },
     "Cargo.toml": {
       "size": 649,
       "sha256": "884c369a3d3c9a14"
+    },
+    "CLAUDE.md": {
+      "size": 1912,
+      "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
       "size": 6393,
@@ -39,14 +39,6 @@
     "infra/gatekeeper/.gitignore": {
       "size": 494,
       "sha256": "f27b7dd313f5239b"
-    },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/config/default.yaml": {
       "size": 1868,
@@ -68,9 +60,17 @@
       "size": 1222,
       "sha256": "4245b692a1baee92"
     },
+    "infra/gatekeeper/Dockerfile": {
+      "size": 1436,
+      "sha256": "a4236d33286cd8ac"
+    },
     "infra/gatekeeper/pyproject.toml": {
       "size": 2951,
       "sha256": "955c6604957e47cc"
+    },
+    "infra/gatekeeper/README.md": {
+      "size": 549,
+      "sha256": "2feeb9c03f762d51"
     },
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2171,
@@ -397,7 +397,7 @@
       "sha256": "f16fe827196c43c2"
     },
     "services/api/.copier-answers.yml": {
-      "size": 458,
+      "size": 537,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -411,14 +411,6 @@
     "services/api/Cargo.toml": {
       "size": 929,
       "sha256": "a5ad4f2c2ac0626e"
-    },
-    "services/api/Dockerfile": {
-      "size": 3083,
-      "sha256": "2caea605ff9f1587"
-    },
-    "services/api/README.md": {
-      "size": 1281,
-      "sha256": "62c13b9b99ad7620"
     },
     "services/api/config/defaults.yaml": {
       "size": 378,
@@ -437,16 +429,24 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1809,
-      "sha256": "1e9ea78f62d0c47c"
+      "size": 1851,
+      "sha256": "eb6bfeb2634bd6b5"
     },
     "services/api/docker-compose.yaml": {
       "size": 836,
       "sha256": "c242f2f5c34d0194"
     },
+    "services/api/Dockerfile": {
+      "size": 3113,
+      "sha256": "4e4ba1aa7ac2aaf9"
+    },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,
       "sha256": "3f329aea2ff16c7b"
+    },
+    "services/api/README.md": {
+      "size": 1281,
+      "sha256": "62c13b9b99ad7620"
     },
     "services/api/src/app.rs": {
       "size": 2009,
