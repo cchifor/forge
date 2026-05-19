@@ -11,14 +11,19 @@ on:
       - 'v*.*.*'
       - 'v*.*.*-*'   # pre-release identifiers (alpha, beta, rc)
 
-# Workflow-level group — deliberately omits ``github.ref`` so two
-# different tag pushes serialize globally (a per-tag group would let
-# v1.2.0 and v1.2.1 race on PyPI / npm / pub.dev uploads).
-# ``cancel-in-progress: false`` is critical for releases — interrupting
-# a half-published release leaves the artefact set inconsistent across
-# registries.
+# Per-tag concurrency group — protects against re-triggering THE SAME
+# tag while one of its publish jobs is mid-flight (eg. someone pushes
+# v1.2.0 twice). GitHub Actions concurrency cannot truly serialise
+# different tags: a workflow-level group (`release-publish`) with
+# `cancel-in-progress: false` would actually *cancel* older pending
+# runs when a newer one is queued (per the GHA docs: only the running
+# run is preserved, every other run in the same group is purged when a
+# new one arrives). Per-tag grouping lets v1.2.0 and v1.2.1 publish in
+# parallel — registries (PyPI / npm / pub.dev) tolerate concurrent
+# distinct-version uploads, so this is the safer trade-off than
+# silently dropping a queued release.
 concurrency:
-  group: release-publish
+  group: release-publish-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
