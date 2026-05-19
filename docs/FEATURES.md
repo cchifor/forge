@@ -575,24 +575,38 @@ BACKENDS: python
 
 ### `queue.backend`
 
-**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** node, python, rust
 
-**Allowed values:** `none`, `redis`, `sqs`
+**Allowed values:** `none`, `redis`, `sqs`, `bullmq`, `apalis`
 
-_Background-work queue — Redis lists or AWS SQS, behind the QueuePort._
+_Background-work queue — selects the QueuePort adapter (per RFC-012)._
 
 Selects which queue implementation the ``QueuePort`` resolves to.
-Redis is the simple-and-cheap default for self-hosted setups; SQS
-covers AWS-native deployments with delayed delivery + FIFO.
+Each value is scoped to the backend language whose adapter ecosystem
+it belongs to — see docs/rfcs/RFC-012-forgequeue-port.md for the
+per-language mapping:
 
-OPTIONS: none | redis | sqs
-BACKENDS: python
-DEPENDENCY: redis-py (redis) or aioboto3 (sqs)
-ENV: REDIS_URL / AWS_REGION
+- ``redis`` / ``sqs``: Python adapters (Taskiq broker, AWS SQS).
+- ``bullmq``: Node adapter (BullMQ + ioredis).
+- ``apalis``: Rust adapter (Apalis + Redis).
+
+In a polyglot project, the resolver targets the adapter only at the
+backend language whose ecosystem it belongs to. Other backends in
+the same project receive the port (typing only, no concrete adapter)
+unless paired with their own queue.backend value via per-language
+overrides (future work; see RFC-012 §"Drawbacks").
+
+OPTIONS: none | redis | sqs | bullmq | apalis
+BACKENDS: python (redis, sqs), node (bullmq), rust (apalis)
+DEPENDENCY: redis-py (redis), aioboto3 (sqs), bullmq+ioredis
+    (bullmq), apalis+apalis-redis (apalis)
+ENV: REDIS_URL / AWS_REGION / TASKIQ_BROKER_URL
 
 **Enables fragments:**
 - on `redis` → `queue_port`, `queue_redis`
 - on `sqs` → `queue_port`, `queue_sqs`
+- on `bullmq` → `queue_port`, `queue_bullmq`
+- on `apalis` → `queue_port`, `queue_apalis`
 
 ### `streaming.sse`
 
@@ -1052,22 +1066,25 @@ metadata of any single option.
 ## Layer discriminators — composing a project
 
 Five **layer-mode** options control what forge generates, one per
-major layer. Each is an ENUM with `generate` / `external` / `none`
-values (subset varies by layer). The first four (`backend.mode`,
-`database.mode`, `frontend.mode`, `agent.mode`) have an empty
-`enables` map — the mode orchestrates generation, it doesn't enable
-a fragment bundle. `auth.mode` is the exception: its `generate` value
-fans out to a per-language SDK + per-frontend session-timeout fragment
-bundle (the resolver's `_is_user_selected` knows to silent-skip
-unmatched-backend / unmatched-frontend entries — see the architecture
-note below).
+major layer. Each is an ENUM whose `none` value enables no fragments
+(the shared "no-op layer" contract).
+`backend.mode` / `database.mode` / `frontend.mode` orchestrate
+generation directly — their non-`none` values gate the template loops
+in `generator` without enabling per-value fragment bundles.
+`agent.mode` (Theme 2A) is the fanout sibling: its non-`none` values
+map to bundles of `conversational_ai` fragments (LLM port, chat
+history, agent runner, MCP scaffolds). `auth.mode` is the per-language
+fanout: its `generate` value fans out to a per-backend SDK +
+per-frontend session-timeout fragment bundle (the resolver's
+`_is_user_selected` knows to silent-skip unmatched-backend /
+unmatched-frontend entries — see the architecture note below).
 
 | Path | Options | Default | Purpose |
 |---|---|---|---|
 | `backend.mode` | `generate`, `none` | `generate` | Skip backend scaffolding entirely. Pair with `frontend.api_target.url` for a frontend-only project pointed at an external API. |
 | `database.mode` | `generate`, `none` | `generate` | Skip the postgres container + per-backend migrate sidecars. Use for stateless services. Incompatible with DB-backed options (`conversation.persistence`, `rag.backend != none`, `platform.admin`, etc.). |
 | `frontend.mode` | `generate`, `external`, `none` | `generate` | `none` skips frontend generation (coherent with `FrontendFramework.NONE`). `external` is reserved for wiring a thin wrapper at an existing deployed frontend. |
-| `agent.mode` | `generate`, `external`, `none` | `none` | Placeholder — pattern parity with the other layers. Real wiring lands when the agentic stack gets its own generate/external scenarios. |
+| `agent.mode` | `none`, `llm_only`, `tool_calling`, `multi_agent` | `none` | Layer discriminator for the agentic/LLM stack. `llm_only` ships `llm_port` + `conversation_persistence`. `tool_calling` adds the full agent triple (`agent_streaming` + `agent_tools` + `agent`) and the MCP consumer scaffolds (`mcp_server` + `mcp_ui`). `multi_agent` is registered for forward-compat but raises NOT-YET-IMPLEMENTED at `ProjectConfig.validate()` — the agent-to-agent routing layer ships in v2. Cross-layer rule: non-`none` values require `backend.mode != "none"`. |
 | `auth.mode` | `generate`, `none` | `generate` | Drives the platform-auth stack: per-language verifier SDKs (Python / Node / Rust) + per-frontend session-timeout (Vue / Svelte / Flutter). `none` skips the entire auth namespace — useful for stateless internal-only services. Discriminator-fanout: a Python-only project gets only the Python SDK + (if a Vue/Svelte/Flutter frontend is configured) the matching session-timeout. See [`docs/auth-architecture.md`](auth-architecture.md). |
 
 ### `frontend.api_target`

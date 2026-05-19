@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { ArrowLeft, X, Sparkles } from 'lucide-vue-next'
 import { Button } from '@/shared/ui/button'
+import CanvasError from './CanvasError.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useAiChat } from '../composables/useAiChat'
 import { resolveCanvasComponent } from './registry'
@@ -55,20 +56,24 @@ function handleAction(action: WorkspaceAction) {
       </Button>
     </div>
 
-    <!-- Content: engine router -->
+    <!-- Content: engine router. Wrapped in <CanvasError> so a crashing
+         canvas component renders a fallback card instead of unmounting
+         the entire pane (v2 Theme 8-C2). -->
     <div :class="canvasActivity.engine === 'mcp-ext' ? 'flex-1' : 'flex-1 overflow-auto'">
-      <AgUiEngine
-        v-if="canvasActivity.engine === 'ag-ui'"
-        :activity="canvasActivity"
-        :state="{}"
-        @action="handleAction"
-      />
-      <McpExtEngine
-        v-else-if="canvasActivity.engine === 'mcp-ext'"
-        :activity="canvasActivity"
-        :state="{}"
-        @action="handleAction"
-      />
+      <CanvasError :component-name="resolved?.label || canvasActivity.activityType">
+        <AgUiEngine
+          v-if="canvasActivity.engine === 'ag-ui'"
+          :activity="canvasActivity"
+          :state="{}"
+          @action="handleAction"
+        />
+        <McpExtEngine
+          v-else-if="canvasActivity.engine === 'mcp-ext'"
+          :activity="canvasActivity"
+          :state="{}"
+          @action="handleAction"
+        />
+      </CanvasError>
     </div>
   </div>
 </template>
