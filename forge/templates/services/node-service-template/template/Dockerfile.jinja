@@ -44,6 +44,13 @@ COPY tsconfig.json ./
 COPY src ./src/
 RUN npm run build
 
+# Ensure a per-service node_modules exists even when npm workspaces
+# hoists every dep to /workspace/node_modules (which happens for
+# minimal scenarios with no dep conflicts — e.g. node_svelte_min). The
+# runtime stage's ``COPY --from=builder .../services/{slug}/node_modules``
+# would otherwise fail BuildKit's checksum step with "not found".
+RUN mkdir -p node_modules
+
 # --- Runtime Stage ---
 FROM node:{{ node_version }}-slim
 
