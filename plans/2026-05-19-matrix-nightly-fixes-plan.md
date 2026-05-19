@@ -2,12 +2,12 @@
 
 ## Context
 
-The nightly matrix CI job on `cchifor/forge` (run [26076244446], 2026-05-19) failed with **15 of 23 matrix legs red** while every prerequisite gate / aggregator job succeeded. PR #53 (merged 2026-05-18) fixed 3 pre-existing bugs but left more open. This plan, after a Codex round-1 review and on-codebase verification, groups the 15 failures into **4 fix clusters plus 1 investigation cluster**:
+The nightly matrix CI job on `cchifor/forge` (run [26076244446], 2026-05-19) failed with **15 of 23 matrix legs red** while every prerequisite gate / aggregator job succeeded. PR #53 (merged 2026-05-18) fixed 3 pre-existing bugs but left more open. This plan, converged after **two rounds of Codex review** plus on-codebase verification, groups the 15 failures into **4 fix clusters plus 1 investigation cluster**:
 
 - **A** — `project_slug` not propagated to backend Copier contexts (Rust + Node only). 6 smoke fixes.
 - **B** — Roundtrip lane lacks exclusions for build-generated artefacts. 5 roundtrip fixes.
 - **C** — Stripper completeness for stateless Python (cli/__init__ + qualified loader.py field). 0 nightly fixes today (latent bug — stateless_py is not on the smoke lane). Worth fixing in this PR because it unblocks future `stateless_py` smoke and proves the stateless surface is internally consistent.
-- **D** — `stateless_py` roundtrip FR1 violation: stripper destroys fragment injection on `lifecycle.py` and leaves manifest stale. 1 roundtrip fix + 1 silent-security-regression fix.
+- **D** — `stateless_py` roundtrip FR1 violation: stripper destroys fragment injection on `lifecycle.py` and leaves manifest stale. 1 roundtrip fix + 1 silent-security-regression fix + stateless option-compat hardening.
 - **E** (investigation, not a fix on this PR) — `py_svelte_min / py_vue_noauth / py_vue_full` smoke: api-1 exits 3 for reasons currently undiagnosable. Requires the compose-log artifacts from the next nightly (PR #53 cc905cf landed the diagnostic capture; this run was BEFORE that artifact path was wired into the nightly workflow → no logs to inspect yet).
 
 **Verified fix coverage on this PR: 12 of 15 nightly red legs.** The remaining 3 (Cluster E) are explicitly deferred to a follow-up after diagnostic data arrives.
@@ -109,7 +109,7 @@ ctx: dict[str, Any] = {
            return True
        return False
    ```
-   Note: this list is **narrower than the golden-snapshot list**. Specifically, we do NOT include `package-lock.json`, `auto-imports.d.ts`, or `/api/generated/` — those are deterministic on the same CI host, and a genuine FR2 drift in them is exactly the kind of bug roundtrip should catch.
+   This list is **narrower than the golden-snapshot list**. We deliberately do NOT include `package-lock.json`, `auto-imports.d.ts`, or `/api/generated/` — those are deterministic on the same CI host, and a genuine FR2 drift in them is exactly the kind of bug roundtrip should catch.
 
 2. Update `tests/test_golden_snapshots.py:85-126` to also call `is_generated_artefact()` as the first check inside the loop (continue on True), but keep the additional `package-lock.json` / `auto-imports.d.ts` / `/api/generated/` exclusions inline as snapshot-only (with a clarifying comment) — those are legitimately host-asymmetric for snapshots, just not for FR2.
 
@@ -163,7 +163,7 @@ _strip_cli_init(backend_dir / "src/app/cli/__init__.py")
 ```
 
 ### C2 — `_strip_loader_db_refs` misses qualified field reference in `loader.py`
-`loader.py:29` declares `db: domain.DbConfig = domain.DbConfig()`. `_strip_config_domain` removes the class from `domain.py`; `_strip_loader_db_refs` only strips IMPORT lines and doesn't match the qualified `domain.DbConfig` reference. At runtime → `AttributeError` at module load. **This path is the most plausible exit-3 source for any future stateless smoke run** (Codex notes `server.py` swallows `get_settings` failures via try/except, and uvicorn then re-imports `app.main` which loads loader → exit 3).
+`loader.py:29` declares `db: domain.DbConfig = domain.DbConfig()`. `_strip_config_domain` removes the class from `domain.py`; `_strip_loader_db_refs` only strips IMPORT lines and doesn't match the qualified `domain.DbConfig` reference. At runtime → `AttributeError` at module load.
 
 **Fix** — extend `_strip_loader_db_refs`:
 ```python
@@ -187,9 +187,9 @@ def _strip_loader_db_refs(path: Path) -> None:
 
 ---
 
-## Cluster D — `stateless_py` FR1 violation: stripper destroys fragment injection on `lifecycle.py` (1 roundtrip fix + silent-security-regression fix)
+## Cluster D — `stateless_py` FR1 violation: stripper destroys fragment injection on `lifecycle.py` (1 roundtrip fix + silent-security-regression fix + stateless option hardening)
 
-### Diagnosis (confirmed via code trace + Codex round-1 review)
+### Diagnosis (confirmed via code trace + two rounds of Codex review)
 - The FR1 check (`tests/matrix/runner.py:736-753`) calls `harvest_project(project_a)` and asserts `[c for c in candidates if c.kind in ("block", "files")] == []`. The single offender's `fragment` is `pii_redaction` (per the observed error message), not `base-template`.
 - `forge/features/middleware/templates/pii_redaction/python/inject.yaml` injects, BEFORE the `FORGE:LIFECYCLE_STARTUP` marker in `src/app/core/lifecycle.py`:
   ```python
@@ -199,7 +199,7 @@ def _strip_loader_db_refs(path: Path) -> None:
 - Pipeline order in `forge/generator.py`:
   1. (~line 147) `_record_tree()` records every base-template file with `origin="base-template"` and its SHA.
   2. Feature/fragment application — the `pii_redaction` fragment runs `record(path, origin="fragment", fragment_name="pii_redaction", ...)` on `lifecycle.py` *after* injecting the two-line snippet. Manifest now has the **fragment** as the owner of `lifecycle.py`.
-  3. (~line 180) `strip_python_database(backend_dir)` overwrites `src/app/core/lifecycle.py` with `_STATELESS_LIFECYCLE` (a hand-written constant in `forge/strippers.py:88-184`). **This silently erases the pii_redaction injection**, including the `# FORGE:LIFECYCLE_STARTUP` marker comment which is an *injection point*, not a paired sentinel (Codex critique 13 — verified).
+  3. (~line 180) `strip_python_database(backend_dir)` overwrites `src/app/core/lifecycle.py` with `_STATELESS_LIFECYCLE` (a hand-written constant in `forge/strippers.py:88-184`). **This silently erases the pii_redaction injection**, including the `# FORGE:LIFECYCLE_STARTUP` marker comment which is an *injection point*, not a paired sentinel.
   4. (~line 348) `forge.toml` is written from the now-stale collector — the manifest still says "this file is owned by fragment `pii_redaction`, with hash `<original>`".
 - At harvest time, the `FileExtractor` sees a fragment-origin row whose recorded hash doesn't match the disk content → `kind="files"` candidate. FR1 fails.
 
@@ -217,23 +217,33 @@ Move `strip_python_database()` to BEFORE fragment application in `forge/generato
 3. apply features/fragments                                    # was step 2 — now sees stateless lifecycle.py
 4. write forge.toml
 ```
+
+**Compatibility scope (Codex round-2 verification).** D1 is safe for the only `database.mode=none` scenario in the matrix today (`stateless_py`, which sets only `database.mode: "none"` with no other options). Codex confirmed it does not break platform_auth: the platform-auth Python middleware fragment has no lifecycle injection, and the stateless lifecycle replacement already includes the platform-auth setup code (`forge/strippers.py:126-137`).
+
+**But** D1 introduces a wider stateless-compatibility cliff for optional fragments that inject into markers the stateless replacements DON'T preserve — `events.core`, `events.outbox`, `airlock`, `streaming`, several `connectors.*` (which target `FORGE:IOC_INFRA_*` / `FORGE:LIFESPAN_*` zones removed by the stateless `_STATELESS_INFRA` / `_STATELESS_IOC_INIT` constants). None of those appear in any of the 15 currently failing nightly legs, but D1 should be paired with two guards in this same PR:
+
+1. **Extend `_validate_database_mode`** (in `forge/config/_validators.py` — same module as `validate_port` / `validate_features`) to reject the documented-incompatible combinations under `database.mode=none`: `events.outbox=true`, `events.bus=postgres_notify`, `streaming.*` (non-noop), `airlock=true`. Raise a clear `ValueError` listing the option(s) that conflict. Don't try to enumerate exhaustively today — the goal is to fail loudly when a user combines these, not to silently degrade.
+2. **Audit which `database.mode=none`-compatible fragments inject into stateless-clobbered markers.** Either (a) update the stateless replacement constants to preserve those markers as bare `# FORGE:MARKER_NAME` lines, or (b) add them to the validator's reject list above. Audit findings can go in the PR description as a checklist.
+
 Then in `strip_python_database`, after each `target.write_text(content)`, call:
 ```python
 collector.record(
     target,
     origin="base-template",
-    template_name=template_name,     # propagate from the caller in generator.py
+    template_name=template_name,
     template_version=template_version,
 )
 ```
-The actual `ProvenanceCollector.record(...)` signature (`forge/sync/provenance.py:111`) takes keyword args: `path, *, origin, fragment_name=None, fragment_version=None, template_name=None, template_version=None`. There is no `record_file(path, text)` method — Codex critique 12, verified by reading the class definition. The function also auto-computes `sha256_of(path)` and `emitted_at`, so the stripper just needs to call it after writing.
+The actual `ProvenanceCollector.record(...)` signature (`forge/sync/provenance.py:111`) takes keyword args: `path, *, origin, fragment_name=None, fragment_version=None, template_name=None, template_version=None`. There is no `record_file(path, text)` method. The function auto-computes `sha256_of(path)` and `emitted_at`, so the stripper just needs to call it after writing.
 
 After this reorder, fragments like `pii_redaction` apply their injection on top of the stateless lifecycle.py. The injection still lands BEFORE the `FORGE:LIFECYCLE_STARTUP` marker — the stateless replacement keeps that marker at the end of `_setup_logging` (`forge/strippers.py:182`). The fragment's `record(origin="fragment", fragment_name="pii_redaction")` call then becomes the manifest's owner of the final lifecycle.py, with the correct hash including the injection.
 
 Required code changes:
 - `forge/generator.py` — move the `strip_python_database` call up to just after `_record_tree`. Pass `collector` and the base-template name+version (already available locally).
 - `forge/strippers.py:335` — extend signature: `def strip_python_database(backend_dir: Path, *, collector: ProvenanceCollector | None = None, template_name: str | None = None, template_version: str | None = None)`. Keep all three keyword args optional so existing test callers don't break.
-- `forge/strippers.py:365-378` — after each `target.write_text(content)`, if `collector is not None`, call the proper `collector.record(target, origin="base-template", template_name=..., template_version=...)`.
+- `forge/strippers.py:365-378` — after each `target.write_text(content)`, if `collector is not None`, call `collector.record(target, origin="base-template", template_name=..., template_version=...)`.
+- **Prune deleted-target records from the collector.** `_delete_targets` (`forge/strippers.py:356-362`) wipes `alembic/`, `src/app/data/`, `src/service/db/`, etc. The collector's previous `_record_tree` pass already recorded those paths. After deletion, walk `_PYTHON_DB_TARGETS` and call a new `collector.drop_records_under(rel)` that removes any `records` keys whose POSIX rel-path starts with the deleted target's rel-path. Without this, `forge.toml` retains base-template provenance rows pointing to files that no longer exist on disk — downstream `forge --update` / `--harvest` consumers see ghost entries. The new method is ~10 lines on `ProvenanceCollector`.
+- `forge/config/_validators.py` — extend (or add) `_validate_database_mode` per the compatibility-scope notes above.
 
 **D2 (fallback — keep the order, re-apply compatible injections post-strip)**
 
@@ -241,16 +251,20 @@ If the reorder is too invasive (e.g. another fragment depends on seeing the DB-b
 
 ### Test
 1. **Unit (correct API)** — `tests/test_strippers.py::test_strip_python_database_records_provenance_with_collector`:
-   - Construct a fake `ProvenanceCollector(project_root=tmp_path)`.
+   - Construct a real `ProvenanceCollector(project_root=tmp_path)`.
    - Run `strip_python_database(backend_dir, collector=collector, template_name="python-service-template", template_version="1.0.0")`.
    - Assert `collector.records["services/api/src/app/core/lifecycle.py"]` exists with `origin="base-template"` and a non-empty sha.
+   - Assert `collector.records` has no keys under the deleted `alembic/` or `src/app/data/` trees (covers `drop_records_under`).
 
 2. **Functional (security regression guard)** — `tests/test_strippers.py::test_strip_python_database_preserves_pii_redaction_injection`:
    - Run the full `generate()` for a synthetic config matching `stateless_py` (with default `middleware.pii_redaction`).
    - Assert the rendered `src/app/core/lifecycle.py` contains both `from app.core.pii_redaction import install_pii_filter` AND `install_pii_filter()`. Without this guard, D1 could regress silently if the pipeline reorder breaks the injection point.
    - Bonus: assert harvesting the rendered project yields zero `kind in ("block","files")` candidates.
 
-3. **Integration** — `tests/matrix/test_runner_diagnostics.py::test_stateless_py_roundtrip_fr1_passes`:
+3. **Validator guard** — `tests/test_validators.py::test_validate_database_mode_rejects_stateless_incompatible_options`:
+   - For each of `events.outbox=true`, `events.bus=postgres_notify`, `streaming.*` (non-noop), `airlock=true` combined with `database.mode=none`, assert `ValueError` with a message naming the offending option.
+
+4. **Integration** — `tests/matrix/test_runner_diagnostics.py::test_stateless_py_roundtrip_fr1_passes`:
    - Drive `run_lane_roundtrip(stateless_py_scenario)` end-to-end; assert `status == "ok"`.
 
 ---
@@ -262,16 +276,23 @@ The compose-log diagnostic capture (PR #53 commit cc905cf) landed AFTER the 2026
 
 What we know already:
 - All three scenarios use `database.mode=generate` (default). Strippers are NOT called → Cluster C fixes don't apply.
-- For `py_svelte_min`: postgres healthy, **`api-migrate` exited**, then `api-1 exited (3)`. The migrate-container exit is suspicious — it precedes the api-1 failure and could be the proximate cause.
+- For `py_svelte_min`: postgres healthy, `api-migrate` exited (this is an **init job** — `api` depends on `service_completed_successfully`, so an `api-migrate` exit line by itself is expected when migrations finish; it doesn't necessarily indicate failure), then `api-1 exited (3)`.
 - For `py_vue_noauth`: frontend healthy, `api-1 exited (3)`.
 - For `py_vue_full`: keycloak healthy (last status reported); no `api` status shown in the truncated log, may share root cause.
 
 ### Strongest hypotheses (to verify with the next nightly's compose logs)
-1. **Auth config validation fails in `ENV=production`.** Both `py_svelte_min` and `py_vue_noauth` have `include_keycloak: false`, so no auth fragment injects credentials. The Dockerfile sets `ENV=production` (`forge/templates/services/python-service-template/template/Dockerfile.jinja:81`), so `production.yaml` loads — and the shipped file only contains `security.auth.enabled: true` with no `server_url`, `realm`, `client_id`, etc. If `weld.core.domain.config.AuthConfig` requires those fields, pydantic validation raises during `Settings()` instantiation. Uvicorn then exits 3 because the ASGI factory `app.main:app` failed to import (`server.py:24` catches the `get_settings()` exception, but `uvicorn.run("app.main:app", ...)` re-loads the app, which calls `get_settings()` again unprotected — see Codex critique 8).
-2. **alembic migration fails.** The `api-migrate` exit on `py_svelte_min` could be from `alembic upgrade head` failing (e.g. postgres connection string, missing migration file, etc.). Worth checking the migrate container's logs first.
+Ordered from most-to-least likely after Codex round-2 review:
+
+1. **`app.main:app` ASGI factory import fails inside uvicorn.** Exit code 3 is uvicorn's specific signal for "couldn't load the application target." `server.py:24` catches the *first* `get_settings()` call in a try/except, but `uvicorn.run("app.main:app", ...)` then re-imports `app.main`, which triggers `get_settings()` again unprotected. Anything that breaks during `app.main` import (a missing weld-core API, a pydantic schema mismatch, a feature module that imports something it shouldn't in production) lands on this exit code. Inspect `api-1`'s stderr for the actual traceback.
+2. **In-container second alembic run fails.** `entrypoint.sh` typically runs `alembic upgrade head` itself before `exec python -m app server run`, even though `api-migrate` already did the migration via the sidecar. If the in-container connection string differs from the sidecar's (e.g. host vs container DNS, port mismatch when keycloak is also on the network), the second run could fail and the entrypoint would exit non-zero.
+3. **Dependency / stub mismatch in matrix env.** The matrix CI uses stub SDKs under `tests/matrix/fixtures/sdks/weld-core/` instead of the real platform monorepo. A change to the stub that lags behind the template's expected weld-core API surface would cause `app.main` to fail at import. Worth diffing the stub against what `lifecycle.py` and `main.py` actually import.
+
+**Hypotheses Codex demoted (don't pursue first):**
+- *AuthConfig validation in production env.* This was the round-1 working theory but Codex notes (a) docker-compose sets `ENV=development` for the matrix Python services (not production), (b) the config loader deep-merges default.yaml + environment file instead of replacing, and (c) the matrix `weld-core` AuthConfig stub provides defaults. Re-evaluate only if the actual logs surface a pydantic ValidationError on auth fields.
+- *Alembic sidecar failure.* The `api-migrate` exit message is the normal init-container success line, not an error. Only chase this if logs show a non-zero exit on `api-migrate`.
 
 ### Verification step (post-next-nightly)
-After the next nightly run lands, pull the `compose-logs-py_svelte_min` (and `_py_vue_noauth`, `_py_vue_full`) artifacts, inspect `api-1`'s stderr, and open a follow-up PR. Suggested investigation commands:
+After the next nightly run lands, pull the `compose-logs-*` artifacts, inspect `api-1`'s stderr, and open a follow-up PR. Suggested investigation commands:
 ```bash
 gh run download <run-id> --name compose-logs-py_svelte_min
 ls compose-logs/
@@ -288,21 +309,21 @@ cat compose-logs/api-migrate-1.log
 Implementation order inside the PR:
 1. **Cluster A** (`forge/variable_mapper.py` + `tests/test_variable_mapper.py`) — smallest change, blocks the most legs.
 2. **Cluster C** (`forge/strippers.py` + `tests/test_strippers.py`) — small, self-contained, but useful baseline before D since D extends the same module.
-3. **Cluster D** (`forge/generator.py` reorder + `forge/strippers.py` collector hook + functional test) — biggest behaviour change; do it after C so the diff is easier to read.
+3. **Cluster D** (`forge/generator.py` reorder + `forge/strippers.py` collector hook + provenance pruning + `forge/config/_validators.py` stateless guards + functional + validator tests) — biggest behaviour change; do it after C so the diff is easier to read.
 4. **Cluster B** (`tests/_artefact_filters.py` NEW + `tests/test_golden_snapshots.py` + `tests/matrix/runner.py`) — test-runner only; land last because it can mask real product drift if the exclusion list is too broad.
 
 | Step | Cluster | File(s) touched | Verifies which scenarios |
 |---|---|---|---|
 | 1 | A | `forge/variable_mapper.py`, `tests/test_variable_mapper.py` | rust_svelte_min, rust_vue_full, multi_all_three, node_svelte_min, node_vue_full, multi_py_node (smoke) |
 | 2 | C | `forge/strippers.py`, `tests/test_strippers.py` | (no current red leg; latent stateless smoke unblocker) |
-| 3 | D | `forge/generator.py`, `forge/strippers.py`, `tests/test_strippers.py`, `tests/matrix/test_runner_diagnostics.py` | stateless_py (roundtrip), + PII-redaction security guard |
+| 3 | D | `forge/generator.py`, `forge/strippers.py`, `forge/sync/provenance.py`, `forge/config/_validators.py`, `tests/test_strippers.py`, `tests/test_validators.py`, `tests/matrix/test_runner_diagnostics.py` | stateless_py (roundtrip) + PII-redaction security guard + stateless option compat |
 | 4 | B | `tests/_artefact_filters.py` (NEW), `tests/test_golden_snapshots.py`, `tests/matrix/runner.py` | node_only_headless, node_svelte_min, py_svelte_min, rust_svelte_min, multi_py_node (roundtrip) |
 
 ### End-to-end verification
 
 ```bash
 # Step 1 — fast unit tests for each cluster
-uv run pytest tests/test_variable_mapper.py tests/test_strippers.py tests/test_golden_snapshots.py tests/matrix/test_runner_diagnostics.py -x
+uv run pytest tests/test_variable_mapper.py tests/test_strippers.py tests/test_validators.py tests/test_golden_snapshots.py tests/matrix/test_runner_diagnostics.py -x
 
 # Step 2 — scenario-specific probes that cover each fix
 uv run python tests/matrix/runner.py --scenario stateless_py     --lane roundtrip   # Cluster D
@@ -337,6 +358,7 @@ Expected post-PR nightly state: **12 of 15 previously red legs green**; the rema
 - `tests/matrix/runner.py:924-1007` (B — `_diff_project_trees_normalized` + `is_excluded`)
 - `tests/test_golden_snapshots.py:85-126` (B — reference exclusion list, NOT a verbatim mirror target)
 - `forge/strippers.py:335-353` `strip_python_database` (C/D — orchestrator)
+- `forge/strippers.py:356-362` `_delete_targets` (D — pre-deletion phase that needs `drop_records_under`)
 - `forge/strippers.py:515-524` `_strip_loader_db_refs` (C2)
 - `forge/templates/services/python-service-template/template/src/app/cli/__init__.py` (C1 — rewritten by new `_strip_cli_init`)
 - `forge/templates/services/python-service-template/template/src/app/core/config/loader.py:29` (C2 — field stripped by extended regex)
@@ -344,7 +366,9 @@ Expected post-PR nightly state: **12 of 15 previously red legs green**; the rema
 - `forge/sync/provenance.py:111-146` `ProvenanceCollector.record(...)` (D — actual API surface)
 - `forge/features/middleware/templates/pii_redaction/python/inject.yaml` (D — injection that the stripper destroys today)
 - `forge/generator.py:147-181,348` (D — pipeline order to reverse)
+- `forge/config/_validators.py` (D — stateless option-compat guards)
 - `tests/matrix/runner.py:736-753` FR1 check (D — assertion being unblocked)
 - `tests/matrix/scenarios.yaml:30-83,297-317,389-407` (E and C scope — confirms which scenarios run strippers)
 
-<!-- codex-review-status: complete -->
+<!-- codex-review-status: finalized -->
+<!-- Two rounds of Codex review (gpt-5.5/xhigh). Round-1 critiques: Cluster C misattributed → restructured; D's ProvenanceCollector API → corrected; D PII regression risk → fixed via D1 pipeline reorder; B exclusion list → curated rather than verbatim-mirrored; sys.path script-mode → addressed. Round-2 critiques: D1 events/streaming compat → added validator; provenance pruning of deleted DB targets → added; Cluster E AuthConfig + sidecar hypotheses → demoted, ASGI import promoted. -->
