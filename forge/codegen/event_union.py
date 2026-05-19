@@ -303,10 +303,17 @@ def emit_pydantic(schemas: list[Schema]) -> str:
         lines.append(f"    payload: {title}")
         lines.append("")
 
-    # Outer discriminated union.
-    union_members = ", ".join(f"{title}Event" for title, _ in kinds)
+    # Outer discriminated union. Emit one variant per line so ruff E501
+    # (line-too-long) doesn't trip when the variant count grows — a flat
+    # single-line ``Union[A, B, C, ...]`` blew past the generated
+    # service's 100-char limit once the AG-UI schema set reached ~7
+    # variants. Per-line is also the convention `ruff format` produces
+    # when it splits a Union, so the auto-fix step finds nothing to do.
     lines.append("AgUiEvent = Annotated[")
-    lines.append(f"    Union[{union_members}],")
+    lines.append("    Union[")
+    for title, _ in kinds:
+        lines.append(f"        {title}Event,")
+    lines.append("    ],")
     lines.append('    Field(discriminator="kind"),')
     lines.append("]")
     lines.append('"""Exhaustive AG-UI event union, discriminated by ``kind``."""')
