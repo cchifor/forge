@@ -63,6 +63,48 @@ class TestProvenanceCollector:
         c.record(nested, origin="base-template")
         assert "src/app/main.py" in c.records
 
+    def test_drop_records_under_directory(self, tmp_path: Path) -> None:
+        """drop_records_under('alembic') removes every record under that prefix.
+
+        Used by strip_python_database after _delete_targets wipes DB-stack
+        directories — without pruning, the manifest retains ghost rows for
+        files no longer on disk.
+        """
+        for rel in ("alembic/env.py", "alembic/versions/0001.py", "src/app/main.py"):
+            p = tmp_path / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("x")
+        c = ProvenanceCollector(project_root=tmp_path)
+        for rel in ("alembic/env.py", "alembic/versions/0001.py", "src/app/main.py"):
+            c.record(tmp_path / rel, origin="base-template")
+
+        c.drop_records_under("alembic")
+
+        assert "alembic/env.py" not in c.records
+        assert "alembic/versions/0001.py" not in c.records
+        assert "src/app/main.py" in c.records  # untouched
+
+    def test_drop_records_under_single_file(self, tmp_path: Path) -> None:
+        """drop_records_under('alembic.ini') drops just that one record."""
+        for rel in ("alembic.ini", "alembic.toml"):
+            (tmp_path / rel).write_text("x")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(tmp_path / "alembic.ini", origin="base-template")
+        c.record(tmp_path / "alembic.toml", origin="base-template")
+
+        c.drop_records_under("alembic.ini")
+
+        assert "alembic.ini" not in c.records
+        # 'alembic.toml' must survive — it shares a stem but isn't under the prefix.
+        assert "alembic.toml" in c.records
+
+    def test_drop_records_under_noop_on_missing_prefix(self, tmp_path: Path) -> None:
+        c = ProvenanceCollector(project_root=tmp_path)
+        (tmp_path / "kept.py").write_text("x")
+        c.record(tmp_path / "kept.py", origin="base-template")
+        c.drop_records_under("does/not/exist")
+        assert "kept.py" in c.records
+
     def test_skips_files_outside_project_root(self, tmp_path: Path) -> None:
         outside = tmp_path.parent / "outside.txt"
         outside.write_text("nope")

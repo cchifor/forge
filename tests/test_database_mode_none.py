@@ -81,6 +81,18 @@ class TestDatabaseModeValidation:
             ("agent.llm", True, "agent.llm"),
             ("platform.admin", True, "platform.admin"),
             ("platform.webhooks", True, "platform.webhooks"),
+            # Cluster D guards (matrix-nightly-fixes plan). Cluster D
+            # reorders the generator pipeline so strip_python_database
+            # runs BEFORE fragment application. That depends on the
+            # validator rejecting every DB-consuming fragment combo —
+            # events.outbox ships an alembic migration, events.bus=
+            # postgres_notify uses postgres pub/sub, streaming.sse needs
+            # events.bus != none (transitively DB), and airlock.client
+            # backs its state in DB.
+            ("events.outbox", True, "events.outbox"),
+            ("events.bus", "postgres_notify", "events.bus"),
+            ("streaming.sse", True, "streaming.sse"),
+            ("airlock.client", True, "airlock.client"),
         ],
     )
     def test_mode_none_rejects_db_backed_options(
@@ -89,6 +101,15 @@ class TestDatabaseModeValidation:
         config = _stateless_config(**{option_key: option_value})
         with pytest.raises(ValueError, match=error_fragment):
             config.validate()
+
+    def test_mode_none_allows_events_bus_none(self):
+        """``events.bus=none`` is the default — stateless mode shouldn't reject it.
+
+        Only the DB-requiring value (``postgres_notify`` today) conflicts;
+        an explicit ``none`` value should be a no-op for the validator.
+        """
+        config = _stateless_config(**{"events.bus": "none"})
+        config.validate()  # should not raise
 
     def test_mode_none_lists_all_conflicts(self):
         """The error names every conflicting option in one shot so the
@@ -117,6 +138,66 @@ class TestDatabaseModeValidation:
         # conversation.persistence has its own downstream requirements,
         # but database.mode=generate shouldn't reject it.
         config.validate()
+
+
+class TestStatelessPiiRedactionSurvivesStrip:
+    """Cluster D functional guard (matrix-nightly-fixes plan).
+
+    Stateless generation must preserve the default-enabled pii_redaction
+    fragment's injection into ``lifecycle.py``. Pre-Cluster-D the
+    generator ran fragments BEFORE the stripper, so the stripper would
+    overwrite the just-injected ``install_pii_filter()`` call without any
+    signal — silently disabling PII redaction in production logs.
+
+    Cluster D's pipeline reorder runs the stripper first; this test pins
+    that the resulting lifecycle.py contains BOTH the import and the call
+    that pii_redaction's inject.yaml emits, so a future re-shuffle of the
+    pipeline can't silently regress the security guarantee.
+    """
+
+    def test_lifecycle_contains_install_pii_filter_after_strip(
+        self, tmp_path: Path
+    ):
+        from forge.generator import generate
+
+        bc = BackendConfig(
+            name="api",
+            project_name="StatelessPii",
+            features=["items"],
+            server_port=5000,
+        )
+        config = ProjectConfig(
+            project_name="StatelessPii",
+            backends=[bc],
+            options={
+                "database.mode": "none",
+                # pii_redaction defaults to True (see
+                # forge/features/middleware/options.py); we set it
+                # explicitly so this test pins the security guarantee
+                # even if the default changes later.
+                "middleware.pii_redaction": True,
+            },
+            output_dir=str(tmp_path),
+        )
+        config.validate()
+
+        # dry_run=True skips toolchain.install (slow) but still runs
+        # Copier + fragment application + the stripper, which is what we
+        # want to assert about.
+        project_root = generate(config, quiet=True, dry_run=True)
+
+        lifecycle = project_root / "services/api/src/app/core/lifecycle.py"
+        assert lifecycle.is_file(), f"lifecycle.py not rendered at {lifecycle}"
+        text = lifecycle.read_text(encoding="utf-8")
+        assert "from app.core.pii_redaction import install_pii_filter" in text, (
+            "pii_redaction import was clobbered by the stripper — the generator "
+            "pipeline ordering regressed; see Cluster D in "
+            "plans/2026-05-19-matrix-nightly-fixes-plan.md"
+        )
+        assert "install_pii_filter()" in text, (
+            "pii_redaction install call was clobbered — security regression "
+            "(default-on PII filter is now inert)"
+        )
 
 
 # -- Compose rendering -------------------------------------------------------
