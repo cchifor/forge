@@ -71,6 +71,14 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
+      - name: Validate scenarios.yaml schema
+        # Front-load schema validation so malformed YAML fails the gate
+        # with the schema test's error message instead of a buried
+        # KeyError inside the inline-Python emit step below. Reuses the
+        # tests/matrix/test_scenarios_schema.py harness so the workflow
+        # and the test suite never drift on what counts as a valid
+        # scenario.
+        run: uv run pytest tests/matrix/test_scenarios_schema.py -v --no-cov
       - id: load
         name: Emit scenario lists as JSON
         env:
@@ -332,6 +340,12 @@ jobs:
           path: matrix-status-raw
           pattern: matrix-status-*
           merge-multiple: true
+        # If every lane was cancelled (or label-filtered to zero
+        # scenarios), no ``matrix-status-*`` artefacts exist and v4 of
+        # download-artifact treats that as an error. Tolerate it so the
+        # render step below can emit an explicit "no lanes ran" summary
+        # instead of failing the publish-dashboard job opaquely.
+        continue-on-error: true
       - name: Render markdown grid to job summary
         run: |
           uv run python - <<'PY'
@@ -340,31 +354,49 @@ jobs:
           from tests.matrix.runner import load_scenarios, _format_markdown_grid, LaneResult
           raw_dir = Path("matrix-status-raw")
           scenarios = load_scenarios()
-          results = []
-          for f in raw_dir.glob("*.json"):
-              try:
-                  rows = json.loads(f.read_text())
-              except json.JSONDecodeError:
-                  continue
-              for row in rows:
-                  results.append(LaneResult(
-                      scenario=row["scenario"],
-                      lane=row["lane"],
-                      status=row["status"],
-                      duration_ms=int(row.get("duration_ms") or 0),
-                      details=row.get("details") or "",
-                      missing_files=list(row.get("missing_files") or []),
-                  ))
-          grid = _format_markdown_grid(results, scenarios)
+          # Honest empty-state guard: if no lane wrote a status artefact,
+          # don't render a deceptive empty grid — emit a clear notice so
+          # the nightly summary reflects what actually happened.
+          status_files = list(raw_dir.glob("*.json")) if raw_dir.is_dir() else []
           summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
-          with summary.open("a", encoding="utf-8") as fh:
-              fh.write(
-                  "## Matrix nightly — lane C (smoke) + lane D (round-trip) "
-                  "+ lane E (update + harvest)\n\n"
+          if not status_files:
+              with summary.open("a", encoding="utf-8") as fh:
+                  fh.write(
+                      "## Matrix nightly — no lanes ran\n\n"
+                      "No ``matrix-status-*`` artefacts were found. Every "
+                      "lane was either cancelled, filtered out by the gate "
+                      "step, or failed before its dump step ran. Check the "
+                      "individual job logs above for the trigger.\n"
+                  )
+              Path("matrix-status.md").write_text(
+                  "matrix-nightly: no lanes ran (no status artefacts)\n",
+                  encoding="utf-8",
               )
-              fh.write(grid)
-              fh.write("\nSee individual scenario logs above for details.\n")
-          Path("matrix-status.md").write_text(grid, encoding="utf-8")
+          else:
+              results = []
+              for f in status_files:
+                  try:
+                      rows = json.loads(f.read_text())
+                  except json.JSONDecodeError:
+                      continue
+                  for row in rows:
+                      results.append(LaneResult(
+                          scenario=row["scenario"],
+                          lane=row["lane"],
+                          status=row["status"],
+                          duration_ms=int(row.get("duration_ms") or 0),
+                          details=row.get("details") or "",
+                          missing_files=list(row.get("missing_files") or []),
+                      ))
+              grid = _format_markdown_grid(results, scenarios)
+              with summary.open("a", encoding="utf-8") as fh:
+                  fh.write(
+                      "## Matrix nightly — lane C (smoke) + lane D (round-trip) "
+                      "+ lane E (update + harvest)\n\n"
+                  )
+                  fh.write(grid)
+                  fh.write("\nSee individual scenario logs above for details.\n")
+              Path("matrix-status.md").write_text(grid, encoding="utf-8")
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

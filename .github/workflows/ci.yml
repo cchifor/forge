@@ -179,6 +179,13 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --all-extras --dev
+      - name: Validate scenarios.yaml schema
+        # Front-load schema validation so malformed YAML fails this step
+        # with a useful diagnostic rather than the inline-Python emit
+        # step below silently propagating empty / wrong matrix lists.
+        # Reuses tests/matrix/test_scenarios_schema.py so the workflow
+        # and test suite agree on what counts as a valid scenario.
+        run: uv run pytest tests/matrix/test_scenarios_schema.py -v --no-cov
       - id: load
         name: Emit scenario list as JSON
         # ``yq`` isn't on the default runner image; use the Python parser

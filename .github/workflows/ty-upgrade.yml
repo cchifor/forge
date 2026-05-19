@@ -54,9 +54,25 @@ jobs:
           if [ -n "${{ inputs.target_version }}" ]; then
             echo "version=${{ inputs.target_version }}" >> "$GITHUB_OUTPUT"
           else
-            # Latest release from PyPI — use uv's dry-run resolver so we
-            # don't touch uv.lock until after the canary passes.
-            latest=$(uv run python -c "from urllib.request import urlopen; import json; print(json.load(urlopen('https://pypi.org/pypi/ty/json'))['info']['version'])")
+            # Latest release from PyPI with a 10 s timeout + fallback to
+            # the currently-pinned version. If PyPI is briefly down on
+            # first-Monday-of-the-month the workflow no-ops cleanly
+            # (the downstream "Skip if already on target" step then
+            # short-circuits everything) instead of opening a PR with
+            # an empty version string or paging anyone.
+            latest=$(uv run python -c "
+            import sys
+            from urllib.request import urlopen
+            import json
+            try:
+                print(json.load(urlopen('https://pypi.org/pypi/ty/json', timeout=10))['info']['version'])
+            except Exception as exc:
+                print(f'::warning::PyPI unreachable, falling back to current pin: {exc}', file=sys.stderr)
+            " 2>&2)
+            if [ -z "$latest" ]; then
+              # Fall back to the current pin so downstream steps no-op.
+              latest=$(grep -oP '"ty==\K[^"]+' pyproject.toml || echo "")
+            fi
             echo "version=$latest" >> "$GITHUB_OUTPUT"
           fi
 
