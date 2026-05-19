@@ -28,7 +28,6 @@ from forge.sync.manifest import read_forge_toml
 from forge.sync.merge import MergeBlockCollector
 from forge.sync.project_to_forge.harvester._bundle_writer import HarvestBundle
 from forge.sync.project_to_forge.harvester._interactive import (
-    HarvestAborted,
     PromptCallback,
     _run_interactive_review,
 )

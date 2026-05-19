@@ -45,9 +45,9 @@ from forge.injectors.sentinels import _read_block_body
 from forge.sync.manifest import read_forge_toml, write_forge_toml
 from forge.sync.merge import MergeBlockCollector, sha256_of_file, sha256_of_text
 from forge.sync.project_to_forge.accept._shared import (
+    _DEFAULT_RISK_FILTER,
     AcceptHarvestedEntry,
     AcceptHarvestedReport,
-    _DEFAULT_RISK_FILTER,
     _read_bundle_manifest,
     _resolve_fragment_version,
     _resolve_upstream_file_sha,
