@@ -13,7 +13,6 @@ from forge.fragments import MARKER_PREFIX
 from forge.injectors.sentinels import _has_sentinel_block
 from forge.sync.forge_to_project.resolver._shared import ResolveKind
 
-
 _HEADER_TAG_PREFIX = "# forge merge conflict — tag: "
 """Prefix of the first line of a text sidecar (see ``merge.write_sidecar``)."""
 

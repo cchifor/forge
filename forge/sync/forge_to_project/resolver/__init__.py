@@ -57,6 +57,7 @@ import sys
 from pathlib import Path
 from typing import IO, Any
 
+from forge.injectors.sentinels import _read_block_body
 from forge.sync.forge_to_project.resolver._actions import _accept, _edit, _reject
 from forge.sync.forge_to_project.resolver._shared import (
     ResolveAction,
@@ -66,24 +67,23 @@ from forge.sync.forge_to_project.resolver._shared import (
     _open_editor,
 )
 from forge.sync.forge_to_project.resolver._sidecar_parser import (
-    _ParsedSidecar,
     _classify_sidecar,
     _discover_sidecars,
     _parse_sidecar,
+    _ParsedSidecar,
     _safe_relpath,
     _target_for_sidecar,
 )
-from forge.injectors.sentinels import _read_block_body
 from forge.sync.manifest import read_forge_toml, write_forge_toml
 from forge.sync.merge import is_binary_file
-
 
 # Re-imported at the package level (in addition to ``_shared``) so tests
 # that ``monkeypatch.setattr("forge.sync.forge_to_project.resolver.shutil.which", ...)``
 # or ``...subprocess.run`` continue to work — the monkeypatch sets an
 # attribute on the SAME ``shutil`` / ``subprocess`` module object that
-# :func:`_open_editor` consults inside ``_shared``.
-_ = (os, shutil, subprocess)
+# :func:`_open_editor` consults inside ``_shared``. ``_open_editor`` itself
+# is re-exported here for the same reason: tests rebind it on this module.
+_ = (os, shutil, subprocess, _open_editor)
 
 
 def resolve_sidecars(project_root: Path, *, quiet: bool = False) -> ResolveReport:
