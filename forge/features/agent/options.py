@@ -113,25 +113,8 @@ ENV: provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)""",
 )
 
 
-# Phase C placeholder — agent layer discriminator. Kept here (rather
-# than in ``layers``) so every ``agent.*`` knob stays in one file.
-register_option(
-    Option(
-        path="agent.mode",
-        type=OptionType.ENUM,
-        default="none",
-        options=("generate", "external", "none"),
-        summary="Layer discriminator for the agentic/LLM stack (placeholder).",
-        description="""\
-Phase C placeholder. Establishes pattern parity with ``backend.mode``,
-``database.mode``, and ``frontend.mode`` so all four layers share the
-same discriminator shape. Does nothing yet — real wiring lands when
-the agentic stack gets its own generate/external/none scenarios.
-
-Registered as ENUM without an ``enables`` map so the resolver treats
-it as a pure orchestration knob, same pattern as the other layer
-modes.""",
-        category=FeatureCategory.CONVERSATIONAL_AI,
-        stability="experimental",
-    )
-)
+# Theme 2A — ``agent.mode`` (the layer discriminator) now lives in
+# ``forge/options/agent/__init__.py`` alongside the other layer-mode
+# registrations. The fragment bundle per enum value is defined there;
+# this module keeps the fine-grained ``agent.streaming`` / ``agent.tools``
+# / ``agent.llm`` toggles + the ``llm.provider`` adapter selector.

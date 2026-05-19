@@ -31,7 +31,11 @@ from typing import Literal, cast
 from forge import telemetry
 from forge.errors import EXIT_VERIFY_CONFLICT, PROVENANCE_MANIFEST_MISSING, ProvenanceError
 from forge.sync.project_to_forge.emit_pr import emit_pr
-from forge.sync.project_to_forge.harvester import HarvestBundle, harvest_project
+from forge.sync.project_to_forge.harvester import (
+    HarvestAborted,
+    HarvestBundle,
+    harvest_project,
+)
 
 # Exit code when the harvest target has no forge.toml. Mirrors the
 # ``--verify`` dispatcher so the harvest verb's exit codes stay
@@ -43,6 +47,13 @@ _EXIT_MANIFEST_MISSING = 5
 # narrow means CI gates that already key on 5 cover the new failure
 # modes without a separate branch.
 _EXIT_EMIT_PR_PRECONDITION = 5
+
+# Exit code when the operator selects ``quit`` at the interactive
+# review prompt. ``0`` would mask the abort from CI gates and ``1``
+# overlaps with generic CLI failures; ``130`` matches the standard
+# SIGINT convention (128 + signal 2), which an interactive cancellation
+# is morally equivalent to.
+_EXIT_HARVEST_ABORTED = 130
 
 
 def _run_harvest(args: argparse.Namespace) -> int:
@@ -86,6 +97,16 @@ def _run_harvest(args: argparse.Namespace) -> int:
         or (emit_pr_mode != "off" and out_dir is None)
     )
 
+    # Theme 2C — wire the per-candidate prompt only when the operator
+    # asked for it. The import is local so headless invocations don't
+    # pay for ``questionary``'s terminal-init machinery just to find the
+    # callback they don't need.
+    prompt_callback = None
+    if interactive:
+        from forge.cli.interactive import prompt_harvest_candidate  # noqa: PLC0415
+
+        prompt_callback = prompt_harvest_candidate
+
     try:
         bundle = harvest_project(
             project_root,
@@ -93,8 +114,27 @@ def _run_harvest(args: argparse.Namespace) -> int:
             scope=scope,
             include=include,
             interactive=interactive,
+            prompt_callback=prompt_callback,
             quiet=quiet,
         )
+    except HarvestAborted as e:
+        # Operator chose ``quit`` mid-review. No bundle is written; we
+        # emit a short human note to stderr (or a JSON envelope in
+        # streaming mode) and return the SIGINT-shaped exit code.
+        msg = f"forge --harvest: aborted by operator after {e.inspected_count} candidate(s)."
+        if out_dir is None:
+            sys.stdout.write(
+                json.dumps(
+                    {
+                        "aborted": True,
+                        "inspected_count": e.inspected_count,
+                    }
+                )
+                + "\n"
+            )
+        else:
+            sys.stderr.write(msg + "\n")
+        return _EXIT_HARVEST_ABORTED
     except ProvenanceError as e:
         # The harvester raises ProvenanceError(PROVENANCE_MANIFEST_MISSING)
         # when no forge.toml is present at project_root. Surface a

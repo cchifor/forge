@@ -33,7 +33,7 @@
       "sha256": "05849f60b3c65e29"
     },
     "forge.toml": {
-      "size": 56660,
+      "size": 57121,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -651,6 +651,14 @@
     "services/api/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
+    },
+    "services/api/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
+    },
+    "services/api/src/app/domain/canvas_props.py": {
+      "size": 1601,
+      "sha256": "b5578609c8b014d1"
     },
     "services/api/src/app/domain/enums/approval_mode.py": {
       "size": 312,

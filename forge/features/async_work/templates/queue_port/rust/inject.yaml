@@ -1,0 +1,9 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: |-
+    // Queue port — adapter-less startup keeps ``QueuePort`` available
+    // for typing only; an adapter (queue.backend=apalis) plugs in the
+    // concrete impl behind the trait.
+    pub mod ports;

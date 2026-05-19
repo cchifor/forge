@@ -15,8 +15,20 @@ Each builder resolves the per-language version key
 ``BACKEND_REGISTRY``, so adding a new backend language means updating
 the registry spec — never this module.
 
+Theme 5-C2: layer-mode lookups go through the typed
+:class:`~forge.config.typed_config.TypedConfig` model rather than
+``ProjectConfig.options.get("...", "...")``. The string-default fallbacks
+disappear (the typed model carries them in its sub-model defaults), and
+a typo'd mode value now fails at conversion with a Pydantic
+ValidationError instead of silently slipping through as an unknown
+string. Non-layer options (RAG / agent / platform flags) still flow
+through the dict surface until C3 — they don't have a discriminator-
+shaped home on the typed model.
+
 Tests for the mapping live in ``tests/test_variable_mapper.py``; the
 generator's round-trip is covered by ``tests/test_generator.py``.
+Type-narrowing tests for the typed-config consumption live in
+``tests/test_variable_mapper_typed.py``.
 """
 
 from __future__ import annotations
@@ -24,6 +36,11 @@ from __future__ import annotations
 from typing import Any
 
 from forge.config import BACKEND_REGISTRY, BackendConfig, FrontendFramework, ProjectConfig
+from forge.config.typed_config import (
+    FrontendExternal,
+    FrontendGenerate,
+    TypedConfig,
+)
 
 
 def _primary_feature(bc: BackendConfig) -> str:
@@ -111,7 +128,33 @@ def _build_vite_proxy_config(config: ProjectConfig) -> str:
     return "\n".join(lines)
 
 
-def _external_api_mode(config: ProjectConfig) -> bool:
+def _typed(config: ProjectConfig) -> TypedConfig:
+    """Return the typed view of ``config.options``.
+
+    C3 made ``ProjectConfig.typed`` the primary surface; this helper
+    is a thin alias so the rest of the module's call sites don't have
+    to choose between ``config.typed`` and a local variable named the
+    same thing. Returning the property's value is allocation-free
+    relative to ``config.typed`` directly — the typed model itself
+    is what the conversion produced.
+    """
+    return config.typed
+
+
+def _frontend_api_target_url(typed: TypedConfig) -> str:
+    """Read the frontend's ``api_target.url`` from the typed model.
+
+    Lives on the ``FrontendGenerate`` / ``FrontendExternal`` sub-models
+    — ``FrontendNone`` doesn't carry it. Returns ``""`` for the
+    ``none`` variant, matching the pre-typed behaviour where
+    ``options.get("frontend.api_target.url", "")`` returned the default.
+    """
+    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+        return typed.frontend.api_target_url
+    return ""
+
+
+def _external_api_mode(typed: TypedConfig) -> bool:
     """True when the frontend should target an externally-hosted API.
 
     Phase A wired this to ``backend.mode=none + url set``. Phase B2
@@ -119,10 +162,19 @@ def _external_api_mode(config: ProjectConfig) -> bool:
     it (even with local backends present). The url must be non-empty
     in both cases — ``_validate_layer_modes`` enforces that, so this
     function treats missing url as "not external".
+
+    C2: consumes the typed model, so the branch on the api_target_type
+    discriminator narrows safely — ``FrontendNone`` won't have the
+    field at all and ``isinstance`` narrows it away.
     """
-    if not config.frontend_api_target_url:
+    url = _frontend_api_target_url(typed)
+    if not url:
         return False
-    return config.backend_mode == "none" or config.frontend_api_target_type == "external"
+    if typed.backend.mode == "none":
+        return True
+    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+        return typed.frontend.api_target_type == "external"
+    return False
 
 
 def _frontend_api_urls(
@@ -145,8 +197,9 @@ def _frontend_api_urls(
       set cookies on the same origin). External mode points the browser
       straight at the external URL.
     """
-    if _external_api_mode(config):
-        ext = config.frontend_api_target_url
+    typed = _typed(config)
+    if _external_api_mode(typed):
+        ext = _frontend_api_target_url(typed)
         return ext, ext, ext
     fc = config.frontend
     local_api = f"http://localhost:{backend_port}"

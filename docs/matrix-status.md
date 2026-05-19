@@ -37,6 +37,14 @@ The five lanes are:
   RFC-006 HTTP contract (`tests/matrix/smoke_contract.py`) accepts each
   backend (nightly via `matrix-nightly.yml::smoke`; PR-fast subset on
   the two smallest scenarios via `ci.yml::matrix-smoke-fast`).
+  Lane C runs nightly across all opted-in scenarios. PRs can opt-in to
+  an on-demand re-run via the `ci:compose-smoke` label, which fires the
+  fast subset (`py_svelte_min`, `node_svelte_min`) through
+  `matrix-nightly.yml`. This is the same pair `ci.yml::matrix-smoke-fast`
+  runs unconditionally on every PR; the label is for deliberate re-runs
+  (e.g. after a flaky compose teardown) or for signalling to reviewers
+  that compose drift is the focus of the PR. The broader
+  `ci:matrix-smoke` label still fans out across all five lanes.
 - **D — roundtrip** — `harvest_project` on a fresh generate emits zero
   block/files candidates (FR1) plus apply-back smoke when a literal
   sentinel block is present (nightly via `matrix-nightly.yml::roundtrip`;

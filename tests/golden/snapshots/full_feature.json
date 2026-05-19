@@ -128,6 +128,10 @@
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
     },
+    "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
+      "size": 2878,
+      "sha256": "d4d1c834a9546bd3"
+    },
     "apps/frontend/src/features/ai_chat/canvas/CanvasFallback.vue": {
       "size": 1009,
       "sha256": "7005a82c335d4caa"
@@ -137,8 +141,8 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2497,
-      "sha256": "afd6a4e1d0e87249"
+      "size": 2825,
+      "sha256": "9a961a8a61e1960a"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
@@ -201,8 +205,8 @@
       "sha256": "6e4b72b152c36197"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
-      "size": 1307,
-      "sha256": "dab98c959989b69f"
+      "size": 1115,
+      "sha256": "adf39be514746325"
     },
     "apps/frontend/src/features/ai_chat/ui/AgentStatusBar.test.ts": {
       "size": 2718,
@@ -957,12 +961,16 @@
       "sha256": "f3c92053e424d5ee"
     },
     "forge.toml": {
-      "size": 119022,
+      "size": 119930,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
       "size": 7130,
       "sha256": "d73104adb44ccb05"
+    },
+    "frontend/src/features/ai_chat/events.gen.ts": {
+      "size": 3950,
+      "sha256": "1f33a624e35dc387"
     },
     "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
       "size": 2159,
@@ -1679,6 +1687,14 @@
     "services/api/src/app/domain/base.py": {
       "size": 384,
       "sha256": "c65d6235b6631cea"
+    },
+    "services/api/src/app/domain/canvas_events.py": {
+      "size": 2435,
+      "sha256": "139d098a8d202c69"
+    },
+    "services/api/src/app/domain/canvas_props.py": {
+      "size": 1601,
+      "sha256": "b5578609c8b014d1"
     },
     "services/api/src/app/domain/chat_file.py": {
       "size": 591,

@@ -14,6 +14,16 @@ dependencies = [
     "pyyaml>=6.0",
     "tomlkit>=0.14.0",
     "libcst>=1.8.6",
+    # Theme 5 — typed orchestration boundary. Pydantic v2 was previously
+    # transitively present via copier; declaring it explicitly so the
+    # typed_config module's dependency surface is honest.
+    "pydantic>=2.0",
+    # v2 Theme 3B — tree-sitter-rust drives the Rust path of
+    # ``forge.codegen.literal_finder``. Declared as a runtime dep (not
+    # dev-only) because the harvester invokes the finder during normal
+    # ``forge sync`` runs on Axum/other Rust targets.
+    "tree-sitter>=0.25.2",
+    "tree-sitter-rust>=0.24.2",
 ]
 
 [dependency-groups]
@@ -28,7 +38,7 @@ dev = [
     # passing canary run is the precondition for bumping this pin. See
     # .github/workflows/ty-upgrade.yml and tests/test_ty_canary.py for the
     # upgrade dance.
-    "ty==0.0.34",
+    "ty==0.0.37",
     "pre-commit>=3.7.0",
     "hypothesis>=6.152.2",
     "pytest-xdist>=3.8.0",

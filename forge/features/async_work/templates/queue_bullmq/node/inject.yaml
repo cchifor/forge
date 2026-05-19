@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Queue adapter: BullMQ — wired behind the QueuePort interface.
+    import { BullmqQueueAdapter } from "./app/adapters/queue/bullmq.js";
+    const _bullmqQueueAdapter: import("./app/ports/queue.js").QueuePort =
+        new BullmqQueueAdapter();

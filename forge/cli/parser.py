@@ -350,7 +350,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--harvest-interactive",
         dest="harvest_interactive",
         action="store_true",
-        help="Prompt accept/reject per candidate (TODO Phase 4b — currently no-op).",
+        help=(
+            "Prompt accept/skip/quit per candidate before bundling. "
+            "Skipped candidates are pruned; quit aborts cleanly with no bundle."
+        ),
     )
 
     # Emit-PR — Phase 6 close of the Story B round-trip. After harvest
