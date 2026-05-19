@@ -46,6 +46,14 @@ def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -
     spec = BACKEND_REGISTRY[bc.language]
     ctx: dict[str, Any] = {
         "project_name": bc.name,
+        # project_slug is the path component for services/<slug>/ — consumed by
+        # Rust + Node Dockerfile.jinja (cargo workspace + npm workspaces), the
+        # Node compose WORKDIR, and the Python compose fragment / entrypoint
+        # paths. Without it, generated Rust services render as `services//src`
+        # (cargo build fails) and Node services render `WORKDIR /workspace/services/`
+        # (npm install fails). Frontend builders set the same key from
+        # ``config.frontend_slug``; for backends, ``bc.name`` is the source of truth.
+        "project_slug": bc.name,
         "project_description": bc.description,
         "server_port": bc.server_port,
         "db_name": bc.name.replace("-", "_"),
