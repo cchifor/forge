@@ -10,11 +10,7 @@
 #   D — roundtrip (nightly, opt-in; exercises harvest + apply-back FR1/FR2
 #       invariants — see docs/round-trip.md)
 #   E — update (nightly, opt-in; exercises ``forge --update`` in all three
-#       merge modes + ``forge --harvest`` JSON probe via the CLI. Today
-#       only Python-backend scenarios are opted in — Node-only / Rust-only
-#       projects trip a pre-existing resolver bug where the Python-only
-#       ``correlation_id`` fragment is persisted into forge.toml and
-#       re-resolves on ``--update``. Opt those in once that bug is fixed.)
+#       merge modes + ``forge --harvest`` JSON probe via the CLI.)
 #
 # ``lanes`` lists which lanes are applicable. Scenarios on a backend whose
 # toolchain can't be invoked in CI (e.g. a plugin backend without a linter
@@ -342,7 +338,7 @@ scenarios:
 
   - name: node_only_headless
     description: Node-only, no frontend, Keycloak, rate_limit + OTel
-    lanes: [generate, verify, roundtrip]
+    lanes: [generate, verify, roundtrip, update]
     port_base: 8130
     expected_files:
       - services/api/package.json
@@ -363,7 +359,7 @@ scenarios:
 
   - name: rust_only_headless
     description: Rust-only, no frontend, no Keycloak (dev-auth), rate_limit + OTel
-    lanes: [generate, verify, roundtrip]
+    lanes: [generate, verify, roundtrip, update]
     port_base: 8140
     expected_files:
       - services/api/Cargo.toml
