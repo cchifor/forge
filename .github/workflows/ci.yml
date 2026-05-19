@@ -84,6 +84,12 @@ jobs:
         # `-n auto` parallelises within the cell using pytest-xdist; the
         # GitHub-Actions linux runner is 2-core so this typically halves
         # the cell wall-clock.
+        # PYTHONIOENCODING=utf-8 protects the Windows cell from xdist
+        # workers dying when pytest emits non-ASCII (em-dash, …) via
+        # stdout/stderr — the locale default cp1252 cannot encode the
+        # banner characters our codegen + docstrings already use.
+        env:
+          PYTHONIOENCODING: "utf-8"
         run: uv run pytest -m "not e2e and not package_integrity and not fuzz and not golden_snapshot" -n auto
 
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:

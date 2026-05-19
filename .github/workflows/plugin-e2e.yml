@@ -36,9 +36,14 @@ concurrency:
 jobs:
   plugin-e2e:
     runs-on: ubuntu-latest
+    # uv sync + editable plugin install + a single test marker takes
+    # well under five minutes in steady state; cap at 20 to absorb cold
+    # caches or transient network delays without burning the default
+    # 6-hour ceiling.
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
       - name: Set Python 3.13

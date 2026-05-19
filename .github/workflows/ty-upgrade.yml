@@ -25,12 +25,23 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialise the monthly schedule against ad-hoc ``workflow_dispatch``
+# runs so two probes don't race on the PR branch / pyproject edit.
+# Per-ref grouping keeps the schedule isolated from manual dispatches
+# of the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   probe:
     runs-on: ubuntu-latest
+    # The probe runs sync + canary + ty check, then opens a PR. Five
+    # minutes covers a clean run; cap at fifteen for slow network days.
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
 
@@ -86,7 +97,7 @@ jobs:
 
       - name: Open PR with the bump
         if: steps.current.outputs.version != steps.target.outputs.version
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ty-upgrade/${{ steps.target.outputs.version }}
