@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 522,
+      "size": 540,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -473,8 +473,8 @@
       "sha256": "c0859dec5b712b9b"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 2453,
-      "sha256": "da823a11741af641"
+      "size": 2462,
+      "sha256": "c0ebc686500089e5"
     },
     "services/api/docker-compose.yaml": {
       "size": 871,

@@ -389,7 +389,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api/.copier-answers.yml": {
-      "size": 517,
+      "size": 535,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -421,20 +421,20 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1874,
-      "sha256": "9d333ed0f35950c1"
+      "size": 1916,
+      "sha256": "adcca448862091c7"
     },
     "services/api/docker-compose.yaml": {
       "size": 843,
       "sha256": "1a530bf3ab0e8ae8"
     },
     "services/api/Dockerfile": {
-      "size": 3132,
-      "sha256": "341788a576a8445d"
+      "size": 3159,
+      "sha256": "38f4c7232ada8955"
     },
     "services/api/entrypoint.sh": {
-      "size": 298,
-      "sha256": "74f9a7761be19e3f"
+      "size": 301,
+      "sha256": "fc0726a647a0700c"
     },
     "services/api/package.json": {
       "size": 1225,
