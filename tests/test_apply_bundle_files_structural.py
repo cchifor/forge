@@ -213,6 +213,15 @@ class TestApplyBundleFilesStructural:
         # The sidecar header tags the conflict source so consumers can grep.
         assert "tag:" in sidecar_content
         assert fragment_name in sidecar_content
+        # CRLF regression guard: write_file_sidecar pins ``newline="\n"``,
+        # so even on Windows the sidecar must be byte-identical to the LF
+        # output. The previous bug was text-mode write translating an
+        # already-CRLF payload into ``\r\r\n``.
+        raw_bytes = sidecar.read_bytes()
+        assert b"\r\r\n" not in raw_bytes, (
+            "sidecar contains \\r\\r\\n — write_file_sidecar lost its "
+            "newline=\\n pin and is re-translating LF on Windows"
+        )
 
     def test_safe_apply_does_not_emit_sidecar(self, tmp_path: Path) -> None:
         """Safe-apply files candidate takes the LITERAL path — wholesale
