@@ -1,118 +1,156 @@
 # Matrix-Nightly CI Failure Analysis & Improvement Plan
 
-## Codex Review
-
-- Cluster A is directionally sound: `forge/generator.py` generates backend services under `services/<bc.name>`, so backend `project_slug` must match `bc.name` for Rust/Node/Python compose contexts.
-- Cluster B needs a narrower, matrix-specific artefact filter. The golden snapshot predicate is neither complete for the observed `.svelte-kit` failure nor fully safe to reuse for FR2.
-- Cluster C is likely misattributed for the listed smoke legs: those scenarios use default `database.mode=generate`, and the entrypoint does not translate Python failures to exit code 3.
-- Cluster D correctly identifies stale provenance as a failure mode, but the proposed API call does not exist and a hash-only restamp can mask lost fragment behavior, including default PII redaction.
-- Missing verification: add log-based smoke triage for Python exit codes, script-mode import coverage for the new test helper, and functional assertions that stateless-compatible fragments survive stripping.
-
 ## Context
 
-The nightly matrix CI job on `cchifor/forge` (run [26076244446], 2026-05-19) failed with **15 of 23 matrix legs red** while every prerequisite gate / aggregator job succeeded. PR #53 (merged 2026-05-18) fixed 3 pre-existing bugs but explicitly left at least 3 more open - those have surfaced again in the latest nightly along with two additional root causes that PR #53 didn't enumerate. This plan groups the 15 failures into **4 root-cause clusters** and proposes the minimal fix per cluster.
+The nightly matrix CI job on `cchifor/forge` (run [26076244446], 2026-05-19) failed with **15 of 23 matrix legs red** while every prerequisite gate / aggregator job succeeded. PR #53 (merged 2026-05-18) fixed 3 pre-existing bugs but left more open. This plan, after a Codex round-1 review and on-codebase verification, groups the 15 failures into **4 fix clusters plus 1 investigation cluster**:
+
+- **A** — `project_slug` not propagated to backend Copier contexts (Rust + Node only). 6 smoke fixes.
+- **B** — Roundtrip lane lacks exclusions for build-generated artefacts. 5 roundtrip fixes.
+- **C** — Stripper completeness for stateless Python (cli/__init__ + qualified loader.py field). 0 nightly fixes today (latent bug — stateless_py is not on the smoke lane). Worth fixing in this PR because it unblocks future `stateless_py` smoke and proves the stateless surface is internally consistent.
+- **D** — `stateless_py` roundtrip FR1 violation: stripper destroys fragment injection on `lifecycle.py` and leaves manifest stale. 1 roundtrip fix + 1 silent-security-regression fix.
+- **E** (investigation, not a fix on this PR) — `py_svelte_min / py_vue_noauth / py_vue_full` smoke: api-1 exits 3 for reasons currently undiagnosable. Requires the compose-log artifacts from the next nightly (PR #53 cc905cf landed the diagnostic capture; this run was BEFORE that artifact path was wired into the nightly workflow → no logs to inspect yet).
+
+**Verified fix coverage on this PR: 12 of 15 nightly red legs.** The remaining 3 (Cluster E) are explicitly deferred to a follow-up after diagnostic data arrives.
 
 | Lane / Scenario | Symptom | Cluster |
 |---|---|---|
-| smoke (rust_svelte_min, rust_vue_full, multi_all_three) | `mkdir -p services//src/bin` - empty service slug | A |
+| smoke (rust_svelte_min, rust_vue_full, multi_all_three) | `mkdir -p services//src/bin` — empty service slug | A |
 | smoke (node_vue_full, multi_py_node) | `npx prisma generate` exit 1 (wrong WORKDIR) | A |
 | smoke (node_svelte_min) | `npm install --workspaces` exit 1 (wrong WORKDIR) | A |
-| smoke (py_svelte_min, py_vue_noauth, py_vue_full) | `container <.>-api-1 exited (3)` | C |
+| smoke (py_svelte_min, py_vue_noauth, py_vue_full) | `container <…>-api-1 exited (3)` (NOT a stripper failure — these scenarios use `database.mode=generate`) | **E** |
 | roundtrip (node_only_headless) | diff first file: `services/api/node_modules/.prisma/client/edge.js` | B |
 | roundtrip (node_svelte_min, py_svelte_min, rust_svelte_min) | diff first file: `apps/frontend/.svelte-kit/generated/server/internal.js` | B |
 | roundtrip (multi_py_node) | diff first file: `apps/frontend/scripts/__pycache__/feature_templates.cpython-314.pyc` | B |
-| roundtrip (stateless_py) | `FR1 violation: 1 block/files candidate: pii_redaction/src/app/core/lifecycle.py` | D |
+| roundtrip (stateless_py) | `FR1 violation: 1 block/files candidate from fragment 'pii_redaction': src/app/core/lifecycle.py` | D |
 
 ---
 
-## Cluster A - `project_slug` not propagated to backend Copier contexts (6 smoke failures)
+## Cluster A — `project_slug` not propagated to backend Copier contexts (6 smoke fixes)
 
 ### Diagnosis
-- `forge/variable_mapper.py:34-63` `backend_context()` builds the Copier data dict for **every** backend template but does not set `project_slug`.
-- The three frontend builders at lines 164 / 200 / 237 *do* set `"project_slug": config.frontend_slug,`.
-- The Rust + Node + Python Dockerfile templates all reference `{{ project_slug }}`:
-<!-- codex: The Python Dockerfile does not use project_slug for services/<slug> paths; its only Dockerfile reference is a tag comment. Python still has project_slug-sensitive compose/entrypoint paths, especially for hyphenated service names, so tests should cover the compose fragment rather than treating it as the same Dockerfile failure. -->
-  - `forge/templates/services/rust-service-template/template/Dockerfile.jinja:13,34,40-44,49-50` renders as `services//src/...` (empty), causing `cargo build --workspace` to exit 101.
-  - `forge/templates/services/node-service-template/template/Dockerfile.jinja:14,30,38,58,63-66,83` renders as `WORKDIR /workspace/services/` (no service dir), so `npm install --workspaces` and `npx prisma generate` run in the wrong tree and fail.
-  - Five other template files reference `{{ project_slug }}` too: `Cargo.toml.jinja`, `config/{defaults,testing}.yaml.jinja`, `docker-compose.fragment.yaml.jinja` under both rust + node service templates.
-- `BackendConfig` (`forge/config/_backend.py:179-198`) does not own a `slug` field; the Rust/Node Dockerfile comments make it clear that `project_slug` in this context means the *backend service slug* (i.e. `bc.name`).
-<!-- codex: Confirmed generator.py names backend dirs as project_root/services/bc.name, so bc.name is the path slug. The hidden edge case is validation drift: BackendConfig allows underscores, while all backend copier.yml files validate project_name as kebab-case; add or adjust validation, or test an underscore backend explicitly. -->
+- `forge/variable_mapper.py:34-63` `backend_context()` does not set `project_slug`. The frontend builders at lines 164 / 200 / 237 *do* set `"project_slug": config.frontend_slug,`.
+- Concrete render breakage by language:
+  - **Rust** — `forge/templates/services/rust-service-template/template/Dockerfile.jinja:13,34,40-44,49-50` renders `services//src/...` (empty slug); `cargo build --workspace` exits 101.
+  - **Node** — `forge/templates/services/node-service-template/template/Dockerfile.jinja:14,30,38,58,63-66,83` renders `WORKDIR /workspace/services/`; `npm install --workspaces` and `npx prisma generate` run in the wrong tree and fail.
+  - **Python** — the Dockerfile uses `{{ project_slug }}` **only inside a header comment** (line 8: `-t {{ project_slug }} .`), not in any path. The Python compose fragment and entrypoint paths, however, do consume the variable for hyphenated service names (e.g. `py-svc` in `multi_py_node`). Python smoke isn't observably broken by this in the current nightly because the failing Python smoke legs (Cluster E) crash long after the build succeeds.
+- `BackendConfig` (`forge/config/_backend.py:179-198`) has no `slug` field. `forge/generator.py` directories its backends as `services/<bc.name>` (per Codex's verification), so `bc.name` is the path slug.
+- **Validation-drift edge case:** `BackendConfig.name` allows underscores while the per-language `copier.yml` validators enforce kebab-case on `project_name`. A backend named `py_svc` would pass `BackendConfig` validation, render under `services/py_svc/`, but fail downstream copier validation. None of the failing scenarios trip this today (all use `api` or hyphenated names like `py-svc`), but the test added below pins it.
 
 ### Fix
-Add a single key to `backend_context()`:
+Add one key to `backend_context()`:
 
 ```python
 # forge/variable_mapper.py:47-55 (inside backend_context)
 ctx: dict[str, Any] = {
     "project_name": bc.name,
-    "project_slug": bc.name,           # <-- ADD; backend service slug for Dockerfile + Cargo
+    "project_slug": bc.name,           # <-- ADD; backend service slug for Dockerfile + Cargo + compose
     "project_description": bc.description,
     ...
 }
 ```
 
-Rationale: backend names are already validated as slug-safe (lowercase + dashes/underscores) by `forge/config/_validators.py`, so a separate `slug` derivation isn't needed.
-
 ### Test
-- `tests/test_variable_mapper.py` - extend the `test_backend_context_*` cases to assert `project_slug == bc.name` for all three languages.
-- Re-render the 3 Rust/Node smoke scenarios locally (`uv run python tests/matrix/runner.py --scenario rust_svelte_min --lane smoke`) and confirm `docker compose up --wait` reaches healthy.
+- `tests/test_variable_mapper.py` — extend the `test_backend_context_*` cases to assert `project_slug == bc.name` for all three languages.
+- Add `test_backend_context_rejects_underscore_name_pre_copier_validation` (or extend the validator's tests) — pin the validation-drift edge case so a future plugin backend can't slip in an underscore-named slug.
+- Re-render the 3 Rust/Node smoke scenarios locally:
+  ```bash
+  uv run python tests/matrix/runner.py --scenario rust_svelte_min --lane smoke
+  uv run python tests/matrix/runner.py --scenario node_svelte_min --lane smoke
+  uv run python tests/matrix/runner.py --scenario multi_py_node --lane smoke   # hyphenated py-svc + node-svc
+  ```
+  All three should reach `docker compose up --wait` healthy.
 
 ---
 
-## Cluster B - Roundtrip lane lacks exclusions for build-generated artefacts (5 roundtrip failures)
+## Cluster B — Roundtrip lane lacks exclusions for build-generated artefacts (5 roundtrip fixes)
 
 ### Diagnosis
-- `tests/matrix/runner.py:924-1007` `_diff_project_trees_normalized` walks `project_a` vs `project_b` with `p.rglob("*")` and applies `is_excluded()` (lines 950-953) which **only** filters `.git/` + `.copier-answers.yml`.
-- The Svelte / Vue / Python post-generate scripts run `npm install`, `npm run build`, and Python feature codegen - producing `node_modules/`, `.svelte-kit/`, `.prisma/`, `__pycache__/`, `build/`, `dist/`, etc. These artefacts are non-deterministic across two consecutive generates (timestamps, source maps, hashes).
-- The exact same problem was already solved for golden snapshots - `tests/test_golden_snapshots.py:88-126` carries a comprehensive exclusion list. The fix is to mirror it.
-<!-- codex: Do not mirror the golden predicate verbatim. It lacks .svelte-kit/ (one of the observed failures), .venv/.pytest/.mypy caches, and dist/build, while some golden exclusions are host/snapshot-specific rather than FR2 noise. -->
+- `tests/matrix/runner.py:924-1007` `_diff_project_trees_normalized` only filters `.git/` + `.copier-answers.yml` (`is_excluded`, lines 950-953).
+- Frontend `post_generate.py` runs `npm install` / `npm run build` and the multi-backend Python codegen runs `python scripts/feature_templates.py` — producing `node_modules/`, `.svelte-kit/`, `.prisma/`, `__pycache__/`, etc. These are non-deterministic across two consecutive generates (timestamps, source maps, dependency-resolution order).
+- The golden snapshot test (`tests/test_golden_snapshots.py:88-126`) carries an exclusion list, but mirroring it verbatim is wrong:
+  - **It's incomplete for FR2.** It omits `.svelte-kit/`, which is the very first offender in 3 of 5 failing roundtrip legs. It also omits `.venv/`, `.pytest_cache/`, `.mypy_cache/`, `build/`, `dist/` (Vue), all of which can leak from post-generate.
+  - **Some golden entries hide real FR2 drift** if propagated. Specifically, `/api/generated/` (hey-api openapi-ts output) and `auto-imports.d.ts` (Vue codegen) are deterministic when produced on the same host; if they differ between project_a and project_b, that's a real bug. `package-lock.json` is host-deterministic with frozen lockfiles and shouldn't be ignored in FR2 either.
+- The shared helper needs care: `tests/matrix/runner.py` is invoked as `uv run python tests/matrix/runner.py` (script mode). The file's own docstring notes the repo root isn't on `sys.path` initially. Co-locating the helper inside the `tests/` package without a `sys.path` prepend would silently fail at the first `from tests._artefact_filters import ...`.
 
 ### Fix
-Extract the exclusion predicate into a shared helper so the runner and golden-snapshot tests can't drift again:
+1. **New file** `tests/_artefact_filters.py` — explicit, curated list with rationale per entry:
+   ```python
+   """Path-exclusion predicates shared between FR2 (matrix roundtrip) and
+   golden-snapshot tests. Each entry is documented with the reason it's
+   non-deterministic across two generates on the same host.
+   """
+   def is_generated_artefact(rel: str) -> bool:
+       # VCS internals
+       if rel == ".git" or rel.startswith(".git/") or "/.git/" in rel:
+           return True
+       # Copier internals — _commit + _src_path drift across re-runs
+       if rel.endswith(".copier-answers.yml"):
+           return True
+       # Python bytecode + tool caches (timestamp-dependent)
+       if "/__pycache__/" in rel or rel.startswith("__pycache__/"):
+           return True
+       if rel.endswith(".pyc"):
+           return True
+       for cache in ("/.ruff_cache/", "/.pytest_cache/", "/.mypy_cache/", "/.venv/"):
+           if cache in rel or rel.startswith(cache.lstrip("/")):
+               return True
+       # Node — npm install resolution order + Prisma codegen are unstable
+       if "/node_modules/" in rel or rel.startswith("node_modules/"):
+           return True
+       # SvelteKit generated output (build-time only, regenerated each `npm run build`)
+       if "/.svelte-kit/" in rel or rel.startswith(".svelte-kit/"):
+           return True
+       # Frontend build output
+       for build in ("/build/", "/dist/"):
+           if build in rel:
+               return True
+       # Cargo target/ — present only if a previous cargo build leaked it
+       if "/target/" in rel or rel.startswith("target/"):
+           return True
+       return False
+   ```
+   Note: this list is **narrower than the golden-snapshot list**. Specifically, we do NOT include `package-lock.json`, `auto-imports.d.ts`, or `/api/generated/` — those are deterministic on the same CI host, and a genuine FR2 drift in them is exactly the kind of bug roundtrip should catch.
 
-1. Add `tests/_artefact_filters.py` (new file, ~35 lines) exporting `is_generated_artefact(rel: str) -> bool`. Body: copy the predicate body from `tests/test_golden_snapshots.py:88-125` verbatim, with a module docstring documenting why each exclusion is non-deterministic.
-<!-- codex: Golden-only exclusions that should be reviewed before propagation include /api/generated/, auto-imports.d.ts, and package-lock.json; ignoring them in FR2 can hide real generated-client or dependency-lock drift. Use a matrix-specific allowlist with documented rationale per path family. -->
-2. Update `tests/test_golden_snapshots.py:85-126` to call `is_generated_artefact(rel)` and `continue` on `True`.
-3. Update `tests/matrix/runner.py:950-953` `is_excluded` to delegate to the same helper (keep the existing `.git/` + `.copier-answers.yml` branches; add `is_generated_artefact(rel)`).
+2. Update `tests/test_golden_snapshots.py:85-126` to also call `is_generated_artefact()` as the first check inside the loop (continue on True), but keep the additional `package-lock.json` / `auto-imports.d.ts` / `/api/generated/` exclusions inline as snapshot-only (with a clarifying comment) — those are legitimately host-asymmetric for snapshots, just not for FR2.
 
-Locating the helper at `tests/_artefact_filters.py` (not `tests/matrix/_path_filters.py`) keeps it discoverable to non-matrix consumers like `test_golden_snapshots.py` without creating a `tests.matrix.*` import out of a sibling test module.
-<!-- codex: runner.py is invoked as uv run python tests/matrix/runner.py, and the file itself documents that repo root is not initially on sys.path. If the helper lives at tests/_artefact_filters.py, add the repo-root sys.path insertion before importing it or use an import path that works in script mode. -->
+3. Update `tests/matrix/runner.py` — both the `is_excluded` in `_diff_project_trees_normalized` (line 950) and the import. Because `runner.py` runs in script mode, prepend the repo root to `sys.path` before importing:
+   ```python
+   import sys
+   from pathlib import Path
+   _REPO_ROOT = Path(__file__).resolve().parents[2]
+   if str(_REPO_ROOT) not in sys.path:
+       sys.path.insert(0, str(_REPO_ROOT))
+   from tests._artefact_filters import is_generated_artefact  # noqa: E402
+   ```
+   (Mirror this in golden-snapshots; pytest already puts the repo root on `sys.path`, but the prepend is harmless.)
 
 ### Test
-- New unit test in `tests/matrix/test_runner_diagnostics.py` (already exists from PR #53): assert that `_diff_project_trees_normalized` returns `[]` when one tree has only stripped paths (`node_modules/foo`, `.svelte-kit/bar`) that the other lacks.
-- Re-run lane D for `py_svelte_min` and `multi_py_node` locally.
+- New unit test in `tests/matrix/test_runner_diagnostics.py` (file already exists from PR #53): seed two scratch directories where one has only `node_modules/x`, `.svelte-kit/y`, `__pycache__/z.pyc`, the other empty; assert `_diff_project_trees_normalized()` returns `[]`.
+- Re-run lane D for `py_svelte_min`, `multi_py_node`, `rust_svelte_min`, `node_svelte_min`, `node_only_headless` locally; all five should return `OK`.
 
 ---
 
-## Cluster C - Two stripper gaps prevent Python API container start (3 smoke failures)
+## Cluster C — Stripper completeness for stateless Python (latent bug, not on red legs today)
 
-PR #53 documented both bugs as out-of-scope follow-ups. They're the cause of the `container <.>-api-1 exited (3)` failures.
-<!-- codex: The three smoke scenarios named in the table use the default database.mode=generate in scenarios.yaml, so strip_python_database is not called for them. These stripper fixes are valid for stateless_py, but they do not currently explain py_svelte_min/py_vue_noauth/py_vue_full smoke failures unless the CI config differs from the checked-in scenarios. -->
+These are the two follow-ups PR #53 documented. **Neither bug is on the failing-leg list today** — `py_svelte_min / py_vue_noauth / py_vue_full` all use the default `database.mode=generate` (see `tests/matrix/scenarios.yaml:30-83,297-317`), so `strip_python_database()` is never called for them. Their smoke failures (Cluster E) come from somewhere else.
 
-### C1 - `cli/__init__.py` keeps imports of deleted `cli/db.py`
+What these fixes DO unblock: when the team eventually opts `stateless_py` into the smoke lane, the container needs to start cleanly. Today, both bugs would crash it before uvicorn binds. They also tighten the stateless contract — an internally inconsistent stateless build is a footgun.
 
-`forge/strippers.py:52-81` `_PYTHON_DB_TARGETS` includes `src/app/cli/db.py` (deleted at line 58) but `strip_python_database()` (lines 335-353) never rewrites `src/app/cli/__init__.py`. The shipped file contains:
-
+### C1 — `cli/__init__.py` keeps imports of deleted `cli/db.py`
+`forge/strippers.py:52-81` `_PYTHON_DB_TARGETS` deletes `src/app/cli/db.py` but no stripper rewrites `src/app/cli/__init__.py`, which contains:
 ```python
-# forge/templates/services/python-service-template/template/src/app/cli/__init__.py
-from app.cli.db import db_app                                   # line 3 - dangling import
-from app.cli.server import server_app
+from app.cli.db import db_app                            # line 3
 ...
-cli.add_typer(db_app, name="db", help="Database migrations")    # line 9 - dangling reference
+cli.add_typer(db_app, name="db", help="Database migrations")   # line 9
 ```
+At first `python -m app` import → `ModuleNotFoundError: No module named 'app.cli.db'`. Plain Python exits 1 (not uvicorn's 3) per Codex's clarification, which further confirms this is not the cause of the observed exit-3 smoke failures.
 
-When `python -m app` runs, importing `app.cli` raises `ModuleNotFoundError: No module named 'app.cli.db'` immediately. The uvicorn launcher catches this and Python exits with code 3.
-<!-- codex: entrypoint.sh runs alembic upgrade head and then exec python -m app server run; it does not translate exit codes. A missing app.cli.db import happens during app.__main__ -> app.cli import before Typer/uvicorn runs, so it should be an uncaught Python import failure, normally exit 1, not uvicorn's exit 3. -->
-
-**Fix:** Add `_strip_cli_init()` after `_strip_loader_db_refs` in `forge/strippers.py`, then wire it into `strip_python_database`:
-
+**Fix** — add `_strip_cli_init()`:
 ```python
-# forge/strippers.py - new function
 _CLI_DB_IMPORT_RE = re.compile(r"^from app\.cli\.db import [^\n]*\n", re.MULTILINE)
 _CLI_DB_REGISTER_RE = re.compile(r"^cli\.add_typer\(\s*db_app[^\n]*\n", re.MULTILINE)
 
 def _strip_cli_init(path: Path) -> None:
-    """Drop the ``app.cli.db`` import + Typer registration from cli/__init__.py."""
     if not path.is_file():
         return
     text = path.read_text(encoding="utf-8")
@@ -120,30 +158,15 @@ def _strip_cli_init(path: Path) -> None:
     text = _CLI_DB_REGISTER_RE.sub("", text)
     path.write_text(text, encoding="utf-8")
 
-# strip_python_database (line 353):
-_strip_loader_db_refs(backend_dir / "src/app/core/config/loader.py")
-_strip_cli_init(backend_dir / "src/app/cli/__init__.py")   # <-- ADD
+# strip_python_database(...) — after _strip_loader_db_refs():
+_strip_cli_init(backend_dir / "src/app/cli/__init__.py")
 ```
 
-### C2 - `_strip_loader_db_refs` misses qualified field reference in `loader.py`
+### C2 — `_strip_loader_db_refs` misses qualified field reference in `loader.py`
+`loader.py:29` declares `db: domain.DbConfig = domain.DbConfig()`. `_strip_config_domain` removes the class from `domain.py`; `_strip_loader_db_refs` only strips IMPORT lines and doesn't match the qualified `domain.DbConfig` reference. At runtime → `AttributeError` at module load. **This path is the most plausible exit-3 source for any future stateless smoke run** (Codex notes `server.py` swallows `get_settings` failures via try/except, and uvicorn then re-imports `app.main` which loads loader → exit 3).
 
-The shipped loader file (`forge/templates/services/python-service-template/template/src/app/core/config/loader.py:29`) declares:
-
+**Fix** — extend `_strip_loader_db_refs`:
 ```python
-db: domain.DbConfig = domain.DbConfig()
-```
-
-`_strip_config_domain` (lines 491-512) already removes the `DbConfig` class from `domain.py`. But `_strip_loader_db_refs` (lines 515-524) only strips IMPORT lines (regex anchored at `^from . import .DbConfig`). It misses line 29 because:
-- loader.py imports via `from . import domain, sources` (no direct `DbConfig` name).
-- The field is referenced as the qualified `domain.DbConfig`, which the import-line regex doesn't match.
-
-At runtime `domain.DbConfig` no longer exists - `AttributeError` at module load - exit 3.
-<!-- codex: This path can plausibly become uvicorn exit 3 because server.py swallows get_settings import/config failures and uvicorn later imports app.main. The plan should distinguish this from C1 and verify it with captured compose logs. -->
-
-**Fix:** Extend `_strip_loader_db_refs` to also strip the field assignment (mirrors the regex already used in `_strip_config_domain:511`):
-
-```python
-# forge/strippers.py:515-524 - extend _strip_loader_db_refs
 def _strip_loader_db_refs(path: Path) -> None:
     if not path.is_file():
         return
@@ -151,105 +174,177 @@ def _strip_loader_db_refs(path: Path) -> None:
     text = re.sub(r"^from [^\n]*import[^\n]*DbConfig[^\n]*\n", "", text, flags=re.MULTILINE)
     text = re.sub(r",\s*DbConfig\b", "", text)
     text = re.sub(r"\bDbConfig,\s*", "", text)
-    # NEW: also strip the qualified field on Settings - ``db: domain.DbConfig = .``
+    # NEW — strip the qualified Settings field too
     text = re.sub(r"^[ \t]+db:\s*(?:domain\.)?DbConfig[^\n]*\n", "", text, flags=re.MULTILINE)
     path.write_text(text, encoding="utf-8")
 ```
 
 ### Test
-- New unit cases in `tests/test_strippers.py`:
+- `tests/test_strippers.py`:
   - `test_strip_cli_init_drops_db_app_import_and_registration`
   - `test_strip_loader_db_refs_drops_qualified_field`
-- Re-run smoke for `py_svelte_min` locally; assert container reaches healthy. The compose-log diagnostic capture (cc905cf) will surface any residual python-startup issue.
-<!-- codex: For database.mode=none Docker builds, the Python Dockerfile and entrypoint still unconditionally copy/run alembic. stateless_py is not a smoke lane today, but an end-to-end stateless container test will need to address that separately. -->
+- Stateless smoke verification is **out of scope** for this PR — `stateless_py` is roundtrip-only in `scenarios.yaml`, and adding it to the smoke lane would also need the Dockerfile/alembic side adjusted (the Python Dockerfile unconditionally copies `alembic/`, which doesn't exist after the stripper runs). Leave that for the follow-up that opts stateless into smoke.
 
 ---
 
-## Cluster D - `stateless_py` FR1 violation on `lifecycle.py` (1 roundtrip failure)
+## Cluster D — `stateless_py` FR1 violation: stripper destroys fragment injection on `lifecycle.py` (1 roundtrip fix + silent-security-regression fix)
 
-### Diagnosis (confirmed via code trace)
-- `tests/matrix/runner.py:736-753` runs `harvest_project()` immediately after fresh-generate and asserts the harvester emits zero `block` or `files` candidates (FR1).
-- For `stateless_py`, `harvest_project()` returns exactly one `kind="files"` candidate for `src/app/core/lifecycle.py` because of a **manifest-vs-disk hash mismatch**:
-  1. `forge/generator.py:147-153` `_record_tree()` records every base-template file (including the original DB-backed `lifecycle.py`) into the `ProvenanceCollector` with its SHA-256.
-  2. `forge/generator.py:177-181` calls `strip_python_database(backend_dir)`, which `_write_stateless_replacements` (`forge/strippers.py:365-378`) overwrites `src/app/core/lifecycle.py` (and four sibling IoC modules) with the `_STATELESS_LIFECYCLE` / `_STATELESS_INFRA` / `_STATELESS_SECURITY` / `_STATELESS_SERVICES` / `_STATELESS_IOC_INIT` / `_STATELESS_HEALTH_ENDPOINT` constants - but the collector is **not** updated.
-<!-- codex: The root cause is more than hash staleness: strip_python_database runs after apply_features and overwrites lifecycle.py, which removes default-enabled PII redaction's startup injection. A pure provenance restamp can make FR1 green while leaving an enabled security feature inert. -->
-  3. `forge/generator.py:348` writes `forge.toml` from the now-stale collector with the *original* hashes.
-  4. At harvest time, `FileExtractor._extract_one()` (`forge/extractors/files.py:113-129`) re-reads each file from disk, computes a fresh SHA-256, and compares against the manifest's baseline. The hashes differ - `kind="files"` candidate emitted. FR1 fails.
-- This affects six files, not just `lifecycle.py` - the FR1 check stops at the first offender, so the other five are masked until `lifecycle.py` is fixed.
-<!-- codex: Harvest only groups provenance rows with origin="fragment"; base-template-only replacement files are ignored by FileExtractor. The observed pii_redaction/lifecycle.py offender is a fragment-provenance row, so enumerate affected fragment-owned paths rather than all six replacement files. -->
+### Diagnosis (confirmed via code trace + Codex round-1 review)
+- The FR1 check (`tests/matrix/runner.py:736-753`) calls `harvest_project(project_a)` and asserts `[c for c in candidates if c.kind in ("block", "files")] == []`. The single offender's `fragment` is `pii_redaction` (per the observed error message), not `base-template`.
+- `forge/features/middleware/templates/pii_redaction/python/inject.yaml` injects, BEFORE the `FORGE:LIFECYCLE_STARTUP` marker in `src/app/core/lifecycle.py`:
+  ```python
+  from app.core.pii_redaction import install_pii_filter
+  install_pii_filter()
+  ```
+- Pipeline order in `forge/generator.py`:
+  1. (~line 147) `_record_tree()` records every base-template file with `origin="base-template"` and its SHA.
+  2. Feature/fragment application — the `pii_redaction` fragment runs `record(path, origin="fragment", fragment_name="pii_redaction", ...)` on `lifecycle.py` *after* injecting the two-line snippet. Manifest now has the **fragment** as the owner of `lifecycle.py`.
+  3. (~line 180) `strip_python_database(backend_dir)` overwrites `src/app/core/lifecycle.py` with `_STATELESS_LIFECYCLE` (a hand-written constant in `forge/strippers.py:88-184`). **This silently erases the pii_redaction injection**, including the `# FORGE:LIFECYCLE_STARTUP` marker comment which is an *injection point*, not a paired sentinel (Codex critique 13 — verified).
+  4. (~line 348) `forge.toml` is written from the now-stale collector — the manifest still says "this file is owned by fragment `pii_redaction`, with hash `<original>`".
+- At harvest time, the `FileExtractor` sees a fragment-origin row whose recorded hash doesn't match the disk content → `kind="files"` candidate. FR1 fails.
+
+The "naïve fix" (have the stripper call `collector.record(...)` again to refresh the hash) would make FR1 pass **but would not restore the lost `install_pii_filter()` call** — a silent security regression where the default-enabled PII redaction stops actually filtering logs. That's worse than the current red CI signal.
 
 ### Fix
-Thread the `ProvenanceCollector` into the stripper and have it re-record the rewritten files:
+Re-apply compatible fragment injections after the stripper runs. Two implementation shapes:
 
-1. `forge/strippers.py:335` change signature:
-   ```python
-   def strip_python_database(backend_dir: Path, *, collector: ProvenanceCollector | None = None) -> None:
-   ```
-2. `forge/strippers.py:365-378` extend `_write_stateless_replacements` to also accept `collector` and call `collector.record_file(backend_dir / rel, rewritten_text)` after each `target.write_text(...)`. (The `record_file` method already exists - `_record_tree` is the bulk wrapper; the single-file path is what we need here.)
-<!-- codex: ProvenanceCollector has record(path, *, origin, fragment_name=None, fragment_version=None, template_name=None, template_version=None); there is no record_file(path, text) method. Any fix must use the actual API and preserve the existing record's origin/fragment/template metadata when restamping. -->
-3. `forge/generator.py:180` pass the collector through:
-   ```python
-   strip_python_database(backend_dir, collector=collector)
-   ```
-4. Keep `collector=None` as the default so existing callers / unit tests don't break.
+**D1 (preferred — reorder the generator pipeline)**
 
-The trailing `# FORGE:LIFECYCLE_STARTUP` comment inside `_STATELESS_LIFECYCLE` (`forge/strippers.py:182`, just before the closing `'''`) is a paired-sentinel marker, not an unattributed standalone - the harvester only emits `block` candidates from `FORGE:BEGIN`/`FORGE:END` pairs, so the comment is inert and can stay.
-<!-- codex: This is not a paired sentinel; it is an injection marker consumed by the forward injector. In stateless replacement it remains as a bare marker, but because stripping happens after feature application, compatible lifecycle injections are not reapplied. -->
+Move `strip_python_database()` to BEFORE fragment application in `forge/generator.py`:
+```
+1. _record_tree(base template)
+2. strip_python_database(backend_dir, collector=collector)     # was step 3
+3. apply features/fragments                                    # was step 2 — now sees stateless lifecycle.py
+4. write forge.toml
+```
+Then in `strip_python_database`, after each `target.write_text(content)`, call:
+```python
+collector.record(
+    target,
+    origin="base-template",
+    template_name=template_name,     # propagate from the caller in generator.py
+    template_version=template_version,
+)
+```
+The actual `ProvenanceCollector.record(...)` signature (`forge/sync/provenance.py:111`) takes keyword args: `path, *, origin, fragment_name=None, fragment_version=None, template_name=None, template_version=None`. There is no `record_file(path, text)` method — Codex critique 12, verified by reading the class definition. The function also auto-computes `sha256_of(path)` and `emitted_at`, so the stripper just needs to call it after writing.
+
+After this reorder, fragments like `pii_redaction` apply their injection on top of the stateless lifecycle.py. The injection still lands BEFORE the `FORGE:LIFECYCLE_STARTUP` marker — the stateless replacement keeps that marker at the end of `_setup_logging` (`forge/strippers.py:182`). The fragment's `record(origin="fragment", fragment_name="pii_redaction")` call then becomes the manifest's owner of the final lifecycle.py, with the correct hash including the injection.
+
+Required code changes:
+- `forge/generator.py` — move the `strip_python_database` call up to just after `_record_tree`. Pass `collector` and the base-template name+version (already available locally).
+- `forge/strippers.py:335` — extend signature: `def strip_python_database(backend_dir: Path, *, collector: ProvenanceCollector | None = None, template_name: str | None = None, template_version: str | None = None)`. Keep all three keyword args optional so existing test callers don't break.
+- `forge/strippers.py:365-378` — after each `target.write_text(content)`, if `collector is not None`, call the proper `collector.record(target, origin="base-template", template_name=..., template_version=...)`.
+
+**D2 (fallback — keep the order, re-apply compatible injections post-strip)**
+
+If the reorder is too invasive (e.g. another fragment depends on seeing the DB-backed lifecycle to do something else), keep the current order and have the stripper rescan applied fragments for a "compatible-with-stateless" allowlist (just `pii_redaction` today), then re-apply their injection into the stateless file before re-recording. This is more code and more surface for drift; only fall back to it if D1 surfaces an ordering dependency.
 
 ### Test
-- New unit case in `tests/test_strippers.py`: invoke `strip_python_database(backend_dir, collector=fake_collector)`; assert `fake_collector` has the post-strip hash for `src/app/core/lifecycle.py` (and the other 5 rewritten files).
-<!-- codex: Add a functional assertion that stateless generation with default middleware.pii_redaction still contains install_pii_filter() or deliberately disables that option; hash-only fake collector tests will miss the security regression. -->
-- New integration case in `tests/matrix/test_runner_diagnostics.py`: run `generate()` + `harvest_project()` on a synthetic stateless config; assert `[c for c in bundle.candidates if c.kind in ("block", "files")] == []`.
+1. **Unit (correct API)** — `tests/test_strippers.py::test_strip_python_database_records_provenance_with_collector`:
+   - Construct a fake `ProvenanceCollector(project_root=tmp_path)`.
+   - Run `strip_python_database(backend_dir, collector=collector, template_name="python-service-template", template_version="1.0.0")`.
+   - Assert `collector.records["services/api/src/app/core/lifecycle.py"]` exists with `origin="base-template"` and a non-empty sha.
+
+2. **Functional (security regression guard)** — `tests/test_strippers.py::test_strip_python_database_preserves_pii_redaction_injection`:
+   - Run the full `generate()` for a synthetic config matching `stateless_py` (with default `middleware.pii_redaction`).
+   - Assert the rendered `src/app/core/lifecycle.py` contains both `from app.core.pii_redaction import install_pii_filter` AND `install_pii_filter()`. Without this guard, D1 could regress silently if the pipeline reorder breaks the injection point.
+   - Bonus: assert harvesting the rendered project yields zero `kind in ("block","files")` candidates.
+
+3. **Integration** — `tests/matrix/test_runner_diagnostics.py::test_stateless_py_roundtrip_fr1_passes`:
+   - Drive `run_lane_roundtrip(stateless_py_scenario)` end-to-end; assert `status == "ok"`.
+
+---
+
+## Cluster E (investigation, NOT a fix on this PR) — `py_svelte_min / py_vue_noauth / py_vue_full` smoke exit 3
+
+### Why this isn't fixed in this PR
+The compose-log diagnostic capture (PR #53 commit cc905cf) landed AFTER the 2026-05-19 nightly was scheduled, so the failing run has no captured container logs. The next nightly will capture them; we revisit then.
+
+What we know already:
+- All three scenarios use `database.mode=generate` (default). Strippers are NOT called → Cluster C fixes don't apply.
+- For `py_svelte_min`: postgres healthy, **`api-migrate` exited**, then `api-1 exited (3)`. The migrate-container exit is suspicious — it precedes the api-1 failure and could be the proximate cause.
+- For `py_vue_noauth`: frontend healthy, `api-1 exited (3)`.
+- For `py_vue_full`: keycloak healthy (last status reported); no `api` status shown in the truncated log, may share root cause.
+
+### Strongest hypotheses (to verify with the next nightly's compose logs)
+1. **Auth config validation fails in `ENV=production`.** Both `py_svelte_min` and `py_vue_noauth` have `include_keycloak: false`, so no auth fragment injects credentials. The Dockerfile sets `ENV=production` (`forge/templates/services/python-service-template/template/Dockerfile.jinja:81`), so `production.yaml` loads — and the shipped file only contains `security.auth.enabled: true` with no `server_url`, `realm`, `client_id`, etc. If `weld.core.domain.config.AuthConfig` requires those fields, pydantic validation raises during `Settings()` instantiation. Uvicorn then exits 3 because the ASGI factory `app.main:app` failed to import (`server.py:24` catches the `get_settings()` exception, but `uvicorn.run("app.main:app", ...)` re-loads the app, which calls `get_settings()` again unprotected — see Codex critique 8).
+2. **alembic migration fails.** The `api-migrate` exit on `py_svelte_min` could be from `alembic upgrade head` failing (e.g. postgres connection string, missing migration file, etc.). Worth checking the migrate container's logs first.
+
+### Verification step (post-next-nightly)
+After the next nightly run lands, pull the `compose-logs-py_svelte_min` (and `_py_vue_noauth`, `_py_vue_full`) artifacts, inspect `api-1`'s stderr, and open a follow-up PR. Suggested investigation commands:
+```bash
+gh run download <run-id> --name compose-logs-py_svelte_min
+ls compose-logs/
+cat compose-logs/api-1.log
+cat compose-logs/api-migrate-1.log
+```
 
 ---
 
 ## Sequencing & Verification
 
-**PR shape:** all four clusters land in a single PR titled `fix(matrix): unblock all 15 nightly red lanes (project_slug, runner exclusions, stripper gaps)`. Mirrors PR #53's "one CI-fix bundle" pattern; keeps the nightly red for exactly one merge cycle. Implementation order inside the PR can be A -> C -> D -> B (the smaller product-code changes first so they're easy to revert if a regression appears, then the test-runner change last).
-<!-- codex: Because B is test-runner-only and can hide real FR2 drift if too broad, land it after product fixes as stated but keep its exclusions narrowly reviewed. Cluster C may need re-triage before inclusion because it is not tied to the named smoke legs. -->
+**PR shape:** all four fix clusters (A, B, C, D) land in a single PR titled `fix(matrix): unblock 12 of 15 nightly red lanes (project_slug, FR2 exclusions, stripper completeness, stateless lifecycle pipeline)`. Cluster E stays open as a follow-up issue; the PR description references it explicitly so reviewers don't conflate "12 fixes" with "100% green".
+
+Implementation order inside the PR:
+1. **Cluster A** (`forge/variable_mapper.py` + `tests/test_variable_mapper.py`) — smallest change, blocks the most legs.
+2. **Cluster C** (`forge/strippers.py` + `tests/test_strippers.py`) — small, self-contained, but useful baseline before D since D extends the same module.
+3. **Cluster D** (`forge/generator.py` reorder + `forge/strippers.py` collector hook + functional test) — biggest behaviour change; do it after C so the diff is easier to read.
+4. **Cluster B** (`tests/_artefact_filters.py` NEW + `tests/test_golden_snapshots.py` + `tests/matrix/runner.py`) — test-runner only; land last because it can mask real product drift if the exclusion list is too broad.
 
 | Step | Cluster | File(s) touched | Verifies which scenarios |
 |---|---|---|---|
 | 1 | A | `forge/variable_mapper.py`, `tests/test_variable_mapper.py` | rust_svelte_min, rust_vue_full, multi_all_three, node_svelte_min, node_vue_full, multi_py_node (smoke) |
-| 2 | C | `forge/strippers.py`, `tests/test_strippers.py` | py_svelte_min, py_vue_noauth, py_vue_full (smoke) |
-| 3 | D | `forge/strippers.py`, `forge/generator.py`, `tests/test_strippers.py`, `tests/matrix/test_runner_diagnostics.py` | stateless_py (roundtrip) |
+| 2 | C | `forge/strippers.py`, `tests/test_strippers.py` | (no current red leg; latent stateless smoke unblocker) |
+| 3 | D | `forge/generator.py`, `forge/strippers.py`, `tests/test_strippers.py`, `tests/matrix/test_runner_diagnostics.py` | stateless_py (roundtrip), + PII-redaction security guard |
 | 4 | B | `tests/_artefact_filters.py` (NEW), `tests/test_golden_snapshots.py`, `tests/matrix/runner.py` | node_only_headless, node_svelte_min, py_svelte_min, rust_svelte_min, multi_py_node (roundtrip) |
-
-After all four land, expected nightly state: **all 23 matrix legs green**. Two follow-up items worth flagging but **out of scope**:
-<!-- codex: All-23-green depends on resolving the unverified Python smoke exit-code source; the current Cluster C explanation does not prove that. Add a log-based verification checkpoint before treating the count as closed. -->
-1. The `[FAIL] Linting (eslint)` warnings in many `post_generate.py` outputs are pre-existing template-quality noise, not CI failures (they don't propagate up to `runner.py`'s exit code). Worth a separate cleanup PR.
-2. The Cluster A fix may surface a secondary `keycloak_client_id` mismatch in compose fragments - verify the fragment rendering once Cluster A is applied.
 
 ### End-to-end verification
 
 ```bash
-# Unit tests for each cluster (fast - runs in seconds)
-uv run pytest tests/test_variable_mapper.py tests/test_strippers.py tests/matrix/test_runner_diagnostics.py -x
+# Step 1 — fast unit tests for each cluster
+uv run pytest tests/test_variable_mapper.py tests/test_strippers.py tests/test_golden_snapshots.py tests/matrix/test_runner_diagnostics.py -x
 
-# Run the full nightly grid manually against the worktree (slow - ~25 min total)
+# Step 2 — scenario-specific probes that cover each fix
+uv run python tests/matrix/runner.py --scenario stateless_py     --lane roundtrip   # Cluster D
+uv run python tests/matrix/runner.py --scenario py_svelte_min    --lane roundtrip   # Cluster B
+uv run python tests/matrix/runner.py --scenario multi_py_node    --lane roundtrip   # Cluster B + hyphenated slugs
+uv run python tests/matrix/runner.py --scenario node_svelte_min  --lane smoke       # Cluster A (node WORKDIR)
+uv run python tests/matrix/runner.py --scenario rust_svelte_min  --lane smoke       # Cluster A (rust paths)
+uv run python tests/matrix/runner.py --scenario multi_all_three  --lane smoke       # Cluster A (3 backends)
+
+# Step 3 — full matrix run (slow — ~25 min total) to catch regressions
 uv run python tests/matrix/runner.py --lane smoke
 uv run python tests/matrix/runner.py --lane roundtrip
-uv run python tests/matrix/runner.py --lane update     # regression check - already passing
+uv run python tests/matrix/runner.py --lane update    # regression check — should stay green
 
-# Trigger nightly on the draft PR by adding label `ci:matrix-smoke`
-gh pr edit <pr-number> --add-label ci:matrix-smoke
+# Step 4 — log-aware probe for the deferred Cluster E scenarios
+FORGE_MATRIX_LOG_DIR=$PWD/compose-logs \
+  uv run python tests/matrix/runner.py --scenario py_svelte_min --lane smoke
+ls compose-logs/   # confirms PR #53's diagnostic capture is working; logs go into the follow-up
 ```
 
-Each lane should report `OK` for every scenario; the `matrix-status-grid` artifact published by `publish-dashboard` should show no red cells.
-<!-- codex: Add scenario-specific probes: stateless_py --lane roundtrip, py_svelte_min/py_vue_noauth/py_vue_full --lane smoke with FORGE_MATRIX_LOG_DIR set, and at least one hyphenated Python backend compose-render check to cover project_slug path routing. -->
+Expected post-PR nightly state: **12 of 15 previously red legs green**; the remaining 3 (Cluster E) red with `compose-logs-*` artifacts populated. Out-of-scope items kept on the follow-up backlog:
+1. `[FAIL] Linting (eslint)` warnings in many `post_generate.py` outputs — pre-existing template noise, not a runner.py exit code.
+2. The Cluster A fix may surface a secondary `keycloak_client_id` mismatch in compose fragments (the Vue/Svelte builders fall back to `frontend_slug` when the per-frontend client id is unset). Verify after Cluster A renders correctly.
+3. Adding `stateless_py` to the smoke lane requires Dockerfile/alembic adjustments not in this PR.
 
 ## Critical Files Referenced
 
-- `forge/variable_mapper.py:34-63` (Cluster A)
-- `forge/templates/services/{rust,node,python}-service-template/template/Dockerfile.jinja` (Cluster A - already correctly templated)
-- `forge/config/_backend.py:179-198` (BackendConfig - already has `bc.name`)
-- `tests/matrix/runner.py:924-1007` (Cluster B)
-- `tests/test_golden_snapshots.py:85-126` (Cluster B - reference exclusion list to mirror)
-- `forge/strippers.py:335-353` `strip_python_database` (Cluster C - orchestrator to extend)
-- `forge/strippers.py:515-524` `_strip_loader_db_refs` (Cluster C2)
-- `forge/templates/services/python-service-template/template/src/app/cli/__init__.py` (Cluster C1 - file rewritten by new `_strip_cli_init`)
-- `forge/templates/services/python-service-template/template/src/app/core/config/loader.py:29` (Cluster C2 - field stripped by extended regex)
-- `forge/strippers.py:88-184` `_STATELESS_LIFECYCLE` + `_write_stateless_replacements` (Cluster D)
-- `tests/matrix/runner.py:736-753` FR1 check (Cluster D - alternative fix locus)
+- `forge/variable_mapper.py:34-63` (A — `backend_context()`)
+- `forge/templates/services/{rust,node}-service-template/template/Dockerfile.jinja` (A — paths consume `project_slug`)
+- `forge/templates/services/python-service-template/template/Dockerfile.jinja:8` (A — Python only references `project_slug` in a header comment, so it's not the cause of Python smoke failures)
+- `forge/config/_backend.py:179-198` (A — `BackendConfig` with `bc.name` as path slug)
+- `tests/matrix/runner.py:924-1007` (B — `_diff_project_trees_normalized` + `is_excluded`)
+- `tests/test_golden_snapshots.py:85-126` (B — reference exclusion list, NOT a verbatim mirror target)
+- `forge/strippers.py:335-353` `strip_python_database` (C/D — orchestrator)
+- `forge/strippers.py:515-524` `_strip_loader_db_refs` (C2)
+- `forge/templates/services/python-service-template/template/src/app/cli/__init__.py` (C1 — rewritten by new `_strip_cli_init`)
+- `forge/templates/services/python-service-template/template/src/app/core/config/loader.py:29` (C2 — field stripped by extended regex)
+- `forge/strippers.py:88-184` `_STATELESS_LIFECYCLE` + `_write_stateless_replacements` (D — clobbers fragment injection)
+- `forge/sync/provenance.py:111-146` `ProvenanceCollector.record(...)` (D — actual API surface)
+- `forge/features/middleware/templates/pii_redaction/python/inject.yaml` (D — injection that the stripper destroys today)
+- `forge/generator.py:147-181,348` (D — pipeline order to reverse)
+- `tests/matrix/runner.py:736-753` FR1 check (D — assertion being unblocked)
+- `tests/matrix/scenarios.yaml:30-83,297-317,389-407` (E and C scope — confirms which scenarios run strippers)
 
 <!-- codex-review-status: complete -->
