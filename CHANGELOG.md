@@ -129,6 +129,186 @@ Replaces the legacy Keycloak-direct auth stack with the platform-auth model. See
 4. **S2S calls go through `S2SClient`.** Handles client_credentials and RFC 8693 token-exchange automatically with cached tokens.
 5. **`SameSite=Lax` cookie + JSON-only mutation enforcement.** CSRF is mitigated at the API layer via `Content-Type: application/json` + CORS preflight. Audit non-JSON mutating endpoints before upgrading.
 
+### Architectural improvement plan — landed (1.2.0-draft)
+
+The full plan + per-initiative reviews live at
+`.claude/plans/role-expertise-you-melodic-pixel.md` and
+`~/.codex/runs/20260520T131313Z-119433.final.md`. Below is the per-RFC-002
+breaking / changed / added summary for callers who pin contracts.
+
+**Breaking — typed adapter contracts (Initiative #1)**
+
+- `forge/appliers/plan.py::_Injection.position` / `.zone` are now
+  `Literal` types instead of bare `str`. Construction with a literal
+  outside `("after", "before")` / `("generated", "user", "merge")`
+  raises `FragmentError` immediately. Production callers always
+  passed string literals; this only bites code that built `_Injection`
+  from untrusted dynamic strings.
+- `forge/extractors/pipeline.py::CandidatePatch.kind` / `.risk` are
+  now `Literal`s. New error codes
+  `CANDIDATE_PATCH_BAD_KIND` / `CANDIDATE_PATCH_BAD_RISK` fire on bad
+  values from bundle deserializers or plugin extractors.
+- `forge/sync/project_to_forge/apply_bundle/_dispatch.py` replaced
+  the if/elif `kind` ladder with a `dict[CandidateKind, ApplyHandler]`
+  registry. `ApplyHandler` is a `Protocol` with the typed keyword-only
+  signature; handlers registered with the wrong shape fail at type
+  check time instead of first call.
+
+**Breaking — plugin extractor retention (Initiative #1 sub-task 4)**
+
+- `ForgeAPI.add_extractor(kind, extractor, *, fragment=None)` now
+  retains the extractor instance on
+  `PluginRegistration.extractor_registrations` (was `del`'d before).
+  Global overrides (`fragment=None`) replace the built-in extractor
+  of matching kind at harvest time. Fragment-scoped overrides
+  (`fragment="name"`) are retained but explicitly NOT yet invoked —
+  the harvester emits a one-shot `plugin.extractor.scoped_skipped`
+  warning per process. Plugin authors targeting fragment scope should
+  treat their registration as a no-op until per-fragment pipeline
+  plumbing lands.
+
+**Breaking — Dart canvas prop typed shapes (Initiative #8)**
+
+- Generated Dart props for nested-object arrays now emit `final
+  class` types instead of `List<Map<String, dynamic>>`:
+  - `DynamicFormProps.fields: List<DynamicFormField>`
+  - `DataTableProps.columns: List<DataTableColumn>`
+  - `WorkflowDiagramProps.nodes: List<WorkflowDiagramNode>`
+  - `WorkflowDiagramProps.edges: List<WorkflowDiagramEdge>`
+  (`DataTableProps.rows` stays `List<Map<String, dynamic>>` per the
+  schema's `additionalProperties: true`.)
+- Hand-written prop interface mirrors deleted from the Vue, Svelte,
+  and Dart canvas package indexes; the generated module is now the
+  only source of truth. `TestGeneratedPropsOnly` greps the components
+  to prevent reintroduction. Wire format unchanged — only Dart code
+  that constructed these props directly needs updating. See
+  `packages/forge-canvas-dart/CHANGELOG.md` for the Dart-specific
+  bump under `1.0.0-alpha.6`.
+
+**Breaking — manifest schema v3 → v4 (Initiative #3)**
+
+- `forge.toml` schema bumps to v4 with a new `[forge.frontend]`
+  table carrying `framework` + `app_dir`. V3 manifests are read
+  through an inference fallback that scans on-disk `apps/` subdirs;
+  the migration is automatic on first re-stamp. Callers that pin the
+  manifest schema version must update.
+
+**Changed — agent event discriminator (Initiative #4)**
+
+- The seven AG-UI event variants emitted by `forge/codegen/event_union.py`
+  use a `{kind, payload}` wrapped envelope across Pydantic (Python),
+  Dart (`AgUiEvent.parse`), and TypeScript canvas-vue / canvas-svelte.
+  The forge-generated `agent_streaming` `/ws/agent` endpoint emits
+  its own simpler streaming protocol (`text_delta` / `tool_call_*` /
+  etc.) that is NOT in the AG-UI vocabulary — the canvas-vue /
+  canvas-svelte `AgUiClient` docstrings now clarify the scope to
+  prevent a confused integration. The backend `AgentEvent` Pydantic
+  model carries `kind` alongside the legacy `type` field for one
+  release (validator rejects mismatched values to surface the
+  transition explicitly).
+- Vue + Svelte canvas packages ship a new `AgUiClient` shim mirroring
+  the Dart shape, for callers integrating with AG-UI-compliant
+  external servers.
+
+**Changed — option-metadata compatibility (Initiative #7)**
+
+- `forge/options/_registry.py::Option` gains new optional fields:
+  `requires_database`, `requires_backend`, `allowed_backends`,
+  `allowed_frontends`, `incompatible_with`. `ProjectConfig.validate()`
+  now walks `OPTION_REGISTRY` checking these flags instead of
+  hardcoding feature-name dispatch. Error messages from
+  `_validate_database_mode` may have slightly different ordering
+  (sorted by registry path rather than insertion order); error codes
+  unchanged.
+- `forge/config/typed_config.py::TypedConfig.aliases` now reads from
+  the registry's `OPTION_ALIAS_INDEX` (single source of truth) —
+  previously duplicated.
+- Added `requires_database=True` on `agent.mode`, `rag.embeddings`,
+  `rag.reranker`, `async.rag_ingest_queue` to catch transitively
+  DB-backed combinations the old in-line validator missed.
+
+**Added — agent-grade reports (Initiative #5)**
+
+- New `forge.reports` module ships `GenerationReport`,
+  `UpdateReport`, `SyncPlanReport` dataclasses with versioned
+  envelopes (`_report_version: int`).
+- `forge --json` now emits a `GenerationReport` alongside the legacy
+  thin payload — effective config, option origins, fragment graph,
+  file inventory, provenance sidecar paths, warnings, skipped
+  toolchains, next-action hints, and `hidden_mutations` (e.g. the
+  silent `auth.mode` coercion at `cli/builder.py`).
+- `forge --update --json` emits an `UpdateReport` with per-file
+  disposition counts. `SyncPlanReport` ships as a tested scaffold —
+  no production caller wires it yet; that's a clean follow-up.
+- Plugin command failures now wrap via `_json_error()` when `--json`
+  is set (was empty-stdout-crash before).
+
+**Added — frontend-only sync (Initiative #3)**
+
+- `forge --update` and `forge --harvest` now work on projects with
+  `backend.mode=none`. The updater synthesizes a bridge backend for
+  the per-fragment apply loop and strips it before restamping.
+- The updater threads `frontend_framework` into update-time feature
+  application so `Fragment.target_frontends` gating is effective.
+
+**Added — plugin emitter execution (Initiative #2, scoped)**
+
+- `ForgeAPI.add_option` now routes through `register_option()`,
+  picking up alias-index updates and collision detection for free.
+- `ForgeAPI.add_emitter` retains the callable on
+  `PluginRegistration.emitter_registrations`.
+  `forge.codegen.pipeline.run_codegen` walks `LOADED_PLUGINS` after
+  the built-in passes and invokes each plugin's emitter with
+  `(project_root, config, resolved)`. Last-loaded wins on target
+  collision via a two-pass collect+invoke (the loser does NOT fire).
+  Failed emitters are isolated per plugin and logged via
+  `plugin.emitter.failed`.
+- Deferred from the full Initiative #2: plugin backends / frontends
+  end-to-end (template-dir dispatch, dependency dispatch for plugin
+  backends, CLI parser plugin-command discovery). The hooks are
+  registered; the consumers aren't yet wired.
+
+**Performance — cache hot paths (Initiative #6, scoped)**
+
+- Per-`forge --update` / `--harvest` invocation cache for
+  `forge.toml` keyed on `(path, mtime)`. A fragment with N merge
+  blocks now pays one tomlkit parse instead of N.
+- Process-global `mtime`-keyed cache for `*.schema.json` reads in
+  `forge.codegen.ui_protocol` + `forge.codegen.canvas_contract`
+  (transitively covers `canvas_props` + `event_union` loaders).
+  Returns deep-copies on hit so callers can't poison each other.
+- `forge.codegen.pipeline._write` skips disk writes when content
+  sha256 matches the existing file. Provenance is still recorded so
+  the re-stamp downstream stays consistent.
+- Deferred: parallel execution graph from `ResolvedPlan`; `ts-morph`
+  daemon refactor; LibCST parse-once in `python_ast`.
+
+**Tooling — tests toward behavior (Initiative #9)**
+
+- Lane D in `tests/matrix/runner.py` no longer reports `success` on
+  empty candidate lists. Scenarios that legitimately produce zero
+  candidates must opt-in via `expect_candidates: false` in
+  `scenarios.yaml`.
+- Lane D's live-tree mutate-restore replaced with a tempdir copy of
+  the `forge/` package plus a subprocess invocation. No more race
+  when CI runs Lane D in parallel.
+- New `tests/test_canvas_decoder_contract.py` feeds a shared JSON
+  corpus through the Pydantic backend serializer + Dart
+  `AgUiEvent.parse` + TS `getEventKind` shim and asserts byte-
+  identical decoding.
+- Matrix runner now emits `::warning::` GitHub Actions annotations
+  per skipped scenario, naming the missing dependency. Silent
+  docker / npm / cargo skips no longer masquerade as green.
+- Fuzz strategies expanded to LIST / OBJECT / multi-backend /
+  frontend-swap.
+- E2E skip rationales refreshed for Svelte + Flutter chat with the
+  blocker docs linked.
+
+**SDK note** — `forge.api.SDK_VERSION` remains `"1.1"`; the API
+surface gained provisional extension points (`add_extractor`,
+`add_emitter`) but no breaking changes to existing stable methods.
+`docs/SDK_CHANGELOG.md` carries the per-method notes.
+
 ---
 
 ## [Unreleased — 1.1 wave]
