@@ -52,4 +52,32 @@ await for (final event in client.runAgent(
 - `1.0.0-alpha.4` — real component implementations (`CodeViewer`, `DataTable`, `DynamicForm`, `Report`, `WorkflowDiagram`)
 - `1.0.0` — GA
 
+## Prop-shape contract
+
+The classes under `lib/src/generated/props.dart` are the **single
+source of truth** for canvas-component prop shapes. They are emitted
+from `forge/templates/_shared/canvas-components/*.props.schema.json`
+by `python -m forge.codegen.canvas_props` and ship sealed inner
+classes for nested-object array items
+(`DynamicFormProps.fields` is `List<DynamicFormField>`,
+`DataTableProps.columns` is `List<DataTableColumn>`,
+`WorkflowDiagramProps.nodes/edges` are `List<WorkflowDiagramNode>` /
+`List<WorkflowDiagramEdge>`).
+
+Rules:
+
+- The package's public surface (`forge_canvas.dart`) re-exports only
+  the generated classes. The components under `lib/src/components/`
+  import the generated sealed classes directly and no longer carry
+  private mirror classes (the old `_Column`, `_Field`, `_WfNode`,
+  `_WfEdge` are gone).
+- Hand-written prop mirror classes inside component files are
+  **banned**: the codegen pipeline tests grep for them and will fail
+  CI.
+- `DataTableProps.rows` keeps its `List<Map<String, dynamic>>` typing
+  on purpose — its schema sets `additionalProperties: true` and
+  there is no fixed shape to type against.
+- To extend a prop schema, edit the JSON schema and re-run the
+  codegen — components inherit the new typed shape automatically.
+
 See [forge repository](https://github.com/forge-project/forge) for the broader 1.0 roadmap.
