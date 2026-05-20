@@ -423,7 +423,13 @@ def _apply_project_scope(
 
     try:
         with phase_timer(_logger, "generate.codegen"):
-            run_codegen(config, project_root, collector=collector)
+            # ``resolved=plan`` is forwarded to plugin emitters via
+            # ``run_codegen``'s new positional param (Init #2 sub-scope:
+            # plugin emitter retention + invocation). Without it, plugin
+            # emitters get None and can't see the resolved capability
+            # graph during a real ``forge new`` — only synthetic test
+            # paths exercised the threading otherwise.
+            run_codegen(config, project_root, collector=collector, resolved=plan)
     except Exception as exc:  # noqa: BLE001
         if not quiet:
             print(f"  [warn] codegen pipeline emitted an error: {exc}")
