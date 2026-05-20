@@ -1,31 +1,42 @@
 // AG-UI WebSocket client (Vue + Svelte share the same shape).
 //
-// Mirrors the Dart `AgUiClient` in `forge-canvas-dart` so a generated
-// frontend that swaps frameworks doesn't have to learn a new event
-// pipeline. The shape is intentionally tiny: open a WebSocket, send a
-// payload per turn, decode each inbound JSON frame via the caller's
-// parser, emit it through `onEvent`. No reconnect, no resume, no
-// per-app state — wrap or extend if your project needs more.
+// Mirrors the *decoding contract* of the Dart `AgUiClient` in
+// `forge-canvas-dart`: a caller-supplied parser turns each inbound
+// JSON frame into a typed event, fired through `onEvent`. The
+// transport differs by design — Dart is SSE/POST (the deepagent
+// `runAgent` contract); Vue + Svelte are WebSocket (the
+// `agent_streaming` `/ws/agent` endpoint). The decode-and-callback
+// shape is the unified surface; the wire underneath follows each
+// frontend's existing template.
 //
 // Initiative #4: events flow with `kind` as the canonical discriminator
-// (the backend emits both `type` and `kind` for one release, so
-// existing parsers pinned to `type` keep working).
+// in a wrapped envelope (`{kind, payload}`). The backend Pydantic
+// union and the Dart `AgUiEvent.parse` factory both produce/consume
+// that shape. TS consumers narrow on `event.kind` and read fields
+// off `event.payload`.
 //
 // Usage with the generated discriminated union:
 //
 //     import { AgUiClient } from '@forge/canvas-svelte'
 //     import type { AgUiEvent } from './generated/events'
 //
-//     function parse(data: Record<string, unknown>): AgUiEvent | null {
-//       const kind = data.kind
+//     function parse(frame: Record<string, unknown>): AgUiEvent | null {
+//       const kind = frame.kind
+//       const payload = frame.payload
 //       if (typeof kind !== 'string') return null
-//       return data as AgUiEvent
+//       if (payload === null || typeof payload !== 'object') return null
+//       return frame as AgUiEvent  // wire is already {kind, payload}
 //     }
 //
 //     const client = new AgUiClient<AgUiEvent>({
 //       url: `ws://${host}/api/v1/ws/agent`,
 //       parser: parse,
-//       onEvent: (ev) => store.push(ev),
+//       onEvent: (ev) => {
+//         switch (ev.kind) {
+//           case 'agent-state':   /* ev.payload: AgentState */ break
+//           // ...assertUnreachable(ev) at the default to enforce coverage.
+//         }
+//       },
 //     })
 //     client.connect()
 //     client.send({ content: 'hi' })

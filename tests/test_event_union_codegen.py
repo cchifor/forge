@@ -118,16 +118,41 @@ class TestEmitTypescript:
             )
 
     def test_every_schema_emits_with_kind_alias(self) -> None:
+        """Initiative #4 wraps each variant in a ``{kind, payload}`` envelope
+        — same shape as the Pydantic discriminated-union backend and the
+        Dart parse factory consume. Previously the TS shape was a flat
+        intersection ``T & {kind: ...}``, which silently disagreed with
+        the wire format Pydantic emits.
+        """
         out = emit_typescript(load_event_schemas())
         for title, kind in _EXPECTED_KINDS.items():
-            expected = f'export type {title}WithKind = {title} & {{ kind: "{kind}" }};'
-            assert expected in out, f"missing intersection alias: {expected}"
+            expected = (
+                f'export type {title}WithKind = '
+                f'{{ kind: "{kind}"; payload: {title} }};'
+            )
+            assert expected in out, f"missing wrapped envelope alias: {expected}"
 
     def test_union_type_lists_every_variant(self) -> None:
         out = emit_typescript(load_event_schemas())
         assert "export type AgUiEvent =" in out
         for title in _EXPECTED_TITLES:
             assert f"| {title}WithKind" in out, f"variant {title}WithKind missing from union"
+
+    def test_envelope_is_wrapped_not_flat(self) -> None:
+        """Regression pin for Initiative #4 — the union must be the
+        wrapped ``{kind, payload}`` envelope, not a flat intersection.
+        A drift back to ``T & { kind: ... }`` would silently break
+        cross-runtime parsing (Pydantic emits wrapped; Dart parses
+        wrapped; TS would lie about the shape).
+        """
+        out = emit_typescript(load_event_schemas())
+        # The intersection-style alias must not return.
+        for title, kind in _EXPECTED_KINDS.items():
+            flat = f'export type {title}WithKind = {title} & {{ kind: "{kind}" }};'
+            assert flat not in out, (
+                f"flat-shape alias resurfaced for {title} — Initiative #4 "
+                "settled on the wrapped envelope to match Pydantic + Dart."
+            )
 
     def test_kind_literal_union_lists_every_kind(self) -> None:
         out = emit_typescript(load_event_schemas())
@@ -200,13 +225,34 @@ class TestEmitDart:
         `fromJson`. Missing a branch silently drops events of that
         kind on the floor — exactly the failure mode we're guarding
         against.
+
+        The constructor reads from the nested ``payload`` map (the
+        wrapped wire shape Pydantic emits), not the outer envelope.
+        That alignment is the load-bearing fix of Initiative #4 —
+        see :func:`forge.codegen.event_union.emit_dart`.
         """
         out = emit_dart(load_event_schemas())
         for title, kind in _EXPECTED_KINDS.items():
             case_line = f"case '{kind}':"
-            ctor_line = f"return {title}Event({title}.fromJson(json));"
+            # ``payload`` is the local variable bound from json['payload'];
+            # Initiative #4 fix — previously this was ``json`` directly,
+            # which silently broke any frame Pydantic actually emitted.
+            ctor_line = f"return {title}Event({title}.fromJson(payload));"
             assert case_line in out, f"parse factory missing case for {kind!r}"
             assert ctor_line in out, f"parse factory missing constructor for {title}Event"
+
+    def test_parse_factory_reads_wrapped_payload(self) -> None:
+        """Regression pin for Initiative #4 — the factory must read
+        ``json['payload']`` and pass the inner map to ``fromJson``.
+        Pre-Initiative-#4 it called ``Title.fromJson(json)`` on the
+        outer envelope, which would have failed at runtime against
+        every Pydantic-emitted frame (the variant fields live nested
+        under ``payload``, not at the top level).
+        """
+        out = emit_dart(load_event_schemas())
+        assert "final rawPayload = json['payload'];" in out
+        assert "if (rawPayload is! Map) return null;" in out
+        assert "final payload = Map<String, dynamic>.from(rawPayload);" in out
 
     def test_parse_factory_returns_null_on_unknown_kind(self) -> None:
         out = emit_dart(load_event_schemas())
