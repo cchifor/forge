@@ -172,6 +172,34 @@ class TestV3InferenceFallback:
         # recognisable marker matched, so framework collapses to "".
         assert data.frontend.framework == ""
 
+    def test_apps_frontend_preferred_over_sibling(self, tmp_path: Path) -> None:
+        """If both ``apps/admin/`` (React-ish, unrecognised) and
+        ``apps/frontend/`` (Vue) exist, inference picks ``apps/frontend/``.
+
+        Pre-Initiative-#3 refinement: ``_scan_apps_for_frontend`` only
+        returned the FIRST sub-directory in lexicographic order — so
+        ``apps/admin/`` would shadow ``apps/frontend/`` and the
+        framework would fall through to "" instead of "vue". The
+        refined inference walks the conventional slot first, then
+        siblings.
+        """
+        _write_v3_manifest(tmp_path / "forge.toml", with_frontend_template=False)
+        admin = tmp_path / "apps" / "admin"
+        admin.mkdir(parents=True)
+        (admin / "package.json").write_text(
+            '{"name": "admin", "dependencies": {"react": "^18.0.0"}}\n',
+            encoding="utf-8",
+        )
+        fe = tmp_path / "apps" / "frontend"
+        fe.mkdir(parents=True)
+        (fe / "package.json").write_text(
+            '{"name": "fe", "dependencies": {"vue": "^3.5.0"}}\n',
+            encoding="utf-8",
+        )
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert data.frontend.framework == "vue"
+        assert data.frontend.app_dir == "apps/frontend"
+
 
 class TestV4MissingTableTriggersInference:
     """v4 manifests where the writer omitted the table fall back to inference.
