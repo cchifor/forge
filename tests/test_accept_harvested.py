@@ -26,7 +26,11 @@ import pytest
 
 from forge.cli.commands.accept_harvested import _run_accept_harvested
 from forge.fragments import MARKER_PREFIX
-from forge.sync.manifest import read_forge_toml, write_forge_toml
+from forge.sync.manifest import (
+    CURRENT_SCHEMA_VERSION,
+    read_forge_toml,
+    write_forge_toml,
+)
 from forge.sync.merge import MergeBlockCollector, sha256_of_text
 from forge.sync.project_to_forge.accept import (
     AcceptHarvestedEntry,
@@ -1160,10 +1164,12 @@ class TestAcceptHarvestedManifestSchema:
         + template_versions + every other current-schema field must
         survive the re-stamp.
 
-        Note (WS2): schema_version is bumped to 3 by the default
-        ``write_forge_toml`` call below — the assertion below pins it
-        to 3 to match. The semantic check is "no schema downgrade
-        across a harvest-accept round trip", not "stay at 2".
+        Note (Initiative #3): schema_version is bumped to 4 by the
+        default ``write_forge_toml`` call below — the assertion below
+        pins it to ``CURRENT_SCHEMA_VERSION`` so a future schema bump
+        only requires updating the constant. The semantic check is
+        "no schema downgrade across a harvest-accept round trip", not
+        "stay at any particular number".
         """
         fragment_name = "test_schema_v2"
         meta = _scaffold_project_with_block(tmp_path, fragment_name=fragment_name)
@@ -1213,10 +1219,10 @@ class TestAcceptHarvestedManifestSchema:
             _unregister_fragment(fragment_name)
         assert report.restamped == 1
         data = read_forge_toml(tmp_path / "forge.toml")
-        # WS2 bumped CURRENT_SCHEMA_VERSION to 3. The re-stamp picks
-        # up the new default — the test's intent is "no schema
+        # Initiative #3 bumped CURRENT_SCHEMA_VERSION to 4. The re-stamp
+        # picks up the new default — the test's intent is "no schema
         # downgrade across the round trip", which still holds.
-        assert data.schema_version == 3
+        assert data.schema_version == CURRENT_SCHEMA_VERSION
         assert data.template_versions == {"python": "0.6.1"}
         assert data.options == {"some.path": "value"}
         # fragment_version bumped from the registry/forge.__version__
