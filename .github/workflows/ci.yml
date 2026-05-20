@@ -95,8 +95,10 @@ jobs:
   # Epic S (1.1.0-alpha.1) — coverage gate. Two layers:
   #   1. `pyproject.toml`'s `fail_under = 30` catches project-wide regressions.
   #   2. `tests/test_coverage_gates.py` enforces per-module floors for the
-  #      critical path (resolver, feature_injector, merge, provenance, AST
-  #      injectors, updater). See docs/coverage-policy.md.
+  #      critical path (resolver, appliers/*, sync/{merge,provenance},
+  #      AST injectors, sync/forge_to_project/updater/* — post-Epic-A
+  #      decomposition of the legacy `feature_injector` + `updater` modules).
+  #      See docs/coverage-policy.md.
   # Runs on ubuntu × 3.13 only — this is a gate, not a matrix, and the
   # test_coverage_gates tests parametrize over platform-agnostic path keys.
   coverage:
