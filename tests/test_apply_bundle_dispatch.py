@@ -14,20 +14,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.extractors.pipeline import CANDIDATE_KINDS, CandidatePatch
+from forge.extractors.pipeline import CANDIDATE_KINDS, CandidateKind, CandidatePatch
+from forge.sync.project_to_forge.apply_bundle import apply_bundle_to_fragments
 from forge.sync.project_to_forge.apply_bundle._dispatch import (
     _build_apply_handlers,
 )
-from forge.sync.project_to_forge.apply_bundle import apply_bundle_to_fragments
 from forge.sync.project_to_forge.harvester import HarvestBundle
-
 
 # ``new-file`` is intentionally absent from the apply_bundle registry —
 # that kind is owned by the accept-baseline path
 # (forge.sync.project_to_forge.accept), not by apply_bundle. Routing a
 # new-file candidate through apply_bundle is a contract bug worth
-# surfacing in the report.
-_ACCEPT_OWNED_KINDS: frozenset[str] = frozenset({"new-file"})
+# surfacing in the report. Typed as ``frozenset[CandidateKind]`` so a
+# typo in this set (e.g. ``"new_file"``) trips ty rather than silently
+# loosening the coverage assertion below.
+_ACCEPT_OWNED_KINDS: frozenset[CandidateKind] = frozenset({"new-file"})
 
 
 class TestApplyHandlerRegistryCoverage:
