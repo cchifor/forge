@@ -33,4 +33,24 @@ registry.register({
 - `1.0.0-alpha.4` — extracted Svelte components with typed props
 - `1.0.0` — GA
 
+## Prop-shape contract
+
+The interfaces under `src/generated/props.ts` are the **single source
+of truth** for canvas-component prop shapes. They are emitted from
+`forge/templates/_shared/canvas-components/*.props.schema.json` by
+`python -m forge.codegen.canvas_props`.
+
+Rules:
+
+- The package's public surface re-exports only the generated
+  interfaces (`CodeViewerProps`, `DataTableProps`, `DynamicFormProps`,
+  `ReportProps`, `WorkflowDiagramProps`).
+- The per-component `<script>` blocks consume the generated
+  interfaces directly (e.g.
+  `let props: DynamicFormProps = $props()`). Hand-written prop
+  interface re-declarations inside component files are **banned**:
+  the codegen pipeline tests grep for them and will fail CI.
+- To extend a prop schema, edit the JSON schema and re-run the
+  codegen — components inherit the new shape automatically.
+
 See the [forge repository](https://github.com/forge-project/forge) for the 1.0 roadmap.

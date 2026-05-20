@@ -16,9 +16,15 @@ export type { AgUiClientOptions } from './ag_ui_client'
 
 // Canvas component props — generated from
 // forge/templates/_shared/canvas-components/*.props.schema.json.
-// The per-component `<script>` blocks still declare local Props
-// interfaces; deletion in favour of these is deferred to Theme 1C
-// once the codegen pipeline gates drift in CI.
+//
+// Contract (Initiative #8): the generated module is the SINGLE source
+// of truth for canvas-component prop shapes. The per-component
+// `<script>` blocks consume the generated interfaces directly (e.g.
+// `let props: DynamicFormProps = $props()`); hand-written prop
+// interface re-declarations inside component files are banned by
+// convention. To extend a prop schema, edit the JSON schema and run
+// `python -m forge.codegen.canvas_props` — the components inherit the
+// new shape automatically.
 export type {
   CodeViewerProps,
   DataTableProps,

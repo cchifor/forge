@@ -5,20 +5,15 @@
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { DataTableProps } from '../generated/props'
 
-interface Column {
-  key: string
-  label: string
-  sortable?: boolean
-}
+// `DataTableProps.columns` is generated; extract the element type for
+// the per-column sort/toggle helper below. The generated interface is
+// the source of truth — hand-written mirror interfaces for
+// canvas-component props are banned by convention.
+type Column = DataTableProps['columns'][number]
 
-interface Props {
-  columns: Column[]
-  rows: Record<string, unknown>[]
-  pageSize?: number
-}
-
-const props = defineProps<Props>()
+const props = defineProps<DataTableProps>()
 
 const sortKey = ref<string | null>(null)
 const sortDir = ref<'asc' | 'desc'>('asc')
