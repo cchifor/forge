@@ -332,3 +332,85 @@ class TestCliLint:
         assert rc == 2
         out = capsys.readouterr().out
         assert "failed to parse" in out
+
+
+# ---------------------------------------------------------------------------
+# Canvas-package symmetry — the AG-UI client shims (Initiative #4)
+# ---------------------------------------------------------------------------
+
+
+class TestAgUiClientShipsAcrossPackages:
+    """The AG-UI WebSocket client must be present and symmetric in every
+    canvas package — Vue, Svelte, Dart.
+
+    Initiative #4 ships TS shims for Vue + Svelte that mirror the
+    existing Dart `AgUiClient`. The shims are intentionally tiny (a
+    WebSocket wrapper that decodes frames and calls back) and must stay
+    in sync: a future fix landing in one but not the other breaks the
+    polyglot contract the same way the lint files would.
+    """
+
+    _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+    def test_vue_shim_is_present(self) -> None:
+        target = self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "ag_ui_client.ts"
+        assert target.is_file(), f"missing AgUiClient shim at {target}"
+
+    def test_svelte_shim_is_present(self) -> None:
+        target = self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "ag_ui_client.ts"
+        assert target.is_file(), f"missing AgUiClient shim at {target}"
+
+    def test_dart_client_still_present(self) -> None:
+        # Initiative #4 must not regress the existing Dart client —
+        # it's the canonical shape the TS shims mirror.
+        target = (
+            self._REPO_ROOT
+            / "packages"
+            / "forge-canvas-dart"
+            / "lib"
+            / "src"
+            / "ag_ui_client.dart"
+        )
+        assert target.is_file()
+        body = target.read_text(encoding="utf-8")
+        # The Dart client expects `AgUiEvent.parse` (see line 24 of the file).
+        # If we ever drop the import expectation, the generated parser
+        # factory becomes load-bearing dead code.
+        assert "parser: AgUiEvent.parse" in body
+
+    def test_vue_and_svelte_shims_are_byte_equivalent_modulo_package_name(self) -> None:
+        """The two TS shims must differ by exactly one line — the example
+        import comment naming the package — to mirror the Dart/Vue/Svelte
+        lint parity invariant. Drift in any other line means one package
+        has a behaviour the other lacks.
+        """
+        vue = (
+            self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "ag_ui_client.ts"
+        ).read_text(encoding="utf-8").splitlines()
+        sv = (
+            self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "ag_ui_client.ts"
+        ).read_text(encoding="utf-8").splitlines()
+        diff = [(i, a, b) for i, (a, b) in enumerate(zip(vue, sv, strict=True)) if a != b]
+        assert len(diff) == 1, (
+            f"Vue/Svelte AgUiClient shims diverged on {len(diff)} lines — "
+            "must differ by exactly the package-name import comment."
+        )
+        i, a, b = diff[0]
+        assert "@forge/canvas-vue" in a and "@forge/canvas-svelte" in b, (
+            f"line {i}: only the package-name comment may differ "
+            f"(got vue={a!r}, svelte={b!r})"
+        )
+
+    def test_vue_shim_is_re_exported(self) -> None:
+        body = (
+            self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "index.ts"
+        ).read_text(encoding="utf-8")
+        assert "export { AgUiClient }" in body
+        assert "from './ag_ui_client'" in body
+
+    def test_svelte_shim_is_re_exported(self) -> None:
+        body = (
+            self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "index.ts"
+        ).read_text(encoding="utf-8")
+        assert "export { AgUiClient }" in body
+        assert "from './ag_ui_client'" in body

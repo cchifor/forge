@@ -79,14 +79,16 @@ export interface WorkspaceActivity {
 }
 
 // Synthesised `kind` discriminator: each schema's PascalCase title kebab-cased.
-// Variant-with-kind aliases — intersection with the kind literal:
-export type AgUiPayloadWithKind = AgUiPayload & { kind: "ag-ui-payload" };
-export type AgentStateWithKind = AgentState & { kind: "agent-state" };
-export type HitlResponseWithKind = HitlResponse & { kind: "hitl-response" };
-export type McpExtPayloadWithKind = McpExtPayload & { kind: "mcp-ext-payload" };
-export type ToolCallInfoWithKind = ToolCallInfo & { kind: "tool-call-info" };
-export type UserPromptPayloadWithKind = UserPromptPayload & { kind: "user-prompt-payload" };
-export type WorkspaceActivityWithKind = WorkspaceActivity & { kind: "workspace-activity" };
+// Wire shape mirrors Pydantic's discriminated-union envelope:
+//   { kind: '<slug>', payload: <variant> }
+// Variant-with-kind aliases — the envelope wrapping each payload:
+export type AgUiPayloadWithKind = { kind: "ag-ui-payload"; payload: AgUiPayload };
+export type AgentStateWithKind = { kind: "agent-state"; payload: AgentState };
+export type HitlResponseWithKind = { kind: "hitl-response"; payload: HitlResponse };
+export type McpExtPayloadWithKind = { kind: "mcp-ext-payload"; payload: McpExtPayload };
+export type ToolCallInfoWithKind = { kind: "tool-call-info"; payload: ToolCallInfo };
+export type UserPromptPayloadWithKind = { kind: "user-prompt-payload"; payload: UserPromptPayload };
+export type WorkspaceActivityWithKind = { kind: "workspace-activity"; payload: WorkspaceActivity };
 
 /** The exhaustive AG-UI event union. */
 export type AgUiEvent =
