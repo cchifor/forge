@@ -4,7 +4,7 @@
 // Regenerate via `python -m forge.codegen.canvas_props`.
 
 /// Props for the CodeViewer canvas component — renders syntax-highlighted code with optional filename header.
-class CodeViewerProps {
+final class CodeViewerProps {
   final String code;
   final String language;
   final String? filename;
@@ -32,7 +32,7 @@ class CodeViewerProps {
   };
 }
 
-class DataTableColumn {
+final class DataTableColumn {
   final String key;
   final String label;
   final bool? sortable;
@@ -57,7 +57,7 @@ class DataTableColumn {
 }
 
 /// Props for the DataTable canvas component — renders tabular data with optional sorting and pagination.
-class DataTableProps {
+final class DataTableProps {
   final List<DataTableColumn> columns;
   final List<Map<String, dynamic>> rows;
   final int? pageSize;
@@ -69,7 +69,7 @@ class DataTableProps {
   });
 
   factory DataTableProps.fromJson(Map<String, dynamic> json) => DataTableProps(
-      columns: (json['columns'] as List).whereType<Map>().map((e) => DataTableColumn.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
+      columns: (json['columns'] as List).map((e) => DataTableColumn.fromJson(Map<String, dynamic>.from(e as Map))).toList(growable: false),
       rows: (json['rows'] as List).cast<Map<String, dynamic>>(),
       pageSize: json['pageSize'] == null ? null : (json['pageSize'] as int),
   );
@@ -81,7 +81,7 @@ class DataTableProps {
   };
 }
 
-class DynamicFormField {
+final class DynamicFormField {
   final String name;
   final String label;
   final String type;
@@ -122,7 +122,7 @@ class DynamicFormField {
 }
 
 /// Props for the DynamicForm canvas component — renders a form declared by a JSON Schema-like field list.
-class DynamicFormProps {
+final class DynamicFormProps {
   final String? title;
   final List<DynamicFormField> fields;
   final String? submitLabel;
@@ -137,7 +137,7 @@ class DynamicFormProps {
 
   factory DynamicFormProps.fromJson(Map<String, dynamic> json) => DynamicFormProps(
       title: json['title'] == null ? null : (json['title'] as String),
-      fields: (json['fields'] as List).whereType<Map>().map((e) => DynamicFormField.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
+      fields: (json['fields'] as List).map((e) => DynamicFormField.fromJson(Map<String, dynamic>.from(e as Map))).toList(growable: false),
       submitLabel: json['submitLabel'] == null ? null : (json['submitLabel'] as String),
       cancelLabel: json['cancelLabel'] == null ? null : (json['cancelLabel'] as String),
   );
@@ -151,7 +151,7 @@ class DynamicFormProps {
 }
 
 /// Props for the Report canvas component — renders a Markdown document with optional title.
-class ReportProps {
+final class ReportProps {
   final String? title;
   final String markdown;
 
@@ -171,7 +171,7 @@ class ReportProps {
   };
 }
 
-class WorkflowDiagramNode {
+final class WorkflowDiagramNode {
   final String id;
   final String label;
   final String status;
@@ -195,7 +195,7 @@ class WorkflowDiagramNode {
   };
 }
 
-class WorkflowDiagramEdge {
+final class WorkflowDiagramEdge {
   final String from;
   final String to;
 
@@ -216,7 +216,7 @@ class WorkflowDiagramEdge {
 }
 
 /// Props for the WorkflowDiagram canvas component — renders a DAG of steps with status indicators.
-class WorkflowDiagramProps {
+final class WorkflowDiagramProps {
   final List<WorkflowDiagramNode> nodes;
   final List<WorkflowDiagramEdge> edges;
 
@@ -226,8 +226,8 @@ class WorkflowDiagramProps {
   });
 
   factory WorkflowDiagramProps.fromJson(Map<String, dynamic> json) => WorkflowDiagramProps(
-      nodes: (json['nodes'] as List).whereType<Map>().map((e) => WorkflowDiagramNode.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
-      edges: (json['edges'] as List).whereType<Map>().map((e) => WorkflowDiagramEdge.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
+      nodes: (json['nodes'] as List).map((e) => WorkflowDiagramNode.fromJson(Map<String, dynamic>.from(e as Map))).toList(growable: false),
+      edges: (json['edges'] as List).map((e) => WorkflowDiagramEdge.fromJson(Map<String, dynamic>.from(e as Map))).toList(growable: false),
   );
 
   Map<String, dynamic> toJson() => {

@@ -277,10 +277,18 @@ def _dart_from_json_for_canvas(
         elif ty == "array":
             items = prop.get("items") or {"type": "string"}
             if nested_class and _is_typed_object_array(prop):
+                # Strict cast: every list element MUST be a Map. A
+                # non-Map element raises a Dart `TypeError` instead
+                # of being silently dropped — for known schema
+                # shapes the right failure mode is loud, not lossy.
+                # The `Map<String, dynamic>.from(...)` round-trip
+                # keeps Dart's runtime map (often `_Map<String,
+                # Object?>` from the underlying JSON decoder) in the
+                # right concrete shape for the inner `fromJson`.
                 cast = (
                     f"({raw} as List)"
-                    ".whereType<Map>()"
-                    f".map((e) => {nested_class}.fromJson(Map<String, dynamic>.from(e)))"
+                    f".map((e) => {nested_class}.fromJson("
+                    "Map<String, dynamic>.from(e as Map)))"
                     ".toList(growable: false)"
                 )
             else:
@@ -385,7 +393,12 @@ def _dart_for_canvas_object(
             lines.append("")
     if description:
         lines.append(f"/// {description}")
-    lines.append(f"class {title} {{")
+    # ``final class`` (Dart 3) — closed for subclassing so a downstream
+    # app cannot accidentally invalidate the schema-derived shape by
+    # extending it. Matches the docstring promise of "sealed classes":
+    # `final` is the right call here over `sealed` because these are
+    # leaf data classes, not a variant hierarchy.
+    lines.append(f"final class {title} {{")
     lines.extend(field_decls)
     lines.append("")
     lines.append(f"  const {title}({{")
