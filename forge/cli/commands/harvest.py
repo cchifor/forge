@@ -108,15 +108,24 @@ def _run_harvest(args: argparse.Namespace) -> int:
         prompt_callback = prompt_harvest_candidate
 
     try:
-        bundle = harvest_project(
-            project_root,
-            out_dir=out_dir,
-            scope=scope,
-            include=include,
-            interactive=interactive,
-            prompt_callback=prompt_callback,
-            quiet=quiet,
-        )
+        # Initiative #6 (caching): open the per-invocation forge.toml
+        # cache so any consumer that walks merge baselines parses the
+        # manifest exactly once for the whole harvest run. The harvest
+        # orchestrator reads forge.toml at startup and the extractor
+        # injection module reads it once per fragment; with the cache
+        # active both flow through one tomlkit parse.
+        from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
+
+        with manifest_cache_scope():
+            bundle = harvest_project(
+                project_root,
+                out_dir=out_dir,
+                scope=scope,
+                include=include,
+                interactive=interactive,
+                prompt_callback=prompt_callback,
+                quiet=quiet,
+            )
     except HarvestAborted as e:
         # Operator chose ``quit`` mid-review. No bundle is written; we
         # emit a short human note to stderr (or a JSON envelope in

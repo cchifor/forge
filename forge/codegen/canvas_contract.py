@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from forge.codegen._schema_cache import load_json_schema
 from forge.errors import GeneratorError
 
 
@@ -37,11 +38,16 @@ def load_components(root: Path | None = None) -> list[CanvasComponentSpec]:
 
     The canvas component name is derived from the schema's ``title``
     (stripping the ``Props`` suffix): ``DataTableProps`` → ``DataTable``.
+
+    Initiative #6 (caching): each schema payload is loaded via
+    :func:`forge.codegen._schema_cache.load_json_schema` so repeat
+    invocations during a single codegen pass parse each file once,
+    not once per call site.
     """
     root = root or DEFAULT_SCHEMA_ROOT
     components: list[CanvasComponentSpec] = []
     for path in sorted(root.glob("*.props.schema.json")):
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = load_json_schema(path)
         title = raw.get("title") or ""
         if not title.endswith("Props"):
             raise GeneratorError(
