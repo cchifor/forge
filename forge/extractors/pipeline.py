@@ -109,9 +109,19 @@ class CandidatePatch:
             * ``"deps"`` / ``"env"`` — the matching pair extractors
               detect drift between the fragment's declared deps/env
               and the project's manifest.
-            * ``"new-file"`` — emitted when the user added a file that
-              ought to ship with the fragment (covered by the
-              :class:`FileExtractor` discovery path).
+            * ``"new-file"`` — reserved for bundles authored against
+              the accept-baseline path
+              (:mod:`forge.sync.project_to_forge.accept`), which works
+              over raw manifest entries that may carry this kind. No
+              built-in extractor emits ``new-file`` as a
+              :class:`CandidatePatch` today; the accept handler
+              constructs :class:`AcceptHarvestedEntry` directly. Kept
+              in :data:`CANDIDATE_KINDS` so a bundle whose JSON
+              survived a round-trip still deserializes cleanly through
+              :class:`CandidatePatch`, and so apply-back dispatch can
+              surface a structured "errored" entry when an agent
+              forwards one of these to ``apply_bundle_to_fragments``
+              instead of the accept path.
             * ``"cross-lang-suggest"`` — synthetic candidate emitted by
               the harvester's cross-language parity pass (RFC-006). For
               each ``"block"`` candidate harvested from a tier-1

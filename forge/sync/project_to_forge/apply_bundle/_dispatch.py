@@ -63,10 +63,9 @@ exercise the full forward→reverse→apply→forward cycle in tests.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from forge.extractors.pipeline import CandidateKind, CandidatePatch
 
@@ -290,7 +289,21 @@ def apply_bundle_to_fragments(
 # through. Plugin extractors that introduce their own kinds will plug in
 # here in sub-task 4.
 
-ApplyHandler = Callable[..., ApplyBundleEntry]
+class ApplyHandler(Protocol):
+    """Callable contract every kind-handler in :func:`_build_apply_handlers`
+    must satisfy. Spells out the keyword-only ``forge_repo`` / ``quiet``
+    parameters that ``Callable[..., ApplyBundleEntry]`` flattened away,
+    so ty catches a handler with the wrong signature at registration
+    time instead of at first call.
+    """
+
+    def __call__(
+        self,
+        cand: CandidatePatch,
+        *,
+        forge_repo: Path,
+        quiet: bool,
+    ) -> ApplyBundleEntry: ...
 
 
 def _apply_cross_lang_suggest_candidate(
