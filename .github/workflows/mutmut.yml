@@ -101,18 +101,25 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             mode=pr
             # PR mode: only mutate critical-path files the PR touched.
-            # No critical-path changes → nothing to do.
-            changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
-              | grep -E '^forge/(feature_injector|merge|provenance|updater|injectors/python_ast|injectors/ts_ast)\.py$' \
-              || true)
-            if [ -z "$changed" ]; then
+            # Source the critical-path set from pyproject.toml so this
+            # stays in sync with the nightly lane — a previous hard-coded
+            # regex named pre-Epic-A modules (feature_injector / merge /
+            # provenance / updater) and silently skipped PRs touching the
+            # post-decomposition forge/sync/* + forge/appliers/* tree.
+            changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+            paths_json=$(echo "$changed" | uv run python -c "
+          import json, sys, tomllib
+          critical = set(tomllib.loads(open('pyproject.toml','rb').read().decode())['tool']['mutmut']['paths_to_mutate'])
+          changed = {line for line in sys.stdin.read().splitlines() if line}
+          print(json.dumps(sorted(critical & changed)))
+          ")
+            if [ "$paths_json" = "[]" ]; then
               echo "No critical-path files changed — skipping."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               echo "paths=[]" >> "$GITHUB_OUTPUT"
               echo "mode=$mode" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            paths_json=$(echo "$changed" | python -c 'import json,sys; print(json.dumps([l for l in sys.stdin.read().splitlines() if l]))')
           else
             mode=nightly
             # Schedule / dispatch: full critical-path set from pyproject.
