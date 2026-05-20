@@ -159,11 +159,13 @@ def _update_locked(
     # ``has_recorded_frontend`` covers both the built-in framework
     # case (Vue / Svelte / Flutter — ``frontend_framework`` lights up)
     # and plugin frontends (``frontend.framework`` is set but doesn't
-    # map onto the :class:`FrontendFramework` enum). The bail-out
-    # below should fire only when neither a backend nor a frontend
-    # layer is recorded; the synth-backend bridge below kicks in for
-    # the rest.
-    has_recorded_frontend = bool(data.frontend.framework)
+    # map onto the :class:`FrontendFramework` enum). An explicit
+    # ``framework = "none"`` reading is treated as no-frontend (the
+    # manifest documents ``"none"`` as the explicit "no frontend
+    # layer" marker).
+    has_recorded_frontend = bool(data.frontend.framework) and (
+        data.frontend.framework != FrontendFramework.NONE.value
+    )
     if not backends and not has_recorded_frontend:
         # Genuinely empty project — no services/<backend>/ AND no
         # frontend recorded in the manifest (and none discoverable on
@@ -195,8 +197,9 @@ def _update_locked(
     # frontends too (``frontend_framework == NONE`` but
     # ``has_recorded_frontend == True``) so plugin authors get the
     # same dispatch path as built-ins.
+    is_synth_bridge = not backends and has_recorded_frontend
     resolver_backends: list[BackendConfig] = list(backends)
-    if not resolver_backends and has_recorded_frontend:
+    if is_synth_bridge:
         resolver_backends.append(
             BackendConfig(
                 name="_frontend_only",
@@ -467,9 +470,34 @@ def _update_locked(
     # on every ``--update`` (or worse, errored out). v3 manifests fall
     # back to inference from ``apps/<slug>/`` — see
     # :func:`forge.sync.manifest._infer_frontend_from_v3`.
+    #
+    # Synth-bridge narrowing (Initiative #3 P1 follow-up): when the
+    # only "backend" in play is the ``_frontend_only`` placeholder
+    # we inserted above, we restrict project-scope apply to
+    # fragments that explicitly target a frontend (non-empty
+    # ``target_frontends``). Without this narrowing, the resolver's
+    # workaround-of-registering-frontend-fragments-as-PYTHON-impls
+    # would pull non-frontend Python project-scope fragments (e.g.
+    # ``platform_auth_sdk_python``, ``platform_auth_gatekeeper``,
+    # ``agents_md``) and write their files into a project that has
+    # no Python backend to consume them — a regression
+    # codex-review flagged on the first synth-bridge revision.
+    project_apply_plan = plan.ordered
+    if is_synth_bridge:
+        project_apply_plan = tuple(
+            rf for rf in plan.ordered if rf.fragment.target_frontends
+        )
+        if not quiet:
+            dropped = len(plan.ordered) - len(project_apply_plan)
+            if dropped:
+                print(
+                    f"  [update] synth-bridge mode — skipping {dropped} non-frontend "
+                    "project-scope fragment(s) (no backend to host them)"
+                )
+
     apply_project_features(
         project_root,
-        plan.ordered,
+        project_apply_plan,
         quiet=quiet,
         update_mode=update_mode,
         file_baselines=file_baselines,
@@ -478,9 +506,30 @@ def _update_locked(
         frontend_framework=frontend_framework,
     )
 
-    for rf in plan.ordered:
+    # ``fragments_applied`` lists every fragment that participated in
+    # this run (backend pass + project-scope pass). In synth-bridge
+    # mode we drop the non-frontend project-scope fragments from the
+    # apply call, so we report only what actually got applied here
+    # — pre-Initiative-#3 this list always equalled the resolved
+    # plan, but the synth-bridge narrowing makes the distinction
+    # observable. The backend pass set ``fragments_applied`` for
+    # everything it touched already (``apply_features`` doesn't return
+    # them, so we relied on plan iteration here historically); use
+    # ``project_apply_plan`` so we keep the contract of "report what
+    # we actually re-rendered".
+    for rf in project_apply_plan:
         if rf.fragment.name not in fragments_applied:
             fragments_applied.append(rf.fragment.name)
+    # Also surface anything from the resolved plan that hit a real
+    # backend's apply pass (or would have, if backends weren't
+    # skipped). The pre-Init-#3 behavior reported every plan entry as
+    # "applied" — we keep that for the backend-having case so the
+    # CLI's summary doesn't suddenly start listing fewer fragments
+    # after this initiative.
+    if not is_synth_bridge:
+        for rf in plan.ordered:
+            if rf.fragment.name not in fragments_applied:
+                fragments_applied.append(rf.fragment.name)
 
     # File-level merge sidecars produced by the apply pass. We glob
     # rather than thread a counter through the appliers — sidecars on

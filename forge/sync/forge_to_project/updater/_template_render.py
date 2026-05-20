@@ -104,13 +104,18 @@ def _build_template_update_tasks(
                         target_dir = candidate
                         break
         else:
-            # Frontend: conventional path is ``apps/<framework_slug>/``.
-            # The frontend may live under apps/<slug>/ where slug is the
-            # frontend's project slug rather than the framework name.
-            # Look for ``.copier-answers.yml`` to pinpoint it; if not
-            # found, scan apps/ for any directory carrying one.
+            # Frontend: prefer the manifest's recorded ``app_dir`` if it
+            # exists (Initiative #3, v4 manifest). Falls back to the
+            # conventional ``apps/<framework_slug>/`` slot, then to
+            # scanning ``apps/`` for any directory with a
+            # ``.copier-answers.yml`` — the pre-Init-#3 behavior.
+            recorded_app_dir = data.frontend.app_dir
+            if recorded_app_dir:
+                candidate = project_root / recorded_app_dir
+                if (candidate / ".copier-answers.yml").is_file():
+                    target_dir = candidate
             apps = project_root / "apps"
-            if apps.is_dir():
+            if target_dir is None and apps.is_dir():
                 # Try the direct framework subdir first, then fall back
                 # to scanning for the first apps/<dir>/.copier-answers.yml.
                 framework_dir = apps / lang
