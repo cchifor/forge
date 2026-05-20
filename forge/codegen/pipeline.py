@@ -25,6 +25,7 @@ not fragment overlays.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -298,8 +299,47 @@ def _write(
     content: str,
     collector: ProvenanceCollector | None,
 ) -> None:
-    """Write ``content`` to ``target`` and record base-template provenance."""
+    """Write ``content`` to ``target`` and record base-template provenance.
+
+    Initiative #6 (caching) — content-hash skip: when ``target`` already
+    exists and its UTF-8 sha256 matches the new payload byte-for-byte,
+    the write is skipped. The mtime is preserved, fsync churn drops,
+    and IDEs / file watchers don't fire spurious "file changed" events
+    for codegen outputs that didn't actually change.
+
+    Provenance recording still runs unconditionally — the manifest
+    re-stamp downstream needs a record for every generated file even
+    when its bytes are unchanged this pass. Without the unconditional
+    record, the re-stamp would drop the entry and the next ``--update``
+    would re-classify the file as untracked.
+    """
     target.parent.mkdir(parents=True, exist_ok=True)
+    new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    if target.is_file():
+        # Compare via decoded text (not raw bytes) — Path.write_text on
+        # Windows translates ``\n`` to the platform line separator when
+        # ``newline`` is left unspecified, so a raw-bytes compare would
+        # produce a false miss on every Windows run even when the
+        # codegen output is unchanged. Reading via ``read_text`` mirrors
+        # the round-trip the write below performs, so the hashes match
+        # iff the next write would produce identical on-disk bytes.
+        try:
+            existing_sha = hashlib.sha256(
+                target.read_text(encoding="utf-8").encode("utf-8")
+            ).hexdigest()
+        except (UnicodeDecodeError, OSError):
+            existing_sha = ""
+        if existing_sha == new_sha:
+            # Content unchanged — skip the write. Provenance is still
+            # recorded below so the manifest carries the entry.
+            if collector is not None:
+                collector.record(
+                    target,
+                    origin="base-template",
+                    template_name="_codegen",
+                    template_version=None,
+                )
+            return
     target.write_text(content, encoding="utf-8")
     if collector is not None:
         # Codegen outputs are derived from authoritative schemas under
