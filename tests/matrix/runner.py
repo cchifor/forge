@@ -82,7 +82,24 @@ _INSTALL_TIMEOUT_SECONDS = 300
 _BUILD_TIMEOUT_SECONDS = 180
 
 
-def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
+@dataclass(frozen=True)
+class _FrontendVerifyOutcome:
+    """Tagged result of ``_verify_frontend`` (Initiative #9 — surface skips).
+
+    * ``status="ok"`` — install + build both succeeded. ``error`` / ``skip_reason`` empty.
+    * ``status="fail"`` — install or build returned a non-zero exit. ``error`` carries
+      the label the caller embeds in the lane FAIL ``details``.
+    * ``status="skip"`` — the check was bypassed (Flutter, no frontend, no JS runtime,
+      ...). ``skip_reason`` names the missing dependency / opt-out for the
+      annotation emitter.
+    """
+
+    status: Literal["ok", "fail", "skip"]
+    error: str = ""
+    skip_reason: str = ""
+
+
+def _verify_frontend(fe_cfg, fe_dir: Path) -> _FrontendVerifyOutcome:
     """Run a build/analyze check against the generated frontend.
 
     Lane B's frontend complement to ``BackendToolchain.verify`` — runs
@@ -90,16 +107,19 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
     ``apps/frontend/`` so vue-tsc / svelte-check / vite build regressions
     surface on PR rather than waiting for nightly compose-up (lane C).
 
-    Returns ``None`` on success, an error label on failure. Uses the
-    package manager from ``fe_cfg.package_manager`` when present;
-    falls back to ``npm``.
+    Returns a :class:`_FrontendVerifyOutcome` tagging the outcome as
+    ``ok`` / ``fail`` / ``skip``. Initiative #9 split this from the
+    pre-Init pattern (``None`` for both success AND skip) so silent
+    skips (no npm on PATH, Flutter scenario, etc.) can be surfaced
+    as GitHub Actions annotations rather than masquerading as
+    coverage.
 
     Budget (worst-case wall-clock per scenario): install 5 min +
     build 3 min = 8 min. Lane B aims for ~5 min average across the
     matrix; the upper bound covers cold CI caches without letting a
     runaway process stall the whole runner.
 
-    Skips silently (returns ``None``) when:
+    Skips (returned with ``skip_reason``) when:
 
     * The frontend framework is Flutter — ``subosito/flutter-action`` is
       heavy and lane B targets <5 min/scenario; Flutter is covered by
@@ -115,17 +135,26 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
 
     framework = getattr(fe_cfg, "framework", None)
     if framework is None or framework == FrontendFramework.NONE:
-        return None
+        return _FrontendVerifyOutcome(
+            status="skip", skip_reason="no frontend configured"
+        )
     if getattr(framework, "value", None) == "flutter":
-        # Flutter handled by e2e suite (subosito/flutter-action heavy install).
-        return None
+        return _FrontendVerifyOutcome(
+            status="skip",
+            skip_reason="flutter frontend (covered by tests/e2e/test_full_generation.py)",
+        )
     pm = getattr(fe_cfg, "package_manager", "npm") or "npm"
     pm_exe = shutil.which(pm) or shutil.which("npm")
     if pm_exe is None:
-        return None  # No JS runtime on this runner — skip silently.
-    return _run_frontend_step(
+        return _FrontendVerifyOutcome(
+            status="skip", skip_reason=f"{pm} / npm not on PATH (no JS runtime)"
+        )
+    err = _run_frontend_step(
         pm, pm_exe, fe_dir, ["install", "--no-fund", "--no-audit"], _INSTALL_TIMEOUT_SECONDS
     ) or _run_frontend_step(pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS)
+    if err is None:
+        return _FrontendVerifyOutcome(status="ok")
+    return _FrontendVerifyOutcome(status="fail", error=err)
 
 
 def _run_frontend_step(
@@ -227,6 +256,13 @@ class LaneResult:
     duration_ms: int
     details: str = ""
     missing_files: list[str] = field(default_factory=list)
+    # Initiative #9: sub-lane skips (e.g. lane B's frontend check
+    # silently returning None when npm isn't on PATH). The lane
+    # status stays ``ok`` because the check that COULD run all
+    # succeeded, but the skipped sub-checks are surfaced as GitHub
+    # Actions warnings via ``_emit_github_annotations`` so a "green"
+    # nightly doesn't mask under-coverage from a missing runtime.
+    skipped_subchecks: list[str] = field(default_factory=list)
 
 
 def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
@@ -478,11 +514,16 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
         # C). ``frontend_mode`` is the project-level option discriminator
         # (``options["frontend.mode"]``); ``_validate_frontend_mode_coherence``
         # already keeps it in lock-step with ``FrontendConfig.framework``.
+        skipped_subchecks: list[str] = []
         if project_config.frontend is not None and project_config.frontend_mode != "none":
             fe_dir = project_root / "apps" / "frontend"
-            fe_result = _verify_frontend(project_config.frontend, fe_dir)
-            if fe_result is not None:
-                failures.append(f"frontend:{fe_result}")
+            fe_outcome = _verify_frontend(project_config.frontend, fe_dir)
+            if fe_outcome.status == "fail":
+                failures.append(f"frontend:{fe_outcome.error}")
+            elif fe_outcome.status == "skip":
+                # Initiative #9: surface the skip so a "green" lane B
+                # doesn't quietly mean "frontend build was never run".
+                skipped_subchecks.append(f"frontend: {fe_outcome.skip_reason}")
 
         if failures:
             return LaneResult(
@@ -491,12 +532,14 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details="toolchain checks failed: " + "; ".join(failures),
+                skipped_subchecks=skipped_subchecks,
             )
         return LaneResult(
             scenario=scenario.name,
             lane="verify",
             status="ok",
             duration_ms=int((perf_counter() - start) * 1000),
+            skipped_subchecks=skipped_subchecks,
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -593,11 +636,15 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
 
         # Run the HTTP contract against each backend.
         violations: list[str] = []
+        sub_skips: list[str] = []
         for bc in project_config.backends:
             base_url = f"http://localhost:{bc.server_port}"
             result = assert_contract(base_url, scenario.name, bc.name)
             if not result.passed:
                 violations.extend(f"{bc.name}:{v.endpoint}: {v.reason}" for v in result.violations)
+            # Initiative #9 — propagate per-backend endpoint skips to the
+            # lane result so the annotation emitter can surface them.
+            sub_skips.extend(f"{bc.name}: {s}" for s in result.skipped_endpoints)
 
         if violations:
             return LaneResult(
@@ -608,12 +655,14 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 details="contract violations: "
                 + "; ".join(violations[:5])
                 + (f" (+{len(violations) - 5} more)" if len(violations) > 5 else ""),
+                skipped_subchecks=sub_skips,
             )
         return LaneResult(
             scenario=scenario.name,
             lane="smoke",
             status="ok",
             duration_ms=int((perf_counter() - start) * 1000),
+            skipped_subchecks=sub_skips,
         )
     finally:
         if project_root is not None:
@@ -1388,6 +1437,91 @@ def _format_markdown_grid(results: list[LaneResult], scenarios: list[Scenario]) 
     return "\n".join(lines)
 
 
+# Skip details emitted by ``run_scenario`` when a scenario simply
+# doesn't opt into a lane — this is a deliberate config choice (see
+# scenarios.yaml's ``lanes:`` list), not a missing-dep skip, so it
+# shouldn't generate annotation noise. The runner emits exactly this
+# string; centralising it here keeps the annotation filter in lock-
+# step with the producer if either is renamed.
+_LANE_OPTOUT_DETAILS_PREFIX = "scenario does not opt into lane"
+
+
+def _emit_github_annotations(results: list[LaneResult]) -> None:
+    """Print ``::warning::`` lines for each skipped lane / sub-check.
+
+    Initiative #9: pre-#9, lane C (compose-up) would silently SKIP
+    when ``docker`` wasn't on PATH; lane B (verify) would silently
+    skip the frontend build when ``npm`` wasn't on PATH; the
+    OpenAPI sub-check in smoke_contract treats 404-on-every-path
+    as a skip (currently the Node + Rust template surface). A "green"
+    nightly grid hid all three, so a regression that REMOVED a tool
+    from the CI image would coast through Lane C as a pass-because-
+    skipped without surfacing the loss of coverage.
+
+    GitHub Actions parses ``::warning::`` lines on stdout and renders
+    them on the run summary + a per-line annotation. The lane
+    keeps its ``status="skip"`` (this isn't a failure — the missing
+    tool is environmental), but the warning forces a human eyeball.
+
+    Annotations are NOT emitted for the "scenario does not opt into
+    lane X" skip path — that's a deliberate config choice, not a
+    missing-dep signal, and treating every cross-axis cell of the
+    scenarios x lanes grid as a "skip warning" would drown the real
+    missing-dep skips in noise.
+
+    Emitted to stdout (not stderr) because GitHub's annotation
+    parser reads stdout; falling back to stderr would land the
+    message in the log but not the annotations panel.
+
+    Always called from :func:`main` — local invocations also see the
+    warnings, which is fine: a developer running on a machine without
+    docker should see exactly the same skip surface CI would record.
+    """
+    for r in results:
+        if (
+            r.status == "skip"
+            and r.details
+            and not r.details.startswith(_LANE_OPTOUT_DETAILS_PREFIX)
+        ):
+            print(
+                f"::warning title=Matrix lane {r.lane!s} skipped ({r.scenario!s})::"
+                f"{r.scenario} / {r.lane}: {r.details}"
+            )
+        for sub in r.skipped_subchecks:
+            print(
+                f"::warning title=Matrix sub-check skipped ({r.scenario!s} / {r.lane!s})::"
+                f"{r.scenario} / {r.lane}: sub-check skipped — {sub}"
+            )
+
+
+def _format_skip_summary(results: list[LaneResult]) -> str:
+    """Render a one-line summary of missing-dep skipped lanes + sub-checks.
+
+    Mirrors the annotation filter in :func:`_emit_github_annotations`:
+    counts only environmental skips, NOT the "scenario does not opt
+    into lane X" routine non-application. The same information is
+    embedded as ``::warning::`` annotations elsewhere (visible in the
+    GH Actions UI); this summary line is the plain-text receipt for
+    local invocations + log greppability.
+    """
+    skipped_lanes = sum(
+        1
+        for r in results
+        if r.status == "skip"
+        and r.details
+        and not r.details.startswith(_LANE_OPTOUT_DETAILS_PREFIX)
+    )
+    skipped_subchecks = sum(len(r.skipped_subchecks) for r in results)
+    if not skipped_lanes and not skipped_subchecks:
+        return ""
+    parts: list[str] = []
+    if skipped_lanes:
+        parts.append(f"{skipped_lanes} lane(s) skipped")
+    if skipped_subchecks:
+        parts.append(f"{skipped_subchecks} sub-check(s) skipped")
+    return "  [SKIP-SUMMARY] " + ", ".join(parts) + " (see ::warning:: lines above)"
+
+
 def main() -> int:
     args = _parse_args()
     try:
@@ -1430,6 +1564,7 @@ def main() -> int:
                         "duration_ms": r.duration_ms,
                         "details": r.details,
                         "missing_files": r.missing_files,
+                        "skipped_subchecks": r.skipped_subchecks,
                     }
                     for r in results
                 ],
@@ -1441,6 +1576,15 @@ def main() -> int:
     else:
         for r in results:
             print(_format_row(r))
+
+    # Initiative #9 — emit GH Actions ``::warning::`` annotations for
+    # each lane skip / sub-check skip. Plus a one-line plaintext
+    # summary so local invocations (no GHA parser) still see the
+    # count.
+    _emit_github_annotations(results)
+    summary = _format_skip_summary(results)
+    if summary:
+        print(summary)
 
     failed = [r for r in results if r.status == "fail"]
     return 2 if failed else 0
