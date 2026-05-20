@@ -9,6 +9,7 @@ import pytest
 from forge import plugins
 from forge.api import ForgeAPI, PluginRegistration
 from forge.errors import PluginError
+from forge.options import OPTION_ALIAS_INDEX, OPTION_REGISTRY
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +17,26 @@ def _reset_plugins():
     plugins.reset_for_tests()
     yield
     plugins.reset_for_tests()
+
+
+@pytest.fixture
+def _isolate_option_registry():
+    """Snapshot + restore OPTION_REGISTRY and OPTION_ALIAS_INDEX around a test.
+
+    Several add_option tests below mutate the live registry (and its
+    alias index sidecar). Without isolation, a test that registers
+    ``testplugin.flag`` leaks into the next test and the registry
+    invariant tests in test_options.py would see plugin entries.
+    """
+    saved_registry = dict(OPTION_REGISTRY)
+    saved_aliases = dict(OPTION_ALIAS_INDEX)
+    try:
+        yield
+    finally:
+        OPTION_REGISTRY.clear()
+        OPTION_REGISTRY.update(saved_registry)
+        OPTION_ALIAS_INDEX.clear()
+        OPTION_ALIAS_INDEX.update(saved_aliases)
 
 
 class TestPluginRegistration:
@@ -34,8 +55,8 @@ class TestPluginRegistration:
 
 
 class TestForgeAPI:
-    def test_add_option_registers_and_counts(self) -> None:
-        from forge.options import OPTION_REGISTRY, FeatureCategory, Option, OptionType
+    def test_add_option_registers_and_counts(self, _isolate_option_registry) -> None:
+        from forge.options import FeatureCategory, Option, OptionType
 
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)
@@ -52,9 +73,6 @@ class TestForgeAPI:
 
         assert "testplugin.flag" in OPTION_REGISTRY
         assert reg.options_added == 1
-
-        # Cleanup: remove the injected option so other tests aren't affected.
-        OPTION_REGISTRY.pop("testplugin.flag", None)
 
     def test_add_option_rejects_collision(self) -> None:
         from forge.options import FeatureCategory, Option, OptionType
@@ -74,6 +92,171 @@ class TestForgeAPI:
             api.add_option(opt)
         assert reg.options_added == 0
 
+    def test_add_option_updates_alias_index(self, _isolate_option_registry) -> None:
+        """Initiative #2 sub-task 1: add_option must go through
+        register_option so the OPTION_ALIAS_INDEX picks up plugin
+        aliases the same way it picks up built-in ones."""
+        from forge.options import FeatureCategory, Option, OptionType, resolve_alias
+
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        opt = Option(
+            path="testplugin.canonical",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="canonical-with-alias",
+            description="exercises alias-index update via add_option",
+            aliases=("testplugin.legacy", "testplugin.older"),
+            deprecated_since="1.2.0",
+        )
+        api.add_option(opt)
+
+        assert "testplugin.canonical" in OPTION_REGISTRY
+        # Both aliases must resolve via the alias index — proving
+        # add_option no longer writes directly to OPTION_REGISTRY but
+        # delegates to register_option().
+        assert resolve_alias("testplugin.legacy") == "testplugin.canonical"
+        assert resolve_alias("testplugin.older") == "testplugin.canonical"
+        assert reg.options_added == 1
+
+    def test_add_option_rejects_alias_collision(self, _isolate_option_registry) -> None:
+        """Two plugin options whose aliases collide must surface as a
+        PluginError, not a raw ValueError from register_option."""
+        from forge.options import FeatureCategory, Option, OptionType
+
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        first = Option(
+            path="testplugin.first",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="first",
+            description="first option",
+            aliases=("testplugin.shared_alias",),
+            deprecated_since="1.2.0",
+        )
+        api.add_option(first)
+
+        second = Option(
+            path="testplugin.second",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="second",
+            description="second option",
+            aliases=("testplugin.shared_alias",),
+            deprecated_since="1.2.0",
+        )
+        with pytest.raises(PluginError, match="already aliased"):
+            api.add_option(second)
+        # First registration intact; second's counter did NOT bump.
+        assert reg.options_added == 1
+        assert "testplugin.first" in OPTION_REGISTRY
+        assert "testplugin.second" not in OPTION_REGISTRY
+
+    def test_add_option_rejects_path_aliasing_existing_canonical(
+        self, _isolate_option_registry
+    ) -> None:
+        """A plugin option whose path equals an existing alias must be
+        rejected — the alias index would otherwise become inconsistent."""
+        from forge.options import FeatureCategory, Option, OptionType
+
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        first = Option(
+            path="testplugin.canonical",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="first",
+            description="first option",
+            aliases=("testplugin.shadow",),
+            deprecated_since="1.2.0",
+        )
+        api.add_option(first)
+
+        # Second tries to register the SAME path as the first's alias.
+        clash = Option(
+            path="testplugin.shadow",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="clash",
+            description="clash option",
+        )
+        with pytest.raises(PluginError, match="path collides with an existing alias"):
+            api.add_option(clash)
+        assert reg.options_added == 1
+
+    def test_add_option_retains_option_registration(
+        self, _isolate_option_registry
+    ) -> None:
+        """Initiative #2 sub-task 1: the Option object must be retained
+        on PluginRegistration.option_registrations so downstream
+        consumers can introspect plugin-registered options without
+        re-reading OPTION_REGISTRY."""
+        from forge.api import PluginOptionRegistration
+        from forge.options import FeatureCategory, Option, OptionType
+
+        reg = PluginRegistration(name="my_plugin", module="m")
+        api = ForgeAPI(reg)
+
+        opt = Option(
+            path="testplugin.retained",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="retained",
+            description="retained option",
+        )
+        api.add_option(opt)
+
+        assert len(reg.option_registrations) == 1
+        registration = reg.option_registrations[0]
+        assert isinstance(registration, PluginOptionRegistration)
+        assert registration.option is opt
+        assert registration.plugin_name == "my_plugin"
+
+    def test_add_option_accumulates_registrations(
+        self, _isolate_option_registry
+    ) -> None:
+        """Multiple add_option calls accumulate into the tuple in order."""
+        from forge.options import FeatureCategory, Option, OptionType
+
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        first = Option(
+            path="testplugin.first",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=False,
+            summary="first",
+            description="first option",
+        )
+        second = Option(
+            path="testplugin.second",
+            type=OptionType.BOOL,
+            category=FeatureCategory.OBSERVABILITY,
+            default=True,
+            summary="second",
+            description="second option",
+        )
+        api.add_option(first)
+        api.add_option(second)
+
+        assert reg.options_added == 2
+        assert len(reg.option_registrations) == 2
+        assert [r.option.path for r in reg.option_registrations] == [
+            "testplugin.first",
+            "testplugin.second",
+        ]
+
     def test_add_command_captures_handler(self) -> None:
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)
@@ -89,6 +272,73 @@ class TestForgeAPI:
         api.add_emitter("dart", fn)
         assert reg.emitters_added == 1
         assert api._emitters["dart"] is fn
+
+    def test_add_emitter_retains_emitter_registration(self) -> None:
+        """Initiative #2 sub-task 2: the emitter callable must be
+        retained on PluginRegistration.emitter_registrations so the
+        codegen pipeline can walk LOADED_PLUGINS and invoke each
+        plugin's emitter after the built-in passes."""
+        from forge.api import PluginEmitterRegistration
+
+        reg = PluginRegistration(name="my_plugin", module="m")
+        api = ForgeAPI(reg)
+
+        def fn(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("openapi", fn)
+
+        assert len(reg.emitter_registrations) == 1
+        registration = reg.emitter_registrations[0]
+        assert isinstance(registration, PluginEmitterRegistration)
+        assert registration.target == "openapi"
+        assert registration.emitter is fn
+        assert registration.plugin_name == "my_plugin"
+
+    def test_add_emitter_accumulates_across_targets(self) -> None:
+        """Multiple add_emitter calls accumulate into the tuple."""
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        def emit_py(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        def emit_ts(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("python", emit_py)
+        api.add_emitter("typescript", emit_ts)
+
+        assert reg.emitters_added == 2
+        assert len(reg.emitter_registrations) == 2
+        targets = [r.target for r in reg.emitter_registrations]
+        assert targets == ["python", "typescript"]
+        # Back-compat: ``_emitters`` dict still populated.
+        assert api._emitters == {"python": emit_py, "typescript": emit_ts}
+
+    def test_add_emitter_same_target_last_wins_on_dict(self) -> None:
+        """When the same plugin re-registers a target, the dict
+        last-wins (back-compat with the 1.0.0a1 shape). Both
+        registrations are retained on the tuple so the codegen
+        walker can spot the collision and warn."""
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        def first(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        def second(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("python", first)
+        api.add_emitter("python", second)
+
+        assert reg.emitters_added == 2
+        assert api._emitters["python"] is second
+        # Both registrations retained on the tuple — pipeline walker
+        # is responsible for last-wins resolution + warning.
+        assert len(reg.emitter_registrations) == 2
+        assert [r.emitter for r in reg.emitter_registrations] == [first, second]
 
     def test_add_extractor_records_registration(self) -> None:
         reg = PluginRegistration(name="p", module="m")
