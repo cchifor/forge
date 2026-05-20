@@ -26,6 +26,7 @@ not fragment overlays.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,8 +50,10 @@ from forge.codegen.ui_protocol import (
 )
 from forge.config import BackendLanguage, FrontendFramework
 from forge.frontends import FrontendLayout, get_frontend_layout
+from forge.logging import get_logger, log_event
 
 if TYPE_CHECKING:
+    from forge.capability_resolver import ResolvedPlan
     from forge.config import ProjectConfig
     from forge.sync.provenance import ProvenanceCollector
 
@@ -58,11 +61,15 @@ if TYPE_CHECKING:
 _TEMPLATES_ROOT = Path(__file__).resolve().parent.parent / "templates"
 _ENUMS_ROOT = _TEMPLATES_ROOT / "_shared" / "domain" / "enums"
 
+_LOGGER = get_logger(__name__)
+
 
 def run_codegen(
     config: ProjectConfig,
     project_root: Path,
     collector: ProvenanceCollector | None = None,
+    *,
+    resolved: ResolvedPlan | None = None,
 ) -> None:
     """Run every schema-driven emitter and write outputs into the project tree.
 
@@ -70,6 +77,15 @@ def run_codegen(
     present, the corresponding emitter quietly skips. Overwrites existing
     generated files (they're authoritative forge outputs — user edits to
     these are expected to be captured via `user` zones in the future).
+
+    Initiative #2 sub-task 2: after the built-in passes run,
+    :func:`_run_plugin_emitters` walks
+    :data:`forge.plugins.LOADED_PLUGINS` and invokes every emitter
+    registered via :meth:`forge.api.ForgeAPI.add_emitter`. ``resolved``
+    is forwarded to plugin emitters as the third argument; it defaults
+    to ``None`` because the in-tree generator path that calls
+    ``run_codegen`` hasn't been plumbed with the resolved plan yet
+    (deferred follow-up). Built-in passes do not consume ``resolved``.
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
@@ -77,6 +93,7 @@ def run_codegen(
     _emit_canvas_lint_packages(config, project_root, collector)
     _emit_event_union_pydantic(config, project_root, collector)
     _emit_shared_enums(config, project_root, collector)
+    _run_plugin_emitters(config, project_root, resolved)
 
 
 def _frontend_layout(config: ProjectConfig) -> FrontendLayout | None:
@@ -317,3 +334,87 @@ def _write(
             template_name="_codegen",
             template_version=None,
         )
+
+
+# ---------------------------------------------------------------------------
+# Plugin emitter walk (Initiative #2 sub-task 2)
+# ---------------------------------------------------------------------------
+
+
+def _run_plugin_emitters(
+    config: ProjectConfig,
+    project_root: Path,
+    resolved: ResolvedPlan | None,
+) -> None:
+    """Walk LOADED_PLUGINS and invoke every plugin-registered emitter.
+
+    Mirrors the harvester's
+    :func:`forge.sync.project_to_forge.harvester._orchestrator._collect_global_plugin_extractor_overrides`
+    pattern: each plugin's ``emitter_registrations`` tuple is iterated
+    in plugin-load order, with last-loaded winning on target collision.
+
+    Emitter exceptions are caught and logged — a broken plugin emitter
+    must not abort codegen for the remaining plugins. The caller
+    (``forge.generator._apply_project_scope``) already wraps
+    ``run_codegen`` in a try/except that downgrades any escape to a
+    warning, but per-plugin isolation here means one bad plugin
+    doesn't shadow every plugin that follows.
+    """
+    from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
+
+    winners: dict[str, str] = {}
+    for plugin in LOADED_PLUGINS:
+        for registration in plugin.emitter_registrations:
+            prior_winner = winners.get(registration.target)
+            if prior_winner is not None and prior_winner != plugin.name:
+                _warn_emitter_target_collision(
+                    target=registration.target,
+                    loser=prior_winner,
+                    winner=plugin.name,
+                )
+            winners[registration.target] = plugin.name
+            try:
+                registration.emitter(project_root, config, resolved)
+            except Exception as exc:  # noqa: BLE001 — isolate per-plugin failure
+                log_event(
+                    _LOGGER,
+                    "plugin.emitter.failed",
+                    level=logging.WARNING,
+                    message=(
+                        f"plugin {plugin.name!r} emitter for target "
+                        f"{registration.target!r} raised "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                    plugin=plugin.name,
+                    target=registration.target,
+                    error_type=type(exc).__name__,
+                )
+
+
+def _warn_emitter_target_collision(
+    *, target: str, loser: str, winner: str
+) -> None:
+    """Emit a structured warning when two plugins claim the same target.
+
+    Collision warnings are NOT deduplicated: each codegen invocation
+    that exhibits the collision deserves the signal because resolution
+    depends on plugin load order — operators should see it on every
+    ``forge new`` until the conflict is resolved.
+
+    Mirrors
+    :func:`forge.sync.project_to_forge.harvester._orchestrator._warn_global_override_collision`
+    so the two collision-warning surfaces share the same shape.
+    """
+    log_event(
+        _LOGGER,
+        "plugin.emitter.target_collision",
+        level=logging.WARNING,
+        message=(
+            f"plugin {winner!r} overrode the codegen emitter for target "
+            f"{target!r} previously registered by plugin {loser!r}; "
+            "last-loaded wins by default"
+        ),
+        target=target,
+        winner=winner,
+        loser=loser,
+    )
