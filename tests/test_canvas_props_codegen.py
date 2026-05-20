@@ -128,6 +128,146 @@ class TestEmitDart:
         assert "final String? filename" in out
 
 
+class TestDartNestedSealedClasses:
+    """Initiative #8: typed inner classes for nested array-of-object fields.
+
+    Pre-#8 the Dart emitter collapsed every ``items: {type: object}`` to
+    ``List<Map<String, dynamic>>`` — typing was lost the moment props
+    crossed the codegen boundary, and every consumer (``data_table.dart``,
+    ``dynamic_form.dart``, ``workflow_diagram.dart``) had to hand-roll
+    its own ``_Column`` / ``_Field`` / ``_WfNode`` mirror class.
+
+    Initiative #8 lifts the schema's nested shape into the emitted file
+    as a sealed inner class so a single source of truth covers every
+    nested level.
+
+    Naming rule (matches :func:`_nested_class_name`): strip the trailing
+    ``Props`` from the parent title, append a singularised PascalCase
+    field name. ``DynamicFormProps.fields`` → ``DynamicFormField``;
+    ``WorkflowDiagramProps.nodes`` → ``WorkflowDiagramNode``.
+    """
+
+    def test_dynamic_form_fields_becomes_typed_list(self) -> None:
+        out = emit_dart(load_canvas_schemas())
+        assert "class DynamicFormField {" in out
+        assert "final List<DynamicFormField> fields;" in out
+        # `Map<String, dynamic>` must NOT appear on the parent's
+        # `fields` field declaration any more.
+        assert "final List<Map<String, dynamic>> fields;" not in out
+
+    def test_dynamic_form_field_has_typed_properties(self) -> None:
+        out = emit_dart(load_canvas_schemas())
+        # All schema-declared properties on the nested item must show
+        # up as typed fields on the inner class.
+        # `name`, `label` are required strings.
+        # `type` is a string enum → emitted as `String`.
+        # `required` is optional bool.
+        # `default` is a wildcard `{}` → emitted as `dynamic` (no `?`
+        # marker because `dynamic` is implicitly nullable).
+        # `options` is optional `List<String>`.
+        # `description` is optional string.
+        for expected in (
+            "final String name;",
+            "final String label;",
+            "final String type;",
+            "final bool? required;",
+            "final dynamic defaultValue;",
+            "final List<String>? options;",
+            "final String? description;",
+        ):
+            assert expected in out, f"DynamicFormField missing field decl: {expected!r}"
+
+    def test_dynamic_form_field_reserved_word_remapped(self) -> None:
+        # ``default`` is a Dart reserved word — the emitter must rename
+        # the field on the Dart side while keeping the original JSON key.
+        out = emit_dart(load_canvas_schemas())
+        assert "this.defaultValue" in out
+        # The JSON key must stay ``'default'`` so wire compatibility
+        # with the Pydantic / TS side is preserved.
+        assert "defaultValue: json['default']" in out
+        assert "'default': defaultValue" in out
+
+    def test_data_table_columns_becomes_typed_list(self) -> None:
+        out = emit_dart(load_canvas_schemas())
+        assert "class DataTableColumn {" in out
+        assert "final List<DataTableColumn> columns;" in out
+        # Inner class typed fields.
+        assert "final String key;" in out
+        assert "final String label;" in out
+        assert "final bool? sortable;" in out
+
+    def test_data_table_rows_stays_loose_map(self) -> None:
+        # DataTable.rows.items has `additionalProperties: true` and no
+        # `properties` — there is no fixed shape to type against, so
+        # the emitter must NOT invent a class. `List<Map<String,
+        # dynamic>>` is the correct ceiling here.
+        out = emit_dart(load_canvas_schemas())
+        assert "final List<Map<String, dynamic>> rows;" in out
+        # Sanity: no ``DataTableRow`` class was synthesised.
+        assert "class DataTableRow {" not in out
+
+    def test_workflow_diagram_nodes_and_edges_typed(self) -> None:
+        out = emit_dart(load_canvas_schemas())
+        assert "class WorkflowDiagramNode {" in out
+        assert "class WorkflowDiagramEdge {" in out
+        assert "final List<WorkflowDiagramNode> nodes;" in out
+        assert "final List<WorkflowDiagramEdge> edges;" in out
+        # `from` is not a reserved word but a built-in identifier; the
+        # emitter passes it through verbatim.
+        assert "final String from;" in out
+        assert "final String to;" in out
+
+    def test_nested_class_factory_constructors_present(self) -> None:
+        out = emit_dart(load_canvas_schemas())
+        for nested in (
+            "DataTableColumn",
+            "DynamicFormField",
+            "WorkflowDiagramNode",
+            "WorkflowDiagramEdge",
+        ):
+            assert f"factory {nested}.fromJson" in out, f"missing {nested}.fromJson"
+            assert "Map<String, dynamic> toJson()" in out  # at least one to_json
+
+    def test_parent_from_json_constructs_inner_via_factory(self) -> None:
+        # The recurse-into-typed-items branch should call the inner
+        # class's `.fromJson` for every list element, not just cast.
+        out = emit_dart(load_canvas_schemas())
+        assert "DynamicFormField.fromJson" in out
+        assert "DataTableColumn.fromJson" in out
+        assert "WorkflowDiagramNode.fromJson" in out
+        assert "WorkflowDiagramEdge.fromJson" in out
+
+    def test_parent_to_json_serialises_inner_via_to_json(self) -> None:
+        # Symmetric direction: `toJson` for the parent must map each
+        # inner element through its own `toJson()` so the wire format
+        # round-trips identically to the input.
+        out = emit_dart(load_canvas_schemas())
+        assert "fields.map((e) => e.toJson()).toList()" in out
+        assert "columns.map((e) => e.toJson()).toList()" in out
+        assert "nodes.map((e) => e.toJson()).toList()" in out
+        assert "edges.map((e) => e.toJson()).toList()" in out
+
+    def test_inner_classes_emitted_before_parent(self) -> None:
+        # Dart compiles top-to-bottom; a class reference resolves
+        # symbol-table-wide so order does not strictly matter, but
+        # putting the inner class first reads naturally. Lock the
+        # ordering with an indexOf check so a refactor that flips it
+        # is intentional, not accidental.
+        out = emit_dart(load_canvas_schemas())
+        assert out.index("class DynamicFormField {") < out.index(
+            "class DynamicFormProps {"
+        )
+        assert out.index("class DataTableColumn {") < out.index(
+            "class DataTableProps {"
+        )
+        assert out.index("class WorkflowDiagramNode {") < out.index(
+            "class WorkflowDiagramProps {"
+        )
+        assert out.index("class WorkflowDiagramEdge {") < out.index(
+            "class WorkflowDiagramProps {"
+        )
+
+
 class TestEmitPydantic:
     def test_banner_is_autogenerated(self) -> None:
         out = emit_pydantic(load_canvas_schemas())
