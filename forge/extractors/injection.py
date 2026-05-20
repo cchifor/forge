@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, Any
 from forge.codegen.literal_finder import LiteralEdit, SupportedLanguage, find_literal_edits
 from forge.config import BackendLanguage
 from forge.errors import FragmentError
-from forge.extractors.pipeline import CandidatePatch
+from forge.extractors.pipeline import CandidatePatch, ExtractorKind
 from forge.injectors.sentinels import _read_block_body
 from forge.sync.merge import reverse_three_way_decide, sha256_of_text
 
@@ -76,7 +76,7 @@ _LANGUAGE_BY_BACKEND: dict[BackendLanguage, SupportedLanguage] = {
 class InjectionExtractor:
     """Harvest user edits to fragment-injected blocks."""
 
-    kind = "block"
+    kind: ExtractorKind = "block"
 
     def extract(
         self,

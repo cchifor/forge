@@ -152,3 +152,53 @@ class TestSelectedKindsFiltering:
         pipeline = _make_pipeline({"files", "deps"})
         kinds = {ext.kind for ext in pipeline.extractors}
         assert kinds == {"files", "deps"}
+
+    def test_override_for_unselected_kind_is_excluded(self) -> None:
+        """If a plugin overrides ``files`` but the operator only asked
+        for ``deps``, the override must NOT leak into the pipeline."""
+        stub = _StubExtractor(kind="files", tag="plugin-files")
+        _register_plugin_with_extractor("p_files", "files", stub)
+
+        pipeline = _make_pipeline({"deps"})
+        kinds = {ext.kind for ext in pipeline.extractors}
+        assert kinds == {"deps"}
+        assert stub not in pipeline.extractors
+
+
+class TestApiToHarvesterBridge:
+    """End-to-end: register a plugin extractor via the real
+    :meth:`forge.api.ForgeAPI.add_extractor` and confirm the
+    harvester picks it up. Catches regressions in the api->harvester
+    seam where the prior tests construct ``PluginExtractorRegistration``
+    directly and skip the API layer entirely.
+    """
+
+    def test_add_extractor_via_api_reaches_harvester_pipeline(self) -> None:
+        from forge.api import ForgeAPI, PluginRegistration  # noqa: PLC0415
+
+        class _ApiStubExtractor:
+            kind: ExtractorKind = "block"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        registration = PluginRegistration(name="bridge", module="bridge.module")
+        api = ForgeAPI(registration)
+        extractor = _ApiStubExtractor()
+        api.add_extractor("block", extractor)
+
+        # Push the registration into LOADED_PLUGINS the way
+        # ``forge.plugins.load_all`` would.
+        plugins_module.LOADED_PLUGINS.append(registration)
+
+        pipeline = _make_pipeline({"block"})
+        block_handlers = [e for e in pipeline.extractors if e.kind == "block"]
+
+        assert len(block_handlers) == 1
+        assert block_handlers[0] is extractor, (
+            "extractor registered via ForgeAPI.add_extractor did not survive "
+            "the api -> harvester bridge"
+        )
+        # Both representations should be populated symmetrically.
+        assert len(registration.extractor_registrations) == 1
+        assert registration.extractors_added == (("block", None),)
