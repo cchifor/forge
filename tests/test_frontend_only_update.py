@@ -195,6 +195,30 @@ class TestFrontendOnlyUpdateNegative:
         with pytest.raises(ProvenanceError, match="Nothing to update"):
             update_project(root, quiet=True)
 
+    def test_explicit_framework_none_treated_as_no_frontend(
+        self, tmp_path: Path
+    ) -> None:
+        """A v4 manifest with ``[forge.frontend] framework = "none"``
+        must be treated as "no frontend layer" — not as a synth-bridge
+        trigger. Pinned because the bridge would otherwise pull in
+        every Python project-scope fragment for a strictly empty
+        project that the writer (e.g. a future migration) explicitly
+        flagged ``framework = "none"`` for clarity.
+        """
+        root = tmp_path / "explicit_none"
+        root.mkdir()
+        write_forge_toml(
+            root / "forge.toml",
+            version="1.2.0",
+            project_name="explicit-none",
+            templates={},
+            options={},
+            frontend=ForgeFrontendData(framework="none", app_dir=""),
+        )
+        # No services/, no real frontend — should bail with "Nothing to update".
+        with pytest.raises(ProvenanceError, match="Nothing to update"):
+            update_project(root, quiet=True)
+
     def test_malformed_v3_manifest_falls_back_to_empty_frontend(
         self, tmp_path: Path
     ) -> None:
@@ -348,6 +372,47 @@ class TestResolverBridgeForFrontendOnly:
         # solely because of the synth bridge.
         assert "vue" in data.templates
         assert "python" not in data.templates
+
+    def test_synth_bridge_narrows_to_frontend_targeted_only(
+        self, tmp_path: Path
+    ) -> None:
+        """Synth-bridge narrowing: when the only "backend" in play is
+        the placeholder, project-scope fragments without
+        ``target_frontends`` (e.g. ``platform_auth_sdk_python``,
+        ``platform_auth_gatekeeper``) must NOT be applied. Pinned
+        because the resolver's PYTHON-only filter would otherwise
+        emit those into a project that has no Python backend.
+        """
+        root = tmp_path / "fe_only_auth"
+        root.mkdir()
+        app = root / "apps" / "frontend"
+        app.mkdir(parents=True)
+        (app / "package.json").write_text(
+            '{"name": "f", "dependencies": {"vue": "^3.5.0"}}\n',
+            encoding="utf-8",
+        )
+        write_forge_toml(
+            root / "forge.toml",
+            version="1.2.0",
+            project_name="fe-auth",
+            templates={"vue": "apps/vue-frontend-template"},
+            options={"backend.mode": "none", "auth.mode": "generate"},
+            option_origins={"backend.mode": "user", "auth.mode": "user"},
+            frontend=ForgeFrontendData(framework="vue", app_dir="apps/frontend"),
+        )
+
+        # No services/ dir, no sdks/ dir — the apply pass must not
+        # create either, despite ``auth.mode=generate`` pulling in
+        # Python project-scope fragments at the resolver layer.
+        update_project(root, quiet=True)
+        assert not (root / "sdks").exists(), (
+            "synth bridge must NOT emit platform_auth_sdk_python files "
+            "into a frontend-only project (no Python backend to host them)"
+        )
+        assert not (root / "infra" / "gatekeeper").exists(), (
+            "synth bridge must NOT emit platform_auth_gatekeeper files "
+            "into a frontend-only project"
+        )
 
     def test_synth_bridge_pulls_in_frontend_targeted_fragments(
         self, tmp_path: Path
