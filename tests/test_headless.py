@@ -1,7 +1,10 @@
 """Tests for headless mode config building."""
 
 import json
+import subprocess
+import sys
 from argparse import Namespace
+from pathlib import Path
 
 import pytest
 
@@ -163,3 +166,57 @@ class TestLoadConfigFile:
     def test_missing_file_raises(self, tmp_path):
         with pytest.raises(ValueError, match="Config file not found"):
             _load_config_file(str(tmp_path / "nope.json"))
+
+
+class TestNonTtyRefusesToPrompt:
+    """Regression: headless mode without ``--yes`` must not hang or exit
+    silently when stdin isn't a TTY. An interactive ``questionary`` prompt
+    in that situation kills the process with exit 1 and no structured
+    output, which leaves agents (Claude Code / Codex / CI) unable to
+    classify the failure.
+    """
+
+    @staticmethod
+    def _forge_bin() -> Path:
+        # ``console_scripts`` install the entry point next to the
+        # interpreter; works whether we're inside ``.venv`` or not.
+        return Path(sys.executable).parent / "forge"
+
+    def test_json_non_tty_emits_error_envelope(self, tmp_path):
+        forge_bin = self._forge_bin()
+        if not forge_bin.is_file():
+            pytest.skip(f"forge entry point not installed at {forge_bin}")
+
+        cfg = tmp_path / "forge.yaml"
+        cfg.write_text(
+            "project_name: hf3-smoke\n"
+            "backend:\n"
+            "  language: python\n"
+            "  features: [items]\n"
+            "frontend:\n"
+            "  framework: none\n"
+        )
+
+        proc = subprocess.run(
+            [
+                str(forge_bin),
+                "--config",
+                str(cfg),
+                "--json",
+                "--no-docker",
+                "--output-dir",
+                str(tmp_path / "out"),
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert proc.returncode == 2, (
+            f"expected exit 2, got {proc.returncode}\n"
+            f"stdout: {proc.stdout!r}\nstderr: {proc.stderr!r}"
+        )
+        payload = json.loads(proc.stdout.strip().splitlines()[-1])
+        assert "error" in payload
+        assert "yes" in payload["error"].lower() or "stdin" in payload["error"].lower()
