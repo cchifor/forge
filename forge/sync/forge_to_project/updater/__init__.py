@@ -46,7 +46,13 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from forge.capability_resolver import ResolvedPlan, resolve
-from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
+from forge.config import (
+    BACKEND_REGISTRY,
+    BackendConfig,
+    BackendLanguage,
+    FrontendFramework,
+    ProjectConfig,
+)
 from forge.errors import (
     PROVENANCE_MANIFEST_MISSING,
     ForgeError,
@@ -66,7 +72,12 @@ from forge.sync.forge_to_project.updater._merge_driver import (
 )
 from forge.sync.forge_to_project.updater._template_render import _build_template_update_tasks
 from forge.sync.lock import acquire_lock
-from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
+from forge.sync.manifest import (
+    ForgeFrontendData,
+    ForgeTomlData,
+    read_forge_toml,
+    write_forge_toml,
+)
 from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
@@ -143,10 +154,17 @@ def _update_locked(
     except metadata.PackageNotFoundError:
         current_version = "0.0.0+unknown"
 
-    backends = _infer_backends(project_root)
-    if not backends:
+    backends = _infer_backends(project_root, manifest_frontend=data.frontend)
+    frontend_framework = _frontend_framework_from_manifest(data.frontend)
+    if not backends and frontend_framework == FrontendFramework.NONE:
+        # Genuinely empty project — no services/<backend>/ AND no
+        # frontend recorded in the manifest (and none discoverable on
+        # disk). That's not something --update can act on; bail with
+        # the same error shape that pre-Initiative-#3 used so JSON
+        # callers keep their existing envelope.
         raise ProvenanceError(
-            f"No services/<backend>/ directories found under {project_root}. Nothing to update.",
+            f"No services/<backend>/ directories or [forge.frontend] layer found under "
+            f"{project_root}. Nothing to update.",
             context={"project_root": str(project_root)},
         )
 
@@ -237,8 +255,14 @@ def _update_locked(
 
     # Epic H — sentinel audit before re-injection. If a hand-edit broke
     # a BEGIN/END pair, raise here with the file+tag+line rather than
-    # silently double-injecting.
-    injection_targets = _collect_injection_targets(project_root, plan, config.backends)
+    # silently double-injecting. We pass the resolver's option map so
+    # ``FragmentPlan.from_impl`` renders any Jinja-templated injection
+    # targets — without it the audit silently skipped option-rendered
+    # paths and the apply pass downstream could double-inject (or fail
+    # noisily) on a corrupted file we never saw.
+    injection_targets = _collect_injection_targets(
+        project_root, plan, config.backends, options=plan.option_values
+    )
     issues = audit_targets(injection_targets)
     if issues:
         if not quiet:
@@ -399,6 +423,13 @@ def _update_locked(
 
     if not quiet:
         print("  [update] re-applying project-scope fragments ...")
+    # ``frontend_framework`` (Initiative #3) — forward the manifest's
+    # recorded frontend so ``Fragment.target_frontends`` gating fires
+    # on update. Pre-Init-#3 this argument was omitted, so a Vue-only
+    # fragment was applied to Svelte / Flutter / frontend-less projects
+    # on every ``--update`` (or worse, errored out). v3 manifests fall
+    # back to inference from ``apps/<slug>/`` — see
+    # :func:`forge.sync.manifest._infer_frontend_from_v3`.
     apply_project_features(
         project_root,
         plan.ordered,
@@ -407,6 +438,7 @@ def _update_locked(
         file_baselines=file_baselines,
         collector=collector,
         option_values=plan.option_values,
+        frontend_framework=frontend_framework,
     )
 
     for rf in plan.ordered:
@@ -444,6 +476,11 @@ def _update_locked(
         for path in plan.option_values
     }
 
+    # Initiative #3 — preserve the manifest's recorded frontend layer
+    # on re-stamp. If we read v4 explicit data, write it back. If we
+    # inferred from v3, the inference result is what carries the
+    # framework + app_dir forward, upgrading the on-disk manifest to
+    # v4 in place.
     _restamp_forge_toml(
         manifest=manifest,
         project_name=data.project_name or project_root.name,
@@ -454,6 +491,7 @@ def _update_locked(
         provenance=collector.as_dict(),
         merge_blocks=collector.merge_blocks_as_dict(),
         template_versions=next_template_versions,
+        frontend=data.frontend,
     )
 
     return {
@@ -493,6 +531,8 @@ def _collect_injection_targets(
     project_root: Path,
     plan: ResolvedPlan,
     backends: list[BackendConfig],
+    *,
+    options: dict[str, Any] | None = None,
 ) -> list[Path]:
     """Return every file path the plan's injections would touch.
 
@@ -500,9 +540,17 @@ def _collect_injection_targets(
     pairs before injection runs. The set is the union of inject.yaml
     targets across every resolved fragment × every matching backend.
     Duplicates are collapsed — one file audited once is enough.
+
+    ``options`` (Initiative #3) seeds Jinja rendering of injection
+    target paths declared with ``render: true`` in ``inject.yaml``.
+    Without it, option-rendered paths fall through with their raw
+    Jinja syntax and the audit silently misses any file the fragment
+    would actually touch on apply. Defaults to an empty dict for
+    backward compatibility; the updater passes ``plan.option_values``.
     """
     from forge.appliers.plan import FragmentPlan  # noqa: PLC0415
 
+    rendering_options = options if options is not None else {}
     seen: set[Path] = set()
     for rf in plan.ordered:
         for bc in backends:
@@ -516,7 +564,7 @@ def _collect_injection_targets(
                 fp = FragmentPlan.from_impl(
                     impl,
                     rf.fragment.name,
-                    options={},
+                    options=rendering_options,
                     middlewares=rf.fragment.middlewares,
                     backend=bc.language,
                 )
@@ -601,15 +649,29 @@ def classify_project_state(
     return out
 
 
-def _infer_backends(project_root: Path) -> list[BackendConfig]:
+def _infer_backends(
+    project_root: Path,
+    *,
+    manifest_frontend: ForgeFrontendData | None = None,
+) -> list[BackendConfig]:
     """Discover backends from on-disk layout.
 
     Each ``services/<name>/`` is a backend. Language is inferred from the
     language-specific marker file present: ``pyproject.toml`` → python,
     ``package.json`` → node, ``Cargo.toml`` → rust.
+
+    ``manifest_frontend`` (Initiative #3) is a no-op for built-in
+    backend discovery — it's accepted so the harvester / planner /
+    updater can pass the manifest's recorded frontend through without
+    branching at the call site. A future plugin-backend marker
+    fallback would consult it; today it only documents that the
+    caller has a manifest-side frontend record (used by the updater's
+    "no backends, but a frontend exists" decision in
+    ``_update_locked``).
     """
     services = project_root / "services"
     if not services.is_dir():
+        _ = manifest_frontend  # accepted for forward-compat; see docstring
         return []
 
     markers: dict[str, BackendLanguage] = {
@@ -632,7 +694,33 @@ def _infer_backends(project_root: Path) -> list[BackendConfig]:
                     )
                 )
                 break
+    _ = manifest_frontend  # accepted for forward-compat; see docstring
     return out
+
+
+def _frontend_framework_from_manifest(
+    frontend: ForgeFrontendData,
+) -> FrontendFramework:
+    """Map the manifest's ``[forge.frontend]`` record onto a :class:`FrontendFramework`.
+
+    Returns :attr:`FrontendFramework.NONE` when the manifest doesn't
+    record a frontend (``framework == ""`` — typically the case for
+    backend-only projects, or a v3 manifest where on-disk inference
+    didn't find an ``apps/<slug>/`` marker). Unknown framework names
+    (plugin frontends the current forge doesn't recognise) also
+    collapse to NONE: the updater treats those as "frontend layer
+    present but not introspectable", and the project-scope fragment
+    pass simply skips ``target_frontends``-gated fragments — same
+    effect as a no-frontend project, which is the conservative
+    behaviour.
+    """
+    if not frontend.framework:
+        return FrontendFramework.NONE
+    try:
+        return FrontendFramework(frontend.framework)
+    except ValueError:
+        # Plugin framework or stray value — be conservative.
+        return FrontendFramework.NONE
 
 
 def _restamp_forge_toml(
@@ -646,6 +734,7 @@ def _restamp_forge_toml(
     provenance: dict[str, dict[str, str]] | None = None,
     merge_blocks: dict[str, dict[str, str]] | None = None,
     template_versions: dict[str, str] | None = None,
+    frontend: ForgeFrontendData | None = None,
 ) -> None:
     """Write forge.toml with the current version + options + provenance + merge blocks.
 
@@ -660,10 +749,49 @@ def _restamp_forge_toml(
     "default"). When ``None``, :func:`write_forge_toml`'s fallback
     stamps every entry as "user" (legacy callers; the in-tree updater
     populates this explicitly post-WS2b).
+
+    ``frontend`` (Initiative #3, v4) carries the project's frontend
+    framework + app_dir forward across re-stamps. Built-in frontends
+    (Vue / Svelte / Flutter) also get their template_dir added to the
+    ``[forge.templates]`` map so the next read-time inference fallback
+    has a v4-compatible source even if the explicit table is dropped
+    by an unrelated write path. ``None`` and the empty-framework
+    record both omit the ``[forge.frontend]`` table.
     """
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
         templates[lang.value] = BACKEND_REGISTRY[lang].template_dir
+
+    # Mirror the generator: include the frontend template_dir in
+    # ``[forge.templates]`` so downstream re-reads (and tools that
+    # only inspect ``data.templates``) still see the frontend layer
+    # even if they ignore the dedicated ``[forge.frontend]`` table.
+    # We avoid importing :data:`forge.generator.TEMPLATE_DIRS` here
+    # (the generator imports the updater via the CLI hook chain —
+    # round-tripping would create a circular import); the mapping
+    # below mirrors that table for the built-in frameworks and the
+    # ``FRONTEND_SPECS`` registry for plugins.
+    if frontend is not None and frontend.framework:
+        builtin_dirs = {
+            FrontendFramework.VUE: "apps/vue-frontend-template",
+            FrontendFramework.SVELTE: "apps/svelte-frontend-template",
+            FrontendFramework.FLUTTER: "apps/flutter-frontend-template",
+        }
+        try:
+            framework_enum = FrontendFramework(frontend.framework)
+        except ValueError:
+            framework_enum = None
+        if framework_enum is not None and framework_enum != FrontendFramework.NONE:
+            template_dir = builtin_dirs.get(framework_enum)
+            if template_dir:
+                templates[framework_enum.value] = template_dir
+        elif framework_enum is None:
+            # Plugin-registered framework — look it up via FRONTEND_SPECS.
+            from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+            plugin_spec = FRONTEND_SPECS.get(frontend.framework)
+            if plugin_spec is not None:
+                templates[frontend.framework] = plugin_spec.template_dir
 
     write_forge_toml(
         manifest,
@@ -675,11 +803,13 @@ def _restamp_forge_toml(
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
+        frontend=frontend,
     )
 
 
 __all__ = [
     "_apply_fragment",
+    "_frontend_framework_from_manifest",
     "_infer_backends",
     "_no_uninstall_flag",
     "apply_features",
