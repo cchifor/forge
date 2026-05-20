@@ -32,6 +32,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from tests.matrix.runner import Scenario, run_lane_smoke
 
 
@@ -543,3 +545,138 @@ class TestLaneDLiveTreeSandbox:
             "forge tree before apply_bundle_to_fragments — see "
             "_materialize_forge_sandbox docstring."
         )
+
+
+class TestSkippedLaneAnnotations:
+    """Initiative #9 — skipped lanes + sub-checks must surface as
+    GitHub Actions ``::warning::`` annotations.
+
+    Pre-#9: ``docker not on PATH`` → silent SKIP; lane B's frontend
+    check returned None for both success AND missing-npm → silent
+    skip; ``_check_openapi`` printed to stdout when every path 404'd
+    → silent skip. The nightly matrix grid showed all three as
+    pass-because-skipped, masking a CI image regression that removed
+    a tool.
+
+    Post-#9: every skip carries a label, and the runner's main()
+    emits one ``::warning::`` line per label so the GH Actions UI
+    surfaces them on the run summary. The lane keeps ``status="skip"``
+    (these are environmental, not failures) but the warning forces
+    a human eyeball.
+    """
+
+    def test_emit_annotations_one_warning_per_skipped_lane(self, capsys):
+        """A lane SKIP with details emits exactly one warning line."""
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="rust_svelte_min",
+                    lane="smoke",
+                    status="skip",
+                    duration_ms=0,
+                    details="docker not on PATH",
+                ),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "::warning" in out
+        assert "rust_svelte_min" in out
+        assert "docker not on PATH" in out
+
+    def test_emit_annotations_for_sub_check_skips(self, capsys):
+        """Sub-check skips (lane B frontend, lane C openapi) emit
+        a separate annotation line even when the lane itself is OK.
+        Without this, a green lane with internal skips would hide
+        coverage loss from a missing runtime tool."""
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="node_only_headless",
+                    lane="verify",
+                    status="ok",
+                    duration_ms=42,
+                    details="",
+                    skipped_subchecks=["frontend: npm not on PATH"],
+                ),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "::warning" in out
+        assert "node_only_headless" in out
+        assert "frontend: npm not on PATH" in out
+
+    def test_emit_annotations_no_output_for_ok_lanes(self, capsys):
+        """A clean OK lane (no details, no sub-skips) emits nothing —
+        the annotation surface must be silent for happy-path scenarios
+        so it doesn't drown the GH Actions UI in green noise.
+        """
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="py_only_headless",
+                    lane="generate",
+                    status="ok",
+                    duration_ms=15000,
+                ),
+            ]
+        )
+        assert capsys.readouterr().out == ""
+
+    def test_emit_annotations_skips_lane_optout_message(self, capsys):
+        """The "scenario does not opt into lane X" skip is a routine
+        config statement (matrix x lanes grid has cells that don't
+        apply), not a missing-dep signal. Treating every such cell as
+        an annotation would drown the real missing-dep skips in noise.
+        """
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="py_only_headless",
+                    lane="smoke",
+                    status="skip",
+                    duration_ms=0,
+                    # Verbatim string from ``run_scenario`` (pinned
+                    # via ``_LANE_OPTOUT_DETAILS_PREFIX``).
+                    details="scenario does not opt into lane smoke",
+                ),
+            ]
+        )
+        assert "::warning" not in capsys.readouterr().out
+
+    def test_skip_summary_line_counts_lanes_and_subchecks(self):
+        """The plaintext summary is the local-invocation receipt:
+        a one-liner that says how many skips happened so the operator
+        sees the count without scrolling through warnings. JSON / CI
+        readers get the same info via per-line annotations."""
+        from tests.matrix.runner import LaneResult, _format_skip_summary
+
+        results = [
+            LaneResult(
+                scenario="a",
+                lane="smoke",
+                status="skip",
+                duration_ms=0,
+                details="docker missing",
+            ),
+            LaneResult(
+                scenario="b",
+                lane="verify",
+                status="ok",
+                duration_ms=1,
+                skipped_subchecks=["frontend: npm missing"],
+            ),
+            LaneResult(scenario="c", lane="generate", status="ok", duration_ms=2),
+        ]
+        summary = _format_skip_summary(results)
+        assert "1 lane(s) skipped" in summary
+        assert "1 sub-check(s) skipped" in summary
+        # Empty when nothing was skipped — silent on the happy path.
+        assert _format_skip_summary([results[-1]]) == ""
