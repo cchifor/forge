@@ -93,6 +93,16 @@ class TestDatabaseModeValidation:
             ("events.bus", "postgres_notify", "events.bus"),
             ("streaming.sse", True, "streaming.sse"),
             ("airlock.client", True, "airlock.client"),
+            # Init #7 codex follow-up: these options enable fragments
+            # that transitively pull conversation_persistence (DB-backed)
+            # but the original validate() didn't list them. The
+            # metadata-driven walker now catches them via the
+            # requires_database flags landed in the same commit set.
+            ("agent.mode", "llm_only", "agent.mode"),
+            ("agent.mode", "tool_calling", "agent.mode"),
+            ("rag.embeddings", "voyage", "rag.embeddings"),
+            ("rag.reranker", True, "rag.reranker"),
+            ("async.rag_ingest_queue", True, "async.rag_ingest_queue"),
         ],
     )
     def test_mode_none_rejects_db_backed_options(

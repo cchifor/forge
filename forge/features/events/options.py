@@ -29,6 +29,11 @@ never lose events on listener downtime.
 BACKENDS: python
 DEPENDENCY: weld-events""",
         category=FeatureCategory.ASYNC_WORK,
+        # Initiative #7 — only the values that resolve to fragments are
+        # checked. ``postgres_notify`` and ``memory`` both need a DB
+        # because ``events_core`` ships an alembic migration. ``none``
+        # has no enables → is_active_value returns False → no DB check.
+        requires_database=True,
         enables={
             "postgres_notify": ("events_core",),
             "memory": ("events_core",),
@@ -58,6 +63,9 @@ that never publishes. Enable both together when adopting the bus.
 REQUIRES: ``events.bus`` ≠ ``none``.
 BACKENDS: python""",
         category=FeatureCategory.ASYNC_WORK,
+        # Initiative #7 — outbox is a DB table with its own alembic
+        # migration; can't exist without a database.
+        requires_database=True,
         enables={True: ("events_outbox",)},
     )
 )

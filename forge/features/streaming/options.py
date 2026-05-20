@@ -27,6 +27,10 @@ DEPENDENCY: weld-streaming, sse-starlette
 ENV: STREAMING_HEARTBEAT_S, STREAMING_QUEUE_MAX""",
         category=FeatureCategory.ASYNC_WORK,
         stability="beta",
+        # Initiative #7 — transitively requires the event bus, which
+        # requires the DB. Surfacing the constraint here too keeps the
+        # diagnostic explicit when the user enables streaming.sse alone.
+        requires_database=True,
         enables={True: ("streaming_sse",)},
     )
 )
