@@ -37,6 +37,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+import sys
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -771,7 +772,25 @@ def _resolve_namespace(
     )
 
 
+class _TTYStub:
+    """Stand-in for ``sys.stdin`` that reports as a TTY.
+
+    HF-3 (FU-4): ``_run_resolve`` refuses to prompt when stdin is
+    non-TTY and sidecars are present. Tests in :class:`TestCLIDispatch`
+    exercise the interactive path by replacing the prompt with
+    :func:`_patch_select`; this stub keeps the TTY guard from short-
+    circuiting before the patched prompt can intercept.
+    """
+
+    def isatty(self) -> bool:
+        return True
+
+
 class TestCLIDispatch:
+    @pytest.fixture(autouse=True)
+    def _fake_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "stdin", _TTYStub())
+
     def test_cli_runs_against_project(self, tmp_path: Path) -> None:
         """End-to-end via ``_run_resolve``: a real walk with accept."""
         meta = _scaffold_file_project(tmp_path)
@@ -936,3 +955,58 @@ class TestOpenEditor:
         rc = _open_editor(scratch)
         assert rc == 0
         assert seen["cmd"][-1] == str(scratch)
+
+
+# ---------------------------------------------------------------------------
+# FU-4: non-TTY refusal — agents driving ``forge --resolve --json`` without a
+# terminal must get a structured error envelope instead of falling into
+# questionary's silent exit(1). Pairs with the HF-3 guard on
+# ``forge new``.
+# ---------------------------------------------------------------------------
+
+
+class TestCLINonTtyRefusesToPrompt:
+    """Regression for the FU-4 carve-out at
+    :func:`forge.cli.commands.resolve._run_resolve`. When stdin is not
+    a TTY AND there are sidecars to walk, the dispatcher emits a JSON
+    refusal (or text on stderr) and returns the resolve-failure exit
+    code rather than falling into the questionary prompt.
+    """
+
+    def test_json_non_tty_with_sidecars_refuses(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        meta = _scaffold_file_project(tmp_path)
+        # Pytest typically captures stdin as a non-TTY pipe; assert
+        # the premise of this test so a future test-runner change
+        # surfaces as a test failure rather than a silent bypass.
+        assert not sys.stdin.isatty()
+
+        ns = _resolve_namespace(project_path=str(tmp_path), json_output=True)
+        rc = _run_resolve(ns)
+
+        assert rc == 5
+        out = capsys.readouterr().out
+        payload = json.loads(out.strip().splitlines()[-1])
+        assert "error" in payload
+        assert payload["sidecar_count"] == 1
+        # The walk never started, so the sidecar must still be on disk.
+        assert meta["sidecar"].exists()
+
+    def test_non_tty_with_no_sidecars_proceeds(self, tmp_path: Path) -> None:
+        # Empty project (forge.toml exists, no sidecars). The TTY guard
+        # short-circuits on the sidecar-count check, so the resolver
+        # runs and returns a clean empty report.
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.2.0",
+            project_name="demo",
+            templates={"python": "services/python-service-template"},
+            options={},
+        )
+        assert not sys.stdin.isatty()
+
+        ns = _resolve_namespace(project_path=str(tmp_path), json_output=True)
+        rc = _run_resolve(ns)
+
+        assert rc == 0
