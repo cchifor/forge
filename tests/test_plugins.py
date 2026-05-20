@@ -140,6 +140,52 @@ class TestForgeAPI:
             api.add_extractor("bogus", object())
         assert reg.extractors_added == ()
 
+    def test_add_extractor_retains_extractor_callable(self) -> None:
+        # Initiative #1 sub-task 4: the extractor instance must be
+        # retained on PluginRegistration.extractor_registrations so the
+        # harvester can actually invoke it. Pre-sub-task-4 the API did
+        # ``del extractor`` and only kept the (kind, fragment) tag.
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "files"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        instance = _StubExtractor()
+        api.add_extractor("files", instance)
+
+        assert len(reg.extractor_registrations) == 1
+        registration = reg.extractor_registrations[0]
+        assert registration.kind == "files"
+        assert registration.fragment is None
+        assert registration.extractor is instance
+
+    def test_add_extractor_preserves_fragment_scope(self) -> None:
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        class _StubExtractor:
+            kind = "block"
+
+            def extract(self, ctx, plan):  # noqa: ARG002
+                return []
+
+        instance = _StubExtractor()
+        api.add_extractor("block", instance, fragment="auth_jwt")
+
+        assert len(reg.extractor_registrations) == 1
+        registration = reg.extractor_registrations[0]
+        assert registration.kind == "block"
+        assert registration.fragment == "auth_jwt"
+        assert registration.extractor is instance
+        # The harvester pipeline assembler treats fragment-scoped
+        # overrides as deferred (still recorded, not yet invoked).
+        # Drift-gate the assertion as documentation of the contract.
+        assert registration.as_legacy_pair == ("block", "auth_jwt")
+
     def test_as_dict_surfaces_extractor_registrations(self) -> None:
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)
