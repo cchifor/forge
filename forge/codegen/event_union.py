@@ -205,6 +205,18 @@ def emit_dart(schemas: list[Schema]) -> str:
     The file is self-contained: every payload class is inlined
     (reusing :func:`forge.codegen.ui_protocol._dart_for_schema`) and
     then a sealed-class hierarchy wraps them with a ``kind`` getter.
+
+    A static :meth:`AgUiEvent.parse` factory is also emitted so the
+    repo's ``AgUiClient`` (see :file:`packages/forge-canvas-dart/lib/src/ag_ui_client.dart`)
+    can be wired up without any per-app glue:
+
+        AgUiClient<AgUiEvent>(dio: dio, parser: AgUiEvent.parse, ...)
+
+    ``parse`` switches on the ``kind`` slug, delegates to the matching
+    payload's ``.fromJson`` constructor, and wraps the result in the
+    sealed subclass. Returns ``null`` when ``kind`` is missing or
+    unknown — the caller's ``onParseError`` decides whether to surface
+    a synthetic event or drop the frame.
     """
     kinds = _kinds_list(schemas)
 
@@ -225,6 +237,32 @@ def emit_dart(schemas: list[Schema]) -> str:
     lines.append("")
     lines.append("  /// The kebab-case kind slug for this variant.")
     lines.append("  String get kind;")
+    lines.append("")
+    # Factory: kind -> variant. Returns null for missing/unknown kind so
+    # AgUiClient<AgUiEvent>(parser: AgUiEvent.parse) wires up directly
+    # without per-app glue.
+    lines.append("  /// Parse a raw JSON frame into the matching sealed variant.")
+    lines.append("  ///")
+    lines.append("  /// Reads the canonical `kind` discriminator and dispatches to")
+    lines.append("  /// the matching payload's `fromJson`. Returns `null` when the")
+    lines.append("  /// frame has no `kind` field or carries an unknown slug —")
+    lines.append("  /// the caller's `onParseError` then decides whether to surface")
+    lines.append("  /// a synthetic event or drop the frame.")
+    lines.append("  ///")
+    lines.append("  /// Wired into the shipped `AgUiClient` via")
+    lines.append("  /// `AgUiClient<AgUiEvent>(parser: AgUiEvent.parse, ...)`.")
+    lines.append("  static AgUiEvent? parse(Map<String, dynamic> json) {")
+    lines.append("    final kind = json['kind'];")
+    lines.append("    if (kind is! String) return null;")
+    lines.append("    switch (kind) {")
+    for title, kind in kinds:
+        case_name = f"{title}Event"
+        lines.append(f"      case '{kind}':")
+        lines.append(f"        return {case_name}({title}.fromJson(json));")
+    lines.append("      default:")
+    lines.append("        return null;")
+    lines.append("    }")
+    lines.append("  }")
     lines.append("}")
     lines.append("")
 
