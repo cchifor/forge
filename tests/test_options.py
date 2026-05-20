@@ -151,6 +151,193 @@ class TestValidateValue:
             opt.validate_value("HELLO")
 
 
+class TestOptionCompatMetadata:
+    """Initiative #7 — structural checks on the new compatibility fields."""
+
+    def test_compat_defaults_match_legacy_behaviour(self) -> None:
+        """Default compat metadata: backend-required, no DB requirement,
+        any built-in backend / frontend, no incompatibilities. This mirrors
+        the pre-Initiative-#7 state where the resolver had no per-Option
+        compatibility metadata at all."""
+        opt = Option(
+            path="x.compat",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        assert opt.requires_database is False
+        assert opt.requires_backend is True
+        assert opt.allowed_backends is None
+        assert opt.allowed_frontends is None
+        assert opt.incompatible_with == ()
+
+    def test_allowed_backends_empty_tuple_rejected(self) -> None:
+        from forge.config._backend import BackendLanguage  # noqa: PLC0415
+
+        with pytest.raises(ValueError, match="allowed_backends must be None"):
+            Option(
+                path="x.compat",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+                allowed_backends=(),
+            )
+        # Sanity: non-empty tuple is accepted.
+        Option(
+            path="x.compat2",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+            allowed_backends=(BackendLanguage.PYTHON,),
+        )
+
+    def test_allowed_frontends_empty_tuple_rejected(self) -> None:
+        from forge.config._frontend import FrontendFramework  # noqa: PLC0415
+
+        with pytest.raises(ValueError, match="allowed_frontends must be None"):
+            Option(
+                path="x.compat",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+                allowed_frontends=(),
+            )
+        # Sanity: non-empty tuple accepted.
+        Option(
+            path="x.compat2",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+            allowed_frontends=(FrontendFramework.VUE,),
+        )
+
+    def test_incompatible_with_self_referential_rejected(self) -> None:
+        with pytest.raises(ValueError, match="can't conflict with itself"):
+            Option(
+                path="x.self",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+                incompatible_with=("x.self",),
+            )
+
+    def test_incompatible_with_duplicates_rejected(self) -> None:
+        with pytest.raises(ValueError, match="duplicate entries in incompatible_with"):
+            Option(
+                path="x.dup",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+                incompatible_with=("a.b", "a.b"),
+            )
+
+    def test_incompatible_with_invalid_path_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Invalid option path"):
+            Option(
+                path="x.bad_target",
+                type=OptionType.BOOL,
+                default=False,
+                summary="s",
+                description="d",
+                category=FeatureCategory.PLATFORM,
+                incompatible_with=("not a path",),
+            )
+
+    def test_requires_database_accepted(self) -> None:
+        opt = Option(
+            path="x.needs_db",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+            requires_database=True,
+        )
+        assert opt.requires_database is True
+
+    def test_requires_backend_false_accepted(self) -> None:
+        """Frontend-only options opt out of the default backend requirement."""
+        opt = Option(
+            path="x.frontend_only",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+            requires_backend=False,
+        )
+        assert opt.requires_backend is False
+
+
+class TestIsActiveValue:
+    """``Option.is_active_value`` powers the compatibility walker — it
+    decides whether a registered option's value should trigger
+    metadata checks. BOOL active iff True; ENUM active iff the value
+    resolves to at least one fragment; other types inactive."""
+
+    def test_bool_true_active(self) -> None:
+        opt = Option(
+            path="x.on",
+            type=OptionType.BOOL,
+            default=False,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        assert opt.is_active_value(True) is True
+        assert opt.is_active_value(False) is False
+
+    def test_enum_active_when_value_enables_fragments(self) -> None:
+        opt = Option(
+            path="x.pick",
+            type=OptionType.ENUM,
+            default="none",
+            options=("none", "a", "b"),
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+            enables={"a": ("frag_a",), "b": ("frag_b",)},
+        )
+        assert opt.is_active_value("a") is True
+        assert opt.is_active_value("b") is True
+        # ``none`` doesn't map to fragments → considered inactive.
+        assert opt.is_active_value("none") is False
+
+    def test_str_and_int_inactive(self) -> None:
+        opt_str = Option(
+            path="x.s",
+            type=OptionType.STR,
+            default="hello",
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        opt_int = Option(
+            path="x.k",
+            type=OptionType.INT,
+            default=5,
+            summary="s",
+            description="d",
+            category=FeatureCategory.PLATFORM,
+        )
+        assert opt_str.is_active_value("hello") is False
+        assert opt_int.is_active_value(5) is False
+
+
 class TestOptionConstruction:
     def test_invalid_path_rejected(self) -> None:
         with pytest.raises(ValueError, match="Invalid option path"):

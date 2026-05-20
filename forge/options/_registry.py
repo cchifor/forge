@@ -21,7 +21,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from forge.config._backend import BackendLanguage
+    from forge.config._frontend import FrontendFramework
 
 # -----------------------------------------------------------------------------
 # Categories — product-level grouping for display
@@ -204,6 +208,39 @@ class Option:
     # recursion into further OBJECT types).
     object_schema: dict[str, ObjectFieldSpec] | None = None
 
+    # Initiative #7 — compatibility metadata. Replaces the
+    # feature-name-dispatching ``ProjectConfig.validate()`` block that
+    # used to hard-code "if rag/conversation/events… then check
+    # database.mode" rules. The resolver now walks every enabled
+    # Option's metadata generically; adding a new feature only requires
+    # declaring its constraints next to its other Option fields.
+    #
+    # ``requires_database`` — when the option is "enabled" (BOOL=True
+    # or ENUM≠the false-y value) the resolved fragment plan needs a
+    # real database, so ``database.mode != "none"``. Default False so
+    # most options stay opt-in.
+    requires_database: bool = False
+    # ``requires_backend`` — option only makes sense when at least one
+    # backend is being generated (``backend.mode != "none"``). Defaults
+    # True because every option in the registry today targets a backend
+    # service; frontend-only Options must opt out explicitly.
+    requires_backend: bool = True
+    # ``allowed_backends`` — None means "any registered backend
+    # language" (built-in + plugin). Non-None enumerates the supported
+    # built-in BackendLanguage values explicitly; the resolver rejects
+    # the option when none of the project's backends match.
+    allowed_backends: tuple[BackendLanguage, ...] | None = None
+    # ``allowed_frontends`` — same semantics for frontends. Only
+    # meaningful when the option targets a frontend feature (rare —
+    # most registry options target backends).
+    allowed_frontends: tuple[FrontendFramework, ...] | None = None
+    # ``incompatible_with`` — other canonical option paths that
+    # mutual-exclude this one when both are enabled. Mirrors fragment
+    # ``conflicts_with`` but at the option layer so the error message
+    # can name the user-visible option paths instead of the internal
+    # fragment names.
+    incompatible_with: tuple[str, ...] = ()
+
     def __post_init__(self) -> None:
         _validate_path(self.path)
         self._validate_default_matches_type()
@@ -211,6 +248,7 @@ class Option:
         self._validate_enables_shape()
         self._validate_constraints()
         self._validate_aliases()
+        self._validate_compat_metadata()
 
     # -- validators ----------------------------------------------------------
 
@@ -309,12 +347,70 @@ class Option:
             if self.max is not None and self.default > self.max:
                 raise ValueError(f"Option {self.path}: default {self.default} > max {self.max}")
 
+    def _validate_compat_metadata(self) -> None:
+        """Initiative #7 — structural checks on compatibility metadata.
+
+        Cross-option checks (``incompatible_with`` targets exist,
+        layer modes aren't self-referential) run at resolver time —
+        they depend on registry state that doesn't exist yet at
+        Option construction. Here we just ensure the per-Option
+        shapes are sane.
+        """
+        if self.allowed_backends is not None and not self.allowed_backends:
+            raise ValueError(
+                f"Option {self.path}: allowed_backends must be None (any) "
+                "or a non-empty tuple — empty tuple means 'no backend can "
+                "use this option', which is nonsensical."
+            )
+        if self.allowed_frontends is not None and not self.allowed_frontends:
+            raise ValueError(
+                f"Option {self.path}: allowed_frontends must be None (any) "
+                "or a non-empty tuple."
+            )
+        for other in self.incompatible_with:
+            _validate_path(other)
+            if other == self.path:
+                raise ValueError(
+                    f"Option {self.path}: incompatible_with includes its "
+                    f"own path {other!r} — an option can't conflict with "
+                    "itself."
+                )
+        if len(set(self.incompatible_with)) != len(self.incompatible_with):
+            raise ValueError(
+                f"Option {self.path}: duplicate entries in incompatible_with "
+                f"{list(self.incompatible_with)}"
+            )
+
     # -- convenience ---------------------------------------------------------
 
     @property
     def namespace(self) -> str:
         """Top-level segment of the path (e.g. ``rag.backend`` → ``rag``)."""
         return self.path.split(".", 1)[0]
+
+    def is_active_value(self, value: Any) -> bool:
+        """True when ``value`` represents the option being "turned on".
+
+        Used by the Initiative #7 compatibility walker on
+        ``ProjectConfig.validate()``: a BOOL option is active when
+        ``True``; an ENUM option is active when its value resolves to
+        at least one fragment (i.e. non-empty ``enables`` entry).
+        STR / INT / LIST options have no on/off concept — the walker
+        treats them as always inactive so compatibility metadata on
+        those types is a no-op until callers explicitly opt in.
+
+        The point of this rule is to mirror the pre-Initiative #7
+        behaviour: ``rag.backend="none"`` did *not* trigger the old
+        hard-coded DB compatibility check, but ``rag.backend="qdrant"``
+        did. Both have the same Option object — the value is what
+        matters.
+        """
+        if self.type is OptionType.BOOL:
+            return value is True
+        if self.type is OptionType.ENUM:
+            return bool(self.enables.get(value))
+        # STR / INT / LIST / OBJECT — see the docstring; opt out by default.
+        return False
 
     def validate_value(self, value: Any) -> None:
         """Raise ``ValueError`` if ``value`` isn't admissible for this Option.
