@@ -103,7 +103,10 @@ class TestPluginEmitterIsInvoked:
         emitted_root, emitted_config, emitted_resolved = calls[0]
         assert emitted_root == project_root
         assert emitted_config is config
-        # No resolved plan threaded yet — documents the deferred follow-up.
+        # No plan supplied to this call → emitter sees None. The
+        # production caller (forge.generator._apply_project_scope)
+        # forwards the resolved plan; the resolved-forwarded path is
+        # pinned in test_resolved_plan_is_forwarded below.
         assert emitted_resolved is None
 
     def test_emitter_can_write_files(self, tmp_path: Path) -> None:
@@ -213,12 +216,17 @@ class TestTargetCollision:
     collision behaviour from Initiative #1 sub-task 4."""
 
     def test_last_loaded_plugin_wins(self, tmp_path: Path) -> None:
+        """Only the last-loaded plugin's emitter for the target runs.
+
+        Matches the harvester's
+        ``_collect_global_plugin_extractor_overrides`` semantics: the
+        collection pass dedup's by target, and the invocation pass
+        runs only the winner. If both side-effects shipped, the
+        collision warning would be a lie — the operator would expect
+        plugin B to own the target but plugin A's emitter would still
+        have written its own output earlier in the same run.
+        """
         config, project_root = _make_project(tmp_path)
-        # We invoke BOTH emitters (the codegen walker doesn't currently
-        # dedup, it just warns) — but the "winner" recorded in the
-        # warning is the last-loaded plugin. Document that here so a
-        # future change that switches to skip-the-loser-entirely has to
-        # update this test on purpose.
         fired: list[str] = []
 
         def first(pr: Path, cfg: ProjectConfig, resolved: Any) -> None:
@@ -233,9 +241,33 @@ class TestTargetCollision:
         _register_plugin_emitter("plugin_second", "python", second)
         run_codegen(config, project_root)
 
-        # Today: both fire, in registration order — the warning
-        # tells the operator which plugin "owns" the target.
-        assert fired == ["first", "second"]
+        assert fired == ["second"], (
+            "last-loaded plugin must be the only one whose emitter runs "
+            "for a collided target — otherwise the collision warning lies"
+        )
+
+    def test_loser_emitter_does_not_write_files(self, tmp_path: Path) -> None:
+        """Stronger form of the previous test: the loser must not write
+        files. Catches a future regression that re-introduces the
+        eager-invoke behaviour from a botched refactor."""
+        config, project_root = _make_project(tmp_path)
+
+        def loser(pr: Path, cfg: ProjectConfig, resolved: Any) -> None:
+            _ = cfg, resolved
+            (pr / "loser_wrote_this.txt").write_text("oops", encoding="utf-8")
+
+        def winner(pr: Path, cfg: ProjectConfig, resolved: Any) -> None:
+            _ = cfg, resolved
+            (pr / "winner_wrote_this.txt").write_text("ok", encoding="utf-8")
+
+        _register_plugin_emitter("plugin_loser", "openapi", loser)
+        _register_plugin_emitter("plugin_winner", "openapi", winner)
+        run_codegen(config, project_root)
+
+        assert not (project_root / "loser_wrote_this.txt").exists(), (
+            "loser's emitter must NOT have run — it wrote a file"
+        )
+        assert (project_root / "winner_wrote_this.txt").is_file()
 
     def test_collision_emits_warning(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
