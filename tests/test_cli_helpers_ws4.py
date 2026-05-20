@@ -171,6 +171,95 @@ class TestBuildConfig:
         assert config.frontend is not None
         assert config.include_keycloak is True  # mirrors include_auth default
 
+    def test_auth_mode_coercion_recorded_when_collector_passed(self) -> None:
+        """When Keycloak is disabled but the user asked for auth.mode!=none,
+        the CLI flips it to 'none'. Init #5 surfaces that as a HiddenMutation."""
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "none"},  # implicit include_auth=False
+            "include_keycloak": False,
+            "options": {"auth.mode": "generate"},
+        }
+        mutations: list = []
+        config = _build_config(_empty_args(), cfg, mutations=mutations)
+        # The coercion still happens — back-compat preserved.
+        assert config.options["auth.mode"] == "none"
+        # And the mutation is recorded.
+        assert len(mutations) == 1
+        m = mutations[0]
+        assert m.path == "auth.mode"
+        assert m.previous == "generate"
+        assert m.current == "none"
+        assert "Keycloak" in m.reason
+
+    def test_auth_mode_coercion_silent_when_no_collector(self) -> None:
+        """Back-compat: callers that pass no ``mutations`` arg still see the
+        coerced value but get no extra signal."""
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "none"},
+            "include_keycloak": False,
+            "options": {"auth.mode": "generate"},
+        }
+        # No mutations= kwarg — this exercises the back-compat path.
+        config = _build_config(_empty_args(), cfg)
+        assert config.options["auth.mode"] == "none"
+
+    def test_no_coercion_when_auth_mode_already_none(self) -> None:
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "none"},
+            "include_keycloak": False,
+            "options": {"auth.mode": "none"},
+        }
+        mutations: list = []
+        _build_config(_empty_args(), cfg, mutations=mutations)
+        assert mutations == []
+
+    def test_no_coercion_when_keycloak_enabled(self) -> None:
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "vue", "include_auth": True},
+            "options": {"auth.mode": "generate"},
+        }
+        mutations: list = []
+        config = _build_config(_empty_args(), cfg, mutations=mutations)
+        assert config.include_keycloak is True
+        assert config.options["auth.mode"] == "generate"
+        assert mutations == []
+
+    def test_option_origins_records_cli_injection_as_default(self) -> None:
+        """Codex review P2: the CLI inserts auth.mode='none' when Keycloak
+        is disabled even if the user didn't ask for it. The resulting
+        option_origins should mark auth.mode as ``"default"`` so the
+        report's user/default distinction stays truthful."""
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "none"},
+            "include_keycloak": False,
+            # auth.mode NOT in options — user didn't touch it.
+        }
+        config = _build_config(_empty_args(), cfg)
+        # CLI still injected the value (back-compat: resolver needs it).
+        assert config.options["auth.mode"] == "none"
+        # But option_origins marks it as default-originated, not user.
+        assert config.option_origins.get("auth.mode") == "default"
+
+    def test_option_origins_records_user_set_path_as_user(self) -> None:
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "vue", "include_auth": True},
+            "options": {"rag.backend": "qdrant"},
+        }
+        config = _build_config(_empty_args(), cfg)
+        assert config.option_origins.get("rag.backend") == "user"
+
 
 # -- ProjectConfig.validate() splits ------------------------------------------
 
