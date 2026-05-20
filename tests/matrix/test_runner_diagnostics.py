@@ -409,3 +409,137 @@ class TestLaneDEmptyCandidateGate:
         )
         with _pytest.raises(ValueError, match="expect_candidates"):
             load_scenarios(sc_yaml)
+
+
+class TestLaneDLiveTreeSandbox:
+    """Initiative #9 — Lane D must NOT mutate the live forge tree.
+
+    Pre-#9 contract: ``run_lane_roundtrip`` snapshot+restore'd every
+    ``inject.yaml`` under the live forge tree in a ``finally`` block.
+    Under parallel CI (multiple scenarios on the same runner, or a
+    developer running ``forge`` concurrently) the snapshot/restore raced;
+    a killed process between mutate and restore left the tree in a
+    half-restored state. Pre-#9 ``finally`` could also be defeated by a
+    SIGKILL between ``apply_bundle_to_fragments`` and the snapshot
+    write-back.
+
+    Post-#9 contract: lane D copies the forge tree to a tempdir
+    sandbox, applies the bundle there, and runs the second generate in
+    a subprocess pointed at the sandbox via ``PYTHONPATH``. The
+    sandbox is thrown away with the rest of the lane's scratch space.
+    No live-tree mutation. No restore step. No race.
+    """
+
+    def test_materialize_forge_sandbox_copies_inject_yamls(self, tmp_path: Path):
+        """The sandbox must contain a working copy of every inject.yaml.
+
+        If the copy missed inject.yaml entries (e.g. via an
+        ignore-pattern regression), apply_bundle_to_fragments wouldn't
+        find the entry it needs to rewrite, the apply would land as
+        ``errored``, and the FR2 round-trip step would never even run —
+        a regression that pre-#9 ``ok`` paths would mask completely.
+        """
+        from tests.matrix.runner import _live_forge_root, _materialize_forge_sandbox
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        live = _live_forge_root()
+
+        live_yamls = sorted(
+            p.relative_to(live).as_posix() for p in (live / "forge").rglob("inject.yaml")
+        )
+        sandbox_yamls = sorted(
+            p.relative_to(sandbox).as_posix()
+            for p in (sandbox / "forge").rglob("inject.yaml")
+        )
+        assert sandbox_yamls == live_yamls, (
+            "sandbox missing inject.yaml files copied from live tree — "
+            f"diff: {set(live_yamls).symmetric_difference(set(sandbox_yamls))}"
+        )
+
+    def test_materialize_forge_sandbox_excludes_build_artefacts(self, tmp_path: Path):
+        """``__pycache__`` / ``.git`` / ``node_modules`` etc must not be
+        copied. The live tree's ``forge/__pycache__`` is large + churns
+        on every Python import, and copying it would balloon the
+        sandbox by orders of magnitude without contributing anything
+        the apply-back path needs.
+        """
+        from tests.matrix.runner import _materialize_forge_sandbox
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        for forbidden in ("__pycache__", ".git", "node_modules", ".venv"):
+            for p in sandbox.rglob(forbidden):
+                # Defensive: a developer might legitimately have a
+                # fragment whose templates ship a ``__pycache__`` literal
+                # in the path (rare). Treat anything inside ``forge/``
+                # under one of these names as a copy regression.
+                pytest.fail(
+                    f"sandbox contains excluded path {forbidden!r}: {p.relative_to(sandbox)}"
+                )
+
+    def test_apply_bundle_does_not_touch_live_tree(self, tmp_path: Path):
+        """Mutating an inject.yaml in the SANDBOX must not change the
+        same file in the live tree.
+
+        Pinned via byte-equality check. Pre-#9 lane D mutated the live
+        file in place; if the snapshot/restore was bypassed (the race
+        condition that motivated #9), the live tree would carry the
+        mutation across runs. The sandboxed path can't leak that way
+        because the apply targets a different absolute path.
+        """
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import _live_forge_root, _materialize_forge_sandbox
+
+        live = _live_forge_root()
+        live_yamls = list((live / "forge").rglob("inject.yaml"))
+        if not live_yamls:
+            pytest.skip("live forge tree has no inject.yaml files (unexpected)")
+        live_yaml = live_yamls[0]
+        live_before = live_yaml.read_bytes()
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        rel = live_yaml.relative_to(live)
+        sandbox_yaml = sandbox / rel
+        assert sandbox_yaml.is_file(), (
+            f"sandbox should have a mirrored copy of {rel.as_posix()!r}"
+        )
+
+        # Drive a non-trivial mutation on the sandbox copy.
+        sandbox_doc = _yaml.safe_load(sandbox_yaml.read_text(encoding="utf-8")) or []
+        if isinstance(sandbox_doc, list) and sandbox_doc:
+            sandbox_doc.insert(0, {"sandbox_marker": "initiative-9-test"})
+        sandbox_yaml.write_text(_yaml.safe_dump(sandbox_doc), encoding="utf-8")
+
+        # The live file's bytes MUST NOT have changed.
+        live_after = live_yaml.read_bytes()
+        assert live_before == live_after, (
+            f"live forge tree mutated by sandbox edit: {rel.as_posix()!r} "
+            "differs after sandboxed mutation — sandboxing is leaking"
+        )
+
+    def test_run_lane_roundtrip_no_longer_imports_apply_bundle_against_live_root(self):
+        """Source-level pin: ``run_lane_roundtrip`` no longer calls
+        ``apply_bundle_to_fragments(..., _live_forge_root(), ...)``.
+
+        A pure source-level check is the right shape here — the
+        function's true contract (don't mutate the live tree) is
+        established by the byte-equality test above; this complements
+        that with a fast structural assertion that catches an
+        accidental rebase regressing to the live-root pattern.
+        """
+        import inspect  # noqa: PLC0415
+
+        from tests.matrix import runner
+
+        source = inspect.getsource(runner.run_lane_roundtrip)
+        assert "_live_forge_root()" not in source, (
+            "run_lane_roundtrip should not reference _live_forge_root() "
+            "directly — apply-back must operate on a tempdir sandbox "
+            "(_materialize_forge_sandbox) to avoid live-tree races. "
+            "If this assertion fires, the sandboxing was undone."
+        )
+        assert "_materialize_forge_sandbox" in source, (
+            "run_lane_roundtrip must materialize a sandbox copy of the "
+            "forge tree before apply_bundle_to_fragments — see "
+            "_materialize_forge_sandbox docstring."
+        )

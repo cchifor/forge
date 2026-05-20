@@ -829,63 +829,72 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 ),
             )
 
-        # Snapshot every inject.yaml under the live forge package, apply
-        # the bundle in place, regenerate, compare, and revert in
-        # ``finally``. This pattern is necessary because the generator
-        # imports its fragment registry at module load; pointing it at
-        # a clone would have no effect on the second generate.
-        forge_repo = _live_forge_root()
-        inject_yamls = list((forge_repo / "forge").rglob("inject.yaml"))
-        snapshots = {p: p.read_bytes() for p in inject_yamls}
+        # Initiative #9: apply the bundle to a tempdir SANDBOX of the
+        # forge tree (cp -a or git worktree) and run the second generate
+        # via subprocess pointed at that sandbox. The previous design
+        # mutated the LIVE forge tree under
+        # ``snapshot/finally restore``; under parallel CI (multiple
+        # scenarios on the same runner, or a developer running another
+        # ``forge`` command concurrently) the snapshot/restore raced and
+        # could leave inject.yaml files in a half-restored state if the
+        # process was killed between mutate and restore. The sandbox is
+        # discarded with ``shutil.rmtree(tmp)`` so no restore step is
+        # needed and concurrent invocations don't share state.
+        sandbox_forge_root = _materialize_forge_sandbox(tmp / "forge-sandbox")
         try:
-            report = apply_bundle_to_fragments(bundle_post, forge_repo, quiet=True)
-            if report.errored:
-                first_err = next((e.error for e in report.entries if e.status == "errored"), "")
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=(
-                        f"apply-back errored on {report.errored} block "
-                        f"candidate(s); first: {first_err}"
-                    ),
-                )
+            report = apply_bundle_to_fragments(
+                bundle_post, sandbox_forge_root, quiet=True
+            )
+        except Exception as exc:  # noqa: BLE001
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=f"apply-back raised {type(exc).__name__}: {exc}",
+            )
+        if report.errored:
+            first_err = next((e.error for e in report.entries if e.status == "errored"), "")
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"apply-back errored on {report.errored} block "
+                    f"candidate(s); first: {first_err}"
+                ),
+            )
 
-            cfg_b = dict(scenario.config)
-            cfg_b["output_dir"] = str(tmp / "project-b")
-            try:
-                project_config_b = _project_config_from_dict(cfg_b)
-                project_config_b.validate()
-                project_b = generate(project_config_b, quiet=True, dry_run=False)
-            except (ValueError, ForgeError) as e:
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=f"second generate failed: {e}",
-                )
+        cfg_b = dict(scenario.config)
+        cfg_b["output_dir"] = str(tmp / "project-b")
+        project_b_or_fail = _subprocess_generate(
+            cfg_b,
+            sandbox_forge_root=sandbox_forge_root,
+            project_name=scenario.config.get("project_name") or scenario.name,
+        )
+        if isinstance(project_b_or_fail, str):
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=f"second generate failed: {project_b_or_fail}",
+            )
+        project_b = project_b_or_fail
 
-            differing = _diff_project_trees_normalized(project_a, project_b)
-            if differing:
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=(
-                        f"project_a vs project_b: {len(differing)} file(s) "
-                        f"differ after normalisation; first: {differing[0]}"
-                    ),
-                )
-        finally:
-            # Best-effort restore — if a snapshot path disappeared (apply-
-            # back wrote elsewhere) we don't want to mask the original lane
-            # failure with a teardown OSError.
-            for path, content in snapshots.items():
-                with contextlib.suppress(OSError):
-                    path.write_bytes(content)
+        differing = _diff_project_trees_normalized(project_a, project_b)
+        if differing:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"project_a vs project_b: {len(differing)} file(s) "
+                    f"differ after normalisation; first: {differing[0]}"
+                ),
+            )
 
         return LaneResult(
             scenario=scenario.name,
@@ -990,13 +999,167 @@ def _edit_one_literal_block(project_root: Path) -> Path | None:
 def _live_forge_root() -> Path:
     """Return the directory containing the live ``forge/`` package.
 
-    Used by lane D's apply-back step to write into the live forge
-    tree (with snapshot+restore in ``finally``) so a subsequent
-    ``generate()`` re-emits the user's edit. The runner is invoked
-    from the repo root, so the parent of this file's grand-parent
-    is the directory containing ``forge/``.
+    The runner is invoked from the repo root, so the parent of this
+    file's grand-parent is the directory containing ``forge/``. Used
+    by :func:`_materialize_forge_sandbox` as the source for lane D's
+    sandbox copy.
     """
     return Path(__file__).resolve().parents[2]
+
+
+_SANDBOX_IGNORE = shutil.ignore_patterns(
+    ".git",
+    ".venv",
+    "node_modules",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "target",
+    "build",
+    "dist",
+)
+
+
+def _materialize_forge_sandbox(dest: Path) -> Path:
+    """Create a sandbox copy of the live forge package tree at ``dest``.
+
+    Initiative #9: lane D used to mutate ``inject.yaml`` files in the
+    LIVE forge tree (with a snapshot+restore-in-``finally`` guard).
+    Under parallel CI (multiple scenarios on one runner, or a developer
+    running a ``forge`` command concurrently) the snapshot/restore
+    raced; a killed process between mutate and restore left the tree
+    in a half-restored state. The sandbox sidesteps the race: the
+    apply-back writes into a tempdir copy and the tempdir is removed
+    with the rest of the lane's scratch space at the end of
+    :func:`run_lane_roundtrip`. No restore step exists, so no race.
+
+    Returns ``dest`` (the directory now containing a ``forge/`` subdir
+    suitable for use as the ``forge_repo`` argument to
+    :func:`apply_bundle_to_fragments`).
+
+    Copies only the ``forge/`` package directory (not the surrounding
+    repo) — apply-back only touches
+    ``forge/features/.../inject.yaml`` and
+    ``forge/templates/_fragments/.../inject.yaml`` paths, and the
+    subprocess generate spawned below only needs ``forge/`` itself on
+    ``PYTHONPATH``. ``shutil.copytree`` with ``_SANDBOX_IGNORE`` skips
+    build artefacts and caches that would otherwise inflate the copy
+    by orders of magnitude on a developer machine (the ``forge/``
+    package proper is ~30 MB; a venv-laden checkout is closer to 500 MB).
+    """
+    live = _live_forge_root()
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        str(live / "forge"),
+        str(dest / "forge"),
+        symlinks=True,
+        ignore=_SANDBOX_IGNORE,
+        dirs_exist_ok=True,
+    )
+    return dest
+
+
+def _subprocess_generate(
+    scenario_config: dict[str, Any],
+    *,
+    sandbox_forge_root: Path,
+    project_name: str,
+) -> Path | str:
+    """Spawn ``python -m forge --config <yaml>`` against the sandbox tree.
+
+    Lane D's second-generate step. Must run in a subprocess (not via a
+    direct :func:`forge.generator.generate` call) because the current
+    process imported ``forge`` from the live tree at module load —
+    ``FRAGMENT_REGISTRY`` entries and ``_TEMPLATES_DIR`` were resolved
+    against the live tree's paths and cannot be re-rooted at runtime.
+    The subprocess imports ``forge`` from the sandbox (``PYTHONPATH``
+    prepend), so the apply-back's inject.yaml edits in the sandbox
+    take effect.
+
+    Returns the absolute path to the generated project root on success,
+    or a single-line error string on failure (caller surfaces as a
+    lane FAIL ``details``). The error includes the subprocess's
+    captured stderr tail so a real generator regression doesn't get
+    swallowed by an opaque "second generate failed" message.
+    """
+    import subprocess  # noqa: PLC0415
+
+    output_dir = Path(scenario_config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    config_yaml = output_dir.parent / "scenario-config.yaml"
+    config_yaml.write_text(yaml.safe_dump(scenario_config), encoding="utf-8")
+
+    env = dict(os.environ)
+    pythonpath_parts = [str(sandbox_forge_root)]
+    if env.get("PYTHONPATH"):
+        pythonpath_parts.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge",
+                "--config",
+                str(config_yaml),
+                # ``--output-dir`` must be passed via CLI flag, not the
+                # config file's ``output_dir`` key: the CLI's argparse
+                # default of ``"."`` wins over the config-file value in
+                # the builder's flag>cfg>default resolution order, so
+                # leaving it implicit would land the second project at
+                # ``cwd/<slug>`` rather than the tempdir we want.
+                "--output-dir",
+                str(output_dir),
+                "--quiet",
+                "--yes",
+                # ``--yes`` would otherwise trigger ``docker compose up``
+                # at the end of generate; lane D only cares about the
+                # generated tree contents, not the live stack. Skipping
+                # the boot also avoids a flaky tail (compose pulling
+                # the network at random) that drowns the diff signal.
+                "--no-docker",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(sandbox_forge_root),
+            timeout=600,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return "subprocess generate timed out after 600s"
+    except FileNotFoundError as e:
+        return f"subprocess generate exec failed: {e}"
+    if result.returncode != 0:
+        stream = result.stderr.strip() or result.stdout.strip()
+        tail = "\n".join(stream.splitlines()[-5:]) if stream else "<no output>"
+        return f"subprocess generate exit {result.returncode}: {tail}"
+
+    # ``forge`` slugifies the project_name (lowercase, replace spaces +
+    # hyphens with underscores) before constructing the project dir;
+    # matches ``ProjectConfig.project_slug``. Computed locally so we
+    # don't import a ``forge.config`` symbol from the host process —
+    # the helper has no business depending on whichever forge module
+    # the runner imported at startup, given the whole point of the
+    # subprocess is to isolate the second generate from the host's
+    # registry state.
+    slug = project_name.lower().replace(" ", "_").replace("-", "_")
+    project_root = output_dir / slug
+    if not project_root.is_dir():
+        # Fallback: scan output_dir for the single created subdir.
+        # Robust against future slug-rule drift without forcing the
+        # helper to mirror forge's slugifier byte-for-byte.
+        candidates = [p for p in output_dir.iterdir() if p.is_dir()]
+        if len(candidates) == 1:
+            return candidates[0]
+        return (
+            f"subprocess generate succeeded but project dir not found under "
+            f"{output_dir} (candidates: {[c.name for c in candidates]!r})"
+        )
+    return project_root
 
 
 def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
