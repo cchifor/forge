@@ -9,6 +9,11 @@ export type {
 export { lintProps, warnOnLintIssues } from './lint'
 export type { LintIssue } from './lint'
 
+// AG-UI WebSocket client — mirrors `forge_canvas` (Dart). Single source
+// of truth for inbound event decoding across Vue / Svelte / Flutter.
+export { AgUiClient } from './ag_ui_client'
+export type { AgUiClientOptions } from './ag_ui_client'
+
 // Canvas component props — generated from
 // forge/templates/_shared/canvas-components/*.props.schema.json.
 // The per-component `<script>` blocks still declare local Props
