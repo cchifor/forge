@@ -84,7 +84,10 @@ from typing import TYPE_CHECKING, Any
 from forge.errors import PLUGIN_COLLISION, PLUGIN_SDK_INCOMPATIBLE, PluginError
 
 if TYPE_CHECKING:
-    from forge.config import BackendSpec, FrontendSpec
+    from pathlib import Path
+
+    from forge.capability_resolver import ResolvedPlan
+    from forge.config import BackendSpec, FrontendSpec, ProjectConfig
     from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
     from forge.options import Option
@@ -179,6 +182,58 @@ class PluginExtractorRegistration:
         return (self.kind, self.fragment)
 
 
+@dataclass(frozen=True)
+class PluginOptionRegistration:
+    """A single ``ForgeAPI.add_option`` call, with the Option kept.
+
+    Initiative #2 sub-task 1: registering an option used to drop the
+    :class:`Option` object on the floor (only the ``options_added``
+    integer counter survived on :class:`PluginRegistration`). Retaining
+    the Option here lets downstream consumers — JSON-Schema emitters,
+    plugin introspection tooling, future per-plugin validation — walk
+    plugin-registered options without re-reading ``OPTION_REGISTRY``
+    and guessing at provenance.
+
+    ``plugin_name`` mirrors the harvester pattern from
+    :class:`PluginExtractorRegistration`'s sibling: the registering
+    plugin's name is captured so collision warnings and
+    ``forge --plugins list`` can attribute each option to its owner.
+    """
+
+    option: "Option"  # noqa: UP037 — forward reference lives in forge.options
+    plugin_name: str
+
+
+@dataclass(frozen=True)
+class PluginEmitterRegistration:
+    """A single ``ForgeAPI.add_emitter`` call, with the callable kept.
+
+    Initiative #2 sub-task 2: emitters registered via
+    :meth:`ForgeAPI.add_emitter` used to live only on the ForgeAPI
+    instance (``self._emitters[target]``) which the codegen pipeline
+    never read. Retaining the callable on :class:`PluginRegistration`
+    lets :func:`forge.codegen.pipeline.run_codegen` walk
+    :data:`forge.plugins.LOADED_PLUGINS` after the built-in passes and
+    invoke each registered emitter.
+
+    The emitter callable contract is
+    ``emitter(project_root: Path, config: ProjectConfig,
+    resolved: ResolvedPlan | None) -> None``. ``resolved`` is the
+    capability-resolver output (fragments, capabilities, option values);
+    it is currently ``None`` when ``run_codegen`` is invoked from the
+    legacy generator path that has not yet been plumbed with the
+    resolved plan. Plugins MUST tolerate ``None``.
+
+    Last-loaded wins on target collision (two plugins registering the
+    same ``target`` string); the pipeline emits a structured warning
+    naming both plugins so operators see the override happening.
+    """
+
+    target: str
+    emitter: "Callable[[Path, ProjectConfig, ResolvedPlan | None], None]"  # noqa: UP037 — forward references
+    plugin_name: str
+
+
 @dataclass
 class PluginRegistration:
     """Record of a single loaded plugin for introspection by `forge --plugins list`.
@@ -189,6 +244,18 @@ class PluginRegistration:
     Initiative #1 sub-task 4 — it retains the extractor callable itself
     so the harvester pipeline can actually invoke plugin overrides
     instead of just observing that one was registered.
+
+    ``option_registrations`` (Initiative #2 sub-task 1) retains the
+    :class:`Option` instance for every ``ForgeAPI.add_option`` call,
+    mirroring the extractor pattern. ``options_added`` is preserved as
+    a legacy integer counter so ``forge --plugins list --json`` output
+    stays byte-stable.
+
+    ``emitter_registrations`` (Initiative #2 sub-task 2) retains the
+    emitter callable for every ``ForgeAPI.add_emitter`` call; the
+    codegen pipeline walks these after the built-in passes.
+    ``emitters_added`` is preserved as a legacy integer counter for
+    the same back-compat reason.
     """
 
     name: str
@@ -201,6 +268,8 @@ class PluginRegistration:
     emitters_added: int = 0
     extractors_added: tuple[tuple[str, str | None], ...] = ()
     extractor_registrations: tuple[PluginExtractorRegistration, ...] = ()
+    option_registrations: tuple[PluginOptionRegistration, ...] = ()
+    emitter_registrations: tuple[PluginEmitterRegistration, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -282,22 +351,45 @@ class ForgeAPI:
         The plugin is responsible for ensuring the dotted path doesn't
         collide with built-in options. On collision, the built-in wins
         and the plugin's option is rejected with a clear error.
-        """
-        from forge.options import OPTION_REGISTRY  # noqa: PLC0415
 
-        if option.path in OPTION_REGISTRY:
+        Initiative #2 sub-task 1: delegates to
+        :func:`forge.options.register_option` so the
+        ``OPTION_ALIAS_INDEX`` is updated alongside ``OPTION_REGISTRY``
+        and alias-collision checks fire just like they do for built-in
+        registrations. ``register_option`` raises ``ValueError`` on
+        any collision (path-vs-path, path-vs-alias, alias-vs-path,
+        alias-vs-alias); we wrap that to a :class:`PluginError` with
+        code :data:`forge.errors.PLUGIN_COLLISION` so the surface
+        plugins see is unchanged.
+
+        Retains the Option on
+        :attr:`PluginRegistration.option_registrations` so downstream
+        consumers can introspect plugin-registered options without
+        guessing at provenance from ``OPTION_REGISTRY`` alone.
+        """
+        from forge.options import register_option  # noqa: PLC0415
+
+        try:
+            register_option(option)
+        except ValueError as exc:
             raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register option "
-                f"'{option.path}', but that path is already registered. "
-                "Plugin options must use a namespaced prefix (e.g. 'mycompany.audit_log').",
+                f"'{option.path}', but registration failed: {exc}. "
+                "Plugin options must use a namespaced prefix "
+                "(e.g. 'mycompany.audit_log').",
                 code=PLUGIN_COLLISION,
                 context={
                     "plugin": self._registration.name,
                     "kind": "option",
                     "value": option.path,
                 },
-            )
-        OPTION_REGISTRY[option.path] = option
+            ) from exc
+        self._registration.option_registrations = (
+            self._registration.option_registrations
+            + (PluginOptionRegistration(option=option, plugin_name=self._registration.name),)
+        )
+        # Legacy integer counter — kept so as_dict() output is byte-stable
+        # for ``forge --plugins list --json`` consumers.
         self._registration.options_added += 1
 
     # -- Fragment registration ---------------------------------------------
