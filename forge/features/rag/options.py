@@ -34,6 +34,11 @@ the shared chunker + embeddings + PDF-parser modules.
 OPTIONS: none | pgvector | qdrant | chroma | milvus | weaviate | pinecone | postgresql""",
         category=FeatureCategory.KNOWLEDGE,
         stability="experimental",
+        # Initiative #7 — rag stack persists embeddings to a relational
+        # store (pgvector / external vector DB clients still need
+        # conversation persistence). Any non-``none`` value implies
+        # ``database.mode != none``.
+        requires_database=True,
         # conversation_persistence is a transitive dep of rag_pipeline;
         # bundling it means a single `rag.backend=<x>` spin is
         # self-contained (the resolver won't error on a missing dep).
@@ -111,6 +116,9 @@ OPTIONS: openai | voyage""",
         category=FeatureCategory.KNOWLEDGE,
         stability="experimental",
         enables={"voyage": ("rag_embeddings_voyage",)},
+        # Transitively pulls rag_pipeline -> conversation_persistence
+        # (DB-backed). Init #7 follow-up: codex flagged this gap.
+        requires_database=True,
     )
 )
 
@@ -134,6 +142,9 @@ REQUIRES: rag.backend ≠ none; COHERE_API_KEY.""",
         category=FeatureCategory.KNOWLEDGE,
         stability="experimental",
         enables={True: ("rag_reranking",)},
+        # Transitively pulls rag_pipeline -> conversation_persistence
+        # (DB-backed). Init #7 follow-up: codex flagged this gap.
+        requires_database=True,
     )
 )
 

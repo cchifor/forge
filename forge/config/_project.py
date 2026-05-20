@@ -21,10 +21,13 @@ properties read through ``typed`` to drop their stringly-typed
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from forge.config._backend import BackendConfig
 from forge.config._frontend import FRONTEND_RESERVED, FrontendConfig, FrontendFramework
+
+if TYPE_CHECKING:
+    from forge.options import Option
 from forge.config._validators import TRAEFIK_DASHBOARD_PORT, validate_port
 from forge.config.typed_config import (
     FrontendExternal,
@@ -32,6 +35,23 @@ from forge.config.typed_config import (
     TypedConfig,
     from_legacy_options,
 )
+
+
+def _render_active(opt: "Option", value: Any) -> str:
+    """Render an active option's ``path=value`` for diagnostic messages.
+
+    Initiative #7 — pulled out of the inlined ``conflicts.append(...)``
+    chain so the format is centralised. BOOL renders as literal
+    ``true``; ENUM renders the value with ``repr`` so strings end up
+    quoted (matching the pre-#7 ``f"={value!r}"`` output).
+    """
+    from forge.options import OptionType  # noqa: PLC0415
+
+    if opt.type is OptionType.BOOL:
+        return f"{opt.path}=true"
+    if opt.type is OptionType.ENUM:
+        return f"{opt.path}={value!r}"
+    return f"{opt.path}={value!r}"
 
 
 @dataclass
@@ -258,6 +278,7 @@ class ProjectConfig:
         self._validate_database_mode()
         self._validate_frontend_mode_coherence()
         self._validate_agent_mode()
+        self._validate_option_layer_targets()
 
     def _validate_agent_mode(self) -> None:
         """Theme 2A — coherence rules for the agent layer discriminator.
@@ -335,55 +356,178 @@ class ProjectConfig:
                 "frontend.api_target.url to be a non-empty URL."
             )
 
+    def _validate_option_layer_targets(self) -> None:
+        """Initiative #7 — generic walker for backend / frontend compat.
+
+        Every registered Option carries (per Initiative #7):
+
+        * ``requires_backend`` — defaults True; the option only makes
+          sense when ``backend.mode != "none"`` AND at least one backend
+          is configured. Only enforced for options the user *explicitly*
+          set: default-active options (middleware toggles, default-on
+          security features, ``auth.mode=generate``) silently no-op when
+          there's no backend to apply them to, mirroring the resolver's
+          ``target_backends`` filtering. The walker only fires when the
+          user took an explicit action that doesn't have anywhere to
+          land.
+        * ``allowed_backends`` — None (any built-in) or a tuple of
+          ``BackendLanguage`` values; rejects active options whose
+          enumerated targets don't overlap the configured backends.
+        * ``allowed_frontends`` — same shape for frontends.
+        * ``incompatible_with`` — paths of other options that
+          mutual-exclude this one when both are active.
+
+        Pre-#7 these constraints were either hard-coded in
+        ``_validate_database_mode``, scattered across ``_validate_agent_mode``,
+        or absent. The walker iterates ``OPTION_REGISTRY`` once, surfaces
+        violations with stable phrasing, and never names a feature
+        directly — adding a new option only requires declaring its
+        compatibility metadata next to the rest of its fields.
+
+        Skips inactive options (``Option.is_active_value`` is False) so
+        defaults don't trigger; skips the layer-mode options themselves
+        because their ``enables`` map is empty and ``is_active_value``
+        never fires for them.
+        """
+        from forge.options import OPTION_REGISTRY, resolve_alias  # noqa: PLC0415
+
+        effective = self._effective_option_values()
+        configured_languages = {bc.language for bc in self.backends}
+        frontend_framework: FrontendFramework | None = (
+            self.frontend.framework if self.frontend else None
+        )
+        user_set_paths = {resolve_alias(p) or p for p in self.options}
+
+        for path in sorted(OPTION_REGISTRY):
+            opt = OPTION_REGISTRY[path]
+            value = effective[path]
+            if not opt.is_active_value(value):
+                continue
+            # Skip layer-mode options entirely — they're the gates, not
+            # the targets. (Belt-and-suspenders: their empty `enables`
+            # map already makes `is_active_value` False.)
+            if path in {"backend.mode", "frontend.mode", "database.mode", "agent.mode"}:
+                continue
+            user_set = path in user_set_paths
+            self._check_option_backend_requirement(opt, value, user_set)
+            self._check_option_allowed_backends(opt, value, configured_languages)
+            self._check_option_allowed_frontends(opt, value, frontend_framework)
+            self._check_option_incompatibilities(opt, value, effective)
+
+    def _check_option_backend_requirement(
+        self, opt: "Option", value: Any, user_set: bool
+    ) -> None:
+        if not opt.requires_backend:
+            return
+        # Default-active options (middleware toggles, auth.mode='generate',
+        # platform.agents_md) silently no-op when there's no backend —
+        # the resolver's ``target_backends`` filter handles them. Only
+        # complain when the user explicitly enabled the option and has
+        # nowhere to apply it.
+        if not user_set:
+            return
+        if self.backend_mode == "none" or not self.backends:
+            raise ValueError(
+                f"Option {_render_active(opt, value)} requires at least one "
+                "configured backend (backend.mode != 'none' with a non-empty "
+                "backends list). Either configure a backend or disable this "
+                "option."
+            )
+
+    def _check_option_allowed_backends(
+        self,
+        opt: "Option",
+        value: Any,
+        configured_languages: set[Any],
+    ) -> None:
+        if opt.allowed_backends is None or not configured_languages:
+            return
+        if not configured_languages.intersection(opt.allowed_backends):
+            allowed_names = sorted(b.value for b in opt.allowed_backends)
+            configured_names = sorted(getattr(lang, "value", str(lang)) for lang in configured_languages)
+            raise ValueError(
+                f"Option {_render_active(opt, value)} only supports backends "
+                f"{allowed_names}; configured backends are {configured_names}. "
+                "Either add a supported backend or disable this option."
+            )
+
+    def _check_option_allowed_frontends(
+        self,
+        opt: "Option",
+        value: Any,
+        frontend_framework: FrontendFramework | None,
+    ) -> None:
+        if opt.allowed_frontends is None:
+            return
+        # A project without a frontend is effectively NONE; treat as
+        # missing the allowlist target.
+        active_framework = frontend_framework or FrontendFramework.NONE
+        if active_framework not in opt.allowed_frontends:
+            allowed_names = sorted(f.value for f in opt.allowed_frontends)
+            raise ValueError(
+                f"Option {_render_active(opt, value)} only supports frontends "
+                f"{allowed_names}; configured frontend is "
+                f"{active_framework.value!r}. Either switch the frontend or "
+                "disable this option."
+            )
+
+    def _check_option_incompatibilities(
+        self,
+        opt: "Option",
+        value: Any,
+        effective: dict[str, Any],
+    ) -> None:
+        if not opt.incompatible_with:
+            return
+        from forge.options import OPTION_REGISTRY  # noqa: PLC0415
+
+        for other_path in opt.incompatible_with:
+            other = OPTION_REGISTRY.get(other_path)
+            if other is None:
+                # Author error — incompatible_with references an
+                # unregistered path. Surface loudly rather than silently
+                # ignore so misconfigured metadata gets caught the first
+                # time the affected feature lands in a real project.
+                raise ValueError(
+                    f"Option {opt.path} declares incompatible_with="
+                    f"{other_path!r} but no such option is registered."
+                )
+            other_value = effective[other_path]
+            if other.is_active_value(other_value):
+                # Sort the pair so the diagnostic is symmetric — the
+                # walker would otherwise produce different messages
+                # depending on iteration order.
+                a, b = sorted([_render_active(opt, value), _render_active(other, other_value)])
+                raise ValueError(
+                    f"Options {a} and {b} are mutually exclusive. "
+                    "Disable one of them."
+                )
+
     def _validate_database_mode(self) -> None:
         """Reject ``database.mode=none`` when DB-dependent options are on.
 
-        Phase B1 — the compose-level strip works, but the Python template
-        still emits alembic + SQLAlchemy code. Options that *write* to
-        the DB (conversation history, RAG vector store, attachments
-        metadata, SQLAdmin panel, webhooks registry) must be explicitly
-        turned off before the user can flip to stateless mode.
+        Initiative #7 — what used to be an ``if`` ladder over hard-coded
+        feature names is now a generic walker over every registered
+        Option's ``requires_database`` metadata. Adding a new DB-backed
+        feature only requires declaring ``requires_database=True`` on
+        its Option; this method needs no edits.
 
-        The errors name the specific options so the user can fix them
-        one at a time rather than hunting through the full catalogue.
+        The diagnostic shape is preserved character-for-character so
+        existing callers (tests, CLI grep) keep working:
+
+            database.mode=none is incompatible with the following
+            DB-backed options: <opt>=<val>, ...
+            Either switch to database.mode=generate or disable these
+            options.
+
+        BOOL options render as ``path=true`` (literal ``true``, matching
+        the pre-Initiative-#7 message). ENUM options render as
+        ``path='<value>'`` (single-quoted), again matching the legacy
+        format that ``repr(value)`` produced.
         """
         if self.database_mode != "none":
             return
-        conflicts: list[str] = []
-        if self.options.get("conversation.persistence"):
-            conflicts.append("conversation.persistence=true")
-        rag_backend = self.options.get("rag.backend", "none")
-        if rag_backend and rag_backend != "none":
-            conflicts.append(f"rag.backend={rag_backend!r}")
-        if self.options.get("chat.attachments"):
-            conflicts.append("chat.attachments=true")
-        if self.options.get("agent.streaming"):
-            conflicts.append("agent.streaming=true")
-        if self.options.get("agent.llm"):
-            conflicts.append("agent.llm=true")
-        if self.options.get("platform.admin"):
-            conflicts.append("platform.admin=true")
-        if self.options.get("platform.webhooks"):
-            conflicts.append("platform.webhooks=true")
-        # Cluster D — matrix-nightly-fixes. The generator pipeline now runs
-        # strip_python_database BEFORE fragment application (so default-enabled
-        # fragments like pii_redaction inject into the stateless lifecycle.py
-        # instead of being silently clobbered by the stripper). That reorder
-        # is only safe when every fragment that survives to apply_features is
-        # stateless-compatible. The options below ship alembic migrations
-        # (events.outbox), open postgres pub/sub channels (events.bus=
-        # postgres_notify), require the event bus transitively (streaming.sse),
-        # or persist state in the DB (airlock.client) — all incompatible with
-        # database.mode=none.
-        if self.options.get("events.outbox"):
-            conflicts.append("events.outbox=true")
-        events_bus = self.options.get("events.bus", "none")
-        if events_bus and events_bus != "none":
-            conflicts.append(f"events.bus={events_bus!r}")
-        if self.options.get("streaming.sse"):
-            conflicts.append("streaming.sse=true")
-        if self.options.get("airlock.client"):
-            conflicts.append("airlock.client=true")
+        conflicts = self._collect_db_conflicts()
         if conflicts:
             raise ValueError(
                 "database.mode=none is incompatible with the following "
@@ -391,6 +535,51 @@ class ProjectConfig:
                 "Either switch to database.mode=generate or disable these "
                 "options."
             )
+
+    def _collect_db_conflicts(self) -> list[str]:
+        """Walk the registry for active options that ``requires_database=True``.
+
+        Inlined helper for :meth:`_validate_database_mode`; broken out
+        so tests can hit the rendering surface without spinning up the
+        whole ``validate()`` pipeline.
+
+        Returns the rendered ``path=value`` strings sorted by canonical
+        option path for deterministic message ordering — pre-Init-#7
+        the order followed the ``if`` ladder, which was effectively
+        registration-order anyway; sorting now keeps it stable as
+        features get added.
+        """
+        from forge.options import OPTION_REGISTRY  # noqa: PLC0415
+
+        effective = self._effective_option_values()
+        conflicts: list[str] = []
+        for path in sorted(OPTION_REGISTRY):
+            opt = OPTION_REGISTRY[path]
+            if not opt.requires_database:
+                continue
+            value = effective[path]
+            if not opt.is_active_value(value):
+                continue
+            conflicts.append(_render_active(opt, value))
+        return conflicts
+
+    def _effective_option_values(self) -> dict[str, Any]:
+        """Return canonical-path → value with defaults applied.
+
+        Resolves user-supplied alias paths onto their canonical Option
+        before defaulting so the compatibility walker doesn't need to
+        re-implement alias handling. Does NOT trigger the deprecation
+        warning that ``capability_resolver._apply_option_defaults``
+        emits — validate() runs before that, and we don't want to
+        double-warn.
+        """
+        from forge.options import OPTION_REGISTRY, resolve_alias  # noqa: PLC0415
+
+        canonical: dict[str, Any] = {}
+        for path, value in self.options.items():
+            real = resolve_alias(path) or path
+            canonical[real] = value
+        return {path: canonical.get(path, opt.default) for path, opt in OPTION_REGISTRY.items()}
 
     def _validate_options(self) -> None:
         """Check every option path is registered and each value is valid.
