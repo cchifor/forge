@@ -123,20 +123,23 @@ class TestCandidatePatch:
     def test_invalid_kind_raises_fragment_error(self) -> None:
         # Construction-time gate: a bundle deserializer or plugin extractor
         # that reads a typoed ``kind`` from JSON should fail loudly here
-        # rather than crash deep inside apply-back dispatch.
-        from forge.errors import FRAGMENT_INJECT_YAML_BAD_SHAPE, FragmentError  # noqa: PLC0415
+        # rather than crash deep inside apply-back dispatch. Uses the
+        # CandidatePatch-specific error code (not FRAGMENT_INJECT_YAML_*)
+        # so a JSON consumer can branch on the validation surface that
+        # actually failed.
+        from forge.errors import CANDIDATE_PATCH_BAD_KIND, FragmentError  # noqa: PLC0415
 
         with pytest.raises(FragmentError) as exc:
             self._mk_patch(kind="not-a-kind")  # type: ignore[arg-type]
-        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_SHAPE
+        assert exc.value.code == CANDIDATE_PATCH_BAD_KIND
         assert exc.value.context.get("kind") == "not-a-kind"
 
     def test_invalid_risk_raises_fragment_error(self) -> None:
-        from forge.errors import FRAGMENT_INJECT_YAML_BAD_SHAPE, FragmentError  # noqa: PLC0415
+        from forge.errors import CANDIDATE_PATCH_BAD_RISK, FragmentError  # noqa: PLC0415
 
         with pytest.raises(FragmentError) as exc:
             self._mk_patch(risk="extra-spicy")  # type: ignore[arg-type]
-        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_SHAPE
+        assert exc.value.code == CANDIDATE_PATCH_BAD_RISK
         assert exc.value.context.get("risk") == "extra-spicy"
 
     def test_every_documented_kind_and_risk_constructs(self) -> None:
@@ -173,6 +176,28 @@ class TestCandidatePatch:
         # downstream code assumes every extractor-declared kind is a
         # valid CandidatePatch.kind.
         assert set(EXTRACTOR_KINDS).issubset(set(CANDIDATE_KINDS))
+
+    def test_accept_harvested_kind_is_subset_of_candidate_kind(self) -> None:
+        """``AcceptHarvestedKind`` lives in the accept module and was
+        defined before the CandidatePatch typed-port landed. It must
+        stay a strict subset of CandidateKind, or accept-baseline will
+        accept a manifest entry whose kind apply_bundle / bundle / etc.
+        cannot model.
+        """
+        from typing import get_args  # noqa: PLC0415
+
+        from forge.extractors.pipeline import CandidateKind  # noqa: PLC0415
+        from forge.sync.project_to_forge.accept._shared import (  # noqa: PLC0415
+            AcceptHarvestedKind,
+        )
+
+        accept_kinds = set(get_args(AcceptHarvestedKind))
+        candidate_kinds = set(get_args(CandidateKind))
+        missing = accept_kinds - candidate_kinds
+        assert not missing, (
+            f"AcceptHarvestedKind has values not in CandidateKind: {sorted(missing)}. "
+            "Either widen CandidateKind or shrink AcceptHarvestedKind."
+        )
 
 
 class TestBuiltinExtractorsOnEmptyPlan:
