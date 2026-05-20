@@ -63,9 +63,12 @@ exercise the full forward→reverse→apply→forward cycle in tests.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from forge.extractors.pipeline import CandidateKind, CandidatePatch
 
 if TYPE_CHECKING:
     from forge.sync.project_to_forge.harvester import HarvestBundle
@@ -206,14 +209,11 @@ def apply_bundle_to_fragments(
     inspect ``report.errored`` and the matching entries to decide how to
     surface the partial-failure case.
     """
-    # Local imports to avoid module-level cycles: the per-kind handler
-    # modules import :class:`ApplyBundleEntry` from this module, and
-    # this dispatcher in turn calls them. Importing inside the
-    # function keeps the top-level import order one-directional.
-    from forge.sync.project_to_forge.apply_bundle._blocks import _apply_block_candidate
-    from forge.sync.project_to_forge.apply_bundle._deps import _apply_deps_candidate
-    from forge.sync.project_to_forge.apply_bundle._env import _apply_env_candidate
-    from forge.sync.project_to_forge.apply_bundle._files_literal import _apply_files_candidate
+    # Build the kind -> handler registry. Local imports avoid the
+    # module-level cycle: per-kind handler modules import
+    # :class:`ApplyBundleEntry` from this module, and this dispatcher
+    # calls back into them.
+    handlers = _build_apply_handlers()
 
     entries: list[ApplyBundleEntry] = []
     applied = 0
@@ -238,34 +238,15 @@ def apply_bundle_to_fragments(
             skipped += 1
             continue
 
-        if cand.kind == "files":
-            entry = _apply_files_candidate(cand, forge_repo=forge_repo, quiet=quiet)
-        elif cand.kind == "block":
-            entry = _apply_block_candidate(cand, forge_repo=forge_repo, quiet=quiet)
-        elif cand.kind == "deps":
-            entry = _apply_deps_candidate(cand, forge_repo=forge_repo, quiet=quiet)
-        elif cand.kind == "env":
-            entry = _apply_env_candidate(cand, forge_repo=forge_repo, quiet=quiet)
-        elif cand.kind == "cross-lang-suggest":
-            # RFC-006 cross-language parity hint — never applied
-            # automatically. The candidate carries the path of a
-            # sibling-language impl that the maintainer should mirror
-            # by hand. emit-pr surfaces these in the reviewer
-            # checklist; apply-back records the deferral so the
-            # operator's report stays honest.
-            entry = ApplyBundleEntry(
-                fragment=cand.fragment,
-                kind=cand.kind,
-                rel_path=cand.rel_path,
-                target=cand.target_path or None,
-                status="deferred",
-                error="cross-lang suggestion; apply manually to the named impl",
-            )
-        else:
+        handler = handlers.get(cand.kind)
+        if handler is None:
             # Unknown kind — record + continue rather than crash. The
             # operator's harvest tooling and the apply lane must agree
             # on the kind vocabulary; a mismatch is a bug worth
-            # surfacing.
+            # surfacing. The most common reason today is ``new-file``,
+            # which is owned by the accept-baseline path, not by
+            # apply_bundle; agents that forward a new-file candidate
+            # here get a clean structured error.
             entry = ApplyBundleEntry(
                 fragment=cand.fragment,
                 kind=cand.kind,
@@ -273,6 +254,8 @@ def apply_bundle_to_fragments(
                 status="errored",
                 error=f"unknown candidate kind {cand.kind!r}",
             )
+        else:
+            entry = handler(cand, forge_repo=forge_repo, quiet=quiet)
 
         entries.append(entry)
         if entry.status == "applied":
@@ -297,3 +280,70 @@ def apply_bundle_to_fragments(
         deferred=deferred,
         errored=errored,
     )
+
+
+# Initiative #1 sub-task 3 — kind dispatch via a typed registry instead
+# of an if/elif ladder. Adding a new ``CandidateKind`` value now requires
+# a registry entry (or an explicit "owned elsewhere" comment, the way
+# ``new-file`` is); a missing entry surfaces as the existing structured
+# "unknown candidate kind" error in the report, not as a silent fall-
+# through. Plugin extractors that introduce their own kinds will plug in
+# here in sub-task 4.
+
+ApplyHandler = Callable[..., ApplyBundleEntry]
+
+
+def _apply_cross_lang_suggest_candidate(
+    cand: CandidatePatch,
+    *,
+    forge_repo: Path,  # noqa: ARG001 — uniform handler signature
+    quiet: bool,  # noqa: ARG001 — uniform handler signature
+) -> ApplyBundleEntry:
+    """RFC-006 cross-language parity hint — never applied automatically.
+
+    The candidate carries the path of a sibling-language impl the
+    maintainer should mirror by hand. ``forge --emit-pr`` surfaces these
+    in the reviewer checklist; apply-back records the deferral so the
+    operator's report stays honest.
+    """
+    return ApplyBundleEntry(
+        fragment=cand.fragment,
+        kind=cand.kind,
+        rel_path=cand.rel_path,
+        target=cand.target_path or None,
+        status="deferred",
+        error="cross-lang suggestion; apply manually to the named impl",
+    )
+
+
+def _build_apply_handlers() -> dict[CandidateKind, ApplyHandler]:
+    """Construct the kind -> handler map.
+
+    Built per-call (not at module import) so the per-kind handler
+    modules can keep importing :class:`ApplyBundleEntry` from this
+    module without an import cycle.
+
+    ``new-file`` is intentionally absent — that kind is owned by the
+    accept-baseline path; routing it through apply_bundle is a
+    contract bug and surfaces as a structured ``errored`` entry above.
+    """
+    from forge.sync.project_to_forge.apply_bundle._blocks import (  # noqa: PLC0415
+        _apply_block_candidate,
+    )
+    from forge.sync.project_to_forge.apply_bundle._deps import (  # noqa: PLC0415
+        _apply_deps_candidate,
+    )
+    from forge.sync.project_to_forge.apply_bundle._env import (  # noqa: PLC0415
+        _apply_env_candidate,
+    )
+    from forge.sync.project_to_forge.apply_bundle._files_literal import (  # noqa: PLC0415
+        _apply_files_candidate,
+    )
+
+    return {
+        "files": _apply_files_candidate,
+        "block": _apply_block_candidate,
+        "deps": _apply_deps_candidate,
+        "env": _apply_env_candidate,
+        "cross-lang-suggest": _apply_cross_lang_suggest_candidate,
+    }
