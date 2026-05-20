@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from forge.codegen.literal_finder import LiteralEdit
 from forge.errors import (
-    FRAGMENT_INJECT_YAML_BAD_SHAPE,
+    CANDIDATE_PATCH_BAD_KIND,
+    CANDIDATE_PATCH_BAD_RISK,
     FragmentError,
 )
 
@@ -213,14 +214,14 @@ class CandidatePatch:
             raise FragmentError(
                 f"CandidatePatch.kind must be one of {list(CANDIDATE_KINDS)!r}, "
                 f"got {self.kind!r}",
-                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                code=CANDIDATE_PATCH_BAD_KIND,
                 context={"kind": str(self.kind), "fragment": self.fragment},
             )
         if self.risk not in CANDIDATE_RISKS:
             raise FragmentError(
                 f"CandidatePatch.risk must be one of {list(CANDIDATE_RISKS)!r}, "
                 f"got {self.risk!r}",
-                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                code=CANDIDATE_PATCH_BAD_RISK,
                 context={"risk": str(self.risk), "fragment": self.fragment},
             )
 
