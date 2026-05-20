@@ -262,3 +262,150 @@ class TestDiffProjectTreesNormalizedExclusions:
         assert diff == ["real.py"], (
             f"real.py difference must surface, but got: {diff}"
         )
+
+
+class TestLaneDEmptyCandidateGate:
+    """Initiative #9 — Lane D must NOT report vacuous-green when a
+    scenario was supposed to produce candidates.
+
+    Pre-#9 contract: if ``_edit_one_literal_block`` returned ``None``
+    (no literal sentinel block on disk) OR the post-edit bundle had no
+    safe-apply block, the lane unconditionally reported ``ok`` with a
+    "vacuously round-trippable" note. Result: a future fragment-template
+    drift that removes the last literal sentinel block from a scenario's
+    surface would coast through Lane D as green, even though the FR2
+    round-trip contract was never actually exercised.
+
+    Post-#9 contract: the lane fails by default when no candidates
+    surface. Scenarios that intentionally produce zero candidates opt in
+    via ``expect_candidates: false`` in ``scenarios.yaml`` — the empty
+    case is then reported as ``ok`` with the opt-in noted in details.
+    """
+
+    def _scenario(self, *, expect_candidates: bool) -> Scenario:
+        return Scenario(
+            name="vacuous-test",
+            description="Lane D vacuous-green regression scenario",
+            lanes=("roundtrip",),
+            port_base=9990,
+            expected_files=(),
+            config={"project_name": "Vacuous Test"},
+            expect_candidates=expect_candidates,
+        )
+
+    def test_empty_candidate_path_fails_by_default(self):
+        """Default scenario (``expect_candidates=True``) — empty case → FAIL.
+
+        Drives ``_empty_candidate_result`` (the central helper for both
+        Lane D early-return paths) directly so we exercise the gate
+        without paying for a full ``generate()`` + ``harvest_project()``
+        cycle. The contract — fail by default, ok only on explicit
+        opt-out — is what the rest of the suite needs to trust.
+        """
+        from tests.matrix.runner import _empty_candidate_result
+
+        result = _empty_candidate_result(
+            self._scenario(expect_candidates=True),
+            start=0.0,
+            reason="no literal block",
+            gate_message="missing literal block contract violated",
+        )
+        assert result.status == "fail", (
+            f"expected fail when expect_candidates=True; got {result.status}: {result.details}"
+        )
+        assert "missing literal block contract violated" in result.details
+
+    def test_empty_candidate_path_is_ok_when_opted_out(self):
+        """Scenario opted out (``expect_candidates=False``) — empty case → OK.
+
+        Documents the intent in details (``expect_candidates=false``) so
+        a maintainer reading the matrix output can see the empty case
+        is intentional rather than missed.
+        """
+        from tests.matrix.runner import _empty_candidate_result
+
+        result = _empty_candidate_result(
+            self._scenario(expect_candidates=False),
+            start=0.0,
+            reason="vacuously round-trippable",
+            gate_message="(would-be failure message)",
+        )
+        assert result.status == "ok"
+        assert "expect_candidates=false" in result.details
+
+    def test_load_scenarios_accepts_expect_candidates_field(self, tmp_path):
+        """``expect_candidates`` must round-trip through scenarios.yaml.
+
+        Without this, the runner's gate would always run with the
+        dataclass default (True) and the per-scenario opt-out would
+        silently no-op.
+        """
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import load_scenarios
+
+        sc_yaml = tmp_path / "scenarios.yaml"
+        sc_yaml.write_text(
+            _yaml.safe_dump(
+                {
+                    "schema_version": 1,
+                    "scenarios": [
+                        {
+                            "name": "opted-out",
+                            "description": "opted-out roundtrip scenario",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9991,
+                            "expected_files": ["foo.txt"],
+                            "expect_candidates": False,
+                            "config": {"project_name": "Opted Out"},
+                        },
+                        {
+                            "name": "default-on",
+                            "description": "default expect_candidates",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9992,
+                            "expected_files": ["foo.txt"],
+                            "config": {"project_name": "Default On"},
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = {s.name: s for s in load_scenarios(sc_yaml)}
+        assert loaded["opted-out"].expect_candidates is False
+        # Default is True — preserve the strict gate for scenarios that
+        # never declare it.
+        assert loaded["default-on"].expect_candidates is True
+
+    def test_load_scenarios_rejects_non_bool_expect_candidates(self, tmp_path):
+        """A typo'd value (``"true"`` string) must fail the schema check,
+        not silently coerce. Truthiness coercion would mask a scenario
+        that intended to opt out but used the wrong type."""
+        import pytest as _pytest  # noqa: PLC0415
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import load_scenarios
+
+        sc_yaml = tmp_path / "scenarios.yaml"
+        sc_yaml.write_text(
+            _yaml.safe_dump(
+                {
+                    "schema_version": 1,
+                    "scenarios": [
+                        {
+                            "name": "bad-type",
+                            "description": "non-bool expect_candidates",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9993,
+                            "expected_files": ["foo.txt"],
+                            "expect_candidates": "false",
+                            "config": {"project_name": "Bad Type"},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with _pytest.raises(ValueError, match="expect_candidates"):
+            load_scenarios(sc_yaml)
