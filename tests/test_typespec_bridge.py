@@ -138,3 +138,45 @@ class TestCompileTspUnavailable:
 
             with pytest.raises(TypespecUnavailable):
                 compile_tsp(tmp_path)
+
+
+class TestCompileTspArtefactLifetime:
+    """Regression: the openapi artefact must be read *inside* the tempdir
+    context. A prior bug deferred the read until after ``TemporaryDirectory``
+    exited, leaving callers with an empty ``openapi_yaml`` whenever the
+    compile actually produced output.
+    """
+
+    def test_reads_artefact_before_tempdir_cleanup(self, tmp_path) -> None:
+        from pathlib import Path
+        from subprocess import CompletedProcess
+
+        from forge.domain.typespec import compile_tsp
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        (source_dir / "main.tsp").write_text("model Foo {}\n")
+
+        expected_yaml = "openapi: 3.1.0\ninfo:\n  title: t\n  version: 1\n"
+
+        def fake_run(cmd, **kwargs):
+            out_idx = cmd.index("--output-dir") + 1
+            out_dir = Path(cmd[out_idx])
+            emit_dir = out_dir / "@typespec" / "openapi3"
+            emit_dir.mkdir(parents=True, exist_ok=True)
+            (emit_dir / "openapi.yaml").write_text(expected_yaml)
+            return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/tsp"),
+            patch("subprocess.run", side_effect=fake_run),
+        ):
+            result = compile_tsp(source_dir)
+
+        assert result.openapi_yaml == expected_yaml, (
+            "openapi.yaml read returned empty — artefact was likely read "
+            "after the tempdir was cleaned up"
+        )
+        # Spec is parsed from yaml_text when PyYAML is available; assert
+        # at least one well-known top-level key landed.
+        assert result.openapi_spec.get("openapi") == "3.1.0"
