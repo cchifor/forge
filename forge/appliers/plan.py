@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import yaml
 
@@ -41,6 +41,19 @@ if TYPE_CHECKING:
     from forge.middleware_spec import MiddlewareSpec
 
 
+# Typed-port (Initiative #1) — the invariants for ``inject.yaml`` zone /
+# position dispatch live next to the dataclass that consumes them so type
+# checkers (ty) flag wrong literal values at the call site, and
+# ``__post_init__`` flags them at the construction site for callers that
+# bypass the YAML loader (e.g. ``forge.middleware_spec.render_*``).
+
+InjectionPosition = Literal["after", "before"]
+InjectionZone = Literal["generated", "user", "merge"]
+
+INJECTION_POSITIONS: tuple[InjectionPosition, ...] = ("after", "before")
+INJECTION_ZONES: tuple[InjectionZone, ...] = ("generated", "user", "merge")
+
+
 @dataclass(frozen=True)
 class _Injection:
     feature_key: str  # the owning FeatureSpec.key, used in BEGIN/END sentinels
@@ -49,7 +62,7 @@ class _Injection:
     snippet: str
     # "after" (default) places snippet on the line after the marker;
     # "before" on the line before. Marker line is preserved either way.
-    position: str = "after"
+    position: InjectionPosition = "after"
     # Zone determines the idempotent-reapply semantics for this injection:
     #   * "generated" — default; re-generation overwrites (current behavior).
     #   * "user"      — emit on first apply; subsequent `forge --update`
@@ -60,7 +73,27 @@ class _Injection:
     #                   baseline. On conflict, emit `.forge-merge` markers
     #                   and return non-zero from update. Requires a
     #                   non-empty provenance entry for the target file.
-    zone: str = "generated"
+    zone: InjectionZone = "generated"
+
+    def __post_init__(self) -> None:
+        # Runtime guard for construction sites that bypass ``_load_injections``
+        # (e.g. ``middleware_spec.render_*``). The YAML loader pre-validates
+        # with richer path/index context, so YAML-driven constructions never
+        # reach this raise — but every Python construction site does.
+        if self.position not in INJECTION_POSITIONS:
+            raise FragmentError(
+                f"_Injection.position must be one of {list(INJECTION_POSITIONS)!r}, "
+                f"got {self.position!r}",
+                code=FRAGMENT_INJECT_YAML_BAD_POSITION,
+                context={"position": str(self.position)},
+            )
+        if self.zone not in INJECTION_ZONES:
+            raise FragmentError(
+                f"_Injection.zone must be one of {list(INJECTION_ZONES)!r}, "
+                f"got {self.zone!r}",
+                code=FRAGMENT_INJECT_YAML_BAD_ZONE,
+                context={"zone": str(self.zone)},
+            )
 
 
 def _render_snippet(snippet: str, options: Mapping[str, Any]) -> str:
@@ -130,28 +163,31 @@ def _load_injections(
             ) from e
         if entry.get("render"):
             snippet = _render_snippet(snippet, options or {})
-        position = str(entry.get("position", "after"))
-        if position not in ("before", "after"):
+        position_raw = str(entry.get("position", "after"))
+        if position_raw not in INJECTION_POSITIONS:
             raise FragmentError(
-                f"{path}[{i}]: position must be 'before' or 'after'",
+                f"{path}[{i}]: position must be one of {list(INJECTION_POSITIONS)!r}",
                 code=FRAGMENT_INJECT_YAML_BAD_POSITION,
-                context={"path": str(path), "index": i, "position": position},
+                context={"path": str(path), "index": i, "position": position_raw},
             )
-        zone = str(entry.get("zone", "generated"))
-        if zone not in ("generated", "user", "merge"):
+        zone_raw = str(entry.get("zone", "generated"))
+        if zone_raw not in INJECTION_ZONES:
             raise FragmentError(
-                f"{path}[{i}]: zone must be 'generated' | 'user' | 'merge' (got {zone!r})",
+                f"{path}[{i}]: zone must be one of {list(INJECTION_ZONES)!r} (got {zone_raw!r})",
                 code=FRAGMENT_INJECT_YAML_BAD_ZONE,
-                context={"path": str(path), "index": i, "zone": zone},
+                context={"path": str(path), "index": i, "zone": zone_raw},
             )
+        # After validation, narrow str -> Literal so the dataclass field
+        # types are honored statically (ty) and we don't pay an extra
+        # __post_init__ raise on the YAML-driven path.
         out.append(
             _Injection(
                 feature_key=feature_key,
                 target=target,
                 marker=marker,
                 snippet=snippet,
-                position=position,
-                zone=zone,
+                position=cast(InjectionPosition, position_raw),
+                zone=cast(InjectionZone, zone_raw),
             )
         )
     return out
