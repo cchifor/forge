@@ -273,6 +273,73 @@ class TestForgeAPI:
         assert reg.emitters_added == 1
         assert api._emitters["dart"] is fn
 
+    def test_add_emitter_retains_emitter_registration(self) -> None:
+        """Initiative #2 sub-task 2: the emitter callable must be
+        retained on PluginRegistration.emitter_registrations so the
+        codegen pipeline can walk LOADED_PLUGINS and invoke each
+        plugin's emitter after the built-in passes."""
+        from forge.api import PluginEmitterRegistration
+
+        reg = PluginRegistration(name="my_plugin", module="m")
+        api = ForgeAPI(reg)
+
+        def fn(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("openapi", fn)
+
+        assert len(reg.emitter_registrations) == 1
+        registration = reg.emitter_registrations[0]
+        assert isinstance(registration, PluginEmitterRegistration)
+        assert registration.target == "openapi"
+        assert registration.emitter is fn
+        assert registration.plugin_name == "my_plugin"
+
+    def test_add_emitter_accumulates_across_targets(self) -> None:
+        """Multiple add_emitter calls accumulate into the tuple."""
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        def emit_py(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        def emit_ts(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("python", emit_py)
+        api.add_emitter("typescript", emit_ts)
+
+        assert reg.emitters_added == 2
+        assert len(reg.emitter_registrations) == 2
+        targets = [r.target for r in reg.emitter_registrations]
+        assert targets == ["python", "typescript"]
+        # Back-compat: ``_emitters`` dict still populated.
+        assert api._emitters == {"python": emit_py, "typescript": emit_ts}
+
+    def test_add_emitter_same_target_last_wins_on_dict(self) -> None:
+        """When the same plugin re-registers a target, the dict
+        last-wins (back-compat with the 1.0.0a1 shape). Both
+        registrations are retained on the tuple so the codegen
+        walker can spot the collision and warn."""
+        reg = PluginRegistration(name="p", module="m")
+        api = ForgeAPI(reg)
+
+        def first(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        def second(project_root, config, resolved):  # noqa: ARG001
+            return None
+
+        api.add_emitter("python", first)
+        api.add_emitter("python", second)
+
+        assert reg.emitters_added == 2
+        assert api._emitters["python"] is second
+        # Both registrations retained on the tuple — pipeline walker
+        # is responsible for last-wins resolution + warning.
+        assert len(reg.emitter_registrations) == 2
+        assert [r.emitter for r in reg.emitter_registrations] == [first, second]
+
     def test_add_extractor_records_registration(self) -> None:
         reg = PluginRegistration(name="p", module="m")
         api = ForgeAPI(reg)

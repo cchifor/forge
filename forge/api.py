@@ -611,16 +611,51 @@ class ForgeAPI:
                 },
             ) from exc
 
-    # -- Emitter registration (hook for Phase 1) ---------------------------
+    # -- Emitter registration -----------------------------------------------
 
     def add_emitter(self, target: str, emitter: Callable[..., Any]) -> None:
         """Register a code emitter for a target language or protocol.
 
-        Targets are free-form strings that the Phase 1 schema-first
-        pipeline will consume (``python``, ``typescript``, ``dart``,
-        ``openapi``). 1.0.0a1 ships the hook; the pipeline lands in 1.0.0a2.
+        Targets are free-form strings that the codegen pipeline picks
+        up after its built-in passes run (``python``, ``typescript``,
+        ``dart``, ``openapi``, or any plugin-defined string).
+
+        The emitter callable contract is::
+
+            emitter(project_root: Path,
+                    config: ProjectConfig,
+                    resolved: ResolvedPlan | None) -> None
+
+        where ``project_root`` is the just-generated project tree,
+        ``config`` is the resolved :class:`ProjectConfig`, and
+        ``resolved`` is the capability-resolver output. ``resolved``
+        is ``None`` when ``run_codegen`` is invoked from the legacy
+        generator path that hasn't been plumbed with the plan yet;
+        plugin emitters MUST tolerate that.
+
+        Initiative #2 sub-task 2 retains the callable on
+        :attr:`PluginRegistration.emitter_registrations` so
+        :func:`forge.codegen.pipeline.run_codegen` can walk
+        :data:`forge.plugins.LOADED_PLUGINS` and invoke each
+        registered emitter after the built-in passes. Last-loaded
+        wins on target collision; the pipeline emits a structured
+        warning naming both plugins. ``self._emitters[target]`` is
+        kept for back-compat with the original 1.0.0a1 API surface
+        (and is overwritten on collision by the same last-wins rule).
+        ``emitters_added`` is preserved as a legacy integer counter
+        for byte-stable ``forge --plugins list --json`` output.
         """
         self._emitters[target] = emitter
+        self._registration.emitter_registrations = (
+            self._registration.emitter_registrations
+            + (
+                PluginEmitterRegistration(
+                    target=target,
+                    emitter=emitter,
+                    plugin_name=self._registration.name,
+                ),
+            )
+        )
         self._registration.emitters_added += 1
 
     # -- Extractor registration (hook for Phase 4 forge --harvest) ----------
