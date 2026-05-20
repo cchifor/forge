@@ -23,11 +23,11 @@
       "kill_rate_min": 0.95,
       "survivors_max": 5
     },
-    "forge/merge.py": {
+    "forge/sync/merge.py": {
       "kill_rate_min": 1.0,
       "survivors_max": 0
     },
-    "forge/provenance.py": {
+    "forge/sync/provenance.py": {
       "kill_rate_min": 1.0,
       "survivors_max": 0
     },
@@ -39,7 +39,15 @@
       "kill_rate_min": 0.9,
       "survivors_max": 3
     },
-    "forge/updater.py": {
+    "forge/sync/forge_to_project/updater/__init__.py": {
+      "kill_rate_min": 0.85,
+      "survivors_max": 5
+    },
+    "forge/sync/forge_to_project/updater/_merge_driver.py": {
+      "kill_rate_min": 0.85,
+      "survivors_max": 5
+    },
+    "forge/sync/forge_to_project/updater/_template_render.py": {
       "kill_rate_min": 0.85,
       "survivors_max": 5
     }
