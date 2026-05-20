@@ -156,7 +156,15 @@ def _update_locked(
 
     backends = _infer_backends(project_root, manifest_frontend=data.frontend)
     frontend_framework = _frontend_framework_from_manifest(data.frontend)
-    if not backends and frontend_framework == FrontendFramework.NONE:
+    # ``has_recorded_frontend`` covers both the built-in framework
+    # case (Vue / Svelte / Flutter — ``frontend_framework`` lights up)
+    # and plugin frontends (``frontend.framework`` is set but doesn't
+    # map onto the :class:`FrontendFramework` enum). The bail-out
+    # below should fire only when neither a backend nor a frontend
+    # layer is recorded; the synth-backend bridge below kicks in for
+    # the rest.
+    has_recorded_frontend = bool(data.frontend.framework)
+    if not backends and not has_recorded_frontend:
         # Genuinely empty project — no services/<backend>/ AND no
         # frontend recorded in the manifest (and none discoverable on
         # disk). That's not something --update can act on; bail with
@@ -168,9 +176,38 @@ def _update_locked(
             context={"project_root": str(project_root)},
         )
 
+    # Initiative #3 — frontend-only resolver bridge. The capability
+    # resolver gates each fragment on ``project_backends`` (the union
+    # of backends registered in the project), but the project-scope
+    # frontend fragments (e.g. ``platform_auth_session_timeout_vue``)
+    # are registered under :attr:`BackendLanguage.PYTHON` purely to
+    # satisfy the ``Fragment.implementations`` non-empty invariant —
+    # they're frontend code, not Python code. Without a single
+    # ``BackendLanguage.PYTHON`` entry in ``project_backends``, those
+    # fragments are filtered out before they reach
+    # :func:`apply_project_features` (where ``target_frontends`` gates
+    # them properly), so a frontend-only ``--update`` ends up
+    # rendering nothing at all. The synthetic placeholder satisfies
+    # the resolver's contract; the apply loop's
+    # ``if not backend_dir.is_dir(): continue`` guard keeps it from
+    # touching any non-existent ``services/_frontend_only/`` tree on
+    # the backend-scope pass. We add the placeholder for plugin
+    # frontends too (``frontend_framework == NONE`` but
+    # ``has_recorded_frontend == True``) so plugin authors get the
+    # same dispatch path as built-ins.
+    resolver_backends: list[BackendConfig] = list(backends)
+    if not resolver_backends and has_recorded_frontend:
+        resolver_backends.append(
+            BackendConfig(
+                name="_frontend_only",
+                project_name=data.project_name or project_root.name,
+                language=BackendLanguage.PYTHON,
+            )
+        )
+
     config = ProjectConfig(
         project_name=data.project_name or project_root.name,
-        backends=list(backends),
+        backends=resolver_backends,
         options=dict(data.options),
         # Carry origins through so the resolver can distinguish user-set
         # options from defaulted-but-persisted ones. Without this, a
@@ -480,11 +517,14 @@ def _update_locked(
     # on re-stamp. If we read v4 explicit data, write it back. If we
     # inferred from v3, the inference result is what carries the
     # framework + app_dir forward, upgrading the on-disk manifest to
-    # v4 in place.
+    # v4 in place. Re-stamp only the real on-disk backends — drop the
+    # synth ``_frontend_only`` placeholder so the manifest doesn't
+    # claim a Python backend the project doesn't have.
+    real_backends = tuple(bc for bc in config.backends if bc.name != "_frontend_only")
     _restamp_forge_toml(
         manifest=manifest,
         project_name=data.project_name or project_root.name,
-        backends=tuple(config.backends),
+        backends=real_backends,
         option_values=plan.option_values,
         option_origins=next_option_origins,
         current_version=current_version,
@@ -495,7 +535,10 @@ def _update_locked(
     )
 
     return {
-        "backends": [bc.name for bc in config.backends],
+        # Summary advertises the *real* on-disk backends only — the
+        # ``_frontend_only`` resolver placeholder is an implementation
+        # detail of the apply pass, not something callers should see.
+        "backends": [bc.name for bc in real_backends],
         "fragments_applied": fragments_applied,
         "forge_version_before": data.version,
         "forge_version_after": current_version,

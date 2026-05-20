@@ -298,3 +298,144 @@ class TestInferBackendsAcceptsManifestFrontend:
 
     def test_omitting_kwarg_is_equivalent(self, tmp_path: Path) -> None:
         assert _infer_backends(tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
+# Resolver bridge: synth backend lets frontend-only updates run fragments
+# ---------------------------------------------------------------------------
+
+
+class TestResolverBridgeForFrontendOnly:
+    """The resolver gates fragments on ``project_backends``. For a
+    frontend-only project the updater synthesises a ``BackendLanguage.
+    PYTHON`` placeholder so project-scope frontend fragments (which
+    are registered under PYTHON purely for ``Fragment.implementations``
+    non-emptiness) still reach :func:`apply_project_features` where
+    ``target_frontends`` gating fires.
+
+    These tests pin the bridge to the updater's summary so a future
+    refactor that drops the synth backend resurfaces here — without
+    requiring the resolver / capability_resolver to grow a frontend
+    parameter (which is Init #7's territory).
+    """
+
+    def test_summary_does_not_leak_synth_backend(self, tmp_path: Path) -> None:
+        """The synth ``_frontend_only`` BackendConfig is an
+        implementation detail of the resolver bridge — the summary's
+        ``backends`` list must not mention it. Pinned here so a future
+        refactor doesn't accidentally surface internal scaffolding
+        to JSON-mode callers.
+        """
+        project_root = _stub_frontend_only_project(tmp_path, framework="vue")
+        summary = update_project(project_root, quiet=True)
+        assert "_frontend_only" not in summary["backends"]
+        assert summary["backends"] == []
+
+    def test_manifest_restamp_does_not_leak_synth_backend(
+        self, tmp_path: Path
+    ) -> None:
+        """The re-stamped ``forge.toml`` must not record the synth
+        backend's language (Python) in ``[forge.templates]``.
+
+        Without the carve-out, every frontend-only update would
+        silently add a Python service-template entry to a project
+        that doesn't have one.
+        """
+        project_root = _stub_frontend_only_project(tmp_path, framework="vue")
+        update_project(project_root, quiet=True)
+        data = read_forge_toml(project_root / "forge.toml")
+        # Vue frontend stays in templates; python should not appear
+        # solely because of the synth bridge.
+        assert "vue" in data.templates
+        assert "python" not in data.templates
+
+    def test_synth_bridge_pulls_in_frontend_targeted_fragments(
+        self, tmp_path: Path
+    ) -> None:
+        """Direct check at the resolver layer: with the synth backend,
+        ``auth.mode=generate`` pulls every per-frontend session-timeout
+        fragment into the plan. Without the bridge, the plan would be
+        empty (covered by the inverse assertion below).
+
+        This is the load-bearing invariant for Initiative #3: the
+        manifest-only metadata flows through to a non-empty fragment
+        plan when the project's only layer is the frontend.
+        """
+        from forge.capability_resolver import resolve  # noqa: PLC0415
+        from forge.config import (  # noqa: PLC0415
+            BackendConfig,
+            BackendLanguage,
+            FrontendConfig,
+            ProjectConfig,
+        )
+
+        fc = FrontendConfig(framework=FrontendFramework.VUE, project_name="fe")
+        # WITH synth backend — the bridge the updater installs.
+        cfg_bridged = ProjectConfig(
+            project_name="fe",
+            backends=[
+                BackendConfig(
+                    name="_frontend_only",
+                    project_name="fe",
+                    language=BackendLanguage.PYTHON,
+                ),
+            ],
+            frontend=fc,
+            options={"backend.mode": "none", "auth.mode": "generate"},
+            option_origins={"backend.mode": "user", "auth.mode": "user"},
+        )
+        bridged_plan = resolve(cfg_bridged)
+        bridged_names = {rf.fragment.name for rf in bridged_plan.ordered}
+        # Vue / Svelte / Flutter session-timeout fragments all light up
+        # at the resolver layer — ``apply_project_features`` filters
+        # them by ``target_frontends`` per the actual frontend choice.
+        assert "platform_auth_session_timeout_vue" in bridged_names
+
+        # WITHOUT synth backend — empty plan, regression confirmed.
+        cfg_unbridged = ProjectConfig(
+            project_name="fe",
+            backends=[],
+            frontend=fc,
+            options={"backend.mode": "none", "auth.mode": "generate"},
+            option_origins={"backend.mode": "user", "auth.mode": "user"},
+        )
+        unbridged_plan = resolve(cfg_unbridged)
+        assert unbridged_plan.ordered == ()
+
+
+class TestPluginFrontendOnlyUpdate:
+    """Plugin-registered frontends (a framework name forge doesn't
+    know natively) still get the resolver-bridge treatment — the
+    project is "frontend-only" from the manifest's perspective even
+    when ``_frontend_framework_from_manifest`` collapses to
+    ``FrontendFramework.NONE`` for the unknown name.
+    """
+
+    def test_plugin_frontend_only_update_does_not_raise(
+        self, tmp_path: Path
+    ) -> None:
+        # Write a manifest claiming a plugin framework "solid". No
+        # apps/frontend/ on disk (the test scenario is "manifest has
+        # the framework, project layout is whatever the plugin uses").
+        root = tmp_path / "plugin_proj"
+        root.mkdir()
+        write_forge_toml(
+            root / "forge.toml",
+            version="1.2.0",
+            project_name="plugin-fe",
+            templates={},
+            options={"backend.mode": "none"},
+            option_origins={"backend.mode": "user"},
+            frontend=ForgeFrontendData(
+                framework="solid", app_dir="apps/solid-frontend"
+            ),
+        )
+        # Update should not raise "Nothing to update" — the manifest
+        # records a frontend layer (plugin), even if we can't dispatch
+        # ``target_frontends`` for it.
+        summary = update_project(root, quiet=True)
+        assert summary["backends"] == []
+        # The manifest's frontend record carries through the re-stamp.
+        after = read_forge_toml(root / "forge.toml")
+        assert after.frontend.framework == "solid"
+        assert after.frontend.app_dir == "apps/solid-frontend"
