@@ -117,26 +117,35 @@ def emit_typescript(schemas: list[Schema]) -> str:
 
     The module is self-contained: it inlines every variant interface
     (re-using :func:`forge.codegen.ui_protocol._ts_for_schema`) and
-    then layers a synthesised ``kind`` discriminator on top via
-    intersection types. Self-containment matters because the canvas
-    packages don't otherwise carry ui-protocol payload types — those
-    types are template-internal — so importing the variants from a
-    sibling generated file would require shipping an extra layer.
+    then layers a synthesised ``kind`` discriminator on top. Self-
+    containment matters because the canvas packages don't otherwise
+    carry ui-protocol payload types — those types are template-internal
+    — so importing the variants from a sibling generated file would
+    require shipping an extra layer.
 
     For each schema title ``T`` we emit:
 
-        export interface T { ... }   // inlined 1B body
-        export type T_With_Kind = T & { kind: "<kind>" };
+        export interface T { ... }                   // inlined 1B body
+        export type TWithKind = { kind: "<kind>"; payload: T };
 
     and assemble the union:
 
-        export type AgUiEvent = T_With_Kind | U_With_Kind | ...;
+        export type AgUiEvent = TWithKind | UWithKind | ...;
         export type AgUiEventKind = "<kind>" | "<kind>" | ...;
 
-    The intersection (``T & { kind: ... }``) is the canonical TS way
-    to layer a discriminator onto an otherwise-undiscriminated type
-    without re-declaring its fields. Consumers pattern-match on
-    ``event.kind`` and the compiler narrows the rest.
+    The wire shape (``{kind, payload}`` envelope) matches what the
+    Pydantic discriminated-union backend emits — Pydantic v2's
+    ``Field(discriminator="kind")`` machinery wraps each variant in a
+    dedicated model with ``kind`` + ``payload`` fields, so a generated
+    service serializes events in exactly that shape. Mirroring it in
+    TS keeps the type contract honest: a value typed ``AgUiEvent`` is
+    byte-compatible with the wire payload Pydantic produces and the
+    Dart ``AgUiEvent.parse`` factory consumes.
+
+    Pre-Initiative-#4 (Theme 2B) the TS union flattened payload fields
+    next to ``kind`` via ``T & {kind: ...}``. That shape disagreed with
+    Pydantic and would have failed at runtime against the actual wire;
+    Initiative #4 unifies the three runtimes on the wrapped envelope.
     """
     kinds = _kinds_list(schemas)
 
@@ -149,9 +158,13 @@ def emit_typescript(schemas: list[Schema]) -> str:
         lines.append("")
 
     lines.append("// Synthesised `kind` discriminator: each schema's PascalCase title kebab-cased.")
-    lines.append("// Variant-with-kind aliases — intersection with the kind literal:")
+    lines.append("// Wire shape mirrors Pydantic's discriminated-union envelope:")
+    lines.append("//   { kind: '<slug>', payload: <variant> }")
+    lines.append("// Variant-with-kind aliases — the envelope wrapping each payload:")
     for title, kind in kinds:
-        lines.append(f'export type {title}WithKind = {title} & {{ kind: "{kind}" }};')
+        lines.append(
+            f'export type {title}WithKind = {{ kind: "{kind}"; payload: {title} }};'
+        )
     lines.append("")
 
     lines.append("/** The exhaustive AG-UI event union. */")
@@ -212,11 +225,21 @@ def emit_dart(schemas: list[Schema]) -> str:
 
         AgUiClient<AgUiEvent>(dio: dio, parser: AgUiEvent.parse, ...)
 
-    ``parse`` switches on the ``kind`` slug, delegates to the matching
-    payload's ``.fromJson`` constructor, and wraps the result in the
-    sealed subclass. Returns ``null`` when ``kind`` is missing or
-    unknown — the caller's ``onParseError`` decides whether to surface
-    a synthetic event or drop the frame.
+    ``parse`` switches on the ``kind`` slug, pulls ``json['payload']``,
+    delegates to the matching payload's ``.fromJson`` constructor, and
+    wraps the result in the sealed subclass. Returns ``null`` when
+    ``kind`` is missing or unknown, or when ``payload`` is missing /
+    not an object — the caller's ``onParseError`` decides whether to
+    surface a synthetic event or drop the frame.
+
+    The wire shape — ``{kind: '<slug>', payload: {...}}`` — mirrors
+    the wrapped envelope Pydantic's discriminated-union machinery
+    emits on the backend. The TS union in
+    :func:`emit_typescript` declares the same envelope. Aligning all
+    three runtimes on the wrapped shape is the load-bearing fix of
+    Initiative #4: pre-Initiative-#4 the Dart parser called
+    ``Title.fromJson(json)`` on the outer envelope, which would have
+    failed at runtime against any Pydantic-emitted frame.
     """
     kinds = _kinds_list(schemas)
 
@@ -240,25 +263,37 @@ def emit_dart(schemas: list[Schema]) -> str:
     lines.append("")
     # Factory: kind -> variant. Returns null for missing/unknown kind so
     # AgUiClient<AgUiEvent>(parser: AgUiEvent.parse) wires up directly
-    # without per-app glue.
+    # without per-app glue. Wire shape mirrors Pydantic's wrapped
+    # envelope: { kind: '<slug>', payload: {...} } — the discriminator
+    # picks the variant, the payload sub-map carries the typed fields.
     lines.append("  /// Parse a raw JSON frame into the matching sealed variant.")
     lines.append("  ///")
-    lines.append("  /// Reads the canonical `kind` discriminator and dispatches to")
-    lines.append("  /// the matching payload's `fromJson`. Returns `null` when the")
-    lines.append("  /// frame has no `kind` field or carries an unknown slug —")
-    lines.append("  /// the caller's `onParseError` then decides whether to surface")
-    lines.append("  /// a synthetic event or drop the frame.")
+    lines.append("  /// Reads the canonical `kind` discriminator, pulls the nested")
+    lines.append("  /// `payload` map, and dispatches to the matching payload's")
+    lines.append("  /// `fromJson`. Returns `null` when the frame has no `kind`")
+    lines.append("  /// field, carries an unknown slug, or is missing the")
+    lines.append("  /// `payload` object — the caller's `onParseError` then")
+    lines.append("  /// decides whether to surface a synthetic event or drop the")
+    lines.append("  /// frame.")
+    lines.append("  ///")
+    lines.append("  /// Wire shape (mirrors the Pydantic discriminated-union")
+    lines.append("  /// envelope on the backend):")
+    lines.append("  ///")
+    lines.append("  ///     { \"kind\": \"<slug>\", \"payload\": { ...variant fields... } }")
     lines.append("  ///")
     lines.append("  /// Wired into the shipped `AgUiClient` via")
     lines.append("  /// `AgUiClient<AgUiEvent>(parser: AgUiEvent.parse, ...)`.")
     lines.append("  static AgUiEvent? parse(Map<String, dynamic> json) {")
     lines.append("    final kind = json['kind'];")
     lines.append("    if (kind is! String) return null;")
+    lines.append("    final rawPayload = json['payload'];")
+    lines.append("    if (rawPayload is! Map) return null;")
+    lines.append("    final payload = Map<String, dynamic>.from(rawPayload);")
     lines.append("    switch (kind) {")
     for title, kind in kinds:
         case_name = f"{title}Event"
         lines.append(f"      case '{kind}':")
-        lines.append(f"        return {case_name}({title}.fromJson(json));")
+        lines.append(f"        return {case_name}({title}.fromJson(payload));")
     lines.append("      default:")
     lines.append("        return null;")
     lines.append("    }")

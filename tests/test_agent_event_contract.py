@@ -224,6 +224,22 @@ def test_dart_parse_factory_returns_null_on_missing_kind() -> None:
     assert "if (kind is! String) return null;" in body
 
 
+def test_dart_parse_factory_consumes_wrapped_payload() -> None:
+    """The corpus uses the wrapped envelope (``{kind, payload}``). The
+    Dart factory must extract ``json['payload']`` and dispatch on the
+    inner map. Asserting both halves at once pins the cross-runtime
+    invariant: change the corpus shape (or the Dart factory) without
+    updating the other and the contract fails.
+    """
+    body = emit_dart(load_event_schemas())
+    # The factory pulls the payload before the switch.
+    assert "final rawPayload = json['payload'];" in body
+    # And dispatches on the inner map (`payload`, not `json`).
+    sample = next(iter(CORPUS))
+    title = "".join(part.capitalize() for part in sample.split("-"))
+    assert f"return {title}Event({title}.fromJson(payload));" in body
+
+
 # ---------------------------------------------------------------------------
 # Runtime 3 — TS union covers every corpus entry as a `kind` literal.
 # ---------------------------------------------------------------------------
@@ -242,6 +258,21 @@ def test_typescript_union_has_kind_literal_for_every_corpus_entry(
         f"TS union is missing the `kind: \"{kind}\"` literal — "
         f"the {kind} variant is not addressable from Vue/Svelte consumers."
     )
+
+
+def test_typescript_union_uses_wrapped_envelope() -> None:
+    """The TS shape must declare the same ``{kind, payload}`` envelope
+    Pydantic emits — anything else lies about the wire format to
+    consumers and re-introduces the Dart/TS mismatch Initiative #4
+    fixed.
+    """
+    body = emit_typescript(load_event_schemas())
+    sample = next(iter(CORPUS))
+    title = "".join(part.capitalize() for part in sample.split("-"))
+    assert (
+        f'export type {title}WithKind = '
+        f'{{ kind: "{sample}"; payload: {title} }};'
+    ) in body
 
 
 # ---------------------------------------------------------------------------
