@@ -11,19 +11,30 @@ all share. From schema v3 (WS2) it adds a parallel
 option, whether the value was user-set or defaulted by the resolver —
 the substrate ``forge --update`` uses to skip fragments whose backends
 aren't present without erroring on options the user never asked for.
+From schema v4 (Initiative #3) it adds a ``[forge.frontend]`` table
+recording the frontend framework + its on-disk app directory so
+``forge --update`` can target frontend-only projects (``backend.mode =
+"none"``) and gate ``target_frontends`` fragments without re-deriving
+the framework from disk every run.
 
-Canonical v3 format::
+Canonical v4 format::
 
     [forge]
-    schema_version = 3
+    schema_version = 4
     version = "1.2.0"
     project_name = "acme"
 
     [forge.templates]
     python = "services/python-service-template"
+    vue = "apps/vue-frontend-template"
 
     [forge.template_versions]
     python = "0.6.1"
+    vue = "1.0.0"
+
+    [forge.frontend]
+    framework = "vue"
+    app_dir = "apps/frontend"
 
     [forge.options]
     "middleware.rate_limit" = true
@@ -61,6 +72,15 @@ to v3 with accurate origins. Other write paths (``--reapply-baseline``,
 version intentionally — they shouldn't surprise the user with an
 unrelated schema bump on what may be a quick fix-up command.
 
+Schema v3 manifests are accepted on read — the absent
+``[forge.frontend]`` table is reconstructed by walking the on-disk
+project for the ``apps/<slug>/`` directory and a recognisable
+framework marker (Vue / Svelte / Flutter), seeded from
+``[forge.templates]`` when present (the same map the generator stamps).
+This keeps ``forge --update`` working on pre-v4 projects without a
+manual migration step; the next re-stamp upgrades the manifest in
+place.
+
 Pre-Option shapes (legacy ``[forge.features.*]`` /
 ``[forge.parameters]`` tables) are rejected with a clear error pointing
 to ``forge.toml`` re-generation — the refactor is a hard cutover.
@@ -77,6 +97,16 @@ import tomlkit
 
 logger = logging.getLogger(__name__)
 
+# Bumped from 3 to 4 in Initiative #3 to introduce a top-level
+# ``[forge.frontend]`` table that records the frontend framework + its
+# on-disk app directory. Pre-bump, ``forge --update`` had to re-derive
+# the frontend from disk every run (or, worse, treat frontend-only
+# projects as "no services found, bail"). v4 makes the frontend a
+# first-class manifest fact so backend-less projects update cleanly
+# and ``Fragment.target_frontends`` gating actually fires on update.
+# v3 manifests still read (the missing table is reconstructed by
+# walking ``apps/`` for a recognisable framework marker).
+#
 # Bumped from 2 to 3 in WS2 to introduce a parallel
 # ``[forge.option_origins]`` table that records, for each persisted
 # option, whether the value was user-set or defaulted by the resolver.
@@ -85,7 +115,27 @@ logger = logging.getLogger(__name__)
 # user-set options apart from defaults and would error on persisted
 # defaults whose fragment backends weren't present. v3 fixes that;
 # v2 manifests still read (origins synthesized as all-default).
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
+
+
+@dataclass(frozen=True)
+class ForgeFrontendData:
+    """Frontend-related manifest data, persisted under ``[forge.frontend]``.
+
+    ``framework`` is the value of the :class:`FrontendFramework` enum
+    (``"vue"`` / ``"svelte"`` / ``"flutter"`` / ``"none"``) or a plugin-
+    registered framework name. ``"none"`` means the project has no
+    frontend; the field is still emitted so the manifest is explicit
+    about layer composition (and so the updater can distinguish "no
+    frontend" from "field missing because pre-v4 manifest").
+
+    ``app_dir`` is the POSIX-style project-relative path to the
+    generated frontend (typically ``"apps/frontend"``). Empty when
+    ``framework == "none"``.
+    """
+
+    framework: str = ""
+    app_dir: str = ""
 
 
 @dataclass
@@ -96,7 +146,8 @@ class ForgeTomlData:
     pre-1.2.0) lacks the version+timestamp fields on per-file and
     per-block entries; 2 (1.2.0+) carries the richer metadata that
     enables drift verify and reverse-direction harvest; 3 (WS2) adds
-    per-option provenance via ``option_origins``. Manifests without an
+    per-option provenance via ``option_origins``; 4 (Initiative #3)
+    adds the ``[forge.frontend]`` table. Manifests without an
     explicit version are interpreted as v1.
     """
 
@@ -130,6 +181,10 @@ class ForgeTomlData:
     # ``{sha256, fragment_name?, fragment_version?, snippet_sha256?,
     # line_range?}``. v1 entries carry only ``{sha256}``.
     merge_blocks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Frontend framework + app directory (v4+). On v3 reads this is
+    # reconstructed from ``[forge.templates]`` + on-disk inference;
+    # see :func:`_infer_frontend_from_v3` for the fallback logic.
+    frontend: ForgeFrontendData = field(default_factory=ForgeFrontendData)
 
 
 def read_forge_toml(path: Path) -> ForgeTomlData:
@@ -222,6 +277,30 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
             continue
         merge_blocks[str(key)] = _coerce_entry(dict(entry))
 
+    # frontend: v4+ persists explicitly under ``[forge.frontend]``.
+    # When the table is present + populated, take it at face value
+    # (the generator / updater is the source of truth). When the
+    # table is missing or carries an empty framework, fall back to
+    # the same on-disk inference used for v1 / v2 / v3 manifests —
+    # this covers two cases: (a) older manifests pre-dating v4 and
+    # (b) v4 writers (e.g. ``--reapply-baseline``) that don't track
+    # frontend layer metadata and pass ``frontend=None`` through to
+    # ``write_forge_toml``. Reconstruction is best-effort: empty
+    # strings mean "no frontend known", which downstream consumers
+    # treat as "frontend layer absent".
+    frontend_tbl: dict[str, Any] = {}
+    if schema_version >= 4:
+        raw_frontend = forge.get("frontend") or {}
+        frontend_tbl = dict(raw_frontend) if isinstance(raw_frontend, dict) else {}
+    explicit_framework = str(_unwrap(frontend_tbl.get("framework", "")))
+    if explicit_framework:
+        frontend = ForgeFrontendData(
+            framework=explicit_framework,
+            app_dir=str(_unwrap(frontend_tbl.get("app_dir", ""))),
+        )
+    else:
+        frontend = _infer_frontend_from_v3(path.parent, templates)
+
     return ForgeTomlData(
         version=version,
         project_name=project_name,
@@ -232,7 +311,138 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
         option_origins=option_origins,
         provenance=provenance,
         merge_blocks=merge_blocks,
+        frontend=frontend,
     )
+
+
+# Frontend-framework slugs we know how to dispatch in update phases.
+# Mirrors ``forge.generator.TEMPLATE_DIRS`` (built-in frameworks) plus
+# the value of ``FrontendFramework.NONE`` for explicit "no frontend".
+# Plugin frontends register via ``forge.config.FRONTEND_SPECS`` (consulted
+# below in the inference fallback) — listing them here keeps the read
+# path stable when a plugin isn't installed.
+_BUILTIN_FRONTEND_FRAMEWORKS: tuple[str, ...] = ("vue", "svelte", "flutter")
+
+
+def _infer_frontend_from_v3(
+    project_root: Path,
+    templates: dict[str, str],
+) -> ForgeFrontendData:
+    """Best-effort frontend inference for schema v1 / v2 / v3 manifests.
+
+    Strategy, most-trusted source first:
+
+    1. Walk ``[forge.templates]`` for a key matching a known frontend
+       framework. The generator stamps both backend + frontend template
+       dirs there; if Vue / Svelte / Flutter shows up, that's the
+       frontend.
+    2. Otherwise, scan ``apps/`` for a directory containing a recognisable
+       marker (``package.json`` + framework dep, ``pubspec.yaml``).
+       Used when the manifest is sparse (an older WS2 project, or one
+       hand-edited at some point).
+    3. Returns the empty record when neither yields a match. The
+       updater treats that as "no frontend known" — same effect as
+       ``frontend.framework == "none"`` on v4.
+
+    ``project_root`` is the manifest's containing directory (the
+    project root). ``templates`` is the parsed ``[forge.templates]``
+    map as returned by :func:`read_forge_toml`.
+
+    Pure / no I/O when ``project_root`` doesn't exist on disk (test
+    fixtures that fabricate a manifest in a tmpdir without the rest
+    of the project layout); falls through to step 3 in that case.
+    """
+    # Step 1: templates-table inference. Lazy import keeps the
+    # manifest module free of the FRONTEND_SPECS dependency at import
+    # time (plugin registration runs after manifest is in memory).
+    try:
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        plugin_frontends = tuple(FRONTEND_SPECS)
+    except Exception:  # noqa: BLE001
+        plugin_frontends = ()
+    known = set(_BUILTIN_FRONTEND_FRAMEWORKS) | set(plugin_frontends)
+
+    for key in templates:
+        if key in known:
+            # Assume the conventional ``apps/frontend/`` slot; the
+            # generator hardcodes ``frontend_slug = "frontend"``. The
+            # on-disk presence check below is opportunistic — the
+            # updater treats a missing app_dir as "no frontend on
+            # disk", which matches what the user actually has.
+            app_dir = "apps/frontend"
+            if not (project_root / app_dir).is_dir():
+                # Fall back to scanning apps/ for any directory that
+                # exists (the plugin frontends sometimes ship to
+                # apps/<plugin_slug>/).
+                scanned = _scan_apps_for_frontend(project_root)
+                if scanned:
+                    app_dir = scanned
+            return ForgeFrontendData(framework=key, app_dir=app_dir)
+
+    # Step 2: on-disk inference. The framework is derived from the
+    # marker file we find — ``package.json`` plus a recognisable
+    # dependency name, or ``pubspec.yaml`` for Flutter.
+    inferred_dir = _scan_apps_for_frontend(project_root)
+    if inferred_dir:
+        framework = _framework_from_app_dir(project_root / inferred_dir)
+        if framework:
+            return ForgeFrontendData(framework=framework, app_dir=inferred_dir)
+
+    return ForgeFrontendData()
+
+
+def _scan_apps_for_frontend(project_root: Path) -> str:
+    """Return the POSIX rel-path of the first ``apps/<sub>/`` dir with a marker.
+
+    Recognised markers: ``package.json`` (Vue / Svelte / plugin JS
+    frameworks), ``pubspec.yaml`` (Flutter). Returns ``""`` when
+    ``apps/`` is missing or has no marker-bearing sub-directory.
+    """
+    apps = project_root / "apps"
+    if not apps.is_dir():
+        return ""
+    for sub in sorted(apps.iterdir()):
+        if not sub.is_dir():
+            continue
+        if (sub / "package.json").is_file() or (sub / "pubspec.yaml").is_file():
+            # POSIX rel-path. Tests run on Linux/macOS; even on Windows
+            # the manifest is canonically forward-slashed so consumers
+            # don't have to normalise.
+            return f"apps/{sub.name}"
+    return ""
+
+
+def _framework_from_app_dir(app_dir: Path) -> str:
+    """Heuristic framework detection from a frontend app directory.
+
+    Reads ``package.json`` once and scans for a recognisable
+    dependency (``vue`` / ``svelte``). Falls back to Flutter when
+    ``pubspec.yaml`` is present. Returns ``""`` on no match — the
+    caller treats that as "frontend layer absent from manifest" and
+    skips frontend phases (safer than guessing wrong and applying
+    Vue fragments to a Svelte tree).
+    """
+    pkg = app_dir / "package.json"
+    if pkg.is_file():
+        try:
+            import json  # noqa: PLC0415
+
+            payload = json.loads(pkg.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            payload = {}
+        deps: dict[str, Any] = {}
+        for key in ("dependencies", "devDependencies"):
+            section = payload.get(key) or {}
+            if isinstance(section, dict):
+                deps.update(section)
+        if "svelte" in deps or "@sveltejs/kit" in deps:
+            return "svelte"
+        if "vue" in deps:
+            return "vue"
+    if (app_dir / "pubspec.yaml").is_file():
+        return "flutter"
+    return ""
 
 
 def _coerce_options(raw: dict[str, Any]) -> dict[str, Any]:
@@ -284,12 +494,13 @@ def write_forge_toml(
     provenance: dict[str, dict[str, Any]] | None = None,
     merge_blocks: dict[str, dict[str, Any]] | None = None,
     template_versions: dict[str, str] | None = None,
+    frontend: ForgeFrontendData | None = None,
     schema_version: int = CURRENT_SCHEMA_VERSION,
 ) -> None:
-    """Emit ``forge.toml`` with all v3 sub-tables.
+    """Emit ``forge.toml`` with all v4 sub-tables.
 
     ``schema_version`` defaults to the current version; existing callers
-    that omit it produce a v3 manifest. ``template_versions`` may be
+    that omit it produce a v4 manifest. ``template_versions`` may be
     None or empty when the caller doesn't know per-template versions
     (legacy migration paths) — the table is omitted in that case.
 
@@ -313,6 +524,13 @@ def write_forge_toml(
     merge runtime (see :mod:`forge.sync.merge`) and by the
     reverse-direction harvester (see :mod:`forge.sync.project_to_forge`
     — Phase 4).
+
+    ``frontend`` is the v4 ``[forge.frontend]`` table — framework name
+    + on-disk app dir. ``None`` or a record with empty fields omits
+    the table entirely; existing call sites (``--reapply-baseline``,
+    ``--accept-harvested``, ``--remove-fragment``) that don't track
+    the frontend separately pass ``None`` and the read path
+    re-infers from disk on the next load.
     """
     doc = tomlkit.document()
     doc.add(tomlkit.comment("Generated by forge — do not edit by hand."))
@@ -337,6 +555,21 @@ def write_forge_toml(
         for key in sorted(template_versions):
             tv_tbl.add(key, template_versions[key])
         forge_tbl.add("template_versions", tv_tbl)
+
+    # v4: [forge.frontend] table. Emit only when the caller passed
+    # explicit frontend metadata with a non-empty framework — projects
+    # without a frontend (backend-only) omit the table entirely. The
+    # read path treats both "table absent" and "framework == none" as
+    # "no frontend present", so existing v3-writing call sites
+    # (--reapply-baseline, --accept-harvested, --remove-fragment) that
+    # pass ``frontend=None`` still produce a manifest the read path
+    # can reconstruct from disk on the next load.
+    if frontend is not None and frontend.framework:
+        fe_tbl = tomlkit.table()
+        fe_tbl.add("framework", frontend.framework)
+        if frontend.app_dir:
+            fe_tbl.add("app_dir", frontend.app_dir)
+        forge_tbl.add("frontend", fe_tbl)
 
     options_tbl = tomlkit.table()
     for key in sorted(options):
