@@ -969,8 +969,8 @@
       "sha256": "d73104adb44ccb05"
     },
     "frontend/src/features/ai_chat/events.gen.ts": {
-      "size": 3950,
-      "sha256": "1f33a624e35dc387"
+      "size": 4113,
+      "sha256": "8ef3f1499f5d7f0a"
     },
     "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
       "size": 2159,
