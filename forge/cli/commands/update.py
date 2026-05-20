@@ -15,6 +15,7 @@ from forge.fragment_context import UpdateMode
 def _run_update(args: argparse.Namespace) -> None:
     """Run `forge update` against the given project and exit."""
     from forge.errors import GeneratorError as _GeneratorError  # noqa: PLC0415
+    from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
     from forge.sync.forge_to_project.updater import update_project  # noqa: PLC0415
 
     project_path = Path(getattr(args, "project_path", ".")).resolve()
@@ -26,12 +27,21 @@ def _run_update(args: argparse.Namespace) -> None:
         suffix = ", no-template-update" if no_template_update else ""
         print(f"forge update: {project_path} (mode={update_mode}{suffix})")
     try:
-        summary = update_project(
-            project_path,
-            quiet=quiet,
-            update_mode=update_mode,
-            no_template_update=no_template_update,
-        )
+        # Initiative #6 (caching): open the per-invocation forge.toml
+        # cache so the merge-zone applier parses the manifest exactly
+        # once for the whole run instead of once per merge block.
+        # update_project re-stamps the manifest at the end of its run
+        # (after all appliers have finished consuming baselines), so
+        # the cache lifetime here covers both reads AND the subsequent
+        # write — no stale-read window exists because the write happens
+        # last and we're not re-reading after it.
+        with manifest_cache_scope():
+            summary = update_project(
+                project_path,
+                quiet=quiet,
+                update_mode=update_mode,
+                no_template_update=no_template_update,
+            )
     except _GeneratorError as exc:
         if getattr(args, "json_output", False):
             print(json.dumps({"error": str(exc)}))
