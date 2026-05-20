@@ -639,6 +639,17 @@ def _write_forge_toml(
     provenance = collector.as_dict() if collector is not None else None
     merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
 
+    # Initiative #3 follow-up — stamp the v4 ``[forge.frontend]`` table
+    # explicitly so the read path no longer has to re-infer the
+    # framework + app dir from disk. Pre-#5 callers passed
+    # ``frontend=None`` and ``write_forge_toml`` omitted the table; the
+    # read path's ``_infer_frontend_from_disk`` fallback (manifest.py)
+    # filled in the gap by walking ``apps/*/`` for ``copier-answers``.
+    # That inference can be wrong (matrix sandboxes with stale
+    # ``apps/`` subdirs, monorepos that ship multiple frontends side-
+    # by-side), so populate it from the typed config at write time.
+    frontend_data = _frontend_manifest_data(config)
+
     write_forge_toml(
         project_root / "forge.toml",
         version=forge_version,
@@ -649,6 +660,25 @@ def _write_forge_toml(
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
+        frontend=frontend_data,
+    )
+
+
+def _frontend_manifest_data(config: ProjectConfig):
+    """Return the v4 ``[forge.frontend]`` manifest payload for ``config``.
+
+    Returns ``None`` when the project is backend-only (no frontend
+    framework, or framework set to ``NONE``) so ``write_forge_toml``
+    omits the table — matches the read-side contract that "no frontend"
+    is expressed by absent table OR ``framework == "none"``.
+    """
+    from forge.sync.manifest import ForgeFrontendData  # noqa: PLC0415
+
+    if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
+        return None
+    return ForgeFrontendData(
+        framework=config.frontend.framework.value,
+        app_dir=f"apps/{config.frontend_slug}",
     )
 
 
