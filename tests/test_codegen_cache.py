@@ -73,9 +73,26 @@ class TestSchemaCache:
             b = load_json_schema(path)
             c = load_json_schema(path)
 
-        assert a is b is c
+        # Equality (not identity) — the cache deep-copies on hit so
+        # a misbehaving caller can't poison later reads.
+        assert a == b == c
         assert spy.call_count == 1
         assert _schema_cache._peek_size() == 1
+
+    def test_caller_mutation_does_not_poison_cache(self, tmp_path: Path) -> None:
+        # Deep-copy on hit means a caller that mutates the returned
+        # dict (e.g. annotates it for downstream processing) leaves
+        # the cached payload pristine for the next reader.
+        path = tmp_path / "demo.schema.json"
+        _write_schema(path, title="Original")
+
+        first = load_json_schema(path)
+        first["title"] = "Mutated"
+        first["properties"]["__poisoned__"] = {"type": "string"}
+
+        second = load_json_schema(path)
+        assert second["title"] == "Original"
+        assert "__poisoned__" not in second["properties"]
 
     def test_mtime_change_invalidates(self, tmp_path: Path) -> None:
         path = tmp_path / "demo.schema.json"
@@ -102,9 +119,11 @@ class TestSchemaCache:
             third = load_json_schema(path)
 
         # The mtime mismatch forced a re-parse on the first call;
-        # the second hit the cache again.
+        # the second hit the cache again. Deep-copy semantics mean
+        # the two payloads compare equal but aren't the same object.
         assert second["title"] == "Updated"
-        assert third is second
+        assert third == second
+        assert third is not second  # deep-copied on hit
         assert spy.call_count == 1
 
     def test_relative_and_absolute_paths_collapse(self, tmp_path: Path) -> None:

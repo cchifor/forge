@@ -173,6 +173,41 @@ class TestScopeBasics:
             data = cached_read_forge_toml(manifest)
             assert data.project_name == "demo"
 
+    def test_mid_scope_rewrite_invalidates(self, tmp_path: Path) -> None:
+        # Defence in depth: the updater re-stamps forge.toml at the
+        # END of _update_locked, after every applier has consumed
+        # baselines. Today no in-scope read happens post-restamp, so
+        # a path-only cache would be safe. But future call paths
+        # might add such a read; pin the mtime-arm of the cache key
+        # so an in-scope rewrite is automatically picked up on the
+        # next call instead of returning stale data.
+        import os
+        import time
+
+        manifest = tmp_path / "forge.toml"
+        _write_manifest(manifest, project_name="original")
+
+        with manifest_cache_scope():
+            first = cached_read_forge_toml(manifest)
+            assert first.project_name == "original"
+            assert _peek_cache_size() == 1
+
+            # Sleep + bump mtime explicitly so the rewrite is visible
+            # on filesystems with coarse mtime resolution.
+            time.sleep(0.01)
+            _write_manifest(manifest, project_name="restamped")
+            st = manifest.stat()
+            os.utime(
+                manifest,
+                ns=(st.st_atime_ns, st.st_mtime_ns + 10_000_000),
+            )
+
+            second = cached_read_forge_toml(manifest)
+            assert second.project_name == "restamped"
+            # The cache should still hold a single entry — the new
+            # mtime overwrites the old key:value pair.
+            assert _peek_cache_size() == 1
+
 
 class TestAppliesToMergeBaseline:
     """End-to-end: the merge-zone applier no longer re-parses forge.toml
