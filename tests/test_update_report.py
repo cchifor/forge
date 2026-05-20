@@ -141,3 +141,117 @@ def test_every_file_disposition_serialises(disposition: FileDisposition) -> None
     entry = UpdateFileEntry(path="x", disposition=disposition)
     out = entry.to_dict()
     assert out["disposition"] == disposition
+
+
+class TestRunUpdateJsonEnvelope:
+    """End-to-end: ``forge --update --json`` emits the new ``report`` key
+    alongside the pre-existing summary keys.
+
+    Mocks ``update_project`` so no on-disk project is required — the
+    test exercises the CLI shape, not the underlying updater
+    semantics."""
+
+    def test_envelope_carries_report_and_legacy_keys(self, tmp_path, capsys) -> None:
+        from argparse import Namespace
+        from unittest.mock import patch
+
+        from forge.cli.commands.update import _run_update
+
+        fake_summary: dict = {
+            "backends": ["api"],
+            "fragments_applied": ["rag_qdrant"],
+            "forge_version_before": "1.2.0",
+            "forge_version_after": "1.2.1",
+            "classification": {
+                "services/api/src/main.py": "unchanged",
+                "services/api/src/rag.py": "user-modified",
+                "services/api/src/orders.py": "missing",
+            },
+            "user_modified_count": 1,
+            "uninstalled": [],
+            "update_mode": "merge",
+            "file_conflicts": 0,
+            "template_updates": [],
+        }
+
+        args = Namespace(
+            project_path=str(tmp_path),
+            quiet=False,
+            update_mode="merge",
+            no_template_update=False,
+            json_output=True,
+        )
+
+        with patch(
+            "forge.sync.forge_to_project.updater.update_project",
+            return_value=fake_summary,
+        ), pytest.raises(SystemExit) as exc:
+            _run_update(args)
+        assert exc.value.code == 0
+
+        out = capsys.readouterr().out
+        # The CLI emits a one-line "forge update: ..." prelude on stdout
+        # before the JSON payload; strip it.
+        envelope = json.loads(out.split("\n", 1)[1])
+
+        # Legacy keys remain.
+        assert envelope["fragments_applied"] == ["rag_qdrant"]
+        assert envelope["forge_version_after"] == "1.2.1"
+        assert envelope["file_conflicts"] == 0
+        # New ``report`` key is present and self-consistent.
+        report = envelope["report"]
+        assert report["_report_version"] == 1
+        assert report["update_mode"] == "merge"
+        assert report["project_root"] == str(tmp_path)
+        # Per-file dispositions reflect classification.
+        dispositions = {e["path"]: e["disposition"] for e in report["file_dispositions"]}
+        assert dispositions["services/api/src/main.py"] == "unchanged"
+        assert dispositions["services/api/src/rag.py"] == "user-modified-skipped"
+        # 'missing' maps to 'modified' so the agent knows the file was touched.
+        assert dispositions["services/api/src/orders.py"] == "modified"
+        # legacy_summary holds the full pre-#5 dict verbatim.
+        assert report["legacy_summary"]["fragments_applied"] == ["rag_qdrant"]
+
+    def test_envelope_surfaces_conflict_warning(self, tmp_path, capsys) -> None:
+        from argparse import Namespace
+        from unittest.mock import patch
+
+        from forge.cli.commands.update import _run_update
+
+        fake_summary: dict = {
+            "backends": ["api"],
+            "fragments_applied": [],
+            "forge_version_before": "1.2.0",
+            "forge_version_after": "1.2.0",
+            "classification": {},
+            "user_modified_count": 0,
+            "uninstalled": [],
+            "update_mode": "merge",
+            "file_conflicts": 3,
+            "template_updates": [
+                {
+                    "language": "python",
+                    "status": "conflict",
+                    "project_version": "1.0.0",
+                    "current_version": "1.1.0",
+                }
+            ],
+        }
+        args = Namespace(
+            project_path=str(tmp_path),
+            quiet=False,
+            update_mode="merge",
+            no_template_update=False,
+            json_output=True,
+        )
+        with patch(
+            "forge.sync.forge_to_project.updater.update_project",
+            return_value=fake_summary,
+        ), pytest.raises(SystemExit) as exc:
+            _run_update(args)
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        envelope = json.loads(out.split("\n", 1)[1])
+        warnings = envelope["report"]["warnings"]
+        assert any("3 merge conflict" in w for w in warnings)
+        assert any("template python update conflict" in w for w in warnings)
