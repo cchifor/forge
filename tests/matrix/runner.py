@@ -82,7 +82,24 @@ _INSTALL_TIMEOUT_SECONDS = 300
 _BUILD_TIMEOUT_SECONDS = 180
 
 
-def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
+@dataclass(frozen=True)
+class _FrontendVerifyOutcome:
+    """Tagged result of ``_verify_frontend`` (Initiative #9 — surface skips).
+
+    * ``status="ok"`` — install + build both succeeded. ``error`` / ``skip_reason`` empty.
+    * ``status="fail"`` — install or build returned a non-zero exit. ``error`` carries
+      the label the caller embeds in the lane FAIL ``details``.
+    * ``status="skip"`` — the check was bypassed (Flutter, no frontend, no JS runtime,
+      ...). ``skip_reason`` names the missing dependency / opt-out for the
+      annotation emitter.
+    """
+
+    status: Literal["ok", "fail", "skip"]
+    error: str = ""
+    skip_reason: str = ""
+
+
+def _verify_frontend(fe_cfg, fe_dir: Path) -> _FrontendVerifyOutcome:
     """Run a build/analyze check against the generated frontend.
 
     Lane B's frontend complement to ``BackendToolchain.verify`` — runs
@@ -90,16 +107,19 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
     ``apps/frontend/`` so vue-tsc / svelte-check / vite build regressions
     surface on PR rather than waiting for nightly compose-up (lane C).
 
-    Returns ``None`` on success, an error label on failure. Uses the
-    package manager from ``fe_cfg.package_manager`` when present;
-    falls back to ``npm``.
+    Returns a :class:`_FrontendVerifyOutcome` tagging the outcome as
+    ``ok`` / ``fail`` / ``skip``. Initiative #9 split this from the
+    pre-Init pattern (``None`` for both success AND skip) so silent
+    skips (no npm on PATH, Flutter scenario, etc.) can be surfaced
+    as GitHub Actions annotations rather than masquerading as
+    coverage.
 
     Budget (worst-case wall-clock per scenario): install 5 min +
     build 3 min = 8 min. Lane B aims for ~5 min average across the
     matrix; the upper bound covers cold CI caches without letting a
     runaway process stall the whole runner.
 
-    Skips silently (returns ``None``) when:
+    Skips (returned with ``skip_reason``) when:
 
     * The frontend framework is Flutter — ``subosito/flutter-action`` is
       heavy and lane B targets <5 min/scenario; Flutter is covered by
@@ -115,17 +135,26 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> str | None:
 
     framework = getattr(fe_cfg, "framework", None)
     if framework is None or framework == FrontendFramework.NONE:
-        return None
+        return _FrontendVerifyOutcome(
+            status="skip", skip_reason="no frontend configured"
+        )
     if getattr(framework, "value", None) == "flutter":
-        # Flutter handled by e2e suite (subosito/flutter-action heavy install).
-        return None
+        return _FrontendVerifyOutcome(
+            status="skip",
+            skip_reason="flutter frontend (covered by tests/e2e/test_full_generation.py)",
+        )
     pm = getattr(fe_cfg, "package_manager", "npm") or "npm"
     pm_exe = shutil.which(pm) or shutil.which("npm")
     if pm_exe is None:
-        return None  # No JS runtime on this runner — skip silently.
-    return _run_frontend_step(
+        return _FrontendVerifyOutcome(
+            status="skip", skip_reason=f"{pm} / npm not on PATH (no JS runtime)"
+        )
+    err = _run_frontend_step(
         pm, pm_exe, fe_dir, ["install", "--no-fund", "--no-audit"], _INSTALL_TIMEOUT_SECONDS
     ) or _run_frontend_step(pm, pm_exe, fe_dir, ["run", "build"], _BUILD_TIMEOUT_SECONDS)
+    if err is None:
+        return _FrontendVerifyOutcome(status="ok")
+    return _FrontendVerifyOutcome(status="fail", error=err)
 
 
 def _run_frontend_step(
@@ -205,6 +234,18 @@ class Scenario:
     port_base: int
     expected_files: tuple[str, ...]
     config: dict[str, Any]
+    # Lane D (roundtrip) — when True (the default), lane D MUST find at
+    # least one literal FORGE sentinel block to mutate AND produce at
+    # least one ``safe-apply`` block candidate after the synthetic edit;
+    # otherwise the lane fails. Scenarios that legitimately produce zero
+    # block candidates (e.g. a backend whose templates carry no Jinja-
+    # free sentinel blocks today) set ``expect_candidates: false`` in
+    # ``scenarios.yaml`` to opt out — the lane then reports the empty
+    # case as ``ok`` with a documented note. Initiative #9: removes the
+    # silent vacuous-green path that previously masked Lane D regressions
+    # whenever the fragment surface drifted such that no literal sentinel
+    # block remained on disk.
+    expect_candidates: bool = True
 
 
 @dataclass
@@ -215,6 +256,13 @@ class LaneResult:
     duration_ms: int
     details: str = ""
     missing_files: list[str] = field(default_factory=list)
+    # Initiative #9: sub-lane skips (e.g. lane B's frontend check
+    # silently returning None when npm isn't on PATH). The lane
+    # status stays ``ok`` because the check that COULD run all
+    # succeeded, but the skipped sub-checks are surfaced as GitHub
+    # Actions warnings via ``_emit_github_annotations`` so a "green"
+    # nightly doesn't mask under-coverage from a missing runtime.
+    skipped_subchecks: list[str] = field(default_factory=list)
 
 
 def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
@@ -276,6 +324,12 @@ def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
         if not isinstance(cfg, dict):
             raise ValueError(f"scenario {name!r} 'config' must be a mapping")
 
+        expect_candidates = raw.get("expect_candidates", True)
+        if not isinstance(expect_candidates, bool):
+            raise ValueError(
+                f"scenario {name!r} 'expect_candidates' must be bool (got {type(expect_candidates).__name__})"
+            )
+
         scenarios.append(
             Scenario(
                 name=name,
@@ -284,6 +338,7 @@ def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
                 port_base=port_base,
                 expected_files=tuple(expected),
                 config=cfg,
+                expect_candidates=expect_candidates,
             )
         )
     return scenarios
@@ -459,11 +514,16 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
         # C). ``frontend_mode`` is the project-level option discriminator
         # (``options["frontend.mode"]``); ``_validate_frontend_mode_coherence``
         # already keeps it in lock-step with ``FrontendConfig.framework``.
+        skipped_subchecks: list[str] = []
         if project_config.frontend is not None and project_config.frontend_mode != "none":
             fe_dir = project_root / "apps" / "frontend"
-            fe_result = _verify_frontend(project_config.frontend, fe_dir)
-            if fe_result is not None:
-                failures.append(f"frontend:{fe_result}")
+            fe_outcome = _verify_frontend(project_config.frontend, fe_dir)
+            if fe_outcome.status == "fail":
+                failures.append(f"frontend:{fe_outcome.error}")
+            elif fe_outcome.status == "skip":
+                # Initiative #9: surface the skip so a "green" lane B
+                # doesn't quietly mean "frontend build was never run".
+                skipped_subchecks.append(f"frontend: {fe_outcome.skip_reason}")
 
         if failures:
             return LaneResult(
@@ -472,12 +532,14 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details="toolchain checks failed: " + "; ".join(failures),
+                skipped_subchecks=skipped_subchecks,
             )
         return LaneResult(
             scenario=scenario.name,
             lane="verify",
             status="ok",
             duration_ms=int((perf_counter() - start) * 1000),
+            skipped_subchecks=skipped_subchecks,
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -574,11 +636,15 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
 
         # Run the HTTP contract against each backend.
         violations: list[str] = []
+        sub_skips: list[str] = []
         for bc in project_config.backends:
             base_url = f"http://localhost:{bc.server_port}"
             result = assert_contract(base_url, scenario.name, bc.name)
             if not result.passed:
                 violations.extend(f"{bc.name}:{v.endpoint}: {v.reason}" for v in result.violations)
+            # Initiative #9 — propagate per-backend endpoint skips to the
+            # lane result so the annotation emitter can surface them.
+            sub_skips.extend(f"{bc.name}: {s}" for s in result.skipped_endpoints)
 
         if violations:
             return LaneResult(
@@ -589,12 +655,14 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 details="contract violations: "
                 + "; ".join(violations[:5])
                 + (f" (+{len(violations) - 5} more)" if len(violations) > 5 else ""),
+                skipped_subchecks=sub_skips,
             )
         return LaneResult(
             scenario=scenario.name,
             lane="smoke",
             status="ok",
             duration_ms=int((perf_counter() - start) * 1000),
+            skipped_subchecks=sub_skips,
         )
     finally:
         if project_root is not None:
@@ -755,16 +823,33 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         # Edit a non-Jinja sentinel block (apply-back literalizes the
         # user's body; Jinja-bearing blocks round-trip incorrectly and
         # are flagged needs-review at harvest anyway).
+        #
+        # Initiative #9: the two "no candidates" exit paths below
+        # (no literal block found, or no safe-apply after edit) used to
+        # report ``ok`` unconditionally — a silent vacuous-green that
+        # masked Lane D regressions whenever the fragment surface drifted
+        # such that no literal sentinel block remained on disk. The lane
+        # now requires scenarios to opt INTO empty-candidate vacuous-true
+        # by setting ``expect_candidates: false`` in scenarios.yaml.
+        # Default (``expect_candidates: true``) treats the empty case as
+        # a regression.
         edited_path = _edit_one_literal_block(project_a)
         if edited_path is None:
-            return LaneResult(
-                scenario=scenario.name,
-                lane="roundtrip",
-                status="ok",
-                duration_ms=int((perf_counter() - start) * 1000),
-                details=(
-                    "FR1 passed; no literal FORGE sentinel block to exercise "
-                    "the apply-back round-trip (vacuously round-trippable)"
+            return _empty_candidate_result(
+                scenario,
+                start,
+                reason=(
+                    "no literal FORGE sentinel block to exercise the apply-back "
+                    "round-trip (vacuously round-trippable)"
+                ),
+                gate_message=(
+                    "FR1 passed but no literal FORGE sentinel block was found "
+                    f"under {scenario.name!r}; lane D had nothing to mutate so "
+                    "the apply-back round-trip was vacuously satisfied. If this "
+                    "is intentional (e.g. every fragment in this scenario is "
+                    "Jinja-templated), set `expect_candidates: false` on the "
+                    "scenario in tests/matrix/scenarios.yaml. Otherwise restore "
+                    "the literal block surface that lane D relies on."
                 ),
             )
 
@@ -774,74 +859,91 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         bundle_post = harvest_project(project_a, quiet=True)
         bundle_post.candidates[:] = [c for c in bundle_post.candidates if c.kind == "block"]
         if not any(c.risk == "safe-apply" for c in bundle_post.candidates):
-            return LaneResult(
-                scenario=scenario.name,
-                lane="roundtrip",
-                status="ok",
-                duration_ms=int((perf_counter() - start) * 1000),
-                details=(
-                    "FR1 passed; no safe-apply block candidate after edit "
+            return _empty_candidate_result(
+                scenario,
+                start,
+                reason=(
+                    "no safe-apply block candidate after edit "
                     "(fragment must be Jinja-templated)"
+                ),
+                gate_message=(
+                    "FR1 passed and a literal block was edited, but harvest "
+                    f"produced zero safe-apply block candidates for {scenario.name!r}. "
+                    "The bundle's apply-back contract is empty, so the FR2 "
+                    "round-trip cannot run. If every fragment in this scenario "
+                    "is Jinja-templated (round-trip not applicable), set "
+                    "`expect_candidates: false` on the scenario in "
+                    "tests/matrix/scenarios.yaml. Otherwise investigate why the "
+                    "edit didn't surface a safe-apply candidate."
                 ),
             )
 
-        # Snapshot every inject.yaml under the live forge package, apply
-        # the bundle in place, regenerate, compare, and revert in
-        # ``finally``. This pattern is necessary because the generator
-        # imports its fragment registry at module load; pointing it at
-        # a clone would have no effect on the second generate.
-        forge_repo = _live_forge_root()
-        inject_yamls = list((forge_repo / "forge").rglob("inject.yaml"))
-        snapshots = {p: p.read_bytes() for p in inject_yamls}
+        # Initiative #9: apply the bundle to a tempdir SANDBOX of the
+        # forge tree (cp -a or git worktree) and run the second generate
+        # via subprocess pointed at that sandbox. The previous design
+        # mutated the LIVE forge tree under
+        # ``snapshot/finally restore``; under parallel CI (multiple
+        # scenarios on the same runner, or a developer running another
+        # ``forge`` command concurrently) the snapshot/restore raced and
+        # could leave inject.yaml files in a half-restored state if the
+        # process was killed between mutate and restore. The sandbox is
+        # discarded with ``shutil.rmtree(tmp)`` so no restore step is
+        # needed and concurrent invocations don't share state.
+        sandbox_forge_root = _materialize_forge_sandbox(tmp / "forge-sandbox")
         try:
-            report = apply_bundle_to_fragments(bundle_post, forge_repo, quiet=True)
-            if report.errored:
-                first_err = next((e.error for e in report.entries if e.status == "errored"), "")
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=(
-                        f"apply-back errored on {report.errored} block "
-                        f"candidate(s); first: {first_err}"
-                    ),
-                )
+            report = apply_bundle_to_fragments(
+                bundle_post, sandbox_forge_root, quiet=True
+            )
+        except Exception as exc:  # noqa: BLE001
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=f"apply-back raised {type(exc).__name__}: {exc}",
+            )
+        if report.errored:
+            first_err = next((e.error for e in report.entries if e.status == "errored"), "")
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"apply-back errored on {report.errored} block "
+                    f"candidate(s); first: {first_err}"
+                ),
+            )
 
-            cfg_b = dict(scenario.config)
-            cfg_b["output_dir"] = str(tmp / "project-b")
-            try:
-                project_config_b = _project_config_from_dict(cfg_b)
-                project_config_b.validate()
-                project_b = generate(project_config_b, quiet=True, dry_run=False)
-            except (ValueError, ForgeError) as e:
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=f"second generate failed: {e}",
-                )
+        cfg_b = dict(scenario.config)
+        cfg_b["output_dir"] = str(tmp / "project-b")
+        project_b_or_fail = _subprocess_generate(
+            cfg_b,
+            sandbox_forge_root=sandbox_forge_root,
+            project_name=scenario.config.get("project_name") or scenario.name,
+        )
+        if isinstance(project_b_or_fail, str):
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=f"second generate failed: {project_b_or_fail}",
+            )
+        project_b = project_b_or_fail
 
-            differing = _diff_project_trees_normalized(project_a, project_b)
-            if differing:
-                return LaneResult(
-                    scenario=scenario.name,
-                    lane="roundtrip",
-                    status="fail",
-                    duration_ms=int((perf_counter() - start) * 1000),
-                    details=(
-                        f"project_a vs project_b: {len(differing)} file(s) "
-                        f"differ after normalisation; first: {differing[0]}"
-                    ),
-                )
-        finally:
-            # Best-effort restore — if a snapshot path disappeared (apply-
-            # back wrote elsewhere) we don't want to mask the original lane
-            # failure with a teardown OSError.
-            for path, content in snapshots.items():
-                with contextlib.suppress(OSError):
-                    path.write_bytes(content)
+        differing = _diff_project_trees_normalized(project_a, project_b)
+        if differing:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"project_a vs project_b: {len(differing)} file(s) "
+                    f"differ after normalisation; first: {differing[0]}"
+                ),
+            )
 
         return LaneResult(
             scenario=scenario.name,
@@ -854,6 +956,40 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _empty_candidate_result(
+    scenario: Scenario,
+    start: float,
+    *,
+    reason: str,
+    gate_message: str,
+) -> LaneResult:
+    """Return ``ok`` or ``fail`` per ``scenario.expect_candidates`` gate.
+
+    Centralises the Initiative #9 anti-vacuous-green policy. When a
+    scenario opted out (``expect_candidates: false``) the empty-candidate
+    case is documented as ``ok`` with ``reason`` in details. When the
+    scenario did NOT opt out (the default), the empty case fails loudly
+    with ``gate_message`` so a future template drift doesn't silently
+    coast through lane D as green.
+    """
+    duration_ms = int((perf_counter() - start) * 1000)
+    if scenario.expect_candidates:
+        return LaneResult(
+            scenario=scenario.name,
+            lane="roundtrip",
+            status="fail",
+            duration_ms=duration_ms,
+            details=gate_message,
+        )
+    return LaneResult(
+        scenario=scenario.name,
+        lane="roundtrip",
+        status="ok",
+        duration_ms=duration_ms,
+        details=f"FR1 passed; {reason} (expect_candidates=false)",
+    )
 
 
 def _edit_one_literal_block(project_root: Path) -> Path | None:
@@ -912,13 +1048,167 @@ def _edit_one_literal_block(project_root: Path) -> Path | None:
 def _live_forge_root() -> Path:
     """Return the directory containing the live ``forge/`` package.
 
-    Used by lane D's apply-back step to write into the live forge
-    tree (with snapshot+restore in ``finally``) so a subsequent
-    ``generate()`` re-emits the user's edit. The runner is invoked
-    from the repo root, so the parent of this file's grand-parent
-    is the directory containing ``forge/``.
+    The runner is invoked from the repo root, so the parent of this
+    file's grand-parent is the directory containing ``forge/``. Used
+    by :func:`_materialize_forge_sandbox` as the source for lane D's
+    sandbox copy.
     """
     return Path(__file__).resolve().parents[2]
+
+
+_SANDBOX_IGNORE = shutil.ignore_patterns(
+    ".git",
+    ".venv",
+    "node_modules",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "target",
+    "build",
+    "dist",
+)
+
+
+def _materialize_forge_sandbox(dest: Path) -> Path:
+    """Create a sandbox copy of the live forge package tree at ``dest``.
+
+    Initiative #9: lane D used to mutate ``inject.yaml`` files in the
+    LIVE forge tree (with a snapshot+restore-in-``finally`` guard).
+    Under parallel CI (multiple scenarios on one runner, or a developer
+    running a ``forge`` command concurrently) the snapshot/restore
+    raced; a killed process between mutate and restore left the tree
+    in a half-restored state. The sandbox sidesteps the race: the
+    apply-back writes into a tempdir copy and the tempdir is removed
+    with the rest of the lane's scratch space at the end of
+    :func:`run_lane_roundtrip`. No restore step exists, so no race.
+
+    Returns ``dest`` (the directory now containing a ``forge/`` subdir
+    suitable for use as the ``forge_repo`` argument to
+    :func:`apply_bundle_to_fragments`).
+
+    Copies only the ``forge/`` package directory (not the surrounding
+    repo) — apply-back only touches
+    ``forge/features/.../inject.yaml`` and
+    ``forge/templates/_fragments/.../inject.yaml`` paths, and the
+    subprocess generate spawned below only needs ``forge/`` itself on
+    ``PYTHONPATH``. ``shutil.copytree`` with ``_SANDBOX_IGNORE`` skips
+    build artefacts and caches that would otherwise inflate the copy
+    by orders of magnitude on a developer machine (the ``forge/``
+    package proper is ~30 MB; a venv-laden checkout is closer to 500 MB).
+    """
+    live = _live_forge_root()
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        str(live / "forge"),
+        str(dest / "forge"),
+        symlinks=True,
+        ignore=_SANDBOX_IGNORE,
+        dirs_exist_ok=True,
+    )
+    return dest
+
+
+def _subprocess_generate(
+    scenario_config: dict[str, Any],
+    *,
+    sandbox_forge_root: Path,
+    project_name: str,
+) -> Path | str:
+    """Spawn ``python -m forge --config <yaml>`` against the sandbox tree.
+
+    Lane D's second-generate step. Must run in a subprocess (not via a
+    direct :func:`forge.generator.generate` call) because the current
+    process imported ``forge`` from the live tree at module load —
+    ``FRAGMENT_REGISTRY`` entries and ``_TEMPLATES_DIR`` were resolved
+    against the live tree's paths and cannot be re-rooted at runtime.
+    The subprocess imports ``forge`` from the sandbox (``PYTHONPATH``
+    prepend), so the apply-back's inject.yaml edits in the sandbox
+    take effect.
+
+    Returns the absolute path to the generated project root on success,
+    or a single-line error string on failure (caller surfaces as a
+    lane FAIL ``details``). The error includes the subprocess's
+    captured stderr tail so a real generator regression doesn't get
+    swallowed by an opaque "second generate failed" message.
+    """
+    import subprocess  # noqa: PLC0415
+
+    output_dir = Path(scenario_config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    config_yaml = output_dir.parent / "scenario-config.yaml"
+    config_yaml.write_text(yaml.safe_dump(scenario_config), encoding="utf-8")
+
+    env = dict(os.environ)
+    pythonpath_parts = [str(sandbox_forge_root)]
+    if env.get("PYTHONPATH"):
+        pythonpath_parts.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "forge",
+                "--config",
+                str(config_yaml),
+                # ``--output-dir`` must be passed via CLI flag, not the
+                # config file's ``output_dir`` key: the CLI's argparse
+                # default of ``"."`` wins over the config-file value in
+                # the builder's flag>cfg>default resolution order, so
+                # leaving it implicit would land the second project at
+                # ``cwd/<slug>`` rather than the tempdir we want.
+                "--output-dir",
+                str(output_dir),
+                "--quiet",
+                "--yes",
+                # ``--yes`` would otherwise trigger ``docker compose up``
+                # at the end of generate; lane D only cares about the
+                # generated tree contents, not the live stack. Skipping
+                # the boot also avoids a flaky tail (compose pulling
+                # the network at random) that drowns the diff signal.
+                "--no-docker",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(sandbox_forge_root),
+            timeout=600,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return "subprocess generate timed out after 600s"
+    except FileNotFoundError as e:
+        return f"subprocess generate exec failed: {e}"
+    if result.returncode != 0:
+        stream = result.stderr.strip() or result.stdout.strip()
+        tail = "\n".join(stream.splitlines()[-5:]) if stream else "<no output>"
+        return f"subprocess generate exit {result.returncode}: {tail}"
+
+    # ``forge`` slugifies the project_name (lowercase, replace spaces +
+    # hyphens with underscores) before constructing the project dir;
+    # matches ``ProjectConfig.project_slug``. Computed locally so we
+    # don't import a ``forge.config`` symbol from the host process —
+    # the helper has no business depending on whichever forge module
+    # the runner imported at startup, given the whole point of the
+    # subprocess is to isolate the second generate from the host's
+    # registry state.
+    slug = project_name.lower().replace(" ", "_").replace("-", "_")
+    project_root = output_dir / slug
+    if not project_root.is_dir():
+        # Fallback: scan output_dir for the single created subdir.
+        # Robust against future slug-rule drift without forcing the
+        # helper to mirror forge's slugifier byte-for-byte.
+        candidates = [p for p in output_dir.iterdir() if p.is_dir()]
+        if len(candidates) == 1:
+            return candidates[0]
+        return (
+            f"subprocess generate succeeded but project dir not found under "
+            f"{output_dir} (candidates: {[c.name for c in candidates]!r})"
+        )
+    return project_root
 
 
 def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
@@ -1147,6 +1437,91 @@ def _format_markdown_grid(results: list[LaneResult], scenarios: list[Scenario]) 
     return "\n".join(lines)
 
 
+# Skip details emitted by ``run_scenario`` when a scenario simply
+# doesn't opt into a lane — this is a deliberate config choice (see
+# scenarios.yaml's ``lanes:`` list), not a missing-dep skip, so it
+# shouldn't generate annotation noise. The runner emits exactly this
+# string; centralising it here keeps the annotation filter in lock-
+# step with the producer if either is renamed.
+_LANE_OPTOUT_DETAILS_PREFIX = "scenario does not opt into lane"
+
+
+def _emit_github_annotations(results: list[LaneResult]) -> None:
+    """Print ``::warning::`` lines for each skipped lane / sub-check.
+
+    Initiative #9: pre-#9, lane C (compose-up) would silently SKIP
+    when ``docker`` wasn't on PATH; lane B (verify) would silently
+    skip the frontend build when ``npm`` wasn't on PATH; the
+    OpenAPI sub-check in smoke_contract treats 404-on-every-path
+    as a skip (currently the Node + Rust template surface). A "green"
+    nightly grid hid all three, so a regression that REMOVED a tool
+    from the CI image would coast through Lane C as a pass-because-
+    skipped without surfacing the loss of coverage.
+
+    GitHub Actions parses ``::warning::`` lines on stdout and renders
+    them on the run summary + a per-line annotation. The lane
+    keeps its ``status="skip"`` (this isn't a failure — the missing
+    tool is environmental), but the warning forces a human eyeball.
+
+    Annotations are NOT emitted for the "scenario does not opt into
+    lane X" skip path — that's a deliberate config choice, not a
+    missing-dep signal, and treating every cross-axis cell of the
+    scenarios x lanes grid as a "skip warning" would drown the real
+    missing-dep skips in noise.
+
+    Emitted to stdout (not stderr) because GitHub's annotation
+    parser reads stdout; falling back to stderr would land the
+    message in the log but not the annotations panel.
+
+    Always called from :func:`main` — local invocations also see the
+    warnings, which is fine: a developer running on a machine without
+    docker should see exactly the same skip surface CI would record.
+    """
+    for r in results:
+        if (
+            r.status == "skip"
+            and r.details
+            and not r.details.startswith(_LANE_OPTOUT_DETAILS_PREFIX)
+        ):
+            print(
+                f"::warning title=Matrix lane {r.lane!s} skipped ({r.scenario!s})::"
+                f"{r.scenario} / {r.lane}: {r.details}"
+            )
+        for sub in r.skipped_subchecks:
+            print(
+                f"::warning title=Matrix sub-check skipped ({r.scenario!s} / {r.lane!s})::"
+                f"{r.scenario} / {r.lane}: sub-check skipped — {sub}"
+            )
+
+
+def _format_skip_summary(results: list[LaneResult]) -> str:
+    """Render a one-line summary of missing-dep skipped lanes + sub-checks.
+
+    Mirrors the annotation filter in :func:`_emit_github_annotations`:
+    counts only environmental skips, NOT the "scenario does not opt
+    into lane X" routine non-application. The same information is
+    embedded as ``::warning::`` annotations elsewhere (visible in the
+    GH Actions UI); this summary line is the plain-text receipt for
+    local invocations + log greppability.
+    """
+    skipped_lanes = sum(
+        1
+        for r in results
+        if r.status == "skip"
+        and r.details
+        and not r.details.startswith(_LANE_OPTOUT_DETAILS_PREFIX)
+    )
+    skipped_subchecks = sum(len(r.skipped_subchecks) for r in results)
+    if not skipped_lanes and not skipped_subchecks:
+        return ""
+    parts: list[str] = []
+    if skipped_lanes:
+        parts.append(f"{skipped_lanes} lane(s) skipped")
+    if skipped_subchecks:
+        parts.append(f"{skipped_subchecks} sub-check(s) skipped")
+    return "  [SKIP-SUMMARY] " + ", ".join(parts) + " (see ::warning:: lines above)"
+
+
 def main() -> int:
     args = _parse_args()
     try:
@@ -1189,6 +1564,7 @@ def main() -> int:
                         "duration_ms": r.duration_ms,
                         "details": r.details,
                         "missing_files": r.missing_files,
+                        "skipped_subchecks": r.skipped_subchecks,
                     }
                     for r in results
                 ],
@@ -1200,6 +1576,15 @@ def main() -> int:
     else:
         for r in results:
             print(_format_row(r))
+
+    # Initiative #9 — emit GH Actions ``::warning::`` annotations for
+    # each lane skip / sub-check skip. Plus a one-line plaintext
+    # summary so local invocations (no GHA parser) still see the
+    # count.
+    _emit_github_annotations(results)
+    summary = _format_skip_summary(results)
+    if summary:
+        print(summary)
 
     failed = [r for r in results if r.status == "fail"]
     return 2 if failed else 0
