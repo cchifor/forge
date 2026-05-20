@@ -33,6 +33,7 @@ parallel-codegen refactor (deferred — see Initiative #6 full plan).
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 from pathlib import Path
@@ -56,8 +57,14 @@ def load_json_schema(path: Path) -> Any:
     entry. Missing files raise ``FileNotFoundError`` from the
     underlying ``stat()`` — exceptions are NOT cached.
 
-    Callers must treat the returned dict as read-only — mutating it
-    poisons the cache for every subsequent reader.
+    Callers receive a deep copy of the cached payload, never the
+    cached object itself. Pre-Init-6 the schema loaders called
+    ``json.loads`` directly, so every read produced a fresh dict;
+    callers were free to mutate the returned value (annotate it,
+    pop fields, etc.) without affecting later reads. Preserving
+    that contract via :func:`copy.deepcopy` means a misbehaving
+    caller can't poison the cache for everyone else — including
+    poisoning across threads, since the cache is process-global.
     """
     key = path.resolve()
     # stat() outside the lock — it's a cheap syscall and we want to
@@ -67,13 +74,18 @@ def load_json_schema(path: Path) -> Any:
 
     cached = _cache.get(key)
     if cached is not None and cached[0] == mtime_ns:
-        return cached[1]
+        # Deep copy isolates the caller from the cache and from
+        # every other consumer. Cost is bounded by schema size
+        # (schemas ship at ~1 KiB each, far cheaper than re-parsing).
+        return copy.deepcopy(cached[1])
 
     # Cache miss or mtime mismatch — re-parse.
     payload = json.loads(path.read_text(encoding="utf-8"))
     with _lock:
         _cache[key] = (mtime_ns, payload)
-    return payload
+    # Same isolation rule applies on a fresh load — the cache holds
+    # the canonical instance; the caller gets their own copy.
+    return copy.deepcopy(payload)
 
 
 def clear() -> None:

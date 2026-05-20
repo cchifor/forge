@@ -301,28 +301,33 @@ def _write(
 ) -> None:
     """Write ``content`` to ``target`` and record base-template provenance.
 
-    Initiative #6 (caching) — content-hash skip: when ``target`` already
-    exists and its UTF-8 sha256 matches the new payload byte-for-byte,
-    the write is skipped. The mtime is preserved, fsync churn drops,
-    and IDEs / file watchers don't fire spurious "file changed" events
-    for codegen outputs that didn't actually change.
+    Initiative #6 (caching) — content-skip: when ``target`` already
+    exists and the sha256 of its decoded UTF-8 text matches the sha256
+    of ``content``, the write is skipped. The compare is done at the
+    decoded-text level (not raw bytes) because :meth:`Path.write_text`
+    with the default ``newline=None`` translates ``\\n`` to the
+    platform line separator on Windows, so a raw-bytes compare on a
+    cross-platform manifest would produce a false miss on every
+    Windows run even when the next write would emit identical on-disk
+    bytes. The skip therefore fires whenever the next ``write_text``
+    would produce a logically-identical file — line-ending churn
+    doesn't trigger rewrites, but every content drift does.
 
-    Provenance recording still runs unconditionally — the manifest
-    re-stamp downstream needs a record for every generated file even
-    when its bytes are unchanged this pass. Without the unconditional
-    record, the re-stamp would drop the entry and the next ``--update``
-    would re-classify the file as untracked.
+    Result: mtime is preserved, fsync churn drops, and IDEs / file
+    watchers don't fire spurious "file changed" events for codegen
+    outputs that didn't actually change. Provenance recording still
+    runs unconditionally — the manifest re-stamp downstream needs a
+    record for every generated file even when its bytes are unchanged
+    this pass. Without the unconditional record, the re-stamp would
+    drop the entry and the next ``--update`` would re-classify the
+    file as untracked.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
     new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
     if target.is_file():
-        # Compare via decoded text (not raw bytes) — Path.write_text on
-        # Windows translates ``\n`` to the platform line separator when
-        # ``newline`` is left unspecified, so a raw-bytes compare would
-        # produce a false miss on every Windows run even when the
-        # codegen output is unchanged. Reading via ``read_text`` mirrors
-        # the round-trip the write below performs, so the hashes match
-        # iff the next write would produce identical on-disk bytes.
+        # Compare via decoded text so the hashes match iff the next
+        # write_text() would produce a logically-identical file. See
+        # the function docstring for the line-ending rationale.
         try:
             existing_sha = hashlib.sha256(
                 target.read_text(encoding="utf-8").encode("utf-8")

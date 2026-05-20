@@ -24,12 +24,23 @@ same process) starts clean. ``write_forge_toml`` is the only re-
 stamp path and it runs AFTER all applier work in the same call, so
 no stale-read window exists.
 
-The cache is keyed by ``Path.resolve()`` to collapse symlinks and
-relative variants of the same on-disk file. Values are
-:class:`forge.sync.manifest.ForgeTomlData` instances; the read path
-already produces immutable-ish dataclasses, but callers should
-treat returned data as read-only (mutating it would poison the
-cache for the rest of the invocation).
+The cache is keyed by ``Path.resolve()`` plus ``stat().st_mtime_ns``
+to collapse symlinks/relative variants of the same on-disk file
+AND to automatically invalidate when the manifest is rewritten
+mid-scope. Today's writer (``write_forge_toml`` at the end of
+``_update_locked``) runs after every cached reader, so this is a
+defence-in-depth guard; a future call path that adds an in-scope
+post-restamp read would transparently get the fresh content.
+
+Values are :class:`forge.sync.manifest.ForgeTomlData` instances
+returned by-reference — every in-tree caller of ``read_forge_toml``
+already takes defensive copies via ``dict(data.options)`` /
+``dict(data.merge_blocks)`` when mutation is needed, so identity
+sharing is safe. Callers must continue to follow that pattern;
+mutating the returned dataclass in place would poison every other
+reader in the same scope. (The codegen schema cache, by contrast,
+deep-copies on hit because its callers walk the raw payload
+opaquely and historically got a fresh dict per read.)
 """
 
 from __future__ import annotations
@@ -46,12 +57,16 @@ if TYPE_CHECKING:
 
 # ContextVar default of None means "no scope installed" — the shim
 # falls through to a direct read in that case. A non-None value is
-# the active per-invocation cache (a plain dict keyed by resolved
-# path). ContextVar (rather than a module global) keeps the scope
-# thread-local and asyncio-task-local, so a hypothetical future
-# concurrent ``forge --update`` invocation per task wouldn't share
-# state.
-_active_cache: ContextVar[dict[Path, ForgeTomlData] | None] = ContextVar(
+# the active per-invocation cache: a plain dict keyed by resolved
+# path, holding ``(mtime_ns, parsed_data)`` pairs. The mtime arm of
+# the key guards against a mid-scope re-stamp (the updater rewrites
+# forge.toml at the end of ``_update_locked``; if any future code
+# path re-reads inside the same scope the mtime mismatch forces a
+# fresh parse). ContextVar (rather than a module global) keeps the
+# scope thread-local and asyncio-task-local, so a hypothetical
+# future concurrent ``forge --update`` invocation per task wouldn't
+# share state.
+_active_cache: ContextVar[dict[Path, tuple[int, ForgeTomlData]] | None] = ContextVar(
     "forge_manifest_cache",
     default=None,
 )
@@ -76,11 +91,16 @@ def manifest_cache_scope() -> Iterator[None]:
 def cached_read_forge_toml(path: Path) -> ForgeTomlData:
     """Parse ``forge.toml`` once per invocation, then return the cached parse.
 
-    Cache key is ``path.resolve()`` to collapse equivalent paths
-    (relative vs absolute, with/without symlinks). Outside a
-    :func:`manifest_cache_scope` block this is a straight pass-through
-    to :func:`read_forge_toml`, so legacy call sites that haven't
-    been ported see no behaviour change.
+    Cache key is ``(path.resolve(), path.stat().st_mtime_ns)`` —
+    collapsing equivalent paths (relative vs absolute,
+    with/without symlinks) and invalidating automatically when the
+    manifest is rewritten mid-scope. The updater rewrites forge.toml
+    at the END of ``_update_locked``; in the current flow there is
+    no in-scope read after that write, but the mtime arm of the key
+    makes the cache safe even if a future call path adds one.
+    Outside a :func:`manifest_cache_scope` block this is a straight
+    pass-through to :func:`read_forge_toml`, so legacy call sites
+    that haven't been ported see no behaviour change.
 
     Re-raises the same exceptions as :func:`read_forge_toml`
     (``FileNotFoundError`` on a missing manifest, ``ValueError`` on a
@@ -99,12 +119,16 @@ def cached_read_forge_toml(path: Path) -> ForgeTomlData:
         return read_forge_toml(path)
 
     key = path.resolve()
+    # Read the mtime BEFORE consulting the cache so a mid-scope
+    # re-stamp force-invalidates the entry. stat() is a cheap
+    # syscall — orders of magnitude faster than a tomlkit parse.
+    mtime_ns = key.stat().st_mtime_ns
     cached = cache.get(key)
-    if cached is not None:
-        return cached
+    if cached is not None and cached[0] == mtime_ns:
+        return cached[1]
 
     data = read_forge_toml(path)
-    cache[key] = data
+    cache[key] = (mtime_ns, data)
     return data
 
 
