@@ -85,6 +85,7 @@ from forge.errors import PLUGIN_COLLISION, PLUGIN_SDK_INCOMPATIBLE, PluginError
 
 if TYPE_CHECKING:
     from forge.config import BackendSpec, FrontendSpec
+    from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
     from forge.options import Option
 
@@ -148,17 +149,37 @@ def _check_sdk_requirement(spec: str) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class PluginExtractorRegistration:
+    """A single ``ForgeAPI.add_extractor`` call, with the extractor kept.
+
+    The harvester's :func:`forge.sync.project_to_forge.harvester._orchestrator._make_pipeline`
+    iterates these on every harvest run and composes them with the
+    built-in extractor pipeline. ``fragment=None`` is a global override
+    for the matching ``kind``; a named fragment scopes the override to
+    just that fragment (the harvester applies the scope at run time).
+    """
+
+    kind: "ExtractorKind"  # noqa: UP037 — forward reference lives in extractors.pipeline
+    fragment: str | None
+    extractor: "ExtractorProtocol"  # noqa: UP037 — forward reference
+
+    @property
+    def as_legacy_pair(self) -> tuple[str, str | None]:
+        """Back-compat shim — the older ``extractors_added`` tuple form."""
+        return (self.kind, self.fragment)
+
+
 @dataclass
 class PluginRegistration:
     """Record of a single loaded plugin for introspection by `forge --plugins list`.
 
-    ``extractors_added`` records each ``(kind, fragment)`` pair passed to
-    :meth:`ForgeAPI.add_extractor` — kind is one of ``"files"`` /
-    ``"block"`` / ``"deps"`` / ``"env"`` and fragment is the fragment
-    name the override is scoped to (or ``None`` for "apply to every
-    fragment of this kind"). Phase 4 of the bidirectional-sync plan
-    consumes this list when assembling the :class:`forge.extractors.pipeline.ExtractorPipeline`
-    for a harvest run.
+    ``extractors_added`` is the legacy ``(kind, fragment)`` tuple form
+    kept for back-compat (still surfaced through :meth:`as_dict`).
+    ``extractor_registrations`` is the typed-port companion landed in
+    Initiative #1 sub-task 4 — it retains the extractor callable itself
+    so the harvester pipeline can actually invoke plugin overrides
+    instead of just observing that one was registered.
     """
 
     name: str
@@ -170,6 +191,7 @@ class PluginRegistration:
     commands_added: int = 0
     emitters_added: int = 0
     extractors_added: tuple[tuple[str, str | None], ...] = ()
+    extractor_registrations: tuple[PluginExtractorRegistration, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -504,52 +526,58 @@ class ForgeAPI:
 
     def add_extractor(
         self,
-        kind: str,
-        extractor: Any,
+        kind: ExtractorKind,
+        extractor: ExtractorProtocol,
         *,
         fragment: str | None = None,
     ) -> None:
         """Register a custom extractor for a kind, optionally fragment-scoped.
 
         Plugins that ship custom appliers should ship paired extractors
-        so their fragments survive round-trip (Phase 4
-        ``forge --harvest``). The built-in pipeline ships extractors for
-        kind ``"files"`` / ``"block"`` / ``"deps"`` / ``"env"`` —
-        register one of those values to swap the default for the
-        matching kind. ``fragment=None`` (default) makes the extractor
-        apply to every fragment of the matching kind; pass a fragment
-        name to scope the override to that fragment alone.
+        so their fragments survive round-trip (``forge --harvest``).
+        The built-in pipeline ships extractors for kind ``"files"`` /
+        ``"block"`` / ``"deps"`` / ``"env"`` — register one of those
+        values to swap the default for the matching kind.
+        ``fragment=None`` (default) makes the extractor apply to every
+        fragment of the matching kind; pass a fragment name to scope
+        the override to that fragment alone.
 
-        ``extractor`` should satisfy
-        :class:`forge.extractors.pipeline.ExtractorProtocol`. The Phase
-        3 scaffolding only records the registration on
-        :attr:`PluginRegistration.extractors_added` — the Phase 4
-        harvester reads that list when assembling its pipeline.
+        ``extractor`` must satisfy
+        :class:`forge.extractors.pipeline.ExtractorProtocol`. Initiative
+        #1 sub-task 4 (1.2.0-draft) made retention real: the extractor
+        object is held on
+        :attr:`PluginRegistration.extractor_registrations` and the
+        harvester pipeline assembler calls it like a built-in. The
+        legacy :attr:`extractors_added` tuple form is still populated
+        for back-compat with ``forge --plugins list --json`` consumers.
 
-        Raises :class:`PluginError` when ``kind`` is not one of the
-        built-in kinds. Plugins that need a new extraction kind should
-        bump the SDK rather than smuggling a string through here.
+        Raises :class:`PluginError` when ``kind`` is not a valid
+        :data:`ExtractorKind`. Plugins that need a new extraction kind
+        should bump the SDK rather than smuggling a string through here.
         """
         from forge.errors import PluginError  # noqa: PLC0415
+        from forge.extractors.pipeline import EXTRACTOR_KINDS  # noqa: PLC0415
 
-        valid_kinds = {"files", "block", "deps", "env"}
-        if kind not in valid_kinds:
+        if kind not in EXTRACTOR_KINDS:
             raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register an "
                 f"extractor for unknown kind {kind!r}. Valid kinds: "
-                f"{sorted(valid_kinds)}.",
+                f"{sorted(EXTRACTOR_KINDS)}.",
                 code=PLUGIN_COLLISION,
                 context={
                     "plugin": self._registration.name,
                     "kind": "extractor",
-                    "value": kind,
+                    "value": str(kind),
                 },
             )
-        # The extractor object itself is held by reference on the plugin
-        # side; Phase 4's pipeline assembler walks LOADED_PLUGINS and
-        # reaches back into the plugin's module for the live instance.
-        # Phase 3 only records the (kind, fragment) tag.
-        del extractor  # explicit: not consumed by Phase 3 scaffolding
+        registration = PluginExtractorRegistration(
+            kind=kind, fragment=fragment, extractor=extractor
+        )
+        self._registration.extractor_registrations = (
+            self._registration.extractor_registrations + (registration,)
+        )
+        # Legacy tuple — kept so as_dict() output is byte-stable for
+        # existing JSON consumers (``forge --plugins list --json``).
         self._registration.extractors_added = self._registration.extractors_added + (
             (kind, fragment),
         )

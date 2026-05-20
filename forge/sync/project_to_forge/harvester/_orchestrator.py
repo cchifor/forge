@@ -605,10 +605,51 @@ def _make_pipeline(selected_kinds: set[str]) -> ExtractorPipeline:
     Empty ``selected_kinds`` produces an empty pipeline (so
     ``--harvest-include`` with an unrecognized value yields a quiet
     no-op rather than running every extractor).
+
+    Initiative #1 sub-task 4b composes plugin extractors registered via
+    :meth:`forge.api.ForgeAPI.add_extractor` into the pipeline. Global
+    plugin extractors (``fragment=None``) REPLACE the built-in for the
+    matching kind, mirroring the docstring contract on
+    :meth:`add_extractor`. Fragment-scoped overrides (``fragment="foo"``)
+    are deferred — they need per-fragment pipeline construction, which
+    requires threading the active fragment name into this call; the
+    registrations are retained but skipped here so the contract is at
+    least observable rather than silently dropped.
     """
     default = ExtractorPipeline.default()
-    filtered = tuple(e for e in default.extractors if e.kind in selected_kinds)
-    return ExtractorPipeline(extractors=filtered)
+    overrides = _collect_global_plugin_extractor_overrides()
+    composed: list = []
+    for ext in default.extractors:
+        if ext.kind not in selected_kinds:
+            continue
+        override = overrides.get(ext.kind)
+        composed.append(override if override is not None else ext)
+    return ExtractorPipeline(extractors=tuple(composed))
+
+
+def _collect_global_plugin_extractor_overrides() -> dict[str, object]:
+    """Walk ``LOADED_PLUGINS`` and collect global extractor overrides.
+
+    Returns a ``dict[ExtractorKind, ExtractorProtocol]`` (typed as
+    ``dict[str, object]`` here to avoid a runtime import of
+    ``ExtractorProtocol`` — that lives in ``forge.extractors.pipeline``
+    and is a runtime-checkable Protocol, not needed at this layer).
+    Last-wins on collision: if two plugins both register a global
+    override for the same kind, the most recently loaded plugin's
+    extractor takes effect.
+    """
+    from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
+
+    overrides: dict[str, object] = {}
+    for plugin in LOADED_PLUGINS:
+        for registration in plugin.extractor_registrations:
+            if registration.fragment is not None:
+                # Fragment-scoped overrides need the active fragment
+                # name at pipeline-build time. Tracked but not
+                # consumed yet — see the docstring on _make_pipeline.
+                continue
+            overrides[registration.kind] = registration.extractor
+    return overrides
 
 
 # ---------------------------------------------------------------------------
