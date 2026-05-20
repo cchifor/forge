@@ -102,7 +102,11 @@ class TestEmitDart:
     def test_every_schema_emits_class(self) -> None:
         out = emit_dart(load_canvas_schemas())
         for title, _ in _EXPECTED_FIELDS:
-            assert f"class {title} {{" in out, f"missing Dart class {title}"
+            # Initiative #8: every emitted class is `final` so a
+            # downstream app cannot subclass the schema-derived shape
+            # and silently invalidate it. The `final class` modifier
+            # is Dart 3+.
+            assert f"final class {title} {{" in out, f"missing Dart class {title}"
 
     def test_every_field_appears(self) -> None:
         out = emit_dart(load_canvas_schemas())
@@ -149,7 +153,7 @@ class TestDartNestedSealedClasses:
 
     def test_dynamic_form_fields_becomes_typed_list(self) -> None:
         out = emit_dart(load_canvas_schemas())
-        assert "class DynamicFormField {" in out
+        assert "final class DynamicFormField {" in out
         assert "final List<DynamicFormField> fields;" in out
         # `Map<String, dynamic>` must NOT appear on the parent's
         # `fields` field declaration any more.
@@ -189,7 +193,7 @@ class TestDartNestedSealedClasses:
 
     def test_data_table_columns_becomes_typed_list(self) -> None:
         out = emit_dart(load_canvas_schemas())
-        assert "class DataTableColumn {" in out
+        assert "final class DataTableColumn {" in out
         assert "final List<DataTableColumn> columns;" in out
         # Inner class typed fields.
         assert "final String key;" in out
@@ -208,8 +212,8 @@ class TestDartNestedSealedClasses:
 
     def test_workflow_diagram_nodes_and_edges_typed(self) -> None:
         out = emit_dart(load_canvas_schemas())
-        assert "class WorkflowDiagramNode {" in out
-        assert "class WorkflowDiagramEdge {" in out
+        assert "final class WorkflowDiagramNode {" in out
+        assert "final class WorkflowDiagramEdge {" in out
         assert "final List<WorkflowDiagramNode> nodes;" in out
         assert "final List<WorkflowDiagramEdge> edges;" in out
         # `from` is not a reserved word but a built-in identifier; the
@@ -237,6 +241,22 @@ class TestDartNestedSealedClasses:
         assert "WorkflowDiagramNode.fromJson" in out
         assert "WorkflowDiagramEdge.fromJson" in out
 
+    def test_typed_array_parse_is_strict(self) -> None:
+        # The typed-array parse path must NOT silently drop
+        # non-conforming elements. Codex review flagged
+        # `.whereType<Map>()` as data-loss for known schema shapes;
+        # the strict-cast replacement (`e as Map`) raises a TypeError
+        # on non-Map elements so misshapen payloads fail loud.
+        out = emit_dart(load_canvas_schemas())
+        assert ".whereType<Map>()" not in out, (
+            "typed-array parse uses .whereType which silently drops "
+            "malformed elements; use a strict `as Map` cast so "
+            "known-shape violations raise"
+        )
+        # Sanity: the strict-cast form is present.
+        assert ".map((e) => DynamicFormField.fromJson(" in out
+        assert "e as Map" in out
+
     def test_parent_to_json_serialises_inner_via_to_json(self) -> None:
         # Symmetric direction: `toJson` for the parent must map each
         # inner element through its own `toJson()` so the wire format
@@ -254,17 +274,17 @@ class TestDartNestedSealedClasses:
         # ordering with an indexOf check so a refactor that flips it
         # is intentional, not accidental.
         out = emit_dart(load_canvas_schemas())
-        assert out.index("class DynamicFormField {") < out.index(
-            "class DynamicFormProps {"
+        assert out.index("final class DynamicFormField {") < out.index(
+            "final class DynamicFormProps {"
         )
-        assert out.index("class DataTableColumn {") < out.index(
-            "class DataTableProps {"
+        assert out.index("final class DataTableColumn {") < out.index(
+            "final class DataTableProps {"
         )
-        assert out.index("class WorkflowDiagramNode {") < out.index(
-            "class WorkflowDiagramProps {"
+        assert out.index("final class WorkflowDiagramNode {") < out.index(
+            "final class WorkflowDiagramProps {"
         )
-        assert out.index("class WorkflowDiagramEdge {") < out.index(
-            "class WorkflowDiagramProps {"
+        assert out.index("final class WorkflowDiagramEdge {") < out.index(
+            "final class WorkflowDiagramProps {"
         )
 
 

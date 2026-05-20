@@ -471,7 +471,15 @@ class TestGeneratedPropsOnly:
 
     # Dart components import the generated classes individually (not
     # via a barrel export) — pin the specific imports each one needs.
+    # ``CodeViewer`` and ``Report`` have no nested-object array props
+    # in their schemas, so they only need the top-level *Props class;
+    # they still route ``fromProps`` through the generated class so
+    # the schema-driven shape stays the parse-time source of truth.
     _DART_COMPONENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+        (
+            "packages/forge-canvas-dart/lib/src/components/code_viewer.dart",
+            ("CodeViewerProps",),
+        ),
         (
             "packages/forge-canvas-dart/lib/src/components/data_table.dart",
             ("DataTableColumn",),
@@ -479,6 +487,10 @@ class TestGeneratedPropsOnly:
         (
             "packages/forge-canvas-dart/lib/src/components/dynamic_form.dart",
             ("DynamicFormField",),
+        ),
+        (
+            "packages/forge-canvas-dart/lib/src/components/report.dart",
+            ("ReportProps",),
         ),
         (
             "packages/forge-canvas-dart/lib/src/components/workflow_diagram.dart",

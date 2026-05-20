@@ -47,9 +47,19 @@ Rules:
   `ReportProps`, `WorkflowDiagramProps`).
 - The per-component `<script>` blocks consume the generated
   interfaces directly (e.g.
-  `let props: DynamicFormProps = $props()`). Hand-written prop
-  interface re-declarations inside component files are **banned**:
-  the codegen pipeline tests grep for them and will fail CI.
+  `let props: DynamicFormProps = $props()`). Hand-written
+  re-declarations of schema-driven prop shapes — local
+  `interface Field { ... }`, `interface Column { ... }`,
+  `interface Node { ... }`, `interface Edge { ... }` — are
+  **banned**: the codegen pipeline tests grep for them and will fail
+  CI.
+- A local `interface Props extends GeneratedProps { ... }` is
+  **allowed** when a Svelte 5 component needs to layer non-schema
+  props on top (for example, event-callback props such as `onsubmit`
+  / `oncancel` that the agent never sends but Svelte's `$props()`
+  reads from the parent). The schema-driven fields must come from
+  the generated interface; only purely component-emitted concerns
+  are added on top.
 - To extend a prop schema, edit the JSON schema and re-run the
   codegen — components inherit the new shape automatically.
 

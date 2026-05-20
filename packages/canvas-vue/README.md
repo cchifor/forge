@@ -42,9 +42,14 @@ Rules:
   interfaces (`CodeViewerProps`, `DataTableProps`, `DynamicFormProps`,
   `ReportProps`, `WorkflowDiagramProps`).
 - The per-component `<script setup>` blocks call
-  `defineProps<TheGeneratedInterface>()` directly. Hand-written prop
-  interface re-declarations inside component files are **banned**:
-  the codegen pipeline tests grep for them and will fail CI.
+  `defineProps<TheGeneratedInterface>()` directly. Hand-written
+  re-declarations of schema-driven prop shapes — local
+  `interface Field { ... }`, `interface Column { ... }`,
+  `interface Node { ... }`, `interface Edge { ... }` — are
+  **banned**: the codegen pipeline tests grep for them and will fail
+  CI. Vue exposes component-emitted concerns via `defineEmits<>()`
+  rather than the props block, so it does not need a `Props extends`
+  carve-out.
 - To extend a prop schema, edit the JSON schema and re-run the
   codegen — components inherit the new shape automatically. Drop the
   shipped TS/Dart files into the same regeneration run so the three
