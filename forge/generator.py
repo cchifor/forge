@@ -108,7 +108,7 @@ def generate(
     _generate_frontend_phase(config, project_root, quiet=quiet)
     _render_docker_stack(config, plan, project_root, quiet=quiet)
     _generate_frontend_extras(config, project_root, quiet=quiet)
-    _apply_project_scope(config, plan, project_root, collector, quiet=quiet)
+    _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -422,6 +422,7 @@ def _apply_project_scope(
     collector: ProvenanceCollector,
     *,
     quiet: bool,
+    report: GenerationReport | None = None,
 ) -> None:
     """Catch-all provenance sweep, project-scope features, shared files, codegen."""
     # Record any non-backend base-template writes (frontend, e2e, infra) so
@@ -474,8 +475,11 @@ def _apply_project_scope(
         with phase_timer(_logger, "generate.codegen"):
             run_codegen(config, project_root, collector=collector)
     except Exception as exc:  # noqa: BLE001
+        msg = f"codegen pipeline emitted an error: {exc}"
         if not quiet:
-            print(f"  [warn] codegen pipeline emitted an error: {exc}")
+            print(f"  [warn] {msg}")
+        if report is not None:
+            report.add_warning(msg)
 
 
 def _finalize(
@@ -1065,7 +1069,19 @@ def _populate_report(
 
     report.project_root = str(project_root)
     report.effective_config = dict(plan.option_values)
-    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    # Prefer the caller-supplied option_origins (the CLI populates this
+    # so its silent coercions — e.g. auth.mode flipping when Keycloak
+    # is off — don't leak into the report as user choices). When the
+    # caller didn't populate it (legacy in-tree callers, the matrix
+    # runner), fall back to the pre-#5 "everything in config.options
+    # is user-set" heuristic so back-compat holds.
+    user_set_paths: set[str]
+    if config.option_origins:
+        user_set_paths = {
+            path for path, origin in config.option_origins.items() if origin == "user"
+        }
+    else:
+        user_set_paths = {resolve_alias(p) or p for p in config.options}
     report.option_origins = {
         path: ("user" if path in user_set_paths else "default")
         for path in plan.option_values
@@ -1100,6 +1116,24 @@ def _populate_report(
     # gets written under the temp root, so the path is meaningful even
     # there.
     report.provenance_sidecar_paths.append("forge.toml")
+
+    # Init #5 — discover copier-answers files written under the project
+    # tree. _write_copier_answers drops one inside every Copier-rendered
+    # subdirectory (services/<backend>/, apps/<frontend>/, tests/e2e/)
+    # so the read path can re-render via ``copier update`` without
+    # re-prompting. Surfacing them here means an agent has the full
+    # picture of which subtrees forge owns + how to refresh each one.
+    for answers_path in sorted(project_root.rglob(".copier-answers.yml")):
+        try:
+            rel = answers_path.relative_to(project_root)
+        except ValueError:
+            continue
+        # Skip anything inside _PROVENANCE_PRUNE_DIRS (node_modules etc.)
+        # so we don't surface answers from dependency-installed packages
+        # that happened to ship their own copier metadata.
+        if any(part in _PROVENANCE_PRUNE_DIRS for part in rel.parts):
+            continue
+        report.provenance_sidecar_paths.append(rel.as_posix())
 
     # Sensible default next-actions. The CLI may overwrite / extend
     # these — e.g. add a docker-compose hint when the user passed

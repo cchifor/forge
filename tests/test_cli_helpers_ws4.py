@@ -232,6 +232,34 @@ class TestBuildConfig:
         assert config.options["auth.mode"] == "generate"
         assert mutations == []
 
+    def test_option_origins_records_cli_injection_as_default(self) -> None:
+        """Codex review P2: the CLI inserts auth.mode='none' when Keycloak
+        is disabled even if the user didn't ask for it. The resulting
+        option_origins should mark auth.mode as ``"default"`` so the
+        report's user/default distinction stays truthful."""
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "none"},
+            "include_keycloak": False,
+            # auth.mode NOT in options — user didn't touch it.
+        }
+        config = _build_config(_empty_args(), cfg)
+        # CLI still injected the value (back-compat: resolver needs it).
+        assert config.options["auth.mode"] == "none"
+        # But option_origins marks it as default-originated, not user.
+        assert config.option_origins.get("auth.mode") == "default"
+
+    def test_option_origins_records_user_set_path_as_user(self) -> None:
+        cfg = {
+            "project_name": "Acme",
+            "backends": [{"name": "api", "language": "python"}],
+            "frontend": {"framework": "vue", "include_auth": True},
+            "options": {"rag.backend": "qdrant"},
+        }
+        config = _build_config(_empty_args(), cfg)
+        assert config.option_origins.get("rag.backend") == "user"
+
 
 # -- ProjectConfig.validate() splits ------------------------------------------
 

@@ -288,15 +288,24 @@ def _build_config(
     # docker-compose.yml.j2 only renders those services under ``include_keycloak``.
     # Without this coercion, ``docker compose up`` fails validation with
     # ``service "gatekeeper" depends on undefined service "redis"``.
+    #
+    # Initiative #5 — snapshot which option paths were user-set *before*
+    # this coercion. The result drives the parallel ``option_origins``
+    # dict on ProjectConfig so the report can distinguish a real user
+    # choice from a CLI-injected default like the one below. Without
+    # this snapshot, ``options["auth.mode"] = "none"`` would leak into
+    # ``option_origins`` as ``"user"`` even when the user never touched
+    # the option (the resolver would dutifully record it that way).
+    user_set_paths = set(options)
     auth_mode_before = options.get("auth.mode", "generate")
     if not include_keycloak and auth_mode_before != "none":
         options["auth.mode"] = "none"
-        # Initiative #5 — surface the coercion to JSON callers via the
-        # mutations collector. Agents driving forge headlessly need to
-        # know the auth.mode value they asked for isn't what generation
-        # acted on, otherwise they end up debugging "why is there no
-        # platform-auth stack" against a manifest that does record
-        # ``auth.mode = "none"``.
+        # Surface the coercion to JSON callers via the mutations collector.
+        # Agents driving forge headlessly need to know the auth.mode value
+        # they asked for isn't what generation acted on; without this they
+        # end up debugging "why is there no platform-auth stack" against a
+        # manifest that records ``auth.mode = "none"`` because of the
+        # coercion (not because they set it).
         if mutations is not None:
             mutations.append(
                 HiddenMutation(
@@ -310,6 +319,15 @@ def _build_config(
                     ),
                 )
             )
+
+    # Build the option_origins dict the resolver consumes. Paths the user
+    # set before the auth.mode coercion are "user"; anything the CLI
+    # injected (auth.mode flipped from default) is "default". The resolver
+    # in capability_resolver layers in its own defaults on top of this
+    # snapshot.
+    option_origins: dict[str, str] = {
+        path: ("user" if path in user_set_paths else "default") for path in options
+    }
     keycloak_port = r.get("keycloak_port", "keycloak", "port", default=18080)
     kc_realm = r.get("keycloak_realm", "keycloak", "realm", default=DEFAULT_REALM)
     kc_client_id = r.get(
@@ -332,4 +350,5 @@ def _build_config(
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
         options=options,
+        option_origins=option_origins,
     )

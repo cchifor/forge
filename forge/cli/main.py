@@ -121,12 +121,18 @@ def main() -> None:
     # later in generation with no hint that a plugin failed earlier.
     # Suppressible via ``FORGE_QUIET_PLUGIN_WARNINGS=1`` for scripts
     # that intentionally tolerate broken plugins.
+    #
+    # Init #5 — also collect the warnings in a list keyed by the same
+    # message we print on stderr, so the GenerationReport can surface
+    # them under ``warnings`` for JSON consumers (agents that don't
+    # parse stderr). The list is consumed later in main() after the
+    # report is created.
+    plugin_load_warnings: list[str] = []
     if plugins.FAILED_PLUGINS and os.environ.get("FORGE_QUIET_PLUGIN_WARNINGS") != "1":
         for name, reason in plugins.FAILED_PLUGINS:
-            print(
-                f"  [warn] plugin {name!r} failed to load: {reason}",
-                file=sys.stderr,
-            )
+            msg = f"plugin {name!r} failed to load: {reason}"
+            plugin_load_warnings.append(msg)
+            print(f"  [warn] {msg}", file=sys.stderr)
         print(
             "  [warn] Run `forge --plugins list` for plugin status; "
             "set FORGE_QUIET_PLUGIN_WARNINGS=1 to suppress.",
@@ -252,6 +258,16 @@ def main() -> None:
     if getattr(args, "completion", None):
         _print_completion(args.completion)
 
+    # When --json is set, redirect all print() to stderr so stdout is clean
+    # JSON. Init #5 — moved before plugin dispatch so a plugin handler that
+    # calls print() can't pollute the stdout buffer before a JSON error
+    # envelope is written. Pre-#5, plugin dispatch happened *before* this
+    # redirect, so a print() inside the handler ended up on stdout next to
+    # the error envelope, breaking line-oriented JSON parsers.
+    _real_stdout = sys.stdout
+    if getattr(args, "json_output", False):
+        sys.stdout = sys.stderr
+
     # Plugin-registered commands — walk the registry and invoke any flag
     # the user set. Handlers return an int exit code we pass to sys.exit.
     from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
@@ -260,32 +276,44 @@ def main() -> None:
         dest = f"plugin_cmd_{name.replace('-', '_')}"
         if getattr(args, dest, False):
             # Init #5 — wrap plugin failures in the same JSON envelope
-            # the rest of the CLI uses. Pre-#5, an ``--json`` caller
-            # invoking a broken plugin saw the raw traceback on stderr
-            # and exit code 1, which agents couldn't classify. Now
-            # ForgeError subclasses produce {error, code, hint,
-            # context} via _json_error and other exceptions surface as
-            # ``{error: "<repr>"}``. The text path is unchanged: we
-            # re-raise so the user sees the traceback as before.
+            # the rest of the CLI uses. Three branches:
+            #   * ForgeError subclass — emit {error, code, hint, context}
+            #     via _json_error and exit with the matching exit code.
+            #   * Any other exception — emit {error: "<str>"} so JSON
+            #     callers always see a structured shape, then re-raise so
+            #     the text path's traceback still surfaces.
+            #   * Handler returns a non-zero int — synthesise a minimal
+            #     envelope so callers don't see an empty stdout next to
+            #     a non-zero exit. Pre-#5, a plugin returning ``2`` exited
+            #     2 with no JSON output and agents couldn't classify the
+            #     failure.
             try:
                 code = handler(args)
             except ForgeError as e:
                 if getattr(args, "json_output", False):
-                    _json_error(sys.stdout, e)
+                    _json_error(_real_stdout, e)
                 print(f"\n  Plugin {name!r} failed: {e}", file=sys.stderr)
                 if e.hint:
                     print(f"  Hint: {e.hint}", file=sys.stderr)
                 sys.exit(_exit_code_for(e))
             except Exception as e:  # noqa: BLE001 — surface plugin bugs to JSON callers too
                 if getattr(args, "json_output", False):
-                    _json_error(sys.stdout, str(e))
+                    _json_error(_real_stdout, str(e))
                 raise
-            sys.exit(int(code) if isinstance(code, int) else 0)
-
-    # When --json is set, redirect all print() to stderr so stdout is clean JSON
-    _real_stdout = sys.stdout
-    if getattr(args, "json_output", False):
-        sys.stdout = sys.stderr
+            exit_code = int(code) if isinstance(code, int) else 0
+            if exit_code != 0 and getattr(args, "json_output", False):
+                _real_stdout.write(
+                    json.dumps(
+                        {
+                            "error": f"Plugin {name!r} exited with code {exit_code}",
+                            "plugin": name,
+                            "exit_code": exit_code,
+                        }
+                    )
+                    + "\n"
+                )
+                _real_stdout.flush()
+            sys.exit(exit_code)
 
     # Init #5 — when --json is set, collect every CLI-side coercion
     # (auth.mode rewrite, etc.) so the JSON envelope can surface them
@@ -412,6 +440,13 @@ def main() -> None:
         if report is not None:
             for m in cli_mutations or []:
                 report.add_hidden_mutation(m)
+            # Surface plugin-load warnings caught at startup so JSON
+            # callers see the same signal stderr did. Without this, a
+            # broken plugin would show ``warnings: []`` in the envelope
+            # despite emitting "[warn] plugin 'X' failed to load" on
+            # stderr — agents only parsing stdout would miss the issue.
+            for w in plugin_load_warnings:
+                report.add_warning(w)
             result["report"] = report.to_dict()
         _real_stdout.write(json.dumps(result) + "\n")
         _real_stdout.flush()
