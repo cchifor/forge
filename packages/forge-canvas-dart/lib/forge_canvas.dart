@@ -9,10 +9,16 @@ export 'src/theme.dart';
 
 // Canvas component props — generated from
 // forge/templates/_shared/canvas-components/*.props.schema.json.
-// The hand-written private _Column / _Field / _Node classes inside
-// each component remain in place for now; deletion in favour of the
-// generated classes is deferred to Theme 1C once the codegen
-// pipeline gates drift in CI.
+//
+// Contract (Initiative #8): the generated library is the SINGLE
+// source of truth for canvas-component prop shapes. The components
+// under `src/components/` import the generated sealed classes
+// directly (`DataTableColumn`, `DynamicFormField`,
+// `WorkflowDiagramNode`, `WorkflowDiagramEdge`); the old
+// hand-written private mirror classes (`_Column`, `_Field`,
+// `_WfNode`, `_WfEdge`) are gone. To extend a prop schema, edit the
+// JSON schema and run `python -m forge.codegen.canvas_props` — the
+// components inherit the new typed shape automatically.
 export 'src/generated/props.dart';
 
 // Base components — all 5 canvas components now live in the package.
