@@ -155,9 +155,18 @@ class PluginExtractorRegistration:
 
     The harvester's :func:`forge.sync.project_to_forge.harvester._orchestrator._make_pipeline`
     iterates these on every harvest run and composes them with the
-    built-in extractor pipeline. ``fragment=None`` is a global override
-    for the matching ``kind``; a named fragment scopes the override to
-    just that fragment (the harvester applies the scope at run time).
+    built-in extractor pipeline. ``fragment=None`` is a **global
+    override**: it replaces the built-in extractor for the matching
+    ``kind`` for every fragment that harvest visits.
+
+    Fragment-scoped overrides (``fragment="some_name"``) are accepted
+    by :meth:`ForgeAPI.add_extractor` and retained here, but the
+    harvester pipeline assembler does NOT consume them yet — that path
+    requires per-fragment pipeline construction (the current
+    ``_make_pipeline(selected_kinds)`` signature has no fragment slot).
+    The registration is preserved so the contract surface is honest
+    once that plumbing lands; until then a fragment-scoped registration
+    is a no-op at harvest time.
     """
 
     kind: "ExtractorKind"  # noqa: UP037 — forward reference lives in extractors.pipeline
@@ -538,16 +547,23 @@ class ForgeAPI:
         The built-in pipeline ships extractors for kind ``"files"`` /
         ``"block"`` / ``"deps"`` / ``"env"`` — register one of those
         values to swap the default for the matching kind.
-        ``fragment=None`` (default) makes the extractor apply to every
-        fragment of the matching kind; pass a fragment name to scope
-        the override to that fragment alone.
+
+        ``fragment=None`` (default) is a **global override**: the
+        plugin's extractor replaces the built-in for every fragment
+        the harvester visits. Initiative #1 sub-task 4 wired this
+        path end-to-end.
+
+        ``fragment="some_name"`` is **accepted and retained but NOT
+        yet invoked** by the harvester — fragment-scoped overrides
+        need per-fragment pipeline construction that the current
+        :func:`forge.sync.project_to_forge.harvester._orchestrator._make_pipeline`
+        signature does not support. The registration is preserved on
+        :attr:`PluginRegistration.extractor_registrations` so the SDK
+        contract is honest; the harvester emits a one-shot warning
+        the first time it skips one in a process.
 
         ``extractor`` must satisfy
-        :class:`forge.extractors.pipeline.ExtractorProtocol`. Initiative
-        #1 sub-task 4 (1.2.0-draft) made retention real: the extractor
-        object is held on
-        :attr:`PluginRegistration.extractor_registrations` and the
-        harvester pipeline assembler calls it like a built-in. The
+        :class:`forge.extractors.pipeline.ExtractorProtocol`. The
         legacy :attr:`extractors_added` tuple form is still populated
         for back-compat with ``forge --plugins list --json`` consumers.
 
@@ -578,6 +594,8 @@ class ForgeAPI:
         )
         # Legacy tuple — kept so as_dict() output is byte-stable for
         # existing JSON consumers (``forge --plugins list --json``).
+        # Delegates to the dataclass's own legacy-pair shim so the two
+        # representations can't drift if the field shape changes.
         self._registration.extractors_added = self._registration.extractors_added + (
-            (kind, fragment),
+            registration.as_legacy_pair,
         )

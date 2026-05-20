@@ -19,7 +19,12 @@ import yaml
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
-from forge.extractors.pipeline import CandidatePatch, ExtractorPipeline
+from forge.extractors.pipeline import (
+    CandidatePatch,
+    ExtractorKind,
+    ExtractorPipeline,
+    ExtractorProtocol,
+)
 from forge.extractors.plan import ExtractionPlan
 from forge.fragment_context import FragmentContext
 from forge.fragments import FRAGMENT_REGISTRY, Fragment, FragmentImplSpec
@@ -618,7 +623,7 @@ def _make_pipeline(selected_kinds: set[str]) -> ExtractorPipeline:
     """
     default = ExtractorPipeline.default()
     overrides = _collect_global_plugin_extractor_overrides()
-    composed: list = []
+    composed: list[ExtractorProtocol] = []
     for ext in default.extractors:
         if ext.kind not in selected_kinds:
             continue
@@ -627,20 +632,18 @@ def _make_pipeline(selected_kinds: set[str]) -> ExtractorPipeline:
     return ExtractorPipeline(extractors=tuple(composed))
 
 
-def _collect_global_plugin_extractor_overrides() -> dict[str, object]:
+def _collect_global_plugin_extractor_overrides() -> dict[ExtractorKind, ExtractorProtocol]:
     """Walk ``LOADED_PLUGINS`` and collect global extractor overrides.
 
-    Returns a ``dict[ExtractorKind, ExtractorProtocol]`` (typed as
-    ``dict[str, object]`` here to avoid a runtime import of
-    ``ExtractorProtocol`` — that lives in ``forge.extractors.pipeline``
-    and is a runtime-checkable Protocol, not needed at this layer).
     Last-wins on collision: if two plugins both register a global
     override for the same kind, the most recently loaded plugin's
-    extractor takes effect.
+    extractor takes effect. Fragment-scoped registrations are skipped
+    here — they need per-fragment pipeline construction which the
+    caller's signature does not support yet.
     """
     from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
 
-    overrides: dict[str, object] = {}
+    overrides: dict[ExtractorKind, ExtractorProtocol] = {}
     for plugin in LOADED_PLUGINS:
         for registration in plugin.extractor_registrations:
             if registration.fragment is not None:

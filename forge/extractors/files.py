@@ -22,7 +22,7 @@ from __future__ import annotations
 import difflib
 from typing import TYPE_CHECKING
 
-from forge.extractors.pipeline import CandidatePatch, CandidateRisk
+from forge.extractors.pipeline import CandidatePatch, CandidateRisk, ExtractorKind
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.sync.merge import (
     is_binary_file,
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 class FileExtractor:
     """Harvest user edits to fragment-shipped files."""
 
-    kind = "files"
+    kind: ExtractorKind = "files"
 
     def extract(
         self,

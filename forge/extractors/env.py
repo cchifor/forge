@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from forge.extractors.pipeline import CandidatePatch
+from forge.extractors.pipeline import CandidatePatch, ExtractorKind
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 class EnvExtractor:
     """Harvest ``.env.example`` value drift."""
 
-    kind = "env"
+    kind: ExtractorKind = "env"
 
     def extract(
         self,

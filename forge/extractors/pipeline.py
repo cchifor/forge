@@ -247,15 +247,16 @@ class ExtractorProtocol(Protocol):
 
     Implementers expose:
 
-    * :attr:`kind` — one of ``"files"``, ``"block"``, ``"deps"``,
-      ``"env"``. Drives plugin-side overrides via
+    * :attr:`kind` — one of :data:`ExtractorKind` (the
+      ``"files"`` / ``"block"`` / ``"deps"`` / ``"env"`` subset of
+      :data:`CandidateKind`). Drives plugin-side overrides via
       :meth:`forge.api.ForgeAPI.add_extractor` and tags emitted
       :class:`CandidatePatch` records.
     * :meth:`extract` — returns the candidate patches this extractor
       found for ``plan``.
     """
 
-    kind: str
+    kind: ExtractorKind
 
     def extract(
         self,
