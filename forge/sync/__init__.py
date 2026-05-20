@@ -17,6 +17,7 @@ from forge.sync.direction import UpdateMode, VerifyFailOn, VerifyScope
 from forge.sync.lock import LOCK_DIRNAME, LOCK_FILENAME, acquire_lock
 from forge.sync.manifest import (
     CURRENT_SCHEMA_VERSION,
+    ForgeFrontendData,
     ForgeTomlData,
     read_forge_toml,
     write_forge_toml,
@@ -68,6 +69,7 @@ __all__ = [
     "acquire_lock",
     # manifest
     "CURRENT_SCHEMA_VERSION",
+    "ForgeFrontendData",
     "ForgeTomlData",
     "read_forge_toml",
     "write_forge_toml",
