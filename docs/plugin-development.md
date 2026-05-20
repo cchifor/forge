@@ -277,7 +277,7 @@ The plugin SDK grows with each alpha:
 | Alpha | Added capability |
 |---|---|
 | 1.0.0a1 (this release) | Options, fragments, hooks for commands/emitters |
-| 1.0.0a2 | Plugin-defined backend languages; emitter pipeline wiring (Phase 1.3) |
+| 1.0.0a2 | Plugin-defined backend languages (initial); emitter pipeline wiring shipped in 1.2.0-draft (Initiative #2 — `add_emitter` retains the callable + `run_codegen` invokes registered plugin emitters with `(project_root, config, resolved)` after the built-in passes) |
 | 1.0.0a3 | Command dispatcher integration (Phase 2.2); path resolver for plugin-owned fragment directories |
 | 1.0.0a4 | Plugin-defined frontends with canvas package integration (Phase 3.1) |
 
