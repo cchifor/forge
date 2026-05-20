@@ -255,6 +255,12 @@ class TestGeneratorPopulatesReport:
         assert report.project_root == str(project_root)
         # forge.toml lives in the sidecar list.
         assert "forge.toml" in report.provenance_sidecar_paths
+        # Copier answer files written into each rendered subtree are also
+        # surfaced — backend rendering drops one inside services/api/.
+        assert any(
+            p.endswith(".copier-answers.yml")
+            for p in report.provenance_sidecar_paths
+        ), report.provenance_sidecar_paths
         # effective_config / option_origins are parallel-keyed and non-empty
         # (every registered option contributed at least one default).
         assert report.effective_config
