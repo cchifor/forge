@@ -35,6 +35,7 @@ from forge.errors import (
     TemplateError,
 )
 from forge.generator import generate
+from forge.reports import GenerationReport, HiddenMutation
 
 
 def _exit_code_for(err: ForgeError) -> int:
@@ -258,13 +259,41 @@ def main() -> None:
     for name, handler in COMMAND_REGISTRY.items():
         dest = f"plugin_cmd_{name.replace('-', '_')}"
         if getattr(args, dest, False):
-            code = handler(args)
+            # Init #5 — wrap plugin failures in the same JSON envelope
+            # the rest of the CLI uses. Pre-#5, an ``--json`` caller
+            # invoking a broken plugin saw the raw traceback on stderr
+            # and exit code 1, which agents couldn't classify. Now
+            # ForgeError subclasses produce {error, code, hint,
+            # context} via _json_error and other exceptions surface as
+            # ``{error: "<repr>"}``. The text path is unchanged: we
+            # re-raise so the user sees the traceback as before.
+            try:
+                code = handler(args)
+            except ForgeError as e:
+                if getattr(args, "json_output", False):
+                    _json_error(sys.stdout, e)
+                print(f"\n  Plugin {name!r} failed: {e}", file=sys.stderr)
+                if e.hint:
+                    print(f"  Hint: {e.hint}", file=sys.stderr)
+                sys.exit(_exit_code_for(e))
+            except Exception as e:  # noqa: BLE001 — surface plugin bugs to JSON callers too
+                if getattr(args, "json_output", False):
+                    _json_error(sys.stdout, str(e))
+                raise
             sys.exit(int(code) if isinstance(code, int) else 0)
 
     # When --json is set, redirect all print() to stderr so stdout is clean JSON
     _real_stdout = sys.stdout
     if getattr(args, "json_output", False):
         sys.stdout = sys.stderr
+
+    # Init #5 — when --json is set, collect every CLI-side coercion
+    # (auth.mode rewrite, etc.) so the JSON envelope can surface them
+    # under hidden_mutations. Text-mode callers pass ``mutations=None``
+    # and the builder stays silent (back-compat).
+    cli_mutations: list[HiddenMutation] | None = (
+        [] if getattr(args, "json_output", False) else None
+    )
 
     config: ProjectConfig
     if _is_headless(args):
@@ -289,7 +318,7 @@ def main() -> None:
                 sys.exit(2)
 
         try:
-            config = _build_config(args, cfg)
+            config = _build_config(args, cfg, mutations=cli_mutations)
             config.validate()
         except (ValueError, KeyError) as e:
             if getattr(args, "json_output", False):
@@ -332,11 +361,19 @@ def main() -> None:
 
     if not quiet:
         print()
+    # Init #5 — instantiate a GenerationReport for --json callers so the
+    # generator can populate it as each phase reports state. Text-mode
+    # callers pass report=None to keep the legacy zero-overhead path.
+    report: GenerationReport | None = (
+        GenerationReport() if getattr(args, "json_output", False) else None
+    )
     try:
         dry_run = bool(getattr(args, "dry_run", False))
-        project_root = generate(config, quiet=quiet, dry_run=dry_run)
+        project_root = generate(config, quiet=quiet, dry_run=dry_run, report=report)
     except TypeError:
         # generate() older signature (no dry_run kwarg) — fall back.
+        # This branch also covers plugin-supplied generate() shims that
+        # haven't been updated for the report= kwarg; they still work.
         project_root = generate(config, quiet=quiet)
     except ForgeError as e:
         if getattr(args, "json_output", False):
@@ -363,6 +400,19 @@ def main() -> None:
             result["frontend_dir"] = str(project_root / config.frontend_slug)
             result["framework"] = config.frontend.framework.value
             result["features"] = config.all_features
+        # Init #5 — additive: emit the agent-grade GenerationReport
+        # under a new top-level ``report`` key so old keys
+        # (project_root, backends, frontend_dir, framework, features)
+        # remain. Pre-#5 consumers that pin those keys keep working;
+        # agents that need the richer payload read result["report"].
+        # CLI-side hidden mutations (auth.mode coercion, etc.)
+        # captured during _build_config are attached here — the
+        # generator can't see them because they happen before
+        # generate() is called.
+        if report is not None:
+            for m in cli_mutations or []:
+                report.add_hidden_mutation(m)
+            result["report"] = report.to_dict()
         _real_stdout.write(json.dumps(result) + "\n")
         _real_stdout.flush()
     else:
