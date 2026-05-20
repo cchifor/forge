@@ -683,9 +683,24 @@ def _write_forge_toml(
     # to canonical during resolve); ``options`` is always canonical-keyed.
     # Normalize aliases to canonical via ``resolve_alias`` so a user-set
     # alias path still records as ``"user"`` on the canonical key.
+    #
+    # Init #5 — prefer ``config.option_origins`` when populated. The CLI
+    # records its silent coercions (auth.mode flipping when Keycloak is
+    # disabled) as ``"default"`` there so the manifest agrees with the
+    # report. Falling back to the config.options heuristic keeps the
+    # ~30 in-tree callers that construct ProjectConfig without origins
+    # (matrix runner, headless test fixtures) working unchanged.
     from forge.options import resolve_alias  # noqa: PLC0415
 
-    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    user_set_paths: set[str]
+    if config.option_origins:
+        user_set_paths = {
+            resolve_alias(p) or p
+            for p, origin in config.option_origins.items()
+            if origin == "user"
+        }
+    else:
+        user_set_paths = {resolve_alias(p) or p for p in config.options}
     option_origins: dict[str, str] = {
         path: ("user" if path in user_set_paths else "default") for path in options
     }

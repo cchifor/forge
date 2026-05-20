@@ -307,3 +307,41 @@ class TestGeneratorPopulatesReport:
         project_root = generate(config, quiet=True, dry_run=True)
         assert project_root.is_dir()
         assert (project_root / "forge.toml").is_file()
+
+    def test_manifest_respects_config_option_origins(self, tmp_path) -> None:
+        """Codex review P2 follow-up: when ProjectConfig carries explicit
+        option_origins (the CLI populates them so silent injections like
+        auth.mode='none' don't leak into manifest as 'user'), the
+        generator's manifest writer honours them. The on-disk forge.toml
+        should agree with the report's option_origins, not re-derive
+        user-set paths from config.options."""
+        from forge.config import (
+            BackendConfig,
+            BackendLanguage,
+            ProjectConfig,
+        )
+        from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
+
+        config = ProjectConfig(
+            project_name="origin_demo",
+            output_dir=str(tmp_path),
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="origin_demo",
+                    language=BackendLanguage.PYTHON,
+                    features=["items"],
+                )
+            ],
+            frontend=None,
+            options={"auth.mode": "none", "rag.backend": "qdrant"},
+            # Simulate the CLI's bookkeeping: auth.mode was injected
+            # (default), rag.backend is a real user choice.
+            option_origins={"auth.mode": "default", "rag.backend": "user"},
+        )
+
+        project_root = generate(config, quiet=True, dry_run=True)
+        manifest = read_forge_toml(project_root / "forge.toml")
+        assert manifest.option_origins["auth.mode"] == "default"
+        assert manifest.option_origins["rag.backend"] == "user"
