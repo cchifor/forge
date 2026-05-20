@@ -53,6 +53,7 @@ from forge.frontends import FrontendLayout, get_frontend_layout
 from forge.logging import get_logger, log_event
 
 if TYPE_CHECKING:
+    from forge.api import PluginEmitterRegistration
     from forge.capability_resolver import ResolvedPlan
     from forge.config import ProjectConfig
     from forge.sync.provenance import ProvenanceCollector
@@ -82,10 +83,12 @@ def run_codegen(
     :func:`_run_plugin_emitters` walks
     :data:`forge.plugins.LOADED_PLUGINS` and invokes every emitter
     registered via :meth:`forge.api.ForgeAPI.add_emitter`. ``resolved``
-    is forwarded to plugin emitters as the third argument; it defaults
-    to ``None`` because the in-tree generator path that calls
-    ``run_codegen`` hasn't been plumbed with the resolved plan yet
-    (deferred follow-up). Built-in passes do not consume ``resolved``.
+    is forwarded to plugin emitters as the third positional argument;
+    the in-tree :func:`forge.generator._apply_project_scope` caller
+    forwards the resolved capability plan there. Test paths that
+    construct ``run_codegen`` directly without a plan get ``None``
+    forwarded, so plugin emitters MUST tolerate ``resolved=None``.
+    Built-in passes do not consume ``resolved``.
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
@@ -346,49 +349,65 @@ def _run_plugin_emitters(
     project_root: Path,
     resolved: ResolvedPlan | None,
 ) -> None:
-    """Walk LOADED_PLUGINS and invoke every plugin-registered emitter.
+    """Collect plugin emitters and invoke each surviving target's winner.
 
     Mirrors the harvester's
     :func:`forge.sync.project_to_forge.harvester._orchestrator._collect_global_plugin_extractor_overrides`
-    pattern: each plugin's ``emitter_registrations`` tuple is iterated
-    in plugin-load order, with last-loaded winning on target collision.
+    pattern: walk ``LOADED_PLUGINS`` in load order, collect emitter
+    callables keyed by target with **last-loaded wins** on collision,
+    then invoke each surviving emitter once. Earlier registrations for
+    a collided target are NOT invoked — the operator's understanding
+    of "plugin B's emitter for this target" must be the only thing
+    that runs; otherwise both side-effects ship and the warning is a
+    lie.
+
+    Collisions are recorded during the collection pass and surfaced as
+    structured ``plugin.emitter.target_collision`` warnings naming both
+    the loser and the winner. The invocation pass iterates the winners
+    dict's insertion order — i.e. the order in which each target was
+    first claimed — so callers see deterministic output independent of
+    how many plugins later attempted to override.
 
     Emitter exceptions are caught and logged — a broken plugin emitter
     must not abort codegen for the remaining plugins. The caller
     (``forge.generator._apply_project_scope``) already wraps
     ``run_codegen`` in a try/except that downgrades any escape to a
-    warning, but per-plugin isolation here means one bad plugin
-    doesn't shadow every plugin that follows.
+    warning, but per-plugin isolation here means one bad plugin doesn't
+    shadow every plugin that follows.
     """
     from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
 
-    winners: dict[str, str] = {}
+    # Collection pass: last-loaded wins per target, warning naming both.
+    winners: dict[str, tuple[str, PluginEmitterRegistration]] = {}
     for plugin in LOADED_PLUGINS:
         for registration in plugin.emitter_registrations:
-            prior_winner = winners.get(registration.target)
-            if prior_winner is not None and prior_winner != plugin.name:
+            prior = winners.get(registration.target)
+            if prior is not None and prior[0] != plugin.name:
                 _warn_emitter_target_collision(
                     target=registration.target,
-                    loser=prior_winner,
+                    loser=prior[0],
                     winner=plugin.name,
                 )
-            winners[registration.target] = plugin.name
-            try:
-                registration.emitter(project_root, config, resolved)
-            except Exception as exc:  # noqa: BLE001 — isolate per-plugin failure
-                log_event(
-                    _LOGGER,
-                    "plugin.emitter.failed",
-                    level=logging.WARNING,
-                    message=(
-                        f"plugin {plugin.name!r} emitter for target "
-                        f"{registration.target!r} raised "
-                        f"{type(exc).__name__}: {exc}"
-                    ),
-                    plugin=plugin.name,
-                    target=registration.target,
-                    error_type=type(exc).__name__,
-                )
+            winners[registration.target] = (plugin.name, registration)
+
+    # Invocation pass: each surviving emitter runs exactly once.
+    for plugin_name, registration in winners.values():
+        try:
+            registration.emitter(project_root, config, resolved)
+        except Exception as exc:  # noqa: BLE001 — isolate per-plugin failure
+            log_event(
+                _LOGGER,
+                "plugin.emitter.failed",
+                level=logging.WARNING,
+                message=(
+                    f"plugin {plugin_name!r} emitter for target "
+                    f"{registration.target!r} raised "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                plugin=plugin_name,
+                target=registration.target,
+                error_type=type(exc).__name__,
+            )
 
 
 def _warn_emitter_target_collision(
