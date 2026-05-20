@@ -16,13 +16,65 @@ testable.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from forge.codegen.literal_finder import LiteralEdit
+from forge.errors import (
+    FRAGMENT_INJECT_YAML_BAD_SHAPE,
+    FragmentError,
+)
 
 if TYPE_CHECKING:
     from forge.extractors.plan import ExtractionPlan
     from forge.fragment_context import FragmentContext
+
+
+# Typed-port (Initiative #1, sub-task 2). Single source of truth for the
+# vocabularies that flow out of an extractor and into harvest UI / bundle
+# writer / apply-back dispatch / PR emitter. Subset Literals
+# (``ExtractorKind``, ``AcceptHarvestedKind``) compose from these so a
+# concrete extractor or accept handler can narrow its expected kinds
+# without redefining the alphabet.
+
+CandidateKind = Literal[
+    "files",
+    "block",
+    "deps",
+    "env",
+    "new-file",
+    "cross-lang-suggest",
+]
+"""Every kind a :class:`CandidatePatch` may carry. ``files`` / ``block``
+/ ``deps`` / ``env`` originate from the four built-in extractors;
+``new-file`` is emitted by the accept-baseline path for user-authored
+files that need restamping; ``cross-lang-suggest`` is a synthetic
+record the harvester emits for RFC-006 cross-backend parity hints."""
+
+CandidateRisk = Literal["safe-apply", "needs-review", "conflict"]
+"""Classification controlling how the operator reviews the candidate.
+``safe-apply`` is auto-acceptable; ``needs-review`` queues for human
+review; ``conflict`` requires manual resolution."""
+
+ExtractorKind = Literal["files", "block", "deps", "env"]
+"""The subset of ``CandidateKind`` values that concrete extractors
+declare as :attr:`ExtractorProtocol.kind`. ``new-file`` and
+``cross-lang-suggest`` are produced downstream and never declared by
+an extractor."""
+
+CANDIDATE_KINDS: tuple[CandidateKind, ...] = (
+    "files",
+    "block",
+    "deps",
+    "env",
+    "new-file",
+    "cross-lang-suggest",
+)
+CANDIDATE_RISKS: tuple[CandidateRisk, ...] = (
+    "safe-apply",
+    "needs-review",
+    "conflict",
+)
+EXTRACTOR_KINDS: tuple[ExtractorKind, ...] = ("files", "block", "deps", "env")
 
 
 @dataclass(frozen=True)
@@ -138,18 +190,39 @@ class CandidatePatch:
 
     fragment: str
     backend: str
-    kind: str
+    kind: CandidateKind
     rel_path: str
     target_path: str
     diff: str
     baseline_sha: str | None
     current_sha: str
-    risk: str
+    risk: CandidateRisk
     rationale: str = ""
     current_body: str = ""
     feature_key: str = ""
     marker: str = ""
     option_promotion: tuple[LiteralEdit, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        # Construction-time gate for callers that bypass the per-extractor
+        # builders — bundle deserialization, plugin extractors, future
+        # codepaths that read CandidatePatch records from JSON. The
+        # extractor-side construction sites use string literals that ``ty``
+        # already validates against ``CandidateKind`` / ``CandidateRisk``.
+        if self.kind not in CANDIDATE_KINDS:
+            raise FragmentError(
+                f"CandidatePatch.kind must be one of {list(CANDIDATE_KINDS)!r}, "
+                f"got {self.kind!r}",
+                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                context={"kind": str(self.kind), "fragment": self.fragment},
+            )
+        if self.risk not in CANDIDATE_RISKS:
+            raise FragmentError(
+                f"CandidatePatch.risk must be one of {list(CANDIDATE_RISKS)!r}, "
+                f"got {self.risk!r}",
+                code=FRAGMENT_INJECT_YAML_BAD_SHAPE,
+                context={"risk": str(self.risk), "fragment": self.fragment},
+            )
 
 
 class ExtractorProtocol(Protocol):
