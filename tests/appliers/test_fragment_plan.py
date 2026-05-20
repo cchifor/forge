@@ -144,3 +144,25 @@ class TestInjectionTypedPort:
                 inj = _Injection(**self._kwargs(position=pos, zone=zone))
                 assert inj.position == pos
                 assert inj.zone == zone
+
+    def test_literal_aliases_match_runtime_tuples(self) -> None:
+        """Drift gate: ``InjectionPosition`` / ``InjectionZone`` Literal
+        aliases and the corresponding runtime tuples must enumerate
+        the SAME values, or a future PR that bumps one but not the
+        other can introduce silent acceptance / rejection skew.
+        """
+        from typing import get_args  # noqa: PLC0415
+
+        from forge.appliers.plan import (  # noqa: PLC0415
+            INJECTION_POSITIONS,
+            INJECTION_ZONES,
+            InjectionPosition,
+            InjectionZone,
+        )
+
+        assert set(get_args(InjectionPosition)) == set(INJECTION_POSITIONS), (
+            "InjectionPosition Literal and INJECTION_POSITIONS tuple have drifted"
+        )
+        assert set(get_args(InjectionZone)) == set(INJECTION_ZONES), (
+            "InjectionZone Literal and INJECTION_ZONES tuple have drifted"
+        )
