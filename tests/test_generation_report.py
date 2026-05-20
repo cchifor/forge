@@ -219,3 +219,85 @@ def test_default_report_version_is_one(report_cls):
     """Every report dataclass starts at version 1."""
     rep = report_cls()
     assert rep._report_version == 1
+
+
+class TestGeneratorPopulatesReport:
+    """End-to-end: ``generate(config, report=...)`` populates every field
+    the dry-run path can reach. Skips toolchain phases (dry_run=True) so
+    the test is fast and doesn't need uv / npm / cargo on PATH."""
+
+    def test_dry_run_populates_report(self, tmp_path) -> None:
+        from forge.config import (
+            BackendConfig,
+            BackendLanguage,
+            ProjectConfig,
+        )
+        from forge.generator import generate
+
+        config = ProjectConfig(
+            project_name="rep_demo",
+            output_dir=str(tmp_path),
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="rep_demo",
+                    language=BackendLanguage.PYTHON,
+                    features=["items"],
+                )
+            ],
+            frontend=None,
+        )
+
+        report = GenerationReport()
+        project_root = generate(config, quiet=True, dry_run=True, report=report)
+
+        # project_root recorded correctly.
+        assert report.project_root == str(project_root)
+        # forge.toml lives in the sidecar list.
+        assert "forge.toml" in report.provenance_sidecar_paths
+        # effective_config / option_origins are parallel-keyed and non-empty
+        # (every registered option contributed at least one default).
+        assert report.effective_config
+        assert set(report.effective_config) == set(report.option_origins)
+        # Dry-run skipped install + verify; both should be in the report.
+        skipped_phases = {s.phase for s in report.skipped_toolchains}
+        assert "install" in skipped_phases
+        assert "verify" in skipped_phases
+        # Rollback hint points at the dry-run tempdir.
+        assert str(project_root) in report.rollback_hint
+        # Next-actions include the forge --update suggestion.
+        commands = {a.command for a in report.next_actions}
+        assert "forge --update" in commands
+        # File inventory captured at least the backend pyproject.toml.
+        paths = {entry.path for entry in report.file_inventory}
+        assert any(p.startswith("services/api/") for p in paths), paths
+        # Every entry's sha256 is a 64-char hex string.
+        for entry in report.file_inventory:
+            assert len(entry.sha256) == 64
+
+    def test_no_report_arg_keeps_back_compat(self, tmp_path) -> None:
+        """Generator without ``report=`` returns the project root only —
+        legacy callers continue to work."""
+        from forge.config import (
+            BackendConfig,
+            BackendLanguage,
+            ProjectConfig,
+        )
+        from forge.generator import generate
+
+        config = ProjectConfig(
+            project_name="back_compat",
+            output_dir=str(tmp_path),
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="back_compat",
+                    language=BackendLanguage.PYTHON,
+                    features=["items"],
+                )
+            ],
+            frontend=None,
+        )
+        project_root = generate(config, quiet=True, dry_run=True)
+        assert project_root.is_dir()
+        assert (project_root / "forge.toml").is_file()
