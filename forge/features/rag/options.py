@@ -116,6 +116,9 @@ OPTIONS: openai | voyage""",
         category=FeatureCategory.KNOWLEDGE,
         stability="experimental",
         enables={"voyage": ("rag_embeddings_voyage",)},
+        # Transitively pulls rag_pipeline -> conversation_persistence
+        # (DB-backed). Init #7 follow-up: codex flagged this gap.
+        requires_database=True,
     )
 )
 
@@ -139,6 +142,9 @@ REQUIRES: rag.backend ≠ none; COHERE_API_KEY.""",
         category=FeatureCategory.KNOWLEDGE,
         stability="experimental",
         enables={True: ("rag_reranking",)},
+        # Transitively pulls rag_pipeline -> conversation_persistence
+        # (DB-backed). Init #7 follow-up: codex flagged this gap.
+        requires_database=True,
     )
 )
 
