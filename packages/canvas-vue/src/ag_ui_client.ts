@@ -2,20 +2,35 @@
 //
 // Mirrors the *decoding contract* of the Dart `AgUiClient` in
 // `forge-canvas-dart`: a caller-supplied parser turns each inbound
-// JSON frame into a typed event, fired through `onEvent`. The
-// transport differs by design — Dart is SSE/POST (the deepagent
-// `runAgent` contract); Vue + Svelte are WebSocket (the
-// `agent_streaming` `/ws/agent` endpoint). The decode-and-callback
-// shape is the unified surface; the wire underneath follows each
-// frontend's existing template.
+// JSON frame into a typed event, fired through `onEvent`.
 //
-// Initiative #4: events flow with `kind` as the canonical discriminator
-// in a wrapped envelope (`{kind, payload}`). The backend Pydantic
-// union and the Dart `AgUiEvent.parse` factory both produce/consume
-// that shape. TS consumers narrow on `event.kind` and read fields
-// off `event.payload`.
+// Wire format — `{kind, payload}` wrapped envelope. The generated
+// `AgUiEvent` discriminated union, the Dart `AgUiEvent.parse`
+// factory, and the Pydantic AG-UI union in
+// `forge/codegen/event_union.py` all produce / consume this shape.
+// TS consumers narrow on `event.kind` and read variant fields off
+// `event.payload`.
 //
-// Usage with the generated discriminated union:
+// ## Scope: this client targets AG-UI-compliant servers
+//
+// The seven AG-UI event variants (`ag-ui-payload`, `agent-state`,
+// `hitl-response`, `mcp-ext-payload`, `tool-call-info`,
+// `user-prompt-payload`, `workspace-activity`) are the AG-UI
+// reference protocol — a typed contract for agentic UI streaming.
+// Servers that emit these wrapped frames work with this client out
+// of the box.
+//
+// The forge-generated `agent_streaming` `/ws/agent` endpoint does
+// NOT emit this wire format. It ships its own simpler streaming
+// protocol (`text_delta`, `tool_call_started`,
+// `assistant_message_complete`, etc., flat frames with `kind`
+// alongside the legacy `type` discriminator) consumed by the
+// generated chat templates' own client code. Pointing this
+// `AgUiClient` at `/ws/agent` will drop every frame because the
+// `kind` vocabularies don't overlap — that's by design, not a bug
+// to file against this package.
+//
+// Usage with an AG-UI-compliant server:
 //
 //     import { AgUiClient } from '@forge/canvas-vue'
 //     import type { AgUiEvent } from './generated/events'
@@ -29,7 +44,7 @@
 //     }
 //
 //     const client = new AgUiClient<AgUiEvent>({
-//       url: `ws://${host}/api/v1/ws/agent`,
+//       url: `ws://${host}/ag-ui/events`,  // an AG-UI-compliant route
 //       parser: parse,
 //       onEvent: (ev) => {
 //         switch (ev.kind) {
