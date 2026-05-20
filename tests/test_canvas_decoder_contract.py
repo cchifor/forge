@@ -257,6 +257,58 @@ class TestCorpusCovers:
         )
 
 
+class TestExtrasGapIsAcknowledged:
+    """Pin the known ``additionalProperties: true`` gap so a fix gets
+    noticed.
+
+    The AG-UI ``AgentState`` schema allows ``additionalProperties:
+    true`` (callers can attach arbitrary state). Pydantic with
+    ``ConfigDict(extra="allow")`` round-trips extras correctly; the
+    generated Dart class has an ``extras`` field but ``fromJson``
+    doesn't fill it and ``toJson`` doesn't emit it (see
+    ``packages/forge-canvas-dart/lib/src/generated/events.dart`` —
+    ``class AgentState``). The CORPUS deliberately omits extras so
+    the cross-runtime byte-equality contract test isn't asserting an
+    asymmetry that lives in Init #8's codegen surface.
+
+    This pin documents the gap in code so a future Dart codegen fix
+    (the right place: ``forge/codegen/event_union.py:emit_dart``)
+    causes this test to fail with a "remove the gap pin" message,
+    forcing the contract corpus to grow an extras case at the same
+    time.
+    """
+
+    def test_dart_agent_state_tojson_does_not_emit_extras(self) -> None:
+        """The shipped Dart ``AgentState.toJson`` must NOT yet round-
+        trip extras. Codex review flagged the asymmetry; we acknowledge
+        it as a known gap rather than silently mask it. Init #8 owns
+        the canvas-decoder codegen and would fix this in
+        ``emit_dart``.
+        """
+        dart_src = (
+            Path(__file__).resolve().parent.parent
+            / "packages"
+            / "forge-canvas-dart"
+            / "lib"
+            / "src"
+            / "generated"
+            / "events.dart"
+        ).read_text(encoding="utf-8")
+        # Pinned by source-level inspection: the AgentState toJson
+        # block must contain the declared fields and NOT include
+        # ``extras``. The day Init #8 lands a fix, the assertion
+        # below flips and this test fails with "extras now round-
+        # trips — extend CORPUS to cover the case and delete this
+        # pin".
+        assert "'todos': todos" in dart_src, "AgentState.toJson surface drifted"
+        assert "'extras'" not in dart_src, (
+            "AgentState.toJson now emits 'extras' — the Init #8 codegen "
+            "fix landed. Extend tests/test_canvas_decoder_contract.py "
+            "CORPUS['agent-state'] to include extras and delete this "
+            "guard."
+        )
+
+
 class TestPydanticRoundTrip:
     """Every corpus envelope must round-trip through the Pydantic
     discriminated-union adapter byte-identically. This is the contract

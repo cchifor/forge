@@ -13,7 +13,8 @@ is about to land fixed in an upcoming release.
 | Issue | Impact | Workaround | Tracking |
 | --- | --- | --- | --- |
 | Full-feature golden preset (`platform.admin` + `agent.llm` + `rag.reranker` enabled) fails generation with `Injection target not found: src/app/core/container.py` | The most-ambitious combination of options doesn't scaffold cleanly on `main`. Pairs of options individually work. | Use a subset (see `tests/test_golden_snapshots.py::PRESETS['full_feature']` for a curated large preset that does generate). | Epic F (provenance-driven uninstall) + cross-fragment dep tightening tracked for 1.1.0-beta. |
-| Svelte + chat path's `@ag-ui/client` e2e test (`svelte_chat_on_typechecks`) is skipped | Svelte chat flow isn't exercised in nightly CI. | Generate + test manually; the Vue + Flutter chat paths are covered. | Tracked upstream — `@ag-ui/client` type drift. Re-enable when 1.0 stable. |
+| Svelte + chat path's `@ag-ui/client` e2e test (`svelte_chat_on_typechecks`) is skipped | Svelte chat flow isn't exercised in nightly CI. | Generate + test manually; the Vue chat path is covered (Flutter chat is also skipped — see below). | Tracked upstream — `@ag-ui/client` type drift. Re-enable when the chat scaffolding under `forge/templates/apps/svelte-frontend-template/template/src/lib/features/chat/` is updated to the current `@ag-ui/client` 0.0.51 API. |
+| Flutter + chat path's e2e test (`test_flutter_full_analyzes`) is skipped | Flutter chat (auth + chat + openapi) isn't exercised in nightly CI. | Generate + run `flutter analyze` manually with a `dependency_overrides` block pointing `forge_canvas` at `packages/forge-canvas-dart/` via `path:`. | Tracked under RFC-003 — un-skip once `forge_canvas` ships to pub.dev (today the generated pubspec pins `^1.0.0-alpha.6`, which isn't published; the template comment under `forge/templates/apps/flutter-frontend-template/{{project_slug}}/pubspec.yaml:36` documents the workaround). |
 
 ## Platform
 
