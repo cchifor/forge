@@ -50,3 +50,22 @@ def test_agent_events_accept_kind_alias_on_input() -> None:
     dumped = ev.model_dump(mode="json")
     assert dumped["type"] == "conversation_created"
     assert dumped["kind"] == "conversation_created"
+
+
+def test_agent_events_reject_mismatched_type_and_kind() -> None:
+    """A drifted frame (``type`` and ``kind`` disagree) is ambiguous and
+    must be rejected, not silently routed to the ``type`` discriminator.
+    """
+    import pytest
+
+    from app.agents.events import ConversationCreated
+
+    conv_id = uuid.uuid4()
+    with pytest.raises(Exception):  # pydantic ValidationError wraps the ValueError
+        ConversationCreated.model_validate(
+            {
+                "type": "conversation_created",
+                "kind": "text_delta",  # drifted!
+                "conversation_id": str(conv_id),
+            }
+        )

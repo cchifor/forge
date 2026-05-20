@@ -49,9 +49,27 @@ class _Base(BaseModel):
         Wire frames in flight during the transition may arrive with
         either key; normalise to ``type`` so the existing ``Literal``
         discriminator on each subclass keeps validating.
+
+        If BOTH keys are present they must agree byte-for-byte — a
+        drifted frame (``{"type": "tool_call", "kind": "text_delta"}``)
+        is ambiguous and must be rejected rather than silently routed
+        to one discriminator. Letting the mismatch through would mask
+        a real bug somewhere upstream (a serializer pinning ``type``
+        out of sync with the canvas ``kind``) for one whole release,
+        exactly the window Initiative #4 is trying to close.
         """
-        if isinstance(data, dict) and "kind" in data and "type" not in data:
-            data = {**data, "type": data["kind"]}
+        if isinstance(data, dict):
+            has_type = "type" in data
+            has_kind = "kind" in data
+            if has_type and has_kind and data["type"] != data["kind"]:
+                raise ValueError(
+                    "AgentEvent frame has mismatched `type` and `kind` "
+                    f"discriminators (type={data['type']!r}, "
+                    f"kind={data['kind']!r}). During the type -> kind "
+                    "transition both keys must carry the same value."
+                )
+            if has_kind and not has_type:
+                data = {**data, "type": data["kind"]}
         return data
 
     @model_serializer(mode="wrap")
