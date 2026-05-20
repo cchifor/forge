@@ -344,6 +344,15 @@ class TestMainIntegration:
 
     def test_aborted_confirm_exits_zero(self, tmp_path, monkeypatch, capsys) -> None:
         # No --yes; confirm returns False; should exit 0 with "Aborted."
+        # HF-3 gates the confirm prompt behind ``sys.stdin.isatty()`` so an
+        # agent without a TTY gets a structured refusal rather than the
+        # questionary silent-exit; fake a TTY here to keep exercising the
+        # abort-after-confirm branch.
+        class _TTY:
+            def isatty(self) -> bool:
+                return True
+
+        monkeypatch.setattr(sys, "stdin", _TTY())
         monkeypatch.setattr(
             sys,
             "argv",

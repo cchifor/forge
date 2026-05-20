@@ -300,9 +300,25 @@ def main() -> None:
         if not args.quiet and not getattr(args, "json_output", False):
             _interactive._print_summary(config)
 
-        if not args.yes and not _interactive._ask_confirm("Proceed with generation?"):
-            print("\n  Aborted.")
-            sys.exit(0)
+        if not args.yes:
+            # An interactive ``_ask_confirm`` here would call into
+            # ``questionary``, which exits 1 with no structured output when
+            # stdin is closed — agents driving forge headlessly (Claude Code,
+            # Codex, CI) end up with an empty failure they can't classify.
+            # Fail loudly with a JSON envelope (or text on stderr) instead.
+            if not sys.stdin.isatty():
+                msg = (
+                    "Non-interactive stdin and --yes was not set; refusing "
+                    "to prompt. Re-run with --yes to confirm headless "
+                    "generation."
+                )
+                if getattr(args, "json_output", False):
+                    _json_error(_real_stdout, msg)
+                print(f"  {msg}", file=sys.stderr)
+                sys.exit(2)
+            if not _interactive._ask_confirm("Proceed with generation?"):
+                print("\n  Aborted.")
+                sys.exit(0)
     else:
         collected = _interactive._collect_inputs()
         if collected is None:
@@ -356,7 +372,11 @@ def main() -> None:
     if not args.no_docker and config.backend is not None and not getattr(args, "dry_run", False):
         if args.yes:
             boot(project_root)
-        else:
+        elif sys.stdin.isatty():
             print()
             if _interactive._ask_confirm("Start Docker Compose stack?", default=False):
                 boot(project_root)
+        # Non-TTY without --yes: skip docker boot. Matches the prompt's
+        # default=False answer; an agent that wants the stack should pass
+        # --yes (auto-boot) or run docker compose itself after consuming
+        # the JSON success envelope.
