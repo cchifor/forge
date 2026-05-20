@@ -53,6 +53,12 @@ from forge.errors import (
     TemplateError,
 )
 from forge.logging import get_logger, phase_timer
+from forge.reports import (
+    FileInventoryEntry,
+    GenerationReport,
+    NextAction,
+    SkippedToolchain,
+)
 from forge.sync.forge_to_project import apply_features, apply_project_features
 from forge.sync.provenance import ProvenanceCollector
 
@@ -71,22 +77,41 @@ TEMPLATE_DIRS = {
 }
 
 
-def generate(config: ProjectConfig, quiet: bool = False, dry_run: bool = False) -> Path:
+def generate(
+    config: ProjectConfig,
+    quiet: bool = False,
+    dry_run: bool = False,
+    *,
+    report: GenerationReport | None = None,
+) -> Path:
     """Generate all project components and return the project root path.
 
     When ``dry_run=True``, generation runs into a fresh temporary directory
     (never touching ``config.output_dir``) and the temp path is returned
     for inspection. The caller is responsible for cleanup.
+
+    Initiative #5 — when ``report`` is supplied, the generator
+    populates it as each phase reports state (effective config,
+    fragment graph, file inventory, skipped toolchains, next
+    actions). The caller serialises the report afterwards
+    (``forge --json`` does this via ``GenerationReport.to_dict``).
+    ``report=None`` preserves the pre-#5 zero-overhead path used by
+    test harnesses + headless callers that don't need the richer
+    payload.
     """
     project_root = _create_root(config, dry_run)
     collector = _setup_provenance(project_root)
     plan = _resolve_and_validate(config)
-    _generate_backends(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
+    _generate_backends(
+        config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
+    )
     _generate_frontend_phase(config, project_root, quiet=quiet)
     _render_docker_stack(config, plan, project_root, quiet=quiet)
     _generate_frontend_extras(config, project_root, quiet=quiet)
-    _apply_project_scope(config, plan, project_root, collector, quiet=quiet)
+    _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
+    if report is not None:
+        _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
     return project_root
 
 
@@ -139,6 +164,7 @@ def _generate_backends(
     *,
     quiet: bool,
     dry_run: bool,
+    report: GenerationReport | None = None,
 ) -> None:
     """Render every backend: copier, provenance, fragments, strip, toolchain."""
 
@@ -241,6 +267,15 @@ def _generate_backends(
                 language=bc.language.value,
             ):
                 spec.toolchain.install(backend_dir, quiet=quiet)
+        elif report is not None:
+            report.add_skipped_toolchain(
+                SkippedToolchain(
+                    backend=bc.name,
+                    language=bc.language.value,
+                    phase="install",
+                    reason="--dry-run skips toolchain install",
+                )
+            )
         if not quiet and not dry_run:
             with phase_timer(
                 _logger,
@@ -250,6 +285,20 @@ def _generate_backends(
             ):
                 spec.toolchain.verify(backend_dir, quiet=quiet)
             spec.toolchain.post_generate(backend_dir, quiet=quiet)
+        elif report is not None:
+            reason_bits: list[str] = []
+            if quiet:
+                reason_bits.append("--quiet")
+            if dry_run:
+                reason_bits.append("--dry-run")
+            report.add_skipped_toolchain(
+                SkippedToolchain(
+                    backend=bc.name,
+                    language=bc.language.value,
+                    phase="verify",
+                    reason=f"{' + '.join(reason_bits)} suppressed verify",
+                )
+            )
 
 
 def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
@@ -373,6 +422,7 @@ def _apply_project_scope(
     collector: ProvenanceCollector,
     *,
     quiet: bool,
+    report: GenerationReport | None = None,
 ) -> None:
     """Catch-all provenance sweep, project-scope features, shared files, codegen."""
     # Record any non-backend base-template writes (frontend, e2e, infra) so
@@ -425,8 +475,11 @@ def _apply_project_scope(
         with phase_timer(_logger, "generate.codegen"):
             run_codegen(config, project_root, collector=collector)
     except Exception as exc:  # noqa: BLE001
+        msg = f"codegen pipeline emitted an error: {exc}"
         if not quiet:
-            print(f"  [warn] codegen pipeline emitted an error: {exc}")
+            print(f"  [warn] {msg}")
+        if report is not None:
+            report.add_warning(msg)
 
 
 def _finalize(
@@ -630,14 +683,40 @@ def _write_forge_toml(
     # to canonical during resolve); ``options`` is always canonical-keyed.
     # Normalize aliases to canonical via ``resolve_alias`` so a user-set
     # alias path still records as ``"user"`` on the canonical key.
+    #
+    # Init #5 — prefer ``config.option_origins`` when populated. The CLI
+    # records its silent coercions (auth.mode flipping when Keycloak is
+    # disabled) as ``"default"`` there so the manifest agrees with the
+    # report. Falling back to the config.options heuristic keeps the
+    # ~30 in-tree callers that construct ProjectConfig without origins
+    # (matrix runner, headless test fixtures) working unchanged.
     from forge.options import resolve_alias  # noqa: PLC0415
 
-    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    user_set_paths: set[str]
+    if config.option_origins:
+        user_set_paths = {
+            resolve_alias(p) or p
+            for p, origin in config.option_origins.items()
+            if origin == "user"
+        }
+    else:
+        user_set_paths = {resolve_alias(p) or p for p in config.options}
     option_origins: dict[str, str] = {
         path: ("user" if path in user_set_paths else "default") for path in options
     }
     provenance = collector.as_dict() if collector is not None else None
     merge_blocks = collector.merge_blocks_as_dict() if collector is not None else None
+
+    # Initiative #3 follow-up — stamp the v4 ``[forge.frontend]`` table
+    # explicitly so the read path no longer has to re-infer the
+    # framework + app dir from disk. Pre-#5 callers passed
+    # ``frontend=None`` and ``write_forge_toml`` omitted the table; the
+    # read path's ``_infer_frontend_from_disk`` fallback (manifest.py)
+    # filled in the gap by walking ``apps/*/`` for ``copier-answers``.
+    # That inference can be wrong (matrix sandboxes with stale
+    # ``apps/`` subdirs, monorepos that ship multiple frontends side-
+    # by-side), so populate it from the typed config at write time.
+    frontend_data = _frontend_manifest_data(config)
 
     write_forge_toml(
         project_root / "forge.toml",
@@ -649,6 +728,25 @@ def _write_forge_toml(
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
+        frontend=frontend_data,
+    )
+
+
+def _frontend_manifest_data(config: ProjectConfig):
+    """Return the v4 ``[forge.frontend]`` manifest payload for ``config``.
+
+    Returns ``None`` when the project is backend-only (no frontend
+    framework, or framework set to ``NONE``) so ``write_forge_toml``
+    omits the table — matches the read-side contract that "no frontend"
+    is expressed by absent table OR ``framework == "none"``.
+    """
+    from forge.sync.manifest import ForgeFrontendData  # noqa: PLC0415
+
+    if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
+        return None
+    return ForgeFrontendData(
+        framework=config.frontend.framework.value,
+        app_dir=f"apps/{config.frontend_slug}",
     )
 
 
@@ -951,3 +1049,137 @@ def _git_init(project_root: Path) -> None:
                 stderr_tail = "\n".join(str(e.stderr).strip().splitlines()[-5:])
             suffix = f"\n{stderr_tail}" if stderr_tail else ""
             raise GeneratorError(f"git {step} failed (exit {e.returncode}){suffix}") from e
+
+
+def _populate_report(
+    report: GenerationReport,
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    collector: ProvenanceCollector,
+    *,
+    dry_run: bool,
+) -> None:
+    """Populate the post-generation fields of ``report``.
+
+    Called once after every phase has finished writing. Reads from
+    the same sources :func:`_write_forge_toml` does so the rendered
+    report stays consistent with the on-disk ``forge.toml``.
+
+    * ``effective_config`` / ``option_origins`` — derived from
+      ``plan.option_values`` and ``config.options`` (mirrors the
+      manifest computation), so user-set vs default labelling
+      survives into the JSON envelope.
+    * ``fragment_graph`` — adjacency list keyed by fragment name,
+      values are direct ``Fragment.depends_on`` entries. The order
+      of the dict reflects ``plan.ordered`` (topological order).
+    * ``file_inventory`` — every entry the provenance collector
+      recorded this run, normalised to :class:`FileInventoryEntry`.
+    * ``provenance_sidecar_paths`` — the manifest path itself,
+      relative to the project root.
+    * ``next_actions`` / ``rollback_hint`` — sensible defaults the
+      CLI may extend or override.
+    """
+    from forge.options import resolve_alias  # noqa: PLC0415
+
+    report.project_root = str(project_root)
+    report.effective_config = dict(plan.option_values)
+    # Prefer the caller-supplied option_origins (the CLI populates this
+    # so its silent coercions — e.g. auth.mode flipping when Keycloak
+    # is off — don't leak into the report as user choices). When the
+    # caller didn't populate it (legacy in-tree callers, the matrix
+    # runner), fall back to the pre-#5 "everything in config.options
+    # is user-set" heuristic so back-compat holds.
+    user_set_paths: set[str]
+    if config.option_origins:
+        user_set_paths = {
+            path for path, origin in config.option_origins.items() if origin == "user"
+        }
+    else:
+        user_set_paths = {resolve_alias(p) or p for p in config.options}
+    report.option_origins = {
+        path: ("user" if path in user_set_paths else "default")
+        for path in plan.option_values
+    }
+    # Fragment graph: topological order preserved by walking plan.ordered.
+    # Only include fragments that are actually present in the plan; a
+    # dangling depends_on edge to a fragment the resolver dropped
+    # (transitive backend incompat) would mislead consumers.
+    in_plan = {rf.fragment.name for rf in plan.ordered}
+    graph: dict[str, list[str]] = {}
+    for rf in plan.ordered:
+        deps = [d for d in rf.fragment.depends_on if d in in_plan]
+        graph[rf.fragment.name] = deps
+    report.fragment_graph = graph
+
+    # File inventory: collector.records is the same data write_forge_toml
+    # stamps into ``[forge.provenance]``. Convert each ProvenanceRecord
+    # into a FileInventoryEntry so the JSON envelope is self-contained
+    # (the agent doesn't have to re-parse forge.toml).
+    for rel_path, rec in sorted(collector.records.items()):
+        report.file_inventory.append(
+            FileInventoryEntry(
+                path=rel_path,
+                origin=rec.origin,
+                sha256=rec.sha256,
+                fragment_name=rec.fragment_name,
+                template_name=rec.template_name,
+            )
+        )
+
+    # Manifest path (relative). When dry_run is true the manifest still
+    # gets written under the temp root, so the path is meaningful even
+    # there.
+    report.provenance_sidecar_paths.append("forge.toml")
+
+    # Init #5 — discover copier-answers files written under the project
+    # tree. _write_copier_answers drops one inside every Copier-rendered
+    # subdirectory (services/<backend>/, apps/<frontend>/, tests/e2e/)
+    # so the read path can re-render via ``copier update`` without
+    # re-prompting. Surfacing them here means an agent has the full
+    # picture of which subtrees forge owns + how to refresh each one.
+    for answers_path in sorted(project_root.rglob(".copier-answers.yml")):
+        try:
+            rel = answers_path.relative_to(project_root)
+        except ValueError:
+            continue
+        # Skip anything inside _PROVENANCE_PRUNE_DIRS (node_modules etc.)
+        # so we don't surface answers from dependency-installed packages
+        # that happened to ship their own copier metadata.
+        if any(part in _PROVENANCE_PRUNE_DIRS for part in rel.parts):
+            continue
+        report.provenance_sidecar_paths.append(rel.as_posix())
+
+    # Sensible default next-actions. The CLI may overwrite / extend
+    # these — e.g. add a docker-compose hint when the user passed
+    # --no-docker. ``cd`` framing isn't included in the command because
+    # ``cwd`` is the canonical place for that information.
+    if config.backends or (
+        config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
+    ):
+        report.add_next_action(
+            NextAction(
+                command="docker compose up",
+                description="Start the generated stack (Postgres, services, frontend).",
+                cwd=".",
+            )
+        )
+    report.add_next_action(
+        NextAction(
+            command="forge --update",
+            description="Re-apply option-driven fragments after editing forge.toml.",
+            cwd=".",
+        )
+    )
+
+    # Rollback hint defaults to "remove the project root" for fresh
+    # generations; the CLI override path can swap in a git-aware hint
+    # if the output directory was a pre-existing repo.
+    if dry_run:
+        # Dry-run writes into a tempdir; rollback is implicit when the
+        # caller deletes it. Surface that as a hint anyway so an agent
+        # consuming the JSON envelope doesn't worry about state on the
+        # host filesystem.
+        report.rollback_hint = f"rm -rf {project_root} (dry-run tempdir)"
+    else:
+        report.rollback_hint = f"rm -rf {project_root}"
