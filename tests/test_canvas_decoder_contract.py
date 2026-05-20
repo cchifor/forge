@@ -295,9 +295,15 @@ _DART_HARNESS = r"""
 // using each payload's `toJson`, and writes the result back as JSON
 // on stdout. The harness MUST be a pure-Dart program (no Flutter
 // engine dep) so the test can run without a full Flutter SDK.
+//
+// ``events.dart`` is copied into the same directory as this harness
+// (see ``_build_dart_project``) so the relative import resolves
+// without ``dart pub get`` fetching the Flutter SDK to satisfy
+// forge_canvas's transitive deps. Cross-package relative imports
+// aren't legal Dart, hence the copy.
 import 'dart:convert';
 import 'dart:io';
-import '__PACKAGE_DIR__/lib/src/generated/events.dart';
+import 'events.dart';
 
 Map<String, dynamic> _wrap(AgUiEvent event) {
   // ``payload`` is the sealed subclass's underlying value (e.g.
@@ -346,23 +352,37 @@ def _build_dart_project(tmp_root: Path) -> Path:
     """Materialise a self-contained pure-Dart project at ``tmp_root``.
 
     The generated ``events.dart`` ships in the forge repo at
-    ``packages/forge-canvas-dart/``; we copy that package wholesale
-    so the harness can ``import '../forge_canvas/lib/src/generated/events.dart'``
-    without invoking the real Flutter build (which would require a
-    Flutter SDK install of ~3 GB just to compile a pure-Dart file).
+    ``packages/forge-canvas-dart/lib/src/generated/events.dart``; we
+    copy just that single file (along with the harness) into the
+    tempdir so the harness's ``import 'events.dart'`` resolves
+    without invoking the real Flutter build. Cross-package relative
+    imports aren't legal Dart, so the file MUST sit next to the
+    harness rather than being imported from the source package via
+    a relative path. A Flutter SDK install would be ~3 GB just to
+    compile a pure-Dart file the harness already has on disk.
 
     Returns the path to the harness ``.dart`` file ready to ``dart run``.
     """
-    pkg_src = Path(__file__).resolve().parent.parent / "packages" / "forge-canvas-dart"
-    pkg_dst = tmp_root / "forge_canvas"
-    shutil.copytree(str(pkg_src), str(pkg_dst), ignore=shutil.ignore_patterns(".dart_tool", "build", "test"))
-
-    # Write a minimal pubspec for the test project — just enough so
-    # ``dart pub get`` succeeds; no real deps beyond the dart core
-    # library because ``events.dart`` only uses Dart's collections.
+    events_src = (
+        Path(__file__).resolve().parent.parent
+        / "packages"
+        / "forge-canvas-dart"
+        / "lib"
+        / "src"
+        / "generated"
+        / "events.dart"
+    )
+    if not events_src.is_file():
+        raise FileNotFoundError(
+            f"forge-canvas-dart's generated events.dart missing at {events_src!s}; "
+            "regenerate via ``python -m forge.codegen.event_union``"
+        )
     test_proj = tmp_root / "harness"
     test_proj.mkdir()
     pubspec = test_proj / "pubspec.yaml"
+    # Minimal pubspec so ``dart run`` doesn't bail on the missing
+    # config — no deps beyond the dart core library because
+    # events.dart only uses Dart's collections + json.
     pubspec.write_text(
         "name: canvas_contract_harness\n"
         "environment:\n"
@@ -370,11 +390,11 @@ def _build_dart_project(tmp_root: Path) -> Path:
         encoding="utf-8",
     )
 
+    # Co-locate events.dart with the harness so the relative import
+    # works without ``package:`` URIs.
+    shutil.copy(str(events_src), str(test_proj / "events.dart"))
     harness = test_proj / "harness.dart"
-    harness.write_text(
-        _DART_HARNESS.replace("__PACKAGE_DIR__", "../forge_canvas"),
-        encoding="utf-8",
-    )
+    harness.write_text(_DART_HARNESS, encoding="utf-8")
     return harness
 
 
