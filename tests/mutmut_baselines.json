@@ -41,15 +41,15 @@
     },
     "forge/sync/forge_to_project/updater/__init__.py": {
       "kill_rate_min": 0.85,
-      "survivors_max": 5
+      "survivors_max": 3
     },
     "forge/sync/forge_to_project/updater/_merge_driver.py": {
-      "kill_rate_min": 0.85,
-      "survivors_max": 5
+      "kill_rate_min": 0.9,
+      "survivors_max": 1
     },
     "forge/sync/forge_to_project/updater/_template_render.py": {
-      "kill_rate_min": 0.85,
-      "survivors_max": 5
+      "kill_rate_min": 0.9,
+      "survivors_max": 1
     }
   }
 }
