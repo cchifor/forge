@@ -135,7 +135,9 @@ omit = [
 # met; the roadmap's 26% number was stale. The gate stays at 75 as the
 # coarse safety net. Finer-grained critical-path floors live in
 # `tests/test_coverage_gates.py`; those are the ones that bite when someone
-# touches merge / provenance / feature_injector / the injectors.
+# touches sync/merge, sync/provenance, appliers/, the injectors, or the
+# sync/forge_to_project/updater/ package (post-Epic-A decomposition of the
+# legacy feature_injector + updater modules).
 #
 # Policy: each sprint's coverage PR ratchets the critical-path floors upward
 # toward the targets in docs/coverage-policy.md. Lowering any floor requires
