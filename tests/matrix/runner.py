@@ -205,6 +205,18 @@ class Scenario:
     port_base: int
     expected_files: tuple[str, ...]
     config: dict[str, Any]
+    # Lane D (roundtrip) — when True (the default), lane D MUST find at
+    # least one literal FORGE sentinel block to mutate AND produce at
+    # least one ``safe-apply`` block candidate after the synthetic edit;
+    # otherwise the lane fails. Scenarios that legitimately produce zero
+    # block candidates (e.g. a backend whose templates carry no Jinja-
+    # free sentinel blocks today) set ``expect_candidates: false`` in
+    # ``scenarios.yaml`` to opt out — the lane then reports the empty
+    # case as ``ok`` with a documented note. Initiative #9: removes the
+    # silent vacuous-green path that previously masked Lane D regressions
+    # whenever the fragment surface drifted such that no literal sentinel
+    # block remained on disk.
+    expect_candidates: bool = True
 
 
 @dataclass
@@ -276,6 +288,12 @@ def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
         if not isinstance(cfg, dict):
             raise ValueError(f"scenario {name!r} 'config' must be a mapping")
 
+        expect_candidates = raw.get("expect_candidates", True)
+        if not isinstance(expect_candidates, bool):
+            raise ValueError(
+                f"scenario {name!r} 'expect_candidates' must be bool (got {type(expect_candidates).__name__})"
+            )
+
         scenarios.append(
             Scenario(
                 name=name,
@@ -284,6 +302,7 @@ def load_scenarios(path: Path = SCENARIOS_YAML) -> list[Scenario]:
                 port_base=port_base,
                 expected_files=tuple(expected),
                 config=cfg,
+                expect_candidates=expect_candidates,
             )
         )
     return scenarios
@@ -755,16 +774,33 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         # Edit a non-Jinja sentinel block (apply-back literalizes the
         # user's body; Jinja-bearing blocks round-trip incorrectly and
         # are flagged needs-review at harvest anyway).
+        #
+        # Initiative #9: the two "no candidates" exit paths below
+        # (no literal block found, or no safe-apply after edit) used to
+        # report ``ok`` unconditionally — a silent vacuous-green that
+        # masked Lane D regressions whenever the fragment surface drifted
+        # such that no literal sentinel block remained on disk. The lane
+        # now requires scenarios to opt INTO empty-candidate vacuous-true
+        # by setting ``expect_candidates: false`` in scenarios.yaml.
+        # Default (``expect_candidates: true``) treats the empty case as
+        # a regression.
         edited_path = _edit_one_literal_block(project_a)
         if edited_path is None:
-            return LaneResult(
-                scenario=scenario.name,
-                lane="roundtrip",
-                status="ok",
-                duration_ms=int((perf_counter() - start) * 1000),
-                details=(
-                    "FR1 passed; no literal FORGE sentinel block to exercise "
-                    "the apply-back round-trip (vacuously round-trippable)"
+            return _empty_candidate_result(
+                scenario,
+                start,
+                reason=(
+                    "no literal FORGE sentinel block to exercise the apply-back "
+                    "round-trip (vacuously round-trippable)"
+                ),
+                gate_message=(
+                    "FR1 passed but no literal FORGE sentinel block was found "
+                    f"under {scenario.name!r}; lane D had nothing to mutate so "
+                    "the apply-back round-trip was vacuously satisfied. If this "
+                    "is intentional (e.g. every fragment in this scenario is "
+                    "Jinja-templated), set `expect_candidates: false` on the "
+                    "scenario in tests/matrix/scenarios.yaml. Otherwise restore "
+                    "the literal block surface that lane D relies on."
                 ),
             )
 
@@ -774,14 +810,22 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         bundle_post = harvest_project(project_a, quiet=True)
         bundle_post.candidates[:] = [c for c in bundle_post.candidates if c.kind == "block"]
         if not any(c.risk == "safe-apply" for c in bundle_post.candidates):
-            return LaneResult(
-                scenario=scenario.name,
-                lane="roundtrip",
-                status="ok",
-                duration_ms=int((perf_counter() - start) * 1000),
-                details=(
-                    "FR1 passed; no safe-apply block candidate after edit "
+            return _empty_candidate_result(
+                scenario,
+                start,
+                reason=(
+                    "no safe-apply block candidate after edit "
                     "(fragment must be Jinja-templated)"
+                ),
+                gate_message=(
+                    "FR1 passed and a literal block was edited, but harvest "
+                    f"produced zero safe-apply block candidates for {scenario.name!r}. "
+                    "The bundle's apply-back contract is empty, so the FR2 "
+                    "round-trip cannot run. If every fragment in this scenario "
+                    "is Jinja-templated (round-trip not applicable), set "
+                    "`expect_candidates: false` on the scenario in "
+                    "tests/matrix/scenarios.yaml. Otherwise investigate why the "
+                    "edit didn't surface a safe-apply candidate."
                 ),
             )
 
@@ -854,6 +898,40 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _empty_candidate_result(
+    scenario: Scenario,
+    start: float,
+    *,
+    reason: str,
+    gate_message: str,
+) -> LaneResult:
+    """Return ``ok`` or ``fail`` per ``scenario.expect_candidates`` gate.
+
+    Centralises the Initiative #9 anti-vacuous-green policy. When a
+    scenario opted out (``expect_candidates: false``) the empty-candidate
+    case is documented as ``ok`` with ``reason`` in details. When the
+    scenario did NOT opt out (the default), the empty case fails loudly
+    with ``gate_message`` so a future template drift doesn't silently
+    coast through lane D as green.
+    """
+    duration_ms = int((perf_counter() - start) * 1000)
+    if scenario.expect_candidates:
+        return LaneResult(
+            scenario=scenario.name,
+            lane="roundtrip",
+            status="fail",
+            duration_ms=duration_ms,
+            details=gate_message,
+        )
+    return LaneResult(
+        scenario=scenario.name,
+        lane="roundtrip",
+        status="ok",
+        duration_ms=duration_ms,
+        details=f"FR1 passed; {reason} (expect_candidates=false)",
+    )
 
 
 def _edit_one_literal_block(project_root: Path) -> Path | None:
