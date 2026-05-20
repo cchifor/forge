@@ -23,7 +23,11 @@ import pytest
 from forge import plugins as plugins_module
 from forge.api import PluginExtractorRegistration, PluginRegistration
 from forge.extractors.pipeline import ExtractorKind
-from forge.sync.project_to_forge.harvester._orchestrator import _make_pipeline
+from forge.sync.project_to_forge.harvester._orchestrator import (
+    _collect_global_plugin_extractor_overrides,
+    _make_pipeline,
+    _reset_extractor_warnings_for_tests,
+)
 
 
 class _StubExtractor:
@@ -39,14 +43,19 @@ class _StubExtractor:
 
 @pytest.fixture(autouse=True)
 def _isolate_loaded_plugins():
-    """Snapshot + restore the loaded-plugins registry around each test."""
+    """Snapshot + restore the loaded-plugins registry around each test
+    and clear the process-global scoped-skip dedup so each test sees
+    the warning path from a clean baseline.
+    """
     saved = list(plugins_module.LOADED_PLUGINS)
     plugins_module.LOADED_PLUGINS.clear()
+    _reset_extractor_warnings_for_tests()
     try:
         yield
     finally:
         plugins_module.LOADED_PLUGINS.clear()
         plugins_module.LOADED_PLUGINS.extend(saved)
+        _reset_extractor_warnings_for_tests()
 
 
 def _register_plugin_with_extractor(
@@ -163,6 +172,83 @@ class TestSelectedKindsFiltering:
         kinds = {ext.kind for ext in pipeline.extractors}
         assert kinds == {"deps"}
         assert stub not in pipeline.extractors
+
+
+class TestWarningsOnAnomalies:
+    """Codex sub-task-4 polish: a fragment-scoped extractor is a no-op
+    today (deferred); a plugin-vs-plugin collision on a global override
+    is allowed (last-wins). Both deserve a structured warning so plugin
+    authors and operators see the silent surprises.
+    """
+
+    def test_scoped_skip_emits_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging as _logging  # noqa: PLC0415
+
+        stub = _StubExtractor(kind="block", tag="scoped")
+        _register_plugin_with_extractor(
+            "p_scoped", "block", stub, fragment="auth_jwt"
+        )
+
+        with caplog.at_level(_logging.WARNING, logger="forge"):
+            _collect_global_plugin_extractor_overrides()
+
+        scoped_records = [
+            r for r in caplog.records
+            if getattr(r, "_forge_event", {}).get("event") == "plugin.extractor.scoped_skipped"
+        ]
+        assert len(scoped_records) == 1
+        event = scoped_records[0]._forge_event
+        assert event["plugin"] == "p_scoped"
+        assert event["kind"] == "block"
+        assert event["fragment"] == "auth_jwt"
+
+    def test_scoped_skip_warning_dedups_per_process(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging as _logging  # noqa: PLC0415
+
+        stub = _StubExtractor(kind="block", tag="scoped")
+        _register_plugin_with_extractor(
+            "p_scoped", "block", stub, fragment="auth_jwt"
+        )
+
+        with caplog.at_level(_logging.WARNING, logger="forge"):
+            _collect_global_plugin_extractor_overrides()
+            _collect_global_plugin_extractor_overrides()
+            _collect_global_plugin_extractor_overrides()
+
+        scoped_records = [
+            r for r in caplog.records
+            if getattr(r, "_forge_event", {}).get("event") == "plugin.extractor.scoped_skipped"
+        ]
+        assert len(scoped_records) == 1, (
+            "scoped-skip warning must fire ONCE per (plugin, kind, fragment) "
+            "across multiple _collect calls; got {n}".format(n=len(scoped_records))
+        )
+
+    def test_global_collision_emits_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging as _logging  # noqa: PLC0415
+
+        first = _StubExtractor(kind="block", tag="first")
+        second = _StubExtractor(kind="block", tag="second")
+        _register_plugin_with_extractor("p_first", "block", first)
+        _register_plugin_with_extractor("p_second", "block", second)
+
+        with caplog.at_level(_logging.WARNING, logger="forge"):
+            _collect_global_plugin_extractor_overrides()
+
+        collisions = [
+            r for r in caplog.records
+            if getattr(r, "_forge_event", {}).get("event")
+            == "plugin.extractor.global_override_collision"
+        ]
+        assert len(collisions) == 1
+        event = collisions[0]._forge_event
+        assert event["kind"] == "block"
+        assert event["winner"] == "p_second"
+        assert event["loser"] == "p_first"
 
 
 class TestApiToHarvesterBridge:

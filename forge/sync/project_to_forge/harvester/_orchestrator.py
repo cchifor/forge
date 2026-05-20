@@ -7,6 +7,7 @@ Split out from the original ``harvester.py`` god module — see
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,6 +29,7 @@ from forge.extractors.pipeline import (
 from forge.extractors.plan import ExtractionPlan
 from forge.fragment_context import FragmentContext
 from forge.fragments import FRAGMENT_REGISTRY, Fragment, FragmentImplSpec
+from forge.logging import get_logger, log_event
 from forge.sync.forge_to_project.updater import _infer_backends
 from forge.sync.manifest import read_forge_toml
 from forge.sync.merge import MergeBlockCollector
@@ -36,6 +38,9 @@ from forge.sync.project_to_forge.harvester._interactive import (
     PromptCallback,
     _run_interactive_review,
 )
+
+_LOGGER = get_logger(__name__)
+
 
 # Every extractor kind the orchestrator understands. The CLI accepts a
 # subset via ``--harvest-include``; the bundle stores patches grouped
@@ -637,22 +642,99 @@ def _collect_global_plugin_extractor_overrides() -> dict[ExtractorKind, Extracto
 
     Last-wins on collision: if two plugins both register a global
     override for the same kind, the most recently loaded plugin's
-    extractor takes effect. Fragment-scoped registrations are skipped
-    here — they need per-fragment pipeline construction which the
-    caller's signature does not support yet.
+    extractor takes effect — and we emit a structured warning naming
+    the winner and loser so operators see the override happening.
+
+    Fragment-scoped registrations are skipped here (they need per-
+    fragment pipeline construction the caller's signature does not
+    support yet). We emit a one-shot warning per ``(plugin, kind,
+    fragment)`` so plugin authors learn that their scoped registration
+    is currently a no-op without flooding the log on every harvest.
     """
     from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
 
     overrides: dict[ExtractorKind, ExtractorProtocol] = {}
+    winners: dict[ExtractorKind, str] = {}
     for plugin in LOADED_PLUGINS:
         for registration in plugin.extractor_registrations:
             if registration.fragment is not None:
-                # Fragment-scoped overrides need the active fragment
-                # name at pipeline-build time. Tracked but not
-                # consumed yet — see the docstring on _make_pipeline.
+                _warn_scoped_skip_once(
+                    plugin_name=plugin.name,
+                    kind=registration.kind,
+                    fragment=registration.fragment,
+                )
                 continue
+            prior_winner = winners.get(registration.kind)
+            if prior_winner is not None and prior_winner != plugin.name:
+                _warn_global_override_collision(
+                    kind=registration.kind,
+                    loser=prior_winner,
+                    winner=plugin.name,
+                )
             overrides[registration.kind] = registration.extractor
+            winners[registration.kind] = plugin.name
     return overrides
+
+
+# Process-global dedup for the scoped-skip warning. The harvester
+# discovery loop fires on every ``forge --harvest`` invocation; without
+# dedup, a long-running agent would see the same warning per harvest
+# per scoped registration. Tests reset this via
+# :func:`_reset_extractor_warnings_for_tests`.
+_SCOPED_SKIP_WARNED: set[tuple[str, ExtractorKind, str]] = set()
+
+
+def _warn_scoped_skip_once(
+    *, plugin_name: str, kind: ExtractorKind, fragment: str
+) -> None:
+    key = (plugin_name, kind, fragment)
+    if key in _SCOPED_SKIP_WARNED:
+        return
+    _SCOPED_SKIP_WARNED.add(key)
+    log_event(
+        _LOGGER,
+        "plugin.extractor.scoped_skipped",
+        level=logging.WARNING,
+        message=(
+            f"plugin {plugin_name!r} registered a fragment-scoped extractor "
+            f"(kind={kind!r}, fragment={fragment!r}); the harvester pipeline "
+            "assembler does not invoke fragment-scoped overrides yet, so "
+            "this registration is a no-op until per-fragment plumbing lands"
+        ),
+        plugin=plugin_name,
+        kind=kind,
+        fragment=fragment,
+    )
+
+
+def _warn_global_override_collision(
+    *, kind: ExtractorKind, loser: str, winner: str
+) -> None:
+    # Collision warnings are NOT dedup'd: each invocation that exhibits
+    # the collision deserves the signal, since the resolution depends
+    # on plugin load order and an operator should see it on every
+    # harvest until the conflict is resolved.
+    log_event(
+        _LOGGER,
+        "plugin.extractor.global_override_collision",
+        level=logging.WARNING,
+        message=(
+            f"plugin {winner!r} overrode the global extractor for kind "
+            f"{kind!r} previously registered by plugin {loser!r}; "
+            "last-loaded wins by default"
+        ),
+        kind=kind,
+        winner=winner,
+        loser=loser,
+    )
+
+
+def _reset_extractor_warnings_for_tests() -> None:
+    """Test-only: drop the process-global scoped-skip dedup set so each
+    test exercises the warning path from a clean baseline. Never call
+    from production code.
+    """
+    _SCOPED_SKIP_WARNED.clear()
 
 
 # ---------------------------------------------------------------------------
