@@ -74,10 +74,15 @@ def _run_resolve(args: argparse.Namespace) -> int:
     # would otherwise see an empty failure they can't classify.
     # No sidecars means no prompts will fire, so the empty-project path
     # is still allowed (returns a clean report with no entries).
+    # Discovery reuses ``_discover_sidecars`` so a directory whose name
+    # ends in ``.forge-merge`` can't trigger a false-positive refusal —
+    # the same filter the walker uses (is_file + suffix match).
     if not sys.stdin.isatty():
-        sidecars = list(project_root.rglob("*.forge-merge")) + list(
-            project_root.rglob("*.forge-merge.bin")
+        from forge.sync.forge_to_project.resolver._sidecar_parser import (  # noqa: PLC0415
+            _discover_sidecars,
         )
+
+        sidecars = _discover_sidecars(project_root)
         if sidecars:
             msg = (
                 f"Found {len(sidecars)} unresolved sidecar(s) but stdin is "
