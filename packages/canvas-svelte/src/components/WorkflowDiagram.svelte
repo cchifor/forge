@@ -2,23 +2,15 @@
   WorkflowDiagram canvas component — Svelte 5 variant.
 -->
 <script lang="ts">
-  interface Node {
-    id: string
-    label: string
-    status: 'pending' | 'running' | 'completed' | 'error' | 'skipped'
-  }
+  import type { WorkflowDiagramProps } from '../generated/props'
 
-  interface Edge {
-    from: string
-    to: string
-  }
+  // The generated `WorkflowDiagramProps` is the single source of
+  // truth — hand-written mirror interfaces for canvas-component props
+  // are banned by convention. `Node` extracts the element shape so the
+  // per-status helpers below stay strongly typed.
+  type Node = WorkflowDiagramProps['nodes'][number]
 
-  interface Props {
-    nodes: Node[]
-    edges: Edge[]
-  }
-
-  let { nodes, edges }: Props = $props()
+  let { nodes, edges }: WorkflowDiagramProps = $props()
 
   const NODE_W = 160
   const NODE_H = 52

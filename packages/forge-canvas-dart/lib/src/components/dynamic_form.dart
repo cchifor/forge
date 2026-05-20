@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../generated/props.dart';
+
 /// DynamicForm canvas component — renders a form from a JSON-Schema-
 /// like field list. Dispatches by type: text, number, password, email,
 /// select, checkbox, textarea.
 ///
 /// Props schema:
 /// forge/templates/_shared/canvas-components/DynamicForm.props.schema.json
+///
+/// The field list is typed against [DynamicFormField] — the sealed
+/// inner class generated from the schema by
+/// ``forge.codegen.canvas_props``. Hand-written mirror classes (the
+/// old ``_Field`` shape) are banned by convention: the generated file
+/// is the single source of truth for canvas prop shapes.
 class DynamicForm extends StatefulWidget {
   final String? title;
-  final List<_Field> fields;
+  final List<DynamicFormField> fields;
   final String submitLabel;
   final String cancelLabel;
   final void Function(Map<String, dynamic> values)? onSubmit;
@@ -22,7 +30,9 @@ class DynamicForm extends StatefulWidget {
     this.cancelLabel = 'Cancel',
     this.onSubmit,
     this.onCancel,
-  }) : fields = fields.map(_Field.fromMap).toList(growable: false);
+  }) : fields = fields
+            .map((raw) => DynamicFormField.fromJson(raw))
+            .toList(growable: false);
 
   factory DynamicForm.fromProps(Map<String, dynamic> props) => DynamicForm(
         title: props['title'] as String?,
@@ -35,36 +45,6 @@ class DynamicForm extends StatefulWidget {
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
-}
-
-class _Field {
-  final String name;
-  final String label;
-  final String type;
-  final bool required;
-  final dynamic defaultValue;
-  final List<String> options;
-  final String? description;
-
-  const _Field({
-    required this.name,
-    required this.label,
-    required this.type,
-    required this.required,
-    required this.defaultValue,
-    required this.options,
-    required this.description,
-  });
-
-  factory _Field.fromMap(Map<String, dynamic> raw) => _Field(
-        name: raw['name'] as String,
-        label: raw['label'] as String,
-        type: raw['type'] as String,
-        required: (raw['required'] as bool?) ?? false,
-        defaultValue: raw['default'],
-        options: ((raw['options'] as List?) ?? const []).whereType<String>().toList(),
-        description: raw['description'] as String?,
-      );
 }
 
 class _DynamicFormState extends State<DynamicForm> {
@@ -137,7 +117,7 @@ class _DynamicFormState extends State<DynamicForm> {
 }
 
 class _FieldWidget extends StatefulWidget {
-  final _Field field;
+  final DynamicFormField field;
   final dynamic initialValue;
   final void Function(dynamic) onChanged;
 
@@ -169,7 +149,8 @@ class _FieldWidgetState extends State<_FieldWidget> {
   }
 
   String? _validator(String? v) {
-    if (widget.field.required && (v == null || v.isEmpty)) {
+    final isRequired = widget.field.required ?? false;
+    if (isRequired && (v == null || v.isEmpty)) {
       return 'Required';
     }
     return null;
@@ -178,7 +159,8 @@ class _FieldWidgetState extends State<_FieldWidget> {
   @override
   Widget build(BuildContext context) {
     final field = widget.field;
-    final label = field.required ? '${field.label} *' : field.label;
+    final isRequired = field.required ?? false;
+    final label = isRequired ? '${field.label} *' : field.label;
     final decoration = InputDecoration(
       labelText: label,
       helperText: field.type == 'checkbox' ? null : field.description,
@@ -203,14 +185,14 @@ class _FieldWidgetState extends State<_FieldWidget> {
         decoration: decoration,
         value: _value as String?,
         items: [
-          for (final opt in field.options)
+          for (final opt in (field.options ?? const <String>[]))
             DropdownMenuItem(value: opt, child: Text(opt)),
         ],
         onChanged: (v) {
           setState(() => _value = v);
           widget.onChanged(_value);
         },
-        validator: field.required
+        validator: isRequired
             ? (v) => v == null || v.isEmpty ? 'Required' : null
             : null,
       );

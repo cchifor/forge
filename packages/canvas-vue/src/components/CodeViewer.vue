@@ -8,15 +8,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import hljs from 'highlight.js/lib/common'
+import type { CodeViewerProps } from '../generated/props'
 
-interface Props {
-  code: string
-  language: string
-  filename?: string
-  showLineNumbers?: boolean
-}
-
-const props = defineProps<Props>()
+// The generated `CodeViewerProps` is the single source of truth —
+// hand-written mirror interfaces for canvas-component props are banned
+// by convention.
+const props = defineProps<CodeViewerProps>()
 
 const highlighted = computed(() => {
   try {

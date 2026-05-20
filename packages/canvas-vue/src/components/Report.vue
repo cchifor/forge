@@ -10,13 +10,12 @@
 import { computed } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import type { ReportProps } from '../generated/props'
 
-interface Props {
-  title?: string
-  markdown: string
-}
-
-const props = defineProps<Props>()
+// The generated `ReportProps` is the single source of truth —
+// hand-written mirror interfaces for canvas-component props are banned
+// by convention.
+const props = defineProps<ReportProps>()
 
 const renderedHtml = computed(() => {
   const rawHtml = marked.parse(props.markdown, { async: false }) as string
