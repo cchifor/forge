@@ -132,6 +132,16 @@ class ForgeFrontendData:
     ``app_dir`` is the POSIX-style project-relative path to the
     generated frontend (typically ``"apps/frontend"``). Empty when
     ``framework == "none"``.
+
+    Note: project-scope frontend fragments emit project-relative
+    paths (e.g. ``files/apps/frontend/src/Foo.vue``) — the apply
+    pipeline copies them under ``project_root`` directly, not under
+    ``project_root / app_dir``. ``app_dir`` is consumed by the
+    inference fallback (it picks up the on-disk slot when an older
+    manifest is loaded) and by the template re-render driver
+    (locating Copier's target dir). Fragment authors who want their
+    files to land under a non-default app_dir must include that
+    prefix in their fragment's ``files/`` tree.
     """
 
     framework: str = ""
@@ -382,12 +392,32 @@ def _infer_frontend_from_v3(
 
     # Step 2: on-disk inference. The framework is derived from the
     # marker file we find — ``package.json`` plus a recognisable
-    # dependency name, or ``pubspec.yaml`` for Flutter.
-    inferred_dir = _scan_apps_for_frontend(project_root)
-    if inferred_dir:
-        framework = _framework_from_app_dir(project_root / inferred_dir)
-        if framework:
-            return ForgeFrontendData(framework=framework, app_dir=inferred_dir)
+    # dependency name, or ``pubspec.yaml`` for Flutter. Walk every
+    # ``apps/<sub>/`` (not just the first with a marker file) so a
+    # project with sibling apps like ``apps/admin/`` (React) + ``apps/
+    # frontend/`` (Vue) still resolves to the recognised framework
+    # rather than collapsing to the first lexicographic entry.
+    apps_dir = project_root / "apps"
+    if apps_dir.is_dir():
+        # Prefer the conventional ``apps/frontend/`` slot if it carries
+        # a recognised marker; otherwise scan siblings in lexicographic
+        # order. The conventional path matches what the generator
+        # emits today and avoids ambiguity for the common case.
+        candidates: list[Path] = []
+        conventional = apps_dir / "frontend"
+        if conventional.is_dir():
+            candidates.append(conventional)
+        for sub in sorted(apps_dir.iterdir()):
+            if sub == conventional or not sub.is_dir():
+                continue
+            candidates.append(sub)
+        for sub in candidates:
+            framework = _framework_from_app_dir(sub)
+            if framework:
+                return ForgeFrontendData(
+                    framework=framework,
+                    app_dir=f"apps/{sub.name}",
+                )
 
     return ForgeFrontendData()
 
@@ -398,6 +428,11 @@ def _scan_apps_for_frontend(project_root: Path) -> str:
     Recognised markers: ``package.json`` (Vue / Svelte / plugin JS
     frameworks), ``pubspec.yaml`` (Flutter). Returns ``""`` when
     ``apps/`` is missing or has no marker-bearing sub-directory.
+
+    Step 1 of :func:`_infer_frontend_from_v3` uses this for the
+    templates-table fallback (when ``[forge.templates]`` lists a
+    frontend framework but the conventional ``apps/frontend/`` slot
+    isn't on disk — the project may have used a plugin slug).
     """
     apps = project_root / "apps"
     if not apps.is_dir():
