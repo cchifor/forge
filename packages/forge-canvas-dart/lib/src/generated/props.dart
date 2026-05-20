@@ -32,9 +32,33 @@ class CodeViewerProps {
   };
 }
 
+class DataTableColumn {
+  final String key;
+  final String label;
+  final bool? sortable;
+
+  const DataTableColumn({
+    required this.key,
+    required this.label,
+    this.sortable,
+  });
+
+  factory DataTableColumn.fromJson(Map<String, dynamic> json) => DataTableColumn(
+      key: json['key'] as String,
+      label: json['label'] as String,
+      sortable: json['sortable'] == null ? null : (json['sortable'] as bool),
+  );
+
+  Map<String, dynamic> toJson() => {
+      'key': key,
+      'label': label,
+      'sortable': sortable,
+  };
+}
+
 /// Props for the DataTable canvas component — renders tabular data with optional sorting and pagination.
 class DataTableProps {
-  final List<Map<String, dynamic>> columns;
+  final List<DataTableColumn> columns;
   final List<Map<String, dynamic>> rows;
   final int? pageSize;
 
@@ -45,22 +69,62 @@ class DataTableProps {
   });
 
   factory DataTableProps.fromJson(Map<String, dynamic> json) => DataTableProps(
-      columns: (json['columns'] as List).cast<Map<String, dynamic>>(),
+      columns: (json['columns'] as List).whereType<Map>().map((e) => DataTableColumn.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
       rows: (json['rows'] as List).cast<Map<String, dynamic>>(),
       pageSize: json['pageSize'] == null ? null : (json['pageSize'] as int),
   );
 
   Map<String, dynamic> toJson() => {
-      'columns': columns,
+      'columns': columns.map((e) => e.toJson()).toList(),
       'rows': rows,
       'pageSize': pageSize,
+  };
+}
+
+class DynamicFormField {
+  final String name;
+  final String label;
+  final String type;
+  final bool? required;
+  final dynamic defaultValue;
+  final List<String>? options;
+  final String? description;
+
+  const DynamicFormField({
+    required this.name,
+    required this.label,
+    required this.type,
+    this.required,
+    this.defaultValue,
+    this.options,
+    this.description,
+  });
+
+  factory DynamicFormField.fromJson(Map<String, dynamic> json) => DynamicFormField(
+      name: json['name'] as String,
+      label: json['label'] as String,
+      type: json['type'] as String,
+      required: json['required'] == null ? null : (json['required'] as bool),
+      defaultValue: json['default'] == null ? null : (json['default']),
+      options: json['options'] == null ? null : ((json['options'] as List).cast<String>()),
+      description: json['description'] == null ? null : (json['description'] as String),
+  );
+
+  Map<String, dynamic> toJson() => {
+      'name': name,
+      'label': label,
+      'type': type,
+      'required': required,
+      'default': defaultValue,
+      'options': options,
+      'description': description,
   };
 }
 
 /// Props for the DynamicForm canvas component — renders a form declared by a JSON Schema-like field list.
 class DynamicFormProps {
   final String? title;
-  final List<Map<String, dynamic>> fields;
+  final List<DynamicFormField> fields;
   final String? submitLabel;
   final String? cancelLabel;
 
@@ -73,14 +137,14 @@ class DynamicFormProps {
 
   factory DynamicFormProps.fromJson(Map<String, dynamic> json) => DynamicFormProps(
       title: json['title'] == null ? null : (json['title'] as String),
-      fields: (json['fields'] as List).cast<Map<String, dynamic>>(),
+      fields: (json['fields'] as List).whereType<Map>().map((e) => DynamicFormField.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
       submitLabel: json['submitLabel'] == null ? null : (json['submitLabel'] as String),
       cancelLabel: json['cancelLabel'] == null ? null : (json['cancelLabel'] as String),
   );
 
   Map<String, dynamic> toJson() => {
       'title': title,
-      'fields': fields,
+      'fields': fields.map((e) => e.toJson()).toList(),
       'submitLabel': submitLabel,
       'cancelLabel': cancelLabel,
   };
@@ -107,10 +171,54 @@ class ReportProps {
   };
 }
 
+class WorkflowDiagramNode {
+  final String id;
+  final String label;
+  final String status;
+
+  const WorkflowDiagramNode({
+    required this.id,
+    required this.label,
+    required this.status,
+  });
+
+  factory WorkflowDiagramNode.fromJson(Map<String, dynamic> json) => WorkflowDiagramNode(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      status: json['status'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+      'id': id,
+      'label': label,
+      'status': status,
+  };
+}
+
+class WorkflowDiagramEdge {
+  final String from;
+  final String to;
+
+  const WorkflowDiagramEdge({
+    required this.from,
+    required this.to,
+  });
+
+  factory WorkflowDiagramEdge.fromJson(Map<String, dynamic> json) => WorkflowDiagramEdge(
+      from: json['from'] as String,
+      to: json['to'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+      'from': from,
+      'to': to,
+  };
+}
+
 /// Props for the WorkflowDiagram canvas component — renders a DAG of steps with status indicators.
 class WorkflowDiagramProps {
-  final List<Map<String, dynamic>> nodes;
-  final List<Map<String, dynamic>> edges;
+  final List<WorkflowDiagramNode> nodes;
+  final List<WorkflowDiagramEdge> edges;
 
   const WorkflowDiagramProps({
     required this.nodes,
@@ -118,12 +226,12 @@ class WorkflowDiagramProps {
   });
 
   factory WorkflowDiagramProps.fromJson(Map<String, dynamic> json) => WorkflowDiagramProps(
-      nodes: (json['nodes'] as List).cast<Map<String, dynamic>>(),
-      edges: (json['edges'] as List).cast<Map<String, dynamic>>(),
+      nodes: (json['nodes'] as List).whereType<Map>().map((e) => WorkflowDiagramNode.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
+      edges: (json['edges'] as List).whereType<Map>().map((e) => WorkflowDiagramEdge.fromJson(Map<String, dynamic>.from(e))).toList(growable: false),
   );
 
   Map<String, dynamic> toJson() => {
-      'nodes': nodes,
-      'edges': edges,
+      'nodes': nodes.map((e) => e.toJson()).toList(),
+      'edges': edges.map((e) => e.toJson()).toList(),
   };
 }
