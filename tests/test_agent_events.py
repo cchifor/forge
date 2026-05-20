@@ -161,6 +161,23 @@ class TestKindAliasOnInput:
         )
         assert ev.conversation_id == conv_id
 
+    def test_mismatched_type_and_kind_is_rejected(self, events) -> None:
+        """Initiative #4 strictness: a drifted frame
+        (``type`` and ``kind`` disagree) must FAIL validation rather
+        than silently route to the ``type`` discriminator. Silent
+        acceptance would mask an upstream serializer bug for the
+        entire one-release transition window.
+        """
+        conv_id = uuid.uuid4()
+        with pytest.raises(Exception):  # pydantic ValidationError wraps our ValueError
+            events.ConversationCreated.model_validate(
+                {
+                    "type": "conversation_created",
+                    "kind": "tool_call",  # drifted!
+                    "conversation_id": str(conv_id),
+                }
+            )
+
 
 class TestRoundTrip:
     """A frame emitted by the serializer must validate back through the model."""
