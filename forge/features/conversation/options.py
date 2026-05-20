@@ -25,6 +25,8 @@ BACKENDS: python
 REQUIRES: migration 0002 applied (``alembic upgrade head``).""",
         category=FeatureCategory.CONVERSATIONAL_AI,
         stability="beta",
+        # Initiative #7 — feature persists chat history to SQLAlchemy.
+        requires_database=True,
         enables={True: ("conversation_persistence",)},
     )
 )
@@ -48,6 +50,8 @@ ENDPOINTS: /api/v1/chat-files (upload + download by id)
 REQUIRES: conversation.persistence = true; UPLOAD_DIR writable.""",
         category=FeatureCategory.CONVERSATIONAL_AI,
         stability="beta",
+        # Initiative #7 — ChatFile rows live in the DB.
+        requires_database=True,
         enables={True: ("file_upload",)},
     )
 )

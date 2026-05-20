@@ -33,6 +33,9 @@ ENDPOINTS: /api/v1/ws/agent (WebSocket)
 REQUIRES: conversation.persistence = true.""",
         category=FeatureCategory.CONVERSATIONAL_AI,
         stability="experimental",
+        # Initiative #7 — depends transitively on conversation.persistence
+        # (records the streamed conversation), which writes to the DB.
+        requires_database=True,
         enables={True: ("agent_streaming",)},
     )
 )
@@ -79,6 +82,9 @@ REQUIRES: one of ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY /
 OPENROUTER_API_KEY; agent.streaming = true; agent.tools = true.""",
         category=FeatureCategory.CONVERSATIONAL_AI,
         stability="experimental",
+        # Initiative #7 — depends transitively on agent.streaming +
+        # conversation.persistence, both of which write to the DB.
+        requires_database=True,
         enables={True: ("agent",)},
     )
 )
