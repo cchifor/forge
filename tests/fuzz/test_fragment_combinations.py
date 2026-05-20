@@ -81,12 +81,26 @@ def _option_value_strategy(option):
     if option.type == OptionType.STR:
         return st.text(alphabet="abcdef0123456789-_", min_size=1, max_size=10)
     if option.type == OptionType.LIST:
-        # 1-3 elements of the option's intuited inner type. Most LIST
-        # options today accept strings (e.g.
-        # ``connectors.backends`` takes a subset of the enum
-        # ``{http,fs,sql,s3,mcp}``), so default to short identifiers;
-        # an option that declares a richer inner type can register a
-        # custom strategy later.
+        # Prefer the option's known valid-value set when discoverable.
+        # The Option dataclass doesn't formally declare an "inner enum"
+        # for LIST today (the ``connectors.backends`` description names
+        # ``http/fs/sql/s3/mcp`` but the registry has no structured
+        # field for that), so the best signal we have is the registered
+        # default when it carries example values. Falling back to short
+        # identifiers keeps the strategy non-empty for options that
+        # default to ``[]``. Initiative #9 follow-up (out of scope):
+        # extend Option to declare ``list_inner_options`` so this
+        # strategy can pick from a known-good set instead of guessing —
+        # codex review flagged this as a place where the fuzz currently
+        # bless values the downstream template can't safely consume.
+        default = list(getattr(option, "default", []) or [])
+        if default:
+            return st.lists(
+                st.sampled_from(default),
+                min_size=1,
+                max_size=min(3, len(default)),
+                unique=True,
+            )
         return st.lists(
             st.text(alphabet="abcdef", min_size=1, max_size=6),
             min_size=1,
@@ -317,10 +331,16 @@ def test_resolve_either_succeeds_cleanly_or_raises_options_error(config):
         config.validate()
     except (ValueError, OptionsError):
         return  # expected for invalid combinations
-    try:
-        plan = resolve(config)
-    except (OptionsError, ValueError):
-        return  # expected for invalid combinations
+    # Second resolve — narrow exception set. ``config.validate()`` above
+    # already ran ``_validate_options`` + the resolver once and wrapped
+    # any failure as ValueError, so a fresh ValueError here would more
+    # likely be a resolver bug (option-driven sub-resolution diverging
+    # on the second call) than expected invalid input. We accept only
+    # OptionsError — the resolver's explicit "config is invalid"
+    # signal — and let any other exception propagate. Codex review
+    # flagged the prior ``(OptionsError, ValueError)`` catch as too
+    # lenient.
+    plan = resolve(config)
     _assert_plan_is_consistent(plan)
 
 
