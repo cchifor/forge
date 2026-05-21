@@ -319,9 +319,7 @@ def main() -> None:
     # (auth.mode rewrite, etc.) so the JSON envelope can surface them
     # under hidden_mutations. Text-mode callers pass ``mutations=None``
     # and the builder stays silent (back-compat).
-    cli_mutations: list[HiddenMutation] | None = (
-        [] if getattr(args, "json_output", False) else None
-    )
+    cli_mutations: list[HiddenMutation] | None = [] if getattr(args, "json_output", False) else None
 
     config: ProjectConfig
     if _is_headless(args):

@@ -455,9 +455,7 @@ def _run_plugin_emitters(
             )
 
 
-def _warn_emitter_target_collision(
-    *, target: str, loser: str, winner: str
-) -> None:
+def _warn_emitter_target_collision(*, target: str, loser: str, winner: str) -> None:
     """Emit a structured warning when two plugins claim the same target.
 
     Collision warnings are NOT deduplicated: each codegen invocation

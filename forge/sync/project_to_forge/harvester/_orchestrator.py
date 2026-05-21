@@ -684,9 +684,7 @@ def _collect_global_plugin_extractor_overrides() -> dict[ExtractorKind, Extracto
 _SCOPED_SKIP_WARNED: set[tuple[str, ExtractorKind, str]] = set()
 
 
-def _warn_scoped_skip_once(
-    *, plugin_name: str, kind: ExtractorKind, fragment: str
-) -> None:
+def _warn_scoped_skip_once(*, plugin_name: str, kind: ExtractorKind, fragment: str) -> None:
     key = (plugin_name, kind, fragment)
     if key in _SCOPED_SKIP_WARNED:
         return
@@ -707,9 +705,7 @@ def _warn_scoped_skip_once(
     )
 
 
-def _warn_global_override_collision(
-    *, kind: ExtractorKind, loser: str, winner: str
-) -> None:
+def _warn_global_override_collision(*, kind: ExtractorKind, loser: str, winner: str) -> None:
     # Collision warnings are NOT dedup'd: each invocation that exhibits
     # the collision deserves the signal, since the resolution depends
     # on plugin load order and an operator should see it on every
