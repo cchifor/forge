@@ -231,6 +231,32 @@ class Fragment:
                     "overlap": sorted(overlap),
                 },
             )
+        # Fragment-DX wave: validate before/after edges with the same
+        # discipline as conflicts_with. Self-references are always bugs;
+        # before ∩ after is logically impossible to satisfy.
+        if self.name in self.before:
+            raise FragmentError(
+                f"Fragment {self.name!r} lists itself in before",
+                context={"fragment": self.name, "before": list(self.before)},
+            )
+        if self.name in self.after:
+            raise FragmentError(
+                f"Fragment {self.name!r} lists itself in after",
+                context={"fragment": self.name, "after": list(self.after)},
+            )
+        before_after_overlap = set(self.before) & set(self.after)
+        if before_after_overlap:
+            raise FragmentError(
+                f"Fragment {self.name!r} has names in both before and "
+                f"after: {sorted(before_after_overlap)}. A fragment cannot "
+                f"simultaneously apply before AND after the same neighbour.",
+                context={
+                    "fragment": self.name,
+                    "before": list(self.before),
+                    "after": list(self.after),
+                    "overlap": sorted(before_after_overlap),
+                },
+            )
         if self.parity_tier is None:
             object.__setattr__(self, "parity_tier", _auto_parity_tier(self.implementations))
         else:
