@@ -16,9 +16,8 @@ preserving structure. Collision behaviour is driven by
                   ``.forge-merge`` (or ``.forge-merge.bin``) sidecar on
                   conflict and continue. The user resolves by hand.
 
-Epic A (1.1.0-alpha.1) lifted the body out of
-``forge.feature_injector._copy_files`` into this module; the legacy
-function name is re-exported there for one minor as a deprecation shim.
+Epic A (1.1.0-alpha.1) lifted the body into this module from the
+now-deleted ``forge.feature_injector`` shim (removed in 1.2.0-alpha.1).
 """
 
 from __future__ import annotations
