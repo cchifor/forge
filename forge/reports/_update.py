@@ -120,9 +120,7 @@ class UpdateReport:
             "project_root": self.project_root,
             "effective_config": dict(self.effective_config),
             "option_origins": dict(self.option_origins),
-            "fragment_graph": {
-                name: list(deps) for name, deps in self.fragment_graph.items()
-            },
+            "fragment_graph": {name: list(deps) for name, deps in self.fragment_graph.items()},
             "file_dispositions": [e.to_dict() for e in self.file_dispositions],
             "warnings": list(self.warnings),
             "skipped_toolchains": [e.to_dict() for e in self.skipped_toolchains],

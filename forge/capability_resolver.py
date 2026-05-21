@@ -191,31 +191,54 @@ def _expand_deps(fragment_set: set[str]) -> set[str]:
     return fragment_set
 
 
+def _build_dep_graph(fragment_names: set[str]) -> dict[str, set[str]]:
+    """Combined depends_on + before/after graph for the in-plan fragments.
+
+    Returns a mapping ``name -> {names this fragment must apply after}``.
+    ``depends_on`` edges are unconditional (the resolver already pulled
+    transitive deps into ``fragment_names`` via ``_expand_deps``).
+    ``before`` / ``after`` edges are SOFT — they only constrain the sort
+    when both endpoints are already in the plan; otherwise they're inert.
+    """
+    graph: dict[str, set[str]] = {n: set() for n in fragment_names}
+    for n in fragment_names:
+        frag = FRAGMENT_REGISTRY[n]
+        for dep in frag.depends_on:
+            if dep in fragment_names:
+                graph[n].add(dep)
+        for target in frag.after:
+            if target in fragment_names:
+                graph[n].add(target)
+        for target in frag.before:
+            if target in fragment_names:
+                graph.setdefault(target, set()).add(n)
+    return graph
+
+
 def _topo_sort(fragment_names: set[str]) -> list[str]:
-    """Kahn's algorithm over Fragment.depends_on.
+    """Kahn's algorithm over the combined depends_on + before/after graph.
 
     Sorts ``ready`` sets by (Fragment.order, name) so middleware
     layering is deterministic across runs.
     """
+    graph = _build_dep_graph(fragment_names)
     remaining = set(fragment_names)
     order: list[str] = []
+    order_set: set[str] = set()
 
     while remaining:
-        ready = [
-            name
-            for name in remaining
-            if all(dep in order for dep in FRAGMENT_REGISTRY[name].depends_on)
-        ]
+        ready = [name for name in remaining if graph[name].issubset(order_set)]
         if not ready:
             cyclic = ", ".join(sorted(remaining))
             raise OptionsError(
                 f"Cyclic fragment dependency detected among: {cyclic}. "
-                "Inspect `depends_on` entries in fragments.py.",
+                "Inspect `depends_on` / `before` / `after` entries in fragments.py.",
                 code=OPTIONS_DEP_CYCLE,
                 context={"fragments": sorted(remaining)},
             )
         ready.sort(key=lambda n: (FRAGMENT_REGISTRY[n].order, n))
         order.extend(ready)
+        order_set.update(ready)
         remaining.difference_update(ready)
     return order
 

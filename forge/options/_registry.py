@@ -364,8 +364,7 @@ class Option:
             )
         if self.allowed_frontends is not None and not self.allowed_frontends:
             raise ValueError(
-                f"Option {self.path}: allowed_frontends must be None (any) "
-                "or a non-empty tuple."
+                f"Option {self.path}: allowed_frontends must be None (any) or a non-empty tuple."
             )
         for other in self.incompatible_with:
             _validate_path(other)

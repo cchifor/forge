@@ -232,6 +232,7 @@ def _legacy_aliases() -> dict[str, str]:
 
     return OPTION_ALIAS_INDEX
 
+
 # Canonical paths consumed by the layer sub-models. ``from_legacy_options``
 # routes these into the sub-models and leaves everything else on
 # ``TypedConfig.other``.

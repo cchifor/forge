@@ -484,9 +484,7 @@ def _update_locked(
     # codex-review flagged on the first synth-bridge revision.
     project_apply_plan = plan.ordered
     if is_synth_bridge:
-        project_apply_plan = tuple(
-            rf for rf in plan.ordered if rf.fragment.target_frontends
-        )
+        project_apply_plan = tuple(rf for rf in plan.ordered if rf.fragment.target_frontends)
         if not quiet:
             dropped = len(plan.ordered) - len(project_apply_plan)
             if dropped:
@@ -659,6 +657,7 @@ def _collect_injection_targets(
                     options=rendering_options,
                     middlewares=rf.fragment.middlewares,
                     backend=bc.language,
+                    shared_env_vars=rf.fragment.shared_env_vars,
                 )
             except Exception:  # noqa: BLE001
                 # If the plan can't even be built, the audit can't help —

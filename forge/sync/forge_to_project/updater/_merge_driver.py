@@ -104,7 +104,13 @@ def apply_features(
         # Dispatch via the package namespace so tests that
         # ``patch.object(updater, "_apply_fragment", ...)`` see their
         # patch applied — see ``__init__.py``'s re-export.
-        _resolve_apply_fragment()(ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares)
+        _resolve_apply_fragment()(
+            ctx,
+            impl,
+            rf.fragment.name,
+            middlewares=rf.fragment.middlewares,
+            shared_env_vars=rf.fragment.shared_env_vars,
+        )
 
 
 def apply_project_features(
@@ -168,7 +174,11 @@ def apply_project_features(
                 # (they emit project-level files like AGENTS.md). Pass the
                 # tuple anyway so the pipeline API stays uniform.
                 _resolve_apply_fragment()(
-                    ctx, impl, rf.fragment.name, middlewares=rf.fragment.middlewares
+                    ctx,
+                    impl,
+                    rf.fragment.name,
+                    middlewares=rf.fragment.middlewares,
+                    shared_env_vars=rf.fragment.shared_env_vars,
                 )
                 break
 
@@ -179,6 +189,7 @@ def _apply_fragment(
     feature_key: str,
     *,
     middlewares: tuple[MiddlewareSpec, ...] = (),
+    shared_env_vars: tuple[tuple[str, str], ...] = (),
 ) -> None:
     """Apply one fragment implementation via the default :class:`FragmentPipeline`.
 
@@ -186,7 +197,10 @@ def _apply_fragment(
     classes composed by :class:`FragmentPipeline`. Epic K threads any
     :class:`MiddlewareSpec` declarations on the fragment into the plan
     so the applier emits the middleware import + registration lines
-    without a handwritten ``inject.yaml``.
+    without a handwritten ``inject.yaml``. Fragment-DX wave threads
+    ``shared_env_vars`` (``Fragment.shared_env_vars``) into the env
+    pipeline so per-backend impls don't have to repeat the same
+    backend-agnostic env tuples.
 
     This function is a stable internal entry point — callers route
     through it so the rest of the package doesn't need to know
@@ -194,4 +208,10 @@ def _apply_fragment(
     """
     from forge.appliers import FragmentPipeline  # noqa: PLC0415
 
-    FragmentPipeline.default().run(ctx, impl, feature_key, middlewares=middlewares)
+    FragmentPipeline.default().run(
+        ctx,
+        impl,
+        feature_key,
+        middlewares=middlewares,
+        shared_env_vars=shared_env_vars,
+    )

@@ -61,6 +61,7 @@ class FragmentPipeline:
         feature_key: str,
         *,
         middlewares: tuple[MiddlewareSpec, ...] = (),
+        shared_env_vars: tuple[tuple[str, str], ...] = (),
     ) -> None:
         """Build the plan + apply each phase in the canonical order.
 
@@ -68,6 +69,12 @@ class FragmentPipeline:
         build time using the renderer for the current backend. Fragments
         with no middleware declarations pass ``()`` and the plan looks
         identical to the pre-Epic-K shape.
+
+        ``shared_env_vars`` (``Fragment.shared_env_vars``) is merged
+        with ``impl.env_vars`` before the env applier runs, so per-
+        backend impls don't have to repeat backend-agnostic env vars
+        (``AWS_REGION``, ``S3_ENDPOINT_URL``, …). Empty tuple is the
+        default and preserves the pre-Fragment-DX shape.
         """
         plan = FragmentPlan.from_impl(
             impl,
@@ -75,6 +82,7 @@ class FragmentPipeline:
             options=ctx.options,
             middlewares=middlewares,
             backend=ctx.backend_config.language,
+            shared_env_vars=shared_env_vars,
         )
         self.files.apply(ctx, plan)
         self.injection.apply(ctx, plan)

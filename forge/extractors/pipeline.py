@@ -222,15 +222,13 @@ class CandidatePatch:
         # already validates against ``CandidateKind`` / ``CandidateRisk``.
         if self.kind not in CANDIDATE_KINDS:
             raise FragmentError(
-                f"CandidatePatch.kind must be one of {list(CANDIDATE_KINDS)!r}, "
-                f"got {self.kind!r}",
+                f"CandidatePatch.kind must be one of {list(CANDIDATE_KINDS)!r}, got {self.kind!r}",
                 code=CANDIDATE_PATCH_BAD_KIND,
                 context={"kind": str(self.kind), "fragment": self.fragment},
             )
         if self.risk not in CANDIDATE_RISKS:
             raise FragmentError(
-                f"CandidatePatch.risk must be one of {list(CANDIDATE_RISKS)!r}, "
-                f"got {self.risk!r}",
+                f"CandidatePatch.risk must be one of {list(CANDIDATE_RISKS)!r}, got {self.risk!r}",
                 code=CANDIDATE_PATCH_BAD_RISK,
                 context={"risk": str(self.risk), "fragment": self.fragment},
             )
