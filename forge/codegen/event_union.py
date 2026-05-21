@@ -237,8 +237,9 @@ def emit_dart(schemas: list[Schema]) -> str:
     then a sealed-class hierarchy wraps them with a ``kind`` getter.
 
     A static :meth:`AgUiEvent.parse` factory is also emitted so the
-    repo's ``AgUiClient`` (see :file:`packages/forge-canvas-dart/lib/src/ag_ui_client.dart`)
-    can be wired up without any per-app glue:
+    repo's ``AgUiClient`` (see :file:`packages/forge-canvas-core-dart/lib/src/ag_ui_client.dart`,
+    re-exported from ``forge_canvas`` per Pillar B Phase 2B) can be
+    wired up without any per-app glue:
 
         AgUiClient<AgUiEvent>(dio: dio, parser: AgUiEvent.parse, ...)
 

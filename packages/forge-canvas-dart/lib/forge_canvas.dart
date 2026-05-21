@@ -2,8 +2,23 @@
 /// forge-generated Flutter applications.
 library forge_canvas;
 
+// Re-export the framework-agnostic protocol surface from
+// `forge_canvas_core` (Pillar B Phase 2B). Existing consumers
+// importing `package:forge_canvas/forge_canvas.dart` keep their
+// `AgUiClient` / MCP types unchanged — the implementation simply
+// moved into the sibling pure-Dart package.
+//
+// `forge_canvas_core` ships:
+//   * `AgUiClient<E>` (SSE + reconnect + Last-Event-ID resume).
+//   * `McpApprovalClient` + `McpApprovalRejected` + `McpInvokeRequest`
+//     + `McpInvokeResult` + `ApprovalMode` (the wire-protocol bug
+//     fix for non-`auto` MCP tool invocations).
+//   * `McpBridge` interface types + `mcpBridgeAvailable` constant
+//     (`false` on Dart — Flutter has no DOM iframe model; a real
+//     webview-backed implementation belongs in a separate package).
+export 'package:forge_canvas_core/forge_canvas_core.dart';
+
 export 'src/canvas_registry.dart';
-export 'src/ag_ui_client.dart';
 export 'src/lint.dart';
 export 'src/theme.dart';
 

@@ -35,6 +35,15 @@ _TEMPLATE_ROOT = (
 )
 _CHAT_ROOT = _TEMPLATE_ROOT / "lib" / "src" / "features" / "chat"
 _PACKAGE_ROOT = _REPO_ROOT / "packages" / "forge-canvas-dart"
+# Pillar B Phase 2B (PR #71) extracted the pure-Dart protocol surface
+# (including `ag_ui_client.dart`) into the sibling package
+# `packages/forge-canvas-core-dart/`. `forge-canvas-dart` keeps the
+# Flutter-coupled bits + re-exports the moved files via its barrel
+# (`lib/forge_canvas.dart`), so existing consumers see no breaking
+# change. Tests that read the actual `ag_ui_client.dart` body follow
+# it to its new home; tests that verify the barrel-export surface
+# stay against `_PACKAGE_ROOT`.
+_CORE_PACKAGE_ROOT = _REPO_ROOT / "packages" / "forge-canvas-core-dart"
 
 
 # ---------------------------------------------------------------------------
@@ -137,21 +146,21 @@ class TestPackageClientShape:
     """The package's AgUiClient must expose the API the template depends on."""
 
     def test_client_is_generic_over_event_type(self) -> None:
-        client = _PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
+        client = _CORE_PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
         text = client.read_text(encoding="utf-8")
         assert "class AgUiClient<E>" in text, (
             "Package AgUiClient must be generic over the caller's event type"
         )
 
     def test_client_takes_parser_callback(self) -> None:
-        client = _PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
+        client = _CORE_PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
         text = client.read_text(encoding="utf-8")
         assert "required E? Function(Map<String, dynamic>) parser" in text, (
             "Package AgUiClient must accept a parser: (Map) -> E? in its constructor"
         )
 
     def test_client_exposes_runAgent_helper(self) -> None:
-        client = _PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
+        client = _CORE_PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
         text = client.read_text(encoding="utf-8")
         # The runAgent helper must mirror the deepagent /agent/run contract.
         for marker in (
@@ -167,10 +176,25 @@ class TestPackageClientShape:
             )
 
     def test_library_exports_ag_ui_client(self) -> None:
+        """`forge_canvas` must expose `AgUiClient` so the chat template's
+        ``import 'package:forge_canvas/forge_canvas.dart' as fc;`` keeps
+        resolving `fc.AgUiClient` after the Phase 2B split.
+
+        Post-split the file lives in `forge_canvas_core`, but the barrel
+        re-exports the whole core surface so the public contract is
+        unchanged. Accept either the direct re-export or the
+        package-level re-export, since both produce the same observable
+        surface.
+        """
         lib = _PACKAGE_ROOT / "lib" / "forge_canvas.dart"
         text = lib.read_text(encoding="utf-8")
-        assert "export 'src/ag_ui_client.dart';" in text, (
-            "forge_canvas library must export src/ag_ui_client.dart"
+        assert (
+            "export 'src/ag_ui_client.dart';" in text
+            or "export 'package:forge_canvas_core/forge_canvas_core.dart';" in text
+        ), (
+            "forge_canvas library must re-export AgUiClient — either directly via "
+            "`export 'src/ag_ui_client.dart';` or transitively via "
+            "`export 'package:forge_canvas_core/forge_canvas_core.dart';`"
         )
 
     def test_package_does_not_collide_with_template_AgUiEvent(self) -> None:
@@ -192,7 +216,7 @@ class TestPackageClientShape:
         )
 
     def test_ag_ui_client_does_not_redeclare_AgUiEvent(self) -> None:
-        client = _PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
+        client = _CORE_PACKAGE_ROOT / "lib" / "src" / "ag_ui_client.dart"
         # Strip Dart line-comments so a docstring mentioning the
         # symbol doesn't trip the check.
         stripped = "\n".join(
