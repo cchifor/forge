@@ -63,6 +63,25 @@ from forge.codegen.ui_protocol import (
 # helper signatures changed, etc.). Mirrors canvas_props.SCHEMA_VERSION.
 SCHEMA_VERSION = 1
 
+# Centralized `@ag-ui/client` + `@ag-ui/core` version pin. Lives next to
+# the event-union codegen because the union is the protocol contract
+# with the AG-UI runtime, so any time the version moves the union may
+# need a re-emit. Every consumer reads from here:
+#
+#   * Vue + Svelte frontend templates (``package.json.jinja``) consume
+#     it via the Copier context (``forge/variable_mapper.py`` exposes
+#     ``ag_ui_client_version`` / ``ag_ui_core_version`` to Jinja).
+#   * In-tree canvas packages (``packages/canvas-{vue,svelte}/package.json``)
+#     pin to the same value; ``tests/test_ag_ui_pin_consistency.py``
+#     fails CI on drift.
+#
+# Bump procedure: change the two constants below, run the consistency
+# test, manually update the 2 in-tree canvas-package ``package.json``
+# files to match. The test will not let CI go green if the four
+# locations disagree.
+AG_UI_CLIENT_VERSION = "0.0.51"
+AG_UI_CORE_VERSION = "0.0.51"
+
 
 # -- Slug derivation ---------------------------------------------------------
 

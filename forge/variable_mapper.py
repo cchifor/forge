@@ -220,6 +220,8 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
     api_base_url, api_proxy_target, env_api_base_url = _frontend_api_urls(
         config, backend_name, backend_port
     )
+    from forge.codegen.event_union import AG_UI_CLIENT_VERSION, AG_UI_CORE_VERSION
+
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
@@ -242,6 +244,8 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "backend_features": _build_backend_features_json(config),
         "proxy_targets": _build_proxy_targets_json(config),
         "vite_proxy_config": _build_vite_proxy_config(config),
+        "ag_ui_client_version": AG_UI_CLIENT_VERSION,
+        "ag_ui_core_version": AG_UI_CORE_VERSION,
     }
 
 
@@ -256,6 +260,8 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
     api_base_url, api_proxy_target, env_api_base_url = _frontend_api_urls(
         config, backend_name, backend_port
     )
+    from forge.codegen.event_union import AG_UI_CLIENT_VERSION, AG_UI_CORE_VERSION
+
     return {
         "project_name": fc.project_name,
         "project_slug": config.frontend_slug,
@@ -279,6 +285,8 @@ def svelte_context(config: ProjectConfig) -> dict[str, Any]:
         "backend_features": _build_backend_features_json(config),
         "proxy_targets": _build_proxy_targets_json(config),
         "vite_proxy_config": _build_vite_proxy_config(config),
+        "ag_ui_client_version": AG_UI_CLIENT_VERSION,
+        "ag_ui_core_version": AG_UI_CORE_VERSION,
     }
 
 
