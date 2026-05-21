@@ -135,18 +135,28 @@ jobs:
         with:
           node-version: "22"
 
-      - name: canvas-vue — install + typecheck + build
+      # Workspace-aware install at the repo root — `packages/canvas-vue`
+      # and `packages/canvas-svelte` depend on the in-tree
+      # `@forge/canvas-core` via `npm workspaces` (see root
+      # `package.json`). Installing inside each sub-package directly
+      # would fail with "Cannot find module '@forge/canvas-core'"
+      # because that dep is unpublished and only resolves through the
+      # workspace symlink that the root-level install creates.
+      - name: workspace install (root)
+        run: npm install --no-fund --no-audit
+
+      - name: canvas-core — build (workspace dep of the canvas-* packages)
+        run: npm run --workspace=@forge/canvas-core build
+
+      - name: canvas-vue — typecheck + build
         working-directory: packages/canvas-vue
         run: |
-          npm install --no-fund --no-audit
           npm run typecheck
           npm run build
 
-      - name: canvas-svelte — install + build
+      - name: canvas-svelte — build
         working-directory: packages/canvas-svelte
-        run: |
-          npm install --no-fund --no-audit
-          npx vite build
+        run: npx vite build
 
       - name: Install Flutter for forge_canvas
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
