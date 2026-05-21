@@ -89,8 +89,7 @@ class _Injection:
             )
         if self.zone not in INJECTION_ZONES:
             raise FragmentError(
-                f"_Injection.zone must be one of {list(INJECTION_ZONES)!r}, "
-                f"got {self.zone!r}",
+                f"_Injection.zone must be one of {list(INJECTION_ZONES)!r}, got {self.zone!r}",
                 code=FRAGMENT_INJECT_YAML_BAD_ZONE,
                 context={"zone": str(self.zone)},
             )
@@ -227,6 +226,7 @@ class FragmentPlan:
         options: Mapping[str, Any] | None = None,
         middlewares: tuple[MiddlewareSpec, ...] = (),
         backend: BackendLanguage | None = None,
+        shared_env_vars: tuple[tuple[str, str], ...] = (),
     ) -> FragmentPlan:
         """Resolve an impl to a concrete plan.
 
@@ -242,6 +242,14 @@ class FragmentPlan:
         fragment can carry specs for every backend it supports.
         Synth'd injections are appended after ``inject.yaml`` ones;
         they share the same zoned-dispatch pipeline downstream.
+
+        ``shared_env_vars`` (from :attr:`Fragment.shared_env_vars`) is
+        merged with ``impl.env_vars`` so per-language fragments don't
+        have to repeat backend-agnostic env vars (``AWS_REGION``,
+        ``S3_ENDPOINT_URL``, …) in every ``FragmentImplSpec``. Per-impl
+        entries override shared entries on key collision — that's how a
+        single language gets a different default while the rest inherit
+        the shared value.
         """
         # Lazy import — forge.middleware_spec imports _Injection from
         # this module at function-scope, so a top-level import would
@@ -282,6 +290,29 @@ class FragmentPlan:
             files_dir=files_dir,
             injections=yaml_injections + synth_injections,
             dependencies=impl.dependencies,
-            env_vars=impl.env_vars,
+            env_vars=_merge_env_vars(shared_env_vars, impl.env_vars),
             feature_key=feature_key,
         )
+
+
+def _merge_env_vars(
+    shared: tuple[tuple[str, str], ...],
+    per_impl: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Merge ``Fragment.shared_env_vars`` with ``FragmentImplSpec.env_vars``.
+
+    Order:
+      1. Shared entries first (in declaration order), so they appear
+         at the top of ``.env.example`` for the language-agnostic case.
+      2. Per-impl entries follow; if a per-impl key collides with a
+         shared key, the per-impl value wins (override) and the shared
+         entry is dropped.
+    """
+    if not shared:
+        return per_impl
+    if not per_impl:
+        return shared
+    per_impl_keys = {key for key, _ in per_impl}
+    merged = [(k, v) for (k, v) in shared if k not in per_impl_keys]
+    merged.extend(per_impl)
+    return tuple(merged)

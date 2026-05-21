@@ -139,6 +139,31 @@ class Fragment:
     # Controls middleware registration ordering on before-marker
     # injections.
     order: int = 100
+    # Declarative ordering constraints, complementing the numeric ``order``
+    # tiebreaker. Unlike ``depends_on`` (which is a HARD pull — naming X
+    # in ``depends_on`` forces X into the plan even if no option enables
+    # it), ``before`` / ``after`` are SOFT: they constrain the topological
+    # sort only when both fragments are already in the plan, otherwise
+    # they're inert. Useful when a middleware should sit before or after
+    # another middleware iff they happen to coexist, without forcing the
+    # neighbour into every plan.
+    #
+    # Example:
+    #   Fragment(name="rate_limit",  after=("correlation_id",), ...)
+    #   Fragment(name="audit_log",   before=("auth",),          ...)
+    # If correlation_id is in the plan, rate_limit applies after it; if
+    # auth is in the plan, audit_log applies before it.
+    before: tuple[str, ...] = ()
+    after: tuple[str, ...] = ()
+    # Backend-agnostic environment variables. Authors of multi-language
+    # fragments (object_store, llm_*, vector_store_*) often repeat the
+    # same ``("AWS_REGION", "us-east-1")`` / ``("S3_ENDPOINT_URL", "...")``
+    # tuples across every per-language ``FragmentImplSpec.env_vars``.
+    # ``shared_env_vars`` collapses that triplication: the env applier
+    # merges it ahead of the per-impl entries, so per-impl env vars
+    # always win on key collision (per-impl is allowed to override
+    # the shared default for a specific language).
+    shared_env_vars: tuple[tuple[str, str], ...] = ()
     # RFC-006 (Epic S, 1.1.0-alpha.1) — cross-backend parity tier. See
     # ``ParityTier`` above. Default ``None`` means "auto-derive from
     # ``implementations``": 1 if every built-in backend is covered, 3 if

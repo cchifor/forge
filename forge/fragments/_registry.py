@@ -156,23 +156,41 @@ class _FragmentRegistry(dict[str, Fragment]):
     def _audit_no_cycles(self) -> None:
         """Kahn's algorithm dry-run over the full registry.
 
+        Includes ``depends_on`` (hard pull), ``after`` (soft "X first"),
+        and ``before`` (soft "self first") edges. ``before`` / ``after``
+        are conditional on coexistence at plan time, but a cycle in
+        the union of the three graphs at registry-freeze time still
+        signals an authoring bug worth catching early — even if no
+        plan triggers it today, the next option that pulls both
+        endpoints in will.
+
         On detection of a cycle, walks the dependency graph with a DFS
         to surface the actual cycle path (``a → b → c → a``) instead
         of just the unordered set of fragments involved. Plugin authors
         and built-in maintainers see exactly which edge to delete to
         break the cycle.
         """
+        # Pre-compute the combined edge set: graph[n] = set of names n
+        # must apply after (depends_on + after + reverse-of-before).
+        edges: dict[str, set[str]] = {n: set() for n in self}
+        for n, frag in self.items():
+            for dep in frag.depends_on:
+                if dep in self:
+                    edges[n].add(dep)
+            for target in frag.after:
+                if target in self:
+                    edges[n].add(target)
+            for target in frag.before:
+                if target in self:
+                    edges.setdefault(target, set()).add(n)
+
         remaining = dict(self)
         order: set[str] = set()
         while remaining:
-            ready = [
-                name
-                for name, frag in remaining.items()
-                if all(dep in order for dep in frag.depends_on)
-            ]
+            ready = [name for name in remaining if edges[name].issubset(order)]
             if not ready:
                 cyclic = sorted(remaining)
-                cycle_path = self._find_cycle_path(remaining)
+                cycle_path = self._find_cycle_path(remaining, edges=edges)
                 if cycle_path:
                     arrow = " → ".join(cycle_path)
                     detail = f"cycle: {arrow}"
@@ -196,12 +214,21 @@ class _FragmentRegistry(dict[str, Fragment]):
             for name in ready:
                 del remaining[name]
 
-    def _find_cycle_path(self, remaining: dict[str, Fragment]) -> list[str]:
-        """DFS the depends_on graph to recover one concrete cycle path.
+    def _find_cycle_path(
+        self,
+        remaining: dict[str, Fragment],
+        *,
+        edges: dict[str, set[str]] | None = None,
+    ) -> list[str]:
+        """DFS the dep graph to recover one concrete cycle path.
 
         Returns a list like ``["a", "b", "c", "a"]`` (the closing
         repetition makes the cycle visually obvious) or an empty list
         when the graph is acyclic from every entry point in ``remaining``.
+
+        ``edges`` is the combined depends_on + before/after graph
+        produced by ``_audit_no_cycles``. When omitted (legacy callers),
+        falls back to ``depends_on`` only.
         """
         # Cycle detection via colour-marked DFS. White → unvisited,
         # grey → on the current DFS stack, black → fully explored.
@@ -209,23 +236,27 @@ class _FragmentRegistry(dict[str, Fragment]):
         colour: dict[str, int] = dict.fromkeys(remaining, WHITE)
         stack: list[str] = []
 
+        def _deps_of(name: str) -> set[str]:
+            if edges is not None:
+                return edges.get(name, set())
+            frag = remaining.get(name)
+            return set(frag.depends_on) if frag is not None else set()
+
         def _visit(node: str) -> list[str] | None:
             colour[node] = GREY
             stack.append(node)
-            frag = remaining.get(node)
-            if frag is not None:
-                for dep in frag.depends_on:
-                    if dep not in remaining:
-                        # Out-of-cycle dependency; ignore for cycle search.
-                        continue
-                    if colour[dep] == GREY:
-                        # Back-edge — cycle from `dep` through `node`.
-                        idx = stack.index(dep)
-                        return stack[idx:] + [dep]
-                    if colour[dep] == WHITE:
-                        result = _visit(dep)
-                        if result is not None:
-                            return result
+            for dep in _deps_of(node):
+                if dep not in remaining:
+                    # Out-of-cycle dependency; ignore for cycle search.
+                    continue
+                if colour[dep] == GREY:
+                    # Back-edge — cycle from `dep` through `node`.
+                    idx = stack.index(dep)
+                    return stack[idx:] + [dep]
+                if colour[dep] == WHITE:
+                    result = _visit(dep)
+                    if result is not None:
+                        return result
             stack.pop()
             colour[node] = BLACK
             return None
