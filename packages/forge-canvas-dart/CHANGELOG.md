@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0-alpha.7 — unreleased
+
+Pillar B Phase 2B of the forge architectural improvement plan. Splits
+the framework-agnostic protocol surface out of `forge_canvas` into a
+sibling pure-Dart package `forge_canvas_core` (mirroring the
+TypeScript Phase 2A split: `@forge/canvas-core` ↔
+`@forge/canvas-vue` / `@forge/canvas-svelte`).
+
+**No breaking change is intended.** The public symbols the
+`flutter-frontend-template` consumes (`AgUiClient<E>`) keep their
+existing API; they're now re-exported from `forge_canvas_core` rather
+than implemented directly inside this package.
+
+- **Moved to `forge_canvas_core`:** `AgUiClient<E>` (was
+  `lib/src/ag_ui_client.dart`). The implementation is byte-identical
+  apart from the package boundary; consumers importing it via
+  `package:forge_canvas/forge_canvas.dart` see no change.
+- **New transitive surface via `forge_canvas_core`:**
+  - `McpApprovalClient` + `McpApprovalRejected` — approval-aware MCP
+    tool invocation. Mints a token via `POST /mcp/approval/mint`
+    before calling `POST /mcp/invoke` whenever `approvalMode != "auto"`.
+    Caches the signed token per `(server, tool, input)` for one hour
+    (matching the backend's `MCP_APPROVAL_TOKEN_TTL_SECONDS`, trimmed
+    by 30s for clock-drift safety). Surfaces 401 responses as
+    `McpApprovalRejected` so UI layers can prompt for re-approval.
+  - `McpBridge`, `McpBridgeHandlers`, `BridgeMessage`,
+    `ToolCallRequest`, `OpenLinkRequest`, `IframeSizeChange`,
+    `AppBridgeIdentity`, `AppBridgeCapabilities`, `AppBridgeContext`,
+    and `mcpBridgeAvailable` (`false` on Dart) — typed contract
+    mirroring the TS `@forge/canvas-core/src/mcp_bridge.ts` so
+    cross-stack expectations stay honest by construction. The Dart
+    side is a no-DOM stub because Flutter has no `postMessage` /
+    iframe model.
+- **`dependency_overrides`** points at the on-disk sibling
+  `../forge-canvas-core-dart/` so local dev resolves without
+  requiring `forge_canvas_core` to publish to pub.dev first.
+  Stripped at publish time (pub.dev forbids `dependency_overrides`
+  in published packages).
+
 ## 1.0.0-alpha.6 — unreleased
 
 - **Breaking:** `AgUiClient` is now generic over event type `E` and takes a

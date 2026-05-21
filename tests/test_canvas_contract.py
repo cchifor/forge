@@ -362,11 +362,16 @@ class TestAgUiClientShipsAcrossPackages:
 
     def test_dart_client_still_present(self) -> None:
         # Initiative #4 must not regress the existing Dart client —
-        # it's the canonical shape the TS shims mirror.
+        # it's the canonical shape the TS shims mirror. Pillar B Phase 2B
+        # (PR #71) moved this file from `forge-canvas-dart` to the new
+        # sibling `forge-canvas-core-dart` package (pure Dart, no Flutter
+        # dep), with `forge-canvas-dart` re-exporting from core so
+        # consumers don't see a breaking change. The contract test
+        # follows the file to its new home.
         target = (
             self._REPO_ROOT
             / "packages"
-            / "forge-canvas-dart"
+            / "forge-canvas-core-dart"
             / "lib"
             / "src"
             / "ag_ui_client.dart"
