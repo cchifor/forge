@@ -484,9 +484,7 @@ def _update_locked(
     # codex-review flagged on the first synth-bridge revision.
     project_apply_plan = plan.ordered
     if is_synth_bridge:
-        project_apply_plan = tuple(
-            rf for rf in plan.ordered if rf.fragment.target_frontends
-        )
+        project_apply_plan = tuple(rf for rf in plan.ordered if rf.fragment.target_frontends)
         if not quiet:
             dropped = len(plan.ordered) - len(project_apply_plan)
             if dropped:

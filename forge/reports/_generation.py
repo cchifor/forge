@@ -246,9 +246,7 @@ class GenerationReport:
             "project_root": self.project_root,
             "effective_config": dict(self.effective_config),
             "option_origins": dict(self.option_origins),
-            "fragment_graph": {
-                name: list(deps) for name, deps in self.fragment_graph.items()
-            },
+            "fragment_graph": {name: list(deps) for name, deps in self.fragment_graph.items()},
             "file_inventory": [entry.to_dict() for entry in self.file_inventory],
             "provenance_sidecar_paths": list(self.provenance_sidecar_paths),
             "warnings": list(self.warnings),
