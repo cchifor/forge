@@ -5,6 +5,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Added
+
+- **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
+  Phase 2B split of the existing `forge_canvas` package — extracts
+  the framework-agnostic protocol surface into a sibling pure-Dart
+  package under `packages/forge-canvas-core-dart/`. Mirrors the
+  TypeScript Phase 2A pattern (`@forge/canvas-core` ↔ canvas-vue
+  / canvas-svelte). Ships the `AgUiClient<E>` SSE client, the new
+  `McpApprovalClient` + `McpApprovalRejected` (the wire-protocol
+  bug fix for non-`auto` MCP tool invocations — mints an approval
+  token via `POST /mcp/approval/mint` before calling
+  `POST /mcp/invoke`), and a typed `McpBridge` interface
+  (`mcpBridgeAvailable = false` on Dart by design — Flutter has no
+  DOM iframe model). `forge_canvas` bumps to `1.0.0-alpha.7` and
+  re-exports the full surface so existing
+  `package:forge_canvas/...` import sites stay unchanged. The
+  Flutter chat template rewrite that consumes `forge_canvas_core`
+  directly is Pillar B Phase 3 — deferred until pub.dev publish.
+
+### Internal
+
+- **`packages/forge-canvas-core-dart/` scaffolding.**
+  `pubspec.yaml` declares `forge_canvas_core` with pure-Dart
+  `sdk: ">=3.0.0 <4.0.0"` (no Flutter dep), `analysis_options.yaml`
+  uses `package:lints/recommended.yaml` (vs the Flutter-flavored
+  `package:flutter_lints` the consumer package keeps), and the
+  in-tree barrel `lib/forge_canvas_core.dart` exports the SSE,
+  MCP-approval, and MCP-bridge surfaces. `forge_canvas` carries a
+  `dependency_overrides: { forge_canvas_core: { path:
+  ../forge-canvas-core-dart } }` block so local dev resolves
+  without requiring `forge_canvas_core` to publish to pub.dev
+  first. Stripped at publish time.
+- **Follow-ups not in this PR (tracked):** the
+  `publish-pub-dev-core` job in `.github/workflows/release.yml`
+  (mirroring the existing `publish-pub-dev` job for
+  `forge_canvas`) and the parallel dry-run leg in
+  `.github/workflows/release-dryrun.yml`.
+
 ### Removed
 
 - The `forge.feature_injector` deprecation shim. Migrate to

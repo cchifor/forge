@@ -202,10 +202,12 @@ class TestEmitDart:
             assert f"final {title} payload;" in out
 
     def test_parse_factory_signature_matches_ag_ui_client_contract(self) -> None:
-        """The Dart `AgUiClient` in `packages/forge-canvas-dart/lib/src/ag_ui_client.dart`
-        expects `AgUiEvent.parse` with this exact signature — see line 24
-        of that file. If we drop or rename the factory, the canvas-dart
-        package no longer wires up cleanly to its own client.
+        """The Dart `AgUiClient` in
+        `packages/forge-canvas-core-dart/lib/src/ag_ui_client.dart`
+        (re-exported from `forge_canvas` per Pillar B Phase 2B)
+        expects `AgUiEvent.parse` with this exact signature. If we
+        drop or rename the factory, the canvas packages no longer
+        wire up cleanly to their own client.
         """
         out = emit_dart(load_event_schemas())
         assert "static AgUiEvent? parse(Map<String, dynamic> json) {" in out
