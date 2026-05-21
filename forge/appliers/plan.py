@@ -89,8 +89,7 @@ class _Injection:
             )
         if self.zone not in INJECTION_ZONES:
             raise FragmentError(
-                f"_Injection.zone must be one of {list(INJECTION_ZONES)!r}, "
-                f"got {self.zone!r}",
+                f"_Injection.zone must be one of {list(INJECTION_ZONES)!r}, got {self.zone!r}",
                 code=FRAGMENT_INJECT_YAML_BAD_ZONE,
                 context={"zone": str(self.zone)},
             )
