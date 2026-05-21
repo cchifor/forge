@@ -37,7 +37,7 @@ from forge.config.typed_config import (
 )
 
 
-def _render_active(opt: "Option", value: Any) -> str:
+def _render_active(opt: Option, value: Any) -> str:
     """Render an active option's ``path=value`` for diagnostic messages.
 
     Initiative #7 — pulled out of the inlined ``conflicts.append(...)``
@@ -414,9 +414,7 @@ class ProjectConfig:
             self._check_option_allowed_frontends(opt, value, frontend_framework)
             self._check_option_incompatibilities(opt, value, effective)
 
-    def _check_option_backend_requirement(
-        self, opt: "Option", value: Any, user_set: bool
-    ) -> None:
+    def _check_option_backend_requirement(self, opt: Option, value: Any, user_set: bool) -> None:
         if not opt.requires_backend:
             return
         # Default-active options (middleware toggles, auth.mode='generate',
@@ -436,7 +434,7 @@ class ProjectConfig:
 
     def _check_option_allowed_backends(
         self,
-        opt: "Option",
+        opt: Option,
         value: Any,
         configured_languages: set[Any],
     ) -> None:
@@ -444,7 +442,9 @@ class ProjectConfig:
             return
         if not configured_languages.intersection(opt.allowed_backends):
             allowed_names = sorted(b.value for b in opt.allowed_backends)
-            configured_names = sorted(getattr(lang, "value", str(lang)) for lang in configured_languages)
+            configured_names = sorted(
+                getattr(lang, "value", str(lang)) for lang in configured_languages
+            )
             raise ValueError(
                 f"Option {_render_active(opt, value)} only supports backends "
                 f"{allowed_names}; configured backends are {configured_names}. "
@@ -453,7 +453,7 @@ class ProjectConfig:
 
     def _check_option_allowed_frontends(
         self,
-        opt: "Option",
+        opt: Option,
         value: Any,
         frontend_framework: FrontendFramework | None,
     ) -> None:
@@ -473,7 +473,7 @@ class ProjectConfig:
 
     def _check_option_incompatibilities(
         self,
-        opt: "Option",
+        opt: Option,
         value: Any,
         effective: dict[str, Any],
     ) -> None:
@@ -499,8 +499,7 @@ class ProjectConfig:
                 # depending on iteration order.
                 a, b = sorted([_render_active(opt, value), _render_active(other, other_value)])
                 raise ValueError(
-                    f"Options {a} and {b} are mutually exclusive. "
-                    "Disable one of them."
+                    f"Options {a} and {b} are mutually exclusive. Disable one of them."
                 )
 
     def _validate_database_mode(self) -> None:
