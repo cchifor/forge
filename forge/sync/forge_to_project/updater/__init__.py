@@ -657,6 +657,7 @@ def _collect_injection_targets(
                     options=rendering_options,
                     middlewares=rf.fragment.middlewares,
                     backend=bc.language,
+                    shared_env_vars=rf.fragment.shared_env_vars,
                 )
             except Exception:  # noqa: BLE001
                 # If the plan can't even be built, the audit can't help —
