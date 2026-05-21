@@ -52,8 +52,34 @@ def _run_git(args: list[str], cwd: Path) -> str:
     return result.stdout
 
 
+def _branch_exists(repo: Path, branch: str) -> bool:
+    """``True`` if ``branch`` resolves to a ref in ``repo``.
+
+    Uses a non-raising variant of ``_run_git`` so the absence of the
+    branch (common in shallow CI checkouts) is treated as data, not as
+    a fatal error.
+    """
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", branch],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def _merged_prs(repo: Path, since_days: int, branch: str) -> list[tuple[int, str]]:
-    """Return ``(pr_number, merge_sha)`` for each merged PR in the window."""
+    """Return ``(pr_number, merge_sha)`` for each merged PR in the window.
+
+    Resolves ``branch`` first; if the ref doesn't exist in this checkout
+    (typical in CI runners that only fetch the PR's history rather than
+    the full default branch) returns an empty list. The tool's job is
+    measurement; refusing to run when the default branch isn't local is
+    over-strict for the CI / pre-merge use case.
+    """
+    if not _branch_exists(repo, branch):
+        return []
     log = _run_git(
         [
             "log",

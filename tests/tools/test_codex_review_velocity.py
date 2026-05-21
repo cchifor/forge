@@ -98,6 +98,19 @@ def test_summarize_pure_function_handles_empty_input():
     }
 
 
+def test_missing_branch_returns_empty_result():
+    """CI checkouts often lack `main` as a local ref (shallow / detached HEAD).
+
+    The tool must treat that as zero merged PRs rather than crashing —
+    measurement should never block CI on environmental shape.
+    """
+    result = _run(["--branch", "nonexistent-branch-name", "--since", "30", "--json"])
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["pr_count"] == 0
+    assert data["round_total"] == 0
+
+
 def test_summarize_pure_function_with_synthetic_data():
     import importlib.util
 
