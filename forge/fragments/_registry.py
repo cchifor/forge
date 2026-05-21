@@ -164,6 +164,20 @@ class _FragmentRegistry(dict[str, Fragment]):
         plan triggers it today, the next option that pulls both
         endpoints in will.
 
+        **Audit-time vs plan-time semantics — intentional over-strictness.**
+        The resolver's ``_topo_sort`` (in ``capability_resolver``) only
+        activates a ``before`` / ``after`` edge when BOTH endpoints are
+        present in the plan; this audit considers every edge in the
+        full registry regardless of coexistence. The divergence is
+        deliberate: a cycle in the combined registry-wide graph is an
+        authoring bug worth surfacing early, even if no current option
+        combination would trigger it at apply time. The cost of a false
+        positive (a registry cycle that no real plan would hit) is a
+        loud error pointing at edges to fix; the cost of a false
+        negative (silently shipping a cyclic registry) is a runtime
+        crash for whichever user happens to enable the offending pair
+        of options. We take the false positive trade and document it.
+
         On detection of a cycle, walks the dependency graph with a DFS
         to surface the actual cycle path (``a → b → c → a``) instead
         of just the unordered set of fragments involved. Plugin authors

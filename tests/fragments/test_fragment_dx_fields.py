@@ -279,3 +279,41 @@ def test_before_after_chain_orders_correctly(monkeypatch: pytest.MonkeyPatch, tm
     _seed_registry(monkeypatch, [a, b, c])
     order = _topo_sort({"a", "b", "c"})
     assert order == ["a", "b", "c"]
+
+
+# ---------------------------------------------------------------------------
+# Codex Phase B round 1 — validation + duplicate-key tests
+# ---------------------------------------------------------------------------
+
+
+def test_fragment_rejects_self_in_before():
+    """``__post_init__`` mirrors the existing conflicts_with self-ref check."""
+    with pytest.raises(FragmentError, match="lists itself in before"):
+        Fragment(name="a", implementations={}, before=("a",))
+
+
+def test_fragment_rejects_self_in_after():
+    with pytest.raises(FragmentError, match="lists itself in after"):
+        Fragment(name="a", implementations={}, after=("a",))
+
+
+def test_fragment_rejects_overlap_in_before_and_after():
+    """Logically impossible: can't apply both before AND after the same neighbour."""
+    with pytest.raises(FragmentError, match="both before and"):
+        Fragment(name="a", implementations={}, before=("b",), after=("b",))
+
+
+def test_merge_env_vars_preserves_duplicate_keys_within_shared():
+    """Document the current behaviour: duplicates within shared survive verbatim.
+
+    Most ``.env`` parsers (dotenv, docker-compose) use last-wins; the
+    merge function doesn't dedupe to keep this contract explicit. If a
+    future consumer rejects duplicates, the author needs to dedupe at
+    the Fragment-construction site rather than rely on the merge
+    function.
+    """
+    merged = _merge_env_vars(
+        (("A", "1"), ("A", "2"), ("B", "x")),
+        (),
+    )
+    assert merged == (("A", "1"), ("A", "2"), ("B", "x"))

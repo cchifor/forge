@@ -302,11 +302,21 @@ def _merge_env_vars(
     """Merge ``Fragment.shared_env_vars`` with ``FragmentImplSpec.env_vars``.
 
     Order:
-      1. Shared entries first (in declaration order), so they appear
-         at the top of ``.env.example`` for the language-agnostic case.
-      2. Per-impl entries follow; if a per-impl key collides with a
-         shared key, the per-impl value wins (override) and the shared
-         entry is dropped.
+      1. Shared entries first (in declaration order), with any keys that
+         the per-impl tuple ALSO declares dropped from this slice — the
+         shared entry is logically overridden.
+      2. Per-impl entries follow at the end (in their original declaration
+         order), NOT interleaved with shared. So a per-impl entry that
+         overrides a shared key won't appear at the shared key's original
+         position — it lands at the bottom with the rest of per-impl.
+         This is correct per the "per-impl wins" rule but worth knowing
+         when reading the resulting ``.env.example`` order.
+
+    Duplicate keys within ``shared`` or within ``per_impl`` are preserved
+    verbatim — the merge doesn't dedupe within either tuple. Authors
+    relying on env-file consumers that take "last wins" (most ``.env``
+    parsers do) get that behaviour naturally; authors emitting to a
+    consumer that rejects duplicates need to dedupe at the call site.
     """
     if not shared:
         return per_impl
