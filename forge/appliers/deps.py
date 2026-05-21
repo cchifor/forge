@@ -6,10 +6,8 @@ way that preserves user-authored entries. Raises
 :class:`FragmentError` when the manifest is missing, malformed, or the
 fragment's spec string doesn't parse.
 
-Epic 1b (P1.1) lifts the bodies out of
-``forge.feature_injector._add_dependencies`` into this module; the
-legacy function names are re-exported there for one minor as
-backward-compat shims for tests + plugins that imported them.
+Epic 1b (P1.1) lifted the bodies into this module from the now-deleted
+``forge.feature_injector`` shim (removed in 1.2.0-alpha.1).
 """
 
 from __future__ import annotations

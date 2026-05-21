@@ -6,10 +6,10 @@ block detection, three-way merge integration, and per-suffix routing to
 the LibCST Python injector, the TS regex/ts-morph injector, or the
 text-marker fallback.
 
-Epic A (1.1.0-alpha.1) introduced :class:`FragmentInjectionApplier` as
-a thin wrapper around the pre-decomposition helpers in
-``forge.feature_injector``. 1.2.0-alpha.1 deleted the shim and moved
-the bodies (``_apply_zoned_injection``, ``_apply_merge_zone``,
+Epic A (1.1.0-alpha.1) introduced :class:`FragmentInjectionApplier`;
+1.2.0-alpha.1 finalized the decomposition, deleting the legacy
+``forge.feature_injector`` shim and inlining the body helpers
+(``_apply_zoned_injection``, ``_apply_merge_zone``,
 ``_record_merge_baseline``, ``_load_merge_baseline``,
 ``_dispatch_injector``) into this module.
 """
