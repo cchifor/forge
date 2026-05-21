@@ -162,9 +162,7 @@ def emit_typescript(schemas: list[Schema]) -> str:
     lines.append("//   { kind: '<slug>', payload: <variant> }")
     lines.append("// Variant-with-kind aliases — the envelope wrapping each payload:")
     for title, kind in kinds:
-        lines.append(
-            f'export type {title}WithKind = {{ kind: "{kind}"; payload: {title} }};'
-        )
+        lines.append(f'export type {title}WithKind = {{ kind: "{kind}"; payload: {title} }};')
     lines.append("")
 
     lines.append("/** The exhaustive AG-UI event union. */")
@@ -279,7 +277,7 @@ def emit_dart(schemas: list[Schema]) -> str:
     lines.append("  /// Wire shape (mirrors the Pydantic discriminated-union")
     lines.append("  /// envelope on the backend):")
     lines.append("  ///")
-    lines.append("  ///     { \"kind\": \"<slug>\", \"payload\": { ...variant fields... } }")
+    lines.append('  ///     { "kind": "<slug>", "payload": { ...variant fields... } }')
     lines.append("  ///")
     lines.append("  /// Wired into the shipped `AgUiClient` via")
     lines.append("  /// `AgUiClient<AgUiEvent>(parser: AgUiEvent.parse, ...)`.")

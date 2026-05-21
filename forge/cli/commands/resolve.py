@@ -90,9 +90,7 @@ def _run_resolve(args: argparse.Namespace) -> int:
                 "terminal or accept/reject the sidecars by hand."
             )
             if json_output:
-                sys.stdout.write(
-                    json.dumps({"error": msg, "sidecar_count": len(sidecars)}) + "\n"
-                )
+                sys.stdout.write(json.dumps({"error": msg, "sidecar_count": len(sidecars)}) + "\n")
             else:
                 sys.stderr.write(f"forge --resolve: {msg}\n")
             return _EXIT_RESOLVE_FAILURE

@@ -701,9 +701,7 @@ def _write_forge_toml(
     user_set_paths: set[str]
     if config.option_origins:
         user_set_paths = {
-            resolve_alias(p) or p
-            for p, origin in config.option_origins.items()
-            if origin == "user"
+            resolve_alias(p) or p for p, origin in config.option_origins.items() if origin == "user"
         }
     else:
         user_set_paths = {resolve_alias(p) or p for p in config.options}
@@ -1104,8 +1102,7 @@ def _populate_report(
     else:
         user_set_paths = {resolve_alias(p) or p for p in config.options}
     report.option_origins = {
-        path: ("user" if path in user_set_paths else "default")
-        for path in plan.option_values
+        path: ("user" if path in user_set_paths else "default") for path in plan.option_values
     }
     # Fragment graph: topological order preserved by walking plan.ordered.
     # Only include fragments that are actually present in the plan; a
