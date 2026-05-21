@@ -6,14 +6,15 @@
  * compat WebSocket client + canvas-core re-export check).
  */
 
-// We import from the component-free `protocol` sub-entry so vitest
-// doesn't try to preprocess the `.svelte` files in `./components/`.
-// `index.ts` re-exports everything `protocol.ts` exports, so any
-// consumer of `@forge/canvas-svelte` sees the same surface either
-// way — see `protocol.ts` for the rationale.
+// We import from the component-free `protocol` sub-entry (for the
+// canvas-core re-exports) and from `./ag_ui_client` directly (for the
+// WebSocket AgUiClient) so vitest doesn't try to preprocess the
+// `.svelte` files in `./components/`. The full `@forge/canvas-svelte`
+// surface from `index.ts` includes both — see `protocol.ts` for the
+// rationale.
 import { describe, expect, it } from 'vitest'
+import { AgUiClient } from '../src/ag_ui_client'
 import {
-  AgUiClient,
   EMPTY_CHAT_SNAPSHOT,
   McpApprovalClient,
   McpApprovalRejected,
