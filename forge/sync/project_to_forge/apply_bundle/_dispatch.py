@@ -289,6 +289,7 @@ def apply_bundle_to_fragments(
 # through. Plugin extractors that introduce their own kinds will plug in
 # here in sub-task 4.
 
+
 class ApplyHandler(Protocol):
     """Callable contract every kind-handler in :func:`_build_apply_handlers`
     must satisfy. Spells out the keyword-only ``forge_repo`` / ``quiet``

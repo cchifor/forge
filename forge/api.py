@@ -384,9 +384,8 @@ class ForgeAPI:
                     "value": option.path,
                 },
             ) from exc
-        self._registration.option_registrations = (
-            self._registration.option_registrations
-            + (PluginOptionRegistration(option=option, plugin_name=self._registration.name),)
+        self._registration.option_registrations = self._registration.option_registrations + (
+            PluginOptionRegistration(option=option, plugin_name=self._registration.name),
         )
         # Legacy integer counter — kept so as_dict() output is byte-stable
         # for ``forge --plugins list --json`` consumers.
@@ -646,15 +645,12 @@ class ForgeAPI:
         for byte-stable ``forge --plugins list --json`` output.
         """
         self._emitters[target] = emitter
-        self._registration.emitter_registrations = (
-            self._registration.emitter_registrations
-            + (
-                PluginEmitterRegistration(
-                    target=target,
-                    emitter=emitter,
-                    plugin_name=self._registration.name,
-                ),
-            )
+        self._registration.emitter_registrations = self._registration.emitter_registrations + (
+            PluginEmitterRegistration(
+                target=target,
+                emitter=emitter,
+                plugin_name=self._registration.name,
+            ),
         )
         self._registration.emitters_added += 1
 
@@ -716,8 +712,8 @@ class ForgeAPI:
         registration = PluginExtractorRegistration(
             kind=kind, fragment=fragment, extractor=extractor
         )
-        self._registration.extractor_registrations = (
-            self._registration.extractor_registrations + (registration,)
+        self._registration.extractor_registrations = self._registration.extractor_registrations + (
+            registration,
         )
         # Legacy tuple — kept so as_dict() output is byte-stable for
         # existing JSON consumers (``forge --plugins list --json``).

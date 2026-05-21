@@ -171,9 +171,7 @@ def _build_update_report(
 
     file_conflicts = int(cast("int", summary.get("file_conflicts", 0) or 0))
     if file_conflicts:
-        report.add_warning(
-            f"{file_conflicts} merge conflict(s) — resolve .forge-merge sidecars."
-        )
+        report.add_warning(f"{file_conflicts} merge conflict(s) — resolve .forge-merge sidecars.")
     template_updates = cast("list", summary.get("template_updates") or [])
     for tu in template_updates:
         if not isinstance(tu, dict):
