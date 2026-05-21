@@ -1,6 +1,6 @@
 // AG-UI WebSocket client (Vue + Svelte share the same shape).
 //
-// Two AG-UI clients ship in `@forge/canvas-vue`:
+// Two AG-UI clients ship in this package:
 //
 //   - `AgUiClient` (this file) — **WebSocket** transport for AG-UI-
 //     compliant servers emitting the `{kind, payload}` envelope.

@@ -9,8 +9,10 @@
 // `@forge/canvas-svelte/protocol` (this file) to side-step the
 // preprocessor.
 
-export { AgUiClient } from './ag_ui_client'
-export type { AgUiClientOptions } from './ag_ui_client'
+// The WebSocket AgUiClient is exported from `index.ts` (not here)
+// so the canvas-contract test's literal `export { AgUiClient } from
+// './ag_ui_client'` assertion in index.ts keeps passing. This file
+// stays canvas-core-only.
 
 export {
   AgUiClient as SseAgUiClient,
