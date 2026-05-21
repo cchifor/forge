@@ -1,8 +1,19 @@
 // AG-UI WebSocket client (Vue + Svelte share the same shape).
 //
-// Mirrors the *decoding contract* of the Dart `AgUiClient` in
-// `forge-canvas-dart`: a caller-supplied parser turns each inbound
-// JSON frame into a typed event, fired through `onEvent`.
+// Two AG-UI clients ship in `@forge/canvas-svelte`:
+//
+//   - `AgUiClient` (this file) — **WebSocket** transport for AG-UI-
+//     compliant servers emitting the `{kind, payload}` envelope.
+//     Best for full-duplex consumers (bidirectional `send()` +
+//     `onEvent`).
+//   - `SseAgUiClient` (re-exported from `@forge/canvas-core`) — **SSE**
+//     transport with reconnect + Last-Event-ID resume. Best for
+//     unidirectional agent-run streams (the protocol the Dart
+//     `AgUiClient<E>` reference and the agent_streaming HTTP endpoint
+//     speak).
+//
+// Pick by transport, not by package. The protocols are different and
+// pointing one at the other's endpoint will silently drop frames.
 //
 // Wire format — `{kind, payload}` wrapped envelope. The generated
 // `AgUiEvent` discriminated union, the Dart `AgUiEvent.parse`
