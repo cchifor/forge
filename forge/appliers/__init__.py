@@ -5,10 +5,9 @@ consumes a :class:`~forge.fragment_context.FragmentContext`. A
 :class:`FragmentPipeline` composes them in order; the default pipeline
 reproduces the pre-Epic-A ``_apply_fragment`` behaviour byte-for-byte.
 
-Epic A (1.1.0-alpha.1) lands the class structure as thin wrappers over
-the existing :mod:`forge.feature_injector` helpers. A follow-up moves
-the helper bodies wholesale into the applier modules, at which point
-``feature_injector`` shrinks to the public API + shared constants.
+Epic A (1.1.0-alpha.1) introduced this decomposition; 1.2.0-alpha.1
+completed the move and deleted the legacy ``forge.feature_injector``
+shim. Every applier's body now lives in its own module.
 
 The plug-points:
 
