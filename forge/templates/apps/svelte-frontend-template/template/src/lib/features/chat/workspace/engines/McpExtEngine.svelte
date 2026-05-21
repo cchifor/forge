@@ -109,9 +109,21 @@
 		};
 	});
 
-	// Push fresh tool input when the activity content changes — mirrors
-	// the Vue `watch(deep: true)` shape so MCP apps see the updated
-	// arguments without a full remount.
+	// Push fresh tool input when the activity content changes.
+	//
+	// **Vue↔Svelte divergence — intentional.** Vue's `watch(prop,
+	// { deep: true })` re-runs on nested property mutations of
+	// `activity.content`. Svelte 5's `$effect` only re-runs when the
+	// *reference* to `activity.content` changes. We rely on the latter
+	// because the AG-UI protocol contract is "every activity update is
+	// a fresh immutable snapshot": canvas-core's reducer (see
+	// `packages/canvas-core/src/reducer.ts` — `ACTIVITY_SNAPSHOT` case)
+	// always constructs a new `WorkspaceActivity` object with a new
+	// `content` reference per inbound event. No producer mutates
+	// `activity.content` in place. If a future producer ever does, the
+	// proper fix is to update the producer to honor the immutable-
+	// snapshot contract — not to add deep-watching here, which would
+	// paper over the protocol violation.
 	$effect(() => {
 		const newContent = activity.content as Record<string, unknown>;
 		if (!bridge) return;
