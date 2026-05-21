@@ -2,19 +2,15 @@
   DataTable canvas component — Svelte 5 variant.
 -->
 <script lang="ts">
-  interface Column {
-    key: string
-    label: string
-    sortable?: boolean
-  }
+  import type { DataTableProps } from '../generated/props'
 
-  interface Props {
-    columns: Column[]
-    rows: Record<string, unknown>[]
-    pageSize?: number
-  }
+  // The generated `DataTableProps` is the single source of truth —
+  // hand-written mirror interfaces for canvas-component props are
+  // banned by convention. `Column` extracts the element shape for the
+  // `toggleSort` helper below.
+  type Column = DataTableProps['columns'][number]
 
-  let { columns, rows, pageSize = 25 }: Props = $props()
+  let { columns, rows, pageSize = 25 }: DataTableProps = $props()
 
   let sortKey = $state<string | null>(null)
   let sortDir = $state<'asc' | 'desc'>('asc')

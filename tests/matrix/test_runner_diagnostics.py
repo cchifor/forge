@@ -32,6 +32,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from tests.matrix.runner import Scenario, run_lane_smoke
 
 
@@ -262,3 +264,419 @@ class TestDiffProjectTreesNormalizedExclusions:
         assert diff == ["real.py"], (
             f"real.py difference must surface, but got: {diff}"
         )
+
+
+class TestLaneDEmptyCandidateGate:
+    """Initiative #9 — Lane D must NOT report vacuous-green when a
+    scenario was supposed to produce candidates.
+
+    Pre-#9 contract: if ``_edit_one_literal_block`` returned ``None``
+    (no literal sentinel block on disk) OR the post-edit bundle had no
+    safe-apply block, the lane unconditionally reported ``ok`` with a
+    "vacuously round-trippable" note. Result: a future fragment-template
+    drift that removes the last literal sentinel block from a scenario's
+    surface would coast through Lane D as green, even though the FR2
+    round-trip contract was never actually exercised.
+
+    Post-#9 contract: the lane fails by default when no candidates
+    surface. Scenarios that intentionally produce zero candidates opt in
+    via ``expect_candidates: false`` in ``scenarios.yaml`` — the empty
+    case is then reported as ``ok`` with the opt-in noted in details.
+    """
+
+    def _scenario(self, *, expect_candidates: bool) -> Scenario:
+        return Scenario(
+            name="vacuous-test",
+            description="Lane D vacuous-green regression scenario",
+            lanes=("roundtrip",),
+            port_base=9990,
+            expected_files=(),
+            config={"project_name": "Vacuous Test"},
+            expect_candidates=expect_candidates,
+        )
+
+    def test_empty_candidate_path_fails_by_default(self):
+        """Default scenario (``expect_candidates=True``) — empty case → FAIL.
+
+        Drives ``_empty_candidate_result`` (the central helper for both
+        Lane D early-return paths) directly so we exercise the gate
+        without paying for a full ``generate()`` + ``harvest_project()``
+        cycle. The contract — fail by default, ok only on explicit
+        opt-out — is what the rest of the suite needs to trust.
+        """
+        from tests.matrix.runner import _empty_candidate_result
+
+        result = _empty_candidate_result(
+            self._scenario(expect_candidates=True),
+            start=0.0,
+            reason="no literal block",
+            gate_message="missing literal block contract violated",
+        )
+        assert result.status == "fail", (
+            f"expected fail when expect_candidates=True; got {result.status}: {result.details}"
+        )
+        assert "missing literal block contract violated" in result.details
+
+    def test_empty_candidate_path_is_ok_when_opted_out(self):
+        """Scenario opted out (``expect_candidates=False``) — empty case → OK.
+
+        Documents the intent in details (``expect_candidates=false``) so
+        a maintainer reading the matrix output can see the empty case
+        is intentional rather than missed.
+        """
+        from tests.matrix.runner import _empty_candidate_result
+
+        result = _empty_candidate_result(
+            self._scenario(expect_candidates=False),
+            start=0.0,
+            reason="vacuously round-trippable",
+            gate_message="(would-be failure message)",
+        )
+        assert result.status == "ok"
+        assert "expect_candidates=false" in result.details
+
+    def test_load_scenarios_accepts_expect_candidates_field(self, tmp_path):
+        """``expect_candidates`` must round-trip through scenarios.yaml.
+
+        Without this, the runner's gate would always run with the
+        dataclass default (True) and the per-scenario opt-out would
+        silently no-op.
+        """
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import load_scenarios
+
+        sc_yaml = tmp_path / "scenarios.yaml"
+        sc_yaml.write_text(
+            _yaml.safe_dump(
+                {
+                    "schema_version": 1,
+                    "scenarios": [
+                        {
+                            "name": "opted-out",
+                            "description": "opted-out roundtrip scenario",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9991,
+                            "expected_files": ["foo.txt"],
+                            "expect_candidates": False,
+                            "config": {"project_name": "Opted Out"},
+                        },
+                        {
+                            "name": "default-on",
+                            "description": "default expect_candidates",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9992,
+                            "expected_files": ["foo.txt"],
+                            "config": {"project_name": "Default On"},
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = {s.name: s for s in load_scenarios(sc_yaml)}
+        assert loaded["opted-out"].expect_candidates is False
+        # Default is True — preserve the strict gate for scenarios that
+        # never declare it.
+        assert loaded["default-on"].expect_candidates is True
+
+    def test_load_scenarios_rejects_non_bool_expect_candidates(self, tmp_path):
+        """A typo'd value (``"true"`` string) must fail the schema check,
+        not silently coerce. Truthiness coercion would mask a scenario
+        that intended to opt out but used the wrong type."""
+        import pytest as _pytest  # noqa: PLC0415
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import load_scenarios
+
+        sc_yaml = tmp_path / "scenarios.yaml"
+        sc_yaml.write_text(
+            _yaml.safe_dump(
+                {
+                    "schema_version": 1,
+                    "scenarios": [
+                        {
+                            "name": "bad-type",
+                            "description": "non-bool expect_candidates",
+                            "lanes": ["roundtrip"],
+                            "port_base": 9993,
+                            "expected_files": ["foo.txt"],
+                            "expect_candidates": "false",
+                            "config": {"project_name": "Bad Type"},
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with _pytest.raises(ValueError, match="expect_candidates"):
+            load_scenarios(sc_yaml)
+
+
+class TestLaneDLiveTreeSandbox:
+    """Initiative #9 — Lane D must NOT mutate the live forge tree.
+
+    Pre-#9 contract: ``run_lane_roundtrip`` snapshot+restore'd every
+    ``inject.yaml`` under the live forge tree in a ``finally`` block.
+    Under parallel CI (multiple scenarios on the same runner, or a
+    developer running ``forge`` concurrently) the snapshot/restore raced;
+    a killed process between mutate and restore left the tree in a
+    half-restored state. Pre-#9 ``finally`` could also be defeated by a
+    SIGKILL between ``apply_bundle_to_fragments`` and the snapshot
+    write-back.
+
+    Post-#9 contract: lane D copies the forge tree to a tempdir
+    sandbox, applies the bundle there, and runs the second generate in
+    a subprocess pointed at the sandbox via ``PYTHONPATH``. The
+    sandbox is thrown away with the rest of the lane's scratch space.
+    No live-tree mutation. No restore step. No race.
+    """
+
+    def test_materialize_forge_sandbox_copies_inject_yamls(self, tmp_path: Path):
+        """The sandbox must contain a working copy of every inject.yaml.
+
+        If the copy missed inject.yaml entries (e.g. via an
+        ignore-pattern regression), apply_bundle_to_fragments wouldn't
+        find the entry it needs to rewrite, the apply would land as
+        ``errored``, and the FR2 round-trip step would never even run —
+        a regression that pre-#9 ``ok`` paths would mask completely.
+        """
+        from tests.matrix.runner import _live_forge_root, _materialize_forge_sandbox
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        live = _live_forge_root()
+
+        live_yamls = sorted(
+            p.relative_to(live).as_posix() for p in (live / "forge").rglob("inject.yaml")
+        )
+        sandbox_yamls = sorted(
+            p.relative_to(sandbox).as_posix()
+            for p in (sandbox / "forge").rglob("inject.yaml")
+        )
+        assert sandbox_yamls == live_yamls, (
+            "sandbox missing inject.yaml files copied from live tree — "
+            f"diff: {set(live_yamls).symmetric_difference(set(sandbox_yamls))}"
+        )
+
+    def test_materialize_forge_sandbox_excludes_build_artefacts(self, tmp_path: Path):
+        """``__pycache__`` / ``.git`` / ``node_modules`` etc must not be
+        copied. The live tree's ``forge/__pycache__`` is large + churns
+        on every Python import, and copying it would balloon the
+        sandbox by orders of magnitude without contributing anything
+        the apply-back path needs.
+        """
+        from tests.matrix.runner import _materialize_forge_sandbox
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        for forbidden in ("__pycache__", ".git", "node_modules", ".venv"):
+            for p in sandbox.rglob(forbidden):
+                # Defensive: a developer might legitimately have a
+                # fragment whose templates ship a ``__pycache__`` literal
+                # in the path (rare). Treat anything inside ``forge/``
+                # under one of these names as a copy regression.
+                pytest.fail(
+                    f"sandbox contains excluded path {forbidden!r}: {p.relative_to(sandbox)}"
+                )
+
+    def test_apply_bundle_does_not_touch_live_tree(self, tmp_path: Path):
+        """Mutating an inject.yaml in the SANDBOX must not change the
+        same file in the live tree.
+
+        Pinned via byte-equality check. Pre-#9 lane D mutated the live
+        file in place; if the snapshot/restore was bypassed (the race
+        condition that motivated #9), the live tree would carry the
+        mutation across runs. The sandboxed path can't leak that way
+        because the apply targets a different absolute path.
+        """
+        import yaml as _yaml  # noqa: PLC0415
+
+        from tests.matrix.runner import _live_forge_root, _materialize_forge_sandbox
+
+        live = _live_forge_root()
+        live_yamls = list((live / "forge").rglob("inject.yaml"))
+        if not live_yamls:
+            pytest.skip("live forge tree has no inject.yaml files (unexpected)")
+        live_yaml = live_yamls[0]
+        live_before = live_yaml.read_bytes()
+
+        sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
+        rel = live_yaml.relative_to(live)
+        sandbox_yaml = sandbox / rel
+        assert sandbox_yaml.is_file(), (
+            f"sandbox should have a mirrored copy of {rel.as_posix()!r}"
+        )
+
+        # Drive a non-trivial mutation on the sandbox copy.
+        sandbox_doc = _yaml.safe_load(sandbox_yaml.read_text(encoding="utf-8")) or []
+        if isinstance(sandbox_doc, list) and sandbox_doc:
+            sandbox_doc.insert(0, {"sandbox_marker": "initiative-9-test"})
+        sandbox_yaml.write_text(_yaml.safe_dump(sandbox_doc), encoding="utf-8")
+
+        # The live file's bytes MUST NOT have changed.
+        live_after = live_yaml.read_bytes()
+        assert live_before == live_after, (
+            f"live forge tree mutated by sandbox edit: {rel.as_posix()!r} "
+            "differs after sandboxed mutation — sandboxing is leaking"
+        )
+
+    def test_run_lane_roundtrip_no_longer_imports_apply_bundle_against_live_root(self):
+        """Source-level pin: ``run_lane_roundtrip`` no longer calls
+        ``apply_bundle_to_fragments(..., _live_forge_root(), ...)``.
+
+        A pure source-level check is the right shape here — the
+        function's true contract (don't mutate the live tree) is
+        established by the byte-equality test above; this complements
+        that with a fast structural assertion that catches an
+        accidental rebase regressing to the live-root pattern.
+        """
+        import inspect  # noqa: PLC0415
+
+        from tests.matrix import runner
+
+        source = inspect.getsource(runner.run_lane_roundtrip)
+        assert "_live_forge_root()" not in source, (
+            "run_lane_roundtrip should not reference _live_forge_root() "
+            "directly — apply-back must operate on a tempdir sandbox "
+            "(_materialize_forge_sandbox) to avoid live-tree races. "
+            "If this assertion fires, the sandboxing was undone."
+        )
+        assert "_materialize_forge_sandbox" in source, (
+            "run_lane_roundtrip must materialize a sandbox copy of the "
+            "forge tree before apply_bundle_to_fragments — see "
+            "_materialize_forge_sandbox docstring."
+        )
+
+
+class TestSkippedLaneAnnotations:
+    """Initiative #9 — skipped lanes + sub-checks must surface as
+    GitHub Actions ``::warning::`` annotations.
+
+    Pre-#9: ``docker not on PATH`` → silent SKIP; lane B's frontend
+    check returned None for both success AND missing-npm → silent
+    skip; ``_check_openapi`` printed to stdout when every path 404'd
+    → silent skip. The nightly matrix grid showed all three as
+    pass-because-skipped, masking a CI image regression that removed
+    a tool.
+
+    Post-#9: every skip carries a label, and the runner's main()
+    emits one ``::warning::`` line per label so the GH Actions UI
+    surfaces them on the run summary. The lane keeps ``status="skip"``
+    (these are environmental, not failures) but the warning forces
+    a human eyeball.
+    """
+
+    def test_emit_annotations_one_warning_per_skipped_lane(self, capsys):
+        """A lane SKIP with details emits exactly one warning line."""
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="rust_svelte_min",
+                    lane="smoke",
+                    status="skip",
+                    duration_ms=0,
+                    details="docker not on PATH",
+                ),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "::warning" in out
+        assert "rust_svelte_min" in out
+        assert "docker not on PATH" in out
+
+    def test_emit_annotations_for_sub_check_skips(self, capsys):
+        """Sub-check skips (lane B frontend, lane C openapi) emit
+        a separate annotation line even when the lane itself is OK.
+        Without this, a green lane with internal skips would hide
+        coverage loss from a missing runtime tool."""
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="node_only_headless",
+                    lane="verify",
+                    status="ok",
+                    duration_ms=42,
+                    details="",
+                    skipped_subchecks=["frontend: npm not on PATH"],
+                ),
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "::warning" in out
+        assert "node_only_headless" in out
+        assert "frontend: npm not on PATH" in out
+
+    def test_emit_annotations_no_output_for_ok_lanes(self, capsys):
+        """A clean OK lane (no details, no sub-skips) emits nothing —
+        the annotation surface must be silent for happy-path scenarios
+        so it doesn't drown the GH Actions UI in green noise.
+        """
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="py_only_headless",
+                    lane="generate",
+                    status="ok",
+                    duration_ms=15000,
+                ),
+            ]
+        )
+        assert capsys.readouterr().out == ""
+
+    def test_emit_annotations_skips_lane_optout_message(self, capsys):
+        """The "scenario does not opt into lane X" skip is a routine
+        config statement (matrix x lanes grid has cells that don't
+        apply), not a missing-dep signal. Treating every such cell as
+        an annotation would drown the real missing-dep skips in noise.
+        """
+        from tests.matrix.runner import LaneResult, _emit_github_annotations
+
+        _emit_github_annotations(
+            [
+                LaneResult(
+                    scenario="py_only_headless",
+                    lane="smoke",
+                    status="skip",
+                    duration_ms=0,
+                    # Verbatim string from ``run_scenario`` (pinned
+                    # via ``_LANE_OPTOUT_DETAILS_PREFIX``).
+                    details="scenario does not opt into lane smoke",
+                ),
+            ]
+        )
+        assert "::warning" not in capsys.readouterr().out
+
+    def test_skip_summary_line_counts_lanes_and_subchecks(self):
+        """The plaintext summary is the local-invocation receipt:
+        a one-liner that says how many skips happened so the operator
+        sees the count without scrolling through warnings. JSON / CI
+        readers get the same info via per-line annotations."""
+        from tests.matrix.runner import LaneResult, _format_skip_summary
+
+        results = [
+            LaneResult(
+                scenario="a",
+                lane="smoke",
+                status="skip",
+                duration_ms=0,
+                details="docker missing",
+            ),
+            LaneResult(
+                scenario="b",
+                lane="verify",
+                status="ok",
+                duration_ms=1,
+                skipped_subchecks=["frontend: npm missing"],
+            ),
+            LaneResult(scenario="c", lane="generate", status="ok", duration_ms=2),
+        ]
+        summary = _format_skip_summary(results)
+        assert "1 lane(s) skipped" in summary
+        assert "1 sub-check(s) skipped" in summary
+        # Empty when nothing was skipped — silent on the happy path.
+        assert _format_skip_summary([results[-1]]) == ""

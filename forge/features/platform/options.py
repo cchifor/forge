@@ -27,6 +27,8 @@ REQUIRES: ADMIN_PANEL_MODE=disabled|dev|all (env var); sqladmin +
 itsdangerous.""",
         category=FeatureCategory.PLATFORM,
         stability="beta",
+        # Initiative #7 — SQLAdmin renders model views over the DB.
+        requires_database=True,
         enables={True: ("admin_panel",)},
     )
 )
@@ -49,6 +51,9 @@ BACKENDS: python, node, rust
 ENDPOINTS: /api/v1/webhooks (CRUD + /{id}/test fire)""",
         category=FeatureCategory.PLATFORM,
         stability="beta",
+        # Initiative #7 — webhook registry persists target URLs + delivery
+        # attempts to the DB.
+        requires_database=True,
         enables={True: ("webhooks",)},
     )
 )

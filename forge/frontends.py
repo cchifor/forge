@@ -68,8 +68,10 @@ class FrontendLayout:
     """Where the generated AG-UI event-union module lands (Theme 2B).
 
     Empty string disables emission for this frontend — useful while a
-    template is still being adopted. Vue is the canonical consumer
-    today; Svelte and Flutter follow in a later PR.
+    template is still being adopted. All three built-in frontends
+    (Vue/Svelte/Flutter) now ship the event union; the empty default
+    remains so plugin-added frontends can opt out cheaply by leaving
+    the field unset.
     """
 
 
@@ -106,9 +108,9 @@ register_frontend_layout(
         canvas_manifest_path="public/canvas.manifest.json",
         shared_enums_dir="src/shared/enums",
         shared_enums_emitter="typescript",
-        # Theme 2B: Vue is the canonical adopter of the event union.
-        # Svelte + Flutter follow in a separate PR; leave the path
-        # empty for them until their templates are updated.
+        # Theme 2B: Vue was the canonical adopter of the event union;
+        # Initiative #4 fills in the Svelte + Flutter siblings below so
+        # every built-in frontend ships the same discriminated union.
         event_union_path="src/features/ai_chat/events.gen.ts",
     )
 )
@@ -121,6 +123,10 @@ register_frontend_layout(
         canvas_manifest_path="public/canvas.manifest.json",
         shared_enums_dir="src/lib/shared/enums",
         shared_enums_emitter="typescript",
+        # Mirrors the ui_protocol path layout (src/lib/features/chat) so
+        # the generated event union sits next to the payload types it
+        # discriminates over.
+        event_union_path="src/lib/features/chat/events.gen.ts",
     )
 )
 
@@ -132,5 +138,8 @@ register_frontend_layout(
         canvas_manifest_path="assets/canvas.manifest.json",
         shared_enums_dir="lib/src/shared/enums",
         shared_enums_emitter="dart",
+        # Mirrors the ui_protocol path layout — the Dart sealed class
+        # ships next to its payload types under `domain/`.
+        event_union_path="lib/src/features/chat/domain/events.gen.dart",
     )
 )

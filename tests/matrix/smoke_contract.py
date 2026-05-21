@@ -49,6 +49,14 @@ class ContractResult:
     scenario: str
     backend_name: str
     violations: tuple[ContractViolation, ...]
+    # Initiative #9: per-endpoint sub-skips (e.g. ``/openapi.json``
+    # 404-on-every-path for Node/Rust templates that don't ship an
+    # exporter yet). The pass/fail outcome is unaffected — these
+    # endpoints are "missing endpoint == skip" by contract — but the
+    # runner surfaces the labels as GitHub Actions warnings so a
+    # "green" smoke lane doesn't silently mean "the OpenAPI surface
+    # was never validated for this scenario".
+    skipped_endpoints: tuple[str, ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -220,17 +228,26 @@ def _check_health_ready(base_url: str, timeout_s: int, violations: list[Contract
         )
 
 
-def _check_openapi(base_url: str, timeout_s: int, violations: list[ContractViolation]) -> None:
+def _check_openapi(
+    base_url: str,
+    timeout_s: int,
+    violations: list[ContractViolation],
+    skipped: list[str],
+) -> None:
     """Validate the OpenAPI document, treating "no exporter wired" as a skip.
 
     A 404 on every path in :data:`OPENAPI_PATHS` is interpreted as "this
     backend template does not expose its schema yet" — currently true
     for the rust and node services, where adding an exporter is tracked
-    as path A of ticket #28. Logs a one-line skip notice on stdout and
-    returns without appending a violation. Any other failure (server
-    unreachable, connection reset, non-404 status including 500) is
-    still a contract violation: a 500 from ``/openapi.json`` indicates
-    a real bug in the exporter rather than its absence.
+    as path A of ticket #28. Initiative #9: records the skip into the
+    caller's ``skipped`` list so the runner can surface it via a GitHub
+    Actions ``::warning::`` annotation. Pre-#9 the skip was a plain
+    ``print`` that disappeared into stdout noise.
+
+    Any other failure (server unreachable, connection reset, non-404
+    status including 500) is still a contract violation: a 500 from
+    ``/openapi.json`` indicates a real bug in the exporter rather than
+    its absence.
     """
     try:
         path, status, body = _get_first(base_url, OPENAPI_PATHS, timeout_s)
@@ -240,6 +257,7 @@ def _check_openapi(base_url: str, timeout_s: int, violations: list[ContractViola
         # 404-on-every-path therefore means the backend template doesn't
         # expose a schema endpoint at all — treat as skip, not violation.
         if exc.code == 404:
+            skipped.append("openapi: 404 on every candidate path (no exporter wired)")
             print("  scenario does not expose OpenAPI; skipping check")
             return
         violations.append(
@@ -355,13 +373,15 @@ def assert_contract(
     """
     _wait_for_ready(base_url, readiness_wait_s)
     violations: list[ContractViolation] = []
+    skipped: list[str] = []
     _check_health_live(base_url, timeout_s, violations)
     _check_health_ready(base_url, timeout_s, violations)
-    _check_openapi(base_url, timeout_s, violations)
+    _check_openapi(base_url, timeout_s, violations, skipped)
     return ContractResult(
         scenario=scenario,
         backend_name=backend_name,
         violations=tuple(violations),
+        skipped_endpoints=tuple(skipped),
     )
 
 

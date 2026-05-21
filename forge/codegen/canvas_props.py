@@ -14,10 +14,15 @@ Targets:
       every generated Python backend by
       :mod:`forge.codegen.pipeline`)
 
-The schema → type mapping lives in :mod:`forge.codegen.ui_protocol`;
-this module rebrands the banner so the generated file points at the
-canvas-component schema directory and ships the right
-``schema_version`` tag.
+The TS / Pydantic emitters delegate to :mod:`forge.codegen.ui_protocol`;
+the Dart emitter is canvas-specific because it walks nested
+array-of-object properties and emits a typed sealed inner class per
+nested schema (e.g. ``DynamicFormProps.fields`` becomes
+``List<DynamicFormField>`` where ``DynamicFormField`` is a generated
+sealed class). The ui-protocol Dart emitter collapses the same shape
+to ``List<Map<String, dynamic>>``; canvas components rely on
+typed nested access at the component layer so we lift the recursion
+here.
 
 Run as a script (``python -m forge.codegen.canvas_props``) to regenerate
 the files inside the forge repo. The per-project Pydantic file is
@@ -27,14 +32,16 @@ written by the codegen pipeline on every ``forge new``.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from forge.codegen.ui_protocol import (
     Schema,
-    _dart_for_schema,
     _pydantic_for_schema,
+    _to_camel_case,
     _ts_for_schema,
     load_all,
 )
+from forge.errors import GeneratorError
 
 # Bump when the canvas schema-set grows a breaking change. Mirrors the
 # ``pipeline.py:216`` TODO ("thread schema-set version once
@@ -103,23 +110,322 @@ def emit_typescript(schemas: list[Schema]) -> str:
 
 
 def emit_dart(schemas: list[Schema]) -> str:
-    """Emit a Dart library with immutable classes for every canvas-props schema.
+    """Emit a Dart library with sealed classes for every canvas-props schema.
 
-    Each class has:
+    Each top-level class has:
         * ``final`` fields (camelCase, matching Dart conventions)
         * a named const constructor with required/optional positional flags
         * a ``fromJson`` factory + ``toJson`` map
         * nullability respected per JSON Schema ``required``
 
-    Nested array-item objects collapse to ``List<Map<String, dynamic>>``
-    — matching the existing ``ui_protocol.py`` Dart emitter's strategy
-    (no recursive nested-class generation today).
+    Nested array-of-typed-object properties get a dedicated sealed inner
+    class per nesting level, named ``<parent-without-Props><field-singular>``
+    (e.g. ``DynamicFormProps.fields`` → ``List<DynamicFormField>``;
+    ``WorkflowDiagramProps.nodes`` → ``List<WorkflowDiagramNode>``).
+    Inner classes are emitted **before** the parent class in the file
+    so Dart's top-down compilation resolves them without forward
+    references.
+
+    Schemas whose array items are typeless objects (``items: {type:
+    object}`` with no ``properties``, e.g. ``DataTable.rows`` which sets
+    ``additionalProperties: true``) keep ``List<Map<String, dynamic>>``
+    — there is no fixed shape to type against.
     """
     lines: list[str] = _banner_lines_dart()
     for schema in schemas:
-        lines.append(_dart_for_schema(schema))
+        lines.append(_dart_for_canvas_schema(schema))
         lines.append("")
     return "\n".join(lines)
+
+
+# -- Dart helpers (canvas-only) -----------------------------------------------
+#
+# We do not reuse :func:`forge.codegen.ui_protocol._dart_for_schema` because
+# the canvas surface needs typed nested classes. The ui-protocol emitter
+# stays "flat" (``Map<String, dynamic>`` for nested object items) because
+# AG-UI payloads use ``additionalProperties: true`` and there is no fixed
+# shape to type against. Canvas component props are the opposite: each
+# nested item has a small, closed schema and downstream consumers
+# (``data_table.dart``, ``dynamic_form.dart``, ``workflow_diagram.dart``)
+# expect typed access.
+
+
+# Dart reserved words we must avoid using as a field identifier. Mapped
+# values mirror what the hand-written Dart components already used (e.g.
+# ``default`` → ``defaultValue``) so swapping the components over to the
+# generated classes is a renaming refactor, not a behaviour change.
+_DART_RESERVED_FIELD_REMAP: dict[str, str] = {
+    "default": "defaultValue",
+}
+
+
+def _singularize(name: str) -> str:
+    """Return a best-effort singular form of ``name`` for nested-class naming.
+
+    Limited rules — only what the shipped canvas schemas need:
+
+        * trailing ``ies`` → ``y`` (``categories`` → ``category``)
+        * trailing ``s`` → ``""`` (``fields`` → ``field``, ``nodes`` → ``node``)
+
+    Leaves the name as-is when no rule fits. Generated classes don't
+    blow up — a non-stripped plural just produces a slightly odd class
+    name (``Series`` from ``series``) which is still valid Dart.
+    """
+    if name.endswith("ies") and len(name) > 3:
+        return name[:-3] + "y"
+    if name.endswith("s") and len(name) > 1:
+        return name[:-1]
+    return name
+
+
+def _pascal_case(name: str) -> str:
+    """Convert a snake_case or camelCase identifier to PascalCase."""
+    parts = name.replace("-", "_").split("_")
+    return "".join(p[:1].upper() + p[1:] for p in parts if p)
+
+
+def _nested_class_name(parent_title: str, field_name: str) -> str:
+    """Synthesise the inner-class name for an array-of-object field.
+
+    ``parent_title`` is the parent schema's PascalCase title (e.g.
+    ``DynamicFormProps``); the trailing ``Props`` is stripped so the
+    generated class names match the component domain vocabulary
+    (``DynamicFormField`` reads better than ``DynamicFormPropsField``).
+    """
+    base = parent_title
+    if base.endswith("Props"):
+        base = base[: -len("Props")]
+    return f"{base}{_pascal_case(_singularize(field_name))}"
+
+
+def _is_typed_object_array(prop: dict[str, Any]) -> bool:
+    """True if ``prop`` is ``{type: array, items: {type: object, properties: ...}}``."""
+    if prop.get("type") != "array":
+        return False
+    items = prop.get("items")
+    if not isinstance(items, dict):
+        return False
+    if items.get("type") != "object":
+        return False
+    return isinstance(items.get("properties"), dict) and bool(items.get("properties"))
+
+
+def _dart_field_name(json_key: str) -> str:
+    """Map a JSON key onto a Dart-safe field identifier."""
+    camel = _to_camel_case(json_key)
+    return _DART_RESERVED_FIELD_REMAP.get(camel, camel)
+
+
+def _dart_type_for_canvas(prop: dict[str, Any], *, nested_class: str | None = None) -> str:
+    """Return the Dart type expression for ``prop``.
+
+    Mirrors :func:`forge.codegen.ui_protocol._dart_type_for` but, when
+    ``prop`` is a typed-object array AND a ``nested_class`` name was
+    threaded in by the parent walker, lifts the inner type to that
+    sealed class instead of collapsing to ``Map<String, dynamic>``.
+    Untyped (``items: {}``) or ``additionalProperties: true`` items
+    still degrade to ``Map<String, dynamic>`` — there is no fixed
+    shape to type against.
+    """
+    if "enum" in prop:
+        return "String"
+    if "const" in prop:
+        return "String"
+    ty = prop.get("type")
+    if ty == "string":
+        return "String"
+    if ty == "integer":
+        return "int"
+    if ty == "number":
+        return "double"
+    if ty == "boolean":
+        return "bool"
+    if ty == "array":
+        items = prop.get("items") or {"type": "string"}
+        if nested_class and _is_typed_object_array(prop):
+            return f"List<{nested_class}>"
+        inner = _dart_type_for_canvas(items)
+        return f"List<{inner}>"
+    if ty == "object":
+        return "Map<String, dynamic>"
+    if ty is None:
+        return "dynamic"
+    raise GeneratorError(f"Unsupported JSON Schema type: {ty!r}")
+
+
+def _dart_from_json_for_canvas(
+    prop: dict[str, Any],
+    json_key: str,
+    required: bool,
+    *,
+    nested_class: str | None = None,
+) -> str:
+    """Dart expression that pulls the value for ``json_key`` out of ``json``."""
+    raw = f"json['{json_key}']"
+    if "enum" in prop or "const" in prop:
+        cast = f"{raw} as String"
+    else:
+        ty = prop.get("type")
+        if ty == "string":
+            cast = f"{raw} as String"
+        elif ty == "integer":
+            cast = f"{raw} as int"
+        elif ty == "number":
+            cast = f"({raw} as num).toDouble()"
+        elif ty == "boolean":
+            cast = f"{raw} as bool"
+        elif ty == "array":
+            items = prop.get("items") or {"type": "string"}
+            if nested_class and _is_typed_object_array(prop):
+                # Strict cast: every list element MUST be a Map. A
+                # non-Map element raises a Dart `TypeError` instead
+                # of being silently dropped — for known schema
+                # shapes the right failure mode is loud, not lossy.
+                # The `Map<String, dynamic>.from(...)` round-trip
+                # keeps Dart's runtime map (often `_Map<String,
+                # Object?>` from the underlying JSON decoder) in the
+                # right concrete shape for the inner `fromJson`.
+                cast = (
+                    f"({raw} as List)"
+                    f".map((e) => {nested_class}.fromJson("
+                    "Map<String, dynamic>.from(e as Map)))"
+                    ".toList(growable: false)"
+                )
+            else:
+                inner = _dart_type_for_canvas(items)
+                if inner == "Map<String, dynamic>":
+                    cast = f"({raw} as List).cast<Map<String, dynamic>>()"
+                else:
+                    cast = f"({raw} as List).cast<{inner}>()"
+        elif ty == "object":
+            cast = f"Map<String, dynamic>.from({raw} as Map)"
+        else:
+            cast = raw
+    if required:
+        return cast
+    return f"{raw} == null ? null : ({cast})"
+
+
+def _dart_to_json_for_canvas(
+    prop: dict[str, Any],
+    field_name: str,
+    required: bool,
+    *,
+    nested_class: str | None = None,
+) -> str:
+    """Dart expression serialising ``field_name`` back to a JSON-shaped value."""
+    if nested_class and _is_typed_object_array(prop):
+        if required:
+            return f"{field_name}.map((e) => e.toJson()).toList()"
+        return f"{field_name}?.map((e) => e.toJson()).toList()"
+    return field_name
+
+
+def _dart_for_canvas_object(
+    *,
+    title: str,
+    description: str,
+    body: dict[str, Any],
+) -> str:
+    """Emit a Dart immutable class for one ``object`` schema body.
+
+    Walks ``properties`` once and, for every typed-object array field,
+    recurses to emit the nested class before the current one.
+    """
+    props = body.get("properties") or {}
+    required = set(body.get("required") or [])
+
+    inner_blocks: list[str] = []
+    field_decls: list[str] = []
+    ctor_params: list[str] = []
+    from_json_parts: list[str] = []
+    to_json_parts: list[str] = []
+
+    for name in props:
+        prop_schema = props[name]
+        is_typed_array = _is_typed_object_array(prop_schema)
+        nested_class: str | None = None
+        if is_typed_array:
+            nested_class = _nested_class_name(title, name)
+            items = prop_schema["items"]
+            inner_blocks.append(
+                _dart_for_canvas_object(
+                    title=nested_class,
+                    description=str(items.get("description") or ""),
+                    body=items,
+                )
+            )
+
+        dart_type = _dart_type_for_canvas(prop_schema, nested_class=nested_class)
+        is_required = name in required
+        # ``dynamic`` is already nullable in Dart — adding ``?`` is a
+        # compile error. Skip the marker for optional dynamic fields
+        # (e.g. ``DynamicFormField.default`` whose schema is the
+        # wildcard ``{}``).
+        nullable_mark = "" if (is_required or dart_type == "dynamic") else "?"
+        field_name = _dart_field_name(name)
+
+        field_decls.append(f"  final {dart_type}{nullable_mark} {field_name};")
+        ctor_params.append(f"    {'required ' if is_required else ''}this.{field_name},")
+        from_json_parts.append(
+            "      "
+            f"{field_name}: "
+            f"{_dart_from_json_for_canvas(prop_schema, name, is_required, nested_class=nested_class)},"
+        )
+        to_json_parts.append(
+            "      "
+            f"'{name}': "
+            f"{_dart_to_json_for_canvas(prop_schema, field_name, is_required, nested_class=nested_class)},"
+        )
+
+    if body.get("additionalProperties") is True:
+        field_decls.append("  final Map<String, dynamic> extras;")
+        ctor_params.append("    this.extras = const {},")
+
+    lines: list[str] = []
+    if inner_blocks:
+        # ``inner_blocks`` is already a list of complete class bodies —
+        # separate them with a blank line so the rendered file stays
+        # readable (each class header sits on its own line, not glued
+        # to the previous class's closing brace).
+        for block in inner_blocks:
+            lines.append(block)
+            lines.append("")
+    if description:
+        lines.append(f"/// {description}")
+    # ``final class`` (Dart 3) — closed for subclassing so a downstream
+    # app cannot accidentally invalidate the schema-derived shape by
+    # extending it. Matches the docstring promise of "sealed classes":
+    # `final` is the right call here over `sealed` because these are
+    # leaf data classes, not a variant hierarchy.
+    lines.append(f"final class {title} {{")
+    lines.extend(field_decls)
+    lines.append("")
+    lines.append(f"  const {title}({{")
+    lines.extend(ctor_params)
+    lines.append("  });")
+    lines.append("")
+    lines.append(f"  factory {title}.fromJson(Map<String, dynamic> json) => {title}(")
+    lines.extend(from_json_parts)
+    lines.append("  );")
+    lines.append("")
+    lines.append("  Map<String, dynamic> toJson() => {")
+    lines.extend(to_json_parts)
+    lines.append("  };")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _dart_for_canvas_schema(schema: Schema) -> str:
+    """Emit Dart classes for a top-level canvas-props schema."""
+    body = schema.body
+    if body.get("type") != "object":
+        raise GeneratorError(f"{schema.title}: top-level schema must be type=object")
+    return _dart_for_canvas_object(
+        title=schema.title,
+        description=schema.description,
+        body=body,
+    )
 
 
 def emit_pydantic(schemas: list[Schema]) -> str:

@@ -234,7 +234,14 @@ class TestIntegrationAgainstGenerator:
             # Confirm the manifest persisted Python-only defaults with
             # origin=default (the precondition for the bug to manifest).
             data = read_forge_toml(project_root / "forge.toml")
-            assert data.schema_version == 3
+            # Initiative #3 bumped CURRENT_SCHEMA_VERSION; the generator
+            # stamps whatever is current. Pin to the constant so the
+            # test only fails on a true downgrade, not a schema bump.
+            from forge.sync.manifest import (  # noqa: PLC0415
+                CURRENT_SCHEMA_VERSION,
+            )
+
+            assert data.schema_version == CURRENT_SCHEMA_VERSION
             assert "middleware.correlation_id" in data.options
             assert data.option_origins.get("middleware.correlation_id") == "default"
             assert data.option_origins.get("middleware.pii_redaction") == "default"

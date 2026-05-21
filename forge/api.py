@@ -84,7 +84,11 @@ from typing import TYPE_CHECKING, Any
 from forge.errors import PLUGIN_COLLISION, PLUGIN_SDK_INCOMPATIBLE, PluginError
 
 if TYPE_CHECKING:
-    from forge.config import BackendSpec, FrontendSpec
+    from pathlib import Path
+
+    from forge.capability_resolver import ResolvedPlan
+    from forge.config import BackendSpec, FrontendSpec, ProjectConfig
+    from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
     from forge.options import Option
 
@@ -148,17 +152,110 @@ def _check_sdk_requirement(spec: str) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class PluginExtractorRegistration:
+    """A single ``ForgeAPI.add_extractor`` call, with the extractor kept.
+
+    The harvester's :func:`forge.sync.project_to_forge.harvester._orchestrator._make_pipeline`
+    iterates these on every harvest run and composes them with the
+    built-in extractor pipeline. ``fragment=None`` is a **global
+    override**: it replaces the built-in extractor for the matching
+    ``kind`` for every fragment that harvest visits.
+
+    Fragment-scoped overrides (``fragment="some_name"``) are accepted
+    by :meth:`ForgeAPI.add_extractor` and retained here, but the
+    harvester pipeline assembler does NOT consume them yet — that path
+    requires per-fragment pipeline construction (the current
+    ``_make_pipeline(selected_kinds)`` signature has no fragment slot).
+    The registration is preserved so the contract surface is honest
+    once that plumbing lands; until then a fragment-scoped registration
+    is a no-op at harvest time.
+    """
+
+    kind: "ExtractorKind"  # noqa: UP037 — forward reference lives in extractors.pipeline
+    fragment: str | None
+    extractor: "ExtractorProtocol"  # noqa: UP037 — forward reference
+
+    @property
+    def as_legacy_pair(self) -> tuple[str, str | None]:
+        """Back-compat shim — the older ``extractors_added`` tuple form."""
+        return (self.kind, self.fragment)
+
+
+@dataclass(frozen=True)
+class PluginOptionRegistration:
+    """A single ``ForgeAPI.add_option`` call, with the Option kept.
+
+    Initiative #2 sub-task 1: registering an option used to drop the
+    :class:`Option` object on the floor (only the ``options_added``
+    integer counter survived on :class:`PluginRegistration`). Retaining
+    the Option here lets downstream consumers — JSON-Schema emitters,
+    plugin introspection tooling, future per-plugin validation — walk
+    plugin-registered options without re-reading ``OPTION_REGISTRY``
+    and guessing at provenance.
+
+    ``plugin_name`` mirrors the harvester pattern from
+    :class:`PluginExtractorRegistration`'s sibling: the registering
+    plugin's name is captured so collision warnings and
+    ``forge --plugins list`` can attribute each option to its owner.
+    """
+
+    option: "Option"  # noqa: UP037 — forward reference lives in forge.options
+    plugin_name: str
+
+
+@dataclass(frozen=True)
+class PluginEmitterRegistration:
+    """A single ``ForgeAPI.add_emitter`` call, with the callable kept.
+
+    Initiative #2 sub-task 2: emitters registered via
+    :meth:`ForgeAPI.add_emitter` used to live only on the ForgeAPI
+    instance (``self._emitters[target]``) which the codegen pipeline
+    never read. Retaining the callable on :class:`PluginRegistration`
+    lets :func:`forge.codegen.pipeline.run_codegen` walk
+    :data:`forge.plugins.LOADED_PLUGINS` after the built-in passes and
+    invoke each registered emitter.
+
+    The emitter callable contract is
+    ``emitter(project_root: Path, config: ProjectConfig,
+    resolved: ResolvedPlan | None) -> None``. ``resolved`` is the
+    capability-resolver output (fragments, capabilities, option values);
+    it is currently ``None`` when ``run_codegen`` is invoked from the
+    legacy generator path that has not yet been plumbed with the
+    resolved plan. Plugins MUST tolerate ``None``.
+
+    Last-loaded wins on target collision (two plugins registering the
+    same ``target`` string); the pipeline emits a structured warning
+    naming both plugins so operators see the override happening.
+    """
+
+    target: str
+    emitter: "Callable[[Path, ProjectConfig, ResolvedPlan | None], None]"  # noqa: UP037 — forward references
+    plugin_name: str
+
+
 @dataclass
 class PluginRegistration:
     """Record of a single loaded plugin for introspection by `forge --plugins list`.
 
-    ``extractors_added`` records each ``(kind, fragment)`` pair passed to
-    :meth:`ForgeAPI.add_extractor` — kind is one of ``"files"`` /
-    ``"block"`` / ``"deps"`` / ``"env"`` and fragment is the fragment
-    name the override is scoped to (or ``None`` for "apply to every
-    fragment of this kind"). Phase 4 of the bidirectional-sync plan
-    consumes this list when assembling the :class:`forge.extractors.pipeline.ExtractorPipeline`
-    for a harvest run.
+    ``extractors_added`` is the legacy ``(kind, fragment)`` tuple form
+    kept for back-compat (still surfaced through :meth:`as_dict`).
+    ``extractor_registrations`` is the typed-port companion landed in
+    Initiative #1 sub-task 4 — it retains the extractor callable itself
+    so the harvester pipeline can actually invoke plugin overrides
+    instead of just observing that one was registered.
+
+    ``option_registrations`` (Initiative #2 sub-task 1) retains the
+    :class:`Option` instance for every ``ForgeAPI.add_option`` call,
+    mirroring the extractor pattern. ``options_added`` is preserved as
+    a legacy integer counter so ``forge --plugins list --json`` output
+    stays byte-stable.
+
+    ``emitter_registrations`` (Initiative #2 sub-task 2) retains the
+    emitter callable for every ``ForgeAPI.add_emitter`` call; the
+    codegen pipeline walks these after the built-in passes.
+    ``emitters_added`` is preserved as a legacy integer counter for
+    the same back-compat reason.
     """
 
     name: str
@@ -170,6 +267,9 @@ class PluginRegistration:
     commands_added: int = 0
     emitters_added: int = 0
     extractors_added: tuple[tuple[str, str | None], ...] = ()
+    extractor_registrations: tuple[PluginExtractorRegistration, ...] = ()
+    option_registrations: tuple[PluginOptionRegistration, ...] = ()
+    emitter_registrations: tuple[PluginEmitterRegistration, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -251,22 +351,45 @@ class ForgeAPI:
         The plugin is responsible for ensuring the dotted path doesn't
         collide with built-in options. On collision, the built-in wins
         and the plugin's option is rejected with a clear error.
-        """
-        from forge.options import OPTION_REGISTRY  # noqa: PLC0415
 
-        if option.path in OPTION_REGISTRY:
+        Initiative #2 sub-task 1: delegates to
+        :func:`forge.options.register_option` so the
+        ``OPTION_ALIAS_INDEX`` is updated alongside ``OPTION_REGISTRY``
+        and alias-collision checks fire just like they do for built-in
+        registrations. ``register_option`` raises ``ValueError`` on
+        any collision (path-vs-path, path-vs-alias, alias-vs-path,
+        alias-vs-alias); we wrap that to a :class:`PluginError` with
+        code :data:`forge.errors.PLUGIN_COLLISION` so the surface
+        plugins see is unchanged.
+
+        Retains the Option on
+        :attr:`PluginRegistration.option_registrations` so downstream
+        consumers can introspect plugin-registered options without
+        guessing at provenance from ``OPTION_REGISTRY`` alone.
+        """
+        from forge.options import register_option  # noqa: PLC0415
+
+        try:
+            register_option(option)
+        except ValueError as exc:
             raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register option "
-                f"'{option.path}', but that path is already registered. "
-                "Plugin options must use a namespaced prefix (e.g. 'mycompany.audit_log').",
+                f"'{option.path}', but registration failed: {exc}. "
+                "Plugin options must use a namespaced prefix "
+                "(e.g. 'mycompany.audit_log').",
                 code=PLUGIN_COLLISION,
                 context={
                     "plugin": self._registration.name,
                     "kind": "option",
                     "value": option.path,
                 },
-            )
-        OPTION_REGISTRY[option.path] = option
+            ) from exc
+        self._registration.option_registrations = (
+            self._registration.option_registrations
+            + (PluginOptionRegistration(option=option, plugin_name=self._registration.name),)
+        )
+        # Legacy integer counter — kept so as_dict() output is byte-stable
+        # for ``forge --plugins list --json`` consumers.
         self._registration.options_added += 1
 
     # -- Fragment registration ---------------------------------------------
@@ -488,68 +611,118 @@ class ForgeAPI:
                 },
             ) from exc
 
-    # -- Emitter registration (hook for Phase 1) ---------------------------
+    # -- Emitter registration -----------------------------------------------
 
     def add_emitter(self, target: str, emitter: Callable[..., Any]) -> None:
         """Register a code emitter for a target language or protocol.
 
-        Targets are free-form strings that the Phase 1 schema-first
-        pipeline will consume (``python``, ``typescript``, ``dart``,
-        ``openapi``). 1.0.0a1 ships the hook; the pipeline lands in 1.0.0a2.
+        Targets are free-form strings that the codegen pipeline picks
+        up after its built-in passes run (``python``, ``typescript``,
+        ``dart``, ``openapi``, or any plugin-defined string).
+
+        The emitter callable contract is::
+
+            emitter(project_root: Path,
+                    config: ProjectConfig,
+                    resolved: ResolvedPlan | None) -> None
+
+        where ``project_root`` is the just-generated project tree,
+        ``config`` is the resolved :class:`ProjectConfig`, and
+        ``resolved`` is the capability-resolver output. ``resolved``
+        is ``None`` when ``run_codegen`` is invoked from the legacy
+        generator path that hasn't been plumbed with the plan yet;
+        plugin emitters MUST tolerate that.
+
+        Initiative #2 sub-task 2 retains the callable on
+        :attr:`PluginRegistration.emitter_registrations` so
+        :func:`forge.codegen.pipeline.run_codegen` can walk
+        :data:`forge.plugins.LOADED_PLUGINS` and invoke each
+        registered emitter after the built-in passes. Last-loaded
+        wins on target collision; the pipeline emits a structured
+        warning naming both plugins. ``self._emitters[target]`` is
+        kept for back-compat with the original 1.0.0a1 API surface
+        (and is overwritten on collision by the same last-wins rule).
+        ``emitters_added`` is preserved as a legacy integer counter
+        for byte-stable ``forge --plugins list --json`` output.
         """
         self._emitters[target] = emitter
+        self._registration.emitter_registrations = (
+            self._registration.emitter_registrations
+            + (
+                PluginEmitterRegistration(
+                    target=target,
+                    emitter=emitter,
+                    plugin_name=self._registration.name,
+                ),
+            )
+        )
         self._registration.emitters_added += 1
 
     # -- Extractor registration (hook for Phase 4 forge --harvest) ----------
 
     def add_extractor(
         self,
-        kind: str,
-        extractor: Any,
+        kind: ExtractorKind,
+        extractor: ExtractorProtocol,
         *,
         fragment: str | None = None,
     ) -> None:
         """Register a custom extractor for a kind, optionally fragment-scoped.
 
         Plugins that ship custom appliers should ship paired extractors
-        so their fragments survive round-trip (Phase 4
-        ``forge --harvest``). The built-in pipeline ships extractors for
-        kind ``"files"`` / ``"block"`` / ``"deps"`` / ``"env"`` —
-        register one of those values to swap the default for the
-        matching kind. ``fragment=None`` (default) makes the extractor
-        apply to every fragment of the matching kind; pass a fragment
-        name to scope the override to that fragment alone.
+        so their fragments survive round-trip (``forge --harvest``).
+        The built-in pipeline ships extractors for kind ``"files"`` /
+        ``"block"`` / ``"deps"`` / ``"env"`` — register one of those
+        values to swap the default for the matching kind.
 
-        ``extractor`` should satisfy
-        :class:`forge.extractors.pipeline.ExtractorProtocol`. The Phase
-        3 scaffolding only records the registration on
-        :attr:`PluginRegistration.extractors_added` — the Phase 4
-        harvester reads that list when assembling its pipeline.
+        ``fragment=None`` (default) is a **global override**: the
+        plugin's extractor replaces the built-in for every fragment
+        the harvester visits. Initiative #1 sub-task 4 wired this
+        path end-to-end.
 
-        Raises :class:`PluginError` when ``kind`` is not one of the
-        built-in kinds. Plugins that need a new extraction kind should
-        bump the SDK rather than smuggling a string through here.
+        ``fragment="some_name"`` is **accepted and retained but NOT
+        yet invoked** by the harvester — fragment-scoped overrides
+        need per-fragment pipeline construction that the current
+        :func:`forge.sync.project_to_forge.harvester._orchestrator._make_pipeline`
+        signature does not support. The registration is preserved on
+        :attr:`PluginRegistration.extractor_registrations` so the SDK
+        contract is honest; the harvester emits a one-shot warning
+        the first time it skips one in a process.
+
+        ``extractor`` must satisfy
+        :class:`forge.extractors.pipeline.ExtractorProtocol`. The
+        legacy :attr:`extractors_added` tuple form is still populated
+        for back-compat with ``forge --plugins list --json`` consumers.
+
+        Raises :class:`PluginError` when ``kind`` is not a valid
+        :data:`ExtractorKind`. Plugins that need a new extraction kind
+        should bump the SDK rather than smuggling a string through here.
         """
         from forge.errors import PluginError  # noqa: PLC0415
+        from forge.extractors.pipeline import EXTRACTOR_KINDS  # noqa: PLC0415
 
-        valid_kinds = {"files", "block", "deps", "env"}
-        if kind not in valid_kinds:
+        if kind not in EXTRACTOR_KINDS:
             raise PluginError(
                 f"Plugin '{self._registration.name}' tried to register an "
                 f"extractor for unknown kind {kind!r}. Valid kinds: "
-                f"{sorted(valid_kinds)}.",
+                f"{sorted(EXTRACTOR_KINDS)}.",
                 code=PLUGIN_COLLISION,
                 context={
                     "plugin": self._registration.name,
                     "kind": "extractor",
-                    "value": kind,
+                    "value": str(kind),
                 },
             )
-        # The extractor object itself is held by reference on the plugin
-        # side; Phase 4's pipeline assembler walks LOADED_PLUGINS and
-        # reaches back into the plugin's module for the live instance.
-        # Phase 3 only records the (kind, fragment) tag.
-        del extractor  # explicit: not consumed by Phase 3 scaffolding
+        registration = PluginExtractorRegistration(
+            kind=kind, fragment=fragment, extractor=extractor
+        )
+        self._registration.extractor_registrations = (
+            self._registration.extractor_registrations + (registration,)
+        )
+        # Legacy tuple — kept so as_dict() output is byte-stable for
+        # existing JSON consumers (``forge --plugins list --json``).
+        # Delegates to the dataclass's own legacy-pair shim so the two
+        # representations can't drift if the field shape changes.
         self._registration.extractors_added = self._registration.extractors_added + (
-            (kind, fragment),
+            registration.as_legacy_pair,
         )

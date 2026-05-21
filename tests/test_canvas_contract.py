@@ -332,3 +332,279 @@ class TestCliLint:
         assert rc == 2
         out = capsys.readouterr().out
         assert "failed to parse" in out
+
+
+# ---------------------------------------------------------------------------
+# Canvas-package symmetry — the AG-UI client shims (Initiative #4)
+# ---------------------------------------------------------------------------
+
+
+class TestAgUiClientShipsAcrossPackages:
+    """The AG-UI WebSocket client must be present and symmetric in every
+    canvas package — Vue, Svelte, Dart.
+
+    Initiative #4 ships TS shims for Vue + Svelte that mirror the
+    existing Dart `AgUiClient`. The shims are intentionally tiny (a
+    WebSocket wrapper that decodes frames and calls back) and must stay
+    in sync: a future fix landing in one but not the other breaks the
+    polyglot contract the same way the lint files would.
+    """
+
+    _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+    def test_vue_shim_is_present(self) -> None:
+        target = self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "ag_ui_client.ts"
+        assert target.is_file(), f"missing AgUiClient shim at {target}"
+
+    def test_svelte_shim_is_present(self) -> None:
+        target = self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "ag_ui_client.ts"
+        assert target.is_file(), f"missing AgUiClient shim at {target}"
+
+    def test_dart_client_still_present(self) -> None:
+        # Initiative #4 must not regress the existing Dart client —
+        # it's the canonical shape the TS shims mirror.
+        target = (
+            self._REPO_ROOT
+            / "packages"
+            / "forge-canvas-dart"
+            / "lib"
+            / "src"
+            / "ag_ui_client.dart"
+        )
+        assert target.is_file()
+        body = target.read_text(encoding="utf-8")
+        # The Dart client expects `AgUiEvent.parse` (see line 24 of the file).
+        # If we ever drop the import expectation, the generated parser
+        # factory becomes load-bearing dead code.
+        assert "parser: AgUiEvent.parse" in body
+
+    def test_vue_and_svelte_shims_are_byte_equivalent_modulo_package_name(self) -> None:
+        """The two TS shims must differ by exactly one line — the example
+        import comment naming the package — to mirror the Dart/Vue/Svelte
+        lint parity invariant. Drift in any other line means one package
+        has a behaviour the other lacks.
+        """
+        vue = (
+            self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "ag_ui_client.ts"
+        ).read_text(encoding="utf-8").splitlines()
+        sv = (
+            self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "ag_ui_client.ts"
+        ).read_text(encoding="utf-8").splitlines()
+        diff = [(i, a, b) for i, (a, b) in enumerate(zip(vue, sv, strict=True)) if a != b]
+        assert len(diff) == 1, (
+            f"Vue/Svelte AgUiClient shims diverged on {len(diff)} lines — "
+            "must differ by exactly the package-name import comment."
+        )
+        i, a, b = diff[0]
+        assert "@forge/canvas-vue" in a and "@forge/canvas-svelte" in b, (
+            f"line {i}: only the package-name comment may differ "
+            f"(got vue={a!r}, svelte={b!r})"
+        )
+
+    def test_vue_shim_is_re_exported(self) -> None:
+        body = (
+            self._REPO_ROOT / "packages" / "canvas-vue" / "src" / "index.ts"
+        ).read_text(encoding="utf-8")
+        assert "export { AgUiClient }" in body
+        assert "from './ag_ui_client'" in body
+
+    def test_svelte_shim_is_re_exported(self) -> None:
+        body = (
+            self._REPO_ROOT / "packages" / "canvas-svelte" / "src" / "index.ts"
+        ).read_text(encoding="utf-8")
+        assert "export { AgUiClient }" in body
+        assert "from './ag_ui_client'" in body
+
+
+# ---------------------------------------------------------------------------
+# Generated-props-only contract — Initiative #8
+# ---------------------------------------------------------------------------
+
+
+class TestGeneratedPropsOnly:
+    """Initiative #8: generated prop types are the SINGLE source of truth.
+
+    Every schema-driven canvas component (`CodeViewer`, `DataTable`,
+    `DynamicForm`, `Report`, `WorkflowDiagram` — across Vue, Svelte,
+    and Dart) must import its prop shape from the generated module
+    rather than re-declaring it. Drift between hand-written and
+    generated prop shapes was the load-bearing wart Initiative #8
+    eliminates.
+
+    These tests are deliberately grep-based:
+
+        * stronger than "the generated file imports cleanly" (which a
+          TS/Dart build catches anyway);
+        * weaker than parsing the AST per language (which would require
+          a TS / Dart toolchain inside the Python test runner).
+
+    The pre-Initiative-#8 prop interfaces were named literally
+    `Field`, `Column`, `Node`, `Edge` (TS/Svelte interface; Dart
+    private class) — those names are what we grep for. The
+    `interface Props` shape is allowed when it `extends` a generated
+    interface (Svelte components do this to layer event-callback
+    props on top of the schema-driven data props).
+    """
+
+    _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+    # File → (language, name of generated import). The list pins which
+    # components participate in the contract — adding a new component
+    # without a row here keeps the test silent (intentional: a new
+    # component declares its own props schema and the codegen catches
+    # the drift).
+    _SCHEMA_DRIVEN_COMPONENTS: tuple[tuple[str, str], ...] = (
+        ("packages/canvas-vue/src/components/CodeViewer.vue", "CodeViewerProps"),
+        ("packages/canvas-vue/src/components/DataTable.vue", "DataTableProps"),
+        ("packages/canvas-vue/src/components/DynamicForm.vue", "DynamicFormProps"),
+        ("packages/canvas-vue/src/components/Report.vue", "ReportProps"),
+        ("packages/canvas-vue/src/components/WorkflowDiagram.vue", "WorkflowDiagramProps"),
+        ("packages/canvas-svelte/src/components/CodeViewer.svelte", "CodeViewerProps"),
+        ("packages/canvas-svelte/src/components/DataTable.svelte", "DataTableProps"),
+        ("packages/canvas-svelte/src/components/DynamicForm.svelte", "DynamicFormProps"),
+        ("packages/canvas-svelte/src/components/Report.svelte", "ReportProps"),
+        (
+            "packages/canvas-svelte/src/components/WorkflowDiagram.svelte",
+            "WorkflowDiagramProps",
+        ),
+    )
+
+    # Dart components import the generated classes individually (not
+    # via a barrel export) — pin the specific imports each one needs.
+    # ``CodeViewer`` and ``Report`` have no nested-object array props
+    # in their schemas, so they only need the top-level *Props class;
+    # they still route ``fromProps`` through the generated class so
+    # the schema-driven shape stays the parse-time source of truth.
+    _DART_COMPONENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+        (
+            "packages/forge-canvas-dart/lib/src/components/code_viewer.dart",
+            ("CodeViewerProps",),
+        ),
+        (
+            "packages/forge-canvas-dart/lib/src/components/data_table.dart",
+            ("DataTableColumn",),
+        ),
+        (
+            "packages/forge-canvas-dart/lib/src/components/dynamic_form.dart",
+            ("DynamicFormField",),
+        ),
+        (
+            "packages/forge-canvas-dart/lib/src/components/report.dart",
+            ("ReportProps",),
+        ),
+        (
+            "packages/forge-canvas-dart/lib/src/components/workflow_diagram.dart",
+            ("WorkflowDiagramNode", "WorkflowDiagramEdge"),
+        ),
+    )
+
+    def test_every_ts_component_imports_generated_props(self) -> None:
+        for rel, name in self._SCHEMA_DRIVEN_COMPONENTS:
+            body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+            assert "from '../generated/props'" in body, (
+                f"{rel} does not import from '../generated/props' — "
+                "every schema-driven canvas component must consume the "
+                "generated prop type instead of re-declaring it."
+            )
+            assert name in body, (
+                f"{rel} does not reference the generated `{name}` "
+                "interface — the imported symbol must be the prop "
+                "type for this component."
+            )
+
+    def test_every_dart_component_imports_generated_props(self) -> None:
+        for rel, expected in self._DART_COMPONENTS:
+            body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+            assert "import '../generated/props.dart'" in body, (
+                f"{rel} does not import the generated props library — "
+                "every schema-driven canvas component must consume the "
+                "generated sealed classes instead of declaring private "
+                "mirror classes."
+            )
+            for sym in expected:
+                assert sym in body, (
+                    f"{rel} does not reference `{sym}` — "
+                    "the imported sealed class must replace the old "
+                    "private mirror class for this component."
+                )
+
+    def test_no_ts_component_redeclares_nested_prop_interface(self) -> None:
+        # The pre-#8 components shipped local `Field`, `Column`, `Node`,
+        # `Edge` interfaces that mirrored the schema by hand. After #8
+        # those interfaces must be derived from the generated type
+        # (`type X = GeneratedProps['x'][number]`), never declared via
+        # `interface`.
+        banned_decls = (
+            "interface Field {",
+            "interface Column {",
+            "interface Node {",
+            "interface Edge {",
+        )
+        for rel, _ in self._SCHEMA_DRIVEN_COMPONENTS:
+            body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+            for banned in banned_decls:
+                assert banned not in body, (
+                    f"{rel} re-declares `{banned.rstrip(' {')}` — "
+                    "this interface lives in the generated props "
+                    "module; pull it from there as "
+                    "`type X = GeneratedProps['x'][number]`."
+                )
+
+    def test_no_dart_component_redeclares_private_mirror_class(self) -> None:
+        # Pre-#8 Dart components shipped private mirror classes
+        # (`_Column`, `_Field`, `_WfNode`, `_WfEdge`) with their own
+        # `fromMap` factories — exactly the duplication the generated
+        # sealed classes now subsume.
+        banned_decls = (
+            "class _Field {",
+            "class _Column {",
+            "class _WfNode {",
+            "class _WfEdge {",
+            "class _Node {",
+            "class _Edge {",
+        )
+        for rel, _ in self._DART_COMPONENTS:
+            body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+            for banned in banned_decls:
+                assert banned not in body, (
+                    f"{rel} re-declares `{banned.rstrip(' {')}` — "
+                    "this class lives in the generated props library; "
+                    "use the matching sealed class instead."
+                )
+
+    def test_canvas_indexes_export_only_generated_props(self) -> None:
+        # The Vue / Svelte index re-exports must point at
+        # ``./generated/props`` — never at a hand-written sibling
+        # module. The presence of any other origin path for a `Props`
+        # type would silently double-declare the contract.
+        for pkg, rel in (
+            ("canvas-vue", "packages/canvas-vue/src/index.ts"),
+            ("canvas-svelte", "packages/canvas-svelte/src/index.ts"),
+        ):
+            body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+            assert "from './generated/props'" in body, (
+                f"{pkg} index does not re-export from "
+                "'./generated/props' — generated types are the "
+                "single source of truth for the package's prop "
+                "surface."
+            )
+            # No alternative prop-type origin permitted.
+            for forbidden in (
+                "from './props'",
+                "from './props.ts'",
+                "from './types'",
+                "from './types.ts'",
+            ):
+                assert forbidden not in body, (
+                    f"{pkg} index exports prop types from "
+                    f"{forbidden!r} — must be the generated module."
+                )
+
+    def test_dart_library_exports_generated_props(self) -> None:
+        rel = "packages/forge-canvas-dart/lib/forge_canvas.dart"
+        body = (self._REPO_ROOT / rel).read_text(encoding="utf-8")
+        assert "export 'src/generated/props.dart';" in body, (
+            "forge_canvas.dart must re-export the generated props "
+            "library so downstream apps consume only the generated "
+            "sealed classes."
+        )

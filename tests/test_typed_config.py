@@ -167,6 +167,53 @@ class TestFromLegacyOptions:
         assert isinstance(cfg.frontend, FrontendGenerate)
         assert cfg.frontend.api_target_url == "https://api.example.com"
 
+    def test_alias_table_is_the_registry_index(self):
+        """Initiative #7 — typed_config's alias projection comes from
+        ``OPTION_ALIAS_INDEX``, not a local literal. Pre-#7 the two
+        tables could drift silently (typed_config would shrug a typo'd
+        alias into the ``other`` bag, the resolver would error
+        downstream). Now the registry is the single source of truth.
+
+        We assert by registering a new alias and confirming
+        ``from_legacy_options`` picks it up without any change to
+        typed_config.py."""
+        from forge.options import (  # noqa: PLC0415
+            OPTION_ALIAS_INDEX,
+            OPTION_REGISTRY,
+            FeatureCategory,
+            Option,
+            OptionType,
+            register_option,
+        )
+
+        opt_path = "test_init7.dynamic"
+        alias_path = "test_init7.dynamic_alias"
+        # Best-effort cleanup if a previous run left state behind.
+        OPTION_REGISTRY.pop(opt_path, None)
+        OPTION_ALIAS_INDEX.pop(alias_path, None)
+        register_option(
+            Option(
+                path=opt_path,
+                type=OptionType.BOOL,
+                default=False,
+                summary="alias dedup smoke",
+                description="proves typed_config reads OPTION_ALIAS_INDEX",
+                category=FeatureCategory.PLATFORM,
+                aliases=(alias_path,),
+                deprecated_since="1.2.0",
+            )
+        )
+        try:
+            cfg = from_legacy_options({alias_path: True})
+            # The alias was rewritten to the canonical path before
+            # landing in ``other`` — proving the registry index is the
+            # source of truth.
+            assert cfg.other.get(opt_path) is True
+            assert alias_path not in cfg.other
+        finally:
+            OPTION_REGISTRY.pop(opt_path, None)
+            OPTION_ALIAS_INDEX.pop(alias_path, None)
+
     def test_passes_through_non_layer_options(self):
         cfg = from_legacy_options(
             {

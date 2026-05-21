@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from forge.codegen._schema_cache import load_json_schema
 from forge.errors import GeneratorError
 
 
@@ -62,8 +63,16 @@ class Schema:
 
 
 def load_schema(path: Path) -> Schema:
-    """Load and minimally validate a JSON Schema file."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    """Load and minimally validate a JSON Schema file.
+
+    Initiative #6 (caching): the raw JSON payload is fetched via
+    :func:`forge.codegen._schema_cache.load_json_schema`, an in-process
+    mtime-keyed cache. Repeat reads of the same schema during one
+    ``forge new`` / ``forge --update`` codegen pass collapse to a
+    single ``json.loads``; tests that mutate a schema file pick up
+    the new content via the mtime check.
+    """
+    raw = load_json_schema(path)
     if not isinstance(raw, dict):
         raise GeneratorError(f"{path}: schema must be a JSON object")
     title = raw.get("title")

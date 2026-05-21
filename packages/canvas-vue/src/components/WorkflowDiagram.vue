@@ -11,24 +11,15 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { WorkflowDiagramProps } from '../generated/props'
 
-interface Node {
-  id: string
-  label: string
-  status: 'pending' | 'running' | 'completed' | 'error' | 'skipped'
-}
+// `WorkflowDiagramProps.nodes` / `.edges` are generated; extract the
+// element types for layout calculations and status helpers below. The
+// generated interface is the source of truth — hand-written mirror
+// interfaces for canvas-component props are banned by convention.
+type Node = WorkflowDiagramProps['nodes'][number]
 
-interface Edge {
-  from: string
-  to: string
-}
-
-interface Props {
-  nodes: Node[]
-  edges: Edge[]
-}
-
-const props = defineProps<Props>()
+const props = defineProps<WorkflowDiagramProps>()
 
 const NODE_W = 160
 const NODE_H = 52

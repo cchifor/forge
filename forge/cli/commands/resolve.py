@@ -67,6 +67,36 @@ def _run_resolve(args: argparse.Namespace) -> int:
     quiet = bool(getattr(args, "quiet", False)) or bool(getattr(args, "json_output", False))
     json_output = bool(getattr(args, "json_output", False))
 
+    # HF-3 follow-up: refuse to prompt when stdin isn't a TTY and there
+    # are sidecars to walk. resolve_sidecars -> _prompt_action ->
+    # _ask_select calls questionary which exits 1 with no structured
+    # output when stdin is closed — agents driving forge --resolve --json
+    # would otherwise see an empty failure they can't classify.
+    # No sidecars means no prompts will fire, so the empty-project path
+    # is still allowed (returns a clean report with no entries).
+    # Discovery reuses ``_discover_sidecars`` so a directory whose name
+    # ends in ``.forge-merge`` can't trigger a false-positive refusal —
+    # the same filter the walker uses (is_file + suffix match).
+    if not sys.stdin.isatty():
+        from forge.sync.forge_to_project.resolver._sidecar_parser import (  # noqa: PLC0415
+            _discover_sidecars,
+        )
+
+        sidecars = _discover_sidecars(project_root)
+        if sidecars:
+            msg = (
+                f"Found {len(sidecars)} unresolved sidecar(s) but stdin is "
+                "not a TTY. forge --resolve is interactive — re-run in a "
+                "terminal or accept/reject the sidecars by hand."
+            )
+            if json_output:
+                sys.stdout.write(
+                    json.dumps({"error": msg, "sidecar_count": len(sidecars)}) + "\n"
+                )
+            else:
+                sys.stderr.write(f"forge --resolve: {msg}\n")
+            return _EXIT_RESOLVE_FAILURE
+
     try:
         report = resolve_sidecars(project_root, quiet=quiet)
     except FileNotFoundError as exc:

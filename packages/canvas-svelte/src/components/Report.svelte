@@ -5,13 +5,12 @@
 <script lang="ts">
   import { marked } from 'marked'
   import DOMPurify from 'dompurify'
+  import type { ReportProps } from '../generated/props'
 
-  interface Props {
-    title?: string
-    markdown: string
-  }
-
-  let { title, markdown }: Props = $props()
+  // The generated `ReportProps` is the single source of truth —
+  // hand-written mirror interfaces for canvas-component props are
+  // banned by convention.
+  let { title, markdown }: ReportProps = $props()
 
   let html = $derived.by(() => {
     const rawHtml = marked.parse(markdown, { async: false }) as string

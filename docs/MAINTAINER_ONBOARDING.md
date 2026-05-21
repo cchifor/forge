@@ -17,11 +17,13 @@ Forge is a **project generator**, not a framework. It composes:
    their own features (see `docs/plugin-development.md`).
 3. **A resolver** (`forge/capability_resolver.py`) — turns a user's
    option choices into an ordered fragment plan.
-4. **An injector** (`forge/feature_injector.py`) — applies each
-   fragment (copy files, inject snippets at markers, add deps).
-5. **Provenance** (`forge/provenance.py`) — records who wrote each file
-   so `forge --update` can merge template upgrades into user-customized
-   projects.
+4. **Appliers** (`forge/appliers/`) — apply each fragment via a
+   four-phase pipeline: copy files, inject snippets at markers, add
+   deps, append env vars. (Decomposed from the pre-Epic-A
+   `forge/feature_injector.py`.)
+5. **Provenance** (`forge/sync/provenance.py`) — records who wrote each
+   file so `forge --update` can merge template upgrades into
+   user-customized projects.
 
 Read these three docs before touching code:
 
@@ -63,9 +65,11 @@ Checklist for a typical PR:
 - [ ] **Tests**: does `make check` pass on the PR branch?
 - [ ] **Coverage**: per-module floors in `tests/test_coverage_gates.py`
   not regressed. For PRs touching mutation-scoped modules
-  (`feature_injector`, `merge`, `provenance`, `updater`,
-  `injectors/*_ast`), confirm the `breaking-change` label is applied
-  so CI runs mutation testing.
+  (`forge/appliers/*`, `forge/sync/{merge,provenance}.py`,
+  `forge/injectors/*_ast.py`, `forge/sync/forge_to_project/updater/*`;
+  the live list is in `pyproject.toml [tool.mutmut].paths_to_mutate`
+  and asserted by `tests/test_mutmut_config.py`), confirm the
+  `breaking-change` label is applied so CI runs mutation testing.
 - [ ] **Template changes**: if `forge/templates/**` or `generator.py`
   changed, golden snapshots must be regenerated (`UPDATE_GOLDEN=1
   pytest tests/test_golden_snapshots.py`) and the PR description

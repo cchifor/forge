@@ -54,6 +54,40 @@ def test_flutter_layout_fields_match_pre_epic_o_paths() -> None:
     assert layout.shared_enums_emitter == "dart"
 
 
+# ---------------------------------------------------------------------------
+# Initiative #4 — every built-in frontend ships the AG-UI event union.
+# ---------------------------------------------------------------------------
+
+
+def test_every_builtin_frontend_has_an_event_union_path() -> None:
+    """The Theme 2B opt-out (empty ``event_union_path``) shipped with Vue
+    as the lone adopter. Initiative #4 fills Svelte + Flutter in so all
+    three built-ins land the union next to their existing
+    ``ui_protocol`` types.
+    """
+    for framework in FrontendFramework:
+        if framework is FrontendFramework.NONE:
+            continue
+        layout = get_frontend_layout(framework)
+        assert layout is not None
+        assert layout.event_union_path, (
+            f"{framework.value}: missing event_union_path (Initiative #4)"
+        )
+
+
+def test_svelte_event_union_path_matches_ui_protocol_layout() -> None:
+    """The event union lives next to the ui_protocol types it discriminates."""
+    layout = get_frontend_layout(FrontendFramework.SVELTE)
+    assert layout is not None
+    assert layout.event_union_path == "src/lib/features/chat/events.gen.ts"
+
+
+def test_flutter_event_union_path_lands_in_domain_dir() -> None:
+    layout = get_frontend_layout(FrontendFramework.FLUTTER)
+    assert layout is not None
+    assert layout.event_union_path == "lib/src/features/chat/domain/events.gen.dart"
+
+
 def test_register_rejects_duplicate_framework() -> None:
     existing = get_frontend_layout(FrontendFramework.VUE)
     assert existing is not None

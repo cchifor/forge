@@ -2,21 +2,21 @@
   DynamicForm canvas component — Svelte 5 variant.
 -->
 <script lang="ts">
-  interface Field {
-    name: string
-    label: string
-    type: 'text' | 'number' | 'password' | 'email' | 'select' | 'checkbox' | 'textarea'
-    required?: boolean
-    default?: unknown
-    options?: string[]
-    description?: string
-  }
+  import type { DynamicFormProps } from '../generated/props'
 
-  interface Props {
-    title?: string
-    fields: Field[]
-    submitLabel?: string
-    cancelLabel?: string
+  // The generated `DynamicFormProps` is the single source of truth —
+  // hand-written mirror interfaces for canvas-component props are
+  // banned by convention. Local `Field` extracts the element shape so
+  // the per-input `_defaultFor` helper below reads the same as before.
+  type Field = DynamicFormProps['fields'][number]
+
+  // Svelte 5 props block extends the generated shape with the two
+  // event-callback props (`onsubmit`, `oncancel`) — those are
+  // component-emitted events, not part of the schema (the schema only
+  // describes the inputs the agent supplies). Keep them as locally
+  // declared optionals so the generated interface stays purely
+  // prop-data.
+  interface Props extends DynamicFormProps {
     onsubmit?: (values: Record<string, unknown>) => void
     oncancel?: () => void
   }

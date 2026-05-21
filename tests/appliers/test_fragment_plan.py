@@ -79,3 +79,90 @@ class TestFromImpl:
         impl = FragmentImplSpec(fragment_dir=str(frag))
         plan = FragmentPlan.from_impl(impl, "rendered", options={"top_k": 7})
         assert plan.injections[0].snippet == "TOP_K = 7"
+
+
+# ---------------------------------------------------------------------------
+# Initiative #1 — typed port: ``_Injection`` enforces zone / position
+# invariants at construction so a non-YAML caller (middleware_spec.render_*,
+# future plugin extractors, …) can't smuggle in a bad literal that only
+# fails later in the dispatch loop.
+# ---------------------------------------------------------------------------
+
+
+class TestInjectionTypedPort:
+    """Construction-time invariants for :class:`forge.appliers.plan._Injection`.
+
+    The YAML loader pre-validates with richer path/index context, so these
+    tests target the Python construction path (the only one a typo-ed
+    middleware renderer or plugin extractor would hit).
+    """
+
+    def _kwargs(self, **overrides):
+        base = dict(
+            feature_key="demo",
+            target="main.py",
+            marker="FORGE:DEMO",
+            snippet="x = 1",
+        )
+        base.update(overrides)
+        return base
+
+    def test_default_position_and_zone_construct_cleanly(self) -> None:
+        from forge.appliers.plan import _Injection  # noqa: PLC0415
+
+        inj = _Injection(**self._kwargs())
+        assert inj.position == "after"
+        assert inj.zone == "generated"
+
+    def test_invalid_position_raises_fragment_error(self) -> None:
+        from forge.appliers.plan import _Injection  # noqa: PLC0415
+        from forge.errors import FRAGMENT_INJECT_YAML_BAD_POSITION
+
+        with pytest.raises(FragmentError) as exc:
+            _Injection(**self._kwargs(position="sideways"))
+        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_POSITION
+        assert "sideways" in str(exc.value)
+
+    def test_invalid_zone_raises_fragment_error(self) -> None:
+        from forge.appliers.plan import _Injection  # noqa: PLC0415
+        from forge.errors import FRAGMENT_INJECT_YAML_BAD_ZONE
+
+        with pytest.raises(FragmentError) as exc:
+            _Injection(**self._kwargs(zone="garbage"))
+        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_ZONE
+        assert "garbage" in str(exc.value)
+
+    def test_every_valid_position_and_zone_constructs(self) -> None:
+        from forge.appliers.plan import (  # noqa: PLC0415
+            INJECTION_POSITIONS,
+            INJECTION_ZONES,
+            _Injection,
+        )
+
+        for pos in INJECTION_POSITIONS:
+            for zone in INJECTION_ZONES:
+                inj = _Injection(**self._kwargs(position=pos, zone=zone))
+                assert inj.position == pos
+                assert inj.zone == zone
+
+    def test_literal_aliases_match_runtime_tuples(self) -> None:
+        """Drift gate: ``InjectionPosition`` / ``InjectionZone`` Literal
+        aliases and the corresponding runtime tuples must enumerate
+        the SAME values, or a future PR that bumps one but not the
+        other can introduce silent acceptance / rejection skew.
+        """
+        from typing import get_args  # noqa: PLC0415
+
+        from forge.appliers.plan import (  # noqa: PLC0415
+            INJECTION_POSITIONS,
+            INJECTION_ZONES,
+            InjectionPosition,
+            InjectionZone,
+        )
+
+        assert set(get_args(InjectionPosition)) == set(INJECTION_POSITIONS), (
+            "InjectionPosition Literal and INJECTION_POSITIONS tuple have drifted"
+        )
+        assert set(get_args(InjectionZone)) == set(INJECTION_ZONES), (
+            "InjectionZone Literal and INJECTION_ZONES tuple have drifted"
+        )

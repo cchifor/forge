@@ -285,12 +285,24 @@ def test_vue_auth_off_typechecks(
 
 @pytest.mark.skip(
     reason=(
-        "Svelte chat template has pre-existing @ag-ui/client type drift "
-        "(threadId on RunHttpAgentConfig, activity role on chat messages, "
-        "{@const} placement in CanvasPane) plus a content-type mismatch in "
-        "AiChatMessage. These are separate from the feature-flag-cleanup scope "
-        "of this fix pass — tracked as a follow-up. Enable once the Svelte "
-        "chat surface is updated to the current @ag-ui/client API."
+        "Svelte chat template has pre-existing @ag-ui/client type drift. "
+        "Initiative #4 unified the canvas-packages event-union codegen but "
+        "did NOT touch the template's call sites; svelte-check still fails "
+        "with the five errors enumerated below (verified 2026-05-20 against "
+        "the head of feature/initiative-9-tests-behavior — see Init #9 "
+        "report for the captured svelte-check output):\n"
+        "  - agent-client.svelte.ts:75 — `threadId` not on RunHttpAgentConfig\n"
+        "  - agent-client.svelte.ts:106-107 — `role: 'activity'` not in the "
+        "Message union\n"
+        "  - CanvasPane.svelte:30 — `{@const}` must be immediate child of "
+        "`{#if}`/`{#each}` etc; currently nested under a plain `<div>`\n"
+        "  - AiChatMessage.svelte:18 — `content` overload mismatch "
+        "(string vs structured content union)\n"
+        "Fix scope: the chat scaffolding under forge/templates/apps/svelte-"
+        "frontend-template/template/src/lib/features/chat/ needs to be "
+        "regenerated against the @ag-ui/client 0.0.51 API. Tracked separately "
+        "from Initiative #9 because the template surface is owned by the "
+        "frontend-templates plan, not the test-rebalance plan."
     )
 )
 def test_svelte_chat_on_typechecks(
@@ -364,8 +376,24 @@ def test_flutter_minimal_analyzes(
 
 
 @pytest.mark.skip(
-    reason="Flutter chat requires the forge_canvas package which isn't yet published to "
-    "pub.dev (tracked in RFC-003). Enable this test once the package is live."
+    reason=(
+        "Flutter chat requires the ``forge_canvas`` package, which isn't yet "
+        "published to pub.dev (tracked in RFC-003). The generated pubspec "
+        "still pins ``forge_canvas: ^1.0.0-alpha.6`` and the template's own "
+        "comment notes ``# Replace with `path:` for local development "
+        "until the package is published to pub.dev`` (see "
+        "forge/templates/apps/flutter-frontend-template/{{project_slug}}/"
+        "pubspec.yaml:36). Initiative #9 reverified (2026-05-20) that the "
+        "skip is still valid; un-skipping requires either:\n"
+        "  (a) publishing forge_canvas to pub.dev so a vanilla "
+        "``flutter pub get`` resolves it, or\n"
+        "  (b) injecting a ``dependency_overrides`` block pointing the "
+        "test's pubspec at packages/forge-canvas-dart/ via ``path:`` (a "
+        "test-only fixture; the shipped template stays pub-pinned).\n"
+        "Either lands outside the test-rebalance scope of Initiative #9. "
+        "RFC-003 owns the publication path; this skip stays until that "
+        "lands."
+    )
 )
 def test_flutter_full_analyzes(
     tmp_path: Path, require_uv: None, require_flutter: None, require_git: None

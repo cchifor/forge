@@ -86,6 +86,13 @@ register_option(
         type=OptionType.ENUM,
         default="none",
         options=("none", "llm_only", "tool_calling", "multi_agent"),
+        # ENUM values "llm_only" / "tool_calling" both pull
+        # ``conversation_persistence`` (DB-backed). "none" / "multi_agent"
+        # are no-ops at the persistence layer but the option-level flag
+        # is the lever the walker checks; for ENUMs the validator
+        # narrows further via the DB-conflict collector. Init #7
+        # follow-up — codex flagged this gap.
+        requires_database=True,
         summary="Layer discriminator for the agentic/LLM stack.",
         description="""\
 Fast-path preset for the conversational-AI surface. Mirrors

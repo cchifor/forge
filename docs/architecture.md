@@ -12,12 +12,12 @@ flowchart TD
     subgraph Core[Forge core]
         Resolver[capability_resolver<br/>Option → Fragment plan]
         Generator[generator<br/>orchestrates Copier + fragments + codegen]
-        Injector[feature_injector<br/>fragment files + injections]
+        Injector[appliers pipeline<br/>files + injection + deps + env]
         Codegen[codegen pipeline<br/>UI protocol + enums + canvas manifest]
         Provenance[provenance<br/>SHA-256 of every written file]
     end
 
-    Registries[(3 registries<br/>OPTION_REGISTRY × 30<br/>FRAGMENT_REGISTRY × 51<br/>BACKEND_REGISTRY × 3+)] --> Resolver
+    Registries[(3 registries<br/>OPTION_REGISTRY × 47<br/>FRAGMENT_REGISTRY × 74<br/>BACKEND_REGISTRY × 3+)] --> Resolver
     Plugins[forge.plugins<br/>entry points] -.extends.-> Registries
 
     Resolver --> Generator
@@ -98,7 +98,7 @@ sequenceDiagram
     participant Resolver as capability_resolver.resolve()
     participant Generator as generator.generate()
     participant Copier
-    participant Injector as feature_injector
+    participant Injector as appliers.pipeline
     participant Codegen as codegen.pipeline
     participant Prov as provenance
 
@@ -240,4 +240,4 @@ Plugins can ship fragments from their own package tree — `fragment_dir` accept
 | MCP | `test_mcp_client.py`, `test_mcp_audit.py` | ~15 |
 | E2E (behind `-m e2e`) | `tests/e2e/test_full_generation.py` | 3–5 |
 
-Coverage floor: 75% (enforced in `pyproject.toml`). Mutation-test scoping: `forge/feature_injector.py`, `merge.py`, `provenance.py`, `injectors/*`, `updater.py`. See `docs/mutation-testing.md`.
+Coverage floor: 75% (enforced in `pyproject.toml`). Mutation-test scoping: `forge/appliers/{injection,plan}.py`, `forge/sync/{merge,provenance}.py`, `forge/injectors/{python_ast,ts_ast}.py`, `forge/sync/forge_to_project/updater/*` (the post-Epic-A decomposition of the legacy `feature_injector` + `updater` modules). See `docs/mutation-testing.md` and `tests/mutmut_baselines.json` for the per-module kill-rate floors.

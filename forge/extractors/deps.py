@@ -31,7 +31,7 @@ import tomlkit
 import tomlkit.exceptions
 
 from forge.config import BackendLanguage
-from forge.extractors.pipeline import CandidatePatch
+from forge.extractors.pipeline import CandidatePatch, ExtractorKind
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 class DepsExtractor:
     """Harvest dependency drift from package manifests."""
 
-    kind = "deps"
+    kind: ExtractorKind = "deps"
 
     def extract(
         self,

@@ -35,6 +35,7 @@ from forge.errors import (
     TemplateError,
 )
 from forge.generator import generate
+from forge.reports import GenerationReport, HiddenMutation
 
 
 def _exit_code_for(err: ForgeError) -> int:
@@ -120,12 +121,18 @@ def main() -> None:
     # later in generation with no hint that a plugin failed earlier.
     # Suppressible via ``FORGE_QUIET_PLUGIN_WARNINGS=1`` for scripts
     # that intentionally tolerate broken plugins.
+    #
+    # Init #5 — also collect the warnings in a list keyed by the same
+    # message we print on stderr, so the GenerationReport can surface
+    # them under ``warnings`` for JSON consumers (agents that don't
+    # parse stderr). The list is consumed later in main() after the
+    # report is created.
+    plugin_load_warnings: list[str] = []
     if plugins.FAILED_PLUGINS and os.environ.get("FORGE_QUIET_PLUGIN_WARNINGS") != "1":
         for name, reason in plugins.FAILED_PLUGINS:
-            print(
-                f"  [warn] plugin {name!r} failed to load: {reason}",
-                file=sys.stderr,
-            )
+            msg = f"plugin {name!r} failed to load: {reason}"
+            plugin_load_warnings.append(msg)
+            print(f"  [warn] {msg}", file=sys.stderr)
         print(
             "  [warn] Run `forge --plugins list` for plugin status; "
             "set FORGE_QUIET_PLUGIN_WARNINGS=1 to suppress.",
@@ -251,6 +258,16 @@ def main() -> None:
     if getattr(args, "completion", None):
         _print_completion(args.completion)
 
+    # When --json is set, redirect all print() to stderr so stdout is clean
+    # JSON. Init #5 — moved before plugin dispatch so a plugin handler that
+    # calls print() can't pollute the stdout buffer before a JSON error
+    # envelope is written. Pre-#5, plugin dispatch happened *before* this
+    # redirect, so a print() inside the handler ended up on stdout next to
+    # the error envelope, breaking line-oriented JSON parsers.
+    _real_stdout = sys.stdout
+    if getattr(args, "json_output", False):
+        sys.stdout = sys.stderr
+
     # Plugin-registered commands — walk the registry and invoke any flag
     # the user set. Handlers return an int exit code we pass to sys.exit.
     from forge.plugins import COMMAND_REGISTRY  # noqa: PLC0415
@@ -258,13 +275,53 @@ def main() -> None:
     for name, handler in COMMAND_REGISTRY.items():
         dest = f"plugin_cmd_{name.replace('-', '_')}"
         if getattr(args, dest, False):
-            code = handler(args)
-            sys.exit(int(code) if isinstance(code, int) else 0)
+            # Init #5 — wrap plugin failures in the same JSON envelope
+            # the rest of the CLI uses. Three branches:
+            #   * ForgeError subclass — emit {error, code, hint, context}
+            #     via _json_error and exit with the matching exit code.
+            #   * Any other exception — emit {error: "<str>"} so JSON
+            #     callers always see a structured shape, then re-raise so
+            #     the text path's traceback still surfaces.
+            #   * Handler returns a non-zero int — synthesise a minimal
+            #     envelope so callers don't see an empty stdout next to
+            #     a non-zero exit. Pre-#5, a plugin returning ``2`` exited
+            #     2 with no JSON output and agents couldn't classify the
+            #     failure.
+            try:
+                code = handler(args)
+            except ForgeError as e:
+                if getattr(args, "json_output", False):
+                    _json_error(_real_stdout, e)
+                print(f"\n  Plugin {name!r} failed: {e}", file=sys.stderr)
+                if e.hint:
+                    print(f"  Hint: {e.hint}", file=sys.stderr)
+                sys.exit(_exit_code_for(e))
+            except Exception as e:  # noqa: BLE001 — surface plugin bugs to JSON callers too
+                if getattr(args, "json_output", False):
+                    _json_error(_real_stdout, str(e))
+                raise
+            exit_code = int(code) if isinstance(code, int) else 0
+            if exit_code != 0 and getattr(args, "json_output", False):
+                _real_stdout.write(
+                    json.dumps(
+                        {
+                            "error": f"Plugin {name!r} exited with code {exit_code}",
+                            "plugin": name,
+                            "exit_code": exit_code,
+                        }
+                    )
+                    + "\n"
+                )
+                _real_stdout.flush()
+            sys.exit(exit_code)
 
-    # When --json is set, redirect all print() to stderr so stdout is clean JSON
-    _real_stdout = sys.stdout
-    if getattr(args, "json_output", False):
-        sys.stdout = sys.stderr
+    # Init #5 — when --json is set, collect every CLI-side coercion
+    # (auth.mode rewrite, etc.) so the JSON envelope can surface them
+    # under hidden_mutations. Text-mode callers pass ``mutations=None``
+    # and the builder stays silent (back-compat).
+    cli_mutations: list[HiddenMutation] | None = (
+        [] if getattr(args, "json_output", False) else None
+    )
 
     config: ProjectConfig
     if _is_headless(args):
@@ -289,7 +346,7 @@ def main() -> None:
                 sys.exit(2)
 
         try:
-            config = _build_config(args, cfg)
+            config = _build_config(args, cfg, mutations=cli_mutations)
             config.validate()
         except (ValueError, KeyError) as e:
             if getattr(args, "json_output", False):
@@ -300,9 +357,25 @@ def main() -> None:
         if not args.quiet and not getattr(args, "json_output", False):
             _interactive._print_summary(config)
 
-        if not args.yes and not _interactive._ask_confirm("Proceed with generation?"):
-            print("\n  Aborted.")
-            sys.exit(0)
+        if not args.yes:
+            # An interactive ``_ask_confirm`` here would call into
+            # ``questionary``, which exits 1 with no structured output when
+            # stdin is closed — agents driving forge headlessly (Claude Code,
+            # Codex, CI) end up with an empty failure they can't classify.
+            # Fail loudly with a JSON envelope (or text on stderr) instead.
+            if not sys.stdin.isatty():
+                msg = (
+                    "Non-interactive stdin and --yes was not set; refusing "
+                    "to prompt. Re-run with --yes to confirm headless "
+                    "generation."
+                )
+                if getattr(args, "json_output", False):
+                    _json_error(_real_stdout, msg)
+                print(f"  {msg}", file=sys.stderr)
+                sys.exit(2)
+            if not _interactive._ask_confirm("Proceed with generation?"):
+                print("\n  Aborted.")
+                sys.exit(0)
     else:
         collected = _interactive._collect_inputs()
         if collected is None:
@@ -316,11 +389,19 @@ def main() -> None:
 
     if not quiet:
         print()
+    # Init #5 — instantiate a GenerationReport for --json callers so the
+    # generator can populate it as each phase reports state. Text-mode
+    # callers pass report=None to keep the legacy zero-overhead path.
+    report: GenerationReport | None = (
+        GenerationReport() if getattr(args, "json_output", False) else None
+    )
     try:
         dry_run = bool(getattr(args, "dry_run", False))
-        project_root = generate(config, quiet=quiet, dry_run=dry_run)
+        project_root = generate(config, quiet=quiet, dry_run=dry_run, report=report)
     except TypeError:
         # generate() older signature (no dry_run kwarg) — fall back.
+        # This branch also covers plugin-supplied generate() shims that
+        # haven't been updated for the report= kwarg; they still work.
         project_root = generate(config, quiet=quiet)
     except ForgeError as e:
         if getattr(args, "json_output", False):
@@ -347,6 +428,26 @@ def main() -> None:
             result["frontend_dir"] = str(project_root / config.frontend_slug)
             result["framework"] = config.frontend.framework.value
             result["features"] = config.all_features
+        # Init #5 — additive: emit the agent-grade GenerationReport
+        # under a new top-level ``report`` key so old keys
+        # (project_root, backends, frontend_dir, framework, features)
+        # remain. Pre-#5 consumers that pin those keys keep working;
+        # agents that need the richer payload read result["report"].
+        # CLI-side hidden mutations (auth.mode coercion, etc.)
+        # captured during _build_config are attached here — the
+        # generator can't see them because they happen before
+        # generate() is called.
+        if report is not None:
+            for m in cli_mutations or []:
+                report.add_hidden_mutation(m)
+            # Surface plugin-load warnings caught at startup so JSON
+            # callers see the same signal stderr did. Without this, a
+            # broken plugin would show ``warnings: []`` in the envelope
+            # despite emitting "[warn] plugin 'X' failed to load" on
+            # stderr — agents only parsing stdout would miss the issue.
+            for w in plugin_load_warnings:
+                report.add_warning(w)
+            result["report"] = report.to_dict()
         _real_stdout.write(json.dumps(result) + "\n")
         _real_stdout.flush()
     else:
@@ -356,7 +457,11 @@ def main() -> None:
     if not args.no_docker and config.backend is not None and not getattr(args, "dry_run", False):
         if args.yes:
             boot(project_root)
-        else:
+        elif sys.stdin.isatty():
             print()
             if _interactive._ask_confirm("Start Docker Compose stack?", default=False):
                 boot(project_root)
+        # Non-TTY without --yes: skip docker boot. Matches the prompt's
+        # default=False answer; an agent that wants the stack should pass
+        # --yes (auto-boot) or run docker compose itself after consuming
+        # the JSON success envelope.
