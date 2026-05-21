@@ -13,10 +13,69 @@ export type {
 export { lintProps, warnOnLintIssues } from './lint'
 export type { LintIssue } from './lint'
 
-// AG-UI WebSocket client — mirrors `forge_canvas` (Dart). Single source
-// of truth for inbound event decoding across Vue / Svelte / Flutter.
+// AG-UI WebSocket client — for AG-UI-compliant servers emitting the
+// `{kind, payload}` envelope. Kept for backwards compatibility with
+// existing consumers; the SSE-based client from @forge/canvas-core
+// (re-exported below as `SseAgUiClient`) is the recommended choice
+// for new code targeting agent-run protocols.
 export { AgUiClient } from './ag_ui_client'
 export type { AgUiClientOptions } from './ag_ui_client'
+
+// @forge/canvas-core re-exports — Pillar B Phase 2 of the architectural
+// improvement plan. Surface the framework-agnostic protocol package
+// through canvas-vue so generated Vue projects pull canvas-core
+// transitively and don't have to declare a direct dep. The future
+// template rewrite imports the reducer + SSE client + McpApprovalClient
+// from `@forge/canvas-vue` instead of going direct to canvas-core, so
+// the import path stays inside the framework adapter even though the
+// implementation lives in core.
+//
+// The SSE client is re-exported under `SseAgUiClient` to avoid the
+// name clash with the WebSocket `AgUiClient` above — picking by
+// transport is more honest than picking by package origin.
+export {
+  AgUiClient as SseAgUiClient,
+  McpApprovalClient,
+  McpApprovalRejected,
+  createMcpBridge,
+  MCP_BRIDGE_AVAILABLE,
+  agentStateFromRaw,
+  clearPendingPromptIfMatches,
+  EMPTY_AGENT_STATE,
+  EMPTY_CHAT_SNAPSHOT,
+  parseEvent,
+  reduce,
+  resetSnapshot,
+  splitOnFrameBoundary,
+} from '@forge/canvas-core'
+export type {
+  AgUiClientOptions as SseAgUiClientOptions,
+  AgUiEvent,
+  AgUiRunPayload,
+  AgentState,
+  ApprovalMode,
+  AppBridgeCapabilities,
+  AppBridgeContext,
+  AppBridgeIdentity,
+  BridgeMessage,
+  ChatMessage,
+  ChatRole,
+  ChatStateSnapshot,
+  IframeSizeChange,
+  McpApprovalClientOptions,
+  McpBridge,
+  McpBridgeHandlers,
+  McpInvokeRequest,
+  McpInvokeResult,
+  OpenLinkRequest,
+  ToolCallInfo,
+  ToolCallRequest,
+  ToolCallStatus,
+  UpstreamAppBridge,
+  UserPromptOption,
+  UserPromptPayload,
+  WorkspaceActivity,
+} from '@forge/canvas-core'
 
 // Canvas component props — generated from
 // forge/templates/_shared/canvas-components/*.props.schema.json.

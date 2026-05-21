@@ -9,10 +9,12 @@ export type {
 export { lintProps, warnOnLintIssues } from './lint'
 export type { LintIssue } from './lint'
 
-// AG-UI WebSocket client — mirrors `forge_canvas` (Dart). Single source
-// of truth for inbound event decoding across Vue / Svelte / Flutter.
-export { AgUiClient } from './ag_ui_client'
-export type { AgUiClientOptions } from './ag_ui_client'
+// Framework-agnostic protocol surface — re-exported through the
+// `protocol` sub-module so tests + bundlers that don't need the Svelte
+// component graph can import a lighter slice. The full
+// `@forge/canvas-svelte` surface includes both the protocol and the
+// components below.
+export * from './protocol'
 
 // Canvas component props — generated from
 // forge/templates/_shared/canvas-components/*.props.schema.json.

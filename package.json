@@ -1,0 +1,17 @@
+{
+  "name": "forge-packages",
+  "version": "0.0.0",
+  "private": true,
+  "description": "npm workspace root for forge's TypeScript canvas packages.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/canvas-core",
+    "packages/canvas-vue",
+    "packages/canvas-svelte"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
