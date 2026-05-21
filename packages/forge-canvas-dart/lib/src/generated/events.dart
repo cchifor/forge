@@ -208,6 +208,49 @@ sealed class AgUiEvent {
 
   /// The kebab-case kind slug for this variant.
   String get kind;
+
+  /// Parse a raw JSON frame into the matching sealed variant.
+  ///
+  /// Reads the canonical `kind` discriminator, pulls the nested
+  /// `payload` map, and dispatches to the matching payload's
+  /// `fromJson`. Returns `null` when the frame has no `kind`
+  /// field, carries an unknown slug, or is missing the
+  /// `payload` object — the caller's `onParseError` then
+  /// decides whether to surface a synthetic event or drop the
+  /// frame.
+  ///
+  /// Wire shape (mirrors the Pydantic discriminated-union
+  /// envelope on the backend):
+  ///
+  ///     { "kind": "<slug>", "payload": { ...variant fields... } }
+  ///
+  /// Wired into the shipped `AgUiClient` via
+  /// `AgUiClient<AgUiEvent>(parser: AgUiEvent.parse, ...)`.
+  static AgUiEvent? parse(Map<String, dynamic> json) {
+    final kind = json['kind'];
+    if (kind is! String) return null;
+    final rawPayload = json['payload'];
+    if (rawPayload is! Map) return null;
+    final payload = Map<String, dynamic>.from(rawPayload);
+    switch (kind) {
+      case 'ag-ui-payload':
+        return AgUiPayloadEvent(AgUiPayload.fromJson(payload));
+      case 'agent-state':
+        return AgentStateEvent(AgentState.fromJson(payload));
+      case 'hitl-response':
+        return HitlResponseEvent(HitlResponse.fromJson(payload));
+      case 'mcp-ext-payload':
+        return McpExtPayloadEvent(McpExtPayload.fromJson(payload));
+      case 'tool-call-info':
+        return ToolCallInfoEvent(ToolCallInfo.fromJson(payload));
+      case 'user-prompt-payload':
+        return UserPromptPayloadEvent(UserPromptPayload.fromJson(payload));
+      case 'workspace-activity':
+        return WorkspaceActivityEvent(WorkspaceActivity.fromJson(payload));
+      default:
+        return null;
+    }
+  }
 }
 
 /// `ag-ui-payload` variant of [AgUiEvent], wrapping a [AgUiPayload] payload.

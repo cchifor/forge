@@ -49,6 +49,9 @@ REQUIRES: rag.backend ≠ none + async.task_queue = true.""",
         category=FeatureCategory.ASYNC_WORK,
         stability="experimental",
         enables={True: ("rag_sync_tasks",)},
+        # rag_sync_tasks depends on rag_pipeline -> conversation_persistence
+        # (DB-backed). Init #7 follow-up: codex flagged this gap.
+        requires_database=True,
     )
 )
 

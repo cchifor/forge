@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/github.dart';
 
+import '../generated/props.dart';
+
 /// CodeViewer canvas component — syntax-highlighted code with optional
 /// filename header and line numbers.
 ///
 /// Props schema:
 /// forge/templates/_shared/canvas-components/CodeViewer.props.schema.json
+///
+/// The [fromProps] factory routes through the generated
+/// [CodeViewerProps] so the schema-driven shape is the single source
+/// of truth at parse time. The widget keeps individual `final`
+/// fields for Flutter ergonomics (`const` constructor + structural
+/// `==`).
 class CodeViewer extends StatelessWidget {
   final String code;
   final String language;
@@ -21,12 +29,27 @@ class CodeViewer extends StatelessWidget {
     this.showLineNumbers = false,
   });
 
-  factory CodeViewer.fromProps(Map<String, dynamic> props) => CodeViewer(
-        code: (props['code'] as String?) ?? '',
-        language: (props['language'] as String?) ?? 'plaintext',
-        filename: props['filename'] as String?,
-        showLineNumbers: (props['showLineNumbers'] as bool?) ?? false,
+  /// Build a [CodeViewer] from a typed [CodeViewerProps]. Defaults
+  /// for fields the schema declares as optional mirror the previous
+  /// behaviour (`'plaintext'` language, `showLineNumbers = false`).
+  factory CodeViewer.fromGeneratedProps(CodeViewerProps props) => CodeViewer(
+        code: props.code,
+        language: props.language,
+        filename: props.filename,
+        showLineNumbers: props.showLineNumbers ?? false,
       );
+
+  /// Backend-driven entry point: parse a raw payload into the
+  /// generated [CodeViewerProps] (single source of truth for canvas
+  /// prop shapes), then build the widget.
+  factory CodeViewer.fromProps(Map<String, dynamic> props) =>
+      CodeViewer.fromGeneratedProps(CodeViewerProps.fromJson({
+        'code': (props['code'] as String?) ?? '',
+        'language': (props['language'] as String?) ?? 'plaintext',
+        if (props['filename'] != null) 'filename': props['filename'],
+        if (props['showLineNumbers'] != null)
+          'showLineNumbers': props['showLineNumbers'],
+      }));
 
   @override
   Widget build(BuildContext context) {

@@ -169,11 +169,20 @@ OPENAPI_MISSING_TREATED_AS_SKIP = {
 def test_openapi_missing_is_treated_as_skip(stub_server: str, capsys) -> None:
     """Path B of ticket #28: when every OpenAPI path 404s, the backend
     template has no exporter wired (current state for rust + node), so
-    the contract logs a skip and passes rather than failing the lane."""
+    the contract logs a skip and passes rather than failing the lane.
+
+    Initiative #9: ``skipped_endpoints`` must also be populated so the
+    runner can surface the skip via a GitHub Actions ``::warning::``
+    annotation. Pre-#9 the skip was only a stdout ``print`` and
+    disappeared into the log without surfacing to the CI UI.
+    """
     result = assert_contract(stub_server, scenario="rust_svelte_min", backend_name="api")
     assert result.passed, format_result(result)
     captured = capsys.readouterr()
     assert "skipping" in captured.out.lower()
+    assert any("openapi" in s.lower() for s in result.skipped_endpoints), (
+        f"openapi skip must populate skipped_endpoints (got {result.skipped_endpoints!r})"
+    )
 
 
 OPENAPI_500_STILL_A_VIOLATION = {

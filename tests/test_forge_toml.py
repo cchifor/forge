@@ -182,7 +182,14 @@ class TestSchemaV3OptionOrigins:
     """
 
     def test_v3_origins_round_trip(self, tmp_path: Path) -> None:
-        """Writing + reading a v3 manifest preserves option_origins exactly."""
+        """Writing + reading a manifest preserves option_origins exactly.
+
+        Initiative #3 bumped CURRENT_SCHEMA_VERSION to 4; the
+        ``[forge.option_origins]`` table is still parsed identically,
+        so the round-trip semantics carry forward. Schema-version
+        assertion pinned to the constant so a future bump only needs
+        to update one place.
+        """
         path = tmp_path / "forge.toml"
         write_forge_toml(
             path,
@@ -199,7 +206,7 @@ class TestSchemaV3OptionOrigins:
             },
         )
         data = read_forge_toml(path)
-        assert data.schema_version == 3
+        assert data.schema_version == CURRENT_SCHEMA_VERSION
         assert data.option_origins == {
             "middleware.correlation_id": "default",
             "middleware.rate_limit": "user",
@@ -210,8 +217,13 @@ class TestSchemaV3OptionOrigins:
             "middleware.rate_limit": True,
         }
 
-    def test_v3_default_schema_version_is_3(self, tmp_path: Path) -> None:
-        """Default ``schema_version`` on write is bumped to 3 (WS2)."""
+    def test_v3_default_schema_version_is_current(self, tmp_path: Path) -> None:
+        """Default ``schema_version`` on write tracks CURRENT_SCHEMA_VERSION.
+
+        Initiative #3 bumped the constant from 3 to 4; this test now
+        pins the round-trip default to the constant so subsequent bumps
+        only require updating CURRENT_SCHEMA_VERSION.
+        """
         path = tmp_path / "forge.toml"
         write_forge_toml(
             path,
@@ -220,10 +232,10 @@ class TestSchemaV3OptionOrigins:
             templates={"python": "p"},
             options={"middleware.rate_limit": True},
         )
-        # The constant moved.
-        assert CURRENT_SCHEMA_VERSION == 3
+        # The constant moved (was 2 pre-WS2, was 3 pre-Initiative-#3).
+        assert CURRENT_SCHEMA_VERSION == 4
         data = read_forge_toml(path)
-        assert data.schema_version == 3
+        assert data.schema_version == CURRENT_SCHEMA_VERSION
 
     def test_write_without_explicit_origins_defaults_to_user(
         self, tmp_path: Path
@@ -284,7 +296,8 @@ class TestSchemaV3OptionOrigins:
         )
         data = read_forge_toml(path)
         # schema_version is REPORTED as found on disk — read does NOT
-        # re-stamp. The next generate/update re-stamps to v3.
+        # re-stamp. The next generate/update re-stamps to the current
+        # schema (v4 as of Initiative #3).
         assert data.schema_version == 2
         # Every persisted option got "default" — we can't recover the
         # user's intent from a v2 file.
@@ -303,7 +316,10 @@ class TestSchemaV3OptionOrigins:
     ) -> None:
         """v1 manifests (no ``schema_version`` key) take the same path
         as v2 — origins synthesized as all-``"default"``. The
-        ``schema_version < 3`` branch handles both legacies.
+        ``schema_version < 3`` branch handles both legacies (and v3
+        manifests get the same on-disk frontend inference as the v4
+        fallback path, but that's a separate test in
+        ``tests/test_manifest.py``).
         """
         path = tmp_path / "forge.toml"
         path.write_text(

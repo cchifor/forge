@@ -2,13 +2,20 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../generated/props.dart';
+
 /// DataTable canvas component — tabular data with sortable columns and
 /// client-side pagination.
 ///
 /// Props schema:
 /// forge/templates/_shared/canvas-components/DataTable.props.schema.json
+///
+/// Column descriptors are typed against [DataTableColumn] — the sealed
+/// inner class generated from the schema by
+/// ``forge.codegen.canvas_props``. The hand-written ``_Column`` mirror
+/// class is gone: the generated file is the single source of truth.
 class DataTable extends StatefulWidget {
-  final List<_Column> columns;
+  final List<DataTableColumn> columns;
   final List<Map<String, dynamic>> rows;
   final int pageSize;
 
@@ -17,7 +24,9 @@ class DataTable extends StatefulWidget {
     required List<Map<String, dynamic>> columns,
     required this.rows,
     this.pageSize = 25,
-  }) : columns = columns.map(_Column.fromMap).toList(growable: false);
+  }) : columns = columns
+            .map((raw) => DataTableColumn.fromJson(raw))
+            .toList(growable: false);
 
   factory DataTable.fromProps(Map<String, dynamic> props) => DataTable(
         columns: ((props['columns'] as List?) ?? const [])
@@ -31,20 +40,6 @@ class DataTable extends StatefulWidget {
 
   @override
   State<DataTable> createState() => _DataTableState();
-}
-
-class _Column {
-  final String key;
-  final String label;
-  final bool sortable;
-
-  const _Column({required this.key, required this.label, this.sortable = false});
-
-  factory _Column.fromMap(Map<String, dynamic> raw) => _Column(
-        key: raw['key'] as String,
-        label: raw['label'] as String,
-        sortable: (raw['sortable'] as bool?) ?? false,
-      );
 }
 
 class _DataTableState extends State<DataTable> {
@@ -78,8 +73,8 @@ class _DataTableState extends State<DataTable> {
       .take(widget.pageSize)
       .toList(growable: false);
 
-  void _toggleSort(_Column column) {
-    if (!column.sortable) return;
+  void _toggleSort(DataTableColumn column) {
+    if (!(column.sortable ?? false)) return;
     setState(() {
       if (_sortKey == column.key) {
         _sortAsc = !_sortAsc;
@@ -185,7 +180,7 @@ class _DataTableState extends State<DataTable> {
 }
 
 class _HeaderCell extends StatelessWidget {
-  final _Column column;
+  final DataTableColumn column;
   final String? sortKey;
   final bool sortAsc;
   final VoidCallback onTap;
@@ -201,13 +196,14 @@ class _HeaderCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isActive = sortKey == column.key;
-    final indicator = !column.sortable
+    final isSortable = column.sortable ?? false;
+    final indicator = !isSortable
         ? null
         : isActive
             ? (sortAsc ? '▲' : '▼')
             : '↕';
     return InkWell(
-      onTap: column.sortable ? onTap : null,
+      onTap: isSortable ? onTap : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(

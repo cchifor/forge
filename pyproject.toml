@@ -135,7 +135,9 @@ omit = [
 # met; the roadmap's 26% number was stale. The gate stays at 75 as the
 # coarse safety net. Finer-grained critical-path floors live in
 # `tests/test_coverage_gates.py`; those are the ones that bite when someone
-# touches merge / provenance / feature_injector / the injectors.
+# touches sync/merge, sync/provenance, appliers/, the injectors, or the
+# sync/forge_to_project/updater/ package (post-Epic-A decomposition of the
+# legacy feature_injector + updater modules).
 #
 # Policy: each sprint's coverage PR ratchets the critical-path floors upward
 # toward the targets in docs/coverage-policy.md. Lowering any floor requires
@@ -153,18 +155,24 @@ directory = "htmlcov"
 
 
 # Mutation testing via mutmut. Scoped to the fragment-injection critical
-# path (feature_injector, merge, provenance, injectors/) where silent
-# regressions would bite generated projects on every `forge --update`.
+# path (appliers/, sync/merge, sync/provenance, sync/forge_to_project/updater/,
+# injectors/) where silent regressions would bite generated projects on every
+# `forge --update`. The pre-Epic-A `forge/feature_injector.py`, `forge/merge.py`,
+# `forge/provenance.py`, and `forge/updater.py` paths were decomposed into the
+# packages below; mutmut silently no-ops on missing paths so the list is kept
+# in sync with the live tree.
 # Run with `uvx mutmut run` and inspect with `uvx mutmut results`.
 [tool.mutmut]
 paths_to_mutate = [
     "forge/appliers/injection.py",
     "forge/appliers/plan.py",
-    "forge/merge.py",
-    "forge/provenance.py",
+    "forge/sync/merge.py",
+    "forge/sync/provenance.py",
     "forge/injectors/python_ast.py",
     "forge/injectors/ts_ast.py",
-    "forge/updater.py",
+    "forge/sync/forge_to_project/updater/__init__.py",
+    "forge/sync/forge_to_project/updater/_merge_driver.py",
+    "forge/sync/forge_to_project/updater/_template_render.py",
 ]
 tests_dir = "tests/"
 runner = "uv run pytest -x --no-cov -q"

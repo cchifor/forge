@@ -25,7 +25,9 @@ not fragment overlays.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,8 +51,11 @@ from forge.codegen.ui_protocol import (
 )
 from forge.config import BackendLanguage, FrontendFramework
 from forge.frontends import FrontendLayout, get_frontend_layout
+from forge.logging import get_logger, log_event
 
 if TYPE_CHECKING:
+    from forge.api import PluginEmitterRegistration
+    from forge.capability_resolver import ResolvedPlan
     from forge.config import ProjectConfig
     from forge.sync.provenance import ProvenanceCollector
 
@@ -58,11 +63,15 @@ if TYPE_CHECKING:
 _TEMPLATES_ROOT = Path(__file__).resolve().parent.parent / "templates"
 _ENUMS_ROOT = _TEMPLATES_ROOT / "_shared" / "domain" / "enums"
 
+_LOGGER = get_logger(__name__)
+
 
 def run_codegen(
     config: ProjectConfig,
     project_root: Path,
     collector: ProvenanceCollector | None = None,
+    *,
+    resolved: ResolvedPlan | None = None,
 ) -> None:
     """Run every schema-driven emitter and write outputs into the project tree.
 
@@ -70,6 +79,17 @@ def run_codegen(
     present, the corresponding emitter quietly skips. Overwrites existing
     generated files (they're authoritative forge outputs — user edits to
     these are expected to be captured via `user` zones in the future).
+
+    Initiative #2 sub-task 2: after the built-in passes run,
+    :func:`_run_plugin_emitters` walks
+    :data:`forge.plugins.LOADED_PLUGINS` and invokes every emitter
+    registered via :meth:`forge.api.ForgeAPI.add_emitter`. ``resolved``
+    is forwarded to plugin emitters as the third positional argument;
+    the in-tree :func:`forge.generator._apply_project_scope` caller
+    forwards the resolved capability plan there. Test paths that
+    construct ``run_codegen`` directly without a plan get ``None``
+    forwarded, so plugin emitters MUST tolerate ``resolved=None``.
+    Built-in passes do not consume ``resolved``.
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
@@ -77,6 +97,7 @@ def run_codegen(
     _emit_canvas_lint_packages(config, project_root, collector)
     _emit_event_union_pydantic(config, project_root, collector)
     _emit_shared_enums(config, project_root, collector)
+    _run_plugin_emitters(config, project_root, resolved)
 
 
 def _frontend_layout(config: ProjectConfig) -> FrontendLayout | None:
@@ -298,8 +319,52 @@ def _write(
     content: str,
     collector: ProvenanceCollector | None,
 ) -> None:
-    """Write ``content`` to ``target`` and record base-template provenance."""
+    """Write ``content`` to ``target`` and record base-template provenance.
+
+    Initiative #6 (caching) — content-skip: when ``target`` already
+    exists and the sha256 of its decoded UTF-8 text matches the sha256
+    of ``content``, the write is skipped. The compare is done at the
+    decoded-text level (not raw bytes) because :meth:`Path.write_text`
+    with the default ``newline=None`` translates ``\\n`` to the
+    platform line separator on Windows, so a raw-bytes compare on a
+    cross-platform manifest would produce a false miss on every
+    Windows run even when the next write would emit identical on-disk
+    bytes. The skip therefore fires whenever the next ``write_text``
+    would produce a logically-identical file — line-ending churn
+    doesn't trigger rewrites, but every content drift does.
+
+    Result: mtime is preserved, fsync churn drops, and IDEs / file
+    watchers don't fire spurious "file changed" events for codegen
+    outputs that didn't actually change. Provenance recording still
+    runs unconditionally — the manifest re-stamp downstream needs a
+    record for every generated file even when its bytes are unchanged
+    this pass. Without the unconditional record, the re-stamp would
+    drop the entry and the next ``--update`` would re-classify the
+    file as untracked.
+    """
     target.parent.mkdir(parents=True, exist_ok=True)
+    new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    if target.is_file():
+        # Compare via decoded text so the hashes match iff the next
+        # write_text() would produce a logically-identical file. See
+        # the function docstring for the line-ending rationale.
+        try:
+            existing_sha = hashlib.sha256(
+                target.read_text(encoding="utf-8").encode("utf-8")
+            ).hexdigest()
+        except (UnicodeDecodeError, OSError):
+            existing_sha = ""
+        if existing_sha == new_sha:
+            # Content unchanged — skip the write. Provenance is still
+            # recorded below so the manifest carries the entry.
+            if collector is not None:
+                collector.record(
+                    target,
+                    origin="base-template",
+                    template_name="_codegen",
+                    template_version=None,
+                )
+            return
     target.write_text(content, encoding="utf-8")
     if collector is not None:
         # Codegen outputs are derived from authoritative schemas under
@@ -317,3 +382,103 @@ def _write(
             template_name="_codegen",
             template_version=None,
         )
+
+
+# ---------------------------------------------------------------------------
+# Plugin emitter walk (Initiative #2 sub-task 2)
+# ---------------------------------------------------------------------------
+
+
+def _run_plugin_emitters(
+    config: ProjectConfig,
+    project_root: Path,
+    resolved: ResolvedPlan | None,
+) -> None:
+    """Collect plugin emitters and invoke each surviving target's winner.
+
+    Mirrors the harvester's
+    :func:`forge.sync.project_to_forge.harvester._orchestrator._collect_global_plugin_extractor_overrides`
+    pattern: walk ``LOADED_PLUGINS`` in load order, collect emitter
+    callables keyed by target with **last-loaded wins** on collision,
+    then invoke each surviving emitter once. Earlier registrations for
+    a collided target are NOT invoked — the operator's understanding
+    of "plugin B's emitter for this target" must be the only thing
+    that runs; otherwise both side-effects ship and the warning is a
+    lie.
+
+    Collisions are recorded during the collection pass and surfaced as
+    structured ``plugin.emitter.target_collision`` warnings naming both
+    the loser and the winner. The invocation pass iterates the winners
+    dict's insertion order — i.e. the order in which each target was
+    first claimed — so callers see deterministic output independent of
+    how many plugins later attempted to override.
+
+    Emitter exceptions are caught and logged — a broken plugin emitter
+    must not abort codegen for the remaining plugins. The caller
+    (``forge.generator._apply_project_scope``) already wraps
+    ``run_codegen`` in a try/except that downgrades any escape to a
+    warning, but per-plugin isolation here means one bad plugin doesn't
+    shadow every plugin that follows.
+    """
+    from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
+
+    # Collection pass: last-loaded wins per target, warning naming both.
+    winners: dict[str, tuple[str, PluginEmitterRegistration]] = {}
+    for plugin in LOADED_PLUGINS:
+        for registration in plugin.emitter_registrations:
+            prior = winners.get(registration.target)
+            if prior is not None and prior[0] != plugin.name:
+                _warn_emitter_target_collision(
+                    target=registration.target,
+                    loser=prior[0],
+                    winner=plugin.name,
+                )
+            winners[registration.target] = (plugin.name, registration)
+
+    # Invocation pass: each surviving emitter runs exactly once.
+    for plugin_name, registration in winners.values():
+        try:
+            registration.emitter(project_root, config, resolved)
+        except Exception as exc:  # noqa: BLE001 — isolate per-plugin failure
+            log_event(
+                _LOGGER,
+                "plugin.emitter.failed",
+                level=logging.WARNING,
+                message=(
+                    f"plugin {plugin_name!r} emitter for target "
+                    f"{registration.target!r} raised "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                plugin=plugin_name,
+                target=registration.target,
+                error_type=type(exc).__name__,
+            )
+
+
+def _warn_emitter_target_collision(
+    *, target: str, loser: str, winner: str
+) -> None:
+    """Emit a structured warning when two plugins claim the same target.
+
+    Collision warnings are NOT deduplicated: each codegen invocation
+    that exhibits the collision deserves the signal because resolution
+    depends on plugin load order — operators should see it on every
+    ``forge new`` until the conflict is resolved.
+
+    Mirrors
+    :func:`forge.sync.project_to_forge.harvester._orchestrator._warn_global_override_collision`
+    so the two collision-warning surfaces share the same shape.
+    """
+    log_event(
+        _LOGGER,
+        "plugin.emitter.target_collision",
+        level=logging.WARNING,
+        message=(
+            f"plugin {winner!r} overrode the codegen emitter for target "
+            f"{target!r} previously registered by plugin {loser!r}; "
+            "last-loaded wins by default"
+        ),
+        target=target,
+        winner=winner,
+        loser=loser,
+    )

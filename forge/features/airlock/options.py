@@ -25,6 +25,9 @@ BACKENDS: python
 DEPENDENCY: weld-airlock
 ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN""",
         category=FeatureCategory.PLATFORM,
+        # Initiative #7 — airlock client persists sandbox bookkeeping
+        # (active sessions, token grants) into the DB.
+        requires_database=True,
         enables={True: ("airlock_client",)},
     )
 )

@@ -96,10 +96,13 @@ def compile_tsp(source_dir: Path, *, entry: str | None = None) -> TypespecEmitOu
                 "@typespec/openapi3 is enabled in the source's tspconfig.yaml."
             )
         artefact = candidates[0]
+        # Read inside the tempdir context — the directory (and the
+        # artefact with it) is removed when this ``with`` block exits.
+        suffix = artefact.suffix
+        yaml_text = artefact.read_text(encoding="utf-8")
 
-    yaml_text = artefact.read_text(encoding="utf-8") if artefact.exists() else ""
     spec: dict[str, Any] = {}
-    if artefact.suffix == ".json":
+    if suffix == ".json":
         spec = json.loads(yaml_text) if yaml_text else {}
     else:
         # Lazy-import PyYAML so this stays importable even if PyYAML

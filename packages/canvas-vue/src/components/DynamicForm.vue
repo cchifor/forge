@@ -6,16 +6,14 @@
 -->
 <script setup lang="ts">
 import { reactive } from 'vue'
+import type { DynamicFormProps } from '../generated/props'
 
-interface Field {
-  name: string
-  label: string
-  type: 'text' | 'number' | 'password' | 'email' | 'select' | 'checkbox' | 'textarea'
-  required?: boolean
-  default?: unknown
-  options?: string[]
-  description?: string
-}
+// `DynamicFormProps.fields` is generated; pull the element type out so
+// per-element narrowing below reads the same as before. The generated
+// interface is the source of truth — hand-written mirror interfaces
+// for canvas-component props are banned by convention; the contract
+// lives in `generated/props.ts`.
+type Field = DynamicFormProps['fields'][number]
 
 // v2 Theme 8-C1 — map each declared `field.type` literal to the TS type
 // its `v-model` should carry. Text-like inputs and selects bind strings,
@@ -28,14 +26,7 @@ type FieldValueByType<T extends Field['type']> =
   T extends 'number' ? number :
   string
 
-interface Props {
-  title?: string
-  fields: Field[]
-  submitLabel?: string
-  cancelLabel?: string
-}
-
-const props = defineProps<Props>()
+const props = defineProps<DynamicFormProps>()
 const emit = defineEmits<{
   submit: [values: Record<string, FormFieldValue>]
   cancel: []

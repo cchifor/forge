@@ -120,6 +120,85 @@ class TestCandidatePatch:
         patch = self._mk_patch(baseline_sha=None, risk="needs-review")
         assert patch.baseline_sha is None
 
+    def test_invalid_kind_raises_fragment_error(self) -> None:
+        # Construction-time gate: a bundle deserializer or plugin extractor
+        # that reads a typoed ``kind`` from JSON should fail loudly here
+        # rather than crash deep inside apply-back dispatch. Uses the
+        # CandidatePatch-specific error code (not FRAGMENT_INJECT_YAML_*)
+        # so a JSON consumer can branch on the validation surface that
+        # actually failed.
+        from forge.errors import CANDIDATE_PATCH_BAD_KIND, FragmentError  # noqa: PLC0415
+
+        with pytest.raises(FragmentError) as exc:
+            self._mk_patch(kind="not-a-kind")  # type: ignore[arg-type]
+        assert exc.value.code == CANDIDATE_PATCH_BAD_KIND
+        assert exc.value.context.get("kind") == "not-a-kind"
+
+    def test_invalid_risk_raises_fragment_error(self) -> None:
+        from forge.errors import CANDIDATE_PATCH_BAD_RISK, FragmentError  # noqa: PLC0415
+
+        with pytest.raises(FragmentError) as exc:
+            self._mk_patch(risk="extra-spicy")  # type: ignore[arg-type]
+        assert exc.value.code == CANDIDATE_PATCH_BAD_RISK
+        assert exc.value.context.get("risk") == "extra-spicy"
+
+    def test_every_documented_kind_and_risk_constructs(self) -> None:
+        from forge.extractors.pipeline import (  # noqa: PLC0415
+            CANDIDATE_KINDS,
+            CANDIDATE_RISKS,
+        )
+
+        for kind in CANDIDATE_KINDS:
+            for risk in CANDIDATE_RISKS:
+                patch = self._mk_patch(kind=kind, risk=risk)
+                assert patch.kind == kind
+                assert patch.risk == risk
+
+    def test_literal_aliases_match_runtime_tuples(self) -> None:
+        # Drift gate — Literal alias and runtime tuple must enumerate
+        # the same vocabulary, or a future PR could change one but not
+        # the other and reintroduce stringly-typed acceptance.
+        from typing import get_args  # noqa: PLC0415
+
+        from forge.extractors.pipeline import (  # noqa: PLC0415
+            CANDIDATE_KINDS,
+            CANDIDATE_RISKS,
+            EXTRACTOR_KINDS,
+            CandidateKind,
+            CandidateRisk,
+            ExtractorKind,
+        )
+
+        assert set(get_args(CandidateKind)) == set(CANDIDATE_KINDS)
+        assert set(get_args(CandidateRisk)) == set(CANDIDATE_RISKS)
+        assert set(get_args(ExtractorKind)) == set(EXTRACTOR_KINDS)
+        # ExtractorKind must remain a strict subset of CandidateKind —
+        # downstream code assumes every extractor-declared kind is a
+        # valid CandidatePatch.kind.
+        assert set(EXTRACTOR_KINDS).issubset(set(CANDIDATE_KINDS))
+
+    def test_accept_harvested_kind_is_subset_of_candidate_kind(self) -> None:
+        """``AcceptHarvestedKind`` lives in the accept module and was
+        defined before the CandidatePatch typed-port landed. It must
+        stay a strict subset of CandidateKind, or accept-baseline will
+        accept a manifest entry whose kind apply_bundle / bundle / etc.
+        cannot model.
+        """
+        from typing import get_args  # noqa: PLC0415
+
+        from forge.extractors.pipeline import CandidateKind  # noqa: PLC0415
+        from forge.sync.project_to_forge.accept._shared import (  # noqa: PLC0415
+            AcceptHarvestedKind,
+        )
+
+        accept_kinds = set(get_args(AcceptHarvestedKind))
+        candidate_kinds = set(get_args(CandidateKind))
+        missing = accept_kinds - candidate_kinds
+        assert not missing, (
+            f"AcceptHarvestedKind has values not in CandidateKind: {sorted(missing)}. "
+            "Either widen CandidateKind or shrink AcceptHarvestedKind."
+        )
+
 
 class TestBuiltinExtractorsOnEmptyPlan:
     """Phase 4: every built-in extractor returns ``[]`` for an empty plan.

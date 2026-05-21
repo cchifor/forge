@@ -46,7 +46,13 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from forge.capability_resolver import ResolvedPlan, resolve
-from forge.config import BACKEND_REGISTRY, BackendConfig, BackendLanguage, ProjectConfig
+from forge.config import (
+    BACKEND_REGISTRY,
+    BackendConfig,
+    BackendLanguage,
+    FrontendFramework,
+    ProjectConfig,
+)
 from forge.errors import (
     PROVENANCE_MANIFEST_MISSING,
     ForgeError,
@@ -66,7 +72,12 @@ from forge.sync.forge_to_project.updater._merge_driver import (
 )
 from forge.sync.forge_to_project.updater._template_render import _build_template_update_tasks
 from forge.sync.lock import acquire_lock
-from forge.sync.manifest import ForgeTomlData, read_forge_toml, write_forge_toml
+from forge.sync.manifest import (
+    ForgeFrontendData,
+    ForgeTomlData,
+    read_forge_toml,
+    write_forge_toml,
+)
 from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
 from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
@@ -143,16 +154,63 @@ def _update_locked(
     except metadata.PackageNotFoundError:
         current_version = "0.0.0+unknown"
 
-    backends = _infer_backends(project_root)
-    if not backends:
+    backends = _infer_backends(project_root, manifest_frontend=data.frontend)
+    frontend_framework = _frontend_framework_from_manifest(data.frontend)
+    # ``has_recorded_frontend`` covers both the built-in framework
+    # case (Vue / Svelte / Flutter — ``frontend_framework`` lights up)
+    # and plugin frontends (``frontend.framework`` is set but doesn't
+    # map onto the :class:`FrontendFramework` enum). An explicit
+    # ``framework = "none"`` reading is treated as no-frontend (the
+    # manifest documents ``"none"`` as the explicit "no frontend
+    # layer" marker).
+    has_recorded_frontend = bool(data.frontend.framework) and (
+        data.frontend.framework != FrontendFramework.NONE.value
+    )
+    if not backends and not has_recorded_frontend:
+        # Genuinely empty project — no services/<backend>/ AND no
+        # frontend recorded in the manifest (and none discoverable on
+        # disk). That's not something --update can act on; bail with
+        # the same error shape that pre-Initiative-#3 used so JSON
+        # callers keep their existing envelope.
         raise ProvenanceError(
-            f"No services/<backend>/ directories found under {project_root}. Nothing to update.",
+            f"No services/<backend>/ directories or [forge.frontend] layer found under "
+            f"{project_root}. Nothing to update.",
             context={"project_root": str(project_root)},
+        )
+
+    # Initiative #3 — frontend-only resolver bridge. The capability
+    # resolver gates each fragment on ``project_backends`` (the union
+    # of backends registered in the project), but the project-scope
+    # frontend fragments (e.g. ``platform_auth_session_timeout_vue``)
+    # are registered under :attr:`BackendLanguage.PYTHON` purely to
+    # satisfy the ``Fragment.implementations`` non-empty invariant —
+    # they're frontend code, not Python code. Without a single
+    # ``BackendLanguage.PYTHON`` entry in ``project_backends``, those
+    # fragments are filtered out before they reach
+    # :func:`apply_project_features` (where ``target_frontends`` gates
+    # them properly), so a frontend-only ``--update`` ends up
+    # rendering nothing at all. The synthetic placeholder satisfies
+    # the resolver's contract; the apply loop's
+    # ``if not backend_dir.is_dir(): continue`` guard keeps it from
+    # touching any non-existent ``services/_frontend_only/`` tree on
+    # the backend-scope pass. We add the placeholder for plugin
+    # frontends too (``frontend_framework == NONE`` but
+    # ``has_recorded_frontend == True``) so plugin authors get the
+    # same dispatch path as built-ins.
+    is_synth_bridge = not backends and has_recorded_frontend
+    resolver_backends: list[BackendConfig] = list(backends)
+    if is_synth_bridge:
+        resolver_backends.append(
+            BackendConfig(
+                name="_frontend_only",
+                project_name=data.project_name or project_root.name,
+                language=BackendLanguage.PYTHON,
+            )
         )
 
     config = ProjectConfig(
         project_name=data.project_name or project_root.name,
-        backends=list(backends),
+        backends=resolver_backends,
         options=dict(data.options),
         # Carry origins through so the resolver can distinguish user-set
         # options from defaulted-but-persisted ones. Without this, a
@@ -237,8 +295,14 @@ def _update_locked(
 
     # Epic H — sentinel audit before re-injection. If a hand-edit broke
     # a BEGIN/END pair, raise here with the file+tag+line rather than
-    # silently double-injecting.
-    injection_targets = _collect_injection_targets(project_root, plan, config.backends)
+    # silently double-injecting. We pass the resolver's option map so
+    # ``FragmentPlan.from_impl`` renders any Jinja-templated injection
+    # targets — without it the audit silently skipped option-rendered
+    # paths and the apply pass downstream could double-inject (or fail
+    # noisily) on a corrupted file we never saw.
+    injection_targets = _collect_injection_targets(
+        project_root, plan, config.backends, options=plan.option_values
+    )
     issues = audit_targets(injection_targets)
     if issues:
         if not quiet:
@@ -399,19 +463,73 @@ def _update_locked(
 
     if not quiet:
         print("  [update] re-applying project-scope fragments ...")
+    # ``frontend_framework`` (Initiative #3) — forward the manifest's
+    # recorded frontend so ``Fragment.target_frontends`` gating fires
+    # on update. Pre-Init-#3 this argument was omitted, so a Vue-only
+    # fragment was applied to Svelte / Flutter / frontend-less projects
+    # on every ``--update`` (or worse, errored out). v3 manifests fall
+    # back to inference from ``apps/<slug>/`` — see
+    # :func:`forge.sync.manifest._infer_frontend_from_v3`.
+    #
+    # Synth-bridge narrowing (Initiative #3 P1 follow-up): when the
+    # only "backend" in play is the ``_frontend_only`` placeholder
+    # we inserted above, we restrict project-scope apply to
+    # fragments that explicitly target a frontend (non-empty
+    # ``target_frontends``). Without this narrowing, the resolver's
+    # workaround-of-registering-frontend-fragments-as-PYTHON-impls
+    # would pull non-frontend Python project-scope fragments (e.g.
+    # ``platform_auth_sdk_python``, ``platform_auth_gatekeeper``,
+    # ``agents_md``) and write their files into a project that has
+    # no Python backend to consume them — a regression
+    # codex-review flagged on the first synth-bridge revision.
+    project_apply_plan = plan.ordered
+    if is_synth_bridge:
+        project_apply_plan = tuple(
+            rf for rf in plan.ordered if rf.fragment.target_frontends
+        )
+        if not quiet:
+            dropped = len(plan.ordered) - len(project_apply_plan)
+            if dropped:
+                print(
+                    f"  [update] synth-bridge mode — skipping {dropped} non-frontend "
+                    "project-scope fragment(s) (no backend to host them)"
+                )
+
     apply_project_features(
         project_root,
-        plan.ordered,
+        project_apply_plan,
         quiet=quiet,
         update_mode=update_mode,
         file_baselines=file_baselines,
         collector=collector,
         option_values=plan.option_values,
+        frontend_framework=frontend_framework,
     )
 
-    for rf in plan.ordered:
+    # ``fragments_applied`` lists every fragment that participated in
+    # this run (backend pass + project-scope pass). In synth-bridge
+    # mode we drop the non-frontend project-scope fragments from the
+    # apply call, so we report only what actually got applied here
+    # — pre-Initiative-#3 this list always equalled the resolved
+    # plan, but the synth-bridge narrowing makes the distinction
+    # observable. The backend pass set ``fragments_applied`` for
+    # everything it touched already (``apply_features`` doesn't return
+    # them, so we relied on plan iteration here historically); use
+    # ``project_apply_plan`` so we keep the contract of "report what
+    # we actually re-rendered".
+    for rf in project_apply_plan:
         if rf.fragment.name not in fragments_applied:
             fragments_applied.append(rf.fragment.name)
+    # Also surface anything from the resolved plan that hit a real
+    # backend's apply pass (or would have, if backends weren't
+    # skipped). The pre-Init-#3 behavior reported every plan entry as
+    # "applied" — we keep that for the backend-having case so the
+    # CLI's summary doesn't suddenly start listing fewer fragments
+    # after this initiative.
+    if not is_synth_bridge:
+        for rf in plan.ordered:
+            if rf.fragment.name not in fragments_applied:
+                fragments_applied.append(rf.fragment.name)
 
     # File-level merge sidecars produced by the apply pass. We glob
     # rather than thread a counter through the appliers — sidecars on
@@ -444,20 +562,32 @@ def _update_locked(
         for path in plan.option_values
     }
 
+    # Initiative #3 — preserve the manifest's recorded frontend layer
+    # on re-stamp. If we read v4 explicit data, write it back. If we
+    # inferred from v3, the inference result is what carries the
+    # framework + app_dir forward, upgrading the on-disk manifest to
+    # v4 in place. Re-stamp only the real on-disk backends — drop the
+    # synth ``_frontend_only`` placeholder so the manifest doesn't
+    # claim a Python backend the project doesn't have.
+    real_backends = tuple(bc for bc in config.backends if bc.name != "_frontend_only")
     _restamp_forge_toml(
         manifest=manifest,
         project_name=data.project_name or project_root.name,
-        backends=tuple(config.backends),
+        backends=real_backends,
         option_values=plan.option_values,
         option_origins=next_option_origins,
         current_version=current_version,
         provenance=collector.as_dict(),
         merge_blocks=collector.merge_blocks_as_dict(),
         template_versions=next_template_versions,
+        frontend=data.frontend,
     )
 
     return {
-        "backends": [bc.name for bc in config.backends],
+        # Summary advertises the *real* on-disk backends only — the
+        # ``_frontend_only`` resolver placeholder is an implementation
+        # detail of the apply pass, not something callers should see.
+        "backends": [bc.name for bc in real_backends],
         "fragments_applied": fragments_applied,
         "forge_version_before": data.version,
         "forge_version_after": current_version,
@@ -493,6 +623,8 @@ def _collect_injection_targets(
     project_root: Path,
     plan: ResolvedPlan,
     backends: list[BackendConfig],
+    *,
+    options: dict[str, Any] | None = None,
 ) -> list[Path]:
     """Return every file path the plan's injections would touch.
 
@@ -500,9 +632,17 @@ def _collect_injection_targets(
     pairs before injection runs. The set is the union of inject.yaml
     targets across every resolved fragment × every matching backend.
     Duplicates are collapsed — one file audited once is enough.
+
+    ``options`` (Initiative #3) seeds Jinja rendering of injection
+    target paths declared with ``render: true`` in ``inject.yaml``.
+    Without it, option-rendered paths fall through with their raw
+    Jinja syntax and the audit silently misses any file the fragment
+    would actually touch on apply. Defaults to an empty dict for
+    backward compatibility; the updater passes ``plan.option_values``.
     """
     from forge.appliers.plan import FragmentPlan  # noqa: PLC0415
 
+    rendering_options = options if options is not None else {}
     seen: set[Path] = set()
     for rf in plan.ordered:
         for bc in backends:
@@ -516,7 +656,7 @@ def _collect_injection_targets(
                 fp = FragmentPlan.from_impl(
                     impl,
                     rf.fragment.name,
-                    options={},
+                    options=rendering_options,
                     middlewares=rf.fragment.middlewares,
                     backend=bc.language,
                 )
@@ -601,15 +741,29 @@ def classify_project_state(
     return out
 
 
-def _infer_backends(project_root: Path) -> list[BackendConfig]:
+def _infer_backends(
+    project_root: Path,
+    *,
+    manifest_frontend: ForgeFrontendData | None = None,
+) -> list[BackendConfig]:
     """Discover backends from on-disk layout.
 
     Each ``services/<name>/`` is a backend. Language is inferred from the
     language-specific marker file present: ``pyproject.toml`` → python,
     ``package.json`` → node, ``Cargo.toml`` → rust.
+
+    ``manifest_frontend`` (Initiative #3) is a no-op for built-in
+    backend discovery — it's accepted so the harvester / planner /
+    updater can pass the manifest's recorded frontend through without
+    branching at the call site. A future plugin-backend marker
+    fallback would consult it; today it only documents that the
+    caller has a manifest-side frontend record (used by the updater's
+    "no backends, but a frontend exists" decision in
+    ``_update_locked``).
     """
     services = project_root / "services"
     if not services.is_dir():
+        _ = manifest_frontend  # accepted for forward-compat; see docstring
         return []
 
     markers: dict[str, BackendLanguage] = {
@@ -632,7 +786,33 @@ def _infer_backends(project_root: Path) -> list[BackendConfig]:
                     )
                 )
                 break
+    _ = manifest_frontend  # accepted for forward-compat; see docstring
     return out
+
+
+def _frontend_framework_from_manifest(
+    frontend: ForgeFrontendData,
+) -> FrontendFramework:
+    """Map the manifest's ``[forge.frontend]`` record onto a :class:`FrontendFramework`.
+
+    Returns :attr:`FrontendFramework.NONE` when the manifest doesn't
+    record a frontend (``framework == ""`` — typically the case for
+    backend-only projects, or a v3 manifest where on-disk inference
+    didn't find an ``apps/<slug>/`` marker). Unknown framework names
+    (plugin frontends the current forge doesn't recognise) also
+    collapse to NONE: the updater treats those as "frontend layer
+    present but not introspectable", and the project-scope fragment
+    pass simply skips ``target_frontends``-gated fragments — same
+    effect as a no-frontend project, which is the conservative
+    behaviour.
+    """
+    if not frontend.framework:
+        return FrontendFramework.NONE
+    try:
+        return FrontendFramework(frontend.framework)
+    except ValueError:
+        # Plugin framework or stray value — be conservative.
+        return FrontendFramework.NONE
 
 
 def _restamp_forge_toml(
@@ -646,6 +826,7 @@ def _restamp_forge_toml(
     provenance: dict[str, dict[str, str]] | None = None,
     merge_blocks: dict[str, dict[str, str]] | None = None,
     template_versions: dict[str, str] | None = None,
+    frontend: ForgeFrontendData | None = None,
 ) -> None:
     """Write forge.toml with the current version + options + provenance + merge blocks.
 
@@ -660,10 +841,49 @@ def _restamp_forge_toml(
     "default"). When ``None``, :func:`write_forge_toml`'s fallback
     stamps every entry as "user" (legacy callers; the in-tree updater
     populates this explicitly post-WS2b).
+
+    ``frontend`` (Initiative #3, v4) carries the project's frontend
+    framework + app_dir forward across re-stamps. Built-in frontends
+    (Vue / Svelte / Flutter) also get their template_dir added to the
+    ``[forge.templates]`` map so the next read-time inference fallback
+    has a v4-compatible source even if the explicit table is dropped
+    by an unrelated write path. ``None`` and the empty-framework
+    record both omit the ``[forge.frontend]`` table.
     """
     templates: dict[str, str] = {}
     for lang in sorted({bc.language for bc in backends}, key=lambda L: L.value):
         templates[lang.value] = BACKEND_REGISTRY[lang].template_dir
+
+    # Mirror the generator: include the frontend template_dir in
+    # ``[forge.templates]`` so downstream re-reads (and tools that
+    # only inspect ``data.templates``) still see the frontend layer
+    # even if they ignore the dedicated ``[forge.frontend]`` table.
+    # We avoid importing :data:`forge.generator.TEMPLATE_DIRS` here
+    # (the generator imports the updater via the CLI hook chain —
+    # round-tripping would create a circular import); the mapping
+    # below mirrors that table for the built-in frameworks and the
+    # ``FRONTEND_SPECS`` registry for plugins.
+    if frontend is not None and frontend.framework:
+        builtin_dirs = {
+            FrontendFramework.VUE: "apps/vue-frontend-template",
+            FrontendFramework.SVELTE: "apps/svelte-frontend-template",
+            FrontendFramework.FLUTTER: "apps/flutter-frontend-template",
+        }
+        try:
+            framework_enum = FrontendFramework(frontend.framework)
+        except ValueError:
+            framework_enum = None
+        if framework_enum is not None and framework_enum != FrontendFramework.NONE:
+            template_dir = builtin_dirs.get(framework_enum)
+            if template_dir:
+                templates[framework_enum.value] = template_dir
+        elif framework_enum is None:
+            # Plugin-registered framework — look it up via FRONTEND_SPECS.
+            from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+            plugin_spec = FRONTEND_SPECS.get(frontend.framework)
+            if plugin_spec is not None:
+                templates[frontend.framework] = plugin_spec.template_dir
 
     write_forge_toml(
         manifest,
@@ -675,11 +895,13 @@ def _restamp_forge_toml(
         provenance=provenance,
         merge_blocks=merge_blocks,
         template_versions=template_versions,
+        frontend=frontend,
     )
 
 
 __all__ = [
     "_apply_fragment",
+    "_frontend_framework_from_manifest",
     "_infer_backends",
     "_no_uninstall_flag",
     "apply_features",

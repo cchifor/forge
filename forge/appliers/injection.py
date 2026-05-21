@@ -205,14 +205,25 @@ def _record_merge_baseline(
 
 
 def _load_merge_baseline(project_root: Path, key: str) -> str | None:
-    """Read a baseline sha from ``forge.toml`` if present."""
+    """Read a baseline sha from ``forge.toml`` if present.
+
+    Initiative #6 (caching): reads go through
+    :func:`forge.sync._manifest_cache.cached_read_forge_toml`, which
+    parses each unique manifest path exactly once per
+    :func:`manifest_cache_scope` activation. The CLI entry points
+    for ``forge --update`` and ``forge --harvest`` open that scope
+    once per invocation, so a fragment with N merge blocks now pays
+    one tomlkit parse instead of N. Outside an active scope the
+    shim falls through to a direct read, preserving the legacy
+    contract for tests and one-off callers.
+    """
     manifest = project_root / "forge.toml"
     if not manifest.is_file():
         return None
     try:
-        from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
+        from forge.sync._manifest_cache import cached_read_forge_toml  # noqa: PLC0415
 
-        data = read_forge_toml(manifest)
+        data = cached_read_forge_toml(manifest)
     except Exception:  # noqa: BLE001
         return None
     entry = data.merge_blocks.get(key)

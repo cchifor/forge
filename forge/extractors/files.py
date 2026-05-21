@@ -22,7 +22,7 @@ from __future__ import annotations
 import difflib
 from typing import TYPE_CHECKING
 
-from forge.extractors.pipeline import CandidatePatch
+from forge.extractors.pipeline import CandidatePatch, CandidateRisk, ExtractorKind
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.sync.merge import (
     is_binary_file,
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 class FileExtractor:
     """Harvest user edits to fragment-shipped files."""
 
-    kind = "files"
+    kind: ExtractorKind = "files"
 
     def extract(
         self,
@@ -165,7 +165,12 @@ class FileExtractor:
             )
         )
 
-        risk = "safe-apply" if decision == "safe-apply" else "conflict"
+        # Explicit CandidateRisk annotation — without it ty falls back
+        # to ``str`` for the ternary because ``decision`` is itself a
+        # broader str-typed value, and downstream callers lose the
+        # Literal narrowing that Initiative #1 sub-task 2 introduced
+        # on ``CandidatePatch.risk``.
+        risk: CandidateRisk = "safe-apply" if decision == "safe-apply" else "conflict"
         rationale = (
             "user edited fragment file; upstream unchanged"
             if decision == "safe-apply"

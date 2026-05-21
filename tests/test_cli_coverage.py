@@ -266,10 +266,72 @@ class TestMainIntegration:
 
         out = capsys.readouterr().out
         envelope = json.loads(out.strip().splitlines()[-1])
+        # Pre-#5 keys remain — back-compat for legacy consumers.
         assert envelope["project_root"] == str(fake_root)
         assert envelope["framework"] == "vue"
         assert envelope["features"] == ["items"]
         assert envelope["backends"][0]["language"] == "python"
+        # Init #5 — the new ``report`` key is present and self-consistent.
+        # The mocked generate doesn't populate it, so most fields are
+        # empty, but the contract (schema version + key set) holds.
+        assert "report" in envelope
+        report = envelope["report"]
+        assert report["_report_version"] == 1
+        # Every documented key is present even when empty so consumers
+        # can rely on the shape.
+        for key in (
+            "project_root",
+            "effective_config",
+            "option_origins",
+            "fragment_graph",
+            "file_inventory",
+            "provenance_sidecar_paths",
+            "warnings",
+            "skipped_toolchains",
+            "next_actions",
+            "hidden_mutations",
+        ):
+            assert key in report, f"missing key {key!r} in report"
+
+    def test_json_envelope_captures_hidden_mutation(
+        self, tmp_path, monkeypatch, capsys
+    ) -> None:
+        """The CLI rewrites auth.mode to 'none' when Keycloak is
+        disabled — Init #5 surfaces that coercion under
+        ``report.hidden_mutations``."""
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "forge",
+                "--json",
+                "--yes",
+                "--no-docker",
+                "--project-name",
+                "Mute",
+                "--output-dir",
+                str(tmp_path),
+                "--frontend",
+                "none",
+                "--no-auth",
+                "--backend-language",
+                "python",
+                "--set",
+                "auth.mode=generate",
+            ],
+        )
+
+        fake_root = tmp_path / "mute"
+        fake_root.mkdir()
+        with patch("forge.cli.main.generate", return_value=fake_root):
+            cli.main()
+
+        envelope = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        mutations = envelope["report"]["hidden_mutations"]
+        assert any(m["path"] == "auth.mode" for m in mutations), mutations
+        m = next(m for m in mutations if m["path"] == "auth.mode")
+        assert m["previous"] == "generate"
+        assert m["current"] == "none"
 
     def test_json_config_load_failure(self, tmp_path, monkeypatch, capsys) -> None:
         missing = tmp_path / "missing.yaml"
@@ -344,6 +406,15 @@ class TestMainIntegration:
 
     def test_aborted_confirm_exits_zero(self, tmp_path, monkeypatch, capsys) -> None:
         # No --yes; confirm returns False; should exit 0 with "Aborted."
+        # HF-3 gates the confirm prompt behind ``sys.stdin.isatty()`` so an
+        # agent without a TTY gets a structured refusal rather than the
+        # questionary silent-exit; fake a TTY here to keep exercising the
+        # abort-after-confirm branch.
+        class _TTY:
+            def isatty(self) -> bool:
+                return True
+
+        monkeypatch.setattr(sys, "stdin", _TTY())
         monkeypatch.setattr(
             sys,
             "argv",

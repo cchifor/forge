@@ -213,7 +213,9 @@ forge --yes --no-docker --backend-language python \
 
 ### `api.add_option(Option)`
 
-Registers a new `Option` in the global `OPTION_REGISTRY`. The `path` must use a plugin-namespaced prefix. Forge raises `ValueError` on collision.
+Registers a new `Option` in the global `OPTION_REGISTRY`. The `path` must use a plugin-namespaced prefix. Forge raises `PluginError` (code `PLUGIN_COLLISION`) on path-vs-path, path-vs-alias, alias-vs-path, or alias-vs-alias collisions.
+
+Initiative #2 sub-task 1 routes this call through the same `forge.options.register_option` function the built-in features use, so plugin-declared `aliases=(...,)` populate `OPTION_ALIAS_INDEX` and behave identically to built-in aliases.
 
 ### `api.add_fragment(Fragment)`
 
@@ -231,7 +233,9 @@ Registers a new CLI subcommand. The handler signature is `(args: argparse.Namesp
 
 ### `api.add_emitter(target, emitter)`
 
-Registers a code emitter for a target language or protocol. Targets are free-form strings — standard ones are `python`, `typescript`, `dart`, `openapi`. **Phase 0.3 ships this as a capture-only hook** — the emitter pipeline lands with Phase 1.3 (TypeSpec domain DSL; 1.0.0a2).
+Registers a code emitter for a target language or protocol. Targets are free-form strings — standard ones are `python`, `typescript`, `dart`, `openapi`. The emitter callable's signature is `(project_root: Path, config: ProjectConfig, resolved: ResolvedPlan | None) -> None`; `resolved` is the capability-resolver output and may be `None` on hosts that have not yet plumbed it (plugins MUST tolerate `None`).
+
+Initiative #2 sub-task 2 wired this end-to-end: `forge.codegen.pipeline.run_codegen` walks `LOADED_PLUGINS` after the built-in passes and invokes each plugin's emitter. Last-loaded wins on target collision (a structured `plugin.emitter.target_collision` warning names both plugins); an emitter that raises is logged via `plugin.emitter.failed` and does not abort sibling emitters.
 
 ## Testing your plugin
 
@@ -273,7 +277,7 @@ The plugin SDK grows with each alpha:
 | Alpha | Added capability |
 |---|---|
 | 1.0.0a1 (this release) | Options, fragments, hooks for commands/emitters |
-| 1.0.0a2 | Plugin-defined backend languages; emitter pipeline wiring (Phase 1.3) |
+| 1.0.0a2 | Plugin-defined backend languages (initial); emitter pipeline wiring shipped in 1.2.0-draft (Initiative #2 — `add_emitter` retains the callable + `run_codegen` invokes registered plugin emitters with `(project_root, config, resolved)` after the built-in passes) |
 | 1.0.0a3 | Command dispatcher integration (Phase 2.2); path resolver for plugin-owned fragment directories |
 | 1.0.0a4 | Plugin-defined frontends with canvas package integration (Phase 3.1) |
 

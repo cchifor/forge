@@ -213,13 +213,24 @@ AgentConfigT = Annotated[
 
 
 # Aliases that ``from_legacy_options`` rewrites onto canonical paths.
-# Kept in sync with ``forge.options.OPTION_ALIAS_INDEX`` but enumerated
-# here too because typed_config.py is intentionally pydantic-only — it
-# doesn't depend on the registry at import time so the model can be
-# introspected by tools that don't want the registry's side effects.
-_LEGACY_ALIASES: dict[str, str] = {
-    "frontend.api_target_url": "frontend.api_target.url",
-}
+#
+# Initiative #7 — the registry's ``OPTION_ALIAS_INDEX`` is the single
+# source of truth. Pre-#7 this dict duplicated the index, and the two
+# could drift silently. The lookup runs lazily (inside
+# ``from_legacy_options``) so importing ``forge.config.typed_config``
+# still doesn't trigger ``forge.options``'s registration side effects —
+# pydantic-introspection tools that want the model shape can keep
+# importing this module standalone.
+def _legacy_aliases() -> dict[str, str]:
+    """Return the registry's alias → canonical mapping (lazy import).
+
+    Callers (``from_legacy_options``) only invoke this when they actually
+    need to rewrite, so the registry side effects stay deferred until
+    options actually get processed.
+    """
+    from forge.options import OPTION_ALIAS_INDEX  # noqa: PLC0415
+
+    return OPTION_ALIAS_INDEX
 
 # Canonical paths consumed by the layer sub-models. ``from_legacy_options``
 # routes these into the sub-models and leaves everything else on
@@ -288,9 +299,10 @@ def from_legacy_options(options: dict[str, Any]) -> TypedConfig:
     string-compares against ``"generate"``. The typed model fails
     loudly at conversion time with a useful path.
     """
+    aliases = _legacy_aliases()
     canonical: dict[str, Any] = {}
     for raw_path, value in options.items():
-        path = _LEGACY_ALIASES.get(raw_path, raw_path)
+        path = aliases.get(raw_path, raw_path)
         canonical[path] = value
 
     backend_kwargs: dict[str, Any] = {}

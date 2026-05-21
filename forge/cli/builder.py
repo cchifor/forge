@@ -3,6 +3,12 @@
 The ``_Resolver`` bundles the parsed argparse namespace with the loaded
 config dict so helpers can look up a value in a single call: CLI flag
 wins over config-file value wins over default.
+
+Initiative #5 — the CLI sometimes coerces user-set fields silently
+(e.g. ``auth.mode`` flips to ``"none"`` when Keycloak is disabled).
+``_build_config`` accepts an optional ``mutations`` collector so the
+caller can surface those rewrites in the JSON envelope under
+``hidden_mutations``.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from forge.config import (
     keycloak_client_id_from,
 )
 from forge.options import OPTION_REGISTRY, OptionType
+from forge.reports import HiddenMutation
 
 
 class _Resolver:
@@ -239,8 +246,21 @@ def _build_options(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, A
     return options
 
 
-def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfig:
-    """Build ProjectConfig from CLI args merged with config file."""
+def _build_config(
+    args: argparse.Namespace,
+    cfg: dict[str, Any],
+    *,
+    mutations: list[HiddenMutation] | None = None,
+) -> ProjectConfig:
+    """Build ProjectConfig from CLI args merged with config file.
+
+    ``mutations`` is an optional collector for CLI-side silent
+    rewrites; see :class:`forge.reports.HiddenMutation`. Pass an
+    empty list to capture every coercion (``auth.mode`` flip when
+    Keycloak is disabled, etc.) so the caller can surface them in
+    the JSON envelope. ``None`` (the default) preserves the pre-#5
+    behaviour where rewrites were silent.
+    """
     r = _Resolver(args, cfg)
     project_name = r.get("project_name", "project_name", default="My Platform")
     description = r.get("description", "description", default="A full-stack application")
@@ -268,8 +288,46 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
     # docker-compose.yml.j2 only renders those services under ``include_keycloak``.
     # Without this coercion, ``docker compose up`` fails validation with
     # ``service "gatekeeper" depends on undefined service "redis"``.
-    if not include_keycloak and options.get("auth.mode", "generate") != "none":
+    #
+    # Initiative #5 — snapshot which option paths were user-set *before*
+    # this coercion. The result drives the parallel ``option_origins``
+    # dict on ProjectConfig so the report can distinguish a real user
+    # choice from a CLI-injected default like the one below. Without
+    # this snapshot, ``options["auth.mode"] = "none"`` would leak into
+    # ``option_origins`` as ``"user"`` even when the user never touched
+    # the option (the resolver would dutifully record it that way).
+    user_set_paths = set(options)
+    auth_mode_before = options.get("auth.mode", "generate")
+    if not include_keycloak and auth_mode_before != "none":
         options["auth.mode"] = "none"
+        # Surface the coercion to JSON callers via the mutations collector.
+        # Agents driving forge headlessly need to know the auth.mode value
+        # they asked for isn't what generation acted on; without this they
+        # end up debugging "why is there no platform-auth stack" against a
+        # manifest that records ``auth.mode = "none"`` because of the
+        # coercion (not because they set it).
+        if mutations is not None:
+            mutations.append(
+                HiddenMutation(
+                    path="auth.mode",
+                    previous=auth_mode_before,
+                    current="none",
+                    reason=(
+                        "Keycloak is disabled (include_keycloak=False); "
+                        "platform-auth requires both Keycloak and Redis to "
+                        "run, so auth.mode was coerced to 'none'."
+                    ),
+                )
+            )
+
+    # Build the option_origins dict the resolver consumes. Paths the user
+    # set before the auth.mode coercion are "user"; anything the CLI
+    # injected (auth.mode flipped from default) is "default". The resolver
+    # in capability_resolver layers in its own defaults on top of this
+    # snapshot.
+    option_origins: dict[str, str] = {
+        path: ("user" if path in user_set_paths else "default") for path in options
+    }
     keycloak_port = r.get("keycloak_port", "keycloak", "port", default=18080)
     kc_realm = r.get("keycloak_realm", "keycloak", "realm", default=DEFAULT_REALM)
     kc_client_id = r.get(
@@ -292,4 +350,5 @@ def _build_config(args: argparse.Namespace, cfg: dict[str, Any]) -> ProjectConfi
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
         options=options,
+        option_origins=option_origins,
     )

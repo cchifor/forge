@@ -9,7 +9,11 @@ import yaml
 
 from forge.appliers.injection import _apply_zoned_injection
 from forge.appliers.plan import _Injection, _load_injections
-from forge.errors import GeneratorError
+from forge.errors import (
+    FRAGMENT_INJECT_YAML_BAD_POSITION,
+    FRAGMENT_INJECT_YAML_BAD_ZONE,
+    FragmentError,
+)
 from forge.injectors.sentinels import _has_sentinel_block
 
 
@@ -62,8 +66,34 @@ class TestLoadInjectionsZone:
                 ]
             )
         )
-        with pytest.raises(GeneratorError, match="zone must be"):
+        with pytest.raises(FragmentError) as exc:
             _load_injections(p, "f")
+        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_ZONE
+        assert exc.value.context.get("zone") == "bogus"
+        assert exc.value.context.get("index") == 0
+        # ``path`` context survives so an agent consumer can map the
+        # failure back to a specific inject.yaml entry.
+        assert str(p) in exc.value.context.get("path", "")
+
+    def test_rejects_invalid_position(self, tmp_path: Path) -> None:
+        p = tmp_path / "inject.yaml"
+        p.write_text(
+            yaml.safe_dump(
+                [
+                    {
+                        "target": "a.py",
+                        "marker": "X",
+                        "snippet": "pass",
+                        "position": "sideways",
+                    }
+                ]
+            )
+        )
+        with pytest.raises(FragmentError) as exc:
+            _load_injections(p, "f")
+        assert exc.value.code == FRAGMENT_INJECT_YAML_BAD_POSITION
+        assert exc.value.context.get("position") == "sideways"
+        assert exc.value.context.get("index") == 0
 
 
 class TestZoneSemantics:
