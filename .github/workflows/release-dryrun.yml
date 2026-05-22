@@ -149,6 +149,39 @@ jobs:
         working-directory: packages/canvas-svelte
         run: npm publish --dry-run --access public
 
+  pub-dev-canvas-core-dart:
+    name: dart pub publish --dry-run (forge_canvas_core)
+    # Pure Dart — no Flutter dep (Phase 2B split). Use setup-dart.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c # v1
+        with:
+          sdk: stable
+
+      - name: dart pub get
+        working-directory: packages/forge-canvas-core-dart
+        run: dart pub get
+
+      - name: dart analyze
+        working-directory: packages/forge-canvas-core-dart
+        run: dart analyze
+
+      - name: dart test
+        working-directory: packages/forge-canvas-core-dart
+        run: dart test
+
+      - name: dart pub publish --dry-run
+        working-directory: packages/forge-canvas-core-dart
+        # --dry-run validates pubspec.yaml, file selection, and
+        # dependencies without authenticating or mutating pub.dev.
+        # Strips `dependency_overrides` from the resolution so the
+        # resolved graph matches what published consumers will see.
+        run: dart pub publish --dry-run
+
   pub-dev-canvas-dart:
     name: flutter pub publish --dry-run (forge_canvas)
     runs-on: ubuntu-latest
@@ -173,6 +206,11 @@ jobs:
         working-directory: packages/forge-canvas-dart
         # --dry-run validates pubspec.yaml, file selection, and
         # dependencies without authenticating or mutating pub.dev.
+        # Note: with `forge_canvas_core: ^1.0.0-alpha.1` declared as a
+        # runtime dep and the sibling not yet on pub.dev, this dry-run
+        # will fail-resolve until publish-pub-dev-core lands on the
+        # registry. This is the same race that publish-pub-dev itself
+        # has at release time — both are blocked behind first-publish.
         run: flutter pub publish --dry-run
 
   changelog-extract:
@@ -215,6 +253,7 @@ jobs:
       - install-smoke
       - npm-canvas-vue
       - npm-canvas-svelte
+      - pub-dev-canvas-core-dart
       - pub-dev-canvas-dart
       - changelog-extract
     runs-on: ubuntu-latest
@@ -227,11 +266,12 @@ jobs:
           script: |
             const sha = context.payload.inputs?.ref || context.sha;
             const summary = [
-              "All 6 dry-run jobs green:",
+              "All 7 dry-run jobs green:",
               "- Python sdist + wheel built and metadata validated (twine check)",
               "- forge CLI installable from the built wheel (`forge --version / --help / --list`)",
               "- canvas-vue: `npm publish --dry-run` clean",
               "- canvas-svelte: `npm publish --dry-run` clean",
+              "- forge_canvas_core: `dart pub publish --dry-run` + analyze + test clean",
               "- forge_canvas: `flutter pub publish --dry-run` + analyze clean",
               "- CHANGELOG.md section extraction produces non-empty output",
               "",
