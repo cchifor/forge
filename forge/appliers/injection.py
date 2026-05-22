@@ -20,9 +20,9 @@ import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from forge.injectors._registry import lookup_injector
 from forge.injectors.sentinels import (
     _has_sentinel_block,
-    _inject_snippet,
     _read_block_body,
     _sentinel_tag,
 )
@@ -236,20 +236,30 @@ def _load_merge_baseline(project_root: Path, key: str) -> str | None:
 def _dispatch_injector(target: Path, inj: _Injection) -> None:
     """Route an injection to the right backend based on the target's extension.
 
-    Python (``.py``) goes through the LibCST-backed injector; TypeScript /
-    JavaScript (``.ts`` / ``.tsx`` / ``.js`` / ``.jsx`` / ``.mjs``) through
-    the regex-based TS injector. Everything else (``.rs``, ``.toml``,
-    ``.yaml``) falls back to the legacy text-marker injector.
+    Suffix-to-injector mapping lives in
+    :mod:`forge.injectors._registry` (Pillar A.1 — pluggable
+    ApplierRegistry). Python (``.py`` / ``.pyi``) routes to the LibCST
+    injector, TypeScript / JavaScript
+    (``.ts`` / ``.tsx`` / ``.js`` / ``.jsx`` / ``.mjs`` / ``.cjs``) to
+    the regex/ts-morph injector, and everything else
+    (``.rs`` / ``.toml`` / ``.yaml`` / unknown) falls through to the
+    wildcard sentinel-based text injector. Plugins extend the table
+    via :meth:`forge.api.ForgeAPI.add_injector` so a Go-backend plugin
+    can register a ``.go`` AST injector without forking forge.
+
+    The wildcard fallback is seeded at registry import time, so
+    :func:`forge.injectors._registry.lookup_injector` only returns
+    ``None`` if a caller has explicitly removed the ``"*"`` entry —
+    surface that as a hard error rather than silently dropping the
+    injection.
     """
-    suffix = target.suffix.lower()
-    if suffix in (".py", ".pyi"):
-        from forge.injectors.python_ast import inject_python  # noqa: PLC0415
-
-        inject_python(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
-        return
-    if suffix in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
-        from forge.injectors.ts_ast import inject_ts  # noqa: PLC0415
-
-        inject_ts(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
-        return
-    _inject_snippet(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
+    injector = lookup_injector(target)
+    if injector is None:
+        # Defensive — the seeded wildcard fallback guarantees a hit
+        # under normal operation. Reach this path only if a test (or a
+        # misbehaving plugin) tore the wildcard out of the registry.
+        raise RuntimeError(
+            f"No injector registered for {target} and the wildcard fallback "
+            "has been removed from the ApplierRegistry."
+        )
+    injector(target, inj.feature_key, inj.marker, inj.snippet, inj.position)
