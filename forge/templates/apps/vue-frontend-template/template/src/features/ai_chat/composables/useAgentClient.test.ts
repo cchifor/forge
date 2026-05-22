@@ -394,6 +394,63 @@ describe('useAgentClient', () => {
     })
   })
 
+  // ── retryLastRun (RUN_ERROR banner) ──
+
+  it('retryLastRun re-invokes runAgent with the last options', async () => {
+    mockRunAgent.mockResolvedValue(undefined)
+    const { runAgent, retryLastRun } = useAgentClient()
+    await runAgent({
+      model: 'openai:gpt-4.1-mini',
+      approval: 'bypass',
+      attachmentIds: ['file-1'],
+    })
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(mockRunAgent).toHaveBeenCalledTimes(2)
+    const retryArgs = mockRunAgent.mock.calls[1][0]
+    expect(retryArgs.forwardedProps).toEqual({
+      model: 'openai:gpt-4.1-mini',
+      approval: 'bypass',
+      attachment_ids: ['file-1'],
+    })
+  })
+
+  it('retryLastRun reuses the same threadId (does not mint a new one)', async () => {
+    mockRunAgent.mockResolvedValue(undefined)
+    const { runAgent, retryLastRun } = useAgentClient()
+    await runAgent({ model: 'openai:gpt-4.1' })
+    const firstThreadId = mockRunAgent.mock.calls[0][0].threadId
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const secondThreadId = mockRunAgent.mock.calls[1][0].threadId
+    expect(secondThreadId).toBe(firstThreadId)
+  })
+
+  it('retryLastRun clears error.value before retrying', async () => {
+    mockRunAgent.mockRejectedValueOnce(new Error('First failure'))
+    const { runAgent, retryLastRun, error } = useAgentClient()
+    await runAgent({ model: 'openai:gpt-4.1' })
+    expect(error.value).not.toBeNull()
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    // error is cleared synchronously before the async runAgent kicks off
+    expect(error.value).toBeNull()
+  })
+
+  it('retryLastRun is a no-op before any runAgent call', () => {
+    const { retryLastRun } = useAgentClient()
+    retryLastRun()
+    expect(mockRunAgent).not.toHaveBeenCalled()
+  })
+
   // ── Reset clears new state ──
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {

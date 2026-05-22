@@ -64,6 +64,15 @@ export function useAiChat() {
     agentClient.editAndResend(messageId, newContent, options)
   }
 
+  /**
+   * Re-issue the last `runAgent` call without forcing the user to
+   * retype. Wired into the RUN_ERROR banner's "Retry" button — keeps
+   * `currentThreadId` so conversation context is preserved.
+   */
+  function retryLastRun() {
+    agentClient.retryLastRun()
+  }
+
   function clearMessages() {
     agentClient.resetThread()
   }
@@ -85,6 +94,7 @@ export function useAiChat() {
     sendMessage,
     respondToPrompt,
     editAndResend,
+    retryLastRun,
     clearMessages,
   }
 }
