@@ -29,6 +29,7 @@ from forge.appliers.injection import FragmentInjectionApplier
 from forge.appliers.pipeline import FragmentPipeline
 from forge.appliers.plan import FragmentPlan
 from forge.appliers.renderers import FragmentRenderer
+from forge.specs.port import PortSpec
 
 __all__ = [
     "FragmentDepsApplier",
@@ -38,4 +39,5 @@ __all__ = [
     "FragmentPipeline",
     "FragmentPlan",
     "FragmentRenderer",
+    "PortSpec",
 ]
