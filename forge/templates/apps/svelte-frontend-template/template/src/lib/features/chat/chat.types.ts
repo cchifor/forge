@@ -63,7 +63,27 @@ export type ChatRunOptions = {
 	model?: string;
 	approval?: string;
 	hitlResponse?: HitlResponse;
+	/**
+	 * IDs returned by ``POST /api/v1/chat-files`` for the user's next turn.
+	 * Forwarded to the agent as ``attachment_ids`` in ``forwardedProps`` —
+	 * the agent then resolves each ID via ``GET /api/v1/chat-files/{id}``
+	 * to read the uploaded bytes. Chips for these are owned by
+	 * ``AiChatInput.svelte`` and cleared after a successful send.
+	 */
+	attachmentIds?: string[];
 };
+
+/**
+ * A file the user has uploaded but not yet sent — rendered as a chip
+ * above the textarea, removable, and forwarded into ``ChatRunOptions``
+ * on the next send.
+ */
+export interface ChatAttachment {
+	id: string;
+	filename: string;
+	mime_type?: string;
+	size_bytes?: number;
+}
 
 export type { Message };
 export { EventType };
