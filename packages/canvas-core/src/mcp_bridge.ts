@@ -81,8 +81,18 @@ export interface UpstreamAppBridge {
    * iframe once the bridge has connected. Only the iframe-hosted
    * `sandbox-resource` MCP-ext flow uses this; pure `entryUrl`
    * activities skip it.
+   *
+   * Optional in the interface (codex Phase B round 1 follow-up): older
+   * mock/custom `UpstreamAppBridge` implementations that predate this
+   * helper don't need to grow a method they never call. `mountMcpExtBridge`
+   * guards the call with `typeof bridge.sendSandboxResourceReady === 'function'`
+   * so a sandbox-resource activity against a bridge that lacks the
+   * method becomes a no-op rather than a TypeError. The real
+   * `@modelcontextprotocol/ext-apps` AppBridge implements it; this
+   * relaxation only matters for downstream consumers shipping their own
+   * bridge stubs.
    */
-  sendSandboxResourceReady(args: {
+  sendSandboxResourceReady?(args: {
     html: string
     csp?: string
     permissions?: unknown
@@ -325,12 +335,26 @@ export function mountMcpExtBridge(
 
   const transport = new transportCtor(contentWindow, contentWindow)
 
-  void bridge.connect(transport).then(() => {
-    if (cancelled) return
-    if (typeof html === 'string') {
-      bridge.sendSandboxResourceReady({ html, csp, permissions })
-    }
-  })
+  // Codex Phase B round 1 follow-up: explicitly handle a rejected
+  // `connect()` so the helper doesn't leak an unhandled promise
+  // rejection if the transport fails to hand-shake. Treated the same
+  // as unmount-during-connect: cleanup is the caller's job (they'll
+  // see the iframe never finishes loading + can act on it), the bridge
+  // is left in its connected-or-not state, no sandbox resource is
+  // pushed, no throw escapes.
+  void bridge
+    .connect(transport)
+    .then(() => {
+      if (cancelled) return
+      if (typeof html === 'string' && typeof bridge.sendSandboxResourceReady === 'function') {
+        bridge.sendSandboxResourceReady({ html, csp, permissions })
+      }
+    })
+    .catch(() => {
+      // Swallow — connect() rejections during mount are surfaced to
+      // the user via the iframe failing to load; no useful action
+      // the helper can take from here.
+    })
 
   return {
     cleanup(): void {
