@@ -41,6 +41,11 @@ dependencies:
   markdown: ^7.2.2
   json_patch: ^3.0.0
   shimmer: ^3.0.0
+  # file_selector: Flutter team's official cross-platform file
+  # picker. Used by ChatInputBar for the paperclip attach button
+  # (Pillar G.1). Smaller than `file_picker`; covers the case we
+  # need (pick one or more files, get bytes back).
+  file_selector: ^1.0.3
 {%- endif %}
 
   # Routing
