@@ -23,9 +23,9 @@ from forge.specs.middleware import (
 from forge.specs.port import (
     PortSpec,
     detect_port_cycle,
-    render_axum_port,
-    render_fastapi_port,
-    render_fastify_port,
+    render_axum_port,  # noqa: F401  -- importable for tests/consumers; not in __all__
+    render_fastapi_port,  # noqa: F401  -- importable for tests/consumers; not in __all__
+    render_fastify_port,  # noqa: F401  -- importable for tests/consumers; not in __all__
 )
 
 # Codex Phase B round 1 follow-up: narrow the curated public surface to
