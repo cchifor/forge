@@ -48,6 +48,9 @@ def test_sdk_version_parses() -> None:
         (">=2.0", False),
         ("<2.0", True),
         ("<1.0", False),
+        # SDK bumped to 1.2 in Pillar A (add_hook + add_injector). The
+        # equality case follows the live version so a future bump that
+        # forgets to update this test fails loudly.
         ("==1.2", True),
         ("==1.1", False),
         ("==2.0", False),

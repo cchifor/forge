@@ -75,6 +75,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   legacy `middlewares=` keyword on `FragmentPlan.from_impl` /
   `FragmentPipeline.run` is preserved for one release and folded into
   `renderers=` transparently.
+
+- **`PhaseHook` protocol + `ForgeAPI.add_hook` (Pillar A.3).** Plugins
+  can now observe generator phases without forking `forge.generator`.
+  Implementations supply three callbacks — `on_phase_start(name, ctx)`,
+  `on_phase_end(name, ctx, duration_ms, error)`,
+  `on_generate_complete(report)` — and register via
+  `api.add_hook(MyHook())`. Hooks fire from the existing
+  `phase_timer` contexts that already wrap every phase, so the only
+  generator-side change is two lines in `phase_timer` itself plus a
+  one-line `_fire_generate_complete` at the end of `generate()`. Hook
+  exceptions are swallowed and logged inside the dispatcher — a buggy
+  plugin cannot crash generation. Use cases: telemetry sinks, SBOM
+  emitters, supply-chain signers, post-`forge new` shell scripts.
+  Sibling Pillar A.1 PR also bumps SDK_VERSION to `1.2`; coordinated.
+  New module `forge.hooks`; new test suite `tests/test_phase_hooks.py`;
+  plugin-development guide gains a "Telemetry hook" section.
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts
   the framework-agnostic protocol surface into a sibling pure-Dart

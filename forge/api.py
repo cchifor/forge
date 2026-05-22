@@ -55,6 +55,7 @@ breaking change to this surface surfaces before release.
 | ``ForgeAPI.add_emitter``       | 1.0.0a1      | provisional       |
 | ``ForgeAPI.add_extractor``     | 1.2.0-alpha.1| provisional       |
 | ``ForgeAPI.add_injector``      | 1.2          | provisional       |
+| ``ForgeAPI.add_hook``          | 1.2          | provisional       |
 | ``PluginRegistration``         | 1.0.0a1      | stable            |
 +--------------------------------+--------------+-------------------+
 
@@ -91,6 +92,7 @@ if TYPE_CHECKING:
     from forge.config import BackendSpec, FrontendSpec, ProjectConfig
     from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
+    from forge.hooks import PhaseHook
     from forge.injectors._registry import Injector
     from forge.options import Option
 
@@ -101,11 +103,15 @@ if TYPE_CHECKING:
 # ``api.require_sdk(">=X.Y")``; bumps require a CHANGELOG entry in
 # ``docs/SDK_CHANGELOG.md``.
 #
-# 1.2 (Pillar A.1) — additive: ``ForgeAPI.add_injector`` for the
-# pluggable per-suffix ApplierRegistry at
-# :mod:`forge.injectors._registry`. Lets polyglot backend plugins
-# register new file-type injectors (``.go``, ``.kt``, ``.rs``)
-# without forking forge's ``_dispatch_injector``.
+# 1.2 (Pillar A) — additive: two new ForgeAPI methods —
+#   * ``ForgeAPI.add_injector`` (Pillar A.1) for the pluggable per-suffix
+#     ApplierRegistry at :mod:`forge.injectors._registry`; lets polyglot
+#     backend plugins register new file-type injectors (``.go``,
+#     ``.kt``, ``.rs``) without forking ``_dispatch_injector``.
+#   * ``ForgeAPI.add_hook`` (Pillar A.3) for the
+#     :class:`forge.hooks.PhaseHook` protocol; lets plugins observe
+#     generator phases (telemetry, SBOM, post-generate scripts) without
+#     forking ``generator.py``.
 SDK_VERSION = "1.2"
 
 
@@ -790,3 +796,44 @@ class ForgeAPI:
                     "value": suffix,
                 },
             ) from exc
+
+    # -- Phase-hook registration (Pillar A.3, SDK 1.2) ----------------------
+
+    def add_hook(self, hook: PhaseHook) -> None:
+        """Register a :class:`forge.hooks.PhaseHook` to observe generation.
+
+        Hooks fire from the existing :func:`forge.logging.phase_timer`
+        context that wraps every generator phase: ``on_phase_start`` /
+        ``on_phase_end`` for each ``with phase_timer(...)`` block,
+        ``on_generate_complete`` once at the end of
+        :func:`forge.generator.generate` with the populated
+        :class:`forge.reports.GenerationReport` (or ``None`` when the
+        caller didn't request the richer payload).
+
+        Plugin authors typically pass an instance::
+
+            from forge.hooks import PhaseHook
+            from forge.api import ForgeAPI
+
+            class TelemetryHook:
+                def on_phase_start(self, name, ctx): ...
+                def on_phase_end(self, name, ctx, duration_ms, error): ...
+                def on_generate_complete(self, report): ...
+
+            def register(api: ForgeAPI) -> None:
+                api.require_sdk(">=1.2")
+                api.add_hook(TelemetryHook())
+
+        Hook exceptions are swallowed + logged inside the fire helpers
+        — the contract is "buggy plugin doesn't crash generation".
+        Hooks fire in registration order (FIFO across all plugins).
+
+        Provisional in 1.2: the protocol is additive, so adding methods
+        in a later minor is non-breaking, but the ``ctx`` dict's keys
+        are not yet a stable schema — they reflect whatever the
+        generator passed to ``phase_timer(..., **ctx)`` at the call
+        site. Treat as observability surface, not control surface.
+        """
+        from forge.hooks import register_hook  # noqa: PLC0415
+
+        register_hook(hook)
