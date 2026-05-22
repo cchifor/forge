@@ -57,15 +57,50 @@ class ChatMessageList extends ConsumerWidget {
         Container(
           key: const ValueKey('chat-error-banner'),
           margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color:
                 Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Text(
-            error,
-            style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  error,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                key: const ValueKey('chat-error-retry'),
+                onPressed: () =>
+                    ref.read(chatProvider.notifier).retryLastRun(),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Retry'),
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onErrorContainer,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('chat-error-dismiss'),
+                onPressed: () =>
+                    ref.read(chatProvider.notifier).dismissError(),
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onErrorContainer,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Dismiss'),
+              ),
+            ],
           ),
         ),
       if (isRunning)

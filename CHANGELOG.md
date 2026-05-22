@@ -22,6 +22,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `(file, feature_key, marker, snippet, position) -> None` shape
   every built-in injector already exposes.
 
+- **Retry button on the chat RUN_ERROR banner (all 3 frontend
+  stacks).** Pillar G.5 of the architectural improvement plan.
+  When an agent run fails, the error banner now shows a `Retry`
+  action next to `Dismiss` so users no longer have to retype the
+  prompt. Implemented across Vue (`useAgentClient.retryLastRun()`
+  / `useAiChat.retryLastRun()`), Svelte (`getAgentClient().retryLastRun()`
+  surfaced via `getChatStore().retryLastRun()`), and Flutter
+  (`ChatNotifier.retryLastRun()` exposed through `chatProvider`).
+  The retry reuses the **same `threadId`** (conversation context
+  preserved — distinct from `editAndResend`, which mints a fresh
+  thread) and replays the original `forwardedProps` (model +
+  approval mode + attachment IDs), so a transient backend failure
+  on a multi-attachment turn doesn't drop the attachments. Snapshot
+  of the last run options is captured on every `runAgent` call;
+  cleared on `resetThread`. Vue + Svelte `retryLastRun()` guard
+  against double-fire while a run is in flight; cross-stack
+  `dismissError()` exposed as a public method on all 3 agent
+  clients (UI no longer mutates error state directly).
+
 - **`forge --plugins scaffold-fragment` (Pillar A.5, codegen-engine seam).**
   New CLI subcommand that renders a skeleton fragment tree for plugin
   authors — `fragments.py` registration stub, per-backend

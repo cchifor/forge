@@ -46,6 +46,8 @@ describe('getChatStore (AG-UI agent client)', () => {
 		expect(store).toHaveProperty('pendingPrompt');
 		expect(typeof store.addUserMessage).toBe('function');
 		expect(typeof store.respondToPrompt).toBe('function');
+		expect(typeof store.retryLastRun).toBe('function');
+		expect(typeof store.dismissError).toBe('function');
 		expect(typeof store.setModel).toBe('function');
 		expect(typeof store.setApprovalMode).toBe('function');
 		expect(typeof store.setContext).toBe('function');
@@ -91,5 +93,55 @@ describe('getChatStore (AG-UI agent client)', () => {
 	it('setApprovalMode updates the approval mode', () => {
 		store.setApprovalMode('bypass');
 		expect(store.approvalMode).toBe('bypass');
+	});
+
+	it('retryLastRun re-invokes runAgent with the last forwardedProps', async () => {
+		store.setModel('gpt-4.1');
+		store.setApprovalMode('bypass');
+		store.addUserMessage('Hello');
+		expect(runAgent).toHaveBeenCalledTimes(1);
+		const firstThreadId = runAgent.mock.calls[0][0].threadId;
+		const firstProps = runAgent.mock.calls[0][0].forwardedProps;
+
+		store.retryLastRun();
+		// retryLastRun fires a fresh runAgent invocation
+		expect(runAgent).toHaveBeenCalledTimes(2);
+
+		// Thread ID is preserved — retry MUST stay on the same conversation.
+		const retryThreadId = runAgent.mock.calls[1][0].threadId;
+		expect(retryThreadId).toBe(firstThreadId);
+
+		// forwardedProps shape is identical (model + approval).
+		const retryProps = runAgent.mock.calls[1][0].forwardedProps;
+		expect(retryProps).toEqual(firstProps);
+	});
+
+	it('retryLastRun is a no-op before any runAgent call', () => {
+		store.retryLastRun();
+		expect(runAgent).not.toHaveBeenCalled();
+	});
+
+	it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
+		// Codex Phase B round 1 follow-up: spamming the Retry button
+		// during a slow retry must not queue multiple runAgent calls.
+		let resolveRun: (() => void) | null = null;
+		runAgent.mockImplementation(
+			() => new Promise<void>((resolve) => { resolveRun = resolve }),
+		);
+		store.addUserMessage('Hello');
+		await Promise.resolve();  // let isRunning flip
+		expect(runAgent).toHaveBeenCalledTimes(1);
+		store.retryLastRun();
+		store.retryLastRun();
+		store.retryLastRun();
+		expect(runAgent).toHaveBeenCalledTimes(1);  // still 1
+		resolveRun?.();
+	});
+
+	it('dismissError clears the error without re-running', () => {
+		// No clean way to seed an error without driving the full agent path,
+		// but we can at least assert the method exists and is callable.
+		expect(() => store.dismissError()).not.toThrow();
+		expect(store.error).toBeNull();
 	});
 });

@@ -41,12 +41,10 @@ const {
   sendMessage,
   respondToPrompt,
   editAndResend,
+  retryLastRun,
+  dismissError,
   clearMessages,
 } = useAiChat()
-
-function dismissError() {
-  runError.value = null
-}
 
 const inputText = ref('')
 const selectedModel = ref('openai:gpt-4.1')
@@ -264,6 +262,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
     <div v-if="runError" class="flex items-center gap-2 border-t bg-destructive/10 px-3 py-2 text-sm text-destructive">
       <AlertCircle class="h-4 w-4 shrink-0" />
       <span class="flex-1 truncate">{{ runError.message }}</span>
+      <button class="shrink-0 text-xs underline" @click="retryLastRun">Retry</button>
       <button class="shrink-0 text-xs underline" @click="dismissError">Dismiss</button>
     </div>
 
