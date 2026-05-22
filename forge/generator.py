@@ -15,8 +15,8 @@ from typing import Any
 # later ``print`` survives mixed-locale output.
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # ty:ignore[unresolved-attribute]
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # ty:ignore[unresolved-attribute]
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
         pass
 
