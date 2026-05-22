@@ -31,6 +31,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from forge.codegen import canvas_lint as canvas_lint_codegen
 from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen import event_union as event_union_codegen
@@ -50,6 +52,19 @@ from forge.codegen.ui_protocol import (
     load_all as load_ui_schemas,
 )
 from forge.config import BackendLanguage, FrontendFramework
+from forge.domain.emitters import (
+    emit_alembic_migration,
+    emit_openapi,
+    emit_rust_struct,
+    emit_sqlalchemy_model,
+)
+from forge.domain.emitters import (
+    emit_pydantic as emit_domain_pydantic,
+)
+from forge.domain.emitters import (
+    emit_zod as emit_domain_zod,
+)
+from forge.domain.spec import EntitySpec, load_entity_yaml
 from forge.frontends import FrontendLayout, get_frontend_layout
 from forge.logging import get_logger, log_event
 
@@ -97,6 +112,7 @@ def run_codegen(
     _emit_canvas_lint_packages(config, project_root, collector)
     _emit_event_union_pydantic(config, project_root, collector)
     _emit_shared_enums(config, project_root, collector)
+    _emit_user_entities(config, project_root, collector)
     _run_plugin_emitters(config, project_root, resolved)
 
 
@@ -314,10 +330,347 @@ def _emit_shared_enums(
         _write(path, targets[emitter_key], collector)
 
 
+# ---------------------------------------------------------------------------
+# RFC-010 / Pillar C.2 — user-entity walk
+# ---------------------------------------------------------------------------
+
+
+_DOMAIN_TEMPLATE_NAME = "_domain_emitter"
+"""Synthetic ``template_name`` used in the provenance manifest for RFC-010
+user-entity emissions. See :func:`_write` for the rationale (the manifest's
+``ProvenanceOrigin`` literal stays at ``base-template`` to avoid a
+cross-cutting sync-flow change; the synthetic name is the harvest-facing
+discriminator until a proper ``"domain-emitter"`` origin lands).
+
+TODO(domain-emitter-origin): codex Phase B round 1 flagged this is
+currently metadata-only — today's harvester at
+``forge/sync/project_to_forge/harvester/_orchestrator.py`` only buckets
+rows where ``origin == "fragment"``. Full RFC-010 compliance requires
+coordinated read-side updates in ``forge/sync/{forge_to_project,project_to_forge}/``
+(at minimum: extending ``ProvenanceOrigin`` to add ``"domain-emitter"``
++ the 3 narrow Literal casts in updater/reapply_baseline/verify + the
+harvester orchestrator's bucket logic). Track via this marker; the
+synthetic name keeps the metadata path warm until the proper origin
+literal lands."""
+
+
+def _emit_user_entities(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+) -> None:
+    """Walk ``<project_root>/domain/*.yaml`` and emit per-backend outputs.
+
+    RFC-010 Phase 1 — user-authored entity YAMLs land at
+    ``<project_root>/domain/<entity>.yaml``. Each spec produces, per
+    backend in the project:
+
+      * **Python**: Pydantic DTO, SQLAlchemy ORM, alembic migration
+        (the migration is only emitted when ``config.database_mode``
+        is not ``"none"`` — see ``_emit_python_entity``).
+      * **Node**:   Zod schema.
+      * **Rust**:   serde + sqlx ``FromRow`` struct.
+
+    Plus a per-entity OpenAPI component schema written next to the
+    Python backend (or, when no Python backend ships, into a project-
+    root ``openapi/`` directory) so the frontend codegen pipelines
+    that consume OpenAPI find it without a backend-specific path.
+
+    The ``domain/`` directory is **optional**: missing → no emit, no
+    error (backwards compat for the entire 1.1.x fleet, none of which
+    has the directory). A spec referencing an enum that isn't in the
+    registry raises :class:`forge.domain.emitters.UnknownEnumReferenceError`
+    (a :class:`~forge.errors.ForgeError` subclass) — propagated to the
+    caller for surfacing as a clean ``forge new`` failure.
+
+    The ``known_enums`` set is the union of the shared registry
+    (``forge/templates/_shared/domain/enums/*.yaml``, the same files
+    walked by :func:`_emit_shared_enums`) and any project-local
+    ``<project_root>/domain/enums/*.yaml``. The project-local path
+    isn't shipped today but the union shape is forward-compatible —
+    when per-project enums land, ``_emit_user_entities`` already
+    picks them up.
+
+    Every emitted block is wrapped in
+    ``FORGE:BEGIN domain_<entity>_<block>`` /
+    ``FORGE:END domain_<entity>_<block>`` sentinels so future
+    ``zone="merge"`` configurations flow through the existing
+    three-way-merge applier under the same sentinel discipline the
+    fragment injectors use. OpenAPI output is JSON and therefore
+    unsentinelled — the entire emitted document is authoritative.
+    """
+    domain_root = project_root / "domain"
+    if not domain_root.is_dir():
+        return
+
+    entity_files = sorted(p for p in domain_root.glob("*.yaml") if p.is_file())
+    if not entity_files:
+        return
+
+    known_enums = _collect_known_enums(project_root)
+
+    for entity_file in entity_files:
+        spec = load_entity_yaml(entity_file)
+        for bc in config.backends:
+            if bc.language is BackendLanguage.PYTHON:
+                _emit_python_entity(
+                    spec,
+                    bc.name,
+                    project_root,
+                    collector,
+                    known_enums=known_enums,
+                    database_enabled=config.database_mode != "none",
+                )
+            elif bc.language is BackendLanguage.NODE:
+                _emit_node_entity(
+                    spec,
+                    bc.name,
+                    project_root,
+                    collector,
+                    known_enums=known_enums,
+                )
+            elif bc.language is BackendLanguage.RUST:
+                _emit_rust_entity(
+                    spec,
+                    bc.name,
+                    project_root,
+                    collector,
+                    known_enums=known_enums,
+                )
+        _emit_openapi_entity(
+            spec,
+            config,
+            project_root,
+            collector,
+            known_enums=known_enums,
+        )
+
+
+def _collect_known_enums(project_root: Path) -> set[str]:
+    """Build the enum-name set passed to every domain emitter.
+
+    Sources:
+      * ``forge/templates/_shared/domain/enums/*.yaml`` — the shipped
+        shared registry every project picks up via
+        :func:`_emit_shared_enums`. Authoritative for cross-project
+        enums (``ItemStatus``, ``ApprovalMode``).
+      * ``<project_root>/domain/enums/*.yaml`` — per-project local
+        enums (forward-compat; not shipped today but the loader is
+        already wired so adopters don't need a pipeline change).
+
+    Bad enum YAMLs are silently skipped — the validator under
+    :func:`_emit_shared_enums` will catch them in its own pass with
+    the proper file-pointing error message. Letting them fail here
+    would surface as ``UnknownEnumReferenceError`` blaming the
+    *entity* spec, which would mis-attribute the problem.
+    """
+    names: set[str] = set()
+    candidate_roots = [_ENUMS_ROOT, project_root / "domain" / "enums"]
+    for root in candidate_roots:
+        if not root.is_dir():
+            continue
+        for enum_file in sorted(root.glob("*.yaml")):
+            try:
+                spec = load_enum_yaml(enum_file)
+            except (yaml.YAMLError, ValueError, KeyError) as exc:
+                # Codex Phase B round 1 follow-up: narrow from a broad
+                # `except Exception` to the actual failure surface
+                # (YAML parse failures + schema-shape failures). IO /
+                # permission errors now surface uncaught rather than
+                # being silently swallowed and later misattributed as
+                # `UnknownEnumReferenceError`.
+                logging.getLogger(__name__).warning(
+                    "Skipping malformed enum YAML %s: %s",
+                    enum_file,
+                    exc,
+                )
+                continue
+            names.add(spec.name)
+    return names
+
+
+def _emit_python_entity(
+    spec: EntitySpec,
+    backend_name: str,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    known_enums: set[str],
+    database_enabled: bool,
+) -> None:
+    """Emit the three Python artefacts (Pydantic DTO, SQLA model, alembic).
+
+    Output paths mirror the shared-enums convention
+    (``services/<backend>/src/app/domain/...``):
+
+      * DTO:         ``services/<backend>/src/app/domain/<entity_snake>.py``
+      * ORM:         ``services/<backend>/src/app/domain/<entity_snake>_model.py``
+      * Migration:   ``services/<backend>/alembic/versions/<entity_snake>_domain.py``
+
+    The migration revision is ``domain_<entity_snake>`` and
+    ``down_revision`` is left ``None``. Forge does NOT generate a
+    revision chain in Pillar C.2 — alembic-managed migration ordering
+    is the operator's call. When the user adopts a properly-ordered
+    chain later, the emitter regenerates the body but the chain
+    metadata stays under user control.
+
+    When ``database_enabled`` is False (``config.database_mode == "none"``)
+    we skip ORM and migration emission entirely — a stateless backend
+    has no SQLAlchemy stack to plug into.
+    """
+    snake = _snake_case(spec.name)
+    base = project_root / "services" / backend_name / "src" / "app" / "domain"
+
+    dto_body = _wrap_sentinels(
+        "python",
+        f"domain_{snake}_pydantic",
+        emit_domain_pydantic(spec, known_enums=known_enums),
+    )
+    _write(base / f"{snake}.py", dto_body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+    if not database_enabled:
+        return
+
+    orm_body = _wrap_sentinels(
+        "python",
+        f"domain_{snake}_sqlalchemy",
+        emit_sqlalchemy_model(spec, known_enums=known_enums),
+    )
+    _write(base / f"{snake}_model.py", orm_body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+    revision = f"domain_{snake}"
+    migration_body = _wrap_sentinels(
+        "python",
+        f"domain_{snake}_alembic",
+        emit_alembic_migration(spec, revision, down_revision=None, known_enums=known_enums),
+    )
+    migration_path = (
+        project_root / "services" / backend_name / "alembic" / "versions" / f"{snake}_domain.py"
+    )
+    _write(migration_path, migration_body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+
+def _emit_node_entity(
+    spec: EntitySpec,
+    backend_name: str,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    known_enums: set[str],
+) -> None:
+    """Emit the Zod schema for a Node backend.
+
+    Output path mirrors the shared-enums Node convention
+    (``services/<backend>/src/schemas/enums/<name>.ts``) — entities
+    land one level up under ``schemas/<entity_snake>.ts`` to keep
+    enums and entities visually grouped without colliding.
+    """
+    snake = _snake_case(spec.name)
+    target = project_root / "services" / backend_name / "src" / "schemas" / f"{snake}.ts"
+    body = _wrap_sentinels(
+        "ts", f"domain_{snake}_zod", emit_domain_zod(spec, known_enums=known_enums)
+    )
+    _write(target, body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+
+def _emit_rust_entity(
+    spec: EntitySpec,
+    backend_name: str,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    known_enums: set[str],
+) -> None:
+    """Emit the Rust struct for a Rust backend.
+
+    Output path mirrors the shared-enums Rust convention
+    (``services/<backend>/src/models/enums/<name>.rs``) — entities
+    land at ``services/<backend>/src/models/<entity_snake>.rs``.
+    """
+    snake = _snake_case(spec.name)
+    target = project_root / "services" / backend_name / "src" / "models" / f"{snake}.rs"
+    body = _wrap_sentinels(
+        "rust", f"domain_{snake}_struct", emit_rust_struct(spec, known_enums=known_enums)
+    )
+    _write(target, body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+
+def _emit_openapi_entity(
+    spec: EntitySpec,
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    known_enums: set[str],
+) -> None:
+    """Emit the OpenAPI component schema for the entity.
+
+    JSON has no comment syntax, so the OpenAPI output is NOT wrapped
+    in ``FORGE:BEGIN`` sentinels — the whole file is authoritative
+    and round-trips through ``forge --update`` as a full-file
+    replacement rather than a sentinel-bounded block.
+
+    Output path: ``<project_root>/openapi/<entity_snake>.json``. This
+    is a stable, backend-agnostic location so frontend codegen and
+    external OpenAPI tooling (Stainless, Speakeasy, openapi-generator)
+    find every entity in one place. ``config`` is currently unused;
+    accepted for future per-project routing.
+    """
+    _ = config
+    snake = _snake_case(spec.name)
+    body = json.dumps(emit_openapi(spec, known_enums=known_enums), indent=2) + "\n"
+    target = project_root / "openapi" / f"{snake}.json"
+    _write(target, body, collector, template_name=_DOMAIN_TEMPLATE_NAME)
+
+
+def _wrap_sentinels(language: str, tag: str, body: str) -> str:
+    """Wrap ``body`` in ``FORGE:BEGIN <tag>`` / ``FORGE:END <tag>``.
+
+    ``language`` selects the comment syntax:
+
+      * ``"python"`` — ``# FORGE:BEGIN <tag>`` / ``# FORGE:END <tag>``
+      * ``"ts"``     — ``// FORGE:BEGIN <tag>`` / ``// FORGE:END <tag>``
+      * ``"rust"``   — ``// FORGE:BEGIN <tag>`` / ``// FORGE:END <tag>``
+
+    Mirrors the sentinel shape produced by ``forge.injectors.ts_ast``
+    so the existing audit/merge tooling under :mod:`forge.sync` sees
+    domain-emitted blocks as ordinary FORGE-sentinelled regions.
+    """
+    if language == "python":
+        begin = f"# FORGE:BEGIN {tag}"
+        end = f"# FORGE:END {tag}"
+    else:
+        begin = f"// FORGE:BEGIN {tag}"
+        end = f"// FORGE:END {tag}"
+    # body already ends with "\n" per every emit_*; end sentinel gets
+    # its own trailing newline so the file stays POSIX-clean.
+    return f"{begin}\n{body}{end}\n"
+
+
+def _snake_case(pascal: str) -> str:
+    """Convert ``PascalCase`` → ``snake_case`` for file naming.
+
+    ``Workflow`` → ``workflow``, ``OrderItem`` → ``order_item``,
+    ``ABTest`` → ``a_b_test``. Mirrors the entity-naming convention
+    used by ``forge.codegen.enums._snake`` (which lives on
+    :class:`EntityField` enum field types in the emitter) so a
+    project's ``OrderItem.yaml`` lands at ``order_item.py``
+    consistently with the rest of the codegen surface.
+    """
+    out: list[str] = []
+    for i, ch in enumerate(pascal):
+        if ch.isupper() and i > 0:
+            out.append("_")
+        out.append(ch.lower())
+    return "".join(out)
+
+
 def _write(
     target: Path,
     content: str,
     collector: ProvenanceCollector | None,
+    *,
+    template_name: str = "_codegen",
 ) -> None:
     """Write ``content`` to ``target`` and record base-template provenance.
 
@@ -341,6 +694,17 @@ def _write(
     this pass. Without the unconditional record, the re-stamp would
     drop the entry and the next ``--update`` would re-classify the
     file as untracked.
+
+    ``template_name`` defaults to ``"_codegen"`` so every existing
+    caller keeps producing manifest entries tagged with the historical
+    synthetic name. The Pillar C.2 domain-emitter walk overrides this
+    to ``"_domain_emitter"`` so harvest can distinguish RFC-010 user-
+    entity emissions from the other codegen surfaces without having to
+    introduce a new ``ProvenanceOrigin`` literal (which would require
+    coordinated updates across the read-side sync flow — out of scope
+    for this PR). RFC-010 §"Generation pipeline" point 5 specifies
+    ``origin="domain-emitter"``; promoting the synthetic-name tag to
+    a first-class origin literal is tracked as follow-up work.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
     new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -361,7 +725,7 @@ def _write(
                 collector.record(
                     target,
                     origin="base-template",
-                    template_name="_codegen",
+                    template_name=template_name,
                     template_version=None,
                 )
             return
@@ -379,7 +743,7 @@ def _write(
         collector.record(
             target,
             origin="base-template",
-            template_name="_codegen",
+            template_name=template_name,
             template_version=None,
         )
 
