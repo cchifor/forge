@@ -17,6 +17,31 @@ pre-release labels. SDK MAJOR aligns with the plugin compat boundary
 (plugins may need code changes); MINOR signals additive surface
 (plugins keep working, can opt into new APIs).
 
+## 1.2 (2026-05, with forge 1.2.0-alpha.x)
+
+Status: **provisional** — the new surfaces are additive but the
+contracts may grow in a 1.3 minor before promotion to stable.
+
+Added:
+
+- ``ForgeAPI.add_injector(suffix: str, injector: Injector)`` —
+  Pillar A.1, pluggable per-suffix injector dispatch. Replaces the
+  hardcoded ``if/elif`` suffix chain in
+  ``forge/appliers/injection.py:_dispatch_injector`` with a module-
+  level registry at ``forge/injectors/_registry.py``. Built-ins
+  (``.py`` / ``.pyi`` → LibCST, TS family → regex/ts-morph, ``*`` →
+  sentinel text) seed at import time; plugins register new file
+  types via ``add_injector``. Unblocks polyglot backend plugins that
+  want to ship ``.go`` / ``.kt`` / ``.rs`` AST injectors without
+  forking forge.
+
+  The ``Injector`` contract is the same positional signature every
+  existing injector exposes:
+  ``(file: Path, feature_key: str, marker: str, snippet: str,
+  position: str) -> None``. Provisional in 1.2 — the callable may
+  grow a return value (e.g. structured diff for telemetry) in a
+  later minor; the positional signature is locked.
+
 ## 1.1 (2026-04, with forge 1.1.0-alpha.x)
 
 Status: **stable**.
