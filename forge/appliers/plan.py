@@ -37,8 +37,9 @@ from forge.errors import (
 from forge.fragments import FragmentImplSpec, _resolve_fragment_dir
 
 if TYPE_CHECKING:
+    from forge.appliers.renderers import FragmentRenderer
     from forge.config import BackendLanguage
-    from forge.middleware_spec import MiddlewareSpec
+    from forge.specs.middleware import MiddlewareSpec
 
 
 # Typed-port (Initiative #1) — the invariants for ``inject.yaml`` zone /
@@ -224,6 +225,7 @@ class FragmentPlan:
         feature_key: str,
         *,
         options: Mapping[str, Any] | None = None,
+        renderers: tuple[FragmentRenderer, ...] = (),
         middlewares: tuple[MiddlewareSpec, ...] = (),
         backend: BackendLanguage | None = None,
         shared_env_vars: tuple[tuple[str, str], ...] = (),
@@ -235,13 +237,21 @@ class FragmentPlan:
         resolver has already validated that every path the impl
         declares in ``reads_options`` exists in the registry.
 
-        ``middlewares`` + ``backend`` (Epic K, 1.1.0-alpha.1) let the
-        applier expand :class:`MiddlewareSpec` declarations into
-        ``_Injection`` records using the per-backend renderer. Specs
-        whose ``backend`` doesn't match are silently dropped, so one
-        fragment can carry specs for every backend it supports.
-        Synth'd injections are appended after ``inject.yaml`` ones;
-        they share the same zoned-dispatch pipeline downstream.
+        ``renderers`` + ``backend`` (Pillar A.2, 1.3.0) let the applier
+        expand any :class:`~forge.appliers.renderers.FragmentRenderer`
+        — :class:`MiddlewareSpec`, future ``ServiceRegistrationSpec``
+        (RFC-009), ``ErrorCodeSpec`` (RFC-007), ``LifespanHookSpec``,
+        ``PortSpec`` — into ``_Injection`` records via each renderer's
+        own :meth:`~FragmentRenderer.render`. Renderers whose
+        ``backend`` doesn't match are silently dropped so one fragment
+        can carry renderers for every backend it supports. Synth'd
+        injections are appended after ``inject.yaml`` ones; they share
+        the same zoned-dispatch pipeline downstream.
+
+        ``middlewares`` (Epic K) is the legacy keyword preserved for one
+        release — callers that still pass it have their tuple folded
+        into ``renderers`` transparently. New call sites SHOULD use
+        ``renderers=`` directly.
 
         ``shared_env_vars`` (from :attr:`Fragment.shared_env_vars`) is
         merged with ``impl.env_vars`` so per-language fragments don't
@@ -251,13 +261,6 @@ class FragmentPlan:
         single language gets a different default while the rest inherit
         the shared value.
         """
-        # Lazy import — forge.middleware_spec imports _Injection from
-        # this module at function-scope, so a top-level import would
-        # create a cycle on first load.
-        from forge.middleware_spec import (  # noqa: PLC0415
-            render_middleware_injections,
-        )
-
         fragment_dir = _resolve_fragment_dir(impl.fragment_dir)
         if not fragment_dir.is_dir():
             raise FragmentError(
@@ -281,9 +284,18 @@ class FragmentPlan:
         else:
             yaml_injections = ()
 
+        # Legacy ``middlewares=`` callers are folded into ``renderers``.
+        # ``MiddlewareSpec`` already implements the ``FragmentRenderer``
+        # protocol since the Pillar A.2 move, so the merge is just tuple
+        # concatenation. Order: explicit ``renderers`` first, legacy
+        # ``middlewares`` second — preserves the historical
+        # "inject.yaml then synth" insertion ordering for fragments that
+        # haven't migrated yet.
+        merged_renderers: tuple[FragmentRenderer, ...] = renderers + tuple(middlewares)
+
         synth_injections: tuple[_Injection, ...] = ()
-        if middlewares and backend is not None:
-            synth_injections = render_middleware_injections(middlewares, backend, feature_key)
+        if merged_renderers and backend is not None:
+            synth_injections = _render_all(merged_renderers, backend, feature_key)
 
         return cls(
             fragment_dir=fragment_dir,
@@ -293,6 +305,38 @@ class FragmentPlan:
             env_vars=_merge_env_vars(shared_env_vars, impl.env_vars),
             feature_key=feature_key,
         )
+
+
+def _render_all(
+    renderers: tuple[FragmentRenderer, ...],
+    backend: BackendLanguage,
+    feature_key: str,
+) -> tuple[_Injection, ...]:
+    """Dispatch every renderer targeting ``backend`` in deterministic order.
+
+    Sort key is ``(getattr(r, "order", 100), r.name)`` so:
+
+    - :class:`MiddlewareSpec`s — which carry an explicit ``order`` — keep
+      the same "outermost first" ordering they had under
+      :func:`forge.specs.middleware.render_middleware_injections`.
+    - Other renderers (RFC-009 ``ServiceRegistrationSpec``, RFC-007
+      ``ErrorCodeSpec``) that omit ``order`` slot in at the default 100
+      bucket, tiebroken by ``name`` — stable across runs without forcing
+      every spec kind to expose a sortable order.
+
+    Renderers whose ``backend`` attribute doesn't match the target are
+    skipped before calling :meth:`render`, so a fragment shipping specs
+    for every backend pays no per-spec dispatch cost on the wrong
+    backends.
+    """
+    matching = sorted(
+        (r for r in renderers if getattr(r, "backend", None) == backend),
+        key=lambda r: (getattr(r, "order", 100), r.name),
+    )
+    out: list[_Injection] = []
+    for renderer in matching:
+        out.extend(renderer.render(backend=backend, feature_key=feature_key))
+    return tuple(out)
 
 
 def _merge_env_vars(

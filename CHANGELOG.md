@@ -38,6 +38,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `TODO:` marker. Jinja templates ship as package data under
   `forge/cli/scaffold/fragment_skeleton/` so wheel installs work
   without an editable checkout.
+
+- **`FragmentRenderer` protocol (Pillar A.2, codegen-engine seam).**
+  New `forge.appliers.renderers.FragmentRenderer` Protocol generalises
+  the Epic K `MiddlewareSpec` dispatch so future declarative specs —
+  RFC-009 `ServiceRegistrationSpec`, RFC-007 `ErrorCodeSpec`,
+  `LifespanHookSpec`, and the Pillar D/E `PortSpec` — all flow through
+  the same plan-build dispatch. `FragmentPlan.from_impl` gains a
+  `renderers=` keyword that accepts a heterogeneous tuple of any
+  `FragmentRenderer` and iterates them in deterministic
+  `(order, name)` order, with per-renderer `attach_zone` honoured at
+  emit time. `MiddlewareSpec` moves from `forge.middleware_spec` to
+  `forge.specs.middleware` as the first protocol implementation; the
+  legacy `from forge.middleware_spec import MiddlewareSpec` path keeps
+  working via a one-line re-export shim (slated for removal in 2.0)
+  so plugins shipped against Epic K continue importing unchanged. The
+  legacy `middlewares=` keyword on `FragmentPlan.from_impl` /
+  `FragmentPipeline.run` is preserved for one release and folded into
+  `renderers=` transparently.
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts
   the framework-agnostic protocol surface into a sibling pure-Dart
