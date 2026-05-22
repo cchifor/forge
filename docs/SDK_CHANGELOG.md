@@ -42,6 +42,23 @@ Added:
   grow a return value (e.g. structured diff for telemetry) in a
   later minor; the positional signature is locked.
 
+- ``ForgeAPI.add_hook(hook: PhaseHook)`` — Pillar A.3, register a
+  :class:`forge.hooks.PhaseHook` to observe generator phases.
+  Callbacks (``on_phase_start`` / ``on_phase_end`` /
+  ``on_generate_complete``) fire from the existing
+  :func:`forge.logging.phase_timer` contexts that already wrap every
+  phase, so no plumbing change is required to add new observability
+  surfaces. Use cases: telemetry sinks, SBOM emitters, supply-chain
+  signers, post-``forge new`` shell scripts. Hook exceptions are
+  swallowed + logged inside the fire helpers so a buggy plugin
+  cannot crash generation.
+
+- ``forge.hooks`` module — the ``PhaseHook`` protocol itself,
+  ``register_hook`` for direct in-tree callers, and the testing
+  helper ``reset_hooks_for_tests``. ``forge.plugins.reset_for_tests``
+  already calls the latter so test suites using the existing plugin
+  reset fixture get hook isolation for free.
+
 ## 1.1 (2026-04, with forge 1.1.0-alpha.x)
 
 Status: **stable**.

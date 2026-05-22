@@ -152,9 +152,15 @@ def reset_for_tests() -> None:
     """Clear LOADED_PLUGINS / FAILED_PLUGINS / COMMAND_REGISTRY — use ONLY from tests.
 
     Also thaws ``FRAGMENT_REGISTRY`` so a subsequent ``load_all()`` call can
-    register plugin fragments + re-freeze cleanly.
+    register plugin fragments + re-freeze cleanly, and clears the
+    :mod:`forge.hooks` registry (Pillar A.3) so a hook registered by
+    one test in a worker doesn't fire during the next test's
+    generation.
     """
+    from forge.hooks import reset_hooks_for_tests  # noqa: PLC0415
+
     LOADED_PLUGINS.clear()
     FAILED_PLUGINS.clear()
     COMMAND_REGISTRY.clear()
     FRAGMENT_REGISTRY.frozen = False
+    reset_hooks_for_tests()

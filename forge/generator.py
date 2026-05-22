@@ -112,6 +112,14 @@ def generate(
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
+    # Pillar A.3 — fan out the populated report (or ``None`` when the
+    # caller opted out of the richer payload) to every registered
+    # PhaseHook. Local import keeps generator imports decoupled from
+    # plugin-loading order: hooks are registered via ForgeAPI which
+    # forge.api owns; importing eagerly here would couple module load.
+    from forge.hooks import _fire_generate_complete  # noqa: PLC0415
+
+    _fire_generate_complete(report)
     return project_root
 
 
