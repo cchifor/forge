@@ -240,6 +240,37 @@ class TestPhaseTimerFiresHooks:
 
         assert body_ran is True
 
+    def test_phase_error_plus_hook_error_in_on_phase_end_reraises_phase(self) -> None:
+        """Codex Phase B round 1 follow-up: the exception-handling contract
+        must hold under the combined scenario "phase raises AND a hook raises
+        while handling on_phase_end(error)". The original phase exception
+        must re-raise unchanged; the hook-side exception must be swallowed
+        the same way as it would be on a clean phase.
+        """
+
+        class _OnEndRaisingHook:
+            def on_phase_start(self, name, ctx):  # noqa: D401 - protocol shim
+                pass
+
+            def on_phase_end(self, name, ctx, duration_ms, error):  # noqa: D401
+                raise RuntimeError("hook-side boom in on_phase_end")
+
+            def on_generate_complete(self, report):  # noqa: D401
+                pass
+
+        register_hook(_OnEndRaisingHook())
+        logger = get_logger("test.phase_hooks.combined")
+
+        with (
+            pytest.raises(RuntimeError, match="phase boom") as excinfo,
+            phase_timer(logger, "test.phase.combined", backend="api"),
+        ):
+            raise RuntimeError("phase boom")
+
+        # The PHASE error is what re-raises — not the hook's error.
+        assert str(excinfo.value) == "phase boom"
+        assert "hook-side" not in str(excinfo.value)
+
 
 # -- ForgeAPI.add_hook + end-to-end generate() ------------------------------
 
