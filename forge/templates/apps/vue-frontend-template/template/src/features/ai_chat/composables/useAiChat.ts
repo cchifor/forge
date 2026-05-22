@@ -42,7 +42,16 @@ export function useAiChat() {
     uiStore.setChatOpen(false)
   }
 
-  function sendMessage(content: string, options?: { model?: string; approval?: string }) {
+  function sendMessage(
+    content: string,
+    options?: { model?: string; approval?: string; attachmentIds?: string[] },
+  ) {
+    const trimmed = content.trim()
+    const attachmentIds = options?.attachmentIds ?? []
+    // Allow attachment-only sends (no text). The agent sees the chips
+    // in `attachment_ids` and can act on them without a prompt body.
+    // Reject truly empty sends.
+    if (!trimmed && attachmentIds.length === 0) return
     agentClient.addUserMessage(content)
     agentClient.runAgent(options)
   }
