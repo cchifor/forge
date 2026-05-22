@@ -135,13 +135,17 @@ def test_rust_port_files_land_at_conventional_paths() -> None:
     assert adapter_rs.is_file(), f"rust adapter missing at {adapter_rs}"
 
 
-def test_python_inject_yaml_registers_port_into_container() -> None:
+def test_python_inject_yaml_registers_port_into_app_main() -> None:
     inject = _impl_root(BackendLanguage.PYTHON) / "inject.yaml"
     assert inject.is_file()
     entries = yaml.safe_load(inject.read_text(encoding="utf-8"))
     assert isinstance(entries, list) and len(entries) >= 1
     e = entries[0]
-    assert e["target"] == "src/app/core/container.py"
+    # main.py is the only Python file guaranteed to exist in every
+    # FastAPI backend configuration; container.py is conditional on
+    # agent features being enabled. observability_otel already uses
+    # the same target + marker pair (codex Phase B round 1 follow-up).
+    assert e["target"] == "src/app/main.py"
     assert "APP_POST_CONFIGURE" in e["marker"]
     snippet = e["snippet"]
     # Both the port type AND the default adapter must be reachable at
