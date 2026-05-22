@@ -105,9 +105,19 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
   String _newId() => '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
   /// Send a user message and stream the agent's response.
-  Future<void> sendMessage(String content, {String? bearerToken}) async {
+  ///
+  /// [attachmentIds] are IDs returned by `POST /api/v1/chat-files` for
+  /// this turn — surfaced to the agent as `attachment_ids` in
+  /// `forwardedProps` (snake_case for the Python backend). Empty by
+  /// default. Allows attachment-only sends (empty text but non-empty
+  /// `attachmentIds`); rejects truly empty sends.
+  Future<void> sendMessage(
+    String content, {
+    String? bearerToken,
+    List<String> attachmentIds = const [],
+  }) async {
     final trimmed = content.trim();
-    if (trimmed.isEmpty || state.isRunning) return;
+    if ((trimmed.isEmpty && attachmentIds.isEmpty) || state.isRunning) return;
 
     final userMsg = ChatMessage(
       id: _newId(),
@@ -118,7 +128,12 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
       messages: [...state.messages, userMsg],
       clearError: true,
     );
-    await _runAgent(bearerToken: bearerToken);
+    await _runAgent(
+      bearerToken: bearerToken,
+      forwardedProps: attachmentIds.isNotEmpty
+          ? {'attachment_ids': attachmentIds}
+          : const {},
+    );
   }
 
   /// Respond to a HITL prompt — sends an answer and resumes the run.
