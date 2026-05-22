@@ -261,9 +261,39 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--plugins",
         dest="plugins_subcommand",
-        choices=["list"],
+        choices=["list", "scaffold-fragment"],
         metavar="SUBCMD",
-        help="Plugin management: `list` shows discovered forge.plugins entry points.",
+        help=(
+            "Plugin management: `list` shows discovered forge.plugins entry points; "
+            "`scaffold-fragment` renders a skeleton fragment tree for plugin authors "
+            "(combine with --name, --output-dir, --backends, --force)."
+        ),
+    )
+    p.add_argument(
+        "--name",
+        dest="plugins_name",
+        metavar="NAME",
+        help=(
+            "Fragment name for `--plugins scaffold-fragment`. Must be a valid Python "
+            "identifier (used as a directory name and embedded in generated source)."
+        ),
+    )
+    p.add_argument(
+        "--backends",
+        dest="plugins_backends",
+        metavar="LIST",
+        help=(
+            "Comma-separated backends for `--plugins scaffold-fragment`. Default: python,node,rust."
+        ),
+    )
+    p.add_argument(
+        "--force",
+        dest="plugins_force",
+        action="store_true",
+        help=(
+            "For `--plugins scaffold-fragment`: overwrite the target directory if it "
+            "already exists. Without this flag, scaffold-fragment refuses to clobber."
+        ),
     )
 
     # Canvas
