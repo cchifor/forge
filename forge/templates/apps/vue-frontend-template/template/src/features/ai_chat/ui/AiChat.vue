@@ -86,17 +86,29 @@ function autoResize() {
   el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden'
 }
 
-const attachments = useChatAttachments()
+// Destructure the composable: in `<script setup>` Vue auto-unwraps
+// top-level refs in templates, so destructured names can be used
+// without `.value` access in the markup below. The `attachments` field
+// is renamed to `stagedAttachments` to avoid the outer/inner name clash.
+const {
+  attachments: stagedAttachments,
+  uploading: attachmentUploading,
+  uploadError: attachmentUploadError,
+  addFiles: addAttachments,
+  removeAttachment,
+  clear: clearAttachments,
+  ids: attachmentIds,
+} = useChatAttachments()
 const fileInputEl = ref<HTMLInputElement | null>(null)
 
 function openFilePicker() {
-  attachments.uploadError.value = null
+  attachmentUploadError.value = null
   fileInputEl.value?.click()
 }
 
 async function onFileInputChange(e: Event) {
   const input = e.target as HTMLInputElement
-  await attachments.addFiles(input.files)
+  await addAttachments(input.files)
   // Reset so re-picking the same file fires `change` again — browsers
   // swallow repeat selections of an unchanged value otherwise.
   input.value = ''
@@ -111,7 +123,7 @@ function formatBytes(n: number | undefined): string {
 
 function handleSend() {
   const text = inputText.value.trim()
-  const ids = attachments.ids()
+  const ids = attachmentIds()
   // Allow attachment-only sends; useAiChat.sendMessage enforces the
   // "text or attachments" invariant downstream.
   if ((!text && ids.length === 0) || isGenerating.value) return
@@ -121,7 +133,7 @@ function handleSend() {
     attachmentIds: ids.length > 0 ? ids : undefined,
   })
   inputText.value = ''
-  attachments.clear()
+  clearAttachments()
   nextTick(() => {
     if (textareaEl.value) {
       textareaEl.value.style.height = ''
@@ -275,12 +287,12 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
         <!-- Attachment chips (Pillar G.1) — shown above the toolbar
              when the user has staged files for the next send. -->
         <div
-          v-if="attachments.attachments.value.length > 0 || attachments.uploading.value || attachments.uploadError.value"
+          v-if="stagedAttachments.length > 0 || attachmentUploading || attachmentUploadError"
           class="flex flex-wrap items-center gap-2 px-2 pb-2"
           data-testid="chat-attachments"
         >
           <span
-            v-for="att in attachments.attachments.value"
+            v-for="att in stagedAttachments"
             :key="att.id"
             class="inline-flex items-center gap-1.5 rounded-full border border-input bg-muted/40 px-2 py-1 text-xs"
             :title="`${att.filename}${att.size_bytes ? ` (${formatBytes(att.size_bytes)})` : ''}`"
@@ -291,17 +303,17 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
               type="button"
               class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               :aria-label="`Remove ${att.filename}`"
-              @click="attachments.removeAttachment(att.id)"
+              @click="removeAttachment(att.id)"
             >
               <X class="h-3 w-3" />
             </button>
           </span>
-          <span v-if="attachments.uploading.value" class="text-xs text-muted-foreground">Uploading…</span>
+          <span v-if="attachmentUploading" class="text-xs text-muted-foreground">Uploading…</span>
           <span
-            v-if="attachments.uploadError.value"
+            v-if="attachmentUploadError"
             class="text-xs text-destructive"
             role="alert"
-          >{{ attachments.uploadError.value }}</span>
+          >{{ attachmentUploadError }}</span>
         </div>
 
         <!-- Hidden file input wired by the Plus button below. -->
@@ -323,7 +335,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
                   variant="ghost"
                   size="icon"
                   class="h-7 w-7 text-muted-foreground"
-                  :disabled="attachments.uploading.value || isGenerating"
+                  :disabled="attachmentUploading || isGenerating"
                   data-testid="chat-attach"
                   @click="openFilePicker"
                 >
@@ -374,7 +386,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
             variant="ghost"
             size="icon"
             class="h-7 w-7 shrink-0 rounded-full border border-border interactive-press"
-            :disabled="(!inputText.trim() && attachments.attachments.value.length === 0) || isGenerating"
+            :disabled="(!inputText.trim() && stagedAttachments.length === 0) || isGenerating"
             @click="handleSend"
           >
             <ArrowUp class="h-3.5 w-3.5 text-ai-from" />
