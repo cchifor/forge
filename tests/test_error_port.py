@@ -209,7 +209,12 @@ def test_node_port_declares_serialize_interface() -> None:
     assert "serialize(exc: unknown): ErrorEnvelope" in body
     # The envelope interface declares the same five RFC-007 fields.
     assert "interface ErrorEnvelope" in body
-    for field in ("code", "message", "type", "context", "correlationId"):
+    # Codex Phase B round 1 follow-up: RFC-007 mandates snake_case
+    # `correlation_id` — the prior assertion checked camelCase
+    # (`correlationId`) which would have been a wire-shape regression
+    # vs the existing base-template error-handler. Test + port + adapter
+    # now all agree on the snake_case spelling.
+    for field in ("code", "message", "type", "context", "correlation_id"):
         assert field in body, f"node port missing envelope field: {field!r}"
 
 

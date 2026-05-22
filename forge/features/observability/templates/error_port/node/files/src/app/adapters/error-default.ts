@@ -24,7 +24,7 @@ import type { ErrorEnvelope, ErrorPort } from "../ports/error-port.js";
  * structured `context`. For everything else, falls back to
  * `INTERNAL_ERROR` with a redacted message — the central error
  * middleware logs the real exception so operators can correlate via
- * `correlationId`.
+ * `correlation_id`.
  */
 export class DefaultErrorPort implements ErrorPort {
 	serialize(exc: unknown): ErrorEnvelope {
@@ -35,7 +35,7 @@ export class DefaultErrorPort implements ErrorPort {
 					message: exc.message,
 					type: exc.name,
 					context: exc.context,
-					correlationId: "",
+					correlation_id: "",
 				},
 			};
 		}
@@ -48,7 +48,7 @@ export class DefaultErrorPort implements ErrorPort {
 				message: "An unexpected error occurred",
 				type,
 				context: {},
-				correlationId: "",
+				correlation_id: "",
 			},
 		};
 	}
