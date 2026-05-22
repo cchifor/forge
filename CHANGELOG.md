@@ -87,6 +87,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `UnknownEnumReferenceError` before emission when a spec references
   an enum that isn't declared. (Pillar C.1, internal hardening.)
 
+### Documentation
+
+- **Five ADR backfills.** Capture architectural decisions that exist
+  in the codebase but were never written down. No code changes.
+  - [`ADR-003`](docs/architecture-decisions/ADR-003-copier-over-cookiecutter.md)
+    — why Copier (not Cookiecutter) as the template engine. Bidirectional
+    sync (`--update`, `--harvest`, `--verify`) rests on `copier update`.
+  - [`ADR-004`](docs/architecture-decisions/ADR-004-module-level-registries.md)
+    — why module-level dict registries over a DI container. The five
+    registries are static at runtime; a container's lifecycle machinery
+    buys nothing.
+  - [`ADR-006`](docs/architecture-decisions/ADR-006-forge-toml-provenance-manifest.md)
+    — why `forge.toml` is the round-trip source of truth. Out-of-band
+    manifest survives reformatters, IDE auto-edits, copy-paste, and
+    binary files; per-file headers and git history do not.
+  - [`ADR-007`](docs/architecture-decisions/ADR-007-separate-frontend-templates.md)
+    — why three separate frontend templates instead of one with
+    framework adapters. Sharing happens at the protocol layer
+    (`@forge/canvas-core`, `forge_canvas_core`), not the framework layer.
+  - [`ADR-008`](docs/architecture-decisions/ADR-008-codex-review-worktree.md)
+    — why the `codex-toolkit` dispatcher runs Codex in a sibling git
+    worktree. Stable snapshot, no risk of clobbering the user's WIP,
+    reproducible reviews.
+
 ### Removed
 
 - The `forge.feature_injector` deprecation shim. Migrate to
