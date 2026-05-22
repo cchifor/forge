@@ -1,0 +1,159 @@
+name: AG-UI client upgrade probe
+
+# Weekly probe that asks "is `@ag-ui/client` ready to bump to its
+# latest published 0.0.x patch?"
+#
+# Pillar B follow-up promised by PR #67 (AG-UI client pin
+# centralization). PR #67 collapsed the four scattered hardcoded
+# pins into a single `AG_UI_CLIENT_VERSION = "0.0.51"` constant in
+# `forge/codegen/event_union.py`; this workflow makes the bump
+# decision data-driven by actually building the canvas-vue +
+# canvas-svelte packages against the new version.
+#
+# Outcome:
+#   * Same version → notice, exit clean
+#   * New version + build/typecheck green → notice with the bump
+#     instruction maintainers can run by hand (a future iteration
+#     adds peter-evans/create-pull-request to open the PR
+#     automatically)
+#   * New version + build/typecheck red → workflow fails. The red
+#     run IS the upgrade ticket; investigate what broke before
+#     bumping
+#
+# Scope decision (v1): only probes the canvas-* npm packages, not
+# generated chat templates. Templates use `@ag-ui/client.HttpAgent`
+# heavily (see `forge/templates/apps/*-frontend-template/.../useAgentClient.ts`)
+# and a full forge-new + npm install + vue-tsc probe would multiply
+# wall-clock from ~3 min to ~15 min. The canvas-* packages share
+# the same `@ag-ui/client` / `@ag-ui/core` type imports as the
+# templates, so a breaking change in @ag-ui/client surface will
+# surface here first. Template-level probe is tracked as a follow-up.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"  # Mondays at 07:00 UTC — weekly cadence
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "Override target @ag-ui/client version (default: highest published 0.0.x)"
+        required: false
+        default: ""
+
+concurrency:
+  group: ag-ui-upgrade-probe
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe @ag-ui/client upgrade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          enable-cache: true
+
+      - name: Install Python + forge
+        run: |
+          uv python install 3.13
+          uv sync --all-groups
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Resolve current + target versions
+        id: versions
+        run: |
+          set -euo pipefail
+          current=$(uv run python -c "from forge.codegen.event_union import AG_UI_CLIENT_VERSION; print(AG_UI_CLIENT_VERSION)")
+          if [ -n "${{ inputs.target_version }}" ]; then
+            target="${{ inputs.target_version }}"
+          else
+            # Highest published 0.0.x. `npm view 'X@<range>' version --json`
+            # returns either a JSON string (single match) or array (multi).
+            target=$(npm view '@ag-ui/client@^0.0.0' version --json \
+              | jq -r 'if type == "array" then .[-1] else . end')
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "Currently pinned: $current"
+          echo "Target latest:    $target"
+
+      - name: Short-circuit if already at target
+        id: shortcircuit
+        if: steps.versions.outputs.current == steps.versions.outputs.target
+        run: |
+          echo "::notice::@ag-ui/client already pinned at ${{ steps.versions.outputs.current }} — no probe needed."
+
+      - name: Workspace install (root)
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        run: npm install --no-fund --no-audit
+
+      - name: Override @ag-ui/client + @ag-ui/core to target version
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        env:
+          TARGET: ${{ steps.versions.outputs.target }}
+        run: |
+          set -euo pipefail
+          # npm `overrides` in the root package.json forces every workspace
+          # member's transitive dep on @ag-ui/* down to the target. Avoids
+          # editing per-package package.json files just for the probe.
+          node -e '
+            const fs = require("fs");
+            const target = process.env.TARGET;
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.overrides = pkg.overrides || {};
+            pkg.overrides["@ag-ui/client"] = target;
+            pkg.overrides["@ag-ui/core"] = target;
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          '
+          # Re-install with the override applied.
+          npm install --no-fund --no-audit
+          echo "--- Resolved versions ---"
+          npm ls @ag-ui/client @ag-ui/core || true
+
+      - name: canvas-core — typecheck + build
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        run: npm run --workspace=@forge/canvas-core build
+
+      - name: canvas-vue — typecheck + build
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        run: |
+          cd packages/canvas-vue
+          npm run typecheck
+          npm run build
+
+      - name: canvas-svelte — build
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        run: |
+          cd packages/canvas-svelte
+          npx vite build
+
+      - name: canvas-core — tests
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        run: npm run --workspace=@forge/canvas-core test
+
+      - name: Annotate bump instructions
+        if: steps.versions.outputs.current != steps.versions.outputs.target
+        env:
+          CURRENT: ${{ steps.versions.outputs.current }}
+          TARGET: ${{ steps.versions.outputs.target }}
+        run: |
+          cat <<EOF
+          ::notice title=@ag-ui/client upgrade ready::Build + typecheck green at $TARGET (current pinned $CURRENT).
+
+          Maintainer next steps:
+            1. Edit forge/codegen/event_union.py — set AG_UI_CLIENT_VERSION = "$TARGET" and AG_UI_CORE_VERSION = "$TARGET".
+            2. Edit packages/canvas-vue/package.json + packages/canvas-svelte/package.json — set both deps to "^$TARGET".
+            3. Run: uv run pytest tests/test_ag_ui_pin_consistency.py -v
+            4. Open a PR titled "chore(deps): bump @ag-ui/client $CURRENT -> $TARGET".
+
+          A future iteration of this workflow will auto-open the PR via
+          peter-evans/create-pull-request.
+          EOF
