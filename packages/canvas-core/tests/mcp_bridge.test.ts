@@ -434,4 +434,99 @@ describe('mountMcpExtBridge', () => {
       }),
     ).toThrow(/iframe\.contentWindow is null/)
   })
+
+  // Codex Phase B round 1 follow-up tests:
+
+  it('constructs PostMessageTransport with the iframe contentWindow as both source AND target', () => {
+    const spy = {} as BridgeSpy
+    let receivedSource: Window | null = null
+    let receivedTarget: Window | null = null
+    const TransportCtorSpy = class FakeTransport {
+      constructor(source: Window, target: Window) {
+        receivedSource = source
+        receivedTarget = target
+      }
+    } as unknown as MountMcpExtBridgeOptions['transportCtor']
+    const iframe = makeIframe()
+    const handle = mountMcpExtBridge({
+      appBridgeCtor: makeAppBridgeCtor(spy),
+      transportCtor: TransportCtorSpy,
+      iframe,
+      identity: IDENTITY,
+      capabilities: CAPABILITIES,
+      context: CONTEXT,
+      callbacks: {},
+    })
+    expect(receivedSource).toBe(iframe.contentWindow)
+    expect(receivedTarget).toBe(iframe.contentWindow)
+    expect(receivedSource).toBe(receivedTarget)
+    handle.cleanup()
+  })
+
+  it('swallows a rejected connect() promise (no unhandled rejection)', async () => {
+    const spy = {} as BridgeSpy
+    const RejectingCtor = function (this: BridgeSpy, args: unknown) {
+      spy.upstream = {
+        constructorArgs: args,
+        connect: () => Promise.reject(new Error('hand-shake failed')),
+        sendToolInput: () => {},
+        sendToolResult: () => {},
+        teardownResource: () => Promise.resolve(),
+        sendSandboxResourceReady: () => {},
+      } as unknown as BridgeSpy['upstream']
+      return spy.upstream
+    } as unknown as MountMcpExtBridgeOptions['appBridgeCtor']
+
+    const handle = mountMcpExtBridge({
+      appBridgeCtor: RejectingCtor,
+      transportCtor: makeTransportCtor(),
+      iframe: makeIframe(),
+      identity: IDENTITY,
+      capabilities: CAPABILITIES,
+      context: CONTEXT,
+      callbacks: {},
+      html: '<p>x</p>',
+    })
+
+    // Yield to microtasks so the rejection is delivered.
+    await Promise.resolve()
+    await Promise.resolve()
+    // If the helper didn't .catch(), Node would warn on unhandled
+    // rejection. We assert by asserting cleanup is still fine.
+    expect(() => handle.cleanup()).not.toThrow()
+  })
+
+  it('skips sendSandboxResourceReady when the upstream bridge lacks the method (legacy mock support)', async () => {
+    // Simulates a downstream consumer's custom UpstreamAppBridge stub
+    // that predates the optional sendSandboxResourceReady method.
+    const LegacyCtor = function () {
+      return {
+        oninitialized: () => {},
+        onmessage: () => {},
+        onopenlink: () => {},
+        onsizechange: () => {},
+        ontoolcall: async () => ({}),
+        connect: () => Promise.resolve(),
+        sendToolInput: () => {},
+        sendToolResult: () => {},
+        teardownResource: () => Promise.resolve(),
+        // NOTE: deliberately no sendSandboxResourceReady.
+      }
+    } as unknown as MountMcpExtBridgeOptions['appBridgeCtor']
+
+    const handle = mountMcpExtBridge({
+      appBridgeCtor: LegacyCtor,
+      transportCtor: makeTransportCtor(),
+      iframe: makeIframe(),
+      identity: IDENTITY,
+      capabilities: CAPABILITIES,
+      context: CONTEXT,
+      callbacks: {},
+      html: '<p>x</p>',  // would normally trigger sendSandboxResourceReady
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    // No TypeError surfaced; cleanup runs.
+    expect(() => handle.cleanup()).not.toThrow()
+  })
 })
