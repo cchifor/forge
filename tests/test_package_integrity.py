@@ -260,6 +260,9 @@ class TestWhitelistSelfCheck:
         ".dart", ".rs", ".vue", ".svelte", ".go",
         # Templating
         ".jinja", ".j2", ".mako",
+        # Spec / contract (Pillar D.1 — TypeSpec port contracts under
+        # forge/templates/_shared/ports/<port>/contract.tsp)
+        ".tsp",
         # Config + data
         ".yaml", ".yml", ".json", ".toml", ".ini", ".env", ".properties",
         ".conf", ".lock", ".sql", ".sh", ".example",
