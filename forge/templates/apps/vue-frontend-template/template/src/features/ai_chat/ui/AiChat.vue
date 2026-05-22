@@ -42,12 +42,9 @@ const {
   respondToPrompt,
   editAndResend,
   retryLastRun,
+  dismissError,
   clearMessages,
 } = useAiChat()
-
-function dismissError() {
-  runError.value = null
-}
 
 const inputText = ref('')
 const selectedModel = ref('openai:gpt-4.1')

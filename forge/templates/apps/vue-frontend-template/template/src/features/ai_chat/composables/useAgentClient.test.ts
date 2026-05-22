@@ -451,6 +451,40 @@ describe('useAgentClient', () => {
     expect(mockRunAgent).not.toHaveBeenCalled()
   })
 
+  it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
+    // Codex Phase B round 1 follow-up. Spamming the Retry button
+    // during a slow retry must not queue multiple runAgent calls.
+    let resolveRun: (() => void) | null = null
+    mockRunAgent.mockImplementation(
+      () => new Promise<void>((resolve) => { resolveRun = resolve }),
+    )
+    const { runAgent, retryLastRun } = useAgentClient()
+    const firstCall = runAgent({ model: 'gpt-x', approval: 'default' })
+    // Don't await — runAgent's promise stays pending, isRunning = true.
+    await new Promise((r) => setTimeout(r, 0))  // let isRunning flip
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+    retryLastRun()
+    retryLastRun()
+    retryLastRun()
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)  // still 1, all retries no-op'd
+    resolveRun?.()
+    await firstCall
+  })
+
+  it('dismissError() clears error.value (public API, mirrors Svelte/Flutter)', async () => {
+    // Codex Phase B round 1 follow-up: cross-stack consistency. Vue
+    // exposes dismissError() now instead of forcing the UI layer to
+    // mutate error.value directly.
+    const { runAgent, dismissError, error } = useAgentClient()
+    mockRunAgent.mockImplementation(async (_p: any, subscriber: any) => {
+      await subscriber.onRunErrorEvent({ event: { message: 'boom' } })
+    })
+    await runAgent()
+    expect(error.value).not.toBeNull()
+    dismissError()
+    expect(error.value).toBeNull()
+  })
+
   // ── Reset clears new state ──
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {

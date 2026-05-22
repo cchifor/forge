@@ -229,7 +229,11 @@ function resetThread() {
  * options (model + approval + attachments). No-op before any run.
  */
 function retryLastRun() {
-	if (!hasRun) return;
+	// Codex Phase B round 1 follow-up: guard against double-retry while
+	// a run is in flight (spamming the Retry button during a slow retry
+	// must not queue multiple runAgent calls). Cross-stack consistency
+	// with Flutter's `if (!_hasRun || state.isRunning) return;` guard.
+	if (!hasRun || isRunning) return;
 	lastError = null;
 	void runAgent(lastRunOptions);
 }
