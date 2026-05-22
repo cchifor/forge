@@ -7,6 +7,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **`cache_port` — generic K/V cache port + memory/redis adapters
+  on all three backends (Pillar E.2).** New `CachePort` interface
+  exposes `get(key) / set(key, value, ttl_seconds) /
+  invalidate(key)` semantics with three tier-1 fragments:
+  `cache_port` (the port itself), `cache_memory` (in-process LRU,
+  zero external deps), and `cache_redis` (cross-replica safe,
+  reuses the existing Redis sidecar on a dedicated db=3 to keep
+  eviction independent from queue / rate-limit keysets). Selected
+  via the new `reliability.cache: enum["none", "memory", "redis"]
+  = "none"` option. Distinct from the existing
+  `middleware.response_cache` HTTP middleware (which keys by
+  request shape via fastapi-cache2) — the two are orthogonal and
+  can coexist. Use cases the port targets: idempotency-key dedupe,
+  LLM-response memoization, denormalized read caches. Python uses
+  redis-py asyncio, Node uses ioredis, Rust uses the `redis` crate
+  with its tokio async client. Known limitations (Pillar A.4
+  PortSpec fix tracked): on Rust, simultaneously enabling
+  `cache_port` + `queue_port` collides on `src/ports/mod.rs`, and
+  enabling `cache_memory`/`cache_redis` + `queue_apalis` collides
+  on `src/adapters/mod.rs` — both now declared via `conflicts_with`
+  so capability resolution errors loudly at plan-build time.
+  `reliability.cache=redis` does NOT auto-provision Redis on its
+  own (the capability declaration is the dep marker, not the
+  sidecar trigger); users need Redis provisioned elsewhere
+  (auth.gatekeeper / queue.backend=redis / manual). Sibling
+  cache_redis compose.yaml fragment is E.2.b follow-up.
 - **`ApplierRegistry` — pluggable per-suffix injector dispatch
   (Pillar A.1, SDK 1.2).** Replaces the hardcoded `if/elif` suffix
   chain at `forge/appliers/injection.py:_dispatch_injector` with a

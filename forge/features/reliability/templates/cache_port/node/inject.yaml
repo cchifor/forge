@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Cache port — adapter-less startup uses ``CachePort`` for typing
+    // only; an adapter (reliability.cache=memory|redis) wires the
+    // concrete impl.
+    import type { CachePort } from "./app/ports/cache.js";
