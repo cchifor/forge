@@ -76,6 +76,27 @@ export interface UpstreamAppBridge {
   connect(transport: unknown): Promise<void>
   sendToolInput(args: { arguments: Record<string, unknown> }): void
   sendToolResult(result: unknown): void
+  /**
+   * Push the sandbox resource (HTML + CSP + permissions) into the
+   * iframe once the bridge has connected. Only the iframe-hosted
+   * `sandbox-resource` MCP-ext flow uses this; pure `entryUrl`
+   * activities skip it.
+   *
+   * Optional in the interface (codex Phase B round 1 follow-up): older
+   * mock/custom `UpstreamAppBridge` implementations that predate this
+   * helper don't need to grow a method they never call. `mountMcpExtBridge`
+   * guards the call with `typeof bridge.sendSandboxResourceReady === 'function'`
+   * so a sandbox-resource activity against a bridge that lacks the
+   * method becomes a no-op rather than a TypeError. The real
+   * `@modelcontextprotocol/ext-apps` AppBridge implements it; this
+   * relaxation only matters for downstream consumers shipping their own
+   * bridge stubs.
+   */
+  sendSandboxResourceReady?(args: {
+    html: string
+    csp?: string
+    permissions?: unknown
+  }): void
   /** Tear down + free the bridge. Idempotent. */
   teardownResource(args: Record<string, unknown>): Promise<void>
 }
@@ -136,6 +157,217 @@ export function createMcpBridge(upstream: UpstreamAppBridge): McpBridge {
     },
     async close(): Promise<void> {
       await upstream.teardownResource({})
+    },
+  }
+}
+
+/**
+ * Constructor injection for the upstream `AppBridge` class. The shape
+ * matches `new AppBridge(parent, identity, capabilities, context)` from
+ * `@modelcontextprotocol/ext-apps/app-bridge`; canvas-core stays free
+ * of that dep by accepting the class as a parameter.
+ */
+export type AppBridgeConstructor = new (
+  parent: unknown,
+  identity: AppBridgeIdentity,
+  capabilities: AppBridgeCapabilities,
+  context: AppBridgeContext,
+) => UpstreamAppBridge
+
+/**
+ * Constructor injection for the upstream `PostMessageTransport`. The
+ * shape mirrors `new PostMessageTransport(sourceWindow, targetWindow)`
+ * from the upstream package.
+ */
+export type PostMessageTransportConstructor = new (
+  source: Window,
+  target: Window,
+) => unknown
+
+/** Caller callbacks for inbound iframe events. */
+export interface MountMcpExtBridgeCallbacks {
+  /**
+   * Fires once on upstream `oninitialized`. Templates typically use
+   * the supplied `sendToolInput` handle to push the initial activity
+   * context into the iframe.
+   */
+  onInitialized?: (handles: {
+    sendToolInput: (input: Record<string, unknown>) => void
+  }) => void
+  onMessage?: (msg: BridgeMessage) => void | Promise<void>
+  onOpenLink?: (req: OpenLinkRequest) => void | Promise<void>
+  onSizeChange?: (size: IframeSizeChange) => void
+  /**
+   * Returns the tool's result payload (whatever shape the host
+   * expects). The bridge round-trips it back to the iframe.
+   */
+  onToolCall?: (req: ToolCallRequest) => Promise<unknown>
+}
+
+/**
+ * Options for {@link mountMcpExtBridge}. Constructor-injection keeps
+ * canvas-core free of the upstream `@modelcontextprotocol/ext-apps`
+ * dep; the template (which already imports `AppBridge` +
+ * `PostMessageTransport` for its own engine) passes them in.
+ */
+export interface MountMcpExtBridgeOptions {
+  /** `AppBridge` class from `@modelcontextprotocol/ext-apps/app-bridge`. */
+  appBridgeCtor: AppBridgeConstructor
+  /** `PostMessageTransport` class from the same upstream package. */
+  transportCtor: PostMessageTransportConstructor
+  /**
+   * The iframe element to bind. Must already be in the DOM and have a
+   * non-null `contentWindow` at mount time — the helper throws
+   * descriptively if either fails.
+   */
+  iframe: HTMLIFrameElement
+  identity: AppBridgeIdentity
+  capabilities: AppBridgeCapabilities
+  context: AppBridgeContext
+  callbacks: MountMcpExtBridgeCallbacks
+  /**
+   * If set, the helper calls `sendSandboxResourceReady({html, csp,
+   * permissions})` once the bridge has connected. Omit for pure
+   * `entryUrl` activities.
+   */
+  html?: string
+  csp?: string
+  permissions?: unknown
+}
+
+/** Handles returned from {@link mountMcpExtBridge}. */
+export interface MountMcpExtBridgeHandle {
+  /**
+   * Tear the bridge down. Idempotent. Also flips an internal cancel
+   * flag so an in-flight `connect()` resolution will skip the
+   * post-connect `sendSandboxResourceReady` (unmount-during-connect
+   * race guard mirrored from the template implementations).
+   */
+  cleanup(): void
+  /**
+   * Push fresh tool input to the iframe. Swallows errors because the
+   * bridge may not yet have connected — callers (e.g. a Vue watcher
+   * or Svelte `$effect`) routinely fire this before the first
+   * `oninitialized`.
+   */
+  sendToolInput(input: Record<string, unknown>): void
+  /** Resolve a pending tool call with its result payload. */
+  sendToolResult(result: unknown): void
+}
+
+/**
+ * Mount the upstream `AppBridge` against an iframe and wire the five
+ * inbound event handlers to caller callbacks. Consolidates the inline
+ * MCP-ext mount logic from
+ * `forge/templates/apps/vue-frontend-template/.../McpExtEngine.vue`
+ * and
+ * `forge/templates/apps/svelte-frontend-template/.../McpExtEngine.svelte`
+ * (Pillar B Phase 4) into a single reusable helper. Both templates
+ * will migrate to this helper in a follow-up PR; this PR just makes
+ * the helper available.
+ *
+ * Web-only by contract — uses iframe + postMessage. Throws if called
+ * when {@link MCP_BRIDGE_AVAILABLE} is `false` so non-web callers
+ * (Flutter, CLI Dart) get a fast, descriptive error instead of a
+ * `ReferenceError: window is not defined`.
+ *
+ * **Unmount-during-connect race.** `bridge.connect(transport)` returns
+ * a Promise. If the host unmounts the component (calls `cleanup()`)
+ * before the Promise resolves, the post-connect
+ * `sendSandboxResourceReady` would otherwise fire into a torn-down
+ * bridge. The helper tracks a `cancelled` flag flipped by
+ * `cleanup()` and consulted at the connect callsite before firing
+ * the post-connect step. This mirrors the explicit `if (bridge !==
+ * localBridge) return` guard in the Svelte engine.
+ */
+export function mountMcpExtBridge(
+  opts: MountMcpExtBridgeOptions,
+): MountMcpExtBridgeHandle {
+  if (!MCP_BRIDGE_AVAILABLE) {
+    throw new Error(
+      'mountMcpExtBridge is web-only — call requires window + iframe. ' +
+        'On non-web platforms (Flutter, CLI Dart), gate the call with ' +
+        'MCP_BRIDGE_AVAILABLE and render a no-op UI instead.',
+    )
+  }
+
+  const {
+    appBridgeCtor,
+    transportCtor,
+    iframe,
+    identity,
+    capabilities,
+    context,
+    callbacks,
+    html,
+    csp,
+    permissions,
+  } = opts
+
+  const contentWindow = iframe.contentWindow as Window | null
+  if (!contentWindow) {
+    throw new Error(
+      'mountMcpExtBridge: iframe.contentWindow is null — the iframe must ' +
+        'be attached to the document before mounting the bridge.',
+    )
+  }
+
+  const bridge = new appBridgeCtor(null, identity, capabilities, context)
+  let cancelled = false
+  let teardownCalled = false
+
+  const sendToolInput = (input: Record<string, unknown>): void => {
+    try {
+      bridge.sendToolInput({ arguments: input })
+    } catch {
+      // Bridge may not yet have connected. Templates routinely fire
+      // tool input from a reactive watcher before `oninitialized`.
+    }
+  }
+
+  bridge.oninitialized = (): void => {
+    callbacks.onInitialized?.({ sendToolInput })
+  }
+  if (callbacks.onMessage) bridge.onmessage = callbacks.onMessage
+  if (callbacks.onOpenLink) bridge.onopenlink = callbacks.onOpenLink
+  if (callbacks.onSizeChange) bridge.onsizechange = callbacks.onSizeChange
+  if (callbacks.onToolCall) bridge.ontoolcall = callbacks.onToolCall
+
+  const transport = new transportCtor(contentWindow, contentWindow)
+
+  // Codex Phase B round 1 follow-up: explicitly handle a rejected
+  // `connect()` so the helper doesn't leak an unhandled promise
+  // rejection if the transport fails to hand-shake. Treated the same
+  // as unmount-during-connect: cleanup is the caller's job (they'll
+  // see the iframe never finishes loading + can act on it), the bridge
+  // is left in its connected-or-not state, no sandbox resource is
+  // pushed, no throw escapes.
+  void bridge
+    .connect(transport)
+    .then(() => {
+      if (cancelled) return
+      if (typeof html === 'string' && typeof bridge.sendSandboxResourceReady === 'function') {
+        bridge.sendSandboxResourceReady({ html, csp, permissions })
+      }
+    })
+    .catch(() => {
+      // Swallow — connect() rejections during mount are surfaced to
+      // the user via the iframe failing to load; no useful action
+      // the helper can take from here.
+    })
+
+  return {
+    cleanup(): void {
+      cancelled = true
+      if (teardownCalled) return
+      teardownCalled = true
+      void bridge.teardownResource({}).catch(() => {
+        // Swallow — teardown errors during unmount are not actionable.
+      })
+    },
+    sendToolInput,
+    sendToolResult(result: unknown): void {
+      bridge.sendToolResult(result)
     },
   }
 }
