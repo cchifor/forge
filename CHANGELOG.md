@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+<<<<<<< HEAD
 - **`ApplierRegistry` — pluggable per-suffix injector dispatch
   (Pillar A.1, SDK 1.2).** Replaces the hardcoded `if/elif` suffix
   chain at `forge/appliers/injection.py:_dispatch_injector` with a
@@ -21,6 +22,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   injector callable contract is the same positional
   `(file, feature_key, marker, snippet, position) -> None` shape
   every built-in injector already exposes.
+- **Domain-emitter wiring in the codegen pipeline (RFC-010 /
+  Pillar C.2, internal).** `forge/codegen/pipeline.py` grows a new
+  `_emit_user_entities(config, project_root, collector)` pass that
+  walks `<project_root>/domain/*.yaml` on every `forge new` /
+  `forge --update` and dispatches the hardened domain emitters
+  (PR #78) into per-backend output paths. Each entity produces, per
+  backend in the project: a Pydantic v2 DTO + SQLAlchemy ORM model
+  + alembic migration for every Python backend (ORM and migration
+  skipped when `config.database_mode == "none"`), a Zod schema for
+  every Node backend, and a serde + sqlx struct for every Rust
+  backend. An OpenAPI component schema is always emitted under
+  `<project_root>/openapi/<entity>.json` so frontend codegen and
+  external tooling (Stainless, Speakeasy, openapi-generator) find
+  every entity in one place. The `known_enums` set is sourced from
+  the shipped shared registry (`forge/templates/_shared/domain/enums/*.yaml`)
+  plus any project-local `<project_root>/domain/enums/*.yaml`, so
+  specs referencing an undefined enum raise
+  `UnknownEnumReferenceError` cleanly before any disk write. Every
+  emitted block is wrapped in `FORGE:BEGIN domain_<entity>_<block>`
+  / `FORGE:END domain_<entity>_<block>` sentinels (Python `#`,
+  TS/Rust `//`) so future `zone="merge"` configurations flow
+  through the existing three-way-merge applier under the same
+  sentinel discipline the fragment injectors use; OpenAPI JSON is
+  sentinel-free by design (no comment syntax). Provenance entries
+  for domain emissions carry `template_name="_domain_emitter"` —
+  a forward-compat metadata marker; today's harvester only buckets
+  rows where `origin == "fragment"` and explicitly ignores
+  base-template rows, so the marker is currently descriptive
+  rather than functional. Full RFC-010 §"Generation pipeline"
+  point 5 compliance (`origin="domain-emitter"` as a first-class
+  literal that `--harvest` routes on) requires coordinated
+  read-side updates in `forge/sync/{forge_to_project,project_to_forge}/`
+  — deferred to a follow-up PR explicitly scoped to those
+  cross-cutting sync sites. **`domain/` is optional** —
+  backwards-compat for every existing 1.1.x project: missing or
+  empty directory → no emit, no error.
 
 - **Retry button on the chat RUN_ERROR banner (all 3 frontend
   stacks).** Pillar G.5 of the architectural improvement plan.
