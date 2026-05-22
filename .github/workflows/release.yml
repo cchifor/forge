@@ -191,9 +191,55 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
+  publish-pub-dev-core:
+    name: Publish forge_canvas_core (pub.dev)
+    # Must run BEFORE publish-pub-dev: forge_canvas declares
+    # `forge_canvas_core: ^1.0.0-alpha.1` as a runtime dep, and pub.dev
+    # strips `dependency_overrides` at publish time so the in-tree
+    # `path:` override won't help downstream consumers. publish-pub-dev
+    # validates the resolved dep graph and would 4xx if core isn't on
+    # the registry yet.
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Dart-only — no Flutter toolchain needed. forge_canvas_core has
+      # no Flutter dep (that's the entire point of the Phase 2B split);
+      # using `setup-dart` keeps the publish image small + matches the
+      # package's actual sdk constraint (`>=3.0.0 <4.0.0`).
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c # v1
+        with:
+          sdk: stable
+
+      - name: Configure pub.dev credentials
+        working-directory: packages/forge-canvas-core-dart
+        run: |
+          mkdir -p ~/.config/dart
+          echo "${{ secrets.PUB_DEV_CREDENTIALS }}" > ~/.config/dart/pub-credentials.json
+
+      - name: Analyze
+        working-directory: packages/forge-canvas-core-dart
+        run: |
+          dart pub get
+          dart analyze
+
+      - name: Test
+        working-directory: packages/forge-canvas-core-dart
+        run: dart test
+
+      - name: Publish
+        working-directory: packages/forge-canvas-core-dart
+        run: dart pub publish --force
+
   publish-pub-dev:
     name: Publish forge_canvas (pub.dev)
-    needs: publish-pypi
+    # Depend on -core so the publishes serialize correctly: pub.dev
+    # resolves forge_canvas's `forge_canvas_core: ^X.Y.Z` dep against
+    # the registry, not the dependency_overrides path.
+    needs: publish-pub-dev-core
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -222,7 +268,7 @@ jobs:
 
   github-release:
     name: Create GitHub release
-    needs: [publish-pypi, publish-npm-canvas-vue, publish-npm-canvas-svelte, publish-pub-dev]
+    needs: [publish-pypi, publish-npm-canvas-vue, publish-npm-canvas-svelte, publish-pub-dev-core, publish-pub-dev]
     runs-on: ubuntu-latest
     permissions:
       contents: write
