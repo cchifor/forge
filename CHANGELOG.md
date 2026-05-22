@@ -7,33 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-- **Domain emitter hardening — `emit_alembic_migration`,
-  `emit_sqlalchemy_model`, enum cross-reference validation
-  (RFC-010 / Pillar C.1, internal).** `forge/domain/emitters.py`
-  grows three companions to the existing `emit_pydantic` /
-  `emit_zod` / `emit_rust_struct` / `emit_openapi` surface:
-  `emit_sqlalchemy_model(spec, *, known_enums=None)` produces a
-  SQLAlchemy 2.x declarative ORM model (Mapped[...] columns,
-  `__table_args__` indexes, `Enum(..., native_enum=False)` for
-  enum fields) mirroring the hand-written `ItemModel` shape;
-  `emit_alembic_migration(spec, revision, down_revision, *,
-  known_enums=None)` produces a syntactically valid alembic
-  migration body (typed revision header, `op.create_table` with
-  per-column `sa.Column(...)`, `PrimaryKeyConstraint`,
-  `op.create_index` per declared index, `op.drop_table` in
-  `downgrade()`) modelled on the shipped `0001_initial.py`; and a
-  new `UnknownEnumReferenceError(ValueError)` +
-  `validate_enum_references(spec, *, known_enums=None)` catch the
-  failure mode where a spec referenced an enum (e.g.
-  `ItemStatus`) that wasn't in the registry — previously the
-  blind `from app.domain.enums import {EnumName}` line at the top
-  of every emitted Pydantic model produced Python that parsed but
-  blew up at import time. The validator is called at the top of
-  every emit_* function; pass `known_enums=None` (the default) to
-  preserve the legacy "emit and pray" behaviour for callers and
-  fixtures that don't have a registry handy. **Pipeline wiring is
-  Pillar C.2 (separate PR)** — this PR is the emitter-layer
-  hardening only; no templates, no pipeline, no new options.
+- **`ApplierRegistry` — pluggable per-suffix injector dispatch
+  (Pillar A.1, SDK 1.2).** Replaces the hardcoded `if/elif` suffix
+  chain at `forge/appliers/injection.py:_dispatch_injector` with a
+  module-level registry at `forge/injectors/_registry.py`. Built-in
+  suffixes (`.py` / `.pyi` → LibCST, TS family → regex/ts-morph,
+  `*` wildcard → sentinel text fallback) seed at import time;
+  plugins register new file types via the new
+  `ForgeAPI.add_injector(suffix, injector)` SDK hook. Unblocks
+  polyglot backend plugins shipping `.go` / `.kt` / `.rs` AST
+  injectors without forking forge. SDK_VERSION bumps from `1.1` to
+  `1.2` (see `docs/SDK_CHANGELOG.md` for the matching entry); the
+  injector callable contract is the same positional
+  `(file, feature_key, marker, snippet, position) -> None` shape
+  every built-in injector already exposes.
 
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts

@@ -54,6 +54,7 @@ breaking change to this surface surfaces before release.
 | ``ForgeAPI.add_service``       | 1.1.0-alpha.1| stable            |
 | ``ForgeAPI.add_emitter``       | 1.0.0a1      | provisional       |
 | ``ForgeAPI.add_extractor``     | 1.2.0-alpha.1| provisional       |
+| ``ForgeAPI.add_injector``      | 1.2          | provisional       |
 | ``PluginRegistration``         | 1.0.0a1      | stable            |
 +--------------------------------+--------------+-------------------+
 
@@ -90,6 +91,7 @@ if TYPE_CHECKING:
     from forge.config import BackendSpec, FrontendSpec, ProjectConfig
     from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
+    from forge.injectors._registry import Injector
     from forge.options import Option
 
 
@@ -98,7 +100,13 @@ if TYPE_CHECKING:
 # package version. Plugins declare compatibility with
 # ``api.require_sdk(">=X.Y")``; bumps require a CHANGELOG entry in
 # ``docs/SDK_CHANGELOG.md``.
-SDK_VERSION = "1.1"
+#
+# 1.2 (Pillar A.1) — additive: ``ForgeAPI.add_injector`` for the
+# pluggable per-suffix ApplierRegistry at
+# :mod:`forge.injectors._registry`. Lets polyglot backend plugins
+# register new file-type injectors (``.go``, ``.kt``, ``.rs``)
+# without forking forge's ``_dispatch_injector``.
+SDK_VERSION = "1.2"
 
 
 _SDK_VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
@@ -722,3 +730,63 @@ class ForgeAPI:
         self._registration.extractors_added = self._registration.extractors_added + (
             registration.as_legacy_pair,
         )
+
+    # -- Injector registration (Pillar A.1, SDK 1.2) ------------------------
+
+    def add_injector(self, suffix: str, injector: Injector) -> None:
+        """Register a per-suffix injector with the ApplierRegistry.
+
+        Pillar A.1 replaced the hardcoded ``if/elif`` chain in
+        :func:`forge.appliers.injection._dispatch_injector` with a
+        pluggable registry at :mod:`forge.injectors._registry`. Plugins
+        ship language-specific injectors via this hook so a Go-backend
+        plugin can wire a ``.go`` AST injector — or a Kotlin plugin a
+        ``.kt`` injector — without forking forge.
+
+        ``suffix`` is a lowercase file extension including the leading
+        dot (``".go"``, ``".kt"``, ``".rs"``) or the wildcard literal
+        ``"*"`` to override the catch-all sentinel-based text fallback.
+        Suffix matching is case-insensitive at lookup time.
+
+        ``injector`` is any callable satisfying the
+        :class:`forge.injectors._registry.Injector` protocol — i.e. a
+        positional signature of
+        ``(file: Path, feature_key: str, marker: str,
+        snippet: str, position: str) -> None``. The injector mutates
+        the file at ``file`` in place; it inherits the same
+        replace-in-place idempotency contract every built-in
+        injector follows (re-applying with the same tag replaces the
+        existing sentinel block rather than duplicating).
+
+        Last-write wins on collision: re-registering ``".py"`` silently
+        replaces the built-in LibCST injector. The contract is
+        intentional — plugins that wrap a built-in (e.g. add tracing)
+        register their wrapped version directly.
+
+        Raises :class:`PluginError` (code
+        :data:`forge.errors.PLUGIN_COLLISION`) if ``suffix`` is empty,
+        missing its leading dot, or contains characters that can't
+        appear in a real file suffix. The underlying
+        :func:`register_injector` ``ValueError`` is wrapped so the
+        plugin surface stays plugin-coded.
+
+        Provisional in 1.2: the injector callable contract may grow a
+        return value (e.g. a structured diff for telemetry) in a later
+        minor. The positional signature won't change without a major
+        bump.
+        """
+        from forge.injectors._registry import register_injector  # noqa: PLC0415
+
+        try:
+            register_injector(suffix, injector)
+        except ValueError as exc:
+            raise PluginError(
+                f"Plugin '{self._registration.name}' tried to register an "
+                f"injector for suffix {suffix!r}, but registration failed: {exc}.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "injector",
+                    "value": suffix,
+                },
+            ) from exc

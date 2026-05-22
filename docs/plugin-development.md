@@ -237,6 +237,28 @@ Registers a code emitter for a target language or protocol. Targets are free-for
 
 Initiative #2 sub-task 2 wired this end-to-end: `forge.codegen.pipeline.run_codegen` walks `LOADED_PLUGINS` after the built-in passes and invokes each plugin's emitter. Last-loaded wins on target collision (a structured `plugin.emitter.target_collision` warning names both plugins); an emitter that raises is logged via `plugin.emitter.failed` and does not abort sibling emitters.
 
+### `api.add_injector(suffix, injector)`
+
+Registers a per-suffix injector with the pluggable `ApplierRegistry` (Pillar A.1, SDK 1.2). Before this hook the suffix dispatch in `forge/appliers/injection.py:_dispatch_injector` was a hardcoded `if/elif` chain — adding a new file type meant forking forge. Plugins now ship a `.go` / `.kt` / `.rs` injector at load time and the applier picks it up via `lookup_injector(target)`. `suffix` is a lowercase file extension including the leading dot (or the wildcard `"*"` to override the catch-all sentinel-based text fallback); `injector` is any callable matching `(file: Path, feature_key: str, marker: str, snippet: str, position: str) -> None` — the same signature every built-in injector (`inject_python` / `inject_ts` / `_inject_snippet`) exposes. Last-write wins on collision so plugins can layer wrapped versions of built-ins.
+
+```python
+from pathlib import Path
+
+from forge.api import ForgeAPI
+
+
+def inject_go(file: Path, feature_key: str, marker: str, snippet: str, position: str) -> None:
+    text = file.read_text(encoding="utf-8")
+    # Plugin-specific Go AST surgery here; mutate `text` in place and
+    # honour the BEGIN/END sentinel idempotency contract.
+    file.write_text(text, encoding="utf-8")
+
+
+def register(api: ForgeAPI) -> None:
+    api.require_sdk(">=1.2")
+    api.add_injector(".go", inject_go)
+```
+
 ## Testing your plugin
 
 A reference test using forge's test helpers:
