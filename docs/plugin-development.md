@@ -309,6 +309,31 @@ def register(api: ForgeAPI) -> None:
     api.add_injector(".go", inject_go)
 ```
 
+### `api.add_hook(hook)` — telemetry / SBOM / supply-chain observers (SDK 1.2)
+
+Registers a `forge.hooks.PhaseHook` that observes every generator phase. Callbacks fire from the existing `phase_timer` contexts that already wrap every phase, so plugins get full visibility without forking `forge.generator`. The three callbacks are `on_phase_start(name, ctx)`, `on_phase_end(name, ctx, duration_ms, error)`, and `on_generate_complete(report)` — the last one fires exactly once at the end of `generate()` with the populated `GenerationReport` (or `None` when the caller didn't request one).
+
+A minimal telemetry hook that prints phase timings to stderr:
+
+```python
+from forge.api import ForgeAPI
+
+class TelemetryHook:
+    def on_phase_start(self, name, ctx): pass
+    def on_phase_end(self, name, ctx, duration_ms, error):
+        status = "FAIL" if error else "ok"
+        print(f"[{status}] {name} {duration_ms}ms", file=__import__("sys").stderr)
+    def on_generate_complete(self, report): pass
+
+def register(api: ForgeAPI) -> None:
+    api.require_sdk(">=1.2")
+    api.add_hook(TelemetryHook())
+```
+
+Hook exceptions are swallowed and logged at WARNING by the dispatcher — a buggy hook will not crash generation, will not block sibling hooks, and the original exception (when a timed block itself raised) still re-raises normally. Hooks fire in registration order across all plugins (FIFO). The `ctx` dict is the kwargs the generator passed to `phase_timer(...)`; treat it as read-only — the dispatcher hands the same instance to every subsequent hook and the subsequent log emission.
+
+Common use cases beyond telemetry: SBOM emitters that walk `report.file_inventory` at `on_generate_complete`, supply-chain signers that hash + sign the project tree, post-`forge new` shell scripts that fire automation against the generated repo.
+
 ## Testing your plugin
 
 A reference test using forge's test helpers:
