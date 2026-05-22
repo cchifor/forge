@@ -31,6 +31,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import yaml
+
 from forge.codegen import canvas_lint as canvas_lint_codegen
 from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen import event_union as event_union_codegen
@@ -338,7 +340,18 @@ _DOMAIN_TEMPLATE_NAME = "_domain_emitter"
 user-entity emissions. See :func:`_write` for the rationale (the manifest's
 ``ProvenanceOrigin`` literal stays at ``base-template`` to avoid a
 cross-cutting sync-flow change; the synthetic name is the harvest-facing
-discriminator until a proper ``"domain-emitter"`` origin lands)."""
+discriminator until a proper ``"domain-emitter"`` origin lands).
+
+TODO(domain-emitter-origin): codex Phase B round 1 flagged this is
+currently metadata-only — today's harvester at
+``forge/sync/project_to_forge/harvester/_orchestrator.py`` only buckets
+rows where ``origin == "fragment"``. Full RFC-010 compliance requires
+coordinated read-side updates in ``forge/sync/{forge_to_project,project_to_forge}/``
+(at minimum: extending ``ProvenanceOrigin`` to add ``"domain-emitter"``
++ the 3 narrow Literal casts in updater/reapply_baseline/verify + the
+harvester orchestrator's bucket logic). Track via this marker; the
+synthetic name keeps the metadata path warm until the proper origin
+literal lands."""
 
 
 def _emit_user_entities(
@@ -459,7 +472,18 @@ def _collect_known_enums(project_root: Path) -> set[str]:
         for enum_file in sorted(root.glob("*.yaml")):
             try:
                 spec = load_enum_yaml(enum_file)
-            except Exception:  # noqa: BLE001 — see docstring
+            except (yaml.YAMLError, ValueError, KeyError) as exc:
+                # Codex Phase B round 1 follow-up: narrow from a broad
+                # `except Exception` to the actual failure surface
+                # (YAML parse failures + schema-shape failures). IO /
+                # permission errors now surface uncaught rather than
+                # being silently swallowed and later misattributed as
+                # `UnknownEnumReferenceError`.
+                logging.getLogger(__name__).warning(
+                    "Skipping malformed enum YAML %s: %s",
+                    enum_file,
+                    exc,
+                )
                 continue
             names.add(spec.name)
     return names
