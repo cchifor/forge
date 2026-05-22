@@ -169,20 +169,20 @@
       "sha256": "2ef430f09aecf93c"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
-      "size": 13735,
-      "sha256": "4ae58016d77b49b1"
+      "size": 17205,
+      "sha256": "c5755567fc42c79f"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 8295,
-      "sha256": "e13bacad4c3236ec"
+      "size": 9593,
+      "sha256": "fe4824c6fac2be8f"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
       "sha256": "fe89a988e3337f90"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.ts": {
-      "size": 2411,
-      "sha256": "97fdace02aa6faa8"
+      "size": 2941,
+      "sha256": "b3a1b9a08d9fdec5"
     },
     "apps/frontend/src/features/ai_chat/composables/useCanvas.ts": {
       "size": 620,
@@ -221,8 +221,8 @@
       "sha256": "c6f22e0b2fbb0465"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChat.vue": {
-      "size": 14742,
-      "sha256": "ac0f570f79c85b2d"
+      "size": 14807,
+      "sha256": "472574bd67bb2021"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChatButton.vue": {
       "size": 1084,
