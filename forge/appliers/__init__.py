@@ -28,6 +28,7 @@ from forge.appliers.files import FragmentFileApplier
 from forge.appliers.injection import FragmentInjectionApplier
 from forge.appliers.pipeline import FragmentPipeline
 from forge.appliers.plan import FragmentPlan
+from forge.appliers.renderers import FragmentRenderer
 
 __all__ = [
     "FragmentDepsApplier",
@@ -36,4 +37,5 @@ __all__ = [
     "FragmentInjectionApplier",
     "FragmentPipeline",
     "FragmentPlan",
+    "FragmentRenderer",
 ]
