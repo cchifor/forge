@@ -7,6 +7,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **Domain emitter hardening — `emit_alembic_migration`,
+  `emit_sqlalchemy_model`, enum cross-reference validation
+  (RFC-010 / Pillar C.1, internal).** `forge/domain/emitters.py`
+  grows three companions to the existing `emit_pydantic` /
+  `emit_zod` / `emit_rust_struct` / `emit_openapi` surface:
+  `emit_sqlalchemy_model(spec, *, known_enums=None)` produces a
+  SQLAlchemy 2.x declarative ORM model (Mapped[...] columns,
+  `__table_args__` indexes, `Enum(..., native_enum=False)` for
+  enum fields) mirroring the hand-written `ItemModel` shape;
+  `emit_alembic_migration(spec, revision, down_revision, *,
+  known_enums=None)` produces a syntactically valid alembic
+  migration body (typed revision header, `op.create_table` with
+  per-column `sa.Column(...)`, `PrimaryKeyConstraint`,
+  `op.create_index` per declared index, `op.drop_table` in
+  `downgrade()`) modelled on the shipped `0001_initial.py`; and a
+  new `UnknownEnumReferenceError(ValueError)` +
+  `validate_enum_references(spec, *, known_enums=None)` catch the
+  failure mode where a spec referenced an enum (e.g.
+  `ItemStatus`) that wasn't in the registry — previously the
+  blind `from app.domain.enums import {EnumName}` line at the top
+  of every emitted Pydantic model produced Python that parsed but
+  blew up at import time. The validator is called at the top of
+  every emit_* function; pass `known_enums=None` (the default) to
+  preserve the legacy "emit and pray" behaviour for callers and
+  fixtures that don't have a registry handy. **Pipeline wiring is
+  Pillar C.2 (separate PR)** — this PR is the emitter-layer
+  hardening only; no templates, no pipeline, no new options.
+
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts
   the framework-agnostic protocol surface into a sibling pure-Dart
@@ -42,6 +70,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   (mirroring the existing `publish-pub-dev` job for
   `forge_canvas`) and the parallel dry-run leg in
   `.github/workflows/release-dryrun.yml`.
+
+### Changed
+
+- **`forge.domain.emitters` public functions accept `known_enums`.**
+  All emit_* functions (`emit_pydantic`, `emit_sqlalchemy_model`,
+  `emit_alembic_migration`, `emit_zod`, `emit_rust_struct`,
+  `emit_openapi`, `emit_all`) grew a keyword-only
+  `known_enums: Iterable[str] | None = None` parameter. The default
+  preserves existing behaviour — existing callers that don't have an
+  enum registry on hand keep working unchanged. Pass an explicit set
+  to opt into `validate_enum_references` raising
+  `UnknownEnumReferenceError` before emission when a spec references
+  an enum that isn't declared. (Pillar C.1, internal hardening.)
 
 ### Removed
 
