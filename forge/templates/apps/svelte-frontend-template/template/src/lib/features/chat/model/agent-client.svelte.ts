@@ -63,10 +63,16 @@ async function runAgent(options?: ChatRunOptions) {
 	isRunning = true;
 	lastError = null;
 
-	const { hitlResponse, ...rest } = options ?? {};
+	const { hitlResponse, attachmentIds, ...rest } = options ?? {};
 	const forwardedProps: Record<string, unknown> = { ...rest };
 	if (hitlResponse) {
 		forwardedProps.hitl_response = hitlResponse;
+	}
+	if (attachmentIds && attachmentIds.length > 0) {
+		// Snake-case key matches the Python backend's expected
+		// ``forwardedProps['attachment_ids']`` shape — see the
+		// ``chat.attachments`` agent prompt template.
+		forwardedProps.attachment_ids = attachmentIds;
 	}
 
 	try {

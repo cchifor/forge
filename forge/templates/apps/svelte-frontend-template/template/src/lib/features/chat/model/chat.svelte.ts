@@ -40,11 +40,19 @@ export interface ChatMessage {
 export function getChatStore() {
 	const agent = getAgentClient();
 
-	function sendUserMessage(content: string) {
+	function sendUserMessage(content: string, options?: { attachmentIds?: string[] }) {
 		const trimmed = content.trim();
-		if (!trimmed) return;
+		const attachmentIds = options?.attachmentIds ?? [];
+		// Allow attachment-only sends (no text). The agent sees the
+		// chips in `attachment_ids` and can act on them without a
+		// prompt body. Reject completely-empty sends.
+		if (!trimmed && attachmentIds.length === 0) return;
 		agent.addUserMessage(trimmed);
-		void agent.runAgent({ model, approval: approvalMode });
+		void agent.runAgent({
+			model,
+			approval: approvalMode,
+			attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined
+		});
 	}
 
 	function setModel(next: ModelId) {
