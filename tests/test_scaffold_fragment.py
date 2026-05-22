@@ -289,6 +289,26 @@ class TestIdempotency:
         )
         assert (target / "fragments.py").exists()
 
+    def test_output_dir_is_existing_file_exits_with_typed_error(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Codex Phase B round 1 follow-up: if the user passes an
+        existing FILE path as --output-dir, we surface a controlled
+        CLI error (exit 2) rather than letting `Path.iterdir()` raise
+        `NotADirectoryError` uncontrolled.
+        """
+        target = tmp_path / "not_a_dir.txt"
+        target.write_text("collision")
+        with pytest.raises(SystemExit) as exc:
+            _scaffold_fragment(
+                name="my_fragment",
+                output_dir=str(target),
+                backends=("python",),
+                force=False,
+            )
+        assert exc.value.code == 2
+        assert "not a directory" in capsys.readouterr().err
+
 
 # ---------------------------------------------------------------------------
 # Dispatcher surface (the path the CLI parser actually reaches)
