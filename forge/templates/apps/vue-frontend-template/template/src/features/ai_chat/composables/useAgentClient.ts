@@ -257,12 +257,24 @@ export function useAgentClient() {
    * same `currentThreadId` (so conversation context is preserved —
    * unlike `editAndResend`, which mints a new thread) and replays
    * the original options (model + approval + attachments). No-op
-   * before any run has happened.
+   * before any run has happened OR if a run is currently in flight
+   * (spamming the Retry button during a slow retry must not queue
+   * multiple runAgent calls).
    */
   function retryLastRun() {
-    if (!hasRun) return
+    if (!hasRun || isRunning.value) return
     error.value = null
     runAgent(lastRunOptions)
+  }
+
+  /**
+   * Clear the last RUN_ERROR. UI invokes this from the banner's
+   * Dismiss button. Cross-stack consistency with Svelte's
+   * `dismissError()` + Flutter's `dismissError()` (no business
+   * logic — just clears the error so the banner hides).
+   */
+  function dismissError() {
+    error.value = null
   }
 
   function setCanvasActivity(activity: WorkspaceActivity) {
@@ -289,6 +301,7 @@ export function useAgentClient() {
     error: readonly(error),
     runAgent,
     retryLastRun,
+    dismissError,
     addUserMessage,
     respondToPrompt,
     setCanvasActivity,

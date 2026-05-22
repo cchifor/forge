@@ -121,6 +121,23 @@ describe('getChatStore (AG-UI agent client)', () => {
 		expect(runAgent).not.toHaveBeenCalled();
 	});
 
+	it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
+		// Codex Phase B round 1 follow-up: spamming the Retry button
+		// during a slow retry must not queue multiple runAgent calls.
+		let resolveRun: (() => void) | null = null;
+		runAgent.mockImplementation(
+			() => new Promise<void>((resolve) => { resolveRun = resolve }),
+		);
+		store.addUserMessage('Hello');
+		await Promise.resolve();  // let isRunning flip
+		expect(runAgent).toHaveBeenCalledTimes(1);
+		store.retryLastRun();
+		store.retryLastRun();
+		store.retryLastRun();
+		expect(runAgent).toHaveBeenCalledTimes(1);  // still 1
+		resolveRun?.();
+	});
+
 	it('dismissError clears the error without re-running', () => {
 		// No clean way to seed an error without driving the full agent path,
 		// but we can at least assert the method exists and is callable.

@@ -224,8 +224,15 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
     // Remember the exact payload so `retryLastRun` can re-issue it
     // verbatim. Capture BEFORE the request so a thrown error still
     // leaves retry armed.
+    //
+    // Codex Phase B round 1 follow-up: capture the FULLY-MERGED props
+    // (including model + approval at this moment), not just the raw
+    // forwardedProps. Otherwise a user who changes model/approval
+    // between failure and retry sees a different request shape on
+    // retry — that violates the "retry replays the failed request
+    // verbatim" contract and diverges from Vue/Svelte semantics.
     _lastBearerToken = bearerToken;
-    _lastForwardedProps = forwardedProps;
+    _lastForwardedProps = Map<String, dynamic>.from(mergedProps);
     _hasRun = true;
 
     state = state.copyWith(isRunning: true, clearError: true);

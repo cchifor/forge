@@ -73,6 +73,14 @@ export function useAiChat() {
     agentClient.retryLastRun()
   }
 
+  /**
+   * Clear the last RUN_ERROR. Wired into the banner's Dismiss button.
+   * Cross-stack consistency with Svelte + Flutter's `dismissError()`.
+   */
+  function dismissError() {
+    agentClient.dismissError()
+  }
+
   function clearMessages() {
     agentClient.resetThread()
   }
@@ -95,6 +103,7 @@ export function useAiChat() {
     respondToPrompt,
     editAndResend,
     retryLastRun,
+    dismissError,
     clearMessages,
   }
 }
