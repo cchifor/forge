@@ -246,12 +246,30 @@ def phase_timer(
     ``toolchain.install``, ``codegen.run``, ``provenance.write_toml``)
     so a future ``forge --log-json`` consumer can build a flame chart
     of generation cost without external instrumentation.
+
+    Pillar A.3: every entry/exit is also broadcast to registered
+    :class:`forge.hooks.PhaseHook` instances (telemetry sinks, SBOM
+    emitters, post-generate scripts) via
+    :func:`forge.hooks._fire_phase_start` /
+    :func:`forge.hooks._fire_phase_end`. Hook exceptions are swallowed
+    inside the fire helpers so a buggy plugin can't crash generation.
+    Local import — ``forge.hooks`` is leaf-level and free of cycles,
+    but the lazy form keeps initialisation order honest.
     """
+    from forge.hooks import _fire_phase_end, _fire_phase_start  # noqa: PLC0415
+
     start = perf_counter()
+    _fire_phase_start(event, fields)
     try:
         yield
-    except BaseException:
+    except BaseException as exc:
         duration_ms = int((perf_counter() - start) * 1000)
+        # Only forward ``Exception`` subclasses to hooks —
+        # ``KeyboardInterrupt`` / ``SystemExit`` are control-flow
+        # signals, not failures a plugin should react to. The original
+        # exception re-raises unchanged after the fire returns.
+        hook_error = exc if isinstance(exc, Exception) else None
+        _fire_phase_end(event, fields, duration_ms, hook_error)
         log_event(
             logger,
             event,
@@ -263,6 +281,7 @@ def phase_timer(
         raise
     else:
         duration_ms = int((perf_counter() - start) * 1000)
+        _fire_phase_end(event, fields, duration_ms, None)
         log_event(
             logger,
             event,
