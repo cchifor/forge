@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Cache adapter: in-process LRU — wired behind the CachePort interface.
+    import { MemoryCacheAdapter } from "./app/adapters/cache/memory.js";
+    const _memoryCacheAdapter: import("./app/ports/cache.js").CachePort =
+        new MemoryCacheAdapter();

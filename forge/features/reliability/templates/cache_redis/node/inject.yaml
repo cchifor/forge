@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Cache adapter: Redis — wired behind the CachePort interface.
+    import { RedisCacheAdapter } from "./app/adapters/cache/redis.js";
+    const _redisCacheAdapter: import("./app/ports/cache.js").CachePort =
+        new RedisCacheAdapter();

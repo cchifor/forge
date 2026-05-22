@@ -1,0 +1,9 @@
+- target: src/app/core/container.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Cache adapter: Redis — wired behind the ``CachePort`` interface.
+    from app.adapters.cache.redis import RedisCacheAdapter
+
+    _redis_cache_adapter: "CachePort" = RedisCacheAdapter()

@@ -85,3 +85,104 @@ register_fragment(
         },
     )
 )
+
+
+# -----------------------------------------------------------------------------
+# Pillar E.2 — cache_port + adapters (RFC: deep-gliding-mccarthy §Pillar E).
+#
+# Generic K/V cache port; explicitly distinct from the HTTP-response
+# middleware ``response_cache`` (which keys on request shape via
+# fastapi-cache2). Use cases: idempotency-key dedupe, LLM-response
+# memoization, denormalized read caches.
+#
+# Tier-1 from the start: port + memory + redis adapters on all three
+# backend languages. Auto-derivation tags ``cache_port`` as tier 1
+# because every built-in supports it.
+# -----------------------------------------------------------------------------
+
+
+register_fragment(
+    Fragment(
+        name="cache_port",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "python"),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "node"),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "rust"),
+                # The trait declaration itself uses async_trait + serde_json
+                # + thiserror; landing the port without these deps would
+                # fail ``cargo check`` even before an adapter wires in.
+                dependencies=(
+                    'async-trait = "0.1"',
+                    'serde_json = "1"',
+                    'thiserror = "1"',
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="cache_memory",
+        depends_on=("cache_port",),
+        # No external service — the in-process adapter ships zero
+        # infrastructure dependencies (no Redis, no compose changes).
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "python"),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "node"),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "rust"),
+                dependencies=(
+                    'lru = "0.12"',
+                    'tokio = { version = "1", features = ["sync"] }',
+                ),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="cache_redis",
+        depends_on=("cache_port",),
+        # ``capabilities=("redis",)`` triggers the Redis sidecar in
+        # docker-compose the same way queue_redis / rate_limit_redis do.
+        # Cache traffic shares the existing Redis instance but defaults
+        # to db=3 so eviction policy doesn't clobber queue keysets.
+        capabilities=("redis",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "python"),
+                dependencies=("redis>=5.2.0",),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "node"),
+                dependencies=("ioredis@5.4.1",),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "rust"),
+                dependencies=(
+                    'redis = { version = "0.27", features = ["tokio-comp"] }',
+                    'tokio = { version = "1", features = ["sync"] }',
+                ),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+        },
+    )
+)
