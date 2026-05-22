@@ -17,6 +17,8 @@ This guide walks through building a forge plugin — a pip-installable package t
 
 The fastest path from zero to a working plugin. Copy the reference plugin, change the names, install in dev-mode, verify with `forge --plugins list`.
 
+> **Faster path for the fragment itself.** If you only need to scaffold a single fragment's directory layout (manifest + per-backend `files/` + `fragments.py` registration stub), use `forge --plugins scaffold-fragment --name <name>` — it writes the same tree this Quickstart edits by hand, with `TODO` markers in each slot you have to fill in. See the [scaffold-fragment](#scaffold-fragment) section below for the full flag list.
+
 ```bash
 # 1. Clone or copy the reference plugin from the forge repo.
 cp -r examples/forge-plugin-example my-plugin
@@ -53,6 +55,54 @@ forge --project-name demo --backend-language python \
 5. **`pyproject.toml` needs `[tool.setuptools.package-data]`** so wheel installs ship your fragment tree (YAML + Python files). Editable installs (`pip install -e`) work without it; published wheels don't.
 
 When stuck, run `forge --doctor` — it lists which plugins loaded, which failed, and (P1.4) whether `ts-morph` AST injection is reachable.
+
+## scaffold-fragment
+
+`forge --plugins scaffold-fragment` writes a skeleton fragment tree — the same shape that lives at `examples/forge-plugin-example/src/forge_plugin_example/fragments/hello_banner/`, but parametrised on a name + backend set you pick. Use it when you've already got a plugin package (`pyproject.toml` + `register(api)` entry point) and want to add a new fragment without copy-pasting and renaming by hand.
+
+```bash
+# Default: writes ./plugins/forge-plugin-my_fragment/forge_plugin_my_fragment/fragments/my_fragment/
+forge --plugins scaffold-fragment --name my_fragment
+
+# Pick an explicit output directory + a subset of backends.
+forge --plugins scaffold-fragment \
+      --name audit_log \
+      --output-dir src/forge_plugin_acme/fragments/audit_log \
+      --backends python,rust
+
+# Re-running on a populated directory refuses to clobber. --force wipes
+# the tree first so the render is deterministic.
+forge --plugins scaffold-fragment --name audit_log --output-dir ./out --force
+```
+
+Flags:
+
+| Flag | Default | Notes |
+| ---- | ------- | ----- |
+| `--name` | (required) | Fragment name. Must be a valid Python identifier — it's embedded in generated source (`register_<name>`) and used as a directory name. Hyphens, leading digits, and reserved words are rejected before any file is written. |
+| `--output-dir` | `./plugins/forge-plugin-<name>/forge_plugin_<name>/fragments/<name>/` | Where to render. Reuses the generic `--output-dir` flag. |
+| `--backends` | `python,node,rust` | Comma-separated. Order is preserved; duplicates are deduped; unknown backends are a hard error. |
+| `--force` | off | Wipe the target directory first if it already contains files. Without this, scaffold-fragment exits non-zero on a non-empty target. |
+
+The rendered tree:
+
+```
+<output-dir>/
+├── fragments.py           # registers Fragment via ForgeAPI.add_fragment
+├── README.md              # next-steps cheat sheet
+├── inject.yaml            # placeholder; delete once per-backend manifests exist
+├── python/
+│   ├── inject.yaml        # TODO stub — empty list
+│   └── files/__init__.py  # TODO stub — copied verbatim into the backend
+├── node/                  # only if 'node' in --backends
+│   ├── inject.yaml
+│   └── files/__init__.ts
+└── rust/                  # only if 'rust' in --backends
+    ├── inject.yaml
+    └── files/lib.rs
+```
+
+Every file ships with a visible `TODO:` marker pointing at the slot the author has to fill in. The generated `fragments.py` is import-clean and `ast.parse`-clean out of the box — `from .fragments import register_<name>` works immediately; you just have to wire it into the plugin's top-level `register(api)` and pair it with an `Option`.
 
 ## Trust model
 
