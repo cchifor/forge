@@ -24,6 +24,22 @@ const error = ref<Error | null>(null)
 let currentThreadId = crypto.randomUUID()
 let agent: HttpAgent | null = null
 
+// Options from the last `runAgent` call, retained so the RUN_ERROR
+// banner's "Retry" button can re-issue the same request (same
+// thread, same model + approval + attachments) without forcing the
+// user to retype.
+type RunOptions = {
+  model?: string
+  approval?: string
+  hitlResponse?: HitlResponse
+  attachmentIds?: string[]
+}
+let lastRunOptions: RunOptions | undefined = undefined
+// Tracks whether a run has ever been issued — distinct from
+// `lastRunOptions` because `runAgent(undefined)` is valid (no opts)
+// but should still arm the retry path.
+let hasRun = false
+
 function getAgent(): HttpAgent {
   if (!agent) {
     agent = new HttpAgent({
@@ -34,19 +50,11 @@ function getAgent(): HttpAgent {
 }
 
 export function useAgentClient() {
-  async function runAgent(options?: {
-    model?: string
-    approval?: string
-    hitlResponse?: HitlResponse
-    /**
-     * IDs returned by `POST /api/v1/chat-files` for the user's next
-     * turn. Forwarded to the agent as `attachment_ids` in
-     * `forwardedProps` (snake-case for the Python backend); the agent
-     * then reads each via `GET /api/v1/chat-files/{id}`. Chips
-     * displayed in `AiChat.vue` are cleared after a successful send.
-     */
-    attachmentIds?: string[]
-  }) {
+  async function runAgent(options?: RunOptions) {
+    // Remember the options so `retryLastRun` can re-issue the same
+    // request after a RUN_ERROR without forcing the user to retype.
+    lastRunOptions = options
+    hasRun = true
     const a = getAgent()
     const { getToken } = useAuth()
 
@@ -240,6 +248,21 @@ export function useAgentClient() {
     workspaceActivity.value = null
     activeToolCalls.value = []
     error.value = null
+    lastRunOptions = undefined
+    hasRun = false
+  }
+
+  /**
+   * Re-issue the last `runAgent` call after a RUN_ERROR. Reuses the
+   * same `currentThreadId` (so conversation context is preserved —
+   * unlike `editAndResend`, which mints a new thread) and replays
+   * the original options (model + approval + attachments). No-op
+   * before any run has happened.
+   */
+  function retryLastRun() {
+    if (!hasRun) return
+    error.value = null
+    runAgent(lastRunOptions)
   }
 
   function setCanvasActivity(activity: WorkspaceActivity) {
@@ -265,6 +288,7 @@ export function useAgentClient() {
     isRunning: readonly(isRunning),
     error: readonly(error),
     runAgent,
+    retryLastRun,
     addUserMessage,
     respondToPrompt,
     setCanvasActivity,
