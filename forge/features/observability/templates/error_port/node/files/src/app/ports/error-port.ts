@@ -20,7 +20,7 @@
  *
  * Adapters that mint custom codes (or change context shape) MUST keep
  * the top-level `{ error: {...} }` wrapper and the five required
- * fields (`code`, `message`, `type`, `context`, `correlationId`);
+ * fields (`code`, `message`, `type`, `context`, `correlation_id`);
  * otherwise the unified frontend client breaks. New `code` enum values
  * go through `registerErrorCode` so two features can't silently claim
  * the same mapping.
@@ -42,7 +42,7 @@ export interface ErrorEnvelope {
 		 * with no request context return an empty string; the central
 		 * error middleware fills it in.
 		 */
-		correlationId: string;
+		correlation_id: string;
 	};
 }
 
