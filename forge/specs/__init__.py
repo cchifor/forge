@@ -28,15 +28,20 @@ from forge.specs.port import (
     render_fastify_port,
 )
 
+# Codex Phase B round 1 follow-up: narrow the curated public surface to
+# what plugin authors + spec consumers actually need. The per-backend
+# `render_*_port` helpers stay importable (no leading underscore — kept
+# at module level for tests + future PortSpec consumers) but are NOT in
+# `__all__`. The middleware `render_*` helpers were already public
+# pre-PortSpec; they remain so for back-compat. New spec types
+# (PortSpec, etc.) treat the renderer helpers as implementation detail
+# until a follow-up audit promotes the ones that have stable surfaces.
 __all__ = [
     "MiddlewareSpec",
     "PortSpec",
     "detect_port_cycle",
     "render_axum_layer",
-    "render_axum_port",
     "render_fastapi_middleware",
-    "render_fastapi_port",
     "render_fastify_plugin",
-    "render_fastify_port",
     "render_middleware_injections",
 ]
