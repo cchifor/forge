@@ -1,6 +1,6 @@
 {
   "name": "@forge/canvas-core",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Framework-agnostic AG-UI reducer, SSE client, and MCP iframe bridge for forge canvas packages.",
   "license": "MIT",
   "type": "module",
