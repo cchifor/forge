@@ -19,7 +19,11 @@ Swap an applier by constructing a pipeline with your own instance:
 
 Epic K uses this swap for its ``MiddlewareSpec``-aware injection
 applier that synthesises injections on the fly from a fragment's
-declared middlewares.
+declared middlewares. Pillar A.2 (1.3.0) generalises that shape so
+every declarative spec — ``MiddlewareSpec``, future
+``ServiceRegistrationSpec`` / ``ErrorCodeSpec`` / ``LifespanHookSpec``
+/ ``PortSpec`` — flows through the same
+:class:`~forge.appliers.renderers.FragmentRenderer` dispatch.
 """
 
 from __future__ import annotations
@@ -34,9 +38,10 @@ from forge.appliers.injection import FragmentInjectionApplier
 from forge.appliers.plan import FragmentPlan
 
 if TYPE_CHECKING:
+    from forge.appliers.renderers import FragmentRenderer
     from forge.fragment_context import FragmentContext
     from forge.fragments import FragmentImplSpec
-    from forge.middleware_spec import MiddlewareSpec
+    from forge.specs.middleware import MiddlewareSpec
 
 
 @dataclass(frozen=True)
@@ -60,15 +65,22 @@ class FragmentPipeline:
         impl: FragmentImplSpec,
         feature_key: str,
         *,
+        renderers: tuple[FragmentRenderer, ...] = (),
         middlewares: tuple[MiddlewareSpec, ...] = (),
         shared_env_vars: tuple[tuple[str, str], ...] = (),
     ) -> None:
         """Build the plan + apply each phase in the canonical order.
 
-        ``middlewares`` (Epic K) are expanded into injections at plan-
-        build time using the renderer for the current backend. Fragments
-        with no middleware declarations pass ``()`` and the plan looks
-        identical to the pre-Epic-K shape.
+        ``renderers`` (Pillar A.2, 1.3.0) are
+        :class:`~forge.appliers.renderers.FragmentRenderer` instances —
+        :class:`MiddlewareSpec` and future ``ServiceRegistrationSpec`` /
+        ``ErrorCodeSpec`` / ``LifespanHookSpec`` / ``PortSpec``. Each is
+        expanded into injections at plan-build time via its own
+        :meth:`~FragmentRenderer.render`.
+
+        ``middlewares`` (Epic K) is preserved for one release as a
+        compatibility shim — :meth:`FragmentPlan.from_impl` folds the
+        legacy tuple into ``renderers`` transparently.
 
         ``shared_env_vars`` (``Fragment.shared_env_vars``) is merged
         with ``impl.env_vars`` before the env applier runs, so per-
@@ -80,6 +92,7 @@ class FragmentPipeline:
             impl,
             feature_key,
             options=ctx.options,
+            renderers=renderers,
             middlewares=middlewares,
             backend=ctx.backend_config.language,
             shared_env_vars=shared_env_vars,
