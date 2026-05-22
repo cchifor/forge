@@ -1,0 +1,11 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // Error port — plugins shipping custom RFC-007 envelopes override
+    // ``DefaultErrorPort`` by registering their own adapter under the
+    // ``ErrorPort`` interface. Imported for typing + side-effect-free
+    // availability at startup.
+    import { DefaultErrorPort } from "./app/adapters/error-default.js";
+    import type { ErrorPort } from "./app/ports/error-port.js";
