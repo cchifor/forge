@@ -20,6 +20,7 @@ import {
 } from '@/shared/ui/tooltip'
 import { AlertCircle } from 'lucide-vue-next'
 import { useAiChat } from '../composables/useAiChat'
+import { useChatAttachments } from '../composables/useChatAttachments'
 import AiChatMessage from './AiChatMessage.vue'
 import UserPromptCard from './UserPromptCard.vue'
 
@@ -85,11 +86,54 @@ function autoResize() {
   el.style.overflowY = scrollH > maxH ? 'auto' : 'hidden'
 }
 
+// Destructure the composable: in `<script setup>` Vue auto-unwraps
+// top-level refs in templates, so destructured names can be used
+// without `.value` access in the markup below. The `attachments` field
+// is renamed to `stagedAttachments` to avoid the outer/inner name clash.
+const {
+  attachments: stagedAttachments,
+  uploading: attachmentUploading,
+  uploadError: attachmentUploadError,
+  addFiles: addAttachments,
+  removeAttachment,
+  clear: clearAttachments,
+  ids: attachmentIds,
+} = useChatAttachments()
+const fileInputEl = ref<HTMLInputElement | null>(null)
+
+function openFilePicker() {
+  attachmentUploadError.value = null
+  fileInputEl.value?.click()
+}
+
+async function onFileInputChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  await addAttachments(input.files)
+  // Reset so re-picking the same file fires `change` again — browsers
+  // swallow repeat selections of an unchanged value otherwise.
+  input.value = ''
+}
+
+function formatBytes(n: number | undefined): string {
+  if (!n || n <= 0) return ''
+  if (n < 1024) return `${n}B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)}KB`
+  return `${(n / (1024 * 1024)).toFixed(1)}MB`
+}
+
 function handleSend() {
   const text = inputText.value.trim()
-  if (!text || isGenerating.value) return
-  sendMessage(text, { model: selectedModel.value, approval: approvalMode.value })
+  const ids = attachmentIds()
+  // Allow attachment-only sends; useAiChat.sendMessage enforces the
+  // "text or attachments" invariant downstream.
+  if ((!text && ids.length === 0) || isGenerating.value) return
+  sendMessage(text, {
+    model: selectedModel.value,
+    approval: approvalMode.value,
+    attachmentIds: ids.length > 0 ? ids : undefined,
+  })
   inputText.value = ''
+  clearAttachments()
   nextTick(() => {
     if (textareaEl.value) {
       textareaEl.value.style.height = ''
@@ -240,12 +284,61 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
           @input="autoResize"
         />
 
+        <!-- Attachment chips (Pillar G.1) — shown above the toolbar
+             when the user has staged files for the next send. -->
+        <div
+          v-if="stagedAttachments.length > 0 || attachmentUploading || attachmentUploadError"
+          class="flex flex-wrap items-center gap-2 px-2 pb-2"
+          data-testid="chat-attachments"
+        >
+          <span
+            v-for="att in stagedAttachments"
+            :key="att.id"
+            class="inline-flex items-center gap-1.5 rounded-full border border-input bg-muted/40 px-2 py-1 text-xs"
+            :title="`${att.filename}${att.size_bytes ? ` (${formatBytes(att.size_bytes)})` : ''}`"
+          >
+            <span class="max-w-[160px] truncate">{{ att.filename }}</span>
+            <span v-if="att.size_bytes" class="text-muted-foreground">· {{ formatBytes(att.size_bytes) }}</span>
+            <button
+              type="button"
+              class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              :aria-label="`Remove ${att.filename}`"
+              @click="removeAttachment(att.id)"
+            >
+              <X class="h-3 w-3" />
+            </button>
+          </span>
+          <span v-if="attachmentUploading" class="text-xs text-muted-foreground">Uploading…</span>
+          <span
+            v-if="attachmentUploadError"
+            class="text-xs text-destructive"
+            role="alert"
+          >{{ attachmentUploadError }}</span>
+        </div>
+
+        <!-- Hidden file input wired by the Plus button below. -->
+        <input
+          ref="fileInputEl"
+          type="file"
+          multiple
+          class="hidden"
+          data-testid="chat-file-input"
+          @change="onFileInputChange"
+        />
+
         <!-- Toolbar row -->
         <div class="flex items-center gap-1 px-2 pb-2">
           <TooltipProvider :delay-duration="300">
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-7 w-7 text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-7 w-7 text-muted-foreground"
+                  :disabled="attachmentUploading || isGenerating"
+                  data-testid="chat-attach"
+                  @click="openFilePicker"
+                >
                   <Plus class="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -293,7 +386,7 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
             variant="ghost"
             size="icon"
             class="h-7 w-7 shrink-0 rounded-full border border-border interactive-press"
-            :disabled="!inputText.trim() || isGenerating"
+            :disabled="(!inputText.trim() && stagedAttachments.length === 0) || isGenerating"
             @click="handleSend"
           >
             <ArrowUp class="h-3.5 w-3.5 text-ai-from" />
