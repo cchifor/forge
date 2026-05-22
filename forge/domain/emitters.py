@@ -41,7 +41,7 @@ from forge.errors import GeneratorError
 # -- Enum cross-reference validation ------------------------------------------
 
 
-class UnknownEnumReferenceError(ValueError):
+class UnknownEnumReferenceError(GeneratorError):
     """An ``EntitySpec`` references an enum not present in the registry.
 
     Raised by :func:`validate_enum_references` and, transitively, by every
@@ -49,11 +49,12 @@ class UnknownEnumReferenceError(ValueError):
     are surfaced in the message so the user can fix the spec without
     spelunking through the emitter source.
 
-    Subclasses :class:`ValueError` rather than :class:`forge.errors.ForgeError`
-    on purpose — emitter-level validation failures are programming errors
-    in the spec, not user-facing forge runtime failures, and the existing
-    ``except ValueError`` sites in the codegen pipeline catch this without
-    extra plumbing.
+    Subclasses :class:`forge.errors.GeneratorError` (the :class:`ForgeError`
+    alias used elsewhere in this module for "unknown field type" raises) so
+    spec-validation failures live in the same error family as the rest of
+    the emitters' programming-error surface. Pillar C.2 pipeline wiring
+    can catch :class:`ForgeError` and surface a consistent user-facing
+    error envelope without depending on a stdlib-exception contract.
     """
 
     def __init__(self, entity: str, field: str, enum_name: str, known: Iterable[str]) -> None:
