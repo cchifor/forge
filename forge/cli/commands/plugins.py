@@ -213,6 +213,16 @@ def _scaffold_fragment(
 
     target = Path(output_dir).resolve() if output_dir else _default_output_dir(name)
 
+    # Codex Phase B round 1 follow-up: defensive check for the case where
+    # the user passes an existing FILE path (not a dir). `iterdir()` would
+    # raise NotADirectoryError uncontrolled; surface a typed CLI error.
+    if target.exists() and not target.is_dir():
+        print(
+            f"scaffold-fragment: --output-dir target exists but is not a directory: {target}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     if target.exists() and any(target.iterdir()):
         if not force:
             print(
