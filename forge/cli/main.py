@@ -174,7 +174,21 @@ def main() -> None:
     if getattr(args, "plugins_subcommand", None):
         from forge.cli.commands.plugins import _dispatch_plugins  # noqa: PLC0415
 
-        _dispatch_plugins(args.plugins_subcommand, json_output=getattr(args, "json_output", False))
+        # ``scaffold-fragment`` reuses --output-dir (project gen flag).
+        # ``output_dir`` defaults to ``"."`` from the generic parser — pass
+        # ``None`` through so the scaffold falls back to its own
+        # plugin-shaped default tree (``./plugins/forge-plugin-<name>/...``)
+        # unless the user explicitly set --output-dir to something else.
+        raw_output_dir = getattr(args, "output_dir", None)
+        scaffold_output_dir = raw_output_dir if raw_output_dir not in (None, ".") else None
+        _dispatch_plugins(
+            args.plugins_subcommand,
+            json_output=getattr(args, "json_output", False),
+            name=getattr(args, "plugins_name", None),
+            output_dir=scaffold_output_dir,
+            backends=getattr(args, "plugins_backends", None),
+            force=getattr(args, "plugins_force", False),
+        )
 
     if getattr(args, "canvas_subcommand", None):
         from forge.cli.commands.canvas import _dispatch_canvas  # noqa: PLC0415
