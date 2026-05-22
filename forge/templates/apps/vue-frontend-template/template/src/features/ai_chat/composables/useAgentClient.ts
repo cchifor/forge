@@ -38,6 +38,14 @@ export function useAgentClient() {
     model?: string
     approval?: string
     hitlResponse?: HitlResponse
+    /**
+     * IDs returned by `POST /api/v1/chat-files` for the user's next
+     * turn. Forwarded to the agent as `attachment_ids` in
+     * `forwardedProps` (snake-case for the Python backend); the agent
+     * then reads each via `GET /api/v1/chat-files/{id}`. Chips
+     * displayed in `AiChat.vue` are cleared after a successful send.
+     */
+    attachmentIds?: string[]
   }) {
     const a = getAgent()
     const { getToken } = useAuth()
@@ -54,11 +62,15 @@ export function useAgentClient() {
     isRunning.value = true
     error.value = null
 
-    // Build forwarded props, mapping hitlResponse to the backend key
-    const { hitlResponse, ...rest } = options ?? {}
+    // Build forwarded props, mapping hitlResponse + attachmentIds to
+    // their snake_case backend keys.
+    const { hitlResponse, attachmentIds, ...rest } = options ?? {}
     const forwardedProps: Record<string, unknown> = { ...rest }
     if (hitlResponse) {
       forwardedProps.hitl_response = hitlResponse
+    }
+    if (attachmentIds && attachmentIds.length > 0) {
+      forwardedProps.attachment_ids = attachmentIds
     }
 
     try {
