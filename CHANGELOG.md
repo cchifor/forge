@@ -35,6 +35,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Pillar C.2 (separate PR)** — this PR is the emitter-layer
   hardening only; no templates, no pipeline, no new options.
 
+- **`forge --plugins scaffold-fragment` (Pillar A.5, codegen-engine seam).**
+  New CLI subcommand that renders a skeleton fragment tree for plugin
+  authors — `fragments.py` registration stub, per-backend
+  `inject.yaml` placeholders, per-backend `files/` stubs, and a
+  `README.md` cheat sheet. Replaces the de facto "copy
+  `examples/forge-plugin-example/` and rename everything" pattern
+  with a first-class scaffold. Flags: `--name <id>` (required; must
+  be a valid Python identifier — embedded in generated source),
+  `--output-dir DIR` (defaults to
+  `./plugins/forge-plugin-<name>/forge_plugin_<name>/fragments/<name>/`),
+  `--backends python,node,rust` (subset opt-in), `--force` (overwrite
+  non-empty targets). Generated `fragments.py` is import- and
+  `ast.parse`-clean out of the box; every stub carries a visible
+  `TODO:` marker. Jinja templates ship as package data under
+  `forge/cli/scaffold/fragment_skeleton/` so wheel installs work
+  without an editable checkout.
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts
   the framework-agnostic protocol surface into a sibling pure-Dart
