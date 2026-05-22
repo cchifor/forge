@@ -64,6 +64,23 @@ export function useAiChat() {
     agentClient.editAndResend(messageId, newContent, options)
   }
 
+  /**
+   * Re-issue the last `runAgent` call without forcing the user to
+   * retype. Wired into the RUN_ERROR banner's "Retry" button — keeps
+   * `currentThreadId` so conversation context is preserved.
+   */
+  function retryLastRun() {
+    agentClient.retryLastRun()
+  }
+
+  /**
+   * Clear the last RUN_ERROR. Wired into the banner's Dismiss button.
+   * Cross-stack consistency with Svelte + Flutter's `dismissError()`.
+   */
+  function dismissError() {
+    agentClient.dismissError()
+  }
+
   function clearMessages() {
     agentClient.resetThread()
   }
@@ -85,6 +102,8 @@ export function useAiChat() {
     sendMessage,
     respondToPrompt,
     editAndResend,
+    retryLastRun,
+    dismissError,
     clearMessages,
   }
 }

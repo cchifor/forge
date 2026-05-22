@@ -130,10 +130,24 @@
 			{/if}
 			{#if chat.error}
 				<div
-					class="rounded-md border border-red-500/40 bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300"
+					class="flex items-center gap-2 rounded-md border border-red-500/40 bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300"
 					data-testid="chat-error"
 				>
-					{chat.error.message}
+					<span class="min-w-0 flex-1 truncate">{chat.error.message}</span>
+					<button
+						class="shrink-0 underline"
+						onclick={() => chat.retryLastRun()}
+						data-testid="chat-error-retry"
+					>
+						Retry
+					</button>
+					<button
+						class="shrink-0 underline"
+						onclick={() => chat.dismissError()}
+						data-testid="chat-error-dismiss"
+					>
+						Dismiss
+					</button>
 				</div>
 			{/if}
 			{#if chat.isGenerating}

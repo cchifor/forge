@@ -25,6 +25,14 @@ let isRunning = $state(false);
 let lastError = $state<Error | null>(null);
 let currentThreadId = crypto.randomUUID();
 
+// Options from the last `runAgent` call — retained so the RUN_ERROR
+// banner's "Retry" button can re-issue the same request (same
+// thread + model + approval + attachments) without forcing the user
+// to retype. `hasRun` is a separate flag because `runAgent(undefined)`
+// is valid and should still arm the retry path.
+let lastRunOptions: ChatRunOptions | undefined = undefined;
+let hasRun = false;
+
 let agent: HttpAgent | null = null;
 
 function getAgent(): HttpAgent {
@@ -48,6 +56,8 @@ function resetTransientState() {
 }
 
 async function runAgent(options?: ChatRunOptions) {
+	lastRunOptions = options;
+	hasRun = true;
 	const a = getAgent();
 
 	// Forward Bearer token so the agent service trusts the caller (Gatekeeper-issued).
@@ -208,6 +218,24 @@ function resetThread() {
 	currentThreadId = crypto.randomUUID();
 	messages = [];
 	resetTransientState();
+	lastRunOptions = undefined;
+	hasRun = false;
+}
+
+/**
+ * Re-issue the last `runAgent` call after a RUN_ERROR. Reuses the
+ * same `currentThreadId` (conversation context is preserved — unlike
+ * `editAndResend`, which mints a new thread) and replays the original
+ * options (model + approval + attachments). No-op before any run.
+ */
+function retryLastRun() {
+	// Codex Phase B round 1 follow-up: guard against double-retry while
+	// a run is in flight (spamming the Retry button during a slow retry
+	// must not queue multiple runAgent calls). Cross-stack consistency
+	// with Flutter's `if (!_hasRun || state.isRunning) return;` guard.
+	if (!hasRun || isRunning) return;
+	lastError = null;
+	void runAgent(lastRunOptions);
 }
 
 function setCanvasActivity(activity: WorkspaceActivity) {
@@ -220,6 +248,10 @@ function clearCanvas() {
 
 function clearWorkspaceActivity() {
 	workspaceActivity = null;
+}
+
+function dismissError() {
+	lastError = null;
 }
 
 /**
@@ -259,6 +291,8 @@ export function getAgentClient() {
 			return lastError;
 		},
 		runAgent,
+		retryLastRun,
+		dismissError,
 		addUserMessage,
 		respondToPrompt,
 		setCanvasActivity,

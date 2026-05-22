@@ -96,6 +96,15 @@ final chatAuthTokenProvider = FutureProvider<String?>((ref) async {
 class ChatNotifier extends Notifier<ChatStateSnapshot> {
   late String _threadId;
 
+  // Snapshot of the last `_runAgent` payload — retained so the
+  // RUN_ERROR banner's "Retry" button can re-issue the same request
+  // (same thread + same forwarded props) without forcing the user
+  // to retype. `_hasRun` tracks whether any run has happened, since
+  // an empty forwardedProps map is a valid payload.
+  String? _lastBearerToken;
+  Map<String, dynamic> _lastForwardedProps = const {};
+  bool _hasRun = false;
+
   @override
   ChatStateSnapshot build() {
     _threadId = _newId();
@@ -161,6 +170,27 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
   void resetThread() {
     _threadId = _newId();
     state = ChatStateSnapshot.empty;
+    _lastBearerToken = null;
+    _lastForwardedProps = const {};
+    _hasRun = false;
+  }
+
+  /// Re-issue the last `_runAgent` call after a RUN_ERROR. Reuses
+  /// the same `_threadId` (conversation context is preserved) and
+  /// replays the original forwarded props (model + approval +
+  /// attachments). No-op before any run has happened.
+  Future<void> retryLastRun() async {
+    if (!_hasRun || state.isRunning) return;
+    await _runAgent(
+      bearerToken: _lastBearerToken,
+      forwardedProps: _lastForwardedProps,
+    );
+  }
+
+  /// Clear the RUN_ERROR banner without retrying.
+  void dismissError() {
+    if (state.error == null) return;
+    state = state.copyWith(clearError: true);
   }
 
   void clearCanvas() {
@@ -190,6 +220,20 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
       'approval': approval.wireValue,
       ...forwardedProps,
     };
+
+    // Remember the exact payload so `retryLastRun` can re-issue it
+    // verbatim. Capture BEFORE the request so a thrown error still
+    // leaves retry armed.
+    //
+    // Codex Phase B round 1 follow-up: capture the FULLY-MERGED props
+    // (including model + approval at this moment), not just the raw
+    // forwardedProps. Otherwise a user who changes model/approval
+    // between failure and retry sees a different request shape on
+    // retry — that violates the "retry replays the failed request
+    // verbatim" contract and diverges from Vue/Svelte semantics.
+    _lastBearerToken = bearerToken;
+    _lastForwardedProps = Map<String, dynamic>.from(mergedProps);
+    _hasRun = true;
 
     state = state.copyWith(isRunning: true, clearError: true);
 

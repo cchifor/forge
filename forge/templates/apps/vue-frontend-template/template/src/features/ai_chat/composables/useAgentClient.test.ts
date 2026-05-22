@@ -394,6 +394,97 @@ describe('useAgentClient', () => {
     })
   })
 
+  // ── retryLastRun (RUN_ERROR banner) ──
+
+  it('retryLastRun re-invokes runAgent with the last options', async () => {
+    mockRunAgent.mockResolvedValue(undefined)
+    const { runAgent, retryLastRun } = useAgentClient()
+    await runAgent({
+      model: 'openai:gpt-4.1-mini',
+      approval: 'bypass',
+      attachmentIds: ['file-1'],
+    })
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(mockRunAgent).toHaveBeenCalledTimes(2)
+    const retryArgs = mockRunAgent.mock.calls[1][0]
+    expect(retryArgs.forwardedProps).toEqual({
+      model: 'openai:gpt-4.1-mini',
+      approval: 'bypass',
+      attachment_ids: ['file-1'],
+    })
+  })
+
+  it('retryLastRun reuses the same threadId (does not mint a new one)', async () => {
+    mockRunAgent.mockResolvedValue(undefined)
+    const { runAgent, retryLastRun } = useAgentClient()
+    await runAgent({ model: 'openai:gpt-4.1' })
+    const firstThreadId = mockRunAgent.mock.calls[0][0].threadId
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const secondThreadId = mockRunAgent.mock.calls[1][0].threadId
+    expect(secondThreadId).toBe(firstThreadId)
+  })
+
+  it('retryLastRun clears error.value before retrying', async () => {
+    mockRunAgent.mockRejectedValueOnce(new Error('First failure'))
+    const { runAgent, retryLastRun, error } = useAgentClient()
+    await runAgent({ model: 'openai:gpt-4.1' })
+    expect(error.value).not.toBeNull()
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    retryLastRun()
+    // error is cleared synchronously before the async runAgent kicks off
+    expect(error.value).toBeNull()
+  })
+
+  it('retryLastRun is a no-op before any runAgent call', () => {
+    const { retryLastRun } = useAgentClient()
+    retryLastRun()
+    expect(mockRunAgent).not.toHaveBeenCalled()
+  })
+
+  it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
+    // Codex Phase B round 1 follow-up. Spamming the Retry button
+    // during a slow retry must not queue multiple runAgent calls.
+    let resolveRun: (() => void) | null = null
+    mockRunAgent.mockImplementation(
+      () => new Promise<void>((resolve) => { resolveRun = resolve }),
+    )
+    const { runAgent, retryLastRun } = useAgentClient()
+    const firstCall = runAgent({ model: 'gpt-x', approval: 'default' })
+    // Don't await — runAgent's promise stays pending, isRunning = true.
+    await new Promise((r) => setTimeout(r, 0))  // let isRunning flip
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+    retryLastRun()
+    retryLastRun()
+    retryLastRun()
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)  // still 1, all retries no-op'd
+    resolveRun?.()
+    await firstCall
+  })
+
+  it('dismissError() clears error.value (public API, mirrors Svelte/Flutter)', async () => {
+    // Codex Phase B round 1 follow-up: cross-stack consistency. Vue
+    // exposes dismissError() now instead of forcing the UI layer to
+    // mutate error.value directly.
+    const { runAgent, dismissError, error } = useAgentClient()
+    mockRunAgent.mockImplementation(async (_p: any, subscriber: any) => {
+      await subscriber.onRunErrorEvent({ event: { message: 'boom' } })
+    })
+    await runAgent()
+    expect(error.value).not.toBeNull()
+    dismissError()
+    expect(error.value).toBeNull()
+  })
+
   // ── Reset clears new state ──
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {
