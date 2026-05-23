@@ -65,6 +65,15 @@ export function useAiChat() {
   }
 
   /**
+   * Regenerate from `messageId` — truncates from that message onward
+   * and re-runs the agent on the SAME thread (keeps conversational
+   * context). Distinct from `editAndResend`, which mints a new thread.
+   */
+  function regenerate(messageId: string) {
+    agentClient.regenerate(messageId)
+  }
+
+  /**
    * Re-issue the last `runAgent` call without forcing the user to
    * retype. Wired into the RUN_ERROR banner's "Retry" button — keeps
    * `currentThreadId` so conversation context is preserved.
@@ -102,6 +111,7 @@ export function useAiChat() {
     sendMessage,
     respondToPrompt,
     editAndResend,
+    regenerate,
     retryLastRun,
     dismissError,
     clearMessages,

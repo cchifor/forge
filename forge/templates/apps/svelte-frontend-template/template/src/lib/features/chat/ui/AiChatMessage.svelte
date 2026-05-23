@@ -1,15 +1,25 @@
 <script lang="ts">
 	import DOMPurify from 'dompurify';
 	import { marked } from 'marked';
-	import { Bot, User } from 'lucide-svelte';
+	import { Bot, RefreshCw, User } from 'lucide-svelte';
 	import type { Message, ToolCallInfo } from '../chat.types';
 	import { cn } from '$lib/shared/lib/utils';
 	import ToolCallStatus from './ToolCallStatus.svelte';
 
 	let {
 		message,
-		toolCalls = []
-	}: { message: Message; toolCalls?: ToolCallInfo[] } = $props();
+		toolCalls = [],
+		onRegenerate
+	}: {
+		message: Message;
+		toolCalls?: ToolCallInfo[];
+		/**
+		 * Show a Regenerate button on this assistant message. Parent
+		 * decides — typically only wired on the last assistant message
+		 * when no run is in flight.
+		 */
+		onRegenerate?: (messageId: string) => void;
+	} = $props();
 
 	const isAssistant = $derived(message.role !== 'user');
 
@@ -58,6 +68,18 @@
 					<ToolCallStatus toolCall={tc} />
 				{/each}
 			</div>
+		{/if}
+		{#if isAssistant && onRegenerate}
+			<button
+				type="button"
+				class="mt-1 flex items-center gap-1 self-start text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+				aria-label="Regenerate response"
+				data-testid="chat-message-regenerate"
+				onclick={() => onRegenerate?.(message.id)}
+			>
+				<RefreshCw class="h-3 w-3" />
+				Regenerate
+			</button>
 		{/if}
 	</div>
 </div>

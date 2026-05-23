@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { Sparkles, Wrench, Copy, Check, Pencil } from 'lucide-vue-next'
+import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
@@ -13,10 +13,16 @@ function renderMarkdown(text: string): string {
 const props = defineProps<{
   message: { id: string; role: string; content: string }
   isStreaming?: boolean
+  /**
+   * Show the Regenerate button. Parent decides — typically true only
+   * for the LAST assistant message AND when no run is in flight.
+   */
+  canRegenerate?: boolean
 }>()
 
 const emit = defineEmits<{
   edit: [payload: { id: string; content: string }]
+  regenerate: [payload: { id: string }]
 }>()
 
 const copied = ref(false)
@@ -135,16 +141,29 @@ function submitEdit() {
         v-if="props.isStreaming && props.message.content"
         class="inline-block w-1.5 h-4 bg-foreground/50 animate-pulse"
       />
-      <button
+      <div
         v-if="props.message.content && !props.isStreaming"
-        class="mt-1 flex items-center gap-1 self-start text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        :aria-label="copied ? 'Copied' : 'Copy message'"
-        @click="copyMessage"
+        class="mt-1 flex items-center gap-2 self-start opacity-0 transition-opacity group-hover:opacity-100"
       >
-        <Check v-if="copied" class="h-3 w-3" />
-        <Copy v-else class="h-3 w-3" />
-        {{ copied ? 'Copied' : 'Copy' }}
-      </button>
+        <button
+          class="flex items-center gap-1 text-[10px] text-muted-foreground"
+          :aria-label="copied ? 'Copied' : 'Copy message'"
+          @click="copyMessage"
+        >
+          <Check v-if="copied" class="h-3 w-3" />
+          <Copy v-else class="h-3 w-3" />
+          {{ copied ? 'Copied' : 'Copy' }}
+        </button>
+        <button
+          v-if="props.canRegenerate"
+          class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Regenerate response"
+          @click="emit('regenerate', { id: props.message.id })"
+        >
+          <RefreshCw class="h-3 w-3" />
+          Regenerate
+        </button>
+      </div>
     </div>
   </div>
 

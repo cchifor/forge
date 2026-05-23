@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../theme/design_tokens.dart';
+import '../domain/chat_message.dart';
 import 'chat_providers.dart';
 import 'widgets/chat_message_bubble.dart';
 import 'widgets/user_prompt_card.dart';
@@ -42,11 +43,36 @@ class ChatMessageList extends ConsumerWidget {
     }
 
     final children = <Widget>[
-      for (var i = 0; i < messages.length; i++)
+      for (var i = 0; i < messages.length; i++) ...[
         ChatMessageBubble(
           message: messages[i],
           toolCalls: i == messages.length - 1 ? activeToolCalls : const [],
         ),
+        // Regenerate appears under the LAST assistant message only,
+        // and only when no run is in flight. Distinct from Retry
+        // (which the error banner owns) — Regenerate works on a
+        // successful response that the user wants a fresh take on.
+        if (!isRunning &&
+            messages[i].role == ChatRole.assistant &&
+            i == messages.length - 1)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey('chat-message-regenerate-${messages[i].id}'),
+              onPressed: () => ref
+                  .read(chatProvider.notifier)
+                  .regenerate(messages[i].id),
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Regenerate'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: const TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
+      ],
       if (pendingPrompt != null)
         UserPromptCard(
           prompt: pendingPrompt,
