@@ -225,7 +225,12 @@ function editAndResend(messageId: string, newContent: string, options?: ChatRunO
  * clicks must not queue two runs).
  */
 function regenerate(messageId: string) {
-	if (isRunning) return;
+	// Codex Phase B round 1 follow-up: gate on `hasRun` so a call
+	// after resetThread() (or before any runAgent fired) doesn't fall
+	// through to runAgent(undefined) — which would silently drop the
+	// model / approval / attachmentIds the user expected to carry
+	// over. Same pattern as retryLastRun.
+	if (!hasRun || isRunning) return;
 	const idx = messages.findIndex((m) => m.id === messageId);
 	if (idx === -1) return;
 	messages = messages.slice(0, idx);

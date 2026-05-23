@@ -609,6 +609,21 @@ describe('useAgentClient', () => {
     await inflight
   })
 
+  it('regenerate is a no-op when no prior runAgent has fired (hasRun gate)', () => {
+    // Codex Phase B round 1 follow-up. Calling regenerate before any
+    // runAgent has captured `lastRunOptions` would otherwise fall
+    // through to runAgent(undefined), silently re-running with empty
+    // forwardedProps. The hasRun gate prevents this.
+    const { regenerate, addUserMessage } = useAgentClient()
+    // Seed a message but DON'T fire runAgent (which is what would
+    // happen if a user typed but clicked Regenerate on stale state).
+    addUserMessage('hi')
+    regenerate('user-msg-id-that-may-or-may-not-exist')
+    // Even if the id matched, regenerate must short-circuit on the
+    // hasRun gate BEFORE truncating + calling runAgent.
+    expect(mockRunAgent).not.toHaveBeenCalled()
+  })
+
   // ── Reset clears new state ──
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {

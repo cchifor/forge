@@ -197,7 +197,12 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
   /// if the id isn't found OR a run is in flight (double clicks must
   /// not queue two runs).
   Future<void> regenerate(String messageId) async {
-    if (state.isRunning) return;
+    // Codex Phase B round 1 follow-up: gate on `_hasRun` so a call
+    // after resetThread() (or before any runAgent fired) doesn't fall
+    // through to _runAgent with default empty _lastForwardedProps —
+    // which would silently drop the model / approval / attachment_ids
+    // the user expected to carry over. Same pattern as retryLastRun.
+    if (!_hasRun || state.isRunning) return;
     final idx = state.messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
     state = state.copyWith(

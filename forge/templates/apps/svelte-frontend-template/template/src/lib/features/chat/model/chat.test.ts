@@ -232,4 +232,15 @@ describe('getChatStore (AG-UI agent client)', () => {
 
 		resolveRun?.();
 	});
+
+	it('regenerate is a no-op when no prior runAgent has fired (hasRun gate)', () => {
+		// Codex Phase B round 1 follow-up. Calling regenerate before
+		// any runAgent has captured lastRunOptions would otherwise
+		// fall through to runAgent(undefined), silently re-running
+		// with empty forwardedProps.
+		runAgent.mockReset();
+		store.addUserMessage('hi');
+		store.regenerate('some-id-that-may-or-may-not-exist');
+		expect(runAgent).not.toHaveBeenCalled();
+	});
 });

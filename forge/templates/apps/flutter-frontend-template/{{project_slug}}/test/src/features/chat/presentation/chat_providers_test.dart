@@ -289,6 +289,34 @@ void main() {
       await controller.close();
       await inflight;
     });
+
+    test('is a no-op when no prior sendMessage has fired (hasRun gate)', () async {
+      // Codex Phase B round 1 follow-up. Calling regenerate before
+      // any sendMessage has captured `_lastForwardedProps` /
+      // `_lastBearerToken` would otherwise fall through to _runAgent
+      // with empty forwardedProps, silently dropping model + approval.
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(chatProvider.notifier);
+      // Add a user message directly (bypassing sendMessage so
+      // _hasRun stays false), then attempt regenerate.
+      notifier.state = notifier.state.copyWith(
+        messages: const [
+          ChatMessage(id: 'msg-1', role: ChatRole.user, content: 'hi'),
+        ],
+      );
+      await notifier.regenerate('msg-1');
+      verifyNever(
+        () => client.runAgent(
+          threadId: any(named: 'threadId'),
+          runId: any(named: 'runId'),
+          messages: any(named: 'messages'),
+          state: any(named: 'state'),
+          forwardedProps: any(named: 'forwardedProps'),
+          bearerToken: any(named: 'bearerToken'),
+        ),
+      );
+    });
   });
 
   group('ChatNotifier.dismissError', () {
