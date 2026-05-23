@@ -225,10 +225,35 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
     return McpInvokeResponse(ok=True, output=result)
 
 
+class McpAuditEntry(BaseModel):
+    """One audit-log entry as written by :func:`app.mcp.audit.record_invocation`.
+
+    Fields mirror the on-disk JSONL shape verbatim. New columns added
+    to the write path (e.g. ``tool_call_id``, ``approval_mode``,
+    ``correlation_id`` — RFC-014 deferred) should grow this model as
+    optional, never repurpose existing field semantics.
+
+    ``model_config = {"extra": "allow"}`` keeps the response forward-
+    compatible: when the write path adds fields ahead of this model's
+    next bump, they still surface to API clients rather than getting
+    silently dropped by Pydantic v2's default-strict serialization.
+    """
+
+    model_config = {"extra": "allow"}
+
+    ts: str
+    user_id: str
+    server: str
+    tool: str
+    input_hash: str
+    decision: str
+    error: str | None = None
+
+
 class McpAuditResponse(BaseModel):
     """Page of audit entries returned by ``GET /mcp/audit``."""
 
-    entries: list[dict[str, Any]]
+    entries: list[McpAuditEntry]
 
 
 @router.get("/audit", response_model=McpAuditResponse)
@@ -249,6 +274,21 @@ async def list_audit(
     decision, error}``. Missing log file returns an empty list (not
     an error: that's the "no calls yet" case). Storage-backend
     failures surface as 500 so monitoring catches them.
+
+    **Deferred fields:** ``tool_call_id``, ``approval_mode``, and
+    ``correlation_id`` are spec-mentioned but not yet on the write
+    path. Adding them is a follow-up that extends
+    ``record_invocation`` (and bumps :class:`McpAuditEntry` to declare
+    each as optional). Until then this endpoint returns the JSONL
+    fields verbatim.
+
+    **Memory cost:** ``read_last_n`` parses the entire log file into
+    memory before slicing. Acceptable because the JSONL is externally
+    rotated (see ``audit.py`` module docstring) and bounded to MB-
+    scale in production. If rotation is mis-configured and the file
+    grows to GB-scale, this endpoint will OOM the worker — that's a
+    deployment misconfiguration to surface in monitoring, not an
+    endpoint bug.
     """
     try:
         entries = read_last_n(limit)

@@ -233,7 +233,13 @@ class TestReadLastN:
         assert audit_module.read_last_n(0) == []
         assert audit_module.read_last_n(-1) == []
 
-    def test_skips_malformed_lines(self, audit_module, tmp_path, monkeypatch) -> None:
+    def test_skips_malformed_lines(self, audit_module, tmp_path, monkeypatch, caplog) -> None:
+        """Malformed JSONL (likely from a concurrent write mid-flush) is
+        skipped + emits a warning. Codex Phase B round 1 follow-up:
+        assert the warning fires so corruption isn't completely silent —
+        ops can grep CI logs for `MCP audit: skipping malformed line`.
+        """
+        import logging
         log_path = tmp_path / "audit.jsonl"
         monkeypatch.setenv("MCP_AUDIT_LOG", str(log_path))
         self._write_entries(audit_module, 2)
@@ -251,8 +257,34 @@ class TestReadLastN:
             )
         )
 
-        page = audit_module.read_last_n(10)
+        with caplog.at_level(logging.WARNING, logger="app.mcp.audit"):
+            page = audit_module.read_last_n(10)
         assert [e["ts"] for e in page] == [99.0, 1.0, 0.0]
+        assert any(
+            "malformed" in record.message.lower() or "skip" in record.message.lower()
+            for record in caplog.records
+        ), "malformed-line skip should emit a warning"
+
+    def test_oserror_propagates_uncaught(self, audit_module, tmp_path, monkeypatch) -> None:
+        """Codex Phase B round 1 follow-up: when the JSONL file can be
+        located but reading it fails (e.g. permission denied), read_last_n
+        propagates OSError uncaught. The router's HTTPException(500)
+        wrapping is where the conversion happens — not here.
+        """
+        import pytest
+        log_path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(log_path))
+        self._write_entries(audit_module, 1)
+        # Replace open() with a stub that raises OSError on read.
+        original_open = type(log_path).open
+        def _raising_open(self, *args, **kwargs):
+            raise OSError(13, "Permission denied", str(self))
+        monkeypatch.setattr(type(log_path), "open", _raising_open)
+        try:
+            with pytest.raises(OSError, match="Permission denied"):
+                audit_module.read_last_n(10)
+        finally:
+            monkeypatch.setattr(type(log_path), "open", original_open)
 
     def test_entry_shape_round_trips(self, audit_module, tmp_path, monkeypatch) -> None:
         """Every field written by record_invocation comes back out."""
