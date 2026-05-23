@@ -13,8 +13,9 @@ deletes what a forward applier would have written.
 This module also owns :class:`_Injection` (the per-injection record),
 :func:`_load_injections` (``inject.yaml`` → ``_Injection`` records), and
 :func:`_render_snippet` (Jinja rendering of ``render: true`` snippets).
-They were inlined here in 1.2.0-alpha.1 when the legacy
-``forge.feature_injector`` shim was deleted.
+They were inlined here in 1.2.0-alpha.1 alongside the Epic-A applier
+decomposition; the orchestrating ``_apply_fragment`` entry point now
+lives at :mod:`forge.sync.forge_to_project.updater`.
 """
 
 from __future__ import annotations

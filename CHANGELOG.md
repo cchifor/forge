@@ -25,6 +25,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   standing gap where `audit.py` was write-only and operators had to
   `tail`/`grep` the on-disk file by hand.
 
+- **Fragment-DX cheap wins (Horizon 1).** Three small additions to the
+  fragment authoring surface that together cut ~20% off the multi-
+  language fragment files (`object_store`, `llm_*`, `vector_store_*`).
+  `Fragment.shared_env_vars: tuple[tuple[str, str], ...] = ()` declares
+  backend-agnostic env vars (`AWS_REGION`, `S3_ENDPOINT_URL`, …) once
+  instead of repeating them per `FragmentImplSpec.env_vars`; the env
+  applier merges shared first, per-impl second, with per-impl winning on
+  key collision so a single language can still override the shared
+  default. `Fragment.before: tuple[str, ...] = ()` and `Fragment.after:
+  tuple[str, ...] = ()` declare soft ordering constraints — unlike
+  `depends_on` (which is a HARD pull), `before` / `after` only activate
+  when both endpoints are already in the plan, so a fragment can say
+  "if X happens to coexist, sit before/after it" without forcing X into
+  every plan. Numeric `order` remains the tiebreak inside a topological
+  layer. Cycles in the combined `depends_on` ∪ `before` ∪ `after` graph
+  are caught at `FRAGMENT_REGISTRY.freeze()` with the cycle path
+  surfaced in the `FragmentError`. The accompanying docstring sweep
+  retargets `forge.feature_injector`-shim references (deleted in
+  1.2.0-alpha.1) at the post-shim home: `forge.sync.forge_to_project.
+  updater` for the orchestrator, `forge.appliers.*` for the body
+  helpers. All three new fields default to empty tuples so every
+  existing fragment registration is byte-identical.
+
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second
   `forge.appliers.renderers.FragmentRenderer` implementation,

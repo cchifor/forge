@@ -6,8 +6,9 @@ consumes a :class:`~forge.fragment_context.FragmentContext`. A
 reproduces the pre-Epic-A ``_apply_fragment`` behaviour byte-for-byte.
 
 Epic A (1.1.0-alpha.1) introduced this decomposition; 1.2.0-alpha.1
-completed the move and deleted the legacy ``forge.feature_injector``
-shim. Every applier's body now lives in its own module.
+completed the move. Every applier's body now lives in its own module,
+and the orchestrating ``_apply_fragment`` entry point lives at
+:mod:`forge.sync.forge_to_project.updater`.
 
 The plug-points:
 
