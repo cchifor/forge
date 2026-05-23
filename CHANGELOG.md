@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
+  internal infra).** Second
+  `forge.appliers.renderers.FragmentRenderer` implementation,
+  joining `MiddlewareSpec` (Pillar A.2). Renders the per-backend
+  port-wiring ceremony — port-interface import + adapter imports +
+  factory wiring — at the canonical anchor for each language
+  (`FORGE:APP_POST_CONFIGURE` in `container.py` for FastAPI,
+  `FORGE:MIDDLEWARE_IMPORTS` in `src/app.ts` for Fastify,
+  `FORGE:LIB_MOD_REGISTRATION` in `src/lib.rs` for Axum). Per-
+  backend Jinja macros ship under
+  `forge/templates/_shared/port_spec/{python,node,rust}.jinja`.
+  Includes an advisory `detect_port_cycle` helper that flags
+  `port_dependencies` cycles inside a single fragment's renderers
+  tuple. **Internal infrastructure only — no plugin SDK exposure
+  in this release.** First consumer (`llm_port` Node + Rust)
+  lands in Pillar D.2; the goal there is "three `PortSpec`
+  literals replace three near-identical `inject.yaml` files".
+
 - **`cache_port` — generic K/V cache port + memory/redis adapters
   on all three backends (Pillar E.2).** New `CachePort` interface
   exposes `get(key) / set(key, value, ttl_seconds) /
