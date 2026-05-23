@@ -31,6 +31,26 @@ is about to land fixed in an upcoming release.
 | Node + Rust ship only 8 of the 54 fragments (15%) | Node and Rust lack the agent/RAG/LLM/MCP/admin stack that Python has. | Python remains the canonical "rich" backend. Node/Rust are for pure-service workloads. | Epic J backfills the ops fragments in 1.1.x. Full AI/RAG parity is design-only (RFC-Q) pending polyglot port investment. |
 | `observability.tracing` is a no-op on Node + Rust | The option registers but the fragment doesn't emit tracing code. | Set it to `false` on non-Python backends to silence the option from `forge --list` noise. | Epic J Phase 3 (observability backfill). |
 
+### `vector_store_*` fragments are Python-only in 1.x
+
+This is a deliberate scope cut, not a TODO and not "coming soon". The 1.x
+line ships `vector_store_*` fragments only for the Python backend.
+
+Per [RFC-005 §"Adapter inventory"](rfcs/RFC-005-polyglot-ports.md#adapter-inventory),
+the Rust client for ChromaDB (`chromadb-rs`) is assessed as immature for
+production use. Pinecone, Weaviate, and Qdrant Node and Rust clients do
+exist, but the supervisory pattern forge implements — embeddings →
+vector write → recall on retrieval — requires three coordinated
+implementations per provider × per language. That work is out of scope
+for 1.x and is deferred to the 2.x line per the forge architectural
+roadmap.
+
+**Workaround for Node and Rust users:** generate the Python service
+with `rag.backend=qdrant` (or your provider of choice) and deploy it as
+a sidecar. Call it over HTTP from your Node or Rust services. The
+Python service owns the vector-store interaction; your polyglot service
+owns the rest.
+
 ## Tooling
 
 | Issue | Impact | Workaround | Tracking |
