@@ -300,6 +300,33 @@ ENDPOINTS: none — ambient context via service.observability.correlation
 **Enables fragments:**
 - on `always-on` → `correlation_id`
 
+### `observability.error_envelope`
+
+**Type:** `bool` · **Default:** `true` · **Stability:** `stable` · **Backends:** node, python, rust
+
+_RFC-007 error envelope serialised via a swappable port (default on)._
+
+Promotes the hand-written RFC-007 error-envelope code from base-template
+hand-woven into a swappable port (``ErrorPort`` Protocol / interface /
+trait). The default adapter (``DefaultErrorPort``) wraps the existing
+``app.core.errors`` / ``lib/errors.ts`` / ``crate::errors`` machinery
+and keeps the wire shape identical, so existing projects are unaffected
+at the byte level. Plugins shipping custom envelopes implement
+``ErrorPort`` themselves and register their adapter in place of
+``DefaultErrorPort`` — the auth SDKs already prove the wire shape works
+cross-language, so this option ships tier-1 from the start.
+
+When ``False``, the base-template error code is stripped via the
+existing strip mechanism (follow-up — until the strip lands, ``False``
+is equivalent to ``True`` minus the port adapter on Python; a node /
+rust strip pass is pending).
+
+BACKENDS: python, node, rust
+PORT: ``ErrorPort.serialize(exc) -> {error: {code, message, type, context, correlation_id}}``
+
+**Enables fragments:**
+- on `true` → `error_port`
+
 ### `observability.health`
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** node, python, rust

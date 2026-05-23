@@ -51,6 +51,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   sidecar trigger); users need Redis provisioned elsewhere
   (auth.gatekeeper / queue.backend=redis / manual). Sibling
   cache_redis compose.yaml fragment is E.2.b follow-up.
+- **`error_port` — RFC-007 envelope behind a swappable port
+  (Pillar E.1).** Promotes the hand-written RFC-007 error-envelope
+  code already shipping in every base template into a swappable port:
+  one `serialize(exc) -> envelope` method on an `ErrorPort` Protocol
+  (Python) / interface (Node) / trait (Rust). Default adapter
+  `DefaultErrorPort` wraps the existing `app.core.errors` /
+  `lib/errors.ts` / `crate::errors` machinery and keeps the wire
+  shape byte-identical, so existing projects are unaffected.
+  Tier 1 from the start (Python + Node + Rust) — the wire shape is
+  already proven cross-language by the auth SDKs, so a Python-only
+  port would be a downgrade. New option
+  `observability.error_envelope` (BOOL, default `True`) gates the
+  port; flipping it to `False` strips the adapter (full
+  base-template strip lands as a follow-up). Enables plugins
+  shipping custom envelopes to register their own adapter under the
+  `ErrorPort` interface without forking the base template.
 - **`ApplierRegistry` — pluggable per-suffix injector dispatch
   (Pillar A.1, SDK 1.2).** Replaces the hardcoded `if/elif` suffix
   chain at `forge/appliers/injection.py:_dispatch_injector` with a
