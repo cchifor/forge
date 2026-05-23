@@ -62,6 +62,12 @@ pub struct ErrorEnvelope {
 /// [`crate::errors::ErrorCode::status`]).
 ///
 /// [`serialize`]: ErrorPort::serialize
+///
+/// The `exc` parameter carries a `+ 'static` bound so the default
+/// adapter can `downcast_ref::<AppError>()` — the `std::error::Error`
+/// `Any`-based downcast machinery is `'static`-only. Concrete errors
+/// raised by `axum` handlers (and bridged via `AppError`) are already
+/// `'static`; the bound is documentary, not a behaviour change.
 pub trait ErrorPort: Send + Sync {
-    fn serialize(&self, exc: &dyn std::error::Error) -> ErrorEnvelope;
+    fn serialize(&self, exc: &(dyn std::error::Error + 'static)) -> ErrorEnvelope;
 }
