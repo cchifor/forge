@@ -211,6 +211,11 @@ def main() -> None:
 
         sys.exit(_run_verify(args))
 
+    if getattr(args, "ports_validate", False):
+        from forge.cli.commands.ports import _run_ports_validate  # noqa: PLC0415
+
+        sys.exit(_run_ports_validate(args))
+
     if getattr(args, "harvest", False):
         from forge.cli.commands.harvest import _run_harvest  # noqa: PLC0415
 
