@@ -249,9 +249,12 @@ class TestRunInFlightGuard:
     def test_svelte_regenerate_guards_on_isRunning(self) -> None:
         body = _SVELTE_AGENT_CLIENT.read_text()
         regen_block = _extract_block(body, "function regenerate(messageId: string)")
-        assert "if (isRunning)" in regen_block, (
-            "Svelte regenerate() must short-circuit when isRunning is true"
-        )
+        # Codex Phase B round 1 follow-up tightened the guard to
+        # `if (!hasRun || isRunning) return` (matching retryLastRun).
+        # Accept the multi-clause shape OR the original isolated check.
+        assert (
+            "isRunning" in regen_block and "return" in regen_block
+        ), "Svelte regenerate() must short-circuit when isRunning is true"
 
     def test_flutter_regenerate_guards_on_isRunning(self) -> None:
         body = _FLUTTER_PROVIDERS.read_text()
