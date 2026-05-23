@@ -46,4 +46,44 @@ describe('ToolCallStatus', () => {
     expect(wrapper.find('.text-muted-foreground').exists()).toBe(true)
     expect(wrapper.text()).toContain('pending')
   })
+
+  // ── TOOL_CALL_ARGS collapsible preview (Pillar G.2) ──
+
+  it('hides args details when no argsBuffer/argsPretty', () => {
+    const wrapper = mount(ToolCallStatus, {
+      props: { toolName: 'search', status: 'running' },
+    })
+
+    expect(wrapper.find('[data-testid="tool-call-args"]').exists()).toBe(false)
+  })
+
+  it('shows streaming args buffer (newlines stripped) while running', () => {
+    const wrapper = mount(ToolCallStatus, {
+      props: {
+        toolName: 'search',
+        status: 'running',
+        // Embedded newlines are stripped so the preview stays compact
+        // mid-stream; pretty-printed indent comes back on END.
+        argsBuffer: '{"q":\n"hello"',
+      },
+    })
+
+    const body = wrapper.find('[data-testid="tool-call-args-body"]')
+    expect(body.exists()).toBe(true)
+    expect(body.text()).toBe('{"q": "hello"')
+  })
+
+  it('shows pretty JSON on completed status', () => {
+    const wrapper = mount(ToolCallStatus, {
+      props: {
+        toolName: 'search',
+        status: 'completed',
+        argsBuffer: '{"q":"hello"}',
+        argsPretty: '{\n  "q": "hello"\n}',
+      },
+    })
+
+    const body = wrapper.find('[data-testid="tool-call-args-body"]')
+    expect(body.text()).toContain('"q": "hello"')
+  })
 })

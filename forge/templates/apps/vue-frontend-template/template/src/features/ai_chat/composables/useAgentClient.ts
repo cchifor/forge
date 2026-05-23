@@ -185,10 +185,40 @@ export function useAgentClient() {
             ]
           },
 
-          onToolCallEndEvent: async ({ event }) => {
+          // ``TOOL_CALL_ARGS`` streams the tool-call arguments as a
+          // sequence of string deltas — typically partial JSON. The
+          // model writes character-by-character so we just concat onto
+          // a per-tool-call buffer; pretty-printing happens on END.
+          // Multiple concurrent tool calls don't cross-contaminate
+          // because we key on ``toolCallId``.
+          onToolCallArgsEvent: async ({ event }) => {
             activeToolCalls.value = activeToolCalls.value.map((tc) =>
-              tc.id === event.toolCallId ? { ...tc, status: 'completed' } : tc,
+              tc.id === event.toolCallId
+                ? { ...tc, argsBuffer: (tc.argsBuffer ?? '') + event.delta }
+                : tc,
             )
+          },
+
+          onToolCallEndEvent: async ({ event }) => {
+            activeToolCalls.value = activeToolCalls.value.map((tc) => {
+              if (tc.id !== event.toolCallId) return tc
+              const buffer = tc.argsBuffer
+              if (buffer === undefined || buffer.length === 0) {
+                // No TOOL_CALL_ARGS arrived — leave argsPretty unset
+                // so the collapsible just hides in the UI rather than
+                // showing an empty preview.
+                return { ...tc, status: 'completed' as const }
+              }
+              let pretty: string
+              try {
+                pretty = JSON.stringify(JSON.parse(buffer), null, 2)
+              } catch {
+                // Non-JSON delta stream — surface raw text so users
+                // still see *something* for debugging.
+                pretty = buffer
+              }
+              return { ...tc, status: 'completed' as const, argsPretty: pretty }
+            })
           },
         },
       )

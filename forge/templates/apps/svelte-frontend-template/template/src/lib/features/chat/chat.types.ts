@@ -33,11 +33,36 @@ export interface WorkspaceActivity {
 
 // ── Tool call tracking ──
 
+/**
+ * Client-side tool-call record.
+ *
+ * The wire shape (``id``/``name``/``status``/``args``) mirrors the
+ * UI-protocol :class:`ToolCallInfo` schema. The two trailing fields
+ * are client-only state for Pillar G.2 args-streaming:
+ *
+ * - ``argsBuffer`` — raw delta accumulator. Every ``TOOL_CALL_ARGS``
+ *   event appends ``event.delta`` so the UI can show the partial JSON
+ *   live (newlines stripped) before the (potentially slow) tool
+ *   returns.
+ * - ``argsPretty`` — set on ``TOOL_CALL_END``. Pretty-printed
+ *   ``JSON.stringify(JSON.parse(argsBuffer), null, 2)`` on success;
+ *   falls back to the raw buffer on parse error so the user always
+ *   sees *something* for debugging.
+ *
+ * Field names mirror Vue's ``ToolCallInfo`` + Flutter's
+ * :class:`ToolCallInfo` so the contract test at
+ * ``tests/test_chat_tool_call_args_contract.py`` finds a consistent
+ * surface across all three stacks.
+ */
 export interface ToolCallInfo {
 	id: string;
 	name: string;
 	status: 'running' | 'completed' | 'error';
 	args?: Record<string, unknown>;
+	/** Raw delta accumulator — appended on every TOOL_CALL_ARGS event. */
+	argsBuffer?: string;
+	/** Pretty-printed JSON set on TOOL_CALL_END; falls back to raw on parse error. */
+	argsPretty?: string;
 }
 
 // ── HITL (Human-in-the-Loop) ──

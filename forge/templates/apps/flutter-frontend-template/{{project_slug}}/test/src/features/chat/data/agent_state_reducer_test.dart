@@ -63,8 +63,76 @@ void main() {
       );
       expect(s.activeToolCalls, hasLength(1));
       expect(s.activeToolCalls.first.status, ToolCallStatus.running);
+      // No TOOL_CALL_ARGS arrived — argsBuffer/argsPretty stay null so
+      // the collapsible just hides in the UI.
+      expect(s.activeToolCalls.first.argsBuffer, isNull);
       s = reduce(s, const ToolCallEndEvent(toolCallId: 't1'));
       expect(s.activeToolCalls.first.status, ToolCallStatus.completed);
+      expect(s.activeToolCalls.first.argsPretty, isNull);
+    });
+
+    // ── TOOL_CALL_ARGS streaming (Pillar G.2) ──
+
+    test('TOOL_CALL_ARGS accumulates delta into argsBuffer', () {
+      var s = reduce(
+        ChatStateSnapshot.empty,
+        const ToolCallStartEvent(toolCallId: 't-a', toolCallName: 'search'),
+      );
+      s = reduce(s, const ToolCallArgsEvent(toolCallId: 't-a', delta: '{"q":'));
+      s = reduce(s, const ToolCallArgsEvent(toolCallId: 't-a', delta: '"hi"}'));
+      expect(s.activeToolCalls.first.argsBuffer, '{"q":"hi"}');
+      // argsPretty is set only on TOOL_CALL_END.
+      expect(s.activeToolCalls.first.argsPretty, isNull);
+    });
+
+    test('TOOL_CALL_END pretty-prints argsBuffer via JsonEncoder', () {
+      var s = reduce(
+        ChatStateSnapshot.empty,
+        const ToolCallStartEvent(toolCallId: 't-b', toolCallName: 'search'),
+      );
+      s = reduce(
+        s,
+        const ToolCallArgsEvent(toolCallId: 't-b', delta: '{"q":"hi","n":1}'),
+      );
+      s = reduce(s, const ToolCallEndEvent(toolCallId: 't-b'));
+      expect(
+        s.activeToolCalls.first.argsPretty,
+        '{\n  "q": "hi",\n  "n": 1\n}',
+      );
+      expect(s.activeToolCalls.first.status, ToolCallStatus.completed);
+    });
+
+    test('TOOL_CALL_END falls back to raw buffer on JSON parse error', () {
+      var s = reduce(
+        ChatStateSnapshot.empty,
+        const ToolCallStartEvent(toolCallId: 't-c', toolCallName: 'search'),
+      );
+      s = reduce(
+        s,
+        const ToolCallArgsEvent(toolCallId: 't-c', delta: 'not-json{{'),
+      );
+      s = reduce(s, const ToolCallEndEvent(toolCallId: 't-c'));
+      // Parse fails → argsPretty mirrors the raw delta so the user
+      // still sees *something* in the collapsible preview.
+      expect(s.activeToolCalls.first.argsPretty, 'not-json{{');
+    });
+
+    test('concurrent tool calls keep separate argsBuffers', () {
+      var s = reduce(
+        ChatStateSnapshot.empty,
+        const ToolCallStartEvent(toolCallId: 't-x', toolCallName: 'a'),
+      );
+      s = reduce(
+        s,
+        const ToolCallStartEvent(toolCallId: 't-y', toolCallName: 'b'),
+      );
+      s = reduce(s, const ToolCallArgsEvent(toolCallId: 't-x', delta: '{"x":1}'));
+      s = reduce(s, const ToolCallArgsEvent(toolCallId: 't-y', delta: '{"y":2}'));
+      expect(s.activeToolCalls, hasLength(2));
+      final x = s.activeToolCalls.firstWhere((tc) => tc.id == 't-x');
+      final y = s.activeToolCalls.firstWhere((tc) => tc.id == 't-y');
+      expect(x.argsBuffer, '{"x":1}');
+      expect(y.argsBuffer, '{"y":2}');
     });
 
     test('STATE_SNAPSHOT replaces agent state', () {
