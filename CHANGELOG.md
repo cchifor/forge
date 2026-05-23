@@ -7,7 +7,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-<<<<<<< HEAD
 - **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
   Adds a read endpoint to the MCP server router in generated Python
   projects (shipped via the `mcp_server` fragment, pulled in by
@@ -64,6 +63,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   pre-existing `tests/fragments/test_fragment_dx_fields.py`; the new
   file's Shared/BeforeAfter classes are an intentional transitional
   duplication that consolidates back to the dx_fields file in 1.2.1.
+
+- **`llm_port` + `llm_openai` are now tier-1 on Node + Rust (Pillar D.2).**
+  Promotes the LLM provider port from Python-only / tier-3 to
+  tier-1, with the first cross-language adapter (`llm_openai`)
+  shipping alongside. Node uses the Vercel AI SDK (`ai` core +
+  `@ai-sdk/openai` provider); Rust uses the `async-openai` crate.
+  Both stream `LlmChunk` events behind the same port contract as
+  the Python adapter — the TypeSpec spec at
+  `forge/templates/_shared/ports/llm/contract.tsp` is the
+  cross-language source of truth. Selecting `llm.provider=openai`
+  on a Node or Rust backend now resolves both `llm_port` and
+  `llm_openai`; mixed-language projects get one port + one adapter
+  per supporting backend. **Honest scope** — `llm_anthropic`,
+  `llm_ollama`, and `llm_bedrock` stay Python-only / tier-3 in 1.x;
+  their SDK ecosystems aren't mature enough on Node/Rust to justify
+  in-tree adapters, and plugin authors carry that gap (Featured
+  Plugin tier — see `docs/known-issues.md`). The Pillar A.4
+  `PortSpec` infra is intentionally **not** consumed here: the
+  current production fragment-apply path (the `_apply_fragment`
+  shim in `forge/sync/`) only forwards `middlewares`, not arbitrary
+  `FragmentRenderer` tuples, so wiring PortSpec into a real fragment
+  would require touching out-of-scope code. The three near-identical
+  `inject.yaml` files for the Node + Rust port + adapter are the
+  pragmatic v1; the PortSpec migration is a follow-up once `Fragment`
+  grows a `renderers=()` field and the sync shim threads it through.
+  Known limitations on Rust (mirroring the cache_port pattern):
+  simultaneously enabling `llm_port` + `queue_port` / `cache_port`
+  collides on `src/ports/mod.rs`, and `llm_openai` + `queue_apalis` /
+  `cache_memory` / `cache_redis` collides on `src/adapters/mod.rs` —
+  both declared via `conflicts_with` so the resolver fails loudly
+  at plan-build time rather than silently corrupting the generated
+  tree.
 
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second

@@ -787,21 +787,33 @@ REQUIRES: migration 0002 applied (``alembic upgrade head``).
 
 ### `llm.provider`
 
-**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** node, python, rust
 
 **Allowed values:** `none`, `openai`, `anthropic`, `ollama`, `bedrock`
 
 _LLM provider for the agent loop (OpenAI, Anthropic, Ollama, or AWS Bedrock)._
 
 Selects which LLM provider the generated service talks to via the
-``LlmProviderPort`` (see ``docs/architecture-decisions/ADR-002-ports-and-adapters.md``).
+``LlmPort`` (see ``docs/architecture-decisions/ADR-002-ports-and-adapters.md``
+and the TypeSpec contract at ``forge/templates/_shared/ports/llm/contract.tsp``).
 The chosen adapter registers with the dependency container; the rest
-of the app imports the Protocol. Swap providers in production by
-changing one env var — no regeneration.
+of the app imports the port interface. Swap providers in production
+by changing one env var — no regeneration.
 
 OPTIONS: none | openai | anthropic | ollama | bedrock
-BACKENDS: python
-DEPENDENCY: provider-specific SDK (openai / anthropic / ollama / aioboto3)
+BACKENDS:
+  - openai     python, node, rust    (Pillar D.2 — tier-1, three built-ins)
+  - anthropic  python                (Python-only — Anthropic SDK ecosystem)
+  - ollama     python                (Python-only — ollama-python is the canonical client)
+  - bedrock    python                (Python-only — aioboto3)
+
+Non-Python backends selecting ``anthropic`` / ``ollama`` / ``bedrock``
+resolve the abstract ``llm_port`` only; the adapter fragment is
+Python-only and silently skips on Node/Rust. Plugin authors fill the
+gap (Featured Plugin tier — see ``docs/known-issues.md``).
+
+DEPENDENCY: provider-specific SDK (openai / @ai-sdk/openai / async-openai
+            / anthropic / ollama / aioboto3)
 ENV: provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
 
 **Enables fragments:**
