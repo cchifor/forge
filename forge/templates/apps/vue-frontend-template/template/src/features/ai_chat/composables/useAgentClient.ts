@@ -238,6 +238,27 @@ export function useAgentClient() {
     runAgent(options)
   }
 
+  /**
+   * Regenerate from a given message id. Truncates messages from
+   * `messageId` onward (drops that message + everything after) and
+   * re-runs the agent with the SAME `currentThreadId` so the agent
+   * keeps its conversational context. Distinct from `editAndResend`,
+   * which mints a fresh thread.
+   *
+   * Re-uses `lastRunOptions` (the snapshot captured by `runAgent`) so
+   * a regenerate that follows attachments doesn't lose them. No-op
+   * if the id isn't found OR if a run is currently in flight (double
+   * click on the Regenerate button must not queue two runs).
+   */
+  function regenerate(messageId: string) {
+    if (isRunning.value) return
+    const idx = messages.value.findIndex((m) => m.id === messageId)
+    if (idx === -1) return
+    messages.value = messages.value.slice(0, idx)
+    error.value = null
+    runAgent(lastRunOptions)
+  }
+
   function resetThread() {
     currentThreadId = crypto.randomUUID()
     messages.value = []
@@ -308,6 +329,7 @@ export function useAgentClient() {
     clearCanvas,
     clearWorkspaceActivity,
     editAndResend,
+    regenerate,
     resetThread,
   }
 }

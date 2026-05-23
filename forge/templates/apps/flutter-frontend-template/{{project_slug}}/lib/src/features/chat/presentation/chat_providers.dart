@@ -187,6 +187,29 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
     );
   }
 
+  /// Regenerate from `messageId` — truncates messages from that id
+  /// onward (drops the message + everything after) and re-runs the
+  /// agent on the SAME `_threadId` so conversational context is
+  /// preserved. Distinct from a thread reset.
+  ///
+  /// Re-uses the last forwarded props (model + approval + attachments)
+  /// so a regenerate following attachments doesn't lose them. No-op
+  /// if the id isn't found OR a run is in flight (double clicks must
+  /// not queue two runs).
+  Future<void> regenerate(String messageId) async {
+    if (state.isRunning) return;
+    final idx = state.messages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    state = state.copyWith(
+      messages: state.messages.sublist(0, idx),
+      clearError: true,
+    );
+    await _runAgent(
+      bearerToken: _lastBearerToken,
+      forwardedProps: _lastForwardedProps,
+    );
+  }
+
   /// Clear the RUN_ERROR banner without retrying.
   void dismissError() {
     if (state.error == null) return;

@@ -214,6 +214,25 @@ function editAndResend(messageId: string, newContent: string, options?: ChatRunO
 	void runAgent(options);
 }
 
+/**
+ * Regenerate from `messageId`. Truncates messages from that id onward
+ * (drops the message + everything after) and re-runs the agent on the
+ * SAME `currentThreadId` so conversational context is preserved.
+ * Distinct from `editAndResend`, which mints a new thread.
+ *
+ * Re-uses `lastRunOptions` so a regenerate after attachments keeps
+ * them. No-op if the id is missing OR a run is in flight (double
+ * clicks must not queue two runs).
+ */
+function regenerate(messageId: string) {
+	if (isRunning) return;
+	const idx = messages.findIndex((m) => m.id === messageId);
+	if (idx === -1) return;
+	messages = messages.slice(0, idx);
+	lastError = null;
+	void runAgent(lastRunOptions);
+}
+
 function resetThread() {
 	currentThreadId = crypto.randomUUID();
 	messages = [];
@@ -299,6 +318,7 @@ export function getAgentClient() {
 		clearCanvas,
 		clearWorkspaceActivity,
 		editAndResend,
+		regenerate,
 		resetThread
 	};
 }

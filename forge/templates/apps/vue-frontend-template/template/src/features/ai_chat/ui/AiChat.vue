@@ -41,6 +41,7 @@ const {
   sendMessage,
   respondToPrompt,
   editAndResend,
+  regenerate,
   retryLastRun,
   dismissError,
   clearMessages,
@@ -235,7 +236,9 @@ watch(messages, () => nextTick(scrollToBottom), { deep: true })
         :key="msg.id"
         :message="msg"
         :is-streaming="isGenerating && msg.role === 'assistant' && idx === messages.length - 1"
+        :can-regenerate="!isGenerating && msg.role === 'assistant' && idx === messages.length - 1"
         @edit="(payload) => editAndResend(payload.id, payload.content, { model: selectedModel, approval: approvalMode })"
+        @regenerate="(payload) => regenerate(payload.id)"
       />
 
       <!-- Thinking indicator -->
