@@ -367,6 +367,68 @@ def test_register_adds_option():
 3. **Assuming a specific forge version.** Use `dependencies = ["forge>=1.0.0a1,<2"]` and check the installed `forge.api.__version__` if your plugin needs version-specific behavior.
 4. **Shipping fragments that target a backend the plugin doesn't declare support for.** `Fragment.implementations` must have an entry for every backend the fragment should apply to; omitting one silently skips that backend.
 
+## Featured Plugin tier
+
+Pillar D.4 of the [forge improvement plan](#) introduces a curated tier
+of community plugins that forge maintainers run e2e against `main`
+nightly. Listing in the Featured tier signals that a plugin is held to
+the same compatibility bar as `examples/forge-plugin-example` — a
+forge change that breaks a Featured plugin breaks a forge CI job, not
+just a downstream repo two weeks later.
+
+### Criteria
+
+A plugin qualifies for the Featured tier when it meets all of the
+following:
+
+1. **SDK contract:** the plugin's `register(api)` calls
+   `api.require_sdk(">=1.2")` (or a later version). This guarantees
+   the plugin is using the post-Pillar-A hook surface (`add_hook`,
+   `add_injector`) rather than reaching into private forge internals.
+2. **Integration tests in-repo:** the plugin's own repository ships
+   integration tests covering at least one tier-1 fragment from
+   `docs/matrix-status.md` — typically the fragment the plugin
+   contributes or a built-in fragment it extends. Markers, runner, and
+   command are the plugin author's choice; the point is that the
+   plugin tests *something real* rather than a unit-level stub.
+3. **PyPI publication:** the plugin ships as
+   `forge-plugin-<name>` under the `forge-plugin-*` namespace on PyPI.
+   Pre-release versions are fine (`forge-plugin-foo==0.1.0a1`) — the
+   namespace is what counts. Plugins distributed only as git URLs are
+   out of scope for the tier.
+4. **Maintainer opt-in:** the plugin maintainer agrees, in writing on
+   a GitHub Discussions thread, to forge maintainers running the
+   plugin's e2e against latest forge nightly via
+   `.github/workflows/featured-plugins-e2e.yml`. If the plugin's tests
+   start failing, forge maintainers will open an issue against the
+   plugin repo and (politely) hold the listing.
+5. **Mutual badging:** the plugin's README carries a
+   "Featured forge plugin" badge linking back to this section, and
+   forge's `docs/plugin-development.md` plus `docs/known-issues.md`
+   carry a row pointing at the plugin's repo + PyPI page. The badge is
+   the public signal that the plugin author has signed up to the
+   compatibility contract above.
+
+### How the nightly job works
+
+`.github/workflows/featured-plugins-e2e.yml` runs on a `schedule:`
+(04:00 UTC) plus `workflow_dispatch`. For every entry in its matrix it
+checks out forge `main`, checks out the plugin at its latest tag,
+installs both into a single `uv` venv, runs `forge --plugins list`,
+and (if the matrix row declares a `smoke_option`) runs a `forge new`
+smoke that enables the plugin's option on a Python backend. Each row
+writes a one-line markdown summary into `$GITHUB_STEP_SUMMARY`.
+
+The matrix is currently empty by design (one placeholder row with
+`enabled: false`); the workflow lints, the trigger is wired, and the
+nightly invocation is a green no-op until the first real plugin opts
+in. See the workflow file's header comment for the matrix-row schema
+real entries follow.
+
+### Current featured plugins
+
+_(none yet — applications open via [GitHub Discussions](https://github.com/cchifor/forge/discussions). Open a thread titled "Featured plugin application: forge-plugin-&lt;name&gt;" with a link to the plugin repo, the PyPI page, and a one-paragraph confirmation of the five criteria above.)_
+
 ## Future plugin capabilities
 
 The plugin SDK grows with each alpha:
