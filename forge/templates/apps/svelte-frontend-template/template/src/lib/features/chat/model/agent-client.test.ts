@@ -107,7 +107,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 				event: { toolCallId: 'tc-c', toolCallName: 'search' }
 			});
 			await subscriber.onToolCallArgsEvent({
-				event: { toolCallId: 'tc-c', delta: 'not-json{{' }
+				event: { toolCallId: 'tc-c', delta: 'not-json{' }
 			});
 			await subscriber.onToolCallEndEvent({
 				event: { toolCallId: 'tc-c' }
@@ -116,7 +116,8 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 		await client.runAgent();
 		// Parse fails → argsPretty mirrors the raw delta so the user
 		// still sees *something* in the collapsible preview.
-		expect(client.activeToolCalls[0].argsPretty).toBe('not-json{{');
+		// `{` not `{{` — `{{` collides with Copier's Jinja delimiters.
+		expect(client.activeToolCalls[0].argsPretty).toBe('not-json{');
 	});
 
 	it('concurrent tool calls keep separate argsBuffers (no cross-contamination)', async () => {

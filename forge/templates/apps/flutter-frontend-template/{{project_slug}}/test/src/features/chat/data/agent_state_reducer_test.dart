@@ -109,12 +109,14 @@ void main() {
       );
       s = reduce(
         s,
-        const ToolCallArgsEvent(toolCallId: 't-c', delta: 'not-json{{'),
+        const ToolCallArgsEvent(toolCallId: 't-c', delta: 'not-json{'),
       );
       s = reduce(s, const ToolCallEndEvent(toolCallId: 't-c'));
       // Parse fails → argsPretty mirrors the raw delta so the user
       // still sees *something* in the collapsible preview.
-      expect(s.activeToolCalls.first.argsPretty, 'not-json{{');
+      // Use single `{` (still invalid JSON) — `{{` collides with
+      // Copier's Jinja delimiters during template render.
+      expect(s.activeToolCalls.first.argsPretty, 'not-json{');
     });
 
     test('concurrent tool calls keep separate argsBuffers', () {
