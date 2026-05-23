@@ -307,7 +307,7 @@ impl IntoResponse for AppError {
             tracing::warn!(error = %self, "Request failed");
         }
 
-{% if include_error_envelope | default(true) %}
+{% if include_error_envelope | default(false) %}
         // E.1.b runtime wiring: delegate to the registered ``ErrorPort``
         // adapter so the request path exercises ``DefaultErrorPort``.
         // The ``&dyn std::error::Error`` cast is what makes the trait

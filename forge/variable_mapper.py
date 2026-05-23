@@ -52,7 +52,7 @@ def backend_context(
     bc: BackendConfig,
     *,
     include_platform_auth: bool = False,
-    include_error_envelope: bool = True,
+    include_error_envelope: bool = False,
 ) -> dict[str, Any]:
     """Build a Copier data dict for any backend template.
 
@@ -65,13 +65,15 @@ def backend_context(
     path-dep). Set by the generator when the
     ``platform_auth_python_middleware`` fragment is in the active plan.
 
-    ``include_error_envelope`` (default ``True``) wires the central
+    ``include_error_envelope`` (default ``False``) wires the central
     error-handler through ``DefaultErrorPort.serialize`` so the
     request-path actually exercises the ``error_port`` fragment's
-    adapter (Pillar E.1.b runtime wiring). When ``False`` the handler
-    stays on the inline serialiser — the wire shape is identical either
-    way (the handler's soft-import keeps the two paths in lock-step), so
-    a stale flag won't break the response contract.
+    adapter (Pillar E.1.b runtime wiring). The generator flips this on
+    only when ``error_port`` is in the active plan — leaving it
+    defaulted to ``True`` would emit ``use crate::error_port::...`` (Rust)
+    in projects that never resolved the fragment, breaking ``cargo
+    check``. Codex Phase B round 1 caught this; the unsafe default has
+    been inverted to fail-safe.
     """
     spec = BACKEND_REGISTRY[bc.language]
     ctx: dict[str, Any] = {

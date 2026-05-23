@@ -11,11 +11,14 @@ plugins now have a real seam to override).
 
 The runtime wiring is controlled per-backend by the Copier var
 ``include_error_envelope`` (Jinja-templated handler files). The var
-defaults to ``True`` so existing projects pick up the port path on
-their next ``forge --update``; flipping it to ``False`` preserves the
-inline serialiser (E.1.b follow-up will sync this from
-``observability.error_envelope`` automatically — until then the
-default is the only path exercised end-to-end).
+defaults to ``False`` (fail-safe — see codex Phase B round 1 finding
+#1): the generator flips it to ``True`` only when the ``error_port``
+fragment is in the active plan, because the Rust template emits a
+``use crate::error_port::DefaultErrorPort`` line that won't compile
+when the port module isn't on disk. The Python soft-import + Node
+``ERR_MODULE_NOT_FOUND`` guard are the defence-in-depth for the
+in-plan path; the false default keeps out-of-plan generations
+byte-clean.
 
 The behavioural cross-language envelope-shape test that codex flagged
 on PR #89 (round 1 finding #1) is satisfied by the per-backend
@@ -195,12 +198,12 @@ def test_rust_handler_exposes_status_for_code_helper() -> None:
 # -- variable_mapper threading ------------------------------------------------
 
 
-def test_backend_context_defaults_include_error_envelope_to_true() -> None:
-    """The default must be ``True`` so the port wiring lands on every
-    project that doesn't explicitly opt out — mirrors
-    ``observability.error_envelope``'s default. Failing this test means
-    new projects ship without runtime wiring (silent regression vs
-    PR #89's promise that the port becomes the canonical surface)."""
+def test_backend_context_defaults_include_error_envelope_to_false() -> None:
+    """The default must be ``False`` (fail-safe — codex Phase B round 1
+    finding #1). The generator promotes to ``True`` only when the
+    ``error_port`` fragment is in the active plan; otherwise the Rust
+    template would emit a ``use crate::error_port::...`` line that
+    fails ``cargo check`` because the port module isn't on disk."""
     bc = BackendConfig(
         name="svc",
         project_name="ErrorPortWiringTest",
@@ -208,22 +211,21 @@ def test_backend_context_defaults_include_error_envelope_to_true() -> None:
         server_port=5000,
     )
     ctx = variable_mapper.backend_context(bc)
-    assert ctx["include_error_envelope"] is True
+    assert ctx["include_error_envelope"] is False
 
 
 def test_backend_context_threads_include_error_envelope_override() -> None:
-    """Generator integration is a follow-up (the wiring from
-    ``observability.error_envelope`` into the kwarg lives in
-    ``generator.py`` which this PR scopes out). For now the kwarg is
-    callable directly so tests + future generator threading land cleanly."""
+    """The kwarg is honoured when the generator sets it — the wiring in
+    ``generator.py:_generate_main`` flips to ``True`` based on plan
+    membership of ``error_port``."""
     bc = BackendConfig(
         name="svc",
         project_name="ErrorPortWiringTest",
         language=BackendLanguage.PYTHON,
         server_port=5000,
     )
-    ctx = variable_mapper.backend_context(bc, include_error_envelope=False)
-    assert ctx["include_error_envelope"] is False
+    ctx = variable_mapper.backend_context(bc, include_error_envelope=True)
+    assert ctx["include_error_envelope"] is True
 
 
 def test_backend_context_threads_per_backend() -> None:
@@ -239,6 +241,114 @@ def test_backend_context_threads_per_backend() -> None:
         )
         ctx = variable_mapper.backend_context(bc, include_error_envelope=True)
         assert ctx["include_error_envelope"] is True
+
+
+def test_generator_only_enables_envelope_when_fragment_in_plan() -> None:
+    """Codex Phase B round 1 finding #1: the generator must derive
+    ``include_error_envelope`` from plan membership of the
+    ``error_port`` fragment, not pass the variable_mapper default
+    through. Anything else risks shipping the port-wired branch on
+    projects whose plan never resolved the adapter."""
+    from forge import generator  # noqa: PLC0415
+    import inspect  # noqa: PLC0415
+
+    src = inspect.getsource(generator)
+    # The guard must use the same plan-membership pattern as
+    # ``include_platform_auth`` — a single source-of-truth for the
+    # whole gating idiom.
+    assert "includes_error_envelope" in src, (
+        "generator must compute include_error_envelope from plan membership"
+    )
+    assert 'rf.fragment.name == "error_port"' in src, (
+        "generator must guard on the error_port fragment name specifically"
+    )
+    assert "include_error_envelope=includes_error_envelope" in src, (
+        "_generate_single_backend must receive the derived value"
+    )
+
+
+def test_node_handler_only_catches_module_not_found() -> None:
+    """Codex Phase B round 1 finding #2: the dynamic-import try/catch
+    must rethrow non-module-not-found errors. Bare ``catch {}`` would
+    mask real adapter init bugs (syntax errors, constructor throws),
+    silently degrading to the inline serialiser and hiding the bug
+    until someone notices the missing port instrumentation."""
+    rendered = _render_jinja(NODE_HANDLER, include_error_envelope=True)
+    assert "ERR_MODULE_NOT_FOUND" in rendered, (
+        "Node soft-import must check ERR_MODULE_NOT_FOUND specifically"
+    )
+    assert "throw err" in rendered or "throw error" in rendered, (
+        "non-module-not-found errors must propagate, not be swallowed"
+    )
+
+
+def test_python_handler_softimport_executes_at_runtime() -> None:
+    """Codex Phase B round 1 finding #4: structural string assertions
+    don't prove the runtime fallback actually runs. Render the Python
+    handler to a tmp file, exec it twice — once without
+    ``app.adapters.error_default`` importable (must fall through to
+    ``_default_serialize_exception``), once with a stub adapter (must
+    bind to the stub's ``serialize``). Exercises the actual
+    try/except/else branches end-to-end."""
+    import sys  # noqa: PLC0415
+    import types  # noqa: PLC0415
+
+    rendered = _render_jinja(PYTHON_HANDLER, include_error_envelope=True)
+
+    # Strip the FastAPI / domain-handler portion — we only need the
+    # serialiser-seam block to run. The seam block is delimited by the
+    # well-known ``_default_serialize_exception`` def above and
+    # ``def status_for_code`` below; isolate the import + binding lines.
+    seam_marker = "# Port-wired path:"
+    bind_marker = "_serialize_exception = "
+    assert seam_marker in rendered
+    seam_start = rendered.index(seam_marker)
+    # The block ends at the first ``def `` after the binding lines.
+    bind_idx = rendered.index(bind_marker, seam_start)
+    block_end = rendered.index("\ndef ", bind_idx)
+    block = rendered[seam_start:block_end]
+
+    # --- case 1: adapter absent → fallback bound ----------------------
+    sys.modules.pop("app", None)
+    sys.modules.pop("app.adapters", None)
+    sys.modules.pop("app.adapters.error_default", None)
+    namespace_absent: dict[str, object] = {
+        "_default_serialize_exception": lambda exc: {"sentinel": "default"},
+    }
+    exec(compile(block, "<rendered-py-absent>", "exec"), namespace_absent)
+    fn_absent = namespace_absent["_serialize_exception"]
+    assert callable(fn_absent)
+    assert fn_absent(RuntimeError("x")) == {"sentinel": "default"}, (
+        "with adapter absent, seam must bind to _default_serialize_exception"
+    )
+
+    # --- case 2: adapter present → port bound -------------------------
+    app_mod = types.ModuleType("app")
+    adapters_mod = types.ModuleType("app.adapters")
+    adapter_mod = types.ModuleType("app.adapters.error_default")
+
+    class _StubPort:
+        def serialize(self, exc: object) -> dict[str, str]:
+            return {"sentinel": "port"}
+
+    adapter_mod.DefaultErrorPort = _StubPort  # type: ignore[attr-defined]
+    sys.modules["app"] = app_mod
+    sys.modules["app.adapters"] = adapters_mod
+    sys.modules["app.adapters.error_default"] = adapter_mod
+    try:
+        namespace_present: dict[str, object] = {
+            "_default_serialize_exception": lambda exc: {"sentinel": "default"},
+        }
+        exec(compile(block, "<rendered-py-present>", "exec"), namespace_present)
+        fn_present = namespace_present["_serialize_exception"]
+        assert callable(fn_present)
+        assert fn_present(RuntimeError("x")) == {"sentinel": "port"}, (
+            "with adapter present, seam must bind to DefaultErrorPort().serialize"
+        )
+    finally:
+        sys.modules.pop("app.adapters.error_default", None)
+        sys.modules.pop("app.adapters", None)
+        sys.modules.pop("app", None)
 
 
 # -- wire-shape invariant across all three rendered handlers ------------------

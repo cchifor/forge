@@ -57,7 +57,7 @@ function defaultSerialize(exc: unknown): ErrorEnvelope {
 	};
 }
 
-{% if include_error_envelope | default(true) %}
+{% if include_error_envelope | default(false) %}
 /**
  * E.1.b runtime wiring: bind the serialiser seam to the registered
  * ``ErrorPort`` adapter so the request path actually exercises the
@@ -72,13 +72,24 @@ type SerializeFn = (exc: unknown) => ErrorEnvelope;
 let _serializeException: SerializeFn = defaultSerialize;
 
 // Top-level await is fine in Fastify entry modules (ESM); the import
-// resolves before ``buildApp`` runs.
+// resolves before ``buildApp`` runs. Catch ONLY the
+// module-not-found case so that real adapter init errors (syntax,
+// type, throw-in-constructor) propagate loudly — silently swallowing
+// them and falling back to the inline serialiser would mask broken
+// adapters in production. Node's loader signals "no such module" via
+// ``err.code === 'ERR_MODULE_NOT_FOUND'`` (ESM dynamic import) or
+// ``'MODULE_NOT_FOUND'`` (legacy require fallback some bundlers
+// preserve); accept either.
 try {
 	const mod = await import("../app/adapters/error-default.js");
 	const port = new mod.DefaultErrorPort();
 	_serializeException = (exc: unknown) =>
 		port.serialize(exc) as ErrorEnvelope;
-} catch {
+} catch (err: unknown) {
+	const code = (err as { code?: string } | null)?.code;
+	if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND") {
+		throw err;
+	}
 	// Adapter file absent (fragment disabled) — keep the inline serialiser.
 }
 {% else %}

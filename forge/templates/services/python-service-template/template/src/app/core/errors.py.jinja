@@ -285,7 +285,7 @@ def _default_serialize_exception(exc: Exception) -> dict[str, Any]:
     }
 
 
-{% if include_error_envelope | default(true) -%}
+{% if include_error_envelope | default(false) -%}
 # Port-wired path: bind the serialiser seam to the registered ``ErrorPort``
 # adapter so the request path actually exercises the fragment's
 # ``DefaultErrorPort.serialize``. The soft import is the safety net:
