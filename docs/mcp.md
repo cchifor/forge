@@ -11,9 +11,31 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) lets LLM agents d
 ## What's scaffolded for Phase 3.4 rollout
 
 - `mcp.config.json` skeleton at project root (one entry per connected MCP server).
-- Backend router at `src/app/mcp/router.py` exposing `GET /mcp/tools` (tool discovery) and `POST /mcp/invoke` (proxied tool calls).
+- Backend router at `src/app/mcp/router.py` exposing `GET /mcp/tools` (tool discovery), `POST /mcp/invoke` (proxied tool calls), and `GET /mcp/audit?limit=N` (read the last N audit-log entries — for operators / debug UIs).
 - Frontend **Tool Discovery** panel listing registered tools with summaries.
 - Frontend **Approval Dialog** with the three approval modes.
+
+### Audit endpoint
+
+`GET /mcp/audit?limit=N` returns the last `N` (1 ≤ N ≤ 1000, default 50) entries from the JSONL audit log written by `record_invocation`, **most-recent-first**:
+
+```json
+{
+  "entries": [
+    {
+      "ts": 1700000000.0,
+      "user_id": "user-42",
+      "server": "fs",
+      "tool": "read_file",
+      "input_hash": "abc123",
+      "decision": "approved",
+      "error": null
+    }
+  ]
+}
+```
+
+The endpoint is **read-only and additive** — the write path is unchanged. A missing log file (no calls yet) returns `{"entries": []}`. Storage IO failures surface as `500` so monitoring catches them; invalid `limit` values surface as `422` via FastAPI's `Query` validator. Decisions in the wire shape match the on-disk vocabulary: `approved`, `auto`, `rejected-bad-token`, plus any `error` string when the downstream tool call raised.
 
 ## Planned rollout
 

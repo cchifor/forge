@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
+  Adds a read endpoint to the MCP server router in generated Python
+  projects (shipped via the `mcp_server` fragment, pulled in by
+  `agent.mode=tool_calling`). Returns the last `N` (1–1000, default
+  50) entries from the JSONL audit log written by
+  `record_invocation`, most-recent-first, as
+  `{"entries": [{ts, user_id, server, tool, input_hash, decision,
+  error}, ...]}`. A new `read_last_n(limit)` helper on
+  `app.mcp.audit` backs the endpoint and is independently importable
+  for operators who want to consume the audit stream from a sidecar.
+  Missing log file (no calls yet) returns an empty list; storage IO
+  failures surface as `500`; invalid `limit` surfaces as `422` via
+  FastAPI's `Query` validator. **Backwards-compatible** — the
+  existing write path (`record_invocation` + on-disk JSONL format) is
+  unchanged; the endpoint is purely additive. Closes the long-
+  standing gap where `audit.py` was write-only and operators had to
+  `tail`/`grep` the on-disk file by hand.
+
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second
   `forge.appliers.renderers.FragmentRenderer` implementation,
