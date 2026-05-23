@@ -242,7 +242,8 @@ def phase_timer(
 
     The intent is observability of forge itself, not generated
     services. ``generator.generate`` wraps each phase
-    (``resolver.resolve``, ``copier.run``, ``feature_injector.apply``,
+    (``resolver.resolve``, ``copier.run``,
+    ``sync.forge_to_project.updater.apply``,
     ``toolchain.install``, ``codegen.run``, ``provenance.write_toml``)
     so a future ``forge --log-json`` consumer can build a flame chart
     of generation cost without external instrumentation.

@@ -1,9 +1,10 @@
 """Context object threaded through fragment application (Epic E, 1.1.0-alpha.1).
 
-Before Epic E, ``feature_injector._apply_fragment`` took four loose
-positional arguments (``bc, backend_dir, impl, options={}``) and the
-``options`` dict was always empty — fragments couldn't branch on the
-user-resolved option values without shipping one fragment per value.
+Before Epic E, the orchestrating ``_apply_fragment`` (now living at
+:mod:`forge.sync.forge_to_project.updater`) took four loose positional
+arguments (``bc, backend_dir, impl, options={}``) and the ``options``
+dict was always empty — fragments couldn't branch on the user-resolved
+option values without shipping one fragment per value.
 
 :class:`FragmentContext` bundles everything a fragment needs at apply
 time into one immutable record, and exposes ``options`` as a *filtered*
@@ -13,7 +14,8 @@ declare; the resolver validates the declared paths against
 ``OPTION_REGISTRY`` at resolve time, so typos surface before generation.
 
 This file is intentionally thin — the heavy lifting (construction,
-dispatch into appliers) lives in ``feature_injector``. Epic A's applier
+dispatch into appliers) lives at
+:mod:`forge.sync.forge_to_project.updater`. Epic A's applier
 decomposition uses this same ``FragmentContext`` as its sole input.
 """
 

@@ -183,7 +183,7 @@ class InjectionExtractor:
 
         # The forward applier records ``baseline_sha`` over the
         # INDENTED body that lands in the file (see
-        # ``feature_injector._record_merge_baseline``). The upstream
+        # ``appliers.injection._record_merge_baseline``). The upstream
         # snippet we read from ``inject.yaml`` has no indent. Re-indent
         # the upstream body to the same prefix the on-disk BEGIN line
         # uses so the three-way decide compares apples-to-apples.
