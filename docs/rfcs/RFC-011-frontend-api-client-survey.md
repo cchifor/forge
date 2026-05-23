@@ -2,9 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Survey (no decision yet) |
+| Status | Accepted (1.2.0) |
 | Author | Architecture review 2026-04 |
-| Epic | 1.0.x |
+| Epic | 1.2.0 |
 | Supersedes | — |
 | Replaces | — |
 
@@ -105,3 +105,39 @@ following become true:
   TS one (today: not the case).
 
 Until then, the asymmetry is a *cost we tolerate*, not a *bug to fix*.
+
+## Acceptance
+
+This RFC is accepted for the 1.2.0 cycle with the survey recommendation
+adopted verbatim: **"close two specific gaps, do not pursue full
+convergence"** — the Vue/Svelte (`@hey-api/openapi-ts` + TanStack Query)
+vs Flutter (Retrofit + Riverpod) asymmetry costs less to tolerate than to
+fix. `orval` / `riverpod_query` migration is explicitly classified as
+gold-plating and is out of scope.
+
+The two gaps closed under this acceptance are:
+
+1. **Gap 1 — Flutter error envelope parsing.** Extend
+   `forge/templates/apps/flutter-frontend-template/{{project_slug}}/lib/src/api/client/error_interceptor.dart`
+   to parse the RFC-007 error envelope
+   (`{error: {code, message, type, context, correlation_id}}`) into a
+   typed `AppException` with structured fields instead of collapsing to
+   `DioException.message`. Falls back to today's behavior when the
+   response body does not match the envelope shape.
+
+2. **Gap 2 — Three-frontend CI lint.** Add `tests/test_three_frontend_coverage.py`
+   walking all fragments under `forge/features/*/templates/*/`. Any
+   fragment shipping a Vue composable (`.vue` file or a composable `.ts`
+   under a `vue/` directory) must have a sibling Svelte AND Flutter
+   implementation, or carry an explicit `Fragment.frontend_skip_reason`
+   marker (introduced in this cycle on `forge/fragments/_spec.py`). This
+   keeps RFC-011's tolerated asymmetry from silently growing into a
+   per-fragment Vue-only drift.
+
+Full convergence remains deferred per the "Decision deferred" section
+above. Revisit only when two of the three listed triggers fire.
+
+See the forge improvement plan at
+`/home/c4/.claude/plans/deep-gliding-mccarthy.md`, section
+"RFC-011 frontend API client decision" (1.2.0 cycle), for the broader
+rationale.
