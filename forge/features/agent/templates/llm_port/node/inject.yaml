@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // LLM port — adapter-less startup keeps the ``LlmPort`` interface
+    // available for typing; an adapter (llm.provider=openai) wires the
+    // concrete impl behind it.
+    import type { LlmPort } from "./app/ports/llm.js";

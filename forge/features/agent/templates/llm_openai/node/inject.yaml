@@ -1,0 +1,9 @@
+- target: src/app.ts
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: after
+  zone: generated
+  snippet: |-
+    // LLM adapter: OpenAI — wired behind the LlmPort interface.
+    import { OpenAiAdapter } from "./app/adapters/llm/openai.js";
+    const _openaiLlmAdapter: import("./app/ports/llm.js").LlmPort =
+        new OpenAiAdapter();
