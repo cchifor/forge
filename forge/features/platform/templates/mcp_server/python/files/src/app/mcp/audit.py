@@ -181,3 +181,40 @@ def record_invocation(entry: AuditEntry) -> None:
             f.write(line + "\n")
     except Exception as exc:  # noqa: BLE001
         logger.warning("MCP audit write failed: %s", exc)
+
+
+def read_last_n(limit: int) -> list[dict[str, Any]]:
+    """Return the last ``limit`` audit entries, most-recent-first.
+
+    Reads the JSONL audit log produced by :func:`record_invocation`.
+    Malformed lines are skipped (logged at warn). A missing file
+    returns ``[]`` — that's the normal "no calls yet" case, not an
+    error. IO failures raise ``OSError`` so the caller (the
+    ``/mcp/audit`` endpoint) can return a 500.
+
+    Implementation note: streams the file end-to-end and keeps only
+    the trailing ``limit`` entries via slicing. The audit log is
+    expected to be rotated externally (logrotate / CloudWatch); the
+    "small N at the tail" workload doesn't justify reverse-seek
+    complexity at our current scale.
+    """
+    if limit <= 0:
+        return []
+    path = _audit_path()
+    if not path.is_file():
+        return []
+    entries: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                logger.warning("MCP audit log: skipping malformed line: %s", exc)
+                continue
+    # File order is chronological (append-only); reverse for
+    # most-recent-first, then trim to ``limit``.
+    entries.reverse()
+    return entries[:limit]

@@ -22,13 +22,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.mcp.audit import (
     AuditEntry,
     hash_input,
     mint_approval_token,
+    read_last_n,
     record_invocation,
     verify_approval_token,
 )
@@ -222,3 +223,39 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
         )
     )
     return McpInvokeResponse(ok=True, output=result)
+
+
+class McpAuditResponse(BaseModel):
+    """Page of audit entries returned by ``GET /mcp/audit``."""
+
+    entries: list[dict[str, Any]]
+
+
+@router.get("/audit", response_model=McpAuditResponse)
+async def list_audit(
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=1000,
+        description="Maximum number of entries to return, most-recent-first.",
+    ),
+) -> McpAuditResponse:
+    """Return the last ``limit`` audit-log entries, most-recent-first.
+
+    Operators + debug UIs use this to inspect MCP tool-call decisions
+    written by :func:`app.mcp.audit.record_invocation`. The endpoint
+    is additive — the write path is unchanged. Each entry mirrors the
+    on-disk JSONL shape: ``{ts, user_id, server, tool, input_hash,
+    decision, error}``. Missing log file returns an empty list (not
+    an error: that's the "no calls yet" case). Storage-backend
+    failures surface as 500 so monitoring catches them.
+    """
+    try:
+        entries = read_last_n(limit)
+    except OSError as exc:
+        logger.warning("MCP audit read failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="MCP audit storage backend unavailable.",
+        ) from exc
+    return McpAuditResponse(entries=entries)
