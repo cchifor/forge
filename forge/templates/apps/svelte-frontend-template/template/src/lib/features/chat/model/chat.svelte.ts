@@ -113,6 +113,7 @@ export function getChatStore() {
 		addUserMessage: sendUserMessage,
 		respondToPrompt: agent.respondToPrompt,
 		editAndResend: agent.editAndResend,
+		regenerate: agent.regenerate,
 		retryLastRun: agent.retryLastRun,
 		dismissError: agent.dismissError,
 		setModel,

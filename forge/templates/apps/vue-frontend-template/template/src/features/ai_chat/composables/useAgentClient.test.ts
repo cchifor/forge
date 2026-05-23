@@ -485,6 +485,145 @@ describe('useAgentClient', () => {
     expect(error.value).toBeNull()
   })
 
+  // ── regenerate (G.3) ──
+
+  // Helper: drive an assistant reply through the AG-UI event subscriber
+  // so we get a real assistant message in `messages` without mutating
+  // the readonly export. Returns once the first run resolves.
+  async function seedAssistantReply(
+    runAgentFn: (opts?: any) => Promise<void>,
+    runOpts: any,
+    asstId: string,
+    asstContent: string,
+  ) {
+    mockRunAgent.mockImplementationOnce(async (_params: any, sub: any) => {
+      await sub.onTextMessageStartEvent({
+        event: { messageId: asstId, role: 'assistant' },
+      })
+      await sub.onTextMessageContentEvent({ event: { delta: asstContent } })
+      await sub.onRunFinishedEvent({ event: {} })
+    })
+    await runAgentFn(runOpts)
+  }
+
+  it('regenerate truncates from messageId onward and re-runs', async () => {
+    const { addUserMessage, runAgent, regenerate, messages } = useAgentClient()
+    addUserMessage('hi')
+    await seedAssistantReply(runAgent, { model: 'openai:gpt-4.1' }, 'asst-1', 'previous reply')
+    expect(messages.value).toHaveLength(2)
+    expect(messages.value[1].id).toBe('asst-1')
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    regenerate('asst-1')
+    await new Promise((r) => setTimeout(r, 10))
+
+    // The assistant message we regenerated FROM is dropped — runAgent
+    // is invoked again so the agent can stream a fresh reply.
+    expect(messages.value).toHaveLength(1)
+    expect(messages.value[0].role).toBe('user')
+    expect(mockRunAgent).toHaveBeenCalledTimes(2)
+  })
+
+  it('regenerate preserves currentThreadId (does NOT mint a new thread)', async () => {
+    const { addUserMessage, runAgent, regenerate } = useAgentClient()
+    addUserMessage('hi')
+    await seedAssistantReply(runAgent, { model: 'openai:gpt-4.1' }, 'asst-2', 'reply')
+    const firstThreadId = mockRunAgent.mock.calls[0][0].threadId
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    regenerate('asst-2')
+    await new Promise((r) => setTimeout(r, 10))
+
+    const regenThreadId = mockRunAgent.mock.calls[1][0].threadId
+    // ── Load-bearing invariant: regenerate keeps the thread. ──
+    expect(regenThreadId).toBe(firstThreadId)
+  })
+
+  it('regenerate re-uses lastRunOptions (model + approval + attachments)', async () => {
+    const { addUserMessage, runAgent, regenerate } = useAgentClient()
+    addUserMessage('hi')
+    await seedAssistantReply(
+      runAgent,
+      {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        approval: 'bypass',
+        attachmentIds: ['file-7'],
+      },
+      'asst-3',
+      'reply',
+    )
+
+    mockRunAgent.mockResolvedValueOnce(undefined)
+    regenerate('asst-3')
+    await new Promise((r) => setTimeout(r, 10))
+
+    const regenArgs = mockRunAgent.mock.calls[1][0]
+    expect(regenArgs.forwardedProps).toEqual({
+      model: 'anthropic:claude-sonnet-4-20250514',
+      approval: 'bypass',
+      attachment_ids: ['file-7'],
+    })
+  })
+
+  it('regenerate is a no-op for unknown messageId', async () => {
+    mockRunAgent.mockResolvedValue(undefined)
+    const { addUserMessage, runAgent, regenerate, messages } = useAgentClient()
+    addUserMessage('hi')
+    await runAgent()
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+
+    regenerate('does-not-exist')
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(messages.value).toHaveLength(1)
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
+  })
+
+  it('regenerate is a no-op while a run is in flight (anti-double-click)', async () => {
+    // First produce a successful turn so we have an assistant message
+    // to point regenerate at.
+    const { addUserMessage, runAgent, regenerate, messages } = useAgentClient()
+    addUserMessage('hi')
+    await seedAssistantReply(runAgent, { model: 'gpt-x' }, 'asst-x', 'first reply')
+    expect(messages.value).toHaveLength(2)
+
+    // Now start a second run that never resolves — leaves isRunning=true.
+    let resolveRun: (() => void) | null = null
+    mockRunAgent.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveRun = resolve }),
+    )
+    const inflight = runAgent({ model: 'gpt-x' })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(mockRunAgent).toHaveBeenCalledTimes(2)
+
+    regenerate('asst-x')
+    regenerate('asst-x')
+    regenerate('asst-x')
+
+    // Still 2 — all three regen calls no-op'd because isRunning=true.
+    expect(mockRunAgent).toHaveBeenCalledTimes(2)
+    // And messages weren't truncated either — guard fires BEFORE slice.
+    expect(messages.value).toHaveLength(2)
+
+    resolveRun?.()
+    await inflight
+  })
+
+  it('regenerate is a no-op when no prior runAgent has fired (hasRun gate)', () => {
+    // Codex Phase B round 1 follow-up. Calling regenerate before any
+    // runAgent has captured `lastRunOptions` would otherwise fall
+    // through to runAgent(undefined), silently re-running with empty
+    // forwardedProps. The hasRun gate prevents this.
+    const { regenerate, addUserMessage } = useAgentClient()
+    // Seed a message but DON'T fire runAgent (which is what would
+    // happen if a user typed but clicked Regenerate on stale state).
+    addUserMessage('hi')
+    regenerate('user-msg-id-that-may-or-may-not-exist')
+    // Even if the id matched, regenerate must short-circuit on the
+    // hasRun gate BEFORE truncating + calling runAgent.
+    expect(mockRunAgent).not.toHaveBeenCalled()
+  })
+
   // ── Reset clears new state ──
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {
