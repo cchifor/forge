@@ -101,7 +101,20 @@ model LlmChunk {
 
 @doc("Cross-language LLM capability — streaming completion + embeddings.")
 interface LLM {
-  @doc("Streaming chat completion. Implementations MUST emit chunks as they arrive.")
+  @doc("""
+    Streaming chat completion. Implementations MUST emit chunks as they arrive
+    — the return type is an async stream in every target language, not a
+    pre-materialised array. TypeSpec lacks a first-class `AsyncIterable<T>`
+    primitive at the time of this contract, so the IR-level shape is
+    `LlmChunk[]` as a stand-in; language bindings translate to their
+    native stream type:
+      - TypeScript: `AsyncIterable<LlmChunk>` (Node)
+      - Rust:       `BoxStream<'a, Result<LlmChunk, LlmError>>`
+      - Python:     `AsyncIterator[LlmChunk]`
+    Multi-tool fan-out: one provider chunk MAY produce multiple
+    `LlmChunk` records (one per simultaneous tool-call) — the
+    consumer reconstructs parallel-tool boundaries from `toolCall.id`.
+  """)
   complete(prompt: ChatPrompt, options: LlmOptions): LlmChunk[];
 
   @doc("Batch-embed the given texts. Returns one vector per input, in order.")

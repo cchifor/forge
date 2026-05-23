@@ -49,6 +49,14 @@ export class OpenAiAdapter implements LlmPort {
 			temperature: options.temperature,
 			maxTokens: options.maxTokens,
 			...(tools ? { tools } : {}),
+			// Codex Phase B round 1 follow-up: AI SDK 4 gates
+			// tool-call delta streaming behind `toolCallStreaming: true`.
+			// Without this, tool-call ARGUMENTS arrive as one final
+			// `tool-call` event with no incremental delta, defeating
+			// the port's `arguments_delta` field semantic. Enable
+			// unconditionally — the cost when no tools are configured
+			// is zero (no tool-call events fire either way).
+			toolCallStreaming: true,
 		});
 
 		return mapStream(result.fullStream);

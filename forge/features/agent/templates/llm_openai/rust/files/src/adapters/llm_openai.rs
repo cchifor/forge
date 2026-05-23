@@ -21,7 +21,7 @@ use async_openai::{
     Client,
 };
 use async_trait::async_trait;
-use futures::stream::{BoxStream, StreamExt};
+use futures::stream::{self, BoxStream, StreamExt};
 
 use crate::ports::llm::{
     ChatMessage, ChatPrompt, ChatRole, LlmChunk, LlmError, LlmOptions, LlmPort, Tool,
@@ -110,43 +110,19 @@ impl LlmPort for OpenAiAdapter {
         // [`LlmChunk`] shape. Errors mid-stream surface as
         // [`LlmError::Transport`] so the consumer can decide whether
         // to retry or surface to the caller.
-        let mapped = stream.map(|item| match item {
+        //
+        // Codex Phase B round 1 follow-up: when OpenAI surfaces
+        // multiple tool calls in a single chunk (parallel-tool
+        // scenarios — e.g. search + calculator), fan out to one
+        // [`LlmChunk`] per tool call so the agent loop sees every
+        // tool. The previous `.into_iter().next()` dropped all but
+        // the first, hanging multi-tool workflows.
+        let mapped = stream.flat_map(|item| match item {
             Ok(resp) => {
-                let choice = match resp.choices.into_iter().next() {
-                    Some(c) => c,
-                    None => {
-                        return Ok(LlmChunk {
-                            delta: String::new(),
-                            finish_reason: None,
-                            tool_call: None,
-                        });
-                    }
-                };
-                let delta = choice.delta;
-                let text = delta.content.unwrap_or_default();
-                let finish_reason = choice.finish_reason.map(|fr| {
-                    // `FinishReason` is a serde-tagged enum upstream;
-                    // serialise back to its on-wire string so the
-                    // cross-language contract stays exact.
-                    serde_json::to_value(fr)
-                        .ok()
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or_else(|| "stop".to_string())
-                });
-                let tool_call = delta.tool_calls.and_then(|tcs| tcs.into_iter().next()).map(
-                    |tc| ToolCallChunk {
-                        id: Some(tc.id.clone().unwrap_or_default()),
-                        name: tc.function.as_ref().and_then(|f| f.name.clone()),
-                        arguments_delta: tc.function.as_ref().and_then(|f| f.arguments.clone()),
-                    },
-                );
-                Ok(LlmChunk {
-                    delta: text,
-                    finish_reason,
-                    tool_call,
-                })
+                let chunks = explode_choice_to_chunks(resp);
+                stream::iter(chunks.into_iter().map(Ok).collect::<Vec<_>>())
             }
-            Err(e) => Err(LlmError::Transport(e.to_string())),
+            Err(e) => stream::iter(vec![Err(LlmError::Transport(e.to_string()))]),
         });
 
         Ok(Box::pin(mapped))
@@ -166,6 +142,75 @@ impl LlmPort for OpenAiAdapter {
             .map_err(|e| LlmError::Provider(e.to_string()))?;
         Ok(resp.data.into_iter().map(|d| d.embedding).collect())
     }
+}
+
+/// Convert one OpenAI streaming chunk into 1..N port-shape chunks.
+///
+/// One LlmChunk for the text-delta + finish_reason payload (always
+/// emitted, even when the chunk is empty so the consumer's "another
+/// chunk happened" signal stays), plus one LlmChunk per tool-call
+/// the provider surfaced in this frame. Multi-tool fan-out — the
+/// previous implementation kept only the first tool-call which broke
+/// parallel-tool workflows.
+fn explode_choice_to_chunks(
+    resp: async_openai::types::CreateChatCompletionStreamResponse,
+) -> Vec<LlmChunk> {
+    let Some(choice) = resp.choices.into_iter().next() else {
+        return vec![LlmChunk {
+            delta: String::new(),
+            finish_reason: None,
+            tool_call: None,
+        }];
+    };
+    let delta = choice.delta;
+    let text = delta.content.unwrap_or_default();
+    let finish_reason = choice.finish_reason.map(|fr| {
+        // `FinishReason` is a serde-tagged enum upstream; serialise
+        // back to its on-wire string so the cross-language contract
+        // stays exact.
+        serde_json::to_value(fr)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "stop".to_string())
+    });
+    let tool_calls: Vec<ToolCallChunk> = delta
+        .tool_calls
+        .unwrap_or_default()
+        .into_iter()
+        .map(|tc| ToolCallChunk {
+            id: Some(tc.id.clone().unwrap_or_default()),
+            name: tc.function.as_ref().and_then(|f| f.name.clone()),
+            arguments_delta: tc.function.as_ref().and_then(|f| f.arguments.clone()),
+        })
+        .collect();
+
+    if tool_calls.is_empty() {
+        return vec![LlmChunk {
+            delta: text,
+            finish_reason,
+            tool_call: None,
+        }];
+    }
+
+    // First chunk carries the text-delta + finish_reason + first
+    // tool-call; subsequent chunks carry empty text + each remaining
+    // tool-call (consumer reconstructs the parallel-tool fan-out
+    // from id-grouping).
+    let mut iter = tool_calls.into_iter();
+    let first = iter.next().expect("non-empty per the is_empty check above");
+    let mut out = vec![LlmChunk {
+        delta: text,
+        finish_reason,
+        tool_call: Some(first),
+    }];
+    for tc in iter {
+        out.push(LlmChunk {
+            delta: String::new(),
+            finish_reason: None,
+            tool_call: Some(tc),
+        });
+    }
+    out
 }
 
 fn to_openai_message(m: ChatMessage) -> Result<ChatCompletionRequestMessage, LlmError> {
