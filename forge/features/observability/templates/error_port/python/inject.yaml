@@ -1,0 +1,12 @@
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: after
+  zone: generated
+  snippet: |-
+    # Error port — plugins shipping custom RFC-007 envelopes override
+    # ``DefaultErrorPort`` by registering their own adapter under the
+    # ``ErrorPort`` Protocol. The default adapter wraps the hand-written
+    # ``app.core.errors`` mapping; importing it ensures the type is
+    # available at startup so misconfiguration fails fast.
+    from app.adapters.error_default import DefaultErrorPort  # noqa: F401
+    from app.ports.error_port import ErrorPort  # noqa: F401

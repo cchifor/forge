@@ -1,0 +1,10 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: |-
+    // Error port — plugins shipping custom RFC-007 envelopes override
+    // ``DefaultErrorPort`` by registering their own type under the
+    // ``ErrorPort`` trait. Exposed at the crate root so adapters can
+    // import via ``crate::error_port::{ErrorPort, default::DefaultErrorPort}``.
+    pub mod error_port;
