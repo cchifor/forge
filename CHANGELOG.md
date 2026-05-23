@@ -7,7 +7,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
-<<<<<<< HEAD
 - **`ApplierRegistry` — pluggable per-suffix injector dispatch
   (Pillar A.1, SDK 1.2).** Replaces the hardcoded `if/elif` suffix
   chain at `forge/appliers/injection.py:_dispatch_injector` with a
@@ -128,6 +127,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Sibling Pillar A.1 PR also bumps SDK_VERSION to `1.2`; coordinated.
   New module `forge.hooks`; new test suite `tests/test_phase_hooks.py`;
   plugin-development guide gains a "Telemetry hook" section.
+
+- **TypeSpec port contracts under
+  `forge/templates/_shared/ports/{queue,object_store,llm,vector_store}/contract.tsp`
+  (new).** Pillar D Phase 1 of the polyglot RFC-005 reduced-scope path —
+  ships the four port contracts RFC-005 § "Port Contracts" enumerates as
+  language-neutral TypeSpec spec files. Bodies follow the RFC verbatim
+  where it provided one, with supporting `model` declarations added for
+  types the RFC referenced by name only; per-contract comment headers
+  document every Python-vs-RFC reconciliation. Plugin authors writing
+  Node / Rust adapters outside the forge core now have a canonical
+  spec to conform to. New opt-in `forge --ports-validate` verb at
+  `forge/cli/commands/ports.py` compiles each contract via
+  `npx -y @typespec/compiler` + the `@typespec/openapi3` emitter, prints
+  per-port `VALID` / `INVALID`, exits 0 on success or 1 on any failure.
+  Skips cleanly when `npx` is absent (node is not a hard forge
+  dependency); CI that wants validation coverage must provision node
+  alongside python. **Spec-only — no code is generated from these
+  contracts today.** TypeSpec → bindings POC is plan Pillar D point 3,
+  deferred to 1.4. Tests at `tests/test_typespec_contracts.py`.
 - **`forge_canvas_core` (Dart pub.dev package, new).** Pillar B
   Phase 2B split of the existing `forge_canvas` package — extracts
   the framework-agnostic protocol surface into a sibling pure-Dart

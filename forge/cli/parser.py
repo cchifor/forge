@@ -317,6 +317,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run environment diagnostics (Python/Node/Rust/Flutter toolchains, Docker, ports, forge.toml).",
     )
 
+    # Ports validation — compile every `_shared/ports/<port>/contract.tsp`
+    # via npx + @typespec/compiler. Spec-only contract files; this verb is
+    # the opt-in CI hook described in plan Pillar D point 1 (RFC-005
+    # reduced-scope path). Exits 0 when every contract compiles or when
+    # npx is absent (node is not a hard forge dependency); exits 1 when
+    # any contract fails to compile.
+    p.add_argument(
+        "--ports-validate",
+        dest="ports_validate",
+        action="store_true",
+        help=(
+            "Compile every `_shared/ports/<port>/contract.tsp` via "
+            "`npx -y @typespec/compiler` + the `@typespec/openapi3` emitter. "
+            "Skips cleanly when `npx` is not on PATH. Exits 0 on success, "
+            "1 when any contract fails. Pair with --json for machine output."
+        ),
+    )
+
     # Verify — read-only drift detection against forge.toml baselines.
     # Phase 2 of the bidirectional-sync plan. ``--update`` re-applies
     # forward; ``--verify`` reports drift without touching disk.
