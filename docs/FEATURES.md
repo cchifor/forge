@@ -451,6 +451,39 @@ ENDPOINTS: none — middleware decorates every response.
 **Enables fragments:**
 - on `true` → `security_headers`
 
+### `reliability.cache`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** node, python, rust
+
+**Allowed values:** `none`, `memory`, `redis`
+
+_Generic K/V cache — selects the CachePort adapter (Pillar E.2)._
+
+Selects which adapter the ``CachePort`` resolves to. The port is the
+generic K/V surface used for idempotency-key dedupe, LLM-response
+memoization, and denormalized read caches — distinct from
+``middleware.response_cache`` (which keys HTTP responses on request
+shape via fastapi-cache2).
+
+- ``memory``: in-process LRU. Single-replica only. No external deps.
+- ``redis``: cross-replica safe. Shares the Redis sidecar with
+  queue / rate-limit fragments via the standard ``REDIS_URL``, but
+  defaults to db=3 so cache eviction doesn't clobber queue keysets.
+- ``none``: cache port + adapters stripped from the build.
+
+Tier-1 across Python, Node, and Rust — the contract is identical on
+all three backends.
+
+OPTIONS: none | memory | redis
+BACKENDS: python, node, rust
+DEPENDENCY: redis-py (python+redis), ioredis (node+redis), redis crate
+    (rust+redis); none for ``memory``.
+ENV: CACHE_REDIS_URL (redis), CACHE_MEMORY_MAX_ENTRIES (memory).
+
+**Enables fragments:**
+- on `memory` → `cache_port`, `cache_memory`
+- on `redis` → `cache_port`, `cache_redis`
+
 ### `reliability.circuit_breaker`
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** node, python, rust
