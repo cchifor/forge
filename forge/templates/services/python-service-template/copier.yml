@@ -83,6 +83,19 @@ include_platform_auth:
     false and don't reference platform-auth at all.
   default: false
 
+include_error_envelope:
+  type: bool
+  help: |
+    Wire ``app/core/errors.py``'s central handler through the
+    ``DefaultErrorPort`` adapter shipped by the ``error_port`` fragment
+    (Pillar E.1.b runtime wiring). Default ``true`` keeps the behaviour
+    that ``observability.error_envelope=True`` implies. When ``false``,
+    the handler stays on the inline serialiser (matches
+    ``observability.error_envelope=False`` semantics). The handler's
+    soft import guarantees both states produce the same wire shape,
+    so flipping this knob is byte-safe.
+  default: true
+
 service_path_prefix:
   type: str
   help: "Traefik PathPrefix used for routing this service (e.g. /api/{{ project_slug }})"

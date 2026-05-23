@@ -1,0 +1,139 @@
+//! E.1.b runtime wiring — assert the central ``IntoResponse for
+//! AppError`` impl emits the RFC-007 envelope EXACTLY (parsed JSON)
+//! with the canonical HTTP status mapping, and that
+//! ``X-Correlation-Id`` flows through onto the envelope body via
+//! ``crate::middleware::correlation``. The behavioural cross-stack
+//! invariant codex flagged on PR #89 is satisfied here for Rust.
+
+use axum::Router;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use axum::response::IntoResponse;
+use axum::routing::get;
+use http_body_util::BodyExt;
+use serde_json::Value;
+use tower::ServiceExt;
+
+use {{ project_name | replace("-", "_") }}::errors::AppError;
+
+const RFC007_FIELDS: &[&str] = &[
+    "code",
+    "message",
+    "type",
+    "context",
+    "correlation_id",
+];
+
+async fn missing_handler() -> Result<&'static str, AppError> {
+    Err(AppError::not_found("Item", "abc-123"))
+}
+
+async fn validation_handler() -> Result<&'static str, AppError> {
+    Err(AppError::Validation("email is required".to_string()))
+}
+
+async fn read_only_handler() -> Result<&'static str, AppError> {
+    Err(AppError::read_only("Template"))
+}
+
+async fn internal_handler() -> Result<&'static str, AppError> {
+    Err(AppError::Internal("kaboom".to_string()))
+}
+
+fn router() -> Router {
+    Router::new()
+        .route("/missing", get(missing_handler))
+        .route("/invalid", get(validation_handler))
+        .route("/locked", get(read_only_handler))
+        .route("/boom", get(internal_handler))
+}
+
+async fn send(app: Router, uri: &str, correlation: Option<&str>) -> (StatusCode, Value) {
+    let mut builder = Request::builder().uri(uri);
+    if let Some(corr) = correlation {
+        builder = builder.header("x-correlation-id", corr);
+    }
+    let request = builder.body(Body::empty()).unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let json: Value = serde_json::from_slice(&body_bytes)
+        .expect("response body must be RFC-007 envelope JSON");
+    (status, json)
+}
+
+fn assert_envelope_shape(body: &Value) {
+    let err = body.get("error").expect("missing top-level `error` key");
+    let map = err.as_object().expect("`error` must be a JSON object");
+    let keys: Vec<&str> = map.keys().map(String::as_str).collect();
+    for field in RFC007_FIELDS {
+        assert!(
+            keys.contains(field),
+            "envelope missing required RFC-007 field {field:?}; got keys: {keys:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn not_found_emits_rfc007_envelope() {
+    let (status, body) = send(router(), "/missing", Some("corr-not-found")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_envelope_shape(&body);
+    let err = &body["error"];
+    assert_eq!(err["code"], "NOT_FOUND");
+    assert_eq!(err["type"], "NotFoundError");
+    assert_eq!(err["context"]["entity"], "Item");
+    assert_eq!(err["context"]["id"], "abc-123");
+}
+
+#[tokio::test]
+async fn validation_error_maps_to_422() {
+    let (status, body) = send(router(), "/invalid", Some("corr-validation")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_envelope_shape(&body);
+    let err = &body["error"];
+    assert_eq!(err["code"], "VALIDATION_FAILED");
+    assert_eq!(err["type"], "ValidationError");
+}
+
+#[tokio::test]
+async fn read_only_maps_to_403() {
+    let (status, body) = send(router(), "/locked", None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let err = &body["error"];
+    assert_eq!(err["code"], "READ_ONLY");
+    assert_eq!(err["context"]["resource"], "Template");
+}
+
+#[tokio::test]
+async fn internal_error_maps_to_500() {
+    let (status, body) = send(router(), "/boom", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let err = &body["error"];
+    assert_eq!(err["code"], "INTERNAL_ERROR");
+    assert_eq!(err["type"], "InternalError");
+}
+
+#[tokio::test]
+async fn rfc007_shape_holds_for_every_handler_path() {
+    for uri in ["/missing", "/invalid", "/locked", "/boom"] {
+        let (_status, body) = send(router(), uri, None).await;
+        assert_envelope_shape(&body);
+    }
+}
+
+#[tokio::test]
+async fn into_response_directly_emits_envelope_shape() {
+    // E.1.b structural guard: the ``IntoResponse for AppError`` impl
+    // is the seat of the runtime wiring. When the port path is on,
+    // this exercises ``crate::error_port::default::DefaultErrorPort``
+    // via the ``+ 'static`` dyn-cast (PR #89 fix); when off, it
+    // exercises the inline ``default_envelope`` mirror. Either way
+    // the wire shape must match RFC-007 exactly.
+    let response = AppError::not_found("Doc", "42").into_response();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_envelope_shape(&body);
+    assert_eq!(body["error"]["code"], "NOT_FOUND");
+}

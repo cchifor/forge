@@ -48,7 +48,12 @@ def _primary_feature(bc: BackendConfig) -> str:
     return bc.features[0] if bc.features else "items"
 
 
-def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -> dict[str, Any]:
+def backend_context(
+    bc: BackendConfig,
+    *,
+    include_platform_auth: bool = False,
+    include_error_envelope: bool = True,
+) -> dict[str, Any]:
     """Build a Copier data dict for any backend template.
 
     Shared keys go to every backend; the language-specific version field
@@ -59,6 +64,14 @@ def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -
     references in pyproject.toml.jinja (dependency + ``[tool.uv.sources]``
     path-dep). Set by the generator when the
     ``platform_auth_python_middleware`` fragment is in the active plan.
+
+    ``include_error_envelope`` (default ``True``) wires the central
+    error-handler through ``DefaultErrorPort.serialize`` so the
+    request-path actually exercises the ``error_port`` fragment's
+    adapter (Pillar E.1.b runtime wiring). When ``False`` the handler
+    stays on the inline serialiser — the wire shape is identical either
+    way (the handler's soft-import keeps the two paths in lock-step), so
+    a stale flag won't break the response contract.
     """
     spec = BACKEND_REGISTRY[bc.language]
     ctx: dict[str, Any] = {
@@ -77,6 +90,7 @@ def backend_context(bc: BackendConfig, *, include_platform_auth: bool = False) -
         spec.version_field: getattr(bc, spec.version_field),
         "entity_plural": _primary_feature(bc),
         "include_platform_auth": include_platform_auth,
+        "include_error_envelope": include_error_envelope,
     }
     # Only thread sdk_consumption when the caller set it. Leaving the
     # key absent lets copier.yml's own default (``monorepo``) apply,

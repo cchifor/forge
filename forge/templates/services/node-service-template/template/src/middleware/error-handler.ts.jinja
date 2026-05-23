@@ -1,0 +1,177 @@
+import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
+import { ZodError } from "zod";
+import { AppError, statusForCode } from "../lib/errors.js";
+import { logger } from "../lib/logger.js";
+
+/**
+ * RFC-007 error envelope. Every error response from this service is
+ * serialized into this shape. See docs/rfcs/RFC-007-error-contract.md.
+ */
+interface ErrorEnvelope {
+	error: {
+		code: string;
+		message: string;
+		type: string;
+		context: Record<string, unknown>;
+		correlation_id: string;
+	};
+}
+
+function correlationIdOf(req: FastifyRequest): string {
+	const headers = req.headers as Record<string, string | string[] | undefined>;
+	const raw = headers["x-correlation-id"];
+	if (typeof raw === "string") return raw;
+	if (Array.isArray(raw) && raw.length > 0) return raw[0] ?? "";
+	return (req.id as string | undefined) ?? "";
+}
+
+/**
+ * Inline RFC-007 envelope serialiser — mirrors the
+ * ``DefaultErrorPort.serialize`` shape byte for byte so the wire shape
+ * stays identical regardless of whether the port path or the inline
+ * fallback executes. Used by handlers that synthesize codes from
+ * framework state (Fastify body-validation, generic 5xx fallthrough)
+ * — the port can't peek at HTTP status, only at the raised exception.
+ */
+function defaultSerialize(exc: unknown): ErrorEnvelope {
+	if (exc instanceof AppError) {
+		return {
+			error: {
+				code: exc.code,
+				message: exc.message,
+				type: exc.name,
+				context: exc.context,
+				correlation_id: "",
+			},
+		};
+	}
+	const type = exc instanceof Error ? exc.constructor.name : "UnknownError";
+	return {
+		error: {
+			code: "INTERNAL_ERROR",
+			message: "An unexpected error occurred",
+			type,
+			context: {},
+			correlation_id: "",
+		},
+	};
+}
+
+{% if include_error_envelope | default(true) %}
+/**
+ * E.1.b runtime wiring: bind the serialiser seam to the registered
+ * ``ErrorPort`` adapter so the request path actually exercises the
+ * ``error_port`` fragment's ``DefaultErrorPort.serialize`` — not just a
+ * lookalike inline copy. Dynamic ``await import`` is the soft-import
+ * guard: ``observability.error_envelope=False`` skips the fragment so
+ * the adapter module isn't on disk in that mode; the catch keeps the
+ * inline serialiser available so service startup doesn't fault. Both
+ * paths produce the same RFC-007 envelope.
+ */
+type SerializeFn = (exc: unknown) => ErrorEnvelope;
+let _serializeException: SerializeFn = defaultSerialize;
+
+// Top-level await is fine in Fastify entry modules (ESM); the import
+// resolves before ``buildApp`` runs.
+try {
+	const mod = await import("../app/adapters/error-default.js");
+	const port = new mod.DefaultErrorPort();
+	_serializeException = (exc: unknown) =>
+		port.serialize(exc) as ErrorEnvelope;
+} catch {
+	// Adapter file absent (fragment disabled) — keep the inline serialiser.
+}
+{% else %}
+// Port wiring opt-out: ``observability.error_envelope=False`` keeps the
+// handler on the inline serialiser. No port adapter ships in this mode.
+type SerializeFn = (exc: unknown) => ErrorEnvelope;
+const _serializeException: SerializeFn = defaultSerialize;
+{% endif %}
+
+function envelopeResponse(
+	req: FastifyRequest,
+	reply: FastifyReply,
+	envelope: ErrorEnvelope,
+	statusCode: number,
+): FastifyReply {
+	envelope.error.correlation_id = correlationIdOf(req);
+	return reply.code(statusCode).send(envelope);
+}
+
+function inlineEnvelope(
+	req: FastifyRequest,
+	code: string,
+	message: string,
+	type: string,
+	context: Record<string, unknown> = {},
+): ErrorEnvelope {
+	return {
+		error: {
+			code,
+			message,
+			type,
+			context,
+			correlation_id: correlationIdOf(req),
+		},
+	};
+}
+
+export function errorHandler(
+	error: FastifyError,
+	req: FastifyRequest,
+	reply: FastifyReply,
+) {
+	if (error instanceof AppError) {
+		// Port-wired path: delegate to the registered ``ErrorPort``
+		// adapter, then inject correlation id + pick the HTTP status
+		// from the canonical code → status map. Wire shape stays RFC-007.
+		const envelope = _serializeException(error);
+		return envelopeResponse(req, reply, envelope, statusForCode(error.code));
+	}
+
+	if (error instanceof ZodError) {
+		const message = error.errors
+			.map((e) => `${e.path.join(".")}: ${e.message}`)
+			.join("; ");
+		return reply.code(422).send(
+			inlineEnvelope(req, "VALIDATION_FAILED", message, "ValidationError", {
+				errors: error.errors.map((e) => ({
+					path: e.path,
+					message: e.message,
+					code: e.code,
+				})),
+			}),
+		);
+	}
+
+	// Fastify surfaces body-validation / 4xx framework errors with a statusCode.
+	// Preserve client-facing context but route through the canonical envelope.
+	const frameworkStatus = error.statusCode ?? 0;
+	if (frameworkStatus >= 400 && frameworkStatus < 500) {
+		return reply
+			.code(frameworkStatus)
+			.send(
+				inlineEnvelope(
+					req,
+					frameworkStatus === 429 ? "RATE_LIMITED" : "INVALID_INPUT",
+					error.message,
+					error.name || "FastifyError",
+				),
+			);
+	}
+
+	logger.error(
+		{ err: error, correlationId: correlationIdOf(req) },
+		"Unhandled error",
+	);
+	return reply
+		.code(500)
+		.send(
+			inlineEnvelope(
+				req,
+				"INTERNAL_ERROR",
+				"An unexpected error occurred",
+				"InternalError",
+			),
+		);
+}

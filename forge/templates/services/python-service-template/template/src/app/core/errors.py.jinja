@@ -198,6 +198,23 @@ def _lookup_mapping(exc: ApplicationError) -> tuple[str, int]:
     return "INTERNAL_ERROR", status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
+def status_for_code(code: str) -> int:
+    """Reverse-map an RFC-007 ``code`` enum value to its HTTP status.
+
+    The port owns only the envelope wire shape; HTTP status mapping
+    stays in the central handler. After the port serialises an
+    exception into ``{"error": {"code": ..., ...}}``, this helper
+    looks up the matching status for the response. Unknown codes
+    fall through to ``500`` so a fragment-registered code that
+    forgot to call :func:`register_domain_error` still produces a
+    response (loud but recoverable).
+    """
+    for code_entry, status_code in _DOMAIN_ERROR_MAP.values():
+        if code_entry == code:
+            return status_code
+    return status.HTTP_500_INTERNAL_SERVER_ERROR
+
+
 def _correlation_id(request: Request) -> str:
     header = request.headers.get("x-correlation-id") or request.headers.get("x-request-id")
     if header:
@@ -226,6 +243,86 @@ def _context_for(exc: ApplicationError) -> dict:
     return {}
 
 
+# --- Envelope serialisation seam ---------------------------------------------
+#
+# E.1.b runtime wiring: the central handler calls ``_serialize_exception``
+# to produce the RFC-007 envelope, then injects the request's
+# ``correlation_id`` and picks the HTTP status via ``status_for_code``.
+# When ``observability.error_envelope=True`` (default) the seam binds to
+# the ``DefaultErrorPort`` adapter shipped by the ``error_port`` fragment;
+# the soft import keeps the inline fallback honest if the adapter file
+# isn't on disk (e.g. ``observability.error_envelope=False`` skips the
+# fragment but the Jinja conditional below hasn't been threaded yet from
+# the generator). Either path produces the same wire shape — that's the
+# RFC-007 invariant the test suite locks down.
+
+
+def _default_serialize_exception(exc: Exception) -> dict[str, Any]:
+    """Inline fallback when the ``error_port`` fragment isn't on disk.
+
+    Mirrors ``app.adapters.error_default.DefaultErrorPort.serialize`` byte
+    for byte so the wire shape doesn't depend on which path executed.
+    """
+    if isinstance(exc, ApplicationError):
+        code, _status = _lookup_mapping(exc)
+        return {
+            "error": {
+                "code": code,
+                "message": str(exc),
+                "type": type(exc).__name__,
+                "context": _context_for(exc),
+                "correlation_id": "",
+            }
+        }
+    return {
+        "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred",
+            "type": type(exc).__name__,
+            "context": {},
+            "correlation_id": "",
+        }
+    }
+
+
+{% if include_error_envelope | default(true) -%}
+# Port-wired path: bind the serialiser seam to the registered ``ErrorPort``
+# adapter so the request path actually exercises the fragment's
+# ``DefaultErrorPort.serialize``. The soft import is the safety net:
+# ``observability.error_envelope=False`` skips the ``error_port`` fragment
+# entirely, so the adapter module won't be on disk in that mode — fall
+# through to the inline serialiser. Without the soft import a disabled
+# fragment would break service startup with a stale ``ModuleNotFoundError``.
+try:
+    from app.adapters.error_default import DefaultErrorPort
+except ImportError:  # pragma: no cover - exercised only when the fragment is disabled
+    _serialize_exception = _default_serialize_exception
+else:
+    _serialize_exception = DefaultErrorPort().serialize
+{%- else -%}
+# Port wiring opt-out: ``observability.error_envelope=False`` is the
+# explicit "stay on the inline serialiser" knob. No port adapter is on
+# disk in this mode; the inline fallback owns the wire shape.
+_serialize_exception = _default_serialize_exception
+{%- endif %}
+
+
+def _envelope_response(
+    request: Request,
+    *,
+    envelope: dict[str, Any],
+    status_code: int,
+) -> JSONResponse:
+    """Inject the request's correlation id and ship the RFC-007 envelope.
+
+    The serialiser produces the envelope skeleton with an empty
+    ``correlation_id`` (it has no request context); the handler owns
+    the correlation-id propagation per RFC-007 §"Correlation id".
+    """
+    envelope["error"]["correlation_id"] = _correlation_id(request)
+    return JSONResponse(status_code=status_code, content=envelope)
+
+
 def _envelope(
     request: Request,
     *,
@@ -235,10 +332,11 @@ def _envelope(
     context: dict | None = None,
     status_code: int,
 ) -> JSONResponse:
-    # weld.fastapi.api.errors.Error has shape (message, type, detail). The
-    # platform-wide RFC-007 code + correlation id ride in `detail` so
-    # tooling that grew up around the older ErrorEnvelope shape can still
-    # extract them — they're just one level deeper now.
+    # Pre-port path kept for the non-domain handlers (HTTP / validation /
+    # global). weld.fastapi.api.errors.Error has shape (message, type,
+    # detail). The platform-wide RFC-007 code + correlation id ride in
+    # ``detail`` so tooling that grew up around the older ErrorEnvelope
+    # shape can still extract them — they're just one level deeper now.
     body = Error(
         message=message,
         type=type_name,
@@ -252,15 +350,9 @@ def _envelope(
 
 
 def domain_exception_to_response(request: Request, exc: ApplicationError) -> JSONResponse:
-    code, status_code = _lookup_mapping(exc)
-    return _envelope(
-        request,
-        code=code,
-        message=str(exc),
-        type_name=type(exc).__name__,
-        context=_context_for(exc),
-        status_code=status_code,
-    )
+    envelope = _serialize_exception(exc)
+    status_code = status_for_code(envelope["error"]["code"])
+    return _envelope_response(request, envelope=envelope, status_code=status_code)
 
 
 def _log_error(request: Request, exc: Exception, status_code: int):

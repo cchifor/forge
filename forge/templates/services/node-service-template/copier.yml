@@ -45,6 +45,17 @@ node_version:
     - "22"
     - "24"
 
+include_error_envelope:
+  type: bool
+  help: |
+    Wire ``src/middleware/error-handler.ts`` through the
+    ``DefaultErrorPort`` adapter shipped by the ``error_port`` fragment
+    (Pillar E.1.b runtime wiring). Default ``true`` matches
+    ``observability.error_envelope=True``. When ``false`` the handler
+    stays on the inline serialiser. The dynamic-import soft guard keeps
+    both branches wire-shape-identical, so flipping this knob is byte-safe.
+  default: true
+
 # ---------------------------------------------------------------------------
 # Derived variables (not prompted)
 # ---------------------------------------------------------------------------
