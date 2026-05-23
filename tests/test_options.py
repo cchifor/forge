@@ -1,5 +1,17 @@
 """Tests for the unified Option registry, JSON-Schema emitter, and CLI
-surface that ride on top of it."""
+surface that ride on top of it.
+
+Sister registry-level invariant suites (kept in their own files so the
+collection here stays focused on Options, not "every cross-cutting
+invariant in one giant module"):
+
+- ``tests/test_fragment_parity.py`` — RFC-006 cross-backend parity
+  tiers asserted against ``FRAGMENT_REGISTRY``.
+- ``tests/test_three_frontend_coverage.py`` — RFC-011 (Accepted, 1.2.0)
+  three-frontend coverage lint: any fragment shipping a Vue composable
+  must have sibling Svelte AND Flutter implementations or an explicit
+  ``Fragment.frontend_skip_reason`` marker.
+"""
 
 from __future__ import annotations
 
