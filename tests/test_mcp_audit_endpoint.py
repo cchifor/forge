@@ -64,9 +64,19 @@ class TestEndpointDeclared:
         assert "le=1000" in src
 
     def test_router_response_model_uses_entries_field(self) -> None:
+        """Codex Phase B round 1 tightening: the response model entries
+        is now `list[McpAuditEntry]` (a typed Pydantic model) rather
+        than the original loose `list[dict[str, Any]]`. McpAuditEntry
+        carries the JSONL field shape verbatim + `extra="allow"` so
+        forward-compat additions (RFC-014 deferred fields) pass through.
+        """
         src = _router_source()
         assert "class McpAuditResponse" in src
-        assert "entries: list[dict[str, Any]]" in src
+        assert "class McpAuditEntry" in src
+        assert "entries: list[McpAuditEntry]" in src
+        # Forward-compat: extra="allow" preserves unknown fields if the
+        # write path adds tool_call_id / approval_mode / correlation_id.
+        assert 'extra": "allow"' in src or "'extra': 'allow'" in src
 
     def test_router_returns_500_on_storage_failure(self) -> None:
         """The endpoint must surface storage errors as 500 — silent
