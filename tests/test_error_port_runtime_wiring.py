@@ -267,6 +267,25 @@ def test_generator_only_enables_envelope_when_fragment_in_plan() -> None:
     )
 
 
+def test_add_backend_derives_envelope_from_manifest_options() -> None:
+    """Codex Phase B round 2 finding (A): the ``forge add-backend``
+    code path must thread ``include_error_envelope`` derived from the
+    project's stored ``observability.error_envelope`` option. Without
+    this, a project that opted into the port wiring silently ships its
+    new backend without the wiring (the inline serialiser kicks in),
+    breaking per-project consistency."""
+    from forge.cli.commands import add_backend  # noqa: PLC0415
+    import inspect  # noqa: PLC0415
+
+    src = inspect.getsource(add_backend)
+    assert "observability.error_envelope" in src, (
+        "add-backend must read the option from the manifest"
+    )
+    assert "include_error_envelope=include_error_envelope" in src, (
+        "add-backend must pass the derived value to _generate_single_backend"
+    )
+
+
 def test_node_handler_only_catches_module_not_found() -> None:
     """Codex Phase B round 1 finding #2: the dynamic-import try/catch
     must rethrow non-module-not-found errors. Bare ``catch {}`` would
