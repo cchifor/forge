@@ -70,5 +70,5 @@ Things the reviewers should weigh in on.
 | 008 | Config loading | Accepted | 1.1.0-alpha.2 |
 | 009 | Service registration | Accepted | 1.1.0-alpha.2 |
 | 010 | Schema-driven domain modelling | Proposed | 1.2.0 |
-| 011 | Frontend API client survey | Survey | 1.0.x |
+| 011 | Frontend API client survey | Accepted | 1.2.0 |
 | 012 | ForgeQueue port (cross-language) | Accepted | 1.1.0-alpha.3 |
