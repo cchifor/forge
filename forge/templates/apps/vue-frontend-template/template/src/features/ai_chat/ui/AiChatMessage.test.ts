@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+
+const { parseSpy } = vi.hoisted(() => ({
+  parseSpy: vi.fn((text: string) => `<p>${text}</p>`),
+}))
 
 vi.mock('marked', () => ({
   marked: {
     setOptions: vi.fn(),
-    parse: (text: string) => `<p>${text}</p>`,
+    parse: (text: string) => parseSpy(text),
   },
 }))
 
@@ -13,6 +17,10 @@ vi.mock('dompurify', () => ({
 }))
 
 import AiChatMessage from './AiChatMessage.vue'
+
+beforeEach(() => {
+  parseSpy.mockClear()
+})
 
 function makeMessage(role: string, content: string, id = 'msg-1') {
   return { id, role, content }
@@ -93,5 +101,64 @@ describe('AiChatMessage', () => {
     })
 
     expect(wrapper.text()).toContain('Thinking...')
+  })
+
+  describe('streaming debounce', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('collapses 10 rapid token updates within 50ms into <= 2 markdown parses', async () => {
+      vi.useFakeTimers()
+      const message = makeMessage('assistant', 'a')
+      const wrapper = mount(AiChatMessage, {
+        props: { message, isStreaming: true },
+      })
+      // Initial mount parses content once for the cached HTML.
+      const initialCalls = parseSpy.mock.calls.length
+
+      // Simulate 10 token deltas arriving in 5ms increments — all inside the
+      // 50ms debounce window.
+      for (let i = 0; i < 10; i++) {
+        message.content += `b${i}`
+        await wrapper.setProps({
+          message: { ...message },
+          isStreaming: true,
+        })
+        vi.advanceTimersByTime(5)
+      }
+
+      // Window closes at 50ms — debounce fires exactly one render.
+      vi.advanceTimersByTime(50)
+      await flushPromises()
+
+      const renderCalls = parseSpy.mock.calls.length - initialCalls
+      expect(renderCalls).toBeLessThanOrEqual(2)
+    })
+
+    it('flushes immediately when streaming transitions to false', async () => {
+      vi.useFakeTimers()
+      const message = makeMessage('assistant', 'partial token')
+      const wrapper = mount(AiChatMessage, {
+        props: { message, isStreaming: true },
+      })
+      const baseline = parseSpy.mock.calls.length
+
+      message.content = 'partial token + final'
+      await wrapper.setProps({
+        message: { ...message },
+        isStreaming: true,
+      })
+      // Do not advance the debounce window; flip isStreaming -> false.
+      await wrapper.setProps({
+        message: { ...message },
+        isStreaming: false,
+      })
+      await flushPromises()
+
+      // Final tokens rendered within frame, not delayed by the debounce timer.
+      expect(parseSpy.mock.calls.length).toBeGreaterThan(baseline)
+      expect(wrapper.html()).toContain('partial token + final')
+    })
   })
 })
