@@ -85,3 +85,130 @@ register_fragment(
         },
     )
 )
+
+
+# -----------------------------------------------------------------------------
+# Pillar E.2 — cache_port + adapters (RFC: deep-gliding-mccarthy §Pillar E).
+#
+# Generic K/V cache port; explicitly distinct from the HTTP-response
+# middleware ``response_cache`` (which keys on request shape via
+# fastapi-cache2). Use cases: idempotency-key dedupe, LLM-response
+# memoization, denormalized read caches.
+#
+# Tier-1 from the start: port + memory + redis adapters on all three
+# backend languages. Auto-derivation tags ``cache_port`` as tier 1
+# because every built-in supports it.
+# -----------------------------------------------------------------------------
+
+
+register_fragment(
+    Fragment(
+        name="cache_port",
+        # Codex Phase B round 1 follow-up: cache_port/rust ships
+        # `src/ports/mod.rs` which collides with queue_port/rust's
+        # `src/ports/mod.rs` under the strict file applier's
+        # FRAGMENT_FILES_OVERLAP guard. Declare the conflict
+        # explicitly so capability resolution errors loudly at
+        # plan-build time rather than silently corrupting the
+        # generated tree at apply time.
+        #
+        # The proper architectural fix is PortSpec (Pillar A.4 — PR #88)
+        # which collapses per-port `inject.yaml` into a single shared
+        # `src/ports/mod.rs` rendered by the renderer. Until cache_port
+        # + queue_port migrate to PortSpec, the conflict_with gate is
+        # the safe fallback.
+        conflicts_with=("queue_port",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "python"),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "node"),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_port", "rust"),
+                # The trait declaration itself uses async_trait + serde_json
+                # + thiserror; landing the port without these deps would
+                # fail ``cargo check`` even before an adapter wires in.
+                dependencies=(
+                    'async-trait = "0.1"',
+                    'serde_json = "1"',
+                    'thiserror = "1"',
+                ),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="cache_memory",
+        depends_on=("cache_port",),
+        # No external service — the in-process adapter ships zero
+        # infrastructure dependencies (no Redis, no compose changes).
+        # Codex Phase B round 1 follow-up: cache_memory/rust ships
+        # `src/adapters/mod.rs` which collides with queue_apalis/rust's
+        # same file. See cache_port's `conflicts_with` rationale.
+        conflicts_with=("queue_apalis",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "python"),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "node"),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_memory", "rust"),
+                dependencies=(
+                    'lru = "0.12"',
+                    'tokio = { version = "1", features = ["sync"] }',
+                ),
+                env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
+            ),
+        },
+    )
+)
+
+
+register_fragment(
+    Fragment(
+        name="cache_redis",
+        depends_on=("cache_port",),
+        # Codex Phase B round 1 caught that `capabilities=("redis",)`
+        # alone does NOT auto-provision the Redis sidecar — that
+        # requires a sibling `compose.yaml` fragment registered with
+        # the service-registry (see queue_redis for the pattern that
+        # actually works). Until cache_redis ships its own
+        # `compose.yaml`, users selecting `reliability.cache=redis`
+        # need to ALSO ensure their stack provides Redis another way
+        # (auth.gatekeeper enables Keycloak which provisions Redis;
+        # queue.backend=redis provisions Redis via queue_redis).
+        # Tracked as E.2.b follow-up; documented in CHANGELOG.
+        # Same rust adapters/mod.rs collision concern as cache_memory.
+        conflicts_with=("queue_apalis",),
+        capabilities=("redis",),
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "python"),
+                dependencies=("redis>=5.2.0",),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+            BackendLanguage.NODE: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "node"),
+                dependencies=("ioredis@5.4.1",),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+            BackendLanguage.RUST: FragmentImplSpec(
+                fragment_dir=_impl("cache_redis", "rust"),
+                dependencies=(
+                    'redis = { version = "0.27", features = ["tokio-comp"] }',
+                    'tokio = { version = "1", features = ["sync"] }',
+                ),
+                env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
+            ),
+        },
+    )
+)
