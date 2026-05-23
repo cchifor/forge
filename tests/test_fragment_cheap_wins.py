@@ -17,6 +17,16 @@ to the fragment authoring API:
 The deeper end-to-end + cycle-detection coverage lives in
 ``tests/fragments/test_fragment_dx_fields.py``; this file is the
 single-PR top-level surface used by the cheap-wins ship sequence.
+
+**Intentional overlap** (codex Phase B round 1 follow-up): the
+:class:`TestSharedEnvVars` + :class:`TestBeforeAfterOrdering` classes
+duplicate coverage already in ``test_fragment_dx_fields.py``. This is
+**transitional** — once the cheap-wins ship is fully released and
+this file's contract has held for one minor (target: 1.2.1), the
+duplicated classes consolidate into the existing dx_fields file.
+The grep-style :class:`TestNoFeatureInjectorReferences` stays here
+permanently — it gates the docstring sweep that this file's PR shipped.
+TODO(1.2.1): consolidate Shared/BeforeAfter classes with dx_fields.
 """
 
 from __future__ import annotations

@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+<<<<<<< HEAD
 - **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
   Adds a read endpoint to the MCP server router in generated Python
   projects (shipped via the `mcp_server` fragment, pulled in by
@@ -47,6 +48,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   updater` for the orchestrator, `forge.appliers.*` for the body
   helpers. All three new fields default to empty tuples so every
   existing fragment registration is byte-identical.
+
+- **Fragment-DX cheap wins follow-through (Horizon 1).** Contract-test
+  surface at `tests/test_fragment_cheap_wins.py` (18 tests in 3
+  classes — `TestSharedEnvVars`, `TestBeforeAfterOrdering`,
+  `TestNoFeatureInjectorReferences`) acts as the public-facing
+  release gate for the cheap-wins ship. Docstring sweep across 9
+  in-tree modules retargets stale `forge.feature_injector`-shim
+  references (deleted in 1.2.0-alpha.1) at the post-shim landings:
+  `forge.sync.forge_to_project.updater` for the orchestrator,
+  `forge.appliers.*` for the body helpers, and
+  `forge.injectors._registry.ApplierRegistry` (Pillar A.1, SDK 1.2)
+  for the suffix-dispatch entry point. The deeper end-to-end
+  coverage of `shared_env_vars` + `before`/`after` lives in the
+  pre-existing `tests/fragments/test_fragment_dx_fields.py`; the new
+  file's Shared/BeforeAfter classes are an intentional transitional
+  duplication that consolidates back to the dx_fields file in 1.2.1.
 
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second
