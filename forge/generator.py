@@ -209,9 +209,7 @@ def _generate_backends(
             # ``use crate::error_port::DefaultErrorPort`` line in the
             # port-wired branch that would fail to compile if the module
             # isn't on disk. (Codex Phase B round 1 finding.)
-            includes_error_envelope = any(
-                rf.fragment.name == "error_port" for rf in plan.ordered
-            )
+            includes_error_envelope = any(rf.fragment.name == "error_port" for rf in plan.ordered)
             _generate_single_backend(
                 bc,
                 spec.template_dir,
