@@ -33,7 +33,7 @@
       "sha256": "fe76133c32ffd3e3"
     },
     "forge.toml": {
-      "size": 41450,
+      "size": 41511,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -397,7 +397,7 @@
       "sha256": "f16fe827196c43c2"
     },
     "services/api/.copier-answers.yml": {
-      "size": 477,
+      "size": 480,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -481,12 +481,12 @@
       "sha256": "9ced2ad561bff6ce"
     },
     "services/api/src/error_port/default.rs": {
-      "size": 3119,
-      "sha256": "0e10e1a0c405290f"
+      "size": 3131,
+      "sha256": "45132a486208c28d"
     },
     "services/api/src/error_port/mod.rs": {
-      "size": 2864,
-      "sha256": "994cbce29afc001d"
+      "size": 3226,
+      "sha256": "ff9934ca89807c9d"
     },
     "services/api/src/errors.rs": {
       "size": 9508,

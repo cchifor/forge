@@ -27,7 +27,7 @@ use crate::errors::AppError;
 pub struct DefaultErrorPort;
 
 impl ErrorPort for DefaultErrorPort {
-    fn serialize(&self, exc: &dyn std::error::Error) -> ErrorEnvelope {
+    fn serialize(&self, exc: &(dyn std::error::Error + 'static)) -> ErrorEnvelope {
         if let Some(app_err) = exc.downcast_ref::<AppError>() {
             return ErrorEnvelope {
                 error: ErrorBody {

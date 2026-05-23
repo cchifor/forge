@@ -33,7 +33,7 @@
       "sha256": "05849f60b3c65e29"
     },
     "forge.toml": {
-      "size": 57885,
+      "size": 57990,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 480,
+      "size": 483,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -577,8 +577,8 @@
       "sha256": "c091a2ba6a85a277"
     },
     "services/api/src/app/core/container.py": {
-      "size": 1442,
-      "sha256": "9eb149f020e682b0"
+      "size": 907,
+      "sha256": "cb788464f33846c2"
     },
     "services/api/src/app/core/db.py": {
       "size": 1793,
@@ -685,8 +685,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api/src/app/main.py": {
-      "size": 4190,
-      "sha256": "b843aacbe759adbd"
+      "size": 4761,
+      "sha256": "1be3378820ad1ef9"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
