@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/errors/app_exception.dart';
 import '../generated/export.dart';
+import 'app_exception.dart' as api;
 
 class ErrorInterceptor extends Interceptor {
   @override
@@ -31,6 +32,32 @@ class ErrorInterceptor extends Interceptor {
           error: const AppException.network(
             message: 'No response from server',
           ),
+          type: err.type,
+        ),
+      );
+      return;
+    }
+
+    // RFC-011 acceptance (1.2.0): when the response body matches the
+    // RFC-007 envelope shape ({error: {code, message, ...}}), surface
+    // the structured fields verbatim via the typed
+    // ``api.AppException`` so callers can branch on ``code`` /
+    // ``correlationId`` instead of regexing ``DioException.message``.
+    //
+    // Falls through to the legacy ``AppException`` family (this
+    // file's pre-1.2.0 behavior) whenever the body lacks an envelope
+    // — bare ``{message: "..."}``, framework-default bodies, or
+    // anything we cannot decode.
+    final envelopeException = api.AppException.tryFromEnvelope(
+      response.data,
+      statusCode: response.statusCode,
+    );
+    if (envelopeException != null) {
+      handler.reject(
+        DioException(
+          requestOptions: err.requestOptions,
+          response: response,
+          error: envelopeException,
           type: err.type,
         ),
       );
