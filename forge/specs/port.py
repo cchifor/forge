@@ -245,7 +245,7 @@ def _render_template(env: jinja2.Environment, template_name: str, spec: PortSpec
     """
     template = env.get_template(template_name)
     module = template.module
-    snippet_macro: Callable[[dict[str, object]], str] = module.snippet  # type: ignore[attr-defined]
+    snippet_macro: Callable[[dict[str, object]], str] = module.snippet  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]
     port_view: dict[str, object] = {
         "name": spec.name,
         "interface_path": spec.interface_path,
