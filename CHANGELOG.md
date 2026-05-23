@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+<<<<<<< HEAD
 - **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
   Adds a read endpoint to the MCP server router in generated Python
   projects (shipped via the `mcp_server` fragment, pulled in by
@@ -24,6 +25,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   unchanged; the endpoint is purely additive. Closes the long-
   standing gap where `audit.py` was write-only and operators had to
   `tail`/`grep` the on-disk file by hand.
+
+- **Fragment-DX cheap wins (Horizon 1).** Three small additions to the
+  fragment authoring surface that together cut ~20% off the multi-
+  language fragment files (`object_store`, `llm_*`, `vector_store_*`).
+  `Fragment.shared_env_vars: tuple[tuple[str, str], ...] = ()` declares
+  backend-agnostic env vars (`AWS_REGION`, `S3_ENDPOINT_URL`, …) once
+  instead of repeating them per `FragmentImplSpec.env_vars`; the env
+  applier merges shared first, per-impl second, with per-impl winning on
+  key collision so a single language can still override the shared
+  default. `Fragment.before: tuple[str, ...] = ()` and `Fragment.after:
+  tuple[str, ...] = ()` declare soft ordering constraints — unlike
+  `depends_on` (which is a HARD pull), `before` / `after` only activate
+  when both endpoints are already in the plan, so a fragment can say
+  "if X happens to coexist, sit before/after it" without forcing X into
+  every plan. Numeric `order` remains the tiebreak inside a topological
+  layer. Cycles in the combined `depends_on` ∪ `before` ∪ `after` graph
+  are caught at `FRAGMENT_REGISTRY.freeze()` with the cycle path
+  surfaced in the `FragmentError`. The accompanying docstring sweep
+  retargets `forge.feature_injector`-shim references (deleted in
+  1.2.0-alpha.1) at the post-shim home: `forge.sync.forge_to_project.
+  updater` for the orchestrator, `forge.appliers.*` for the body
+  helpers. All three new fields default to empty tuples so every
+  existing fragment registration is byte-identical.
+
+- **Fragment-DX cheap wins follow-through (Horizon 1).** Contract-test
+  surface at `tests/test_fragment_cheap_wins.py` (18 tests in 3
+  classes — `TestSharedEnvVars`, `TestBeforeAfterOrdering`,
+  `TestNoFeatureInjectorReferences`) acts as the public-facing
+  release gate for the cheap-wins ship. Docstring sweep across 9
+  in-tree modules retargets stale `forge.feature_injector`-shim
+  references (deleted in 1.2.0-alpha.1) at the post-shim landings:
+  `forge.sync.forge_to_project.updater` for the orchestrator,
+  `forge.appliers.*` for the body helpers, and
+  `forge.injectors._registry.ApplierRegistry` (Pillar A.1, SDK 1.2)
+  for the suffix-dispatch entry point. The deeper end-to-end
+  coverage of `shared_env_vars` + `before`/`after` lives in the
+  pre-existing `tests/fragments/test_fragment_dx_fields.py`; the new
+  file's Shared/BeforeAfter classes are an intentional transitional
+  duplication that consolidates back to the dx_fields file in 1.2.1.
 
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second
