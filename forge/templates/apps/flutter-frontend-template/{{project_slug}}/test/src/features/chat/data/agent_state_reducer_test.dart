@@ -114,8 +114,9 @@ void main() {
       s = reduce(s, const ToolCallEndEvent(toolCallId: 't-c'));
       // Parse fails → argsPretty mirrors the raw delta so the user
       // still sees *something* in the collapsible preview.
-      // Use single `{` (still invalid JSON) — `{{` collides with
-      // Copier's Jinja delimiters during template render.
+      // Use a single open-brace (still invalid JSON); a doubled
+      // open-brace would collide with Copier's Jinja print delimiters
+      // at template-render time.
       expect(s.activeToolCalls.first.argsPretty, 'not-json{');
     });
 

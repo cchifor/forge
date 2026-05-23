@@ -422,7 +422,8 @@ describe('useAgentClient', () => {
 
     // Parse fails → argsPretty mirrors the raw delta so the user still
     // sees *something* in the collapsible preview.
-    // `{` not `{{` — `{{` collides with Copier's Jinja delimiters.
+    // Use a single open-brace; a doubled open-brace would collide
+    // with Copier's Jinja print delimiters at template-render time.
     expect(activeToolCalls.value[0].argsPretty).toBe('not-json{')
   })
 

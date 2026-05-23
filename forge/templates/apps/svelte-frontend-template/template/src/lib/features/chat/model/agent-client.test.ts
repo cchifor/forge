@@ -116,7 +116,8 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 		await client.runAgent();
 		// Parse fails → argsPretty mirrors the raw delta so the user
 		// still sees *something* in the collapsible preview.
-		// `{` not `{{` — `{{` collides with Copier's Jinja delimiters.
+		// Use a single open-brace; a doubled open-brace would collide
+		// with Copier's Jinja print delimiters at template-render time.
 		expect(client.activeToolCalls[0].argsPretty).toBe('not-json{');
 	});
 
