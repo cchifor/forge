@@ -15,6 +15,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import yaml
+
 import pytest
 
 from forge.config import (
@@ -375,26 +377,6 @@ def test_flutter_minimal_analyzes(
 # -----------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason=(
-        "Flutter chat requires the ``forge_canvas`` package, which isn't yet "
-        "published to pub.dev (tracked in RFC-003). The generated pubspec "
-        "still pins ``forge_canvas: ^1.0.0-alpha.6`` and the template's own "
-        "comment notes ``# Replace with `path:` for local development "
-        "until the package is published to pub.dev`` (see "
-        "forge/templates/apps/flutter-frontend-template/{{project_slug}}/"
-        "pubspec.yaml:36). Initiative #9 reverified (2026-05-20) that the "
-        "skip is still valid; un-skipping requires either:\n"
-        "  (a) publishing forge_canvas to pub.dev so a vanilla "
-        "``flutter pub get`` resolves it, or\n"
-        "  (b) injecting a ``dependency_overrides`` block pointing the "
-        "test's pubspec at packages/forge-canvas-dart/ via ``path:`` (a "
-        "test-only fixture; the shipped template stays pub-pinned).\n"
-        "Either lands outside the test-rebalance scope of Initiative #9. "
-        "RFC-003 owns the publication path; this skip stays until that "
-        "lands."
-    )
-)
 def test_flutter_full_analyzes(
     tmp_path: Path, require_uv: None, require_flutter: None, require_git: None
 ) -> None:
@@ -415,7 +397,23 @@ def test_flutter_full_analyzes(
     project_root = generate(config, quiet=True)
     _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
-    assert (frontend_dir / "pubspec.yaml").exists()
+    pubspec_path = frontend_dir / "pubspec.yaml"
+    assert pubspec_path.exists()
+
+    # forge_canvas / forge_canvas_core aren't published to pub.dev yet
+    # (RFC-003). Override with local path: references so flutter pub get
+    # resolves them from the monorepo's packages/ directory.
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    pubspec = yaml.safe_load(pubspec_path.read_text())
+    pubspec["dependency_overrides"] = {
+        "forge_canvas": {
+            "path": str(repo_root / "packages" / "forge-canvas-dart"),
+        },
+        "forge_canvas_core": {
+            "path": str(repo_root / "packages" / "forge-canvas-core-dart"),
+        },
+    }
+    pubspec_path.write_text(yaml.dump(pubspec, sort_keys=False))
 
     pub_get = _run(["flutter", "pub", "get"], cwd=frontend_dir)
     assert pub_get.returncode == 0, f"flutter pub get failed:\n{pub_get.stderr}"
