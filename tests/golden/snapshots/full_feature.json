@@ -85,8 +85,8 @@
       "sha256": "d2d885f0408dc4b5"
     },
     "apps/frontend/package.json": {
-      "size": 2063,
-      "sha256": "15364db2361335f5"
+      "size": 2104,
+      "sha256": "f82c96be4a079032"
     },
     "apps/frontend/scripts/post_generate.py": {
       "size": 18561,
@@ -173,12 +173,12 @@
       "sha256": "fc7fa326dfbebdf0"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
-      "size": 17205,
-      "sha256": "c5755567fc42c79f"
+      "size": 16059,
+      "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 9593,
-      "sha256": "fe4824c6fac2be8f"
+      "size": 5561,
+      "sha256": "bdd868c0857a8f2d"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
@@ -965,7 +965,7 @@
       "sha256": "d39507cb58dd4f76"
     },
     "forge.toml": {
-      "size": 121278,
+      "size": 121087,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
