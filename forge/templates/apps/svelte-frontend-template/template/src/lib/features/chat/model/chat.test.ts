@@ -4,16 +4,17 @@ vi.stubGlobal('crypto', {
 	randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2)
 });
 
-// Stub the AG-UI HttpAgent so the test never makes a real HTTP request.
-const runAgent = vi.fn().mockResolvedValue(undefined);
-vi.mock('@ag-ui/client', () => ({
-	HttpAgent: class {
-		headers: Record<string, string> = {};
-		setMessages = vi.fn();
-		setState = vi.fn();
-		runAgent = runAgent;
-	}
-}));
+// Stub the canvas-core AgUiClient so the test never makes a real HTTP request.
+const mockRunAgent = vi.fn().mockResolvedValue(undefined);
+vi.mock('@forge/canvas-core', async () => {
+	const actual = await vi.importActual('@forge/canvas-core');
+	return {
+		...actual,
+		AgUiClient: vi.fn().mockImplementation(() => ({
+			runAgent: mockRunAgent
+		}))
+	};
+});
 
 // Auth is a soft dep — return no token so the chat works in any auth mode.
 vi.mock('$lib/core/auth/auth.svelte', () => ({
@@ -28,7 +29,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 	beforeEach(() => {
 		store = getChatStore();
 		store.clearMessages();
-		runAgent.mockClear();
+		mockRunAgent.mockClear();
 	});
 
 	afterEach(() => {
@@ -64,13 +65,13 @@ describe('getChatStore (AG-UI agent client)', () => {
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
 		expect(store.messages[0].content).toBe('Hello');
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 	});
 
 	it('ignores empty/whitespace-only input', () => {
 		store.addUserMessage('   ');
 		expect(store.messages).toHaveLength(0);
-		expect(runAgent).not.toHaveBeenCalled();
+		expect(mockRunAgent).not.toHaveBeenCalled();
 	});
 
 	it('clearMessages resets the thread', () => {
@@ -99,48 +100,44 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.setModel('gpt-4.1');
 		store.setApprovalMode('bypass');
 		store.addUserMessage('Hello');
-		expect(runAgent).toHaveBeenCalledTimes(1);
-		const firstThreadId = runAgent.mock.calls[0][0].threadId;
-		const firstProps = runAgent.mock.calls[0][0].forwardedProps;
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		const firstThreadId = mockRunAgent.mock.calls[0][0].threadId;
+		const firstProps = mockRunAgent.mock.calls[0][0].forwardedProps;
 
 		store.retryLastRun();
 		// retryLastRun fires a fresh runAgent invocation
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
 		// Thread ID is preserved — retry MUST stay on the same conversation.
-		const retryThreadId = runAgent.mock.calls[1][0].threadId;
+		const retryThreadId = mockRunAgent.mock.calls[1][0].threadId;
 		expect(retryThreadId).toBe(firstThreadId);
 
 		// forwardedProps shape is identical (model + approval).
-		const retryProps = runAgent.mock.calls[1][0].forwardedProps;
+		const retryProps = mockRunAgent.mock.calls[1][0].forwardedProps;
 		expect(retryProps).toEqual(firstProps);
 	});
 
 	it('retryLastRun is a no-op before any runAgent call', () => {
 		store.retryLastRun();
-		expect(runAgent).not.toHaveBeenCalled();
+		expect(mockRunAgent).not.toHaveBeenCalled();
 	});
 
 	it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
-		// Codex Phase B round 1 follow-up: spamming the Retry button
-		// during a slow retry must not queue multiple runAgent calls.
 		let resolveRun: (() => void) | null = null;
-		runAgent.mockImplementation(
+		mockRunAgent.mockImplementation(
 			() => new Promise<void>((resolve) => { resolveRun = resolve }),
 		);
 		store.addUserMessage('Hello');
 		await Promise.resolve();  // let isRunning flip
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 		store.retryLastRun();
 		store.retryLastRun();
 		store.retryLastRun();
-		expect(runAgent).toHaveBeenCalledTimes(1);  // still 1
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);  // still 1
 		resolveRun?.();
 	});
 
 	it('dismissError clears the error without re-running', () => {
-		// No clean way to seed an error without driving the full agent path,
-		// but we can at least assert the method exists and is callable.
 		expect(() => store.dismissError()).not.toThrow();
 		expect(store.error).toBeNull();
 	});

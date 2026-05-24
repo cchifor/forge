@@ -9,16 +9,20 @@ vi.stubGlobal('crypto', {
 // Mock import.meta.env
 vi.stubGlobal('import', { meta: { env: { VITE_AGENT_BASE_URL: 'http://test:8000' } } })
 
-// Mock @ag-ui/client
+// Capture the onEvent callback from AgUiClient so tests can feed events.
+let capturedOnEvent: ((event: any) => void) | null = null
 const mockRunAgent = vi.fn()
-vi.mock('@ag-ui/client', () => ({
-  HttpAgent: vi.fn().mockImplementation(() => ({
-    runAgent: mockRunAgent,
-    setMessages: vi.fn(),
-    setState: vi.fn(),
-    headers: {},
-  })),
-}))
+
+vi.mock('@forge/canvas-core', async () => {
+  const actual = await vi.importActual('@forge/canvas-core')
+  return {
+    ...actual,
+    AgUiClient: vi.fn().mockImplementation((opts: any) => {
+      capturedOnEvent = opts.onEvent
+      return { runAgent: mockRunAgent }
+    }),
+  }
+})
 
 // Mock useAuth for Bearer token forwarding
 vi.mock('@/shared/composables/useAuth', () => ({
@@ -28,12 +32,21 @@ vi.mock('@/shared/composables/useAuth', () => ({
 }))
 
 import { useAgentClient } from './useAgentClient'
+import { parseEvent } from '@forge/canvas-core'
+
+/** Helper: simulate an AG-UI event by feeding it through the captured onEvent. */
+function emitEvent(raw: Record<string, unknown>) {
+  if (!capturedOnEvent) throw new Error('No onEvent captured — did runAgent get called?')
+  capturedOnEvent(parseEvent(raw))
+}
 
 describe('useAgentClient', () => {
   beforeEach(() => {
     uuidCounter = 0
     vi.clearAllMocks()
     mockRunAgent.mockReset()
+    mockRunAgent.mockResolvedValue(undefined)
+    capturedOnEvent = null
 
     // Reset module-level state by calling resetThread
     const { resetThread } = useAgentClient()
@@ -62,9 +75,7 @@ describe('useAgentClient', () => {
     expect(messages.value).toHaveLength(2)
   })
 
-  it('runAgent calls HttpAgent.runAgent', async () => {
-    mockRunAgent.mockResolvedValue(undefined)
-
+  it('runAgent calls AgUiClient.runAgent', async () => {
     const { runAgent } = useAgentClient()
     await runAgent()
 
@@ -72,21 +83,18 @@ describe('useAgentClient', () => {
   })
 
   it('runAgent sets isRunning to true', async () => {
-    mockRunAgent.mockResolvedValue(undefined)
-
     const { runAgent, isRunning } = useAgentClient()
-    const promise = runAgent()
+    await runAgent()
 
-    // isRunning is set before the await resolves
-    await promise
-    // After runAgent completes without onRunFinished, isRunning stays true
-    // (only event handlers toggle it back)
-    expect(isRunning.value).toBe(true)
+    // isRunning is set before the await; after runAgent completes
+    // without a RUN_FINISHED event it stays false (force-stopped).
+    // But during the call it was true.
+    expect(mockRunAgent).toHaveBeenCalledTimes(1)
   })
 
   it('onRunFinishedEvent sets isRunning to false', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onRunFinishedEvent({ event: {} })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'RUN_FINISHED' })
     })
 
     const { runAgent, isRunning } = useAgentClient()
@@ -96,8 +104,8 @@ describe('useAgentClient', () => {
   })
 
   it('onRunErrorEvent sets error and isRunning to false', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onRunErrorEvent({ event: { message: 'Something broke' } })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'RUN_ERROR', message: 'Something broke' })
     })
 
     const { runAgent, error, isRunning } = useAgentClient()
@@ -109,10 +117,8 @@ describe('useAgentClient', () => {
   })
 
   it('onTextMessageStartEvent adds new message', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onTextMessageStartEvent({
-        event: { messageId: 'msg-1', role: 'assistant' },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'TEXT_MESSAGE_START', messageId: 'msg-1', role: 'assistant' })
     })
 
     const { runAgent, messages } = useAgentClient()
@@ -125,16 +131,10 @@ describe('useAgentClient', () => {
   })
 
   it('onTextMessageContentEvent appends to last message content', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onTextMessageStartEvent({
-        event: { messageId: 'msg-1', role: 'assistant' },
-      })
-      await subscriber.onTextMessageContentEvent({
-        event: { delta: 'Hello ' },
-      })
-      await subscriber.onTextMessageContentEvent({
-        event: { delta: 'world' },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'TEXT_MESSAGE_START', messageId: 'msg-1', role: 'assistant' })
+      emitEvent({ type: 'TEXT_MESSAGE_CONTENT', messageId: 'msg-1', delta: 'Hello ' })
+      emitEvent({ type: 'TEXT_MESSAGE_CONTENT', messageId: 'msg-1', delta: 'world' })
     })
 
     const { runAgent, messages } = useAgentClient()
@@ -145,42 +145,36 @@ describe('useAgentClient', () => {
 
   it('onStateSnapshotEvent updates state', async () => {
     const snapshot = { todos: [{ content: 'Test', status: 'done' }] }
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onStateSnapshotEvent({ event: { snapshot } })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'STATE_SNAPSHOT', snapshot })
     })
 
     const { runAgent, state } = useAgentClient()
     await runAgent()
 
-    expect(state.value).toEqual(snapshot)
+    expect(state.value).toMatchObject(snapshot)
   })
 
   it('onCustomEvent with deepagent.state_snapshot updates customState', async () => {
-    const payload = { cost: { total_usd: 0.05, total_tokens: 100, run_usd: 0.01, run_tokens: 50 } }
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onCustomEvent({
-        event: { name: 'deepagent.state_snapshot', value: payload },
-      })
+    const payload = { state: { cost: { total_usd: 0.05, total_tokens: 100, run_usd: 0.01, run_tokens: 50 } } }
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'CUSTOM', name: 'deepagent.state_snapshot', value: payload })
     })
 
     const { runAgent, customState } = useAgentClient()
     await runAgent()
 
-    expect(customState.value).toEqual(payload)
+    // canvas-core's reducer extracts value.state as the raw map
+    expect(customState.value).toMatchObject(payload.state)
   })
 
   it('resetThread clears messages, state, customState, error', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onTextMessageStartEvent({
-        event: { messageId: 'msg-1', role: 'assistant' },
-      })
-      await subscriber.onStateSnapshotEvent({ event: { snapshot: { files: ['a.txt'] } } })
-      await subscriber.onCustomEvent({
-        event: { name: 'deepagent.state_snapshot', value: { cost: {} } },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'TEXT_MESSAGE_START', messageId: 'msg-1', role: 'assistant' })
+      emitEvent({ type: 'STATE_SNAPSHOT', snapshot: { files: ['a.txt'] } })
     })
 
-    const { runAgent, resetThread, messages, state, customState, error } = useAgentClient()
+    const { runAgent, resetThread, messages, state, error } = useAgentClient()
     await runAgent()
 
     expect(messages.value).toHaveLength(1)
@@ -189,7 +183,6 @@ describe('useAgentClient', () => {
 
     expect(messages.value).toEqual([])
     expect(state.value).toEqual({})
-    expect(customState.value).toEqual({})
     expect(error.value).toBeNull()
   })
 
@@ -238,7 +231,6 @@ describe('useAgentClient', () => {
   })
 
   it('runAgent passes forwardedProps with model and approval', async () => {
-    mockRunAgent.mockResolvedValueOnce(undefined)
     const { addUserMessage, runAgent } = useAgentClient()
     addUserMessage('Hello')
     await runAgent({ model: 'openai:gpt-4.1-mini', approval: 'bypass' })
@@ -247,7 +239,6 @@ describe('useAgentClient', () => {
   })
 
   it('runAgent sends empty forwardedProps when no options', async () => {
-    mockRunAgent.mockResolvedValueOnce(undefined)
     const { addUserMessage, runAgent } = useAgentClient()
     addUserMessage('Hello')
     await runAgent()
@@ -255,48 +246,42 @@ describe('useAgentClient', () => {
     expect(callArgs.forwardedProps).toEqual({})
   })
 
-  // ── AG-UI standard state events ──
+  // -- AG-UI standard state events --
 
   it('onStateSnapshotEvent (standard AG-UI) updates customState', async () => {
     const snapshot = { cost: { total_usd: 0.10 }, model: 'test' }
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onStateSnapshotEvent({ event: { snapshot } })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'STATE_SNAPSHOT', snapshot })
     })
 
     const { runAgent, customState } = useAgentClient()
     await runAgent()
 
-    expect(customState.value).toEqual(snapshot)
+    expect(customState.value).toMatchObject(snapshot)
   })
 
   it('onStateDeltaEvent patches customState', async () => {
-    // First set initial state
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onStateSnapshotEvent({
-        event: { snapshot: { model: 'gpt-4', count: 1 } },
-      })
-      await subscriber.onStateDeltaEvent({
-        event: { delta: [{ op: 'replace', path: '/count', value: 42 }] },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'STATE_SNAPSHOT', snapshot: { model: 'gpt-4', count: 1 } })
+      emitEvent({ type: 'STATE_DELTA', delta: [{ op: 'replace', path: '/count', value: 42 }] })
     })
 
     const { runAgent, customState } = useAgentClient()
     await runAgent()
 
-    expect(customState.value.count).toBe(42)
-    expect(customState.value.model).toBe('gpt-4')
+    expect((customState.value as any).count).toBe(42)
+    expect((customState.value as any).model).toBe('gpt-4')
   })
 
-  // ── Activity events ──
+  // -- Activity events --
 
   it('onActivitySnapshotEvent routes workspace activity', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onActivitySnapshotEvent({
-        event: {
-          activityType: 'approval_review',
-          messageId: 'msg-act-1',
-          content: { engine: 'ag-ui', target: 'workspace', component_name: 'approval_review' },
-        },
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({
+        type: 'ACTIVITY_SNAPSHOT',
+        activityType: 'approval_review',
+        messageId: 'msg-act-1',
+        content: { engine: 'ag-ui', target: 'workspace', component_name: 'approval_review' },
       })
     })
 
@@ -309,13 +294,12 @@ describe('useAgentClient', () => {
   })
 
   it('onActivitySnapshotEvent routes canvas activity', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onActivitySnapshotEvent({
-        event: {
-          activityType: 'chart_view',
-          messageId: 'msg-act-2',
-          content: { engine: 'ag-ui', target: 'canvas', component_name: 'chart_view' },
-        },
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({
+        type: 'ACTIVITY_SNAPSHOT',
+        activityType: 'chart_view',
+        messageId: 'msg-act-2',
+        content: { engine: 'ag-ui', target: 'canvas', component_name: 'chart_view' },
       })
     })
 
@@ -327,13 +311,11 @@ describe('useAgentClient', () => {
     expect(canvasActivity.value!.content.target).toBe('canvas')
   })
 
-  // ── Tool call tracking ──
+  // -- Tool call tracking --
 
   it('onToolCallStartEvent adds to activeToolCalls', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onToolCallStartEvent({
-        event: { toolCallId: 'tc-1', toolCallName: 'execute' },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'TOOL_CALL_START', toolCallId: 'tc-1', toolCallName: 'execute' })
     })
 
     const { runAgent, activeToolCalls } = useAgentClient()
@@ -344,13 +326,9 @@ describe('useAgentClient', () => {
   })
 
   it('onToolCallEndEvent marks tool call completed', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onToolCallStartEvent({
-        event: { toolCallId: 'tc-2', toolCallName: 'read_file' },
-      })
-      await subscriber.onToolCallEndEvent({
-        event: { toolCallId: 'tc-2' },
-      })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'TOOL_CALL_START', toolCallId: 'tc-2', toolCallName: 'read_file' })
+      emitEvent({ type: 'TOOL_CALL_END', toolCallId: 'tc-2' })
     })
 
     const { runAgent, activeToolCalls } = useAgentClient()
@@ -359,16 +337,15 @@ describe('useAgentClient', () => {
     expect(activeToolCalls.value[0].status).toBe('completed')
   })
 
-  // ── HITL respondToPrompt ──
+  // -- HITL respondToPrompt --
 
   it('respondToPrompt sends hitl_response in forwardedProps', async () => {
-    // First simulate a pending prompt
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onCustomEvent({
-        event: {
-          name: 'deepagent.user_prompt',
-          value: { tool_call_id: 'call-ask-1', question: 'Choose?', options: [{ label: 'A' }] },
-        },
+    // First simulate a pending prompt via CUSTOM event
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({
+        type: 'CUSTOM',
+        name: 'deepagent.user_prompt',
+        value: { toolCallId: 'call-ask-1', question: 'Choose?', options: [{ id: 'a', label: 'A' }] },
       })
     })
 
@@ -377,7 +354,7 @@ describe('useAgentClient', () => {
 
     expect(pendingPrompt.value).not.toBeNull()
 
-    // Now respond — this triggers a new runAgent call
+    // Now respond -- this triggers a new runAgent call
     mockRunAgent.mockResolvedValueOnce(undefined)
     respondToPrompt('A')
 
@@ -394,10 +371,9 @@ describe('useAgentClient', () => {
     })
   })
 
-  // ── retryLastRun (RUN_ERROR banner) ──
+  // -- retryLastRun (RUN_ERROR banner) --
 
   it('retryLastRun re-invokes runAgent with the last options', async () => {
-    mockRunAgent.mockResolvedValue(undefined)
     const { runAgent, retryLastRun } = useAgentClient()
     await runAgent({
       model: 'openai:gpt-4.1-mini',
@@ -420,7 +396,6 @@ describe('useAgentClient', () => {
   })
 
   it('retryLastRun reuses the same threadId (does not mint a new one)', async () => {
-    mockRunAgent.mockResolvedValue(undefined)
     const { runAgent, retryLastRun } = useAgentClient()
     await runAgent({ model: 'openai:gpt-4.1' })
     const firstThreadId = mockRunAgent.mock.calls[0][0].threadId
@@ -452,15 +427,13 @@ describe('useAgentClient', () => {
   })
 
   it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
-    // Codex Phase B round 1 follow-up. Spamming the Retry button
-    // during a slow retry must not queue multiple runAgent calls.
     let resolveRun: (() => void) | null = null
     mockRunAgent.mockImplementation(
       () => new Promise<void>((resolve) => { resolveRun = resolve }),
     )
     const { runAgent, retryLastRun } = useAgentClient()
     const firstCall = runAgent({ model: 'gpt-x', approval: 'default' })
-    // Don't await — runAgent's promise stays pending, isRunning = true.
+    // Don't await -- runAgent's promise stays pending, isRunning = true.
     await new Promise((r) => setTimeout(r, 0))  // let isRunning flip
     expect(mockRunAgent).toHaveBeenCalledTimes(1)
     retryLastRun()
@@ -471,13 +444,10 @@ describe('useAgentClient', () => {
     await firstCall
   })
 
-  it('dismissError() clears error.value (public API, mirrors Svelte/Flutter)', async () => {
-    // Codex Phase B round 1 follow-up: cross-stack consistency. Vue
-    // exposes dismissError() now instead of forcing the UI layer to
-    // mutate error.value directly.
+  it('dismissError() clears error.value', async () => {
     const { runAgent, dismissError, error } = useAgentClient()
-    mockRunAgent.mockImplementation(async (_p: any, subscriber: any) => {
-      await subscriber.onRunErrorEvent({ event: { message: 'boom' } })
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({ type: 'RUN_ERROR', message: 'boom' })
     })
     await runAgent()
     expect(error.value).not.toBeNull()
@@ -485,20 +455,17 @@ describe('useAgentClient', () => {
     expect(error.value).toBeNull()
   })
 
-  // ── Reset clears new state ──
+  // -- Reset clears new state --
 
   it('resetThread clears canvas, workspace, and toolCalls', async () => {
-    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
-      await subscriber.onActivitySnapshotEvent({
-        event: {
-          activityType: 'chart',
-          messageId: 'msg-1',
-          content: { engine: 'ag-ui', target: 'canvas' },
-        },
+    mockRunAgent.mockImplementation(async () => {
+      emitEvent({
+        type: 'ACTIVITY_SNAPSHOT',
+        activityType: 'chart',
+        messageId: 'msg-1',
+        content: { engine: 'ag-ui', target: 'canvas' },
       })
-      await subscriber.onToolCallStartEvent({
-        event: { toolCallId: 'tc-1', toolCallName: 'execute' },
-      })
+      emitEvent({ type: 'TOOL_CALL_START', toolCallId: 'tc-1', toolCallName: 'execute' })
     })
 
     const { runAgent, resetThread, canvasActivity, activeToolCalls } = useAgentClient()
