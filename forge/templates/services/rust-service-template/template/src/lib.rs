@@ -15,6 +15,7 @@
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::derivable_impls)]
 
+pub mod adapters;
 pub mod app;
 pub mod config;
 pub mod data;
@@ -23,9 +24,8 @@ pub mod errors;
 pub mod identity;
 pub mod middleware;
 pub mod models;
-pub mod routes;
-pub mod adapters;
 pub mod ports;
+pub mod routes;
 pub mod services;
 // FORGE:LIB_MOD_REGISTRATION
 // FORGE:BEGIN reliability_connection_pool:LIB_MOD_REGISTRATION
