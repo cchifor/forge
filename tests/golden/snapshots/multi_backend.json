@@ -513,7 +513,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 534,
+      "size": 519,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -645,8 +645,8 @@
       "sha256": "1130d8a9a12c2118"
     },
     "services/api-node/src/middleware/error-handler.ts": {
-      "size": 4839,
-      "sha256": "a40ce2ed97de5476"
+      "size": 5449,
+      "sha256": "d725afe199bc1319"
     },
     "services/api-node/src/middleware/logging.ts": {
       "size": 942,
@@ -745,7 +745,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 533,
+      "size": 518,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
