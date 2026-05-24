@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge"
-version = "1.0.0"
+dynamic = ["version"]
 description = "CLI tool to generate and orchestrate full-stack projects."
 requires-python = ">=3.13"
 dependencies = [
@@ -46,6 +46,9 @@ dev = [
 
 [project.scripts]
 forge = "forge.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "forge.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]

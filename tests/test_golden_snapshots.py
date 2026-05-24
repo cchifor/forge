@@ -253,6 +253,48 @@ PRESETS = {
             "platform.agents_md": True,
         },
     ),
+    # P0.2 — production-readiness: exercise the combination that
+    # known-issues.md flagged as crashing (platform.admin + agent.llm +
+    # rag.reranker). Investigation (2026-05-24) found no fragment in
+    # this set injects into container.py, so the crash may be stale
+    # after the error_port targeting fix (9cb667e) and PortSpec refactor.
+    # CI will tell us definitively.
+    "full_feature_max": ProjectConfig(
+        project_name="snap_max",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="snap_max",
+                language=BackendLanguage.PYTHON,
+                features=["items", "orders"],
+            )
+        ],
+        frontend=FrontendConfig(
+            project_name="snap_max",
+            framework=FrontendFramework.VUE,
+            include_auth=True,
+            include_chat=True,
+            include_openapi=True,
+        ),
+        options={
+            "observability.tracing": True,
+            "observability.health": True,
+            "middleware.rate_limit": True,
+            "middleware.security_headers": True,
+            "middleware.pii_redaction": True,
+            "conversation.persistence": True,
+            "agent.streaming": True,
+            "agent.tools": True,
+            "agent.llm": True,
+            "llm.provider": "openai",
+            "rag.reranker": True,
+            "chat.attachments": True,
+            "platform.webhooks": True,
+            "platform.admin": True,
+            "platform.cli_extensions": True,
+            "platform.agents_md": True,
+        },
+    ),
 }
 
 
