@@ -7,6 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -83,12 +84,20 @@ def generate(
     dry_run: bool = False,
     *,
     report: GenerationReport | None = None,
+    keep_partial: bool = False,
 ) -> Path:
     """Generate all project components and return the project root path.
 
     When ``dry_run=True``, generation runs into a fresh temporary directory
     (never touching ``config.output_dir``) and the temp path is returned
     for inspection. The caller is responsible for cleanup.
+
+    When ``dry_run=False``, generation runs into a staging directory
+    alongside ``output_dir``. On success the staging dir is atomically
+    moved to the final path. On failure the staging dir is removed
+    (unless ``keep_partial=True``, which preserves it for debugging).
+    This prevents partially-generated projects from being left on disk
+    when a fragment injection or other mid-generation error occurs.
 
     Initiative #5 — when ``report`` is supplied, the generator
     populates it as each phase reports state (effective config,
@@ -99,7 +108,68 @@ def generate(
     test harnesses + headless callers that don't need the richer
     payload.
     """
-    project_root = _create_root(config, dry_run)
+    if dry_run:
+        # dry_run: generate into a throwaway temp dir as before.
+        project_root = _create_root(config, dry_run=True)
+        _generate_into(config, project_root, quiet=quiet, dry_run=True, report=report)
+        return project_root
+
+    # Real generation: check that the final output_dir doesn't already exist,
+    # then generate into a staging directory and move on success.
+    final_root = Path(config.output_dir).resolve() / config.project_slug
+    if final_root.exists():
+        raise GeneratorError(
+            f"Output directory already exists: {final_root}",
+            hint="Remove or rename the existing directory, or choose a different --output-dir.",
+        )
+
+    final_root.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = Path(
+        tempfile.mkdtemp(dir=final_root.parent, prefix=".forge-staging-")
+    )
+    project_root = staging_dir / config.project_slug
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    try:
+        _generate_into(config, project_root, quiet=quiet, dry_run=False, report=report)
+    except BaseException:
+        if keep_partial:
+            _logger.warning(
+                "generation failed; partial output preserved at %s (--keep-partial)",
+                staging_dir,
+            )
+        else:
+            shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+        raise
+
+    # Success — promote staging dir contents to the final location.
+    shutil.move(str(project_root), str(final_root))
+    shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+
+    # Re-populate the report with the final path (not the staging path).
+    if report is not None:
+        report.project_root = str(final_root)
+        if report.rollback_hint and str(project_root) in report.rollback_hint:
+            report.rollback_hint = report.rollback_hint.replace(
+                str(project_root), str(final_root)
+            )
+
+    return final_root
+
+
+def _generate_into(
+    config: ProjectConfig,
+    project_root: Path,
+    *,
+    quiet: bool,
+    dry_run: bool,
+    report: GenerationReport | None,
+) -> None:
+    """Run every generation phase into ``project_root``.
+
+    Extracted from :func:`generate` so the staging-directory wrapper can
+    delegate without duplicating the phase sequence.
+    """
     collector = _setup_provenance(project_root)
     plan = _resolve_and_validate(config)
     _generate_backends(
@@ -120,7 +190,6 @@ def generate(
     from forge.hooks import _fire_generate_complete  # noqa: PLC0415
 
     _fire_generate_complete(report)
-    return project_root
 
 
 def _create_root(config: ProjectConfig, dry_run: bool) -> Path:
