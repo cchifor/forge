@@ -33,7 +33,7 @@
       "sha256": "cf260c31f933484b"
     },
     "forge.toml": {
-      "size": 41513,
+      "size": 42046,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -448,6 +448,10 @@
       "size": 1494,
       "sha256": "3f329aea2ff16c7b"
     },
+    "services/api/src/adapters/mod.rs": {
+      "size": 121,
+      "sha256": "a81ece8acc52f40f"
+    },
     "services/api/src/app.rs": {
       "size": 2009,
       "sha256": "0334e553fd3c981a"
@@ -497,8 +501,8 @@
       "sha256": "aa8431689a7e3f4e"
     },
     "services/api/src/lib.rs": {
-      "size": 1586,
-      "sha256": "311a626ea7e3fdb5"
+      "size": 1619,
+      "sha256": "3d96bd1da2022121"
     },
     "services/api/src/main.rs": {
       "size": 2217,
@@ -539,6 +543,10 @@
     "services/api/src/models/mod.rs": {
       "size": 32,
       "sha256": "9555e9ef73bdc132"
+    },
+    "services/api/src/ports/mod.rs": {
+      "size": 104,
+      "sha256": "062d8c4e4a0e45bd"
     },
     "services/api/src/routes/health.rs": {
       "size": 1307,
