@@ -182,15 +182,17 @@ def test_node_port_and_adapter_files_land_at_conventional_paths() -> None:
 def test_rust_port_and_adapter_files_land_at_conventional_paths() -> None:
     port_root = _port_root(BackendLanguage.RUST)
     assert (port_root / "files" / "src" / "ports" / "cache.rs").is_file()
-    assert (port_root / "files" / "src" / "ports" / "mod.rs").is_file()
+    # mod.rs is now in the base template (shared via inject.yaml marker),
+    # NOT shipped per-fragment.
+    assert not (port_root / "files" / "src" / "ports" / "mod.rs").is_file()
 
     mem_root = _memory_root(BackendLanguage.RUST)
     assert (mem_root / "files" / "src" / "adapters" / "cache_memory.rs").is_file()
-    assert (mem_root / "files" / "src" / "adapters" / "mod.rs").is_file()
+    assert not (mem_root / "files" / "src" / "adapters" / "mod.rs").is_file()
 
     redis_root = _redis_root(BackendLanguage.RUST)
     assert (redis_root / "files" / "src" / "adapters" / "cache_redis.rs").is_file()
-    assert (redis_root / "files" / "src" / "adapters" / "mod.rs").is_file()
+    assert not (redis_root / "files" / "src" / "adapters" / "mod.rs").is_file()
 
 
 # -- inject.yaml well-formedness ---------------------------------------------
@@ -218,12 +220,12 @@ def test_node_port_inject_targets_app_ts() -> None:
     assert "CachePort" in e["snippet"]
 
 
-def test_rust_port_inject_registers_ports_module() -> None:
+def test_rust_port_inject_registers_cache_submodule() -> None:
     entries = _load_inject(_port_root(BackendLanguage.RUST))
     e = entries[0]
-    assert e["target"] == "src/lib.rs"
-    assert "LIB_MOD_REGISTRATION" in e["marker"]
-    assert "pub mod ports" in e["snippet"]
+    assert e["target"] == "src/ports/mod.rs"
+    assert "PORTS_MOD_REGISTRATION" in e["marker"]
+    assert "pub mod cache" in e["snippet"]
 
 
 def test_memory_adapter_inject_wires_adapter_per_language() -> None:
@@ -235,10 +237,10 @@ def test_memory_adapter_inject_wires_adapter_per_language() -> None:
     node = _load_inject(_memory_root(BackendLanguage.NODE))
     node_snippets = " ".join(e.get("snippet", "") for e in node)
     assert "MemoryCacheAdapter" in node_snippets
-    # Rust — adapters module registered in lib.rs.
+    # Rust — adapter submodule registered in adapters/mod.rs via marker.
     rust = _load_inject(_memory_root(BackendLanguage.RUST))
     rust_snippets = " ".join(e.get("snippet", "") for e in rust)
-    assert "pub mod adapters" in rust_snippets
+    assert "pub mod cache_memory" in rust_snippets
 
 
 def test_redis_adapter_inject_wires_adapter_per_language() -> None:
@@ -250,9 +252,10 @@ def test_redis_adapter_inject_wires_adapter_per_language() -> None:
     node_snippets = " ".join(e.get("snippet", "") for e in node)
     assert "RedisCacheAdapter" in node_snippets
 
+    # Rust — adapter submodule registered in adapters/mod.rs via marker.
     rust = _load_inject(_redis_root(BackendLanguage.RUST))
     rust_snippets = " ".join(e.get("snippet", "") for e in rust)
-    assert "pub mod adapters" in rust_snippets
+    assert "pub mod cache_redis" in rust_snippets
 
 
 # -- port + adapter source shape ---------------------------------------------
@@ -370,6 +373,50 @@ def test_resolver_redis_in_mixed_project_targets_every_backend() -> None:
     for lang in (BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST):
         assert lang in port_targets, f"port missing target {lang.value}"
         assert lang in adapter_targets, f"redis adapter missing target {lang.value}"
+
+
+# -- cache + queue coexistence on Rust ----------------------------------------
+
+
+def test_cache_and_queue_port_coexist_rust() -> None:
+    """cache_port + queue_port must resolve together on Rust without
+    conflicts_with blocking the combination. Both ports inject into
+    the shared ``ports/mod.rs`` via the ``FORGE:PORTS_MOD_REGISTRATION``
+    marker with distinct sentinel blocks."""
+    config = _project(
+        [BackendLanguage.RUST],
+        {"reliability.cache": "memory", "queue.backend": "apalis"},
+    )
+    plan = resolve(config)
+    names = {rf.fragment.name for rf in plan.ordered}
+    assert "cache_port" in names
+    assert "queue_port" in names
+
+
+def test_cache_memory_and_queue_apalis_coexist_rust() -> None:
+    """Adapters inject into the shared ``adapters/mod.rs`` via the
+    ``FORGE:ADAPTERS_MOD_REGISTRATION`` marker -- no file collision."""
+    config = _project(
+        [BackendLanguage.RUST],
+        {"reliability.cache": "memory", "queue.backend": "apalis"},
+    )
+    plan = resolve(config)
+    names = {rf.fragment.name for rf in plan.ordered}
+    assert "cache_memory" in names
+    assert "queue_apalis" in names
+
+
+def test_cache_redis_and_queue_apalis_coexist_rust() -> None:
+    """Both the redis cache adapter and the apalis queue adapter coexist
+    on Rust -- no file or injection collision."""
+    config = _project(
+        [BackendLanguage.RUST],
+        {"reliability.cache": "redis", "queue.backend": "apalis"},
+    )
+    plan = resolve(config)
+    names = {rf.fragment.name for rf in plan.ordered}
+    assert "cache_redis" in names
+    assert "queue_apalis" in names
 
 
 # -- distinctness from response_cache (HTTP middleware) -----------------------

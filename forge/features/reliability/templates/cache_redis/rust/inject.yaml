@@ -1,8 +1,6 @@
-- target: src/lib.rs
-  marker: FORGE:LIB_MOD_REGISTRATION
+- target: src/adapters/mod.rs
+  marker: FORGE:ADAPTERS_MOD_REGISTRATION
   position: after
   zone: generated
   snippet: |-
-    // Cache adapter: Redis — concrete impl plugged in behind the
-    // ``crate::ports::cache::CachePort`` trait.
-    pub mod adapters;
+    pub mod cache_redis;
