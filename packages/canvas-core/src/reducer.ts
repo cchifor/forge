@@ -133,15 +133,30 @@ export function reduce(
       return { ...snapshot, activeToolCalls: [...snapshot.activeToolCalls, call] }
     }
 
-    case 'TOOL_CALL_ARGS':
-      // Intentional no-op. The args stream isn't surfaced in v1 — the
-      // collapsible-args UI is Pillar G.2 in the architectural plan.
-      return snapshot
+    case 'TOOL_CALL_ARGS': {
+      const activeToolCalls = snapshot.activeToolCalls.map((c) =>
+        c.id === event.toolCallId
+          ? { ...c, argsBuffer: (c.argsBuffer ?? '') + event.delta }
+          : c,
+      )
+      return { ...snapshot, activeToolCalls }
+    }
 
     case 'TOOL_CALL_END': {
-      const activeToolCalls = snapshot.activeToolCalls.map((c) =>
-        c.id === event.toolCallId ? { ...c, status: 'completed' as const } : c,
-      )
+      const activeToolCalls = snapshot.activeToolCalls.map((c) => {
+        if (c.id !== event.toolCallId) return c
+        const buffer = c.argsBuffer
+        if (buffer === undefined || buffer.length === 0) {
+          return { ...c, status: 'completed' as const }
+        }
+        let pretty: string
+        try {
+          pretty = JSON.stringify(JSON.parse(buffer), null, 2)
+        } catch {
+          pretty = buffer
+        }
+        return { ...c, status: 'completed' as const, argsPretty: pretty }
+      })
       return { ...snapshot, activeToolCalls }
     }
 

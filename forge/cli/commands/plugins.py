@@ -137,7 +137,9 @@ def _audit_plugins(*, json_output: bool = False) -> None:
     rows: list[dict[str, Any]] = []
     eps = _metadata.entry_points()
     entry_points = (
-        eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, ())
+        eps.select(group=ENTRY_POINT_GROUP)
+        if hasattr(eps, "select")
+        else eps.get(ENTRY_POINT_GROUP, ())
     )
 
     for ep in entry_points:
@@ -167,19 +169,19 @@ def _audit_plugins(*, json_output: bool = False) -> None:
                 registrations["extractors"] = len(reg.extractors_added)
 
         # Check if this plugin failed to load.
-        failed_reason = next(
-            (reason for n, reason in plugins.FAILED_PLUGINS if n == name), None
-        )
+        failed_reason = next((reason for n, reason in plugins.FAILED_PLUGINS if n == name), None)
 
-        rows.append({
-            "name": name,
-            "version": version,
-            "source": source,
-            "module": module,
-            "status": "failed" if failed_reason else "loaded",
-            "error": failed_reason,
-            "registrations": registrations,
-        })
+        rows.append(
+            {
+                "name": name,
+                "version": version,
+                "source": source,
+                "module": module,
+                "status": "failed" if failed_reason else "loaded",
+                "error": failed_reason,
+                "registrations": registrations,
+            }
+        )
 
     if json_output:
         sys.stdout.write(json.dumps(rows, indent=2) + "\n")
@@ -204,9 +206,7 @@ def _audit_plugins(*, json_output: bool = False) -> None:
             return "-"
         return ", ".join(f"{v} {k}" for k, v in regs.items())
 
-    col_reg = max(
-        len(headers[5]), *(_len_reg_summary(r["registrations"]) for r in rows)
-    )
+    col_reg = max(len(headers[5]), *(_len_reg_summary(r["registrations"]) for r in rows))
 
     fmt = (
         f"  {{:<{col_name}}}  {{:<{col_ver}}}  {{:<{col_src}}}  "

@@ -23,12 +23,9 @@ export interface ToolCallInfo {
   id: string
   name: string
   status: ToolCallStatus
-  /**
-   * Streamed args (post TOOL_CALL_ARGS support — currently the reducer
-   * doesn't populate this; the field is here for forward compat with
-   * Pillar G.2's collapsible-args preview work.
-   */
   args?: Record<string, unknown>
+  argsBuffer?: string
+  argsPretty?: string
 }
 
 export interface UserPromptOption {
