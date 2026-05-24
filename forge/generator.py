@@ -124,9 +124,7 @@ def generate(
         )
 
     final_root.parent.mkdir(parents=True, exist_ok=True)
-    staging_dir = Path(
-        tempfile.mkdtemp(dir=final_root.parent, prefix=".forge-staging-")
-    )
+    staging_dir = Path(tempfile.mkdtemp(dir=final_root.parent, prefix=".forge-staging-"))
     project_root = staging_dir / config.project_slug
     project_root.mkdir(parents=True, exist_ok=True)
 
@@ -150,9 +148,7 @@ def generate(
     if report is not None:
         report.project_root = str(final_root)
         if report.rollback_hint and str(project_root) in report.rollback_hint:
-            report.rollback_hint = report.rollback_hint.replace(
-                str(project_root), str(final_root)
-            )
+            report.rollback_hint = report.rollback_hint.replace(str(project_root), str(final_root))
 
     return final_root
 
