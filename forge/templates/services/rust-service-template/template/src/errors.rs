@@ -18,13 +18,6 @@
 //! correlation id always travels in the `X-Request-Id` response header
 //! (propagated by `middleware::correlation`). Handlers that wish to
 //! echo it in the body can attach via `AppError::with_correlation`.
-//!
-//! E.1.b runtime wiring: when `observability.error_envelope=True` the
-//! `IntoResponse` impl below delegates the envelope construction to
-//! `crate::error_port::default::DefaultErrorPort::serialize` so the
-//! request path actually exercises the swappable port. When the option
-//! is off the inline path stays — same wire shape either way, that's
-//! the RFC-007 cross-stack invariant.
 
 use axum::Json;
 use axum::http::{HeaderValue, StatusCode};
@@ -90,39 +83,6 @@ impl ErrorCode {
                 StatusCode::SERVICE_UNAVAILABLE
             }
         }
-    }
-
-    /// Reverse-map a wire `code` string to its HTTP status, mirroring
-    /// the Python and Node `status_for_code` helpers. Returns
-    /// `INTERNAL_SERVER_ERROR` for unknown codes — loud-but-recoverable.
-    pub fn status_for_code(code: &str) -> StatusCode {
-        // Iterate the variant set so the mapping stays in lockstep with
-        // ``as_str`` / ``status`` above; a fragment that registers a
-        // new ``AppError`` variant via the canonical path picks the
-        // matching status automatically.
-        const ALL: &[ErrorCode] = &[
-            ErrorCode::AuthRequired,
-            ErrorCode::PermissionDenied,
-            ErrorCode::ReadOnly,
-            ErrorCode::NotFound,
-            ErrorCode::AlreadyExists,
-            ErrorCode::DuplicateEntry,
-            ErrorCode::ForeignKeyViolation,
-            ErrorCode::ConstraintViolation,
-            ErrorCode::ValidationFailed,
-            ErrorCode::InvalidInput,
-            ErrorCode::RateLimited,
-            ErrorCode::InternalError,
-            ErrorCode::DatabaseUnavailable,
-            ErrorCode::DatabaseTimeout,
-            ErrorCode::DependencyUnavailable,
-        ];
-        for ec in ALL {
-            if ec.as_str() == code {
-                return ec.status();
-            }
-        }
-        StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 
@@ -246,7 +206,7 @@ impl AppError {
         }
     }
 
-    pub(crate) fn context(&self) -> Value {
+    fn context(&self) -> Value {
         match self {
             Self::NotFound { entity, id } => json!({ "entity": entity, "id": id }),
             Self::AlreadyExists { entity, name } => {
@@ -267,33 +227,18 @@ impl AppError {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ErrorBody {
-    pub code: String,
-    pub message: String,
+struct ErrorBody<'a> {
+    code: &'a str,
+    message: String,
     #[serde(rename = "type")]
-    pub type_name: String,
-    pub context: Value,
-    pub correlation_id: String,
+    type_name: &'a str,
+    context: Value,
+    correlation_id: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ErrorEnvelope {
-    pub error: ErrorBody,
-}
-
-/// Inline RFC-007 envelope construction — mirrors
-/// `DefaultErrorPort::serialize` byte for byte so the wire shape is
-/// the same whether the port path executed or the inline fallback did.
-fn default_envelope(exc: &AppError) -> ErrorEnvelope {
-    ErrorEnvelope {
-        error: ErrorBody {
-            code: exc.code().as_str().to_string(),
-            message: exc.to_string(),
-            type_name: exc.type_name().to_string(),
-            context: exc.context(),
-            correlation_id: String::new(),
-        },
-    }
+struct ErrorEnvelope<'a> {
+    error: ErrorBody<'a>,
 }
 
 impl IntoResponse for AppError {
@@ -307,20 +252,15 @@ impl IntoResponse for AppError {
             tracing::warn!(error = %self, "Request failed");
         }
 
-{% if include_error_envelope | default(false) %}
-        // E.1.b runtime wiring: delegate to the registered ``ErrorPort``
-        // adapter so the request path exercises ``DefaultErrorPort``.
-        // The ``&dyn std::error::Error`` cast is what makes the trait
-        // object dispatch work — the port's ``serialize`` signature
-        // takes a ``+ 'static`` bound so the ``Any``-based downcast in
-        // the default adapter can recover the concrete ``AppError``
-        // type.
-        use crate::error_port::{ErrorPort, default::DefaultErrorPort};
-        let port = DefaultErrorPort;
-        let body = port.serialize(&self as &(dyn std::error::Error + 'static));
-{% else %}
-        let body = default_envelope(&self);
-{% endif %}
+        let body = ErrorEnvelope {
+            error: ErrorBody {
+                code: code.as_str(),
+                message: self.to_string(),
+                type_name: self.type_name(),
+                context: self.context(),
+                correlation_id: String::new(),
+            },
+        };
 
         let mut response = (status, Json(body)).into_response();
         // Ensure a stable content type even when the framework strips it.

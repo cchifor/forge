@@ -513,7 +513,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 519,
+      "size": 520,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -745,7 +745,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 518,
+      "size": 519,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {

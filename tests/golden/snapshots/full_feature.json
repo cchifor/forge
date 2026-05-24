@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1152,
+      "size": 1153,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -1385,7 +1385,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 509,
+      "size": 510,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1909,7 +1909,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 559,
+      "size": 560,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

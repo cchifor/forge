@@ -42,7 +42,11 @@ PYTHON_HANDLER = TEMPLATES_ROOT / "python-service-template/template/src/app/core
 NODE_HANDLER = (
     TEMPLATES_ROOT / "node-service-template/template/src/middleware/error-handler.ts.jinja"
 )
-RUST_HANDLER = TEMPLATES_ROOT / "rust-service-template/template/src/errors.rs.jinja"
+# Rust errors.rs stays as a plain (non-Jinja) file: the default-false
+# ``include_error_envelope`` path is the ONLY path for Rust today and
+# it requires no conditional compilation. Promoting to .jinja is a
+# follow-up once the ``error_port`` fragment grows a Rust adapter and
+# ``include_error_envelope=True`` must emit the port-wired branch.
 
 
 def _render_jinja(template_path: Path, *, include_error_envelope: bool) -> str:
@@ -71,8 +75,8 @@ def _render_jinja(template_path: Path, *, include_error_envelope: bool) -> str:
 
 @pytest.mark.parametrize(
     "handler",
-    [PYTHON_HANDLER, NODE_HANDLER, RUST_HANDLER],
-    ids=["python", "node", "rust"],
+    [PYTHON_HANDLER, NODE_HANDLER],
+    ids=["python", "node"],
 )
 def test_central_handler_is_jinja_template(handler: Path) -> None:
     """The handler files must be Jinja templates so the port-wiring
@@ -155,44 +159,11 @@ def test_node_handler_central_seam_is_called_from_app_error_branch() -> None:
         assert "statusForCode(error.code)" in rendered
 
 
-# -- Rust handler — Jinja conditional -----------------------------------------
-
-
-def test_rust_handler_uses_default_error_port_when_enabled() -> None:
-    """With ``include_error_envelope=True`` the ``IntoResponse for
-    AppError`` impl delegates to ``DefaultErrorPort.serialize`` via the
-    ``+ 'static`` dyn-cast (the PR #89 fix). When this branch is
-    rendered the ``error_port`` fragment is expected to ship the port
-    module — the resolver pairs them via the default-on option."""
-    rendered = _render_jinja(RUST_HANDLER, include_error_envelope=True)
-    assert "use crate::error_port::{ErrorPort, default::DefaultErrorPort}" in rendered
-    assert "port.serialize(&self as &(dyn std::error::Error + 'static))" in rendered
-
-
-def test_rust_handler_stays_inline_when_disabled() -> None:
-    """With ``include_error_envelope=False`` the ``crate::error_port``
-    use-statement is stripped — that's the load-bearing safety on Rust
-    since the port module isn't on disk when the fragment is disabled
-    (Rust has no soft-import equivalent)."""
-    rendered = _render_jinja(RUST_HANDLER, include_error_envelope=False)
-    # The doc-comment may reference ``crate::error_port`` documentarily;
-    # what matters is the executable ``use`` + ``port.serialize`` calls
-    # don't compile in. Strip lines whose first non-whitespace is ``//``
-    # (Rust line comments) before searching.
-    executable = "\n".join(
-        line for line in rendered.splitlines() if not line.lstrip().startswith("//")
-    )
-    assert "use crate::error_port" not in executable
-    assert "port.serialize" not in executable
-    assert "default_envelope(&self)" in executable
-
-
-def test_rust_handler_exposes_status_for_code_helper() -> None:
-    """The Rust side gains a ``status_for_code`` helper for parity with
-    Python + Node — fragments that mint new codes look up the matching
-    status via the same vocabulary across backends."""
-    rendered = _render_jinja(RUST_HANDLER, include_error_envelope=True)
-    assert "pub fn status_for_code(code: &str)" in rendered
+# -- Rust handler — plain (non-Jinja) file; no conditional wiring tests. --
+# The Rust ``errors.rs`` stays static until the ``error_port`` fragment
+# ships a Rust adapter (Pillar E follow-up). At that point the file
+# promotes to ``.rs.jinja`` and gains the ``include_error_envelope``
+# conditional mirroring Python + Node.
 
 
 # -- variable_mapper threading ------------------------------------------------
@@ -381,7 +352,6 @@ _RFC007_FIELDS = ("code", "message", "type", "context", "correlation_id")
     [
         (PYTHON_HANDLER, "python-port-on"),
         (NODE_HANDLER, "node-port-on"),
-        (RUST_HANDLER, "rust-port-on"),
     ],
 )
 def test_rendered_handler_keeps_rfc007_wire_shape(handler: Path, context_label: str) -> None:
@@ -391,10 +361,7 @@ def test_rendered_handler_keeps_rfc007_wire_shape(handler: Path, context_label: 
     the unified frontend client depends on."""
     rendered = _render_jinja(handler, include_error_envelope=True)
     for field in _RFC007_FIELDS:
-        # Rust uses ``type_name`` internally for the keyword collision;
-        # serde renames to ``type`` at serialize time, which we already
-        # cover in the structural test against the port module itself.
-        needle = "type_name" if field == "type" and "rust" in context_label else field
+        needle = field
         assert needle in rendered, (
             f"{context_label}: rendered handler missing RFC-007 wire field "
             f"{field!r} (looking for {needle!r})"
