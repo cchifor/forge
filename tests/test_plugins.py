@@ -601,3 +601,179 @@ class TestDispatchPlugins:
                 _dispatch_plugins("list", json_output=True)
         payload = json.loads(capsys.readouterr().out.strip())
         assert payload == {"loaded": [], "failed": []}
+
+
+class TestAuditPlugins:
+    """Tests for the ``forge --plugins audit`` subcommand."""
+
+    def test_audit_no_plugins_prints_guidance(self, capsys) -> None:
+        from forge.cli.commands.plugins import _dispatch_plugins
+
+        with patch.object(plugins, "_iter_entry_points", return_value=()):
+            with pytest.raises(SystemExit) as exc:
+                _dispatch_plugins("audit")
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "No forge plugins" in out
+
+    def test_audit_shows_loaded_plugin(self, capsys) -> None:
+        from forge.cli.commands.plugins import _dispatch_plugins
+
+        def fake_register(api: ForgeAPI) -> None:
+            pass
+
+        ep = MagicMock()
+        ep.name = "demo"
+        ep.value = "forge_plugin_demo:register"
+        ep.dist = MagicMock(version="2.0.1")
+        ep.dist.read_text.return_value = None
+        ep.dist.name = "forge-plugin-demo"
+        ep.load.return_value = fake_register
+
+        with patch.object(plugins, "_iter_entry_points", return_value=[ep]):
+            plugins.load_all()
+
+        # Now run audit — it re-discovers entry points independently.
+        with patch(
+            "forge.cli.commands.plugins._metadata.entry_points"
+        ) as mock_eps:
+            mock_eps.return_value = MagicMock()
+            mock_eps.return_value.select.return_value = [ep]
+            with pytest.raises(SystemExit) as exc:
+                _dispatch_plugins("audit")
+
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "demo" in out
+        assert "2.0.1" in out
+        assert "loaded" in out
+
+    def test_audit_json_output_structure(self, capsys) -> None:
+        import json as _json
+
+        from forge.cli.commands.plugins import _dispatch_plugins
+
+        def fake_register(api: ForgeAPI) -> None:
+            pass
+
+        ep = MagicMock()
+        ep.name = "myplugin"
+        ep.value = "forge_plugin_my:register"
+        ep.dist = MagicMock(version="1.0.0")
+        ep.dist.read_text.return_value = None
+        ep.dist.name = "forge-plugin-my"
+        ep.load.return_value = fake_register
+
+        with patch.object(plugins, "_iter_entry_points", return_value=[ep]):
+            plugins.load_all()
+
+        with patch(
+            "forge.cli.commands.plugins._metadata.entry_points"
+        ) as mock_eps:
+            mock_eps.return_value = MagicMock()
+            mock_eps.return_value.select.return_value = [ep]
+            with pytest.raises(SystemExit):
+                _dispatch_plugins("audit", json_output=True)
+
+        payload = _json.loads(capsys.readouterr().out.strip())
+        assert isinstance(payload, list)
+        assert len(payload) == 1
+        row = payload[0]
+        assert row["name"] == "myplugin"
+        assert row["version"] == "1.0.0"
+        assert row["status"] == "loaded"
+        assert row["error"] is None
+        assert isinstance(row["registrations"], dict)
+        assert isinstance(row["module"], str)
+        assert row["source"] in ("pypi", "editable", "direct", "unknown")
+
+    def test_audit_shows_failed_plugin(self, capsys) -> None:
+        from forge.cli.commands.plugins import _dispatch_plugins
+
+        ep = MagicMock()
+        ep.name = "broken"
+        ep.value = "forge_plugin_broken:register"
+        ep.dist = MagicMock(version="0.1.0")
+        ep.dist.read_text.return_value = None
+        ep.dist.name = "forge-plugin-broken"
+        ep.load.side_effect = ImportError("no module")
+
+        with patch.object(plugins, "_iter_entry_points", return_value=[ep]):
+            plugins.load_all()
+
+        with patch(
+            "forge.cli.commands.plugins._metadata.entry_points"
+        ) as mock_eps:
+            mock_eps.return_value = MagicMock()
+            mock_eps.return_value.select.return_value = [ep]
+            with pytest.raises(SystemExit) as exc:
+                _dispatch_plugins("audit")
+
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "broken" in out
+        assert "failed" in out
+
+    def test_audit_detects_editable_source(self) -> None:
+        """PEP 610 direct_url.json with editable flag -> 'editable'."""
+        import json as _json
+
+        from forge.cli.commands.plugins import _detect_install_source
+
+        dist = MagicMock()
+        dist.read_text.return_value = _json.dumps({
+            "url": "file:///home/dev/my-plugin",
+            "dir_info": {"editable": True},
+        })
+        assert _detect_install_source(dist) == "editable"
+
+    def test_audit_detects_pypi_source(self) -> None:
+        """No direct_url.json -> 'pypi'."""
+        from forge.cli.commands.plugins import _detect_install_source
+
+        dist = MagicMock()
+        dist.read_text.side_effect = FileNotFoundError
+        dist.name = "forge-plugin-test"
+        assert _detect_install_source(dist) == "pypi"
+
+    def test_audit_none_dist_returns_unknown(self) -> None:
+        from forge.cli.commands.plugins import _detect_install_source
+
+        assert _detect_install_source(None) == "unknown"
+
+    def test_audit_shows_registration_counts(self, capsys) -> None:
+        import json as _json
+
+        from forge.cli.commands.plugins import _dispatch_plugins
+
+        def fake_register(api: ForgeAPI) -> None:
+            pass
+
+        ep = MagicMock()
+        ep.name = "counted"
+        ep.value = "forge_plugin_counted:register"
+        ep.dist = MagicMock(version="3.0.0")
+        ep.dist.read_text.return_value = None
+        ep.dist.name = "forge-plugin-counted"
+        ep.load.return_value = fake_register
+
+        with patch.object(plugins, "_iter_entry_points", return_value=[ep]):
+            plugins.load_all()
+
+        # Manually set registration counts on the loaded plugin.
+        reg = plugins.LOADED_PLUGINS[0]
+        reg.options_added = 2
+        reg.fragments_added = 3
+
+        with patch(
+            "forge.cli.commands.plugins._metadata.entry_points"
+        ) as mock_eps:
+            mock_eps.return_value = MagicMock()
+            mock_eps.return_value.select.return_value = [ep]
+            with pytest.raises(SystemExit):
+                _dispatch_plugins("audit", json_output=True)
+
+        payload = _json.loads(capsys.readouterr().out.strip())
+        row = payload[0]
+        assert row["registrations"]["options"] == 2
+        assert row["registrations"]["fragments"] == 3
