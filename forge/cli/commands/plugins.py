@@ -17,7 +17,7 @@ import keyword
 import shutil
 import sys
 from collections.abc import Sequence
-from importlib import resources
+from importlib import metadata as _metadata, resources
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,11 @@ def _dispatch_plugins(
     if subcommand == "list":
         plugins.load_all()
         _list_plugins(json_output=json_output)
+        sys.exit(0)
+
+    if subcommand == "audit":
+        plugins.load_all()
+        _audit_plugins(json_output=json_output)
         sys.exit(0)
 
     if subcommand == "scaffold-fragment":
@@ -122,6 +127,160 @@ def _list_plugins(*, json_output: bool = False) -> None:
         print(f"Failed plugins ({len(failed)}):")
         for name, err in failed:
             print(f"  ! {name}: {err}")
+
+
+def _audit_plugins(*, json_output: bool = False) -> None:
+    """Show installed plugins with versions, source, and registration counts."""
+    from forge.plugins import ENTRY_POINT_GROUP  # noqa: PLC0415
+
+    rows: list[dict[str, Any]] = []
+    eps = _metadata.entry_points()
+    entry_points = (
+        eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, ())
+    )
+
+    for ep in entry_points:
+        dist = getattr(ep, "dist", None)
+        name = ep.name
+        version = str(dist.version) if dist and hasattr(dist, "version") else "unknown"
+        module = getattr(ep, "value", None) or getattr(ep, "module", "<unknown>")
+        source = _detect_install_source(dist)
+
+        # Find matching loaded registration for registration counts.
+        from forge import plugins  # noqa: PLC0415
+
+        reg = next((r for r in plugins.LOADED_PLUGINS if r.name == name), None)
+        registrations: dict[str, int] = {}
+        if reg is not None:
+            if reg.options_added:
+                registrations["options"] = reg.options_added
+            if reg.fragments_added:
+                registrations["fragments"] = reg.fragments_added
+            if reg.backends_added:
+                registrations["backends"] = reg.backends_added
+            if reg.commands_added:
+                registrations["commands"] = reg.commands_added
+            if reg.emitters_added:
+                registrations["emitters"] = reg.emitters_added
+            if reg.extractors_added:
+                registrations["extractors"] = len(reg.extractors_added)
+
+        # Check if this plugin failed to load.
+        failed_reason = next(
+            (reason for n, reason in plugins.FAILED_PLUGINS if n == name), None
+        )
+
+        rows.append({
+            "name": name,
+            "version": version,
+            "source": source,
+            "module": module,
+            "status": "failed" if failed_reason else "loaded",
+            "error": failed_reason,
+            "registrations": registrations,
+        })
+
+    if json_output:
+        sys.stdout.write(json.dumps(rows, indent=2) + "\n")
+        return
+
+    if not rows:
+        print("No forge plugins installed.")
+        print("Install one with: pip install forge-plugin-<name>")
+        return
+
+    # Build a formatted table.
+    headers = ("Name", "Version", "Source", "Module", "Status", "Registrations")
+    # Compute column widths from data.
+    col_name = max(len(headers[0]), *(len(r["name"]) for r in rows))
+    col_ver = max(len(headers[1]), *(len(r["version"]) for r in rows))
+    col_src = max(len(headers[2]), *(len(r["source"]) for r in rows))
+    col_mod = max(len(headers[3]), *(len(r["module"]) for r in rows))
+    col_stat = max(len(headers[4]), *(len(r["status"]) for r in rows))
+
+    def _reg_summary(regs: dict[str, int]) -> str:
+        if not regs:
+            return "-"
+        return ", ".join(f"{v} {k}" for k, v in regs.items())
+
+    col_reg = max(
+        len(headers[5]), *(_len_reg_summary(r["registrations"]) for r in rows)
+    )
+
+    fmt = (
+        f"  {{:<{col_name}}}  {{:<{col_ver}}}  {{:<{col_src}}}  "
+        f"{{:<{col_mod}}}  {{:<{col_stat}}}  {{}}"
+    )
+    header_line = fmt.format(*headers)
+    separator = "  " + "  ".join(
+        "-" * w for w in (col_name, col_ver, col_src, col_mod, col_stat, col_reg)
+    )
+
+    print(f"Installed plugins ({len(rows)}):\n")
+    print(header_line)
+    print(separator)
+    for r in rows:
+        print(
+            fmt.format(
+                r["name"],
+                r["version"],
+                r["source"],
+                r["module"],
+                r["status"],
+                _reg_summary(r["registrations"]),
+            )
+        )
+
+    # Show errors for failed plugins below the table.
+    failed = [r for r in rows if r["status"] == "failed"]
+    if failed:
+        print()
+        for r in failed:
+            print(f"  ! {r['name']}: {r['error']}")
+
+
+def _detect_install_source(dist: Any) -> str:
+    """Determine whether a distribution was installed as editable or from PyPI.
+
+    Checks for ``direct_url.json`` (PEP 610) — editable installs set
+    ``dir_info.editable = true``. Falls back to legacy ``.egg-link``
+    detection for older setuptools editable installs.
+    """
+    if dist is None:
+        return "unknown"
+
+    # PEP 610: read direct_url.json from distribution metadata.
+    try:
+        direct_url_text = dist.read_text("direct_url.json")
+        if direct_url_text:
+            direct_url = json.loads(direct_url_text)
+            dir_info = direct_url.get("dir_info", {})
+            if dir_info.get("editable", False):
+                return "editable"
+            # A direct_url.json without editable flag means a direct
+            # install (VCS, local path, URL) but not editable.
+            return "direct"
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+
+    # Legacy: check for .egg-link files (setuptools editable < PEP 660).
+    dist_name = getattr(dist, "name", None) or getattr(dist, "_name", None)
+    if dist_name:
+        import site  # noqa: PLC0415
+
+        for site_dir in site.getsitepackages() + [site.getusersitepackages()]:
+            egg_link = Path(site_dir) / f"{dist_name}.egg-link"
+            if egg_link.exists():
+                return "editable"
+
+    return "pypi"
+
+
+def _len_reg_summary(regs: dict[str, int]) -> int:
+    """Compute display length of the registration summary string."""
+    if not regs:
+        return 1  # "-"
+    return len(", ".join(f"{v} {k}" for k, v in regs.items()))
 
 
 # ---------------------------------------------------------------------------
