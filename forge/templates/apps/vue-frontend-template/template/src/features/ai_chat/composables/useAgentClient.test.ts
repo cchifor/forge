@@ -359,6 +359,120 @@ describe('useAgentClient', () => {
     expect(activeToolCalls.value[0].status).toBe('completed')
   })
 
+  // ── TOOL_CALL_ARGS streaming (Pillar G.2) ──
+
+  it('onToolCallArgsEvent accumulates delta into argsBuffer', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-a', toolCallName: 'search' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-a', delta: '{"q":' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-a', delta: '"hi"}' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(activeToolCalls.value[0].argsBuffer).toBe('{"q":"hi"}')
+    // argsPretty is not set until TOOL_CALL_END.
+    expect(activeToolCalls.value[0].argsPretty).toBeUndefined()
+  })
+
+  it('onToolCallEndEvent pretty-prints argsBuffer via JSON.stringify', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-b', toolCallName: 'search' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-b', delta: '{"q":"hi","n":1}' },
+      })
+      await subscriber.onToolCallEndEvent({
+        event: { toolCallId: 'tc-b' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(activeToolCalls.value[0].argsPretty).toBe(
+      '{\n  "q": "hi",\n  "n": 1\n}',
+    )
+    expect(activeToolCalls.value[0].status).toBe('completed')
+  })
+
+  it('onToolCallEndEvent falls back to raw buffer on JSON parse error', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-c', toolCallName: 'search' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-c', delta: 'not-json{' },
+      })
+      await subscriber.onToolCallEndEvent({
+        event: { toolCallId: 'tc-c' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    // Parse fails → argsPretty mirrors the raw delta so the user still
+    // sees *something* in the collapsible preview.
+    // Use a single open-brace; a doubled open-brace would collide
+    // with Copier's Jinja print delimiters at template-render time.
+    expect(activeToolCalls.value[0].argsPretty).toBe('not-json{')
+  })
+
+  it('concurrent tool calls keep separate argsBuffers (no cross-contamination)', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-x', toolCallName: 'a' },
+      })
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-y', toolCallName: 'b' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-x', delta: '{"x":1}' },
+      })
+      await subscriber.onToolCallArgsEvent({
+        event: { toolCallId: 'tc-y', delta: '{"y":2}' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    expect(activeToolCalls.value).toHaveLength(2)
+    const x = activeToolCalls.value.find((t) => t.id === 'tc-x')
+    const y = activeToolCalls.value.find((t) => t.id === 'tc-y')
+    expect(x?.argsBuffer).toBe('{"x":1}')
+    expect(y?.argsBuffer).toBe('{"y":2}')
+  })
+
+  it('onToolCallEndEvent with no args leaves argsPretty unset', async () => {
+    mockRunAgent.mockImplementation(async (_params: any, subscriber: any) => {
+      await subscriber.onToolCallStartEvent({
+        event: { toolCallId: 'tc-empty', toolCallName: 'ping' },
+      })
+      await subscriber.onToolCallEndEvent({
+        event: { toolCallId: 'tc-empty' },
+      })
+    })
+
+    const { runAgent, activeToolCalls } = useAgentClient()
+    await runAgent()
+
+    // No TOOL_CALL_ARGS arrived — we don't fabricate an empty preview;
+    // the collapsible just hides in the UI.
+    expect(activeToolCalls.value[0].argsPretty).toBeUndefined()
+    expect(activeToolCalls.value[0].argsBuffer).toBeUndefined()
+    expect(activeToolCalls.value[0].status).toBe('completed')
+  })
+
   // ── HITL respondToPrompt ──
 
   it('respondToPrompt sends hitl_response in forwardedProps', async () => {

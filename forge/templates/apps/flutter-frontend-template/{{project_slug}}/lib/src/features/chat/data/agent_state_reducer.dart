@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:json_patch/json_patch.dart';
 
 import '../domain/agent_state.dart';
@@ -6,6 +8,25 @@ import '../domain/tool_call_info.dart';
 import '../domain/user_prompt_payload.dart';
 import '../domain/workspace_activity.dart';
 import 'ag_ui_event.dart';
+
+/// Two-space JSON pretty-printer used by [_prettifyArgs] on
+/// ``TOOL_CALL_END``. Mirrors Vue/Svelte's
+/// ``JSON.stringify(value, null, 2)``.
+const _argsEncoder = JsonEncoder.withIndent('  ');
+
+/// Pretty-print a streamed TOOL_CALL_ARGS buffer for the collapsible
+/// preview. Returns ``null`` for empty input so the UI can hide the
+/// preview (`argsPretty` stays unset on the model). On JSON parse
+/// failure, returns the raw buffer so the user still sees *something*
+/// for debugging — cross-stack consistency with Vue + Svelte.
+String? _prettifyArgs(String? buffer) {
+  if (buffer == null || buffer.isEmpty) return null;
+  try {
+    return _argsEncoder.convert(jsonDecode(buffer));
+  } catch (_) {
+    return buffer;
+  }
+}
 
 /// Snapshot of all chat state the UI needs to render.
 ///
@@ -165,17 +186,35 @@ ChatStateSnapshot reduce(ChatStateSnapshot snapshot, AgUiEvent event) {
       );
 
     case ToolCallEndEvent(toolCallId: final id):
+      // Pillar G.2: pretty-print the accumulated argsBuffer on END.
+      // ``_prettifyArgs`` handles the JSON-parse + fall-back-to-raw
+      // dance; returns ``null`` for empty buffers so we don't fabricate
+      // an empty preview.
+      return snapshot.copyWith(
+        activeToolCalls: snapshot.activeToolCalls.map((tc) {
+          if (tc.id != id) return tc;
+          final pretty = _prettifyArgs(tc.argsBuffer);
+          if (pretty == null) {
+            return tc.copyWith(status: ToolCallStatus.completed);
+          }
+          return tc.copyWith(
+            status: ToolCallStatus.completed,
+            argsPretty: pretty,
+          );
+        }).toList(),
+      );
+
+    case ToolCallArgsEvent(toolCallId: final id, delta: final delta):
+      // Pillar G.2: append the delta into the per-tool-call buffer.
+      // Keyed on ``toolCallId`` so multiple concurrent tool calls
+      // don't cross-contaminate. Pretty-printing happens on END.
       return snapshot.copyWith(
         activeToolCalls: snapshot.activeToolCalls
             .map((tc) => tc.id == id
-                ? tc.copyWith(status: ToolCallStatus.completed)
+                ? tc.copyWith(argsBuffer: (tc.argsBuffer ?? '') + delta)
                 : tc)
             .toList(),
       );
-
-    case ToolCallArgsEvent():
-      // Args streaming for live tool-call display — not surfaced in v1.
-      return snapshot;
 
     case ActivitySnapshotEvent(
         messageId: final mid,
