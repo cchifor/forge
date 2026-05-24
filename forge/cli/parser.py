@@ -256,6 +256,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run full generation to a tempdir but do not write to --output-dir.",
     )
+    p.add_argument(
+        "--keep-partial",
+        dest="keep_partial",
+        action="store_true",
+        help=(
+            "On generation failure, preserve the staging directory for "
+            "debugging instead of removing it. The staging path is "
+            "printed to stderr."
+        ),
+    )
 
     # Plugins
     p.add_argument(

@@ -414,7 +414,10 @@ def main() -> None:
     )
     try:
         dry_run = bool(getattr(args, "dry_run", False))
-        project_root = generate(config, quiet=quiet, dry_run=dry_run, report=report)
+        keep_partial = bool(getattr(args, "keep_partial", False))
+        project_root = generate(
+            config, quiet=quiet, dry_run=dry_run, report=report, keep_partial=keep_partial
+        )
     except TypeError:
         # generate() older signature (no dry_run kwarg) — fall back.
         # This branch also covers plugin-supplied generate() shims that
