@@ -283,28 +283,6 @@ def test_vue_auth_off_typechecks(
 # -----------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason=(
-        "Svelte chat template has pre-existing @ag-ui/client type drift. "
-        "Initiative #4 unified the canvas-packages event-union codegen but "
-        "did NOT touch the template's call sites; svelte-check still fails "
-        "with the five errors enumerated below (verified 2026-05-20 against "
-        "the head of feature/initiative-9-tests-behavior — see Init #9 "
-        "report for the captured svelte-check output):\n"
-        "  - agent-client.svelte.ts:75 — `threadId` not on RunHttpAgentConfig\n"
-        "  - agent-client.svelte.ts:106-107 — `role: 'activity'` not in the "
-        "Message union\n"
-        "  - CanvasPane.svelte:30 — `{@const}` must be immediate child of "
-        "`{#if}`/`{#each}` etc; currently nested under a plain `<div>`\n"
-        "  - AiChatMessage.svelte:18 — `content` overload mismatch "
-        "(string vs structured content union)\n"
-        "Fix scope: the chat scaffolding under forge/templates/apps/svelte-"
-        "frontend-template/template/src/lib/features/chat/ needs to be "
-        "regenerated against the @ag-ui/client 0.0.51 API. Tracked separately "
-        "from Initiative #9 because the template surface is owned by the "
-        "frontend-templates plan, not the test-rebalance plan."
-    )
-)
 def test_svelte_chat_on_typechecks(
     tmp_path: Path, require_uv: None, require_npm: None, require_git: None
 ) -> None:
