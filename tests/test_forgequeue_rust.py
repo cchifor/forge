@@ -104,38 +104,40 @@ def _adapter_root() -> Path:
 
 def test_port_files_land_at_conventional_paths() -> None:
     port_rs = _port_root() / "files" / "src" / "ports" / "queue.rs"
-    mod_rs = _port_root() / "files" / "src" / "ports" / "mod.rs"
     assert port_rs.is_file(), f"port file missing at {port_rs}"
-    assert mod_rs.is_file(), f"ports/mod.rs missing at {mod_rs}"
+    # mod.rs is now in the base template (shared via inject.yaml marker),
+    # NOT shipped per-fragment.
+    mod_rs = _port_root() / "files" / "src" / "ports" / "mod.rs"
+    assert not mod_rs.is_file(), f"ports/mod.rs should not be per-fragment: {mod_rs}"
 
 
 def test_adapter_files_land_at_conventional_paths() -> None:
     adapter_rs = (
         _adapter_root() / "files" / "src" / "adapters" / "queue_apalis.rs"
     )
-    mod_rs = _adapter_root() / "files" / "src" / "adapters" / "mod.rs"
     assert adapter_rs.is_file(), f"adapter file missing at {adapter_rs}"
-    assert mod_rs.is_file(), f"adapters/mod.rs missing at {mod_rs}"
+    mod_rs = _adapter_root() / "files" / "src" / "adapters" / "mod.rs"
+    assert not mod_rs.is_file(), f"adapters/mod.rs should not be per-fragment: {mod_rs}"
 
 
-def test_port_inject_yaml_registers_ports_module() -> None:
+def test_port_inject_yaml_registers_queue_submodule() -> None:
     inject = _port_root() / "inject.yaml"
     assert inject.is_file()
     entries = yaml.safe_load(inject.read_text(encoding="utf-8"))
     assert isinstance(entries, list) and len(entries) >= 1
     e = entries[0]
-    assert e["target"] == "src/lib.rs"
-    assert "LIB_MOD_REGISTRATION" in e["marker"]
-    assert "pub mod ports" in e["snippet"]
+    assert e["target"] == "src/ports/mod.rs"
+    assert "PORTS_MOD_REGISTRATION" in e["marker"]
+    assert "pub mod queue" in e["snippet"]
 
 
-def test_adapter_inject_yaml_registers_adapters_module() -> None:
+def test_adapter_inject_yaml_registers_apalis_submodule() -> None:
     inject = _adapter_root() / "inject.yaml"
     assert inject.is_file()
     entries = yaml.safe_load(inject.read_text(encoding="utf-8"))
     assert isinstance(entries, list) and len(entries) >= 1
     snippets = " ".join(e.get("snippet", "") for e in entries)
-    assert "pub mod adapters" in snippets
+    assert "pub mod queue_apalis" in snippets
 
 
 # -- port + adapter source shape ---------------------------------------------
