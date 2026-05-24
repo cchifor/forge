@@ -261,10 +261,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--plugins",
         dest="plugins_subcommand",
-        choices=["list", "scaffold-fragment"],
+        choices=["list", "audit", "scaffold-fragment"],
         metavar="SUBCMD",
         help=(
             "Plugin management: `list` shows discovered forge.plugins entry points; "
+            "`audit` shows installed plugins with versions, source, and registration counts; "
             "`scaffold-fragment` renders a skeleton fragment tree for plugin authors "
             "(combine with --name, --output-dir, --backends, --force)."
         ),
