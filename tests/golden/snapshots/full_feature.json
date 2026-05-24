@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1155,
+      "size": 1162,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -233,12 +233,12 @@
       "sha256": "80c26fd494a17618"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChatMessage.test.ts": {
-      "size": 2774,
-      "sha256": "4816732add69a7e3"
+      "size": 4931,
+      "sha256": "fa8fb50c7fb3792d"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChatMessage.vue": {
-      "size": 6416,
-      "sha256": "d88b1513da0209ea"
+      "size": 8146,
+      "sha256": "3850dab83671296b"
     },
     "apps/frontend/src/features/ai_chat/ui/ToolCallStatus.test.ts": {
       "size": 1474,
@@ -1385,7 +1385,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 483,
+      "size": 490,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1909,7 +1909,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 562,
+      "size": 569,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
