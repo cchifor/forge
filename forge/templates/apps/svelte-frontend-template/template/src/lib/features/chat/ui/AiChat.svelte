@@ -128,6 +128,9 @@
 					idx === chat.messages.length - 1
 						? chat.regenerate
 						: undefined}
+					isStreaming={chat.isGenerating &&
+						idx === chat.messages.length - 1 &&
+						message.role !== 'user'}
 				/>
 			{/each}
 			{#if chat.pendingPrompt}

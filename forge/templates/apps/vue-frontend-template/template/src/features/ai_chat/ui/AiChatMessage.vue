@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
 marked.setOptions({ breaks: true, gfm: true })
+
+// Token-streaming markdown debounce.
+//
+// Why: each TEXT_MESSAGE_CONTENT delta would otherwise re-parse the entire
+// assistant message through marked + DOMPurify and patch a fresh HTML tree
+// into the DOM. Typing-rate tokens (~5-20/sec from typical models) thrash
+// reconciliation. We collapse bursts into a single render every ~50ms and
+// always flush on stream end so the final tokens land within one frame.
+const MARKDOWN_DEBOUNCE_MS = 50
 
 function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(marked.parse(text) as string)
@@ -30,9 +39,52 @@ const editing = ref(false)
 const editText = ref('')
 const editTextarea = ref<HTMLTextAreaElement | null>(null)
 
-const renderedContent = computed(() =>
+// Debounced HTML cache. Raw text remains the source of truth (props.message.content);
+// we only debounce the parse-to-HTML step. The cache is updated either after
+// MARKDOWN_DEBOUNCE_MS of quiet, or immediately when streaming transitions to
+// false (TEXT_MESSAGE_END).
+const debouncedHtml = ref(
   props.message.content ? renderMarkdown(props.message.content) : '',
 )
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushMarkdown() {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  debouncedHtml.value = props.message.content
+    ? renderMarkdown(props.message.content)
+    : ''
+}
+
+watch(
+  () => props.message.content,
+  () => {
+    if (!props.isStreaming) {
+      // Not streaming: render synchronously (e.g. user edit, replay).
+      flushMarkdown()
+      return
+    }
+    if (debounceTimer !== null) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(flushMarkdown, MARKDOWN_DEBOUNCE_MS)
+  },
+)
+
+// Always render on stream end — the final tokens must appear within frame
+// regardless of where the debounce timer was when END arrived.
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (!streaming) flushMarkdown()
+  },
+)
+
+onBeforeUnmount(() => {
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
+})
+
+const renderedContent = computed(() => debouncedHtml.value)
 
 async function copyMessage() {
   if (!props.message.content) return
