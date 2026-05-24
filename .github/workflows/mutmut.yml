@@ -2,16 +2,26 @@ name: Mutation testing
 
 # Hybrid strategy (Path B + Path C from RFC discussion).
 #
-# Why non-gating: even with sharding, ``--runner "pytest -x"``, and
-# ``--use-coverage``, individual files in this codebase historically
-# overrun any reasonable per-shard budget on ``ubuntu-latest``. Treat
-# mutmut as advisory tech-debt signal, not a merge gate.
+# Why non-gating for the broad lane: even with sharding,
+# ``--runner "pytest -x"``, and ``--use-coverage``, individual files in
+# this codebase historically overrun any reasonable per-shard budget on
+# ``ubuntu-latest``. Treat the broad mutmut lane as advisory tech-debt
+# signal, not a merge gate.
 #
-# Two operating modes:
-#   - Pull request with ``breaking-change`` label (fast feedback):
-#     mutate ONLY the critical-path files the PR changed; 15-min hard
-#     per-shard timeout; ``--runner "pytest -x"`` for fail-fast. The
-#     workflow always passes; baseline regressions surface as workflow
+# Three operating modes:
+#   - Pull request, scoped PR-gate (blocking, default on every PR):
+#     mutate ONLY the three highest-consequence modules listed in
+#     ``tests/mutmut_baselines.json:pr_gate_modules`` AND only if the
+#     PR touched one of them. 20-min per-shard ceiling, kill-rate floor
+#     enforced — a regression below baseline fails the workflow. If no
+#     scoped module is touched the gate exits 0 with a "no scoped
+#     modules touched" log line. This is the velocity-policy-scoped
+#     subset; full PR gate (Epic U) ships in 1.4 — see plan
+#     `Mutation-testing PR-gate scoped subset`.
+#   - Pull request with ``breaking-change`` label (broad, advisory):
+#     mutate every critical-path file the PR changed (from
+#     ``[tool.mutmut].paths_to_mutate``); 15-min hard per-shard
+#     timeout. Non-blocking — baseline regressions surface as workflow
 #     warnings, not as merge blockers.
 #   - Schedule (Monday 06:00 UTC) / workflow_dispatch (comprehensive):
 #     mutate the full critical-path set from
@@ -20,10 +30,10 @@ name: Mutation testing
 #     no test coverage — major speedup). Generates an aggregated
 #     ``mutmut-html-report`` artifact for async tech-debt review.
 #
-# Both modes are non-blocking via ``continue-on-error: true`` on
-# ``mutate`` and ``report``. A real baseline regression still surfaces
-# as a ``::warning::`` annotation; the team triages it during a
-# dedicated tech-debt sprint, not under merge pressure.
+# The broad PR lane + schedule are non-blocking via
+# ``continue-on-error: true``; the scoped PR-gate is blocking.
+# PR-mode is scoped per the velocity policy. Full PR gate (Epic U)
+# ships in 1.4 — see plan.
 
 on:
   schedule:
@@ -32,7 +42,12 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch: {}
   pull_request:
-    types: [labeled, synchronize]
+    # ``opened`` + ``reopened`` so the scoped PR-gate fires the first
+    # time a PR appears (the broad lane keeps its own ``if:`` label
+    # check so its behaviour is unchanged). ``labeled`` keeps the
+    # ``breaking-change`` flow firing when the label is applied
+    # post-open.
+    types: [opened, reopened, labeled, synchronize]
     branches: [main]
 
 permissions:
@@ -349,3 +364,115 @@ jobs:
               ;;
           esac
           exit 0
+
+  # Scoped PR-gate (blocking).
+  #
+  # Fires on every PR (not gated by ``breaking-change`` label). The
+  # scope is intentionally narrow — only the three highest-blast-radius
+  # modules listed in ``tests/mutmut_baselines.json:pr_gate_modules``
+  # — so the wall-clock cost stays sub-20-minutes per shard. Files
+  # touched by the PR are intersected with that scoped set; if no
+  # scoped file is touched the gate exits 0 with a "no scoped modules
+  # touched" log line and no mutation analysis runs.
+  #
+  # Failure mode: a touched module's mutmut kill rate drops below its
+  # baseline floor in ``pr_gate_modules`` -> the workflow fails and the
+  # PR is blocked. Either add tests to kill the new survivors or
+  # lower the floor with a CHANGELOG entry + reviewer sign-off.
+  pr_gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Need history for ``git diff origin/<base>...HEAD``.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Compute touched scoped modules
+        id: scope
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "Changed files:"
+          echo "$changed"
+          paths_json=$(echo "$changed" | uv run python -c "
+          import json, sys
+          baselines = json.loads(open('tests/mutmut_baselines.json').read())
+          scoped = set(baselines['pr_gate_modules'].keys())
+          changed = {line for line in sys.stdin.read().splitlines() if line}
+          print(json.dumps(sorted(scoped & changed)))
+          ")
+          if [ "$paths_json" = "[]" ]; then
+            echo "no scoped modules touched — skipping mutation analysis"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "paths=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "scoped touched modules: $paths_json"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
+
+      - name: Run mutmut on each touched scoped module
+        if: steps.scope.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p pr-gate-results
+          paths='${{ steps.scope.outputs.paths }}'
+          echo "$paths" | uv run python -c "
+          import json, sys
+          for p in json.load(sys.stdin):
+              print(p)
+          " | while IFS= read -r file; do
+            echo "::group::mutmut run on $file"
+            # Fresh cache per file so each module's results are independent.
+            rm -rf .mutmut-cache
+            # ``mutmut run`` exit codes are bit-flags (1=fatal, 2=survived,
+            # 4=timeout, 8=slow); a non-zero exit can mean "some mutants
+            # survived" which is data we still want. ``|| true`` lets the
+            # enforce step read the cache regardless.
+            uvx "mutmut@${MUTMUT_VERSION}" run \
+              --paths-to-mutate "$file" \
+              --runner "pytest -x" || true
+            # ``mutmut results`` text output triggers a pony-ORM bytecode
+            # decompile crash on Python 3.13 (mutmut 2.5.0); read the
+            # SQLite cache directly for a portable kill-rate summary.
+            uv run python .github/workflows/scripts/mutmut_kill_rate.py \
+              .mutmut-cache > "pr-gate-results/rate-${file//\//_}.json"
+            echo "::endgroup::"
+          done
+
+      - name: Enforce per-module kill-rate floors (blocking)
+        if: steps.scope.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          uv run python .github/workflows/scripts/mutmut_pr_gate.py \
+            --baselines tests/mutmut_baselines.json \
+            --results-dir pr-gate-results \
+            --touched '${{ steps.scope.outputs.paths }}'
+
+      - name: Upload PR-gate results
+        if: always() && steps.scope.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mutmut-pr-gate-results
+          path: pr-gate-results/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Note skip
+        if: steps.scope.outputs.skip == 'true'
+        run: echo "no scoped modules touched — mutation analysis skipped (exit 0)"

@@ -1,0 +1,8 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: |-
+    // LLM adapter: OpenAI — concrete impl plugged in behind the
+    // ``crate::ports::llm::LlmPort`` trait.
+    pub mod adapters;

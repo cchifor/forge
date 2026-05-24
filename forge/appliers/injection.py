@@ -7,11 +7,12 @@ the LibCST Python injector, the TS regex/ts-morph injector, or the
 text-marker fallback.
 
 Epic A (1.1.0-alpha.1) introduced :class:`FragmentInjectionApplier`;
-1.2.0-alpha.1 finalized the decomposition, deleting the legacy
-``forge.feature_injector`` shim and inlining the body helpers
+1.2.0-alpha.1 finalized the decomposition and inlined the body helpers
 (``_apply_zoned_injection``, ``_apply_merge_zone``,
 ``_record_merge_baseline``, ``_load_merge_baseline``,
-``_dispatch_injector``) into this module.
+``_dispatch_injector``) into this module. The orchestrating
+``_apply_fragment`` entry point that used to host them now lives at
+:mod:`forge.sync.forge_to_project.updater`.
 """
 
 from __future__ import annotations

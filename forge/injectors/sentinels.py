@@ -19,12 +19,12 @@ centralises:
 * the sentinel-block presence + body extraction helpers used by zone
   semantics (``_has_sentinel_block``, ``_read_block_body``)
 
-Splitting these out of :mod:`forge.feature_injector` (P1.1, Epic 1b)
-keeps the orchestrator's responsibilities cleanly separated from the
-text-manipulation primitives. The names are kept underscore-prefixed
-so callers in ``forge/`` and ``tests/`` that import them by name from
-either location keep working through the shim re-exports in
-``feature_injector``.
+Splitting these out of the legacy orchestrator (P1.1, Epic 1b) keeps
+the orchestrator's responsibilities cleanly separated from the
+text-manipulation primitives. The orchestrating ``_apply_fragment``
+entry point now lives at :mod:`forge.sync.forge_to_project.updater`;
+the names here are kept underscore-prefixed so callers in ``forge/``
+and ``tests/`` continue to import them by name.
 """
 
 from __future__ import annotations

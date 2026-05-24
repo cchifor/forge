@@ -1,0 +1,135 @@
+name: Featured plugins e2e
+
+# Pillar D.4 ("Featured Plugin" CI tier). Companion to
+# ``.github/workflows/plugin-e2e.yml``: where that workflow gates the
+# in-tree reference plugin (``examples/forge-plugin-example``) on every
+# PR, this one exercises out-of-tree community plugins that have signed
+# up for the Featured tier (see ``docs/plugin-development.md`` →
+# "Featured Plugin tier") against the latest ``main`` of forge.
+#
+# Cadence: nightly + on-demand (workflow_dispatch). Never on push/PR —
+# featured plugins are external repos, so a forge PR can't introduce a
+# regression we'd want to fail-fast on; nightly is the right grain.
+#
+# Empty-matrix design (2026-05): the curated plugin list is currently
+# empty. Rather than gate this workflow on the first plugin shipping
+# (which would leave the file in PR limbo for weeks), we ship a single
+# placeholder matrix entry with ``if: false`` on every step that
+# touches it. The workflow lints, the trigger is wired, and
+# ``workflow_dispatch`` returns a green no-op. Replace the placeholder
+# with a real entry the moment ``forge-plugin-<name>`` exists on PyPI
+# and its maintainer has agreed to the criteria in
+# ``docs/plugin-development.md``.
+
+on:
+  schedule:
+    # 04:00 UTC — one hour after ``matrix-nightly`` so we don't fight
+    # for the same self-hosted runners (forge is on github-hosted today
+    # but cron-stacking is still a useful habit).
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  featured-plugin-e2e:
+    runs-on: ubuntu-latest
+    # External-repo clone + pip install + smoke tests stays well under
+    # 20 min in steady state; cap matches plugin-e2e.yml.
+    timeout-minutes: 20
+    strategy:
+      # One failing plugin should not silence the others — a featured
+      # plugin's job is to act as a canary on its own row.
+      fail-fast: false
+      matrix:
+        # PLACEHOLDER ROW — fill once plugins exist. Real entries look
+        # like:
+        #
+        #   - name: forge-plugin-anthropic-node
+        #     repo: example-org/forge-plugin-anthropic-node
+        #     ref: v0.1.0          # latest tag
+        #     pypi: forge-plugin-anthropic-node
+        #     smoke_option: anthropic.completions
+        #
+        # The matrix is intentionally non-empty so the workflow renders
+        # and ``workflow_dispatch`` succeeds; every step below gates on
+        # ``matrix.enabled`` so the placeholder is a no-op.
+        plugin:
+          - name: placeholder
+            repo: cchifor/forge
+            ref: main
+            pypi: ""
+            smoke_option: ""
+            enabled: false
+    steps:
+      - name: Checkout forge
+        if: matrix.plugin.enabled
+        uses: actions/checkout@v4
+      - name: Setup uv
+        if: matrix.plugin.enabled
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+      - name: Install Python 3.13
+        if: matrix.plugin.enabled
+        run: uv python install 3.13
+      - name: Install forge from working tree
+        if: matrix.plugin.enabled
+        run: uv sync --all-extras --dev
+      - name: Checkout featured plugin
+        if: matrix.plugin.enabled
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.plugin.repo }}
+          ref: ${{ matrix.plugin.ref }}
+          path: featured-plugin
+      - name: Install featured plugin into forge venv
+        if: matrix.plugin.enabled
+        # Editable install pins the plugin to the freshly checked-out
+        # tag rather than whatever PyPI happens to ship; we want the
+        # CI failure to point at the tag, not at a stale release.
+        run: uv pip install -e ./featured-plugin
+      - name: forge --plugins list
+        if: matrix.plugin.enabled
+        run: uv run forge --plugins list
+      - name: forge new smoke
+        # Only runs if the matrix row declares a smoke_option — some
+        # plugins (emitters, hooks) have no user-visible option toggle
+        # and rely on ``forge --plugins list`` as the only smoke.
+        if: matrix.plugin.enabled && matrix.plugin.smoke_option != ''
+        run: |
+          uv run forge --yes --no-docker \
+            --project-name featured-smoke \
+            --backend-language python \
+            --features items \
+            --set ${{ matrix.plugin.smoke_option }}=true \
+            --output-dir /tmp \
+            --quiet
+      - name: Write job summary
+        if: always() && matrix.plugin.enabled
+        # Per-plugin row. Aggregating across matrix rows would need a
+        # second job; a per-row summary is good enough to scan from the
+        # checks tab.
+        run: |
+          {
+            echo "## Featured plugin: ${{ matrix.plugin.name }}"
+            echo ""
+            echo "| Plugin | Ref | Forge ref | Result |"
+            echo "| --- | --- | --- | --- |"
+            echo "| ${{ matrix.plugin.name }} | ${{ matrix.plugin.ref }} | ${{ github.sha }} | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Placeholder no-op summary
+        if: ${{ !matrix.plugin.enabled }}
+        # Without this the nightly run looks like it did nothing.
+        # Emit a clear breadcrumb explaining why.
+        run: |
+          {
+            echo "## Featured plugins e2e — no curated plugins yet"
+            echo ""
+            echo "The featured-plugin matrix is empty by design while we"
+            echo "wait for the first ``forge-plugin-*`` package to opt in."
+            echo "See ``docs/plugin-development.md`` → 'Featured Plugin tier'"
+            echo "for criteria and how to apply."
+          } >> "$GITHUB_STEP_SUMMARY"

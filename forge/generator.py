@@ -271,12 +271,21 @@ def _generate_backends(
             includes_platform_auth = any(
                 rf.fragment.name == "platform_auth_python_middleware" for rf in plan.ordered
             )
+            # Mirror the platform-auth gating for error_port: only wire the
+            # central handler through ``DefaultErrorPort.serialize`` when the
+            # fragment is actually in the plan. Otherwise the handler stays
+            # on its inline serialiser — required because Rust emits a
+            # ``use crate::error_port::DefaultErrorPort`` line in the
+            # port-wired branch that would fail to compile if the module
+            # isn't on disk. (Codex Phase B round 1 finding.)
+            includes_error_envelope = any(rf.fragment.name == "error_port" for rf in plan.ordered)
             _generate_single_backend(
                 bc,
                 spec.template_dir,
                 backend_dir,
                 quiet,
                 include_platform_auth=includes_platform_auth,
+                include_error_envelope=includes_error_envelope,
             )
         # We know which backend template produced this tree (spec.template_dir
         # is e.g. "services/python-service-template"). Pass it as template_name
@@ -971,9 +980,14 @@ def _generate_single_backend(
     quiet: bool = False,
     *,
     include_platform_auth: bool = False,
+    include_error_envelope: bool = False,
 ) -> Path:
     """Generate a single backend using Copier."""
-    ctx = variable_mapper.backend_context(bc, include_platform_auth=include_platform_auth)
+    ctx = variable_mapper.backend_context(
+        bc,
+        include_platform_auth=include_platform_auth,
+        include_error_envelope=include_error_envelope,
+    )
     dst.mkdir(parents=True, exist_ok=True)
     _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
     return dst
