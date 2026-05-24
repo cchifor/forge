@@ -2,7 +2,8 @@
 	import DOMPurify from 'dompurify';
 	import { marked } from 'marked';
 	import { Bot, User } from 'lucide-svelte';
-	import type { Message, ToolCallInfo } from '../chat.types';
+	import type { ToolCallInfo } from '../chat.types';
+	import type { ChatMessage as Message } from '@forge/canvas-core';
 	import { cn } from '$lib/shared/lib/utils';
 	import ToolCallStatus from './ToolCallStatus.svelte';
 
