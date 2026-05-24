@@ -45,6 +45,19 @@ node_version:
     - "22"
     - "24"
 
+include_error_envelope:
+  type: bool
+  help: |
+    Wire ``src/middleware/error-handler.ts`` through the
+    ``DefaultErrorPort`` adapter shipped by the ``error_port`` fragment
+    (Pillar E.1.b runtime wiring). Default ``false`` is fail-safe: the
+    generator flips it on only when the ``error_port`` fragment is in
+    the active plan (see ``includes_error_envelope`` in
+    ``forge/generator.py``). Emitting the port-wired branch without
+    the adapter on disk would fail at runtime; the soft-import catches
+    only ``ERR_MODULE_NOT_FOUND``, not init errors.
+  default: false
+
 # ---------------------------------------------------------------------------
 # Derived variables (not prompted)
 # ---------------------------------------------------------------------------

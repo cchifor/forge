@@ -141,6 +141,11 @@ class TestBackendContext:
             # is in the active plan; renders the ``platform-auth`` dep +
             # ``[tool.uv.sources]`` entry in pyproject.toml.jinja.
             "include_platform_auth",
+            # E.1.b runtime wiring — flipped from
+            # ``observability.error_envelope`` (default True), gates the
+            # Jinja conditional that swaps the central error handler
+            # between the inline serialiser and ``DefaultErrorPort``.
+            "include_error_envelope",
         }
 
 
