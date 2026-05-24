@@ -104,20 +104,6 @@ register_fragment(
 register_fragment(
     Fragment(
         name="cache_port",
-        # Codex Phase B round 1 follow-up: cache_port/rust ships
-        # `src/ports/mod.rs` which collides with queue_port/rust's
-        # `src/ports/mod.rs` under the strict file applier's
-        # FRAGMENT_FILES_OVERLAP guard. Declare the conflict
-        # explicitly so capability resolution errors loudly at
-        # plan-build time rather than silently corrupting the
-        # generated tree at apply time.
-        #
-        # The proper architectural fix is PortSpec (Pillar A.4 — PR #88)
-        # which collapses per-port `inject.yaml` into a single shared
-        # `src/ports/mod.rs` rendered by the renderer. Until cache_port
-        # + queue_port migrate to PortSpec, the conflict_with gate is
-        # the safe fallback.
-        conflicts_with=("queue_port",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir=_impl("cache_port", "python"),
@@ -145,12 +131,6 @@ register_fragment(
     Fragment(
         name="cache_memory",
         depends_on=("cache_port",),
-        # No external service — the in-process adapter ships zero
-        # infrastructure dependencies (no Redis, no compose changes).
-        # Codex Phase B round 1 follow-up: cache_memory/rust ships
-        # `src/adapters/mod.rs` which collides with queue_apalis/rust's
-        # same file. See cache_port's `conflicts_with` rationale.
-        conflicts_with=("queue_apalis",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir=_impl("cache_memory", "python"),
@@ -177,18 +157,6 @@ register_fragment(
     Fragment(
         name="cache_redis",
         depends_on=("cache_port",),
-        # Codex Phase B round 1 caught that `capabilities=("redis",)`
-        # alone does NOT auto-provision the Redis sidecar — that
-        # requires a sibling `compose.yaml` fragment registered with
-        # the service-registry (see queue_redis for the pattern that
-        # actually works). Until cache_redis ships its own
-        # `compose.yaml`, users selecting `reliability.cache=redis`
-        # need to ALSO ensure their stack provides Redis another way
-        # (auth.gatekeeper enables Keycloak which provisions Redis;
-        # queue.backend=redis provisions Redis via queue_redis).
-        # Tracked as E.2.b follow-up; documented in CHANGELOG.
-        # Same rust adapters/mod.rs collision concern as cache_memory.
-        conflicts_with=("queue_apalis",),
         capabilities=("redis",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
