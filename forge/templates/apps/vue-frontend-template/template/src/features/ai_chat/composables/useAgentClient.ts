@@ -146,6 +146,15 @@ export function useAgentClient() {
     hasRun = false
   }
 
+  function regenerate(messageId: string) {
+    if (!hasRun || isRunning.value) return
+    const idx = messages.value.findIndex((m) => m.id === messageId)
+    if (idx === -1) return
+    messages.value = messages.value.slice(0, idx)
+    error.value = null
+    runAgent(lastRunOptions)
+  }
+
   function retryLastRun() {
     if (!hasRun || isRunning.value) return
     error.value = null
@@ -179,6 +188,7 @@ export function useAgentClient() {
     isRunning: readonly(isRunning),
     error: readonly(error),
     runAgent,
+    regenerate,
     retryLastRun,
     dismissError,
     addUserMessage,

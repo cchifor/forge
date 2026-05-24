@@ -17,7 +17,8 @@ import keyword
 import shutil
 import sys
 from collections.abc import Sequence
-from importlib import metadata as _metadata, resources
+from importlib import metadata as _metadata
+from importlib import resources
 from pathlib import Path
 from typing import Any
 
