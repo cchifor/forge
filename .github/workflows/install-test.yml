@@ -1,0 +1,39 @@
+name: Install script smoke
+
+on:
+  schedule:
+    - cron: "0 8 * * 0" # Sundays 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-smoke:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The install script invokes `uv tool install git+<repo>` which
+      # needs a Python interpreter visible to uv. GitHub-hosted runners
+      # ship Python, but pinning via setup-python keeps the version
+      # deterministic and ensures uv can discover it.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run install script
+        run: bash install
+
+      - name: Ensure forge is on PATH
+        # uv tool install places binaries in ~/.local/bin; the install
+        # script sources ~/.local/bin/env to update PATH, but that only
+        # affects the subshell. Re-export here for the verification step.
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          forge --version
