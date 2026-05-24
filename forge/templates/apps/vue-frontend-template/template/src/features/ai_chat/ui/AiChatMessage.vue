@@ -1,10 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
-import { Sparkles, Wrench, Copy, Check, Pencil } from 'lucide-vue-next'
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
+import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import type { ToolCallInfo } from '../types'
+import ToolCallStatus from './ToolCallStatus.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
+
+// Token-streaming markdown debounce.
+//
+// Why: each TEXT_MESSAGE_CONTENT delta would otherwise re-parse the entire
+// assistant message through marked + DOMPurify and patch a fresh HTML tree
+// into the DOM. Typing-rate tokens (~5-20/sec from typical models) thrash
+// reconciliation. We collapse bursts into a single render every ~50ms and
+// always flush on stream end so the final tokens land within one frame.
+const MARKDOWN_DEBOUNCE_MS = 50
 
 function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(marked.parse(text) as string)
@@ -13,10 +24,22 @@ function renderMarkdown(text: string): string {
 const props = defineProps<{
   message: { id: string; role: string; content: string }
   isStreaming?: boolean
+  /**
+   * Show the Regenerate button. Parent decides — typically true only
+   * for the LAST assistant message AND when no run is in flight.
+   */
+  canRegenerate?: boolean
+  /**
+   * Tool calls attached to this assistant turn. Rendered under the
+   * message bubble so the args streaming (Pillar G.2) sits next to
+   * the text it belongs to.
+   */
+  toolCalls?: ToolCallInfo[]
 }>()
 
 const emit = defineEmits<{
   edit: [payload: { id: string; content: string }]
+  regenerate: [payload: { id: string }]
 }>()
 
 const copied = ref(false)
@@ -24,9 +47,52 @@ const editing = ref(false)
 const editText = ref('')
 const editTextarea = ref<HTMLTextAreaElement | null>(null)
 
-const renderedContent = computed(() =>
+// Debounced HTML cache. Raw text remains the source of truth (props.message.content);
+// we only debounce the parse-to-HTML step. The cache is updated either after
+// MARKDOWN_DEBOUNCE_MS of quiet, or immediately when streaming transitions to
+// false (TEXT_MESSAGE_END).
+const debouncedHtml = ref(
   props.message.content ? renderMarkdown(props.message.content) : '',
 )
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushMarkdown() {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  debouncedHtml.value = props.message.content
+    ? renderMarkdown(props.message.content)
+    : ''
+}
+
+watch(
+  () => props.message.content,
+  () => {
+    if (!props.isStreaming) {
+      // Not streaming: render synchronously (e.g. user edit, replay).
+      flushMarkdown()
+      return
+    }
+    if (debounceTimer !== null) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(flushMarkdown, MARKDOWN_DEBOUNCE_MS)
+  },
+)
+
+// Always render on stream end — the final tokens must appear within frame
+// regardless of where the debounce timer was when END arrived.
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (!streaming) flushMarkdown()
+  },
+)
+
+onBeforeUnmount(() => {
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
+})
+
+const renderedContent = computed(() => debouncedHtml.value)
 
 async function copyMessage() {
   if (!props.message.content) return
@@ -135,16 +201,43 @@ function submitEdit() {
         v-if="props.isStreaming && props.message.content"
         class="inline-block w-1.5 h-4 bg-foreground/50 animate-pulse"
       />
-      <button
+      <div
         v-if="props.message.content && !props.isStreaming"
-        class="mt-1 flex items-center gap-1 self-start text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        :aria-label="copied ? 'Copied' : 'Copy message'"
-        @click="copyMessage"
+        class="mt-1 flex items-center gap-2 self-start opacity-0 transition-opacity group-hover:opacity-100"
       >
-        <Check v-if="copied" class="h-3 w-3" />
-        <Copy v-else class="h-3 w-3" />
-        {{ copied ? 'Copied' : 'Copy' }}
-      </button>
+        <button
+          class="flex items-center gap-1 text-[10px] text-muted-foreground"
+          :aria-label="copied ? 'Copied' : 'Copy message'"
+          @click="copyMessage"
+        >
+          <Check v-if="copied" class="h-3 w-3" />
+          <Copy v-else class="h-3 w-3" />
+          {{ copied ? 'Copied' : 'Copy' }}
+        </button>
+        <button
+          v-if="props.canRegenerate"
+          class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Regenerate response"
+          @click="emit('regenerate', { id: props.message.id })"
+        >
+          <RefreshCw class="h-3 w-3" />
+          Regenerate
+        </button>
+      </div>
+      <!-- Tool-call list with collapsible args preview. -->
+      <div
+        v-if="props.toolCalls && props.toolCalls.length > 0"
+        class="mt-2 flex flex-col gap-1.5"
+      >
+        <ToolCallStatus
+          v-for="tc in props.toolCalls"
+          :key="tc.id"
+          :tool-name="tc.name"
+          :status="tc.status"
+          :args-buffer="tc.argsBuffer"
+          :args-pretty="tc.argsPretty"
+        />
+      </div>
     </div>
   </div>
 

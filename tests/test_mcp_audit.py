@@ -108,9 +108,7 @@ class TestMintAndVerify:
         import time
 
         original_time = time.time()
-        with patch.object(
-            audit_module.time, "time", return_value=original_time + 7200
-        ):
+        with patch.object(audit_module.time, "time", return_value=original_time + 7200):
             assert not audit_module.verify_approval_token(
                 token,
                 server="fs",
@@ -180,3 +178,137 @@ class TestRecordInvocation:
                 )
             )
         assert len(log_path.read_text(encoding="utf-8").strip().splitlines()) == 3
+
+
+class TestReadLastN:
+    """Read-back helper backing the ``GET /mcp/audit`` endpoint."""
+
+    @staticmethod
+    def _write_entries(audit_module, count: int) -> None:
+        for i in range(count):
+            audit_module.record_invocation(
+                audit_module.AuditEntry(
+                    timestamp=float(i),
+                    user_id=f"u-{i}",
+                    server="fs",
+                    tool="read_file",
+                    input_hash=f"h{i}",
+                    decision="approved",
+                )
+            )
+
+    def test_returns_most_recent_first(self, audit_module, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+        self._write_entries(audit_module, 5)
+
+        page = audit_module.read_last_n(3)
+        assert [e["ts"] for e in page] == [4.0, 3.0, 2.0]
+
+    def test_limit_one_returns_single_newest(self, audit_module, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+        self._write_entries(audit_module, 5)
+
+        page = audit_module.read_last_n(1)
+        assert len(page) == 1
+        assert page[0]["ts"] == 4.0
+
+    def test_limit_exceeds_size_returns_all(self, audit_module, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+        self._write_entries(audit_module, 3)
+
+        page = audit_module.read_last_n(1000)
+        assert len(page) == 3
+        # Still most-recent-first.
+        assert [e["ts"] for e in page] == [2.0, 1.0, 0.0]
+
+    def test_missing_log_returns_empty(self, audit_module, tmp_path, monkeypatch) -> None:
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "does-not-exist.jsonl"))
+        assert audit_module.read_last_n(50) == []
+
+    def test_zero_or_negative_limit_returns_empty(
+        self, audit_module, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+        self._write_entries(audit_module, 2)
+        assert audit_module.read_last_n(0) == []
+        assert audit_module.read_last_n(-1) == []
+
+    def test_skips_malformed_lines(self, audit_module, tmp_path, monkeypatch, caplog) -> None:
+        """Malformed JSONL (likely from a concurrent write mid-flush) is
+        skipped + emits a warning. Codex Phase B round 1 follow-up:
+        assert the warning fires so corruption isn't completely silent —
+        ops can grep CI logs for `MCP audit: skipping malformed line`.
+        """
+        import logging
+        log_path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(log_path))
+        self._write_entries(audit_module, 2)
+        # Splice a corrupt line into the middle.
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write("not-valid-json\n")
+        audit_module.record_invocation(
+            audit_module.AuditEntry(
+                timestamp=99.0,
+                user_id="u-99",
+                server="fs",
+                tool="read_file",
+                input_hash="h99",
+                decision="approved",
+            )
+        )
+
+        with caplog.at_level(logging.WARNING, logger="app.mcp.audit"):
+            page = audit_module.read_last_n(10)
+        assert [e["ts"] for e in page] == [99.0, 1.0, 0.0]
+        assert any(
+            "malformed" in record.message.lower() or "skip" in record.message.lower()
+            for record in caplog.records
+        ), "malformed-line skip should emit a warning"
+
+    def test_oserror_propagates_uncaught(self, audit_module, tmp_path, monkeypatch) -> None:
+        """Codex Phase B round 1 follow-up: when the JSONL file can be
+        located but reading it fails (e.g. permission denied), read_last_n
+        propagates OSError uncaught. The router's HTTPException(500)
+        wrapping is where the conversion happens — not here.
+        """
+        import pytest
+        log_path = tmp_path / "audit.jsonl"
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(log_path))
+        self._write_entries(audit_module, 1)
+        # Replace open() with a stub that raises OSError on read.
+        original_open = type(log_path).open
+        def _raising_open(self, *args, **kwargs):
+            raise OSError(13, "Permission denied", str(self))
+        monkeypatch.setattr(type(log_path), "open", _raising_open)
+        try:
+            with pytest.raises(OSError, match="Permission denied"):
+                audit_module.read_last_n(10)
+        finally:
+            monkeypatch.setattr(type(log_path), "open", original_open)
+
+    def test_entry_shape_round_trips(self, audit_module, tmp_path, monkeypatch) -> None:
+        """Every field written by record_invocation comes back out."""
+        monkeypatch.setenv("MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+        audit_module.record_invocation(
+            audit_module.AuditEntry(
+                timestamp=1700000000.0,
+                user_id="user-42",
+                server="fs",
+                tool="read_file",
+                input_hash="abc123",
+                decision="approved",
+                error=None,
+            )
+        )
+        page = audit_module.read_last_n(1)
+        assert page == [
+            {
+                "ts": 1700000000.0,
+                "user_id": "user-42",
+                "server": "fs",
+                "tool": "read_file",
+                "input_hash": "abc123",
+                "decision": "approved",
+                "error": None,
+            }
+        ]

@@ -22,13 +22,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.mcp.audit import (
     AuditEntry,
     hash_input,
     mint_approval_token,
+    read_last_n,
     record_invocation,
     verify_approval_token,
 )
@@ -222,3 +223,79 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
         )
     )
     return McpInvokeResponse(ok=True, output=result)
+
+
+class McpAuditEntry(BaseModel):
+    """One audit-log entry as written by :func:`app.mcp.audit.record_invocation`.
+
+    Fields mirror the on-disk JSONL shape verbatim. New columns added
+    to the write path (e.g. ``tool_call_id``, ``approval_mode``,
+    ``correlation_id`` — RFC-014 deferred) should grow this model as
+    optional, never repurpose existing field semantics.
+
+    ``model_config = {"extra": "allow"}`` keeps the response forward-
+    compatible: when the write path adds fields ahead of this model's
+    next bump, they still surface to API clients rather than getting
+    silently dropped by Pydantic v2's default-strict serialization.
+    """
+
+    model_config = {"extra": "allow"}
+
+    ts: str
+    user_id: str
+    server: str
+    tool: str
+    input_hash: str
+    decision: str
+    error: str | None = None
+
+
+class McpAuditResponse(BaseModel):
+    """Page of audit entries returned by ``GET /mcp/audit``."""
+
+    entries: list[McpAuditEntry]
+
+
+@router.get("/audit", response_model=McpAuditResponse)
+async def list_audit(
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=1000,
+        description="Maximum number of entries to return, most-recent-first.",
+    ),
+) -> McpAuditResponse:
+    """Return the last ``limit`` audit-log entries, most-recent-first.
+
+    Operators + debug UIs use this to inspect MCP tool-call decisions
+    written by :func:`app.mcp.audit.record_invocation`. The endpoint
+    is additive — the write path is unchanged. Each entry mirrors the
+    on-disk JSONL shape: ``{ts, user_id, server, tool, input_hash,
+    decision, error}``. Missing log file returns an empty list (not
+    an error: that's the "no calls yet" case). Storage-backend
+    failures surface as 500 so monitoring catches them.
+
+    **Deferred fields:** ``tool_call_id``, ``approval_mode``, and
+    ``correlation_id`` are spec-mentioned but not yet on the write
+    path. Adding them is a follow-up that extends
+    ``record_invocation`` (and bumps :class:`McpAuditEntry` to declare
+    each as optional). Until then this endpoint returns the JSONL
+    fields verbatim.
+
+    **Memory cost:** ``read_last_n`` parses the entire log file into
+    memory before slicing. Acceptable because the JSONL is externally
+    rotated (see ``audit.py`` module docstring) and bounded to MB-
+    scale in production. If rotation is mis-configured and the file
+    grows to GB-scale, this endpoint will OOM the worker — that's a
+    deployment misconfiguration to surface in monitoring, not an
+    endpoint bug.
+    """
+    try:
+        entries = read_last_n(limit)
+    except OSError as exc:
+        logger.warning("MCP audit read failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="MCP audit storage backend unavailable.",
+        ) from exc
+    return McpAuditResponse(entries=entries)

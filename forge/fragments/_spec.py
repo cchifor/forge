@@ -193,6 +193,25 @@ class Fragment:
     # are typically project-scoped because they touch the active frontend
     # tree).
     target_frontends: tuple[FrontendFramework, ...] = ()
+    # RFC-011 acceptance (1.2.0) — opt-out marker for the three-frontend
+    # coverage lint at ``tests/test_three_frontend_coverage.py``. Any
+    # fragment shipping a Vue composable (``.vue`` file or a composable
+    # ``.ts`` under a ``vue/`` directory) must either have sibling
+    # ``_svelte`` + ``_flutter`` fragments OR set
+    # ``frontend_skip_reason`` to a non-empty explanation. The reason
+    # string is surfaced in the test failure message so the asymmetry
+    # is a *documented* exception rather than a *silent* one.
+    #
+    # See ``docs/rfcs/RFC-011-frontend-api-client-survey.md`` for the
+    # rationale: RFC-011's accepted recommendation explicitly tolerates
+    # Vue/Svelte vs Flutter asymmetry but requires it be visible at the
+    # registry level so it cannot silently grow.
+    #
+    # Today no fragment uses this; introduced as the escape hatch for
+    # future Vue-only experiments that genuinely don't need a Flutter /
+    # Svelte sibling (e.g. desktop-only canvas tooling, browser-
+    # devtools-style integrations).
+    frontend_skip_reason: str | None = None
 
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations

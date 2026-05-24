@@ -83,6 +83,19 @@ include_platform_auth:
     false and don't reference platform-auth at all.
   default: false
 
+include_error_envelope:
+  type: bool
+  help: |
+    Wire ``app/core/errors.py``'s central handler through the
+    ``DefaultErrorPort`` adapter shipped by the ``error_port`` fragment
+    (Pillar E.1.b runtime wiring). Default ``false`` is fail-safe: the
+    generator flips it on only when the ``error_port`` fragment is in
+    the active plan (see ``includes_error_envelope`` in
+    ``forge/generator.py``). The Python soft-import would still handle
+    a missing adapter, but defaulting off keeps emitted code minimal in
+    the common case.
+  default: false
+
 service_path_prefix:
   type: str
   help: "Traefik PathPrefix used for routing this service (e.g. /api/{{ project_slug }})"

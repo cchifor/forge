@@ -71,8 +71,29 @@ def _dispatch_add_backend(args) -> None:
     )
 
     spec = BACKEND_REGISTRY[lang_enum]
+
+    # E.1.b parity: if the project opted into the error_port runtime
+    # wiring (``observability.error_envelope=True``), the new backend
+    # must match — otherwise the new service silently ships the inline
+    # serialiser while peer services route through ``DefaultErrorPort``,
+    # breaking the per-project consistency the port promises. The main
+    # generator derives this from plan membership of the ``error_port``
+    # fragment; here we read the option directly from the manifest
+    # because ``add-backend`` doesn't run the full capability resolver.
+    # Default ``False`` is fail-safe — matches the variable_mapper
+    # default and avoids emitting ``use crate::error_port::...`` (Rust)
+    # in projects where the port module isn't on disk. (Codex Phase B
+    # round 2 finding.)
+    include_error_envelope = bool(data.options.get("observability.error_envelope", False))
+
     print(f"Scaffolding {spec.display_label} backend '{name}' at {backend_dir} ...")
-    _generate_single_backend(bc, spec.template_dir, backend_dir, quiet=False)
+    _generate_single_backend(
+        bc,
+        spec.template_dir,
+        backend_dir,
+        quiet=False,
+        include_error_envelope=include_error_envelope,
+    )
 
     print()
     print("Next steps:")

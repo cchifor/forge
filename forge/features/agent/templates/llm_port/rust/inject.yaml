@@ -1,0 +1,9 @@
+- target: src/lib.rs
+  marker: FORGE:LIB_MOD_REGISTRATION
+  position: after
+  zone: generated
+  snippet: |-
+    // LLM port — adapter-less startup keeps the ``LlmPort`` trait
+    // available for typing; an adapter (llm.provider=openai) wires the
+    // concrete impl behind it.
+    pub mod ports;

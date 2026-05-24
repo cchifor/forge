@@ -16,8 +16,10 @@ preserving structure. Collision behaviour is driven by
                   ``.forge-merge`` (or ``.forge-merge.bin``) sidecar on
                   conflict and continue. The user resolves by hand.
 
-Epic A (1.1.0-alpha.1) lifted the body into this module from the
-now-deleted ``forge.feature_injector`` shim (removed in 1.2.0-alpha.1).
+Epic A (1.1.0-alpha.1) lifted the body into this module; the
+orchestrating ``_apply_fragment`` entry point that used to call it
+now lives at :mod:`forge.sync.forge_to_project.updater`
+(1.2.0-alpha.1).
 """
 
 from __future__ import annotations

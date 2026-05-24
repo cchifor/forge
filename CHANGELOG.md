@@ -7,6 +7,95 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
+  Adds a read endpoint to the MCP server router in generated Python
+  projects (shipped via the `mcp_server` fragment, pulled in by
+  `agent.mode=tool_calling`). Returns the last `N` (1–1000, default
+  50) entries from the JSONL audit log written by
+  `record_invocation`, most-recent-first, as
+  `{"entries": [{ts, user_id, server, tool, input_hash, decision,
+  error}, ...]}`. A new `read_last_n(limit)` helper on
+  `app.mcp.audit` backs the endpoint and is independently importable
+  for operators who want to consume the audit stream from a sidecar.
+  Missing log file (no calls yet) returns an empty list; storage IO
+  failures surface as `500`; invalid `limit` surfaces as `422` via
+  FastAPI's `Query` validator. **Backwards-compatible** — the
+  existing write path (`record_invocation` + on-disk JSONL format) is
+  unchanged; the endpoint is purely additive. Closes the long-
+  standing gap where `audit.py` was write-only and operators had to
+  `tail`/`grep` the on-disk file by hand.
+
+- **Fragment-DX cheap wins (Horizon 1).** Three small additions to the
+  fragment authoring surface that together cut ~20% off the multi-
+  language fragment files (`object_store`, `llm_*`, `vector_store_*`).
+  `Fragment.shared_env_vars: tuple[tuple[str, str], ...] = ()` declares
+  backend-agnostic env vars (`AWS_REGION`, `S3_ENDPOINT_URL`, …) once
+  instead of repeating them per `FragmentImplSpec.env_vars`; the env
+  applier merges shared first, per-impl second, with per-impl winning on
+  key collision so a single language can still override the shared
+  default. `Fragment.before: tuple[str, ...] = ()` and `Fragment.after:
+  tuple[str, ...] = ()` declare soft ordering constraints — unlike
+  `depends_on` (which is a HARD pull), `before` / `after` only activate
+  when both endpoints are already in the plan, so a fragment can say
+  "if X happens to coexist, sit before/after it" without forcing X into
+  every plan. Numeric `order` remains the tiebreak inside a topological
+  layer. Cycles in the combined `depends_on` ∪ `before` ∪ `after` graph
+  are caught at `FRAGMENT_REGISTRY.freeze()` with the cycle path
+  surfaced in the `FragmentError`. The accompanying docstring sweep
+  retargets `forge.feature_injector`-shim references (deleted in
+  1.2.0-alpha.1) at the post-shim home: `forge.sync.forge_to_project.
+  updater` for the orchestrator, `forge.appliers.*` for the body
+  helpers. All three new fields default to empty tuples so every
+  existing fragment registration is byte-identical.
+
+- **Fragment-DX cheap wins follow-through (Horizon 1).** Contract-test
+  surface at `tests/test_fragment_cheap_wins.py` (18 tests in 3
+  classes — `TestSharedEnvVars`, `TestBeforeAfterOrdering`,
+  `TestNoFeatureInjectorReferences`) acts as the public-facing
+  release gate for the cheap-wins ship. Docstring sweep across 9
+  in-tree modules retargets stale `forge.feature_injector`-shim
+  references (deleted in 1.2.0-alpha.1) at the post-shim landings:
+  `forge.sync.forge_to_project.updater` for the orchestrator,
+  `forge.appliers.*` for the body helpers, and
+  `forge.injectors._registry.ApplierRegistry` (Pillar A.1, SDK 1.2)
+  for the suffix-dispatch entry point. The deeper end-to-end
+  coverage of `shared_env_vars` + `before`/`after` lives in the
+  pre-existing `tests/fragments/test_fragment_dx_fields.py`; the new
+  file's Shared/BeforeAfter classes are an intentional transitional
+  duplication that consolidates back to the dx_fields file in 1.2.1.
+
+- **`llm_port` + `llm_openai` are now tier-1 on Node + Rust (Pillar D.2).**
+  Promotes the LLM provider port from Python-only / tier-3 to
+  tier-1, with the first cross-language adapter (`llm_openai`)
+  shipping alongside. Node uses the Vercel AI SDK (`ai` core +
+  `@ai-sdk/openai` provider); Rust uses the `async-openai` crate.
+  Both stream `LlmChunk` events behind the same port contract as
+  the Python adapter — the TypeSpec spec at
+  `forge/templates/_shared/ports/llm/contract.tsp` is the
+  cross-language source of truth. Selecting `llm.provider=openai`
+  on a Node or Rust backend now resolves both `llm_port` and
+  `llm_openai`; mixed-language projects get one port + one adapter
+  per supporting backend. **Honest scope** — `llm_anthropic`,
+  `llm_ollama`, and `llm_bedrock` stay Python-only / tier-3 in 1.x;
+  their SDK ecosystems aren't mature enough on Node/Rust to justify
+  in-tree adapters, and plugin authors carry that gap (Featured
+  Plugin tier — see `docs/known-issues.md`). The Pillar A.4
+  `PortSpec` infra is intentionally **not** consumed here: the
+  current production fragment-apply path (the `_apply_fragment`
+  shim in `forge/sync/`) only forwards `middlewares`, not arbitrary
+  `FragmentRenderer` tuples, so wiring PortSpec into a real fragment
+  would require touching out-of-scope code. The three near-identical
+  `inject.yaml` files for the Node + Rust port + adapter are the
+  pragmatic v1; the PortSpec migration is a follow-up once `Fragment`
+  grows a `renderers=()` field and the sync shim threads it through.
+  Known limitations on Rust (mirroring the cache_port pattern):
+  simultaneously enabling `llm_port` + `queue_port` / `cache_port`
+  collides on `src/ports/mod.rs`, and `llm_openai` + `queue_apalis` /
+  `cache_memory` / `cache_redis` collides on `src/adapters/mod.rs` —
+  both declared via `conflicts_with` so the resolver fails loudly
+  at plan-build time rather than silently corrupting the generated
+  tree.
+
 - **`PortSpec` — declarative port-wiring renderer (Pillar A.4,
   internal infra).** Second
   `forge.appliers.renderers.FragmentRenderer` implementation,
