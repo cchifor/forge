@@ -30,9 +30,13 @@ service:
     SIGNING_KEY_DIR: "/run/secrets/gatekeeper-signing"
     KEY_BACKEND: "file"
 
-  # Same image build as gatekeeper main service; defining build here too
-  # so docker compose understands both services share the build context.
+  # ``extra`` passes through to docker-compose verbatim. ``user: root``
+  # overrides the Dockerfile's USER appuser (uid 10001) — Docker creates
+  # named volumes as root, so the one-shot keygen init container needs
+  # root to write the signing key. The main gatekeeper service mounts
+  # the volume :ro under its own unprivileged user.
   extra:
+    user: root
     build:
       context: ./infra/gatekeeper
       dockerfile: Dockerfile
