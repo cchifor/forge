@@ -25,6 +25,8 @@ pub mod middleware;
 pub mod models;
 pub mod routes;
 pub mod services;
+pub mod ports;
+pub mod adapters;
 // FORGE:LIB_MOD_REGISTRATION
 // FORGE:BEGIN reliability_connection_pool:LIB_MOD_REGISTRATION
 pub mod db_pool;

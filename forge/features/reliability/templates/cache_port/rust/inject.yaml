@@ -1,9 +1,6 @@
-- target: src/lib.rs
-  marker: FORGE:LIB_MOD_REGISTRATION
+- target: src/ports/mod.rs
+  marker: FORGE:PORTS_MOD_REGISTRATION
   position: after
   zone: generated
   snippet: |-
-    // Cache port — adapter-less startup keeps the ``CachePort`` trait
-    // available for typing; an adapter (reliability.cache=memory|redis)
-    // wires the concrete impl.
-    pub mod ports;
+    pub mod cache;
