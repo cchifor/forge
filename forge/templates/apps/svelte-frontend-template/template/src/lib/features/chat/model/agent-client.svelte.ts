@@ -111,6 +111,15 @@ function editAndResend(messageId: string, newContent: string, options?: ChatRunO
 	void runAgent(options);
 }
 
+function regenerate(messageId: string) {
+	if (!hasRun || isRunning) return;
+	const idx = messages.findIndex((m) => m.id === messageId);
+	if (idx === -1) return;
+	messages = messages.slice(0, idx);
+	lastError = null;
+	void runAgent(lastRunOptions);
+}
+
 function resetThread() {
 	currentThreadId = crypto.randomUUID();
 	snapshot = resetSnapshot();
@@ -177,6 +186,7 @@ export function getAgentClient() {
 			return snapshot.error ? new Error(snapshot.error) : null;
 		},
 		runAgent,
+		regenerate,
 		retryLastRun,
 		dismissError,
 		addUserMessage,
