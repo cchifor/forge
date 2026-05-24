@@ -3,6 +3,8 @@ import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from 'lucide-vue-next'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import type { ToolCallInfo } from '../types'
+import ToolCallStatus from './ToolCallStatus.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -27,6 +29,12 @@ const props = defineProps<{
    * for the LAST assistant message AND when no run is in flight.
    */
   canRegenerate?: boolean
+  /**
+   * Tool calls attached to this assistant turn. Rendered under the
+   * message bubble so the args streaming (Pillar G.2) sits next to
+   * the text it belongs to.
+   */
+  toolCalls?: ToolCallInfo[]
 }>()
 
 const emit = defineEmits<{
@@ -215,6 +223,20 @@ function submitEdit() {
           <RefreshCw class="h-3 w-3" />
           Regenerate
         </button>
+      </div>
+      <!-- Tool-call list with collapsible args preview. -->
+      <div
+        v-if="props.toolCalls && props.toolCalls.length > 0"
+        class="mt-2 flex flex-col gap-1.5"
+      >
+        <ToolCallStatus
+          v-for="tc in props.toolCalls"
+          :key="tc.id"
+          :tool-name="tc.name"
+          :status="tc.status"
+          :args-buffer="tc.argsBuffer"
+          :args-pretty="tc.argsPretty"
+        />
       </div>
     </div>
   </div>
