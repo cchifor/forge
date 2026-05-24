@@ -6,6 +6,7 @@
 	const chat = getChatStore();
 	const activity = $derived(chat.canvasActivity);
 	const entry = $derived(activity ? resolveCanvasComponent(activity.activityType) : null);
+	const Comp = $derived(entry?.component ?? null);
 </script>
 
 {#if activity && entry}
@@ -27,8 +28,9 @@
 			</button>
 		</div>
 		<div class="flex-1 overflow-y-auto">
-			{@const Comp = entry.component}
-			<Comp {activity} />
+			{#if Comp}
+				<Comp {activity} />
+			{/if}
 		</div>
 	</section>
 {/if}
