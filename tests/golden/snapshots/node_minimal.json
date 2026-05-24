@@ -29,7 +29,7 @@
       "sha256": "677ccc660dcf4e6b"
     },
     "forge.toml": {
-      "size": 43497,
+      "size": 43785,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -389,7 +389,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api/.copier-answers.yml": {
-      "size": 478,
+      "size": 505,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -521,8 +521,8 @@
       "sha256": "1130d8a9a12c2118"
     },
     "services/api/src/middleware/error-handler.ts": {
-      "size": 2409,
-      "sha256": "86c7677f63a270e0"
+      "size": 5449,
+      "sha256": "d725afe199bc1319"
     },
     "services/api/src/middleware/logging.ts": {
       "size": 942,
@@ -571,6 +571,10 @@
     "services/api/src/types/auth.ts": {
       "size": 2366,
       "sha256": "13617898a495428a"
+    },
+    "services/api/tests/integration/error-handler.test.ts": {
+      "size": 4498,
+      "sha256": "a315048dec5845c0"
     },
     "services/api/tests/integration/health.test.ts": {
       "size": 1330,
