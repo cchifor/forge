@@ -57,6 +57,10 @@ class TestMcpSigningKeyGuard:
         fn = src.split("def _secret")[1].split("\ndef ")[0]
         assert '"forge-service"' not in fn
 
+    def test_secret_evaluated_eagerly_at_module_scope(self):
+        src = _MCP_AUDIT_PATH.read_text(encoding="utf-8")
+        assert "_SIGNING_SECRET = _secret()" in src
+
 
 class TestDomainSecretKeyGuard:
     """1A: SecurityConfig must reject CHANGEME in production."""
