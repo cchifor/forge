@@ -194,15 +194,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "copier", specifier = ">=9.0.0" },
-    { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "libcst", specifier = ">=1.8.6" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "questionary", specifier = ">=2.0.0" },
-    { name = "tomlkit", specifier = ">=0.14.0" },
-    { name = "tree-sitter", specifier = ">=0.25.2" },
-    { name = "tree-sitter-rust", specifier = ">=0.24.2" },
+    { name = "copier", specifier = ">=9.0.0,<10" },
+    { name = "jinja2", specifier = ">=3.1.0,<4" },
+    { name = "libcst", specifier = ">=1.8.6,<2" },
+    { name = "pydantic", specifier = ">=2.0,<3" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
+    { name = "questionary", specifier = ">=2.0.0,<3" },
+    { name = "tomlkit", specifier = ">=0.14.0,<1" },
+    { name = "tree-sitter", specifier = ">=0.25.2,<1" },
+    { name = "tree-sitter-rust", specifier = ">=0.24.2,<1" },
 ]
 
 [package.metadata.requires-dev]

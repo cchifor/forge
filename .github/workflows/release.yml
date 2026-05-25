@@ -274,6 +274,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          enable-cache: true
+
       - name: Extract changelog section
         id: changelog
         run: |
@@ -283,8 +289,21 @@ jobs:
           awk -v v="$version" '/^## \[/ { in_section=0 } $0 ~ "^## \\[" v "\\]" { in_section=1; next } in_section' CHANGELOG.md > release-notes.md
           cat release-notes.md
 
+      # Task 7 / 3B — CycloneDX SBOM. Generates a machine-readable
+      # software bill of materials from the locked dependency graph and
+      # attaches it to the GitHub release as a downloadable asset.
+      - name: Generate CycloneDX SBOM
+        run: |
+          uv sync --all-extras --dev
+          uvx cyclonedx-bom --format json --output forge-sbom.cdx.json
+
       - name: Create release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      - name: Attach SBOM to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" forge-sbom.cdx.json --clobber
