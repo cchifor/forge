@@ -77,8 +77,8 @@ service:
     SESSION_WARN_AT_SECONDS: "60"
     # Generate via: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
     # Override in production. Rotation invalidates every outstanding session.
-    SESSION_FERNET_KEY: "ZmFrZS1mZXJuZXQta2V5LWZvci1kZXYtb25seS0zMmI="
-    DELEGATION_GRANT_FERNET_KEY: "ZmFrZS1mZXJuZXQta2V5LWZvci1kZWxlZ2F0aW9uLTMy"
+    SESSION_FERNET_KEY: "L9dXzDhHXxIbDpzmUrNSCMUgCl0rYmQ6j6lwtWXH_A4="
+    DELEGATION_GRANT_FERNET_KEY: "UVEc0SmYvD9UcwKTlz_fMTusqFVVTNLliJ96ChlPDCI="
 
     # ── /auth/token (service-to-service via S2SClient) ───────────────
     SERVICE_REGISTRY_PATH: "/run/secrets/gatekeeper-service-registry/service_registry.yaml"
