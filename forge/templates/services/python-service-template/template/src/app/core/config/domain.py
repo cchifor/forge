@@ -78,7 +78,7 @@ class SecurityConfig(BaseModel):
 
     @model_validator(mode="after")
     def _reject_default_secret_in_prod(self) -> "SecurityConfig":
-        env = os.getenv("ENV", os.getenv("ENVIRONMENT", "development"))
+        env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production"))
         if self.secret_key == "CHANGEME" and env.lower() not in (
             "development", "dev", "local", "test",
         ):

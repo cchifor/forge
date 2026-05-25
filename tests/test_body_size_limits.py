@@ -70,6 +70,12 @@ class TestPythonBodyLimit:
             "ContentSizeLimitMiddleware must be registered in main.py"
         )
 
+    def test_guards_against_double_response(self):
+        src = _PYTHON_BODY_LIMIT.read_text(encoding="utf-8")
+        assert "response_started" in src, (
+            "body_limit.py must track response_started to avoid ASGI double-response"
+        )
+
 
 class TestNodeBodyLimit:
     """Node/Fastify template configures bodyLimit in the constructor."""

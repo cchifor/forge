@@ -73,17 +73,17 @@ def _secret() -> bytes:
     key = os.getenv("MCP_APPROVAL_SIGNING_KEY")
     if key:
         return key.encode("utf-8")
-    env = os.getenv("ENV", os.getenv("ENVIRONMENT", "development"))
-    if env.lower() not in ("development", "dev", "local", "test"):
-        raise RuntimeError(
-            "MCP_APPROVAL_SIGNING_KEY must be set in production. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production"))
+    if env.lower() in ("development", "dev", "local", "test"):
+        logger.warning(
+            "MCP_APPROVAL_SIGNING_KEY not set — using an insecure fallback. "
+            "This is acceptable for local dev only."
         )
-    logger.warning(
-        "MCP_APPROVAL_SIGNING_KEY not set — using an insecure fallback. "
-        "This is acceptable for local dev only."
+        return b"forge-local-dev-signing-key"
+    raise RuntimeError(
+        "MCP_APPROVAL_SIGNING_KEY must be set in production. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
     )
-    return b"forge-local-dev-signing-key"
 
 
 # Fail fast: validate the signing key at import time so misconfigured

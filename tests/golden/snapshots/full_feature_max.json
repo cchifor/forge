@@ -1621,8 +1621,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 4188,
-      "sha256": "825bf208d8f2a87a"
+      "size": 4187,
+      "sha256": "8941c31f165088c0"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -1797,8 +1797,8 @@
       "sha256": "3dc4801a7a2cfe7c"
     },
     "services/api/src/app/middleware/body_limit.py": {
-      "size": 2727,
-      "sha256": "130c2a104eecddb4"
+      "size": 3120,
+      "sha256": "b83b5266cabcaeb9"
     },
     "services/api/src/app/middleware/correlation.py": {
       "size": 1269,
