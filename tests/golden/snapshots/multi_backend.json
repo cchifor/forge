@@ -30,7 +30,7 @@
     },
     "docker-compose.yml": {
       "size": 9766,
-      "sha256": "07c828a6582d44d0"
+      "sha256": "39c1a47ba7694d88"
     },
     "forge.toml": {
       "size": 81270,
@@ -57,8 +57,8 @@
       "sha256": "8ee9220daf14615a"
     },
     "infra/gatekeeper/config/production.yaml": {
-      "size": 1357,
-      "sha256": "7917291ba690dcd1"
+      "size": 1184,
+      "sha256": "96b81110decce336"
     },
     "infra/gatekeeper/config/secrets.production.yaml.example": {
       "size": 280,
@@ -73,8 +73,8 @@
       "sha256": "955c6604957e47cc"
     },
     "infra/gatekeeper/scripts/keygen.py": {
-      "size": 2171,
-      "sha256": "c64c4f1525677213"
+      "size": 2372,
+      "sha256": "2a5586db95c1d4c0"
     },
     "infra/gatekeeper/scripts/validate_internal.py": {
       "size": 7196,
@@ -481,8 +481,8 @@
       "sha256": "ff2ee5483ba82cd7"
     },
     "sdks/platform-auth-node/src/plugin.ts": {
-      "size": 6018,
-      "sha256": "d7e60b1e6fb03a56"
+      "size": 6069,
+      "sha256": "acdb552da65e3084"
     },
     "sdks/platform-auth-node/src/revocation.ts": {
       "size": 1572,

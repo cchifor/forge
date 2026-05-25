@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,16 +8,16 @@ dynamic = ["version"]
 description = "CLI tool to generate and orchestrate full-stack projects."
 requires-python = ">=3.13"
 dependencies = [
-    "copier>=9.0.0",
-    "questionary>=2.0.0",
-    "jinja2>=3.1.0",
+    "copier>=9.15.1",
+    "questionary>=2.1.1",
+    "jinja2>=3.1.6",
     "pyyaml>=6.0",
-    "tomlkit>=0.14.0",
+    "tomlkit>=0.15.0",
     "libcst>=1.8.6",
     # Theme 5 — typed orchestration boundary. Pydantic v2 was previously
     # transitively present via copier; declaring it explicitly so the
     # typed_config module's dependency surface is honest.
-    "pydantic>=2.0",
+    "pydantic>=2.13.4",
     # v2 Theme 3B — tree-sitter-rust drives the Rust path of
     # ``forge.codegen.literal_finder``. Declared as a runtime dep (not
     # dev-only) because the harvester invokes the finder during normal
@@ -28,10 +28,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=6.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
     "pyyaml>=6.0",
-    "ruff>=0.7.0",
+    "ruff>=0.15.14",
     # ty is pinned to an exact alpha until a ty-upgrade PR lands (Epic X).
     # Astral ships breaking changes between alphas (the 0.0.1a7 in the old
     # `>=` constraint didn't even know about `[tool.ty.src].include`); a
@@ -39,7 +39,7 @@ dev = [
     # .github/workflows/ty-upgrade.yml and tests/test_ty_canary.py for the
     # upgrade dance.
     "ty==0.0.39",
-    "pre-commit>=3.7.0",
+    "pre-commit>=4.6.0",
     "hypothesis>=6.152.2",
     "pytest-xdist>=3.8.0",
 ]

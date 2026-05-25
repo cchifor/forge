@@ -42,14 +42,16 @@ def _generate_active_pem(out_dir: Path) -> bool:
         encryption_algorithm=serialization.NoEncryption(),
     )
     target.write_bytes(pem)
-    # 0600 — only the owner can read. Cross-platform: chmod is a no-op on
-    # Windows but does the right thing in the Linux container that runs
-    # this in compose.
+    # The keygen init container runs as root (to write into the named
+    # volume) but the main gatekeeper reads the key as appuser (uid
+    # 10001). Set 0644 so the unprivileged process can read the PEM.
+    # The volume itself isn't host-mounted, so 0644 within the container
+    # is acceptable for dev; production uses KEY_BACKEND=kms.
     try:
-        os.chmod(target, stat.S_IRUSR | stat.S_IWUSR)
+        os.chmod(target, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
     except (PermissionError, OSError):
         pass
-    print(f"keygen: wrote {target} (ECDSA P-256, mode 0600)")
+    print(f"keygen: wrote {target} (ECDSA P-256, mode 0644)")
     return True
 
 
