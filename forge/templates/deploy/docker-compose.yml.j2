@@ -85,6 +85,8 @@ services:
       APP__SECURITY__AUTH__SERVER_URL: "http://keycloak:8080"
       APP__SECURITY__AUTH__REALM: "{{ keycloak_realm }}"
       APP__SECURITY__AUTH__CLIENT_ID: "{{ keycloak_client_id }}"
+      GATEKEEPER_ISSUER: "http://gatekeeper:5000"
+      SERVICE_AUDIENCE: "forge-services"
 {% else %}
       APP__SECURITY__AUTH__ENABLED: "false"
 {% endif %}
