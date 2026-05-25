@@ -61,6 +61,11 @@ class TestMcpSigningKeyGuard:
         src = _MCP_AUDIT_PATH.read_text(encoding="utf-8")
         assert "_SIGNING_SECRET = _secret()" in src
 
+    def test_defaults_to_production_posture(self):
+        src = _MCP_AUDIT_PATH.read_text(encoding="utf-8")
+        fn = src.split("def _secret")[1].split("\ndef ")[0]
+        assert '"production"' in fn
+
 
 class TestDomainSecretKeyGuard:
     """1A: SecurityConfig must reject CHANGEME in production."""

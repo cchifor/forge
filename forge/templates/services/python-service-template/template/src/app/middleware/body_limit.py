@@ -14,7 +14,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 
-# Default mirrors AuditConfig.max_body_size (domain.py).
+# Fallback when instantiated without explicit max_body_size.
+# In practice, main.py passes settings.audit.max_body_size (50 KiB).
 DEFAULT_MAX_BODY_SIZE: int = 1_048_576  # 1 MiB
 
 
@@ -55,6 +56,7 @@ class ContentSizeLimitMiddleware:
 
         # Slow-path: stream body chunks and enforce limit on the fly.
         received = 0
+        response_started = False
 
         async def limited_receive() -> Message:
             nonlocal received
@@ -66,13 +68,20 @@ class ContentSizeLimitMiddleware:
                     raise _BodyTooLarge()
             return message
 
+        async def tracked_send(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
         try:
-            await self.app(scope, limited_receive, send)
+            await self.app(scope, limited_receive, tracked_send)
         except _BodyTooLarge:
-            response = PlainTextResponse(
-                "Request body too large", status_code=413
-            )
-            await response(scope, receive, send)
+            if not response_started:
+                response = PlainTextResponse(
+                    "Request body too large", status_code=413
+                )
+                await response(scope, receive, send)
 
 
 class _BodyTooLarge(Exception):
