@@ -965,7 +965,7 @@
       "sha256": "5f4d0c1c8a7a3cb9"
     },
     "forge.toml": {
-      "size": 121087,
+      "size": 121370,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1129,8 +1129,8 @@
       "sha256": "1cbdfff43149d109"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 9098,
-      "sha256": "91d89f778afe9309"
+      "size": 10855,
+      "sha256": "4dece5a6c49782c1"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
@@ -1561,8 +1561,8 @@
       "sha256": "b91267d13225edf0"
     },
     "services/api/src/app/cli/server.py": {
-      "size": 1092,
-      "sha256": "6085d3657bbd30d9"
+      "size": 1146,
+      "sha256": "d0af8b659babeb52"
     },
     "services/api/src/app/cli/tools.py": {
       "size": 1899,
@@ -1581,16 +1581,16 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 3658,
-      "sha256": "b836beff2a71eb18"
+      "size": 4188,
+      "sha256": "825bf208d8f2a87a"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
       "sha256": "a7449363dcc21662"
     },
     "services/api/src/app/core/config/sources.py": {
-      "size": 4299,
-      "sha256": "c091a2ba6a85a277"
+      "size": 4342,
+      "sha256": "850993b1d8d07bd9"
     },
     "services/api/src/app/core/container.py": {
       "size": 907,
@@ -1737,8 +1737,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 4761,
-      "sha256": "1be3378820ad1ef9"
+      "size": 5078,
+      "sha256": "b54bcc98e1bba447"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1751,6 +1751,10 @@
     "services/api/src/app/middleware/auth_context.py": {
       "size": 2369,
       "sha256": "3dc4801a7a2cfe7c"
+    },
+    "services/api/src/app/middleware/body_limit.py": {
+      "size": 2727,
+      "sha256": "130c2a104eecddb4"
     },
     "services/api/src/app/middleware/correlation.py": {
       "size": 1269,
