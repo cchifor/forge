@@ -33,7 +33,9 @@ export const DEFAULT_EXCLUDED_PATHS: readonly string[] = [
   "/api/v1/health/ready",
   "/metrics",
   "/docs",
+  "/api/v1/docs",
   "/openapi.json",
+  "/api/v1/openapi.json",
 ];
 
 export interface PlatformAuthPluginOptions {
