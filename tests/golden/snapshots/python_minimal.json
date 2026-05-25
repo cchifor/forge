@@ -29,8 +29,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 6456,
-      "sha256": "ce6d6ac3a16cbfe3"
+      "size": 6563,
+      "sha256": "00f28aab9ae0e760"
     },
     "forge.toml": {
       "size": 57992,
@@ -41,8 +41,8 @@
       "sha256": "f27b7dd313f5239b"
     },
     "infra/gatekeeper/Dockerfile": {
-      "size": 1436,
-      "sha256": "a4236d33286cd8ac"
+      "size": 1437,
+      "sha256": "6f7ab7e130a98c5b"
     },
     "infra/gatekeeper/README.md": {
       "size": 549,
