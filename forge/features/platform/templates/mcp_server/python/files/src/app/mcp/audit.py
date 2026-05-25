@@ -66,18 +66,24 @@ def _secret() -> bytes:
     """Load the signing secret from the environment.
 
     Generated projects are expected to set ``MCP_APPROVAL_SIGNING_KEY``
-    to a high-entropy random string (32+ bytes). If the env var is
-    missing, fall back to the service name — callers get a noisy warn,
-    but the service still boots (important for local dev).
+    to a high-entropy random string (32+ bytes). In production the var
+    is mandatory; in local dev the service boots with a warning and an
+    insecure fallback.
     """
     key = os.getenv("MCP_APPROVAL_SIGNING_KEY")
     if key:
         return key.encode("utf-8")
+    env = os.getenv("ENV", os.getenv("ENVIRONMENT", "development"))
+    if env.lower() not in ("development", "dev", "local", "test"):
+        raise RuntimeError(
+            "MCP_APPROVAL_SIGNING_KEY must be set in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
     logger.warning(
-        "MCP_APPROVAL_SIGNING_KEY not set — using the service name as a fallback "
-        "signing key. This is NOT safe for production."
+        "MCP_APPROVAL_SIGNING_KEY not set — using an insecure fallback. "
+        "This is acceptable for local dev only."
     )
-    return os.getenv("OTEL_SERVICE_NAME", "forge-service").encode("utf-8")
+    return b"forge-local-dev-signing-key"
 
 
 def hash_input(input_payload: dict[str, Any]) -> str:
