@@ -39,7 +39,7 @@ dev = [
     # .github/workflows/ty-upgrade.yml and tests/test_ty_canary.py for the
     # upgrade dance.
     "ty==0.0.37",
-    "pre-commit>=3.7.0",
+    "pre-commit>=4.6.0",
     "hypothesis>=6.152.2",
     "pytest-xdist>=3.8.0",
 ]
