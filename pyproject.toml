@@ -12,7 +12,7 @@ dependencies = [
     "questionary>=2.0.0",
     "jinja2>=3.1.6",
     "pyyaml>=6.0",
-    "tomlkit>=0.14.0",
+    "tomlkit>=0.15.0",
     "libcst>=1.8.6",
     # Theme 5 — typed orchestration boundary. Pydantic v2 was previously
     # transitively present via copier; declaring it explicitly so the
