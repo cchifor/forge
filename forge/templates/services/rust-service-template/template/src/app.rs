@@ -1,3 +1,4 @@
+use axum::extract::DefaultBodyLimit;
 use axum::Router;
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
@@ -32,4 +33,5 @@ pub fn create_app(pool: PgPool) -> Router {
         .layer(axum::middleware::from_fn(security_headers_middleware))
         // FORGE:END security_headers:MIDDLEWARE_REGISTRATION
         // FORGE:MIDDLEWARE_REGISTRATION
+        .layer(DefaultBodyLimit::max(1_048_576))
 }

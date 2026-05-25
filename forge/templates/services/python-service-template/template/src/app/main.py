@@ -17,6 +17,7 @@ from app.core.errors import (
 )
 from app.core.lifecycle import AppLifecycle
 from app.middleware.audit import AuditMiddleware
+from app.middleware.body_limit import ContentSizeLimitMiddleware
 from app.middleware.logging import RequestLoggingMiddleware
 from weld.fastapi.api.errors import Error
 # FORGE:MIDDLEWARE_IMPORTS
@@ -42,6 +43,13 @@ def _configure_middleware(app: FastAPI, settings: Settings) -> None:
         app.add_middleware(AuditMiddleware)
 
     # FORGE:MIDDLEWARE_REGISTRATION
+
+    # Body-size gate — added last so it wraps all other middleware
+    # (Starlette evaluates outermost-first = last-added-first).
+    app.add_middleware(
+        ContentSizeLimitMiddleware,
+        max_body_size=settings.audit.max_body_size,
+    )
 
 
 def _configure_routers(app: FastAPI) -> None:
