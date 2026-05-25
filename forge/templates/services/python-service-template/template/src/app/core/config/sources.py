@@ -102,7 +102,7 @@ class YamlConfigSettingsSource(PydanticBaseSettingsSource):
         try:
             with open(self.file_path) as f:
                 return yaml.safe_load(f) or {}
-        except Exception as e:
+        except Exception as e:  # Resilience: config sources are optional
             print(f"Warning: Failed to load config file {self.file_path}: {e}")
             return {}
 
