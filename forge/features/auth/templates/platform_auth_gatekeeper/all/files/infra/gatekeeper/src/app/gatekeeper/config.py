@@ -48,9 +48,9 @@ class GatekeeperSettings(BaseSettings):
 
     keycloak_base_url: str = "http://keycloak:9180/realms"
     gatekeeper_client_id: str = "multi-tenant-gateway"
-    gatekeeper_client_secret: str = "super-secret-string"
+    gatekeeper_client_secret: str = ""
     cookie_name: str = "tenant_session"
-    cookie_secure: bool = False
+    cookie_secure: bool = True
     refresh_cookie_name: str = "tenant_refresh"
     jwks_cache_ttl: int = 900  # 15 minutes
 
@@ -158,22 +158,62 @@ _instance: GatekeeperSettings | None = None
 
 def get_settings() -> GatekeeperSettings:
     """Return (and cache) the singleton settings instance."""
+    import sys as _sys
     import logging as _log
 
     global _instance
     if _instance is None:
         _instance = GatekeeperSettings()
+        _logger = _log.getLogger(__name__)
+
+        # ── Security: require explicit client secret ──────────────────────
+        if not _instance.gatekeeper_client_secret or (
+            _instance.gatekeeper_client_secret == "super-secret-string"
+        ):
+            _logger.critical(
+                "GATEKEEPER_CLIENT_SECRET is missing or still set to the "
+                "insecure default. Set GATEKEEPER_CLIENT_SECRET to a strong, "
+                "unique value before starting the gatekeeper."
+            )
+            _sys.exit(1)
+
+        # ── Security: validate signing key material ───────────────────────
+        if _instance.key_backend == "file":
+            key_dir = _instance.signing_key_dir
+            if not key_dir.is_dir():
+                _logger.critical(
+                    "SIGNING_KEY_DIR (%s) does not exist. Create the directory "
+                    "and place at least one PEM signing key inside.",
+                    key_dir,
+                )
+                _sys.exit(1)
+            pem_files = list(key_dir.glob("*.pem"))
+            if not pem_files:
+                _logger.critical(
+                    "SIGNING_KEY_DIR (%s) contains no .pem files. Add at "
+                    "least one PEM signing key.",
+                    key_dir,
+                )
+                _sys.exit(1)
+
+        # ── Warning: session encryption key not set ───────────────────────
+        if _instance.session_fernet_key is None:
+            _logger.warning(
+                "SESSION_FERNET_KEY is not set — the BFF cannot encrypt "
+                "session bodies and /callback will fail closed at first login."
+            )
+
         # Validate test bypass configuration
         if _instance.test_bypass_enabled:
             if len(_instance.test_bypass_token) < 16:
-                _log.getLogger(__name__).warning(
+                _logger.warning(
                     "TEST_BYPASS_TOKEN is too short (< 16 chars) — bypass may be insecure"
                 )
             if not _instance.test_bypass_tenant_ids.strip():
-                _log.getLogger(__name__).warning(
+                _logger.warning(
                     "TEST_BYPASS_TENANT_IDS is empty — bypass will reject all tenants"
                 )
-            _log.getLogger(__name__).warning(
+            _logger.warning(
                 "Test bypass is ENABLED — ensure this is a non-production environment"
             )
     return _instance
