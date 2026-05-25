@@ -48,14 +48,6 @@ service:
     - gatekeeper_signing_keys
 
   environment:
-    # ── Config-file variable references (production.yaml) ──────────
-    SECURITY_SECRET_KEY: "dev-gatekeeper-secret-change-in-production"
-    AUTH_SERVER_URL: "http://keycloak:8080"
-    AUTH_REALM: "app"
-    AUTH_CLIENT_ID: "gatekeeper"
-    AUTH_CLIENT_SECRET: "gatekeeper-dev-secret"
-    DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/keycloak"
-
     # ── Keycloak bridge (login form + Admin API consumer) ────────────
     KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
     KEYCLOAK_ADMIN_REALM: "app"

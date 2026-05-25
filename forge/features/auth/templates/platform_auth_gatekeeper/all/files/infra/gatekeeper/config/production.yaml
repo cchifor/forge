@@ -16,28 +16,21 @@ server:
 
 security:
   algorithm: "HS256"
-  secret_key: "${SECURITY_SECRET_KEY}"
+  secret_key: "dev-gatekeeper-secret-override-in-production"
   access_token_expire_minutes: 30
   refresh_token_expire_minutes: 600
   auth:
     enabled: true
-    server_url: "${AUTH_SERVER_URL}"
-    realm: "${AUTH_REALM}"
-    client_id: "${AUTH_CLIENT_ID}"
-    client_secret: "${AUTH_CLIENT_SECRET}"
+    server_url: "http://keycloak:8080"
+    realm: "app"
+    client_id: "gatekeeper"
+    client_secret: "gatekeeper-dev-secret"
 
 discovery:
-  enabled: true
-  app_name: 'gatekeeper'
-  service_url: "${EUREKA_URL}"
-  service_port: 8761
-  service_user: "${EUREKA_USER}"
-  service_password: "${EUREKA_PASSWORD}"
-  instance_host: "gatekeeper.default.svc.cluster.local"
-  instance_port: 80
+  enabled: false
 
 db:
-  url: '${DATABASE_URL}'
+  url: "postgresql+asyncpg://postgres:postgres@postgres:5432/keycloak"
   echo: false
 
 logging:
