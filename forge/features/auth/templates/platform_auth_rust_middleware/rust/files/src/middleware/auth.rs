@@ -42,6 +42,8 @@ const EXCLUDED_PATHS: &[&str] = &[
     "/health",
     "/health/live",
     "/health/ready",
+    "/healthz",
+    "/readyz",
     "/api/v1/health/live",
     "/api/v1/health/ready",
     "/metrics",
@@ -49,6 +51,8 @@ const EXCLUDED_PATHS: &[&str] = &[
     "/api/v1/docs",
     "/openapi.json",
     "/api/v1/openapi.json",
+    "/api/schema",
+    "/api/openapi.json",
 ];
 
 /// Process-wide AuthGuard. Initialized once from `init_auth()` before
