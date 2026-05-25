@@ -29,8 +29,8 @@
       "sha256": "884c369a3d3c9a14"
     },
     "docker-compose.yml": {
-      "size": 6828,
-      "sha256": "9783712534a75e1d"
+      "size": 6517,
+      "sha256": "5d89132b383ce48f"
     },
     "forge.toml": {
       "size": 42046,
@@ -57,8 +57,8 @@
       "sha256": "8ee9220daf14615a"
     },
     "infra/gatekeeper/config/production.yaml": {
-      "size": 1357,
-      "sha256": "7917291ba690dcd1"
+      "size": 1184,
+      "sha256": "96b81110decce336"
     },
     "infra/gatekeeper/config/secrets.production.yaml.example": {
       "size": 280,
