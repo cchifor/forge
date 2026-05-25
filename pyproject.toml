@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "CLI tool to generate and orchestrate full-stack projects."
 requires-python = ">=3.13"
 dependencies = [
-    "copier>=9.0.0",
+    "copier>=9.15.1",
     "questionary>=2.0.0",
     "jinja2>=3.1.6",
     "pyyaml>=6.0",
