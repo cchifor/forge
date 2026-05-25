@@ -86,6 +86,15 @@ def _secret() -> bytes:
     return b"forge-local-dev-signing-key"
 
 
+# Fail fast: validate the signing key at import time so misconfigured
+# production deployments crash at startup, not on first MCP invocation.
+_SIGNING_SECRET = _secret()
+
+
+def _get_secret() -> bytes:
+    return _SIGNING_SECRET
+
+
 def hash_input(input_payload: dict[str, Any]) -> str:
     """Canonical SHA-256 of a tool's input payload."""
     canonical = json.dumps(input_payload, sort_keys=True, separators=(",", ":"))
@@ -104,7 +113,7 @@ def mint_approval_token(*, server: str, tool: str, input_payload: dict[str, Any]
     input_hash = hash_input(input_payload)
     issued_at = int(time.time())
     message = f"{server}|{tool}|{input_hash}|{issued_at}".encode("utf-8")
-    signature = hmac.new(_secret(), message, hashlib.sha256).hexdigest()
+    signature = hmac.new(_get_secret(), message, hashlib.sha256).hexdigest()
     return ":".join([server, tool, input_hash, str(issued_at), signature])
 
 
@@ -150,7 +159,7 @@ def verify_approval_token(
     if time.time() - parsed.issued_at > max_age_seconds:
         return False
     message = f"{parsed.server}|{parsed.tool}|{parsed.input_hash}|{parsed.issued_at}".encode("utf-8")
-    expected = hmac.new(_secret(), message, hashlib.sha256).hexdigest()
+    expected = hmac.new(_get_secret(), message, hashlib.sha256).hexdigest()
     return hmac.compare_digest(parsed.signature, expected)
 
 
