@@ -177,8 +177,8 @@
       "sha256": "1cbdfff43149d109"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 9098,
-      "sha256": "91d89f778afe9309"
+      "size": 10855,
+      "sha256": "4dece5a6c49782c1"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
@@ -453,8 +453,8 @@
       "sha256": "a81ece8acc52f40f"
     },
     "services/api/src/app.rs": {
-      "size": 2009,
-      "sha256": "0334e553fd3c981a"
+      "size": 2095,
+      "sha256": "e18772f8dcc668a0"
     },
     "services/api/src/bin/migrate.rs": {
       "size": 511,
@@ -509,8 +509,8 @@
       "sha256": "3f60189fd03340ef"
     },
     "services/api/src/middleware/auth.rs": {
-      "size": 8813,
-      "sha256": "8616827606a7cf7d"
+      "size": 8936,
+      "sha256": "66f9b856ecbef661"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
