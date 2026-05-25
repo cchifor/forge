@@ -9,7 +9,7 @@ import { requestLogger } from "./middleware/logging.js";
 // FORGE:MIDDLEWARE_IMPORTS
 
 export async function buildApp() {
-	const app = Fastify({ logger: true });
+	const app = Fastify({ logger: true, bodyLimit: 1_048_576 });
 
 	await app.register(cors);
 
