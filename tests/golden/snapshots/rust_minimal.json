@@ -509,8 +509,8 @@
       "sha256": "3f60189fd03340ef"
     },
     "services/api/src/middleware/auth.rs": {
-      "size": 8758,
-      "sha256": "0bd058fdf57e027b"
+      "size": 8813,
+      "sha256": "8616827606a7cf7d"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
