@@ -29,6 +29,8 @@ export const DEFAULT_EXCLUDED_PATHS: readonly string[] = [
   "/health",
   "/health/live",
   "/health/ready",
+  "/api/v1/health/live",
+  "/api/v1/health/ready",
   "/metrics",
   "/docs",
   "/openapi.json",

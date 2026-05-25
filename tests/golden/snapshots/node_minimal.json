@@ -357,8 +357,8 @@
       "sha256": "ff2ee5483ba82cd7"
     },
     "sdks/platform-auth-node/src/plugin.ts": {
-      "size": 6018,
-      "sha256": "d7e60b1e6fb03a56"
+      "size": 6069,
+      "sha256": "acdb552da65e3084"
     },
     "sdks/platform-auth-node/src/revocation.ts": {
       "size": 1572,
