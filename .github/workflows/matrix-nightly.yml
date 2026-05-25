@@ -68,7 +68,7 @@ jobs:
       roundtrip_scenarios: ${{ steps.load.outputs.roundtrip_scenarios }}
       update_scenarios: ${{ steps.load.outputs.update_scenarios }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true
@@ -135,7 +135,7 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.scenarios) }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # Wall-clock anchor for the "Append timing summary" step at the end
       # of this job. We stash a Unix timestamp because each ``run:`` block
       # spawns a new shell — ``$SECONDS`` resets per step, so the naive
@@ -219,7 +219,7 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.roundtrip_scenarios) }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Capture job start time
         run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
@@ -278,7 +278,7 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(needs.gate.outputs.update_scenarios) }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Capture job start time
         run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
@@ -332,7 +332,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
           enable-cache: true

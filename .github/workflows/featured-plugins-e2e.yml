@@ -66,7 +66,7 @@ jobs:
     steps:
       - name: Checkout forge
         if: matrix.plugin.enabled
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup uv
         if: matrix.plugin.enabled
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
@@ -80,7 +80,7 @@ jobs:
         run: uv sync --all-extras --dev
       - name: Checkout featured plugin
         if: matrix.plugin.enabled
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.plugin.repo }}
           ref: ${{ matrix.plugin.ref }}
