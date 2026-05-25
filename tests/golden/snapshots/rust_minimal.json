@@ -30,7 +30,7 @@
     },
     "docker-compose.yml": {
       "size": 6517,
-      "sha256": "5d89132b383ce48f"
+      "sha256": "8d3896db3eb67e40"
     },
     "forge.toml": {
       "size": 42046,
@@ -73,8 +73,8 @@
       "sha256": "955c6604957e47cc"
     },
     "infra/gatekeeper/scripts/keygen.py": {
-      "size": 2171,
-      "sha256": "c64c4f1525677213"
+      "size": 2372,
+      "sha256": "2a5586db95c1d4c0"
     },
     "infra/gatekeeper/scripts/validate_internal.py": {
       "size": 7196,
