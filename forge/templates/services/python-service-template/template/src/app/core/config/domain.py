@@ -1,6 +1,7 @@
+import os
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from weld.core.domain.config import AuthConfig
 
@@ -74,6 +75,18 @@ class SecurityConfig(BaseModel):
     access_token_expire_minutes: int = 30
     refresh_token_expire_minutes: int = 60
     auth: AuthConfig
+
+    @model_validator(mode="after")
+    def _reject_default_secret_in_prod(self) -> "SecurityConfig":
+        env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production"))
+        if self.secret_key == "CHANGEME" and env.lower() not in (
+            "development", "dev", "local", "test",
+        ):
+            raise ValueError(
+                "security.secret_key is still 'CHANGEME' — set a strong "
+                "random value before running in production."
+            )
+        return self
 
 
 class DbConfig(BaseModel):

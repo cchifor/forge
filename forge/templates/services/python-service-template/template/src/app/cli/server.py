@@ -21,7 +21,7 @@ def run(
         _host = host or settings.server.host
         _log_level = log_level or settings.server.log_level
         _workers = workers or settings.server.max_workers
-    except Exception:
+    except Exception:  # Resilience: CLI must boot even if config is broken
         _port = port or 5000
         _host = host or "0.0.0.0"
         _log_level = log_level or "info"
