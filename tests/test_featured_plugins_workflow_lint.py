@@ -11,7 +11,7 @@ load-bearing pieces are intact:
 * a non-empty matrix (so the workflow renders even with zero curated
   plugins — see the docs/plugin-development.md "Featured Plugin tier"
   section for the empty-matrix-by-design rationale),
-* ``actions/checkout@v4`` pinned at major-version granularity.
+* ``actions/checkout`` pinned at major-version granularity (v4+).
 
 If you genuinely need to delete or rewrite the workflow, delete or
 rewrite this test in the same commit. The point is that you have to
@@ -97,13 +97,9 @@ def test_checkout_action_pinned_to_v4(workflow: dict) -> None:
             uses = step.get("uses", "") if isinstance(step, dict) else ""
             if uses.startswith("actions/checkout@"):
                 found_checkout = True
-                # Accept ``@v4`` or ``@v4.x.y`` or a pinned SHA followed
-                # by a ``# v4.x.y`` comment. Reject ``@v3`` / ``@master``
-                # / unpinned ``@main``.
                 ref = uses.split("@", 1)[1]
                 assert (
-                    ref.startswith("v4")
-                    or "# v4" in step.get("uses", "")  # SHA + comment form
-                    or len(ref) == 40  # raw SHA — caller responsible for v4
-                ), f"actions/checkout must be pinned to v4, got: {uses}"
+                    ref.startswith(("v4", "v5", "v6"))
+                    or len(ref) == 40  # raw SHA
+                ), f"actions/checkout must be pinned to v4+, got: {uses}"
     assert found_checkout, "workflow must use actions/checkout at least once"
