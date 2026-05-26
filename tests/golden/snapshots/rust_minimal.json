@@ -454,7 +454,7 @@
     },
     "services/api/src/app.rs": {
       "size": 2095,
-      "sha256": "e18772f8dcc668a0"
+      "sha256": "35820cb7c288dc50"
     },
     "services/api/src/bin/migrate.rs": {
       "size": 511,
