@@ -26,6 +26,12 @@ const routes = [
     ],
   },
   {
+    path: '/auth/stuck',
+    name: 'auth-stuck',
+    component: () => import('@/features/auth/ui/AuthStuckPage.vue'),
+    meta: { requiresAuth: false, title: 'Sign-in delayed' },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/app/NotFoundPage.vue'),

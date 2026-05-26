@@ -422,3 +422,15 @@ register_fragment(
         capabilities=("gatekeeper-keygen",),
     )
 )
+
+
+register_fragment(
+    Fragment(
+        name="platform_auth_tenant_context",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=str(_TEMPLATES / "tenant_context_middleware" / "python"),
+            ),
+        },
+    )
+)

@@ -194,3 +194,18 @@ register_fragment(
         },
     )
 )
+
+
+register_fragment(
+    Fragment(
+        name="observability_metrics_middleware",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(
+                fragment_dir=_impl("metrics_middleware", "python"),
+                dependencies=(
+                    "opentelemetry-api>=1.20.0",
+                ),
+            ),
+        },
+    )
+)

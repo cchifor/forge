@@ -1,3 +1,15 @@
+# Compose profiles — optional service groups
+#
+# Full stack (all services):
+#   COMPOSE_PROFILES=vectorstore docker compose up
+#
+# Slim stack (core services only, faster boot for dev/test):
+#   docker compose up
+#
+# Services in the ``vectorstore`` profile (qdrant, chroma, weaviate) only
+# start when the profile is active. Add ``COMPOSE_PROFILES=vectorstore``
+# to your ``.env`` to enable them by default.
+
 services:
 {% for be in backends %}
 {% if database_mode != "none" %}

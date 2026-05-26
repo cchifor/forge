@@ -26,6 +26,7 @@ QDRANT_TEMPLATE = ServiceTemplate(
         "timeout": "5s",
         "retries": 5,
     },
+    extra={"profiles": ["vectorstore"]},
 )
 
 
@@ -36,6 +37,7 @@ CHROMA_TEMPLATE = ServiceTemplate(
     volumes=["chroma_data:/chroma/chroma"],
     named_volumes=("chroma_data",),
     environment={"IS_PERSISTENT": "TRUE"},
+    extra={"profiles": ["vectorstore"]},
 )
 
 
@@ -50,6 +52,7 @@ WEAVIATE_TEMPLATE = ServiceTemplate(
         "PERSISTENCE_DATA_PATH": "/var/lib/weaviate",
         "DEFAULT_VECTORIZER_MODULE": "none",
     },
+    extra={"profiles": ["vectorstore"]},
 )
 
 

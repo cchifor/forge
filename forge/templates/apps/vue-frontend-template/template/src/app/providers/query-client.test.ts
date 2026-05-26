@@ -6,6 +6,11 @@ vi.mock('vue-sonner', () => ({
   toast: { error: vi.fn() },
 }))
 
+// Mock the errors module used by the query-client
+vi.mock('@/shared/api/errors', () => ({
+  unpackApiErrorMessage: vi.fn().mockResolvedValue('mocked error'),
+}))
+
 import { queryClient } from '@/app/providers/query-client'
 
 describe('queryClient', () => {
@@ -26,5 +31,10 @@ describe('queryClient', () => {
   it('has refetchOnWindowFocus disabled', () => {
     const defaults = queryClient.getDefaultOptions()
     expect(defaults.queries?.refetchOnWindowFocus).toBe(false)
+  })
+
+  it('has a QueryCache configured', () => {
+    const cache = queryClient.getQueryCache()
+    expect(cache).toBeDefined()
   })
 })

@@ -16,6 +16,54 @@ const isLoading = ref(true)
 const isInitialized = ref(false)
 
 let authDisabled = false
+let loginInFlight = false
+
+export const POST_LOGIN_REDIRECT_KEY = 'auth.post_login_redirect'
+
+function readPersistedRedirect(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)
+    if (!raw) return null
+    const collapsed = toSameOriginPath(raw)
+    return collapsed === '/' ? null : collapsed
+  } catch {
+    return null
+  }
+}
+
+function clearPersistedRedirect(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY)
+  } catch {
+    /* ignore — privacy mode etc. */
+  }
+}
+
+export function persistPostLoginRedirect(target: string): void {
+  if (typeof window === 'undefined') return
+  if (!target || target === '/' || target.startsWith('/auth/')) return
+  try {
+    const collapsed = toSameOriginPath(target)
+    if (collapsed === '/' || collapsed.startsWith('/auth/')) return
+    window.sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, collapsed)
+  } catch {
+    /* ignore */
+  }
+}
+
+function toSameOriginPath(input: string): string {
+  try {
+    const u = new URL(input, window.location.origin)
+    if (u.origin === window.location.origin) {
+      return u.pathname + u.search + u.hash
+    }
+  } catch {
+    /* fall through */
+  }
+  return '/'
+}
 
 const DEV_USER: AuthUser = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -52,11 +100,10 @@ export function useAuth() {
       user.value = DEV_USER
       isLoading.value = false
       isInitialized.value = true
+      rehydratePostLoginRedirect()
       return
     }
 
-    // With Gatekeeper ForwardAuth, if we can load the page we're authenticated.
-    // Fetch user info from the gateway's /auth/userinfo endpoint.
     try {
       const res = await fetch('/auth/userinfo', { credentials: 'include' })
       if (res.ok) {
@@ -72,23 +119,40 @@ export function useAuth() {
           orgId: data.orgId || null,
         }
       } else {
-        // Not authenticated — Gatekeeper will handle redirect on next navigation
         user.value = null
       }
     } catch {
-      // Network error or CORS — treat as authenticated without user details
-      // (Gatekeeper would have redirected if truly unauthenticated)
       user.value = null
     } finally {
       isLoading.value = false
       isInitialized.value = true
+      rehydratePostLoginRedirect()
     }
+  }
+
+  function rehydratePostLoginRedirect(): void {
+    if (typeof window === 'undefined') return
+    if (!user.value) return
+    const target = readPersistedRedirect()
+    if (!target) return
+    const here =
+      window.location.pathname + window.location.search + window.location.hash
+    if (here === target) {
+      clearPersistedRedirect()
+      return
+    }
+    const safe = here === '/' || here.startsWith('/auth/')
+    if (!safe) return
+    try {
+      window.history.replaceState({}, '', target)
+    } catch {
+      /* ignore — best-effort */
+    }
+    clearPersistedRedirect()
   }
 
   async function getToken(): Promise<string | null> {
     if (authDisabled) return 'dev-token'
-    // With Gatekeeper, the session token is in an HttpOnly cookie.
-    // No client-side token access is needed — the cookie is sent automatically.
     return null
   }
 
@@ -97,12 +161,17 @@ export function useAuth() {
       user.value = DEV_USER
       return
     }
-    // Redirect to Gatekeeper's login endpoint to start the OIDC flow
-    const redirect = redirectUri ?? window.location.href
+    if (loginInFlight) return
+    loginInFlight = true
+    const target =
+      redirectUri ??
+      window.location.pathname + window.location.search + window.location.hash
+    const redirect = toSameOriginPath(target)
     window.location.href = `/auth/login?redirect_uri=${encodeURIComponent(redirect)}`
   }
 
   function logout() {
+    loginInFlight = false
     if (authDisabled) {
       user.value = null
       return

@@ -35,5 +35,7 @@ from forge.features import (  # noqa: F401, E402
     rag,
     reliability,
     security,
+    shared_lib,
     streaming,
+    testing_enhanced,
 )

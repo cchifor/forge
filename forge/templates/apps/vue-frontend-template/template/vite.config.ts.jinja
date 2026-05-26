@@ -40,6 +40,18 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-tanstack': ['@tanstack/vue-query'],
+          'vendor-radix': ['radix-vue'],
+        },
+      },
+    },
+  },
   server: {
     port: {{ server_port }},
     proxy: {
@@ -50,5 +62,19 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov', 'html', 'json-summary'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{ts,vue}'],
+      exclude: [
+        'src/test/**',
+        'src/auto-imports.d.ts',
+        'src/env.d.ts',
+        '**/*.d.ts',
+        '**/*.test.ts',
+        '**/*.spec.ts',
+      ],
+    },
   },
 })

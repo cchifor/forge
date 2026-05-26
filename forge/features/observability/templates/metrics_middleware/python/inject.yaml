@@ -1,0 +1,12 @@
+# metrics_middleware: inject HTTP RED metrics (rate, error, duration)
+# into the FastAPI middleware stack via OpenTelemetry metrics API.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.middleware.metrics import MetricsMiddleware"
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: "    app.add_middleware(MetricsMiddleware)"
