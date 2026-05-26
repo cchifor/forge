@@ -102,6 +102,6 @@ BACKENDS: python
 DEPENDENCIES: opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi / instrumentation-httpx
 ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.""",
         category=FeatureCategory.OBSERVABILITY,
-        enables={True: ("observability_otel",)},
+        enables={True: ("observability_otel", "observability_metrics_middleware")},
     )
 )

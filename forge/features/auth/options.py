@@ -121,12 +121,7 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                 # ``forge.services.fragment_compose``.
                 "platform_auth_gatekeeper",
                 "platform_auth_gatekeeper_keygen",
-                # ``platform_auth_gatekeeper`` and
-                # ``platform_auth_gatekeeper_keygen`` are also held
-                # back pending the imperative compose-block removal
-                # in ``forge/templates/deploy/docker-compose.yml.j2``
-                # and the legacy ``forge/templates/infra/gatekeeper/``
-                # template removal — Phase 2 Wave 2.
+                "platform_auth_tenant_context",
             ),
         },
     )

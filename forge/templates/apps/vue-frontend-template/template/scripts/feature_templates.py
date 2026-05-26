@@ -51,6 +51,19 @@ export const {plural}Routes = [
 """
 
 # ──────────────────────────────────────────────
+# api/queryKeys.ts -- Hierarchical query key factory
+# ──────────────────────────────────────────────
+QUERY_KEYS_TEMPLATE = """\
+export const {singular}Keys = {{
+  all: ['{plural}'] as const,
+  lists: () => [...{singular}Keys.all, 'list'] as const,
+  list: (filters: Record<string, unknown>) => [...{singular}Keys.lists(), filters] as const,
+  details: () => [...{singular}Keys.all, 'detail'] as const,
+  detail: (id: string) => [...{singular}Keys.details(), id] as const,
+}}
+"""
+
+# ──────────────────────────────────────────────
 # api/use{Plural}.ts -- Vue Query CRUD composables
 # ──────────────────────────────────────────────
 API_COMPOSABLE_TEMPLATE = """\
@@ -59,6 +72,7 @@ import type {{ Ref }} from 'vue'
 import {{ computed }} from 'vue'
 import {{ useApiClient }} from '@/shared/composables/useApiClient'
 import {{ paginated{Singular}ResponseSchema, {singular}Schema }} from '../model/{singular}.schema'
+import {{ {singular}Keys }} from './queryKeys'
 
 function unref<T>(val: Ref<T> | T): T {{
   return (val as Ref<T>)?.value !== undefined ? (val as Ref<T>).value : (val as T)
@@ -71,14 +85,13 @@ export function use{Plural}(params: {{
 }} = {{}}) {{
   const client = useApiClient()
 
-  const queryKey = computed(() => [
-    '{plural}',
-    {{
+  const queryKey = computed(() =>
+    {singular}Keys.list({{
       skip: unref(params.skip) ?? 0,
       limit: unref(params.limit) ?? 50,
       search: unref(params.search),
-    }},
-  ])
+    }}),
+  )
 
   return useQuery({{
     queryKey,
@@ -103,7 +116,7 @@ export function use{Singular}(id: Ref<string> | string) {{
   const client = useApiClient()
 
   return useQuery({{
-    queryKey: computed(() => ['{plural}', unref(id)]),
+    queryKey: computed(() => {singular}Keys.detail(unref(id))),
     queryFn: async () => {{
       const raw = await client.get(`api/{backend_name}/v1/{plural}/${{unref(id)}}`).json()
       return {singular}Schema.parse(raw)
@@ -122,7 +135,7 @@ export function useCreate{Singular}() {{
       return {singular}Schema.parse(raw)
     }},
     onSuccess: () => {{
-      queryClient.invalidateQueries({{ queryKey: ['{plural}'] }})
+      queryClient.invalidateQueries({{ queryKey: {singular}Keys.all }})
     }},
   }})
 }}
@@ -137,8 +150,8 @@ export function useUpdate{Singular}() {{
       return {singular}Schema.parse(raw)
     }},
     onSuccess: (_data, variables) => {{
-      queryClient.invalidateQueries({{ queryKey: ['{plural}'] }})
-      queryClient.invalidateQueries({{ queryKey: ['{plural}', variables.id] }})
+      queryClient.invalidateQueries({{ queryKey: {singular}Keys.all }})
+      queryClient.invalidateQueries({{ queryKey: {singular}Keys.detail(variables.id) }})
     }},
   }})
 }}
@@ -152,7 +165,7 @@ export function useDelete{Singular}() {{
       await client.delete(`api/{backend_name}/v1/{plural}/${{id}}`)
     }},
     onSuccess: () => {{
-      queryClient.invalidateQueries({{ queryKey: ['{plural}'] }})
+      queryClient.invalidateQueries({{ queryKey: {singular}Keys.all }})
     }},
   }})
 }}

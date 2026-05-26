@@ -363,7 +363,7 @@ DEPENDENCIES: opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi 
 ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.
 
 **Enables fragments:**
-- on `true` → `observability_otel`
+- on `true` → `observability_otel`, `observability_metrics_middleware`
 
 ### `observability.tracing`
 
@@ -1090,6 +1090,46 @@ ENDPOINTS: none — CLI surface only.
 
 **Enables fragments:**
 - on `true` → `cli_commands`
+
+### `platform.shared_lib`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Scaffold a shared Python package in sdks/ for cross-backend code reuse._
+
+Drops a ready-to-import ``shared`` Python package at
+``<project>/sdks/shared/`` with Pydantic domain models, a utilities
+namespace, and smoke tests. Every Python backend can reference it as
+a ``[tool.uv.sources]`` path dependency for zero-publish local
+development.
+
+Use this when multiple backends need to share value objects, domain
+models, or pure-logic helpers without duplicating code across services.
+
+BACKENDS: python
+ENDPOINTS: none — library only.
+
+**Enables fragments:**
+- on `true` → `shared_lib_python`
+
+### `platform.testing_enhanced`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
+
+_Failure forensics + coverage registry for structured test diagnostics._
+
+Opt-in testing infrastructure that captures structured failure context
+on every test failure (written to ``tests/.failure-context/<test-id>/``)
+and ships a ``coverage.json`` registry defining per-module coverage
+thresholds.  Failure context includes timestamps, pytest markers, and
+CI metadata (GitHub Actions run ID, SHA, ref) for post-mortem debugging
+without reproducing locally.
+
+BACKENDS: python
+ENDPOINTS: none — test infrastructure only.
+
+**Enables fragments:**
+- on `true` → `testing_enhanced_python`
 
 ### `platform.webhooks`
 

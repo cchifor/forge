@@ -1,0 +1,12 @@
+# tenant_context: extract tenant/user identity from gateway-injected
+# headers and stash on request.state for downstream access.
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_IMPORTS
+  position: before
+  snippet: "from app.middleware.tenant_context import TenantContextMiddleware"
+
+- target: src/app/main.py
+  marker: FORGE:MIDDLEWARE_REGISTRATION
+  position: before
+  snippet: "    app.add_middleware(TenantContextMiddleware)"

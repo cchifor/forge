@@ -98,6 +98,7 @@ _spec.loader.exec_module(_mod)  # type: ignore
 
 make_feature_context = _mod.make_feature_context
 INDEX_TEMPLATE = _mod.INDEX_TEMPLATE
+QUERY_KEYS_TEMPLATE = _mod.QUERY_KEYS_TEMPLATE
 API_COMPOSABLE_TEMPLATE = _mod.API_COMPOSABLE_TEMPLATE
 SCHEMA_TEMPLATE = _mod.SCHEMA_TEMPLATE
 SCHEMA_TEST_TEMPLATE = _mod.SCHEMA_TEST_TEMPLATE
@@ -149,6 +150,7 @@ def delete_file(path: Path) -> None:
 def generate_feature(ctx: dict[str, str]) -> None:
     base = PROJECT_DIR / "src" / "features" / ctx["plural"]
     write_file(base / "index.ts", INDEX_TEMPLATE.format(**ctx))
+    write_file(base / "api" / "queryKeys.ts", QUERY_KEYS_TEMPLATE.format(**ctx))
     write_file(base / "api" / f"use{ctx['Plural']}.ts", API_COMPOSABLE_TEMPLATE.format(**ctx))
     write_file(base / "model" / f"{ctx['singular']}.schema.ts", SCHEMA_TEMPLATE.format(**ctx))
     write_file(base / "model" / f"{ctx['singular']}.schema.test.ts", SCHEMA_TEST_TEMPLATE.format(**ctx))

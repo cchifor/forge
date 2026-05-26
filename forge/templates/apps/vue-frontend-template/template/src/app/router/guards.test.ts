@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { ref, computed, nextTick } from 'vue'
 import { setupRouterGuards } from './guards'
 
@@ -9,18 +9,28 @@ vi.mock('@/shared/composables/useAuth', () => ({
   useAuth: () => ({
     isAuthenticated: computed(() => !!mockUser.value),
     isLoading: mockIsLoading,
+    hasRole: (role: string) => mockUser.value?.roles.includes(role) ?? false,
   }),
+  persistPostLoginRedirect: vi.fn(),
 }))
 
 function createMockRouter() {
   const guards: Array<(to: Record<string, unknown>) => unknown> = []
+  const afterGuards: Array<(to: Record<string, unknown>) => void> = []
   return {
     beforeEach: (fn: (to: Record<string, unknown>) => unknown) => {
       guards.push(fn)
     },
+    afterEach: (fn: (to: Record<string, unknown>) => void) => {
+      afterGuards.push(fn)
+    },
     _guards: guards,
+    _afterGuards: afterGuards,
     async runGuard(to: Record<string, unknown>) {
       return guards[0]?.(to)
+    },
+    runAfterGuard(to: Record<string, unknown>) {
+      afterGuards[0]?.(to)
     },
   }
 }
@@ -102,11 +112,9 @@ describe('setupRouterGuards', () => {
         return r
       })
 
-    // Guard should be waiting
     await nextTick()
     expect(resolved).toBe(false)
 
-    // Unblock
     mockIsLoading.value = false
     await nextTick()
 
@@ -120,7 +128,6 @@ describe('setupRouterGuards', () => {
     const router = createMockRouter()
     setupRouterGuards(router as never)
 
-    // meta is empty; requiresAuth is not explicitly false => protected
     const result = await router.runGuard(route('settings', {}, '/settings'))
     expect(result).toEqual({ name: 'login', query: { redirect: '/settings' } })
   })
@@ -137,5 +144,71 @@ describe('setupRouterGuards', () => {
       name: 'login',
       query: { redirect: '/profile/me' },
     })
+  })
+
+  it('redirects to auth-stuck when auth init times out', async () => {
+    vi.useFakeTimers()
+    mockIsLoading.value = true
+    const router = createMockRouter()
+    setupRouterGuards(router as never)
+
+    const promise = router.runGuard(route('home', { requiresAuth: true }))
+    vi.advanceTimersByTime(5_001)
+    const result = await promise
+
+    expect(result).toEqual({
+      name: 'auth-stuck',
+      query: { next: '/home' },
+    })
+    vi.useRealTimers()
+  })
+
+  it('allows auth-stuck page to render during timeout (no self-redirect)', async () => {
+    vi.useFakeTimers()
+    mockIsLoading.value = true
+    const router = createMockRouter()
+    setupRouterGuards(router as never)
+
+    const promise = router.runGuard(
+      route('auth-stuck', { requiresAuth: false }, '/auth/stuck'),
+    )
+    vi.advanceTimersByTime(5_001)
+    const result = await promise
+
+    expect(result).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('redirects to home when user lacks required role', async () => {
+    mockUser.value = { roles: ['user'] }
+    const router = createMockRouter()
+    setupRouterGuards(router as never)
+
+    const result = await router.runGuard(
+      route('admin', { requiresAuth: true, requiresRole: 'admin' }),
+    )
+    expect(result).toEqual({ name: 'home' })
+  })
+
+  it('allows user with correct role through role-gated route', async () => {
+    mockUser.value = { roles: ['admin', 'user'] }
+    const router = createMockRouter()
+    setupRouterGuards(router as never)
+
+    const result = await router.runGuard(
+      route('admin', { requiresAuth: true, requiresRole: 'admin' }),
+    )
+    expect(result).toBeUndefined()
+  })
+
+  it('afterEach sets document.title from route meta', () => {
+    const router = createMockRouter()
+    setupRouterGuards(router as never)
+    expect(router._afterGuards).toHaveLength(1)
+
+    router.runAfterGuard(
+      route('settings', { title: 'Settings' }, '/settings'),
+    )
+    expect(document.title).toBe('Settings')
   })
 })
