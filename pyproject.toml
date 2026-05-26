@@ -40,7 +40,7 @@ dev = [
     # upgrade dance.
     "ty==0.0.39",
     "pre-commit>=4.6.0",
-    "hypothesis>=6.152.2",
+    "hypothesis>=6.153.0",
     "pytest-xdist>=3.8.0",
 ]
 
