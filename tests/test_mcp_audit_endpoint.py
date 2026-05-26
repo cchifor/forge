@@ -11,6 +11,7 @@ the read-side audit endpoint that operators depend on.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -132,6 +133,9 @@ def _load_audit_module():
     so this file remains self-contained for selective pytest runs.
     """
     path = _mcp_server_files_root() / "audit.py"
+    # _secret() fires at module scope and defaults to production posture.
+    # Provide the signing key before import so the eager check succeeds.
+    os.environ.setdefault("MCP_APPROVAL_SIGNING_KEY", "test-key-deadbeefx2")
     spec = importlib.util.spec_from_file_location("mcp_audit_endpoint_under_test", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
