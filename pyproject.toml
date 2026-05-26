@@ -8,22 +8,22 @@ dynamic = ["version"]
 description = "CLI tool to generate and orchestrate full-stack projects."
 requires-python = ">=3.13"
 dependencies = [
-    "copier>=9.15.1",
-    "questionary>=2.1.1",
-    "jinja2>=3.1.6",
-    "pyyaml>=6.0",
-    "tomlkit>=0.15.0",
-    "libcst>=1.8.6",
+    "copier>=9.15.1,<10",
+    "questionary>=2.1.1,<3",
+    "jinja2>=3.1.6,<4",
+    "pyyaml>=6.0,<7",
+    "tomlkit>=0.15.0,<1",
+    "libcst>=1.8.6,<2",
     # Theme 5 — typed orchestration boundary. Pydantic v2 was previously
     # transitively present via copier; declaring it explicitly so the
     # typed_config module's dependency surface is honest.
-    "pydantic>=2.13.4",
+    "pydantic>=2.13.4,<3",
     # v2 Theme 3B — tree-sitter-rust drives the Rust path of
     # ``forge.codegen.literal_finder``. Declared as a runtime dep (not
     # dev-only) because the harvester invokes the finder during normal
     # ``forge sync`` runs on Axum/other Rust targets.
-    "tree-sitter>=0.25.2",
-    "tree-sitter-rust>=0.24.2",
+    "tree-sitter>=0.25.2,<1",
+    "tree-sitter-rust>=0.24.2,<1",
 ]
 
 [dependency-groups]

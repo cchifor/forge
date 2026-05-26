@@ -33,7 +33,7 @@
       "sha256": "39c1a47ba7694d88"
     },
     "forge.toml": {
-      "size": 81270,
+      "size": 81556,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -177,8 +177,8 @@
       "sha256": "1cbdfff43149d109"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 9098,
-      "sha256": "91d89f778afe9309"
+      "size": 10855,
+      "sha256": "4dece5a6c49782c1"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
@@ -481,8 +481,8 @@
       "sha256": "ff2ee5483ba82cd7"
     },
     "sdks/platform-auth-node/src/plugin.ts": {
-      "size": 6069,
-      "sha256": "acdb552da65e3084"
+      "size": 6180,
+      "sha256": "303afb3aece5cb90"
     },
     "sdks/platform-auth-node/src/revocation.ts": {
       "size": 1572,
@@ -589,8 +589,8 @@
       "sha256": "857326de88674ea5"
     },
     "services/api-node/src/app.ts": {
-      "size": 2877,
-      "sha256": "5289345682a441c0"
+      "size": 2899,
+      "sha256": "3f1e594a7b735b54"
     },
     "services/api-node/src/config/index.ts": {
       "size": 356,
@@ -865,8 +865,8 @@
       "sha256": "89af57fa1664e95c"
     },
     "services/api-py/src/app/cli/server.py": {
-      "size": 1092,
-      "sha256": "6085d3657bbd30d9"
+      "size": 1146,
+      "sha256": "d0af8b659babeb52"
     },
     "services/api-py/src/app/core/__init__.py": {
       "size": 0,
@@ -881,16 +881,16 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api-py/src/app/core/config/domain.py": {
-      "size": 3658,
-      "sha256": "b836beff2a71eb18"
+      "size": 4187,
+      "sha256": "8941c31f165088c0"
     },
     "services/api-py/src/app/core/config/loader.py": {
       "size": 3530,
       "sha256": "a7449363dcc21662"
     },
     "services/api-py/src/app/core/config/sources.py": {
-      "size": 4299,
-      "sha256": "c091a2ba6a85a277"
+      "size": 4342,
+      "sha256": "850993b1d8d07bd9"
     },
     "services/api-py/src/app/core/container.py": {
       "size": 907,
@@ -1001,8 +1001,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api-py/src/app/main.py": {
-      "size": 4761,
-      "sha256": "1be3378820ad1ef9"
+      "size": 5078,
+      "sha256": "b54bcc98e1bba447"
     },
     "services/api-py/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1015,6 +1015,10 @@
     "services/api-py/src/app/middleware/auth_context.py": {
       "size": 2369,
       "sha256": "3dc4801a7a2cfe7c"
+    },
+    "services/api-py/src/app/middleware/body_limit.py": {
+      "size": 3120,
+      "sha256": "b83b5266cabcaeb9"
     },
     "services/api-py/src/app/middleware/correlation.py": {
       "size": 1269,
