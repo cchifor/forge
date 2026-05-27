@@ -1,0 +1,19 @@
+[feature]
+name = "async_work"
+version = "1.0.0"
+summary = "Off-thread job processing via Redis-backed queues."
+category = "async_work"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = ["async.task_queue", "async.rag_ingest_queue", "queue.backend"]
+fragments = [
+    "background_tasks",
+    "queue_port",
+    "queue_redis",
+    "queue_bullmq",
+    "queue_apalis",
+    "queue_sqs",
+]

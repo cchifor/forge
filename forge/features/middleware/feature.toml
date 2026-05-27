@@ -1,0 +1,24 @@
+[feature]
+name = "middleware"
+version = "1.0.0"
+summary = "Request-path cross-cutting concerns — correlation IDs, rate limiting, security headers, PII redaction, response caching."
+category = "observability"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "middleware.correlation_id",
+    "middleware.rate_limit",
+    "middleware.security_headers",
+    "middleware.pii_redaction",
+    "middleware.response_cache",
+]
+fragments = [
+    "correlation_id",
+    "rate_limit",
+    "security_headers",
+    "pii_redaction",
+    "response_cache",
+]

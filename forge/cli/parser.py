@@ -307,6 +307,26 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # Features
+    p.add_argument(
+        "--features-cmd",
+        dest="features_subcommand",
+        choices=["list", "deps", "validate", "scaffold"],
+        metavar="SUBCMD",
+        help=(
+            "Feature management: `list` shows all discovered features; "
+            "`deps <name>` shows the dependency tree; "
+            "`validate` checks manifest contracts; "
+            "`scaffold` creates a new feature skeleton."
+        ),
+    )
+    p.add_argument(
+        "--features-name",
+        dest="features_name",
+        metavar="NAME",
+        help="Feature name for `--features-cmd deps` or `--features-cmd scaffold`.",
+    )
+
     # Canvas
     p.add_argument(
         "--canvas",

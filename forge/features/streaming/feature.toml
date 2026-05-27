@@ -1,0 +1,13 @@
+[feature]
+name = "streaming"
+version = "1.0.0"
+summary = "SSE fanout of CloudEvents to browser subscribers via weld-streaming."
+category = "async_work"
+stability = "beta"
+
+[feature.depends]
+events = "*"
+
+[feature.provides]
+options = ["streaming.sse"]
+fragments = ["streaming_sse"]

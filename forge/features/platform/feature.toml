@@ -1,0 +1,27 @@
+[feature]
+name = "platform"
+version = "1.0.0"
+summary = "Operator-facing surfaces — admin UI, webhooks, CLI extensions, MCP, AGENTS.md."
+category = "platform"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "platform.admin",
+    "platform.webhooks",
+    "platform.cli_extensions",
+    "platform.mcp",
+    "platform.agents_md",
+]
+fragments = [
+    "admin_panel",
+    "webhooks",
+    "cli_commands",
+    "agents_md",
+    "mcp_server",
+    "mcp_ui",
+    "mcp_ui_svelte",
+    "mcp_ui_flutter",
+]

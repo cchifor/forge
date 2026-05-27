@@ -1,0 +1,11 @@
+[feature]
+name = "shared_lib"
+version = "1.0.0"
+summary = "Shared library scaffold — cross-backend code sharing."
+category = "platform"
+
+[feature.depends]
+
+[feature.provides]
+options = ["platform.shared_lib"]
+fragments = ["shared_lib_python"]

@@ -1,0 +1,12 @@
+[feature]
+name = "mcp_template"
+version = "1.0.0"
+summary = "MCP server template via weld-mcp-template."
+category = "platform"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = ["mcp_template.server", "mcp_template.openapi_to_tools"]
+fragments = ["mcp_template_server", "mcp_template_openapi_tools"]

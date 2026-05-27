@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from forge.api import ForgeAPI
 from forge.options._registry import (
     FeatureCategory,
     Option,
     OptionType,
-    register_option,
 )
 
-register_option(
-    Option(
-        path="platform.testing_enhanced",
-        type=OptionType.BOOL,
-        default=False,
-        summary="Failure forensics + coverage registry for structured test diagnostics.",
-        description="""\
+
+def register_all(api: ForgeAPI) -> None:
+    api.add_option(
+        Option(
+            path="platform.testing_enhanced",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Failure forensics + coverage registry for structured test diagnostics.",
+            description="""\
 Opt-in testing infrastructure that captures structured failure context
 on every test failure (written to ``tests/.failure-context/<test-id>/``)
 and ships a ``coverage.json`` registry defining per-module coverage
@@ -25,8 +27,8 @@ without reproducing locally.
 
 BACKENDS: python
 ENDPOINTS: none — test infrastructure only.""",
-        category=FeatureCategory.PLATFORM,
-        stability="beta",
-        enables={True: ("testing_enhanced_python",)},
+            category=FeatureCategory.PLATFORM,
+            stability="beta",
+            enables={True: ("testing_enhanced_python",)},
+        )
     )
-)

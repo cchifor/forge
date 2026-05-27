@@ -1,0 +1,11 @@
+[feature]
+name = "events"
+version = "1.0.0"
+summary = "CloudEvents bus and transactional outbox via weld-events."
+category = "async_work"
+
+[feature.depends]
+
+[feature.provides]
+options = ["events.bus", "events.outbox"]
+fragments = ["events_core", "events_outbox"]
