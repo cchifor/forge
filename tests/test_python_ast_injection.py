@@ -151,3 +151,35 @@ class TestInjectPython:
         )
         inject_python(src, "f", "X", "import a", "after")
         assert "# FORGE:BEGIN f:X" in src.read_text(encoding="utf-8")
+
+    def test_text_fallback_idempotent_reapply(self, tmp_path: Path) -> None:
+        """The text fallback must replace existing blocks in place."""
+        src = tmp_path / "broken.py"
+        src.write_text(
+            "def app(\n"
+            "    # FORGE:M\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        inject_python(src, "f", "M", "import v1", "after")
+        first = src.read_text(encoding="utf-8")
+        inject_python(src, "f", "M", "import v2", "after")
+        second = src.read_text(encoding="utf-8")
+        assert first.count("# FORGE:BEGIN f:M") == 1
+        assert second.count("# FORGE:BEGIN f:M") == 1
+        assert "import v1" not in second
+        assert "import v2" in second
+
+    def test_text_fallback_position_before_idempotent(self, tmp_path: Path) -> None:
+        """Position=before via the text fallback must not duplicate."""
+        src = tmp_path / "broken.py"
+        src.write_text(
+            "def app(\n"
+            "    # FORGE:REG\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        inject_python(src, "f", "REG", "call()", "before")
+        snapshot = src.read_text(encoding="utf-8")
+        inject_python(src, "f", "REG", "call()", "before")
+        assert src.read_text(encoding="utf-8") == snapshot
