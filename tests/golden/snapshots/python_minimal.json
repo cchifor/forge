@@ -29,11 +29,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 6563,
-      "sha256": "b961a9fc56be5ade"
+      "size": 6973,
+      "sha256": "3cb18e0d29328c28"
     },
     "forge.toml": {
-      "size": 58275,
+      "size": 59289,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -429,7 +429,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 508,
+      "size": 513,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -685,8 +685,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api/src/app/main.py": {
-      "size": 5078,
-      "sha256": "b54bcc98e1bba447"
+      "size": 5454,
+      "sha256": "8f4d90f26bdb6af1"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -719,6 +719,10 @@
     "services/api/src/app/middleware/security_headers.py": {
       "size": 1970,
       "sha256": "73d6af1b448c85e5"
+    },
+    "services/api/src/app/middleware/tenant_context.py": {
+      "size": 879,
+      "sha256": "3900b28ccbedbfe0"
     },
     "services/api/src/app/ports/error_port.py": {
       "size": 2600,
