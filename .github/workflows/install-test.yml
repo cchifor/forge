@@ -23,7 +23,7 @@ jobs:
       # needs a Python interpreter visible to uv. GitHub-hosted runners
       # ship Python, but pinning via setup-python keeps the version
       # deterministic and ensures uv can discover it.
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
 
