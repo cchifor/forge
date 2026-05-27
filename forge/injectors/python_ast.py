@@ -186,6 +186,17 @@ def _text_inject(
 ) -> None:
     """Last-resort text-based injection when libcst can't parse the file."""
     lines = source.splitlines(keepends=True)
+
+    # Idempotency: replace existing sentinel block in place (mirrors
+    # the CST success path).
+    begin_idx, end_idx = _find_sentinel_block(lines, tag)
+    if begin_idx is not None and end_idx is not None:
+        indent = _leading_indent(lines[begin_idx])
+        fresh = _render_block(indent, tag, snippet)
+        lines = lines[:begin_idx] + [fresh] + lines[end_idx + 1 :]
+        file.write_text("".join(lines), encoding="utf-8")
+        return
+
     # Locate any single line containing `FORGE:<MARKER_NAME>` (not BEGIN/END).
     hits = [
         i

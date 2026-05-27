@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1151,
+      "size": 1156,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -89,8 +89,8 @@
       "sha256": "f82c96be4a079032"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 18561,
-      "sha256": "62495a4a093db9eb"
+      "size": 18689,
+      "sha256": "91c4fa82805003da"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
@@ -105,24 +105,24 @@
       "sha256": "f97b98687eef6844"
     },
     "apps/frontend/src/app/providers/query-client.test.ts": {
-      "size": 883,
-      "sha256": "cffc798a39774f0d"
+      "size": 1175,
+      "sha256": "5f8fcddfc32bbc7c"
     },
     "apps/frontend/src/app/providers/query-client.ts": {
-      "size": 453,
-      "sha256": "fdc780bc597ac365"
+      "size": 1932,
+      "sha256": "01732af3e27edee5"
     },
     "apps/frontend/src/app/router/guards.test.ts": {
-      "size": 3985,
-      "sha256": "a4e26af89b70bf82"
+      "size": 6254,
+      "sha256": "6410a69a2387c388"
     },
     "apps/frontend/src/app/router/guards.ts": {
-      "size": 870,
-      "sha256": "9d90345e5646c0e1"
+      "size": 2178,
+      "sha256": "873d6525e07e36ef"
     },
     "apps/frontend/src/app/router/index.ts": {
-      "size": 1095,
-      "sha256": "f5270e3b4eebc6f2"
+      "size": 1283,
+      "sha256": "feac198e6d894d28"
     },
     "apps/frontend/src/app/styles/main.css": {
       "size": 5811,
@@ -324,6 +324,10 @@
       "size": 164,
       "sha256": "52ed49ed3bb6aa87"
     },
+    "apps/frontend/src/features/auth/ui/AuthStuckPage.vue": {
+      "size": 921,
+      "sha256": "c648826d2c1556b2"
+    },
     "apps/frontend/src/features/auth/ui/LoginPage.vue": {
       "size": 2436,
       "sha256": "7f7cd047a3f49b9e"
@@ -356,9 +360,13 @@
       "size": 4751,
       "sha256": "2861c7ad74ae5fce"
     },
+    "apps/frontend/src/features/items/api/queryKeys.ts": {
+      "size": 312,
+      "sha256": "2bb5879b534efebe"
+    },
     "apps/frontend/src/features/items/api/useItems.ts": {
-      "size": 2992,
-      "sha256": "3bd184dcdf6c346e"
+      "size": 3051,
+      "sha256": "94a493b4bd9e1c8d"
     },
     "apps/frontend/src/features/items/index.ts": {
       "size": 708,
@@ -384,9 +392,13 @@
       "size": 5911,
       "sha256": "81f6a6ad1006fb5a"
     },
+    "apps/frontend/src/features/orders/api/queryKeys.ts": {
+      "size": 318,
+      "sha256": "3038e9010043c006"
+    },
     "apps/frontend/src/features/orders/api/useOrders.ts": {
-      "size": 3015,
-      "sha256": "01da9d07317e1df0"
+      "size": 3075,
+      "sha256": "c4d3832292aa7e95"
     },
     "apps/frontend/src/features/orders/index.ts": {
       "size": 733,
@@ -433,8 +445,12 @@
       "sha256": "6c59d4e6116b89e0"
     },
     "apps/frontend/src/shared/api/client.ts": {
-      "size": 1288,
-      "sha256": "7f21c5514468ba89"
+      "size": 2687,
+      "sha256": "d3c07df66f7d89a2"
+    },
+    "apps/frontend/src/shared/api/errors.ts": {
+      "size": 3199,
+      "sha256": "cd6d8bb28db00793"
     },
     "apps/frontend/src/shared/api/namespace.ts": {
       "size": 290,
@@ -497,8 +513,8 @@
       "sha256": "bd04b836785dc6d6"
     },
     "apps/frontend/src/shared/composables/useAuth.ts": {
-      "size": 3727,
-      "sha256": "385f66dc90a75ebb"
+      "size": 5288,
+      "sha256": "8ef1a66082805f0f"
     },
     "apps/frontend/src/shared/composables/useBreakpoint.test.ts": {
       "size": 2063,
@@ -515,6 +531,18 @@
     "apps/frontend/src/shared/composables/useUrlState.ts": {
       "size": 2087,
       "sha256": "df9cf329fde7c046"
+    },
+    "apps/frontend/src/shared/composables/useZodForm.test.ts": {
+      "size": 3106,
+      "sha256": "8281a74223ebd062"
+    },
+    "apps/frontend/src/shared/composables/useZodForm.ts": {
+      "size": 4274,
+      "sha256": "778439e2871912bd"
+    },
+    "apps/frontend/src/shared/config/runtime.ts": {
+      "size": 6266,
+      "sha256": "c6619a3445a56769"
     },
     "apps/frontend/src/shared/layouts/AuthLayout.vue": {
       "size": 200,
@@ -559,6 +587,14 @@
     "apps/frontend/src/shared/mocks/scenarios.ts": {
       "size": 644,
       "sha256": "00a6a11aafe3b2db"
+    },
+    "apps/frontend/src/shared/observability/sentry.ts": {
+      "size": 3637,
+      "sha256": "a5decc8b14d4bd59"
+    },
+    "apps/frontend/src/shared/observability/telemetry.ts": {
+      "size": 3020,
+      "sha256": "20b2cae43f6c2728"
     },
     "apps/frontend/src/shared/stores/settings.store.test.ts": {
       "size": 1723,
@@ -957,15 +993,15 @@
       "sha256": "19e3cea2b4231a91"
     },
     "apps/frontend/vite.config.ts": {
-      "size": 1317,
-      "sha256": "f7a9e2a4dc889d0a"
+      "size": 1958,
+      "sha256": "37ed3cbd161c1509"
     },
     "docker-compose.yml": {
-      "size": 7473,
-      "sha256": "5f4d0c1c8a7a3cb9"
+      "size": 7883,
+      "sha256": "05f1129d97d2fc8c"
     },
     "forge.toml": {
-      "size": 121370,
+      "size": 124259,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1385,7 +1421,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 508,
+      "size": 513,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1737,8 +1773,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 5078,
-      "sha256": "b54bcc98e1bba447"
+      "size": 5454,
+      "sha256": "8f4d90f26bdb6af1"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1771,6 +1807,10 @@
     "services/api/src/app/middleware/security_headers.py": {
       "size": 1970,
       "sha256": "73d6af1b448c85e5"
+    },
+    "services/api/src/app/middleware/tenant_context.py": {
+      "size": 879,
+      "sha256": "3900b28ccbedbfe0"
     },
     "services/api/src/app/ports/error_port.py": {
       "size": 2600,
@@ -1913,7 +1953,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 558,
+      "size": 563,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

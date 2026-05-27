@@ -40,9 +40,9 @@ def test_auth_mode_option_registered() -> None:
     opt = OPTION_REGISTRY["auth.mode"]
     assert opt.default == "generate"
     assert opt.options == ("generate", "none")
-    # Wave 2 cutover complete: auth.mode=generate enables all 11
+    # Wave 2 cutover complete: auth.mode=generate enables all 12
     # auth-namespace fragments (3 SDKs + 3 frontend session-timeout +
-    # 3 backend middleware + 2 gatekeeper).
+    # 3 backend middleware + 2 gatekeeper + 1 tenant-context).
     enabled = opt.enables["generate"]
     assert "platform_auth_sdk_python" in enabled
     assert "platform_auth_sdk_node" in enabled
@@ -55,8 +55,9 @@ def test_auth_mode_option_registered() -> None:
     assert "platform_auth_rust_middleware" in enabled
     assert "platform_auth_gatekeeper" in enabled
     assert "platform_auth_gatekeeper_keygen" in enabled
-    assert len(enabled) == 11, (
-        f"auth.mode=generate should enable all 11 auth fragments after "
+    assert "platform_auth_tenant_context" in enabled
+    assert len(enabled) == 12, (
+        f"auth.mode=generate should enable all 12 auth fragments after "
         f"Wave 2 cutover; got {len(enabled)}: {enabled}"
     )
 

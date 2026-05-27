@@ -25,11 +25,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 7196,
-      "sha256": "bc2889c811bd2975"
+      "size": 7606,
+      "sha256": "894cd4ae0bcdfdef"
     },
     "forge.toml": {
-      "size": 43787,
+      "size": 43927,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -389,7 +389,7 @@
       "sha256": "501d4cab52c61fd6"
     },
     "services/api/.copier-answers.yml": {
-      "size": 503,
+      "size": 508,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {

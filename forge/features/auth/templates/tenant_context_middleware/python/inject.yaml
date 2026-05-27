@@ -9,4 +9,4 @@
 - target: src/app/main.py
   marker: FORGE:MIDDLEWARE_REGISTRATION
   position: before
-  snippet: "    app.add_middleware(TenantContextMiddleware)"
+  snippet: "app.add_middleware(TenantContextMiddleware)"
