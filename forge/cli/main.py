@@ -109,11 +109,12 @@ def main() -> None:
             break
     configure_logging(level=early_level, fmt=early_fmt)
 
-    # Discover third-party plugins before parsing — lets them extend the
-    # argparse surface and the option registry before args hit validation.
-    from forge import plugins  # noqa: PLC0415
+    # Discover and load all features + external plugins before parsing —
+    # lets them extend the argparse surface and the option registry
+    # before args hit validation.
+    from forge import feature_loader  # noqa: PLC0415
 
-    plugins.load_all()
+    feature_loader.load_all()
 
     # Epic 3 (plugin SDK MVP) — surface plugin-load failures at every
     # CLI entry point, not only via ``forge --plugins list``. Otherwise
@@ -128,6 +129,8 @@ def main() -> None:
     # parse stderr). The list is consumed later in main() after the
     # report is created.
     plugin_load_warnings: list[str] = []
+    from forge import plugins  # noqa: PLC0415
+
     if plugins.FAILED_PLUGINS and os.environ.get("FORGE_QUIET_PLUGIN_WARNINGS") != "1":
         for name, reason in plugins.FAILED_PLUGINS:
             msg = f"plugin {name!r} failed to load: {reason}"
@@ -188,6 +191,15 @@ def main() -> None:
             output_dir=scaffold_output_dir,
             backends=getattr(args, "plugins_backends", None),
             force=getattr(args, "plugins_force", False),
+        )
+
+    if getattr(args, "features_subcommand", None):
+        from forge.cli.commands.features import _dispatch_features  # noqa: PLC0415
+
+        _dispatch_features(
+            args.features_subcommand,
+            json_output=getattr(args, "json_output", False),
+            name=getattr(args, "features_name", None),
         )
 
     if getattr(args, "canvas_subcommand", None):

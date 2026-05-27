@@ -1,12 +1,8 @@
-"""``observability.*`` features — tracing, OpenTelemetry, deep health.
-
-Wave A of the features-reorganization refactor (see commit message of
-the correlation_id POC for context).
-"""
-
+"""``observability.*`` features — tracing, OpenTelemetry, deep health."""
 from __future__ import annotations
+from forge.api import ForgeAPI
 
-from forge.features.observability import (  # noqa: F401, E402
-    fragments,
-    options,
-)
+def register(api: ForgeAPI) -> None:
+    from forge.features.observability import options, fragments
+    options.register_all(api)
+    fragments.register_all(api)

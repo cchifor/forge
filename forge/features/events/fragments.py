@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from forge.api import ForgeAPI
 from forge.config import BackendLanguage
-from forge.fragments._registry import register_fragment
 from forge.fragments._spec import Fragment, FragmentImplSpec
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -25,36 +25,36 @@ def _impl(name: str, lang: str) -> str:
     return str(_TEMPLATES / name / lang)
 
 
-register_fragment(
-    Fragment(
-        name="events_core",
-        capabilities=("postgres",),
-        implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir=_impl("events_core", "python"),
-                dependencies=("weld-events",),
-                env_vars=(
-                    ("EVENTS_BUS", "postgres_notify"),
-                    ("EVENTS_CHANNEL", "domain_events"),
+def register_all(api: ForgeAPI) -> None:
+    api.add_fragment(
+        Fragment(
+            name="events_core",
+            capabilities=("postgres",),
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("events_core", "python"),
+                    dependencies=("weld-events",),
+                    env_vars=(
+                        ("EVENTS_BUS", "postgres_notify"),
+                        ("EVENTS_CHANNEL", "domain_events"),
+                    ),
+                    reads_options=("events.bus",),
                 ),
-                reads_options=("events.bus",),
-            ),
-        },
+            },
+        )
     )
-)
 
-
-register_fragment(
-    Fragment(
-        name="events_outbox",
-        depends_on=("events_core",),
-        capabilities=("postgres",),
-        implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir=_impl("events_outbox", "python"),
-                dependencies=("weld-events",),
-                env_vars=(("EVENTS_OUTBOX_POLL_INTERVAL_S", "1.0"),),
-            ),
-        },
+    api.add_fragment(
+        Fragment(
+            name="events_outbox",
+            depends_on=("events_core",),
+            capabilities=("postgres",),
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("events_outbox", "python"),
+                    dependencies=("weld-events",),
+                    env_vars=(("EVENTS_OUTBOX_POLL_INTERVAL_S", "1.0"),),
+                ),
+            },
+        )
     )
-)

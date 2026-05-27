@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from forge.api import ForgeAPI
 from forge.options._registry import (
     FeatureCategory,
     Option,
     OptionType,
-    register_option,
 )
 
-register_option(
-    Option(
-        path="async.task_queue",
-        type=OptionType.BOOL,
-        default=False,
-        summary="Redis-backed job queue (Taskiq / BullMQ / Apalis).",
-        description="""\
+
+def register_all(api: ForgeAPI) -> None:
+    api.add_option(
+        Option(
+            path="async.task_queue",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Redis-backed job queue (Taskiq / BullMQ / Apalis).",
+            description="""\
 A Redis-backed job queue + example task + worker binary. Define jobs as
 regular async functions, enqueue them from request handlers, process
 them out-of-process in a dedicated worker container. Ships with Taskiq
@@ -24,20 +26,19 @@ ecosystems with the same env-var convention (TASKIQ_BROKER_URL).
 
 BACKENDS: python, node, rust
 REQUIRES: TASKIQ_BROKER_URL → Redis.""",
-        category=FeatureCategory.ASYNC_WORK,
-        stability="beta",
-        enables={True: ("background_tasks",)},
+            category=FeatureCategory.ASYNC_WORK,
+            stability="beta",
+            enables={True: ("background_tasks",)},
+        )
     )
-)
 
-
-register_option(
-    Option(
-        path="async.rag_ingest_queue",
-        type=OptionType.BOOL,
-        default=False,
-        summary="Taskiq tasks that move RAG ingest off the request thread.",
-        description="""\
+    api.add_option(
+        Option(
+            path="async.rag_ingest_queue",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Taskiq tasks that move RAG ingest off the request thread.",
+            description="""\
 Taskiq tasks that move RAG ingestion off the request thread. Enqueue
 with ``await ingest_text_task.kiq(...)`` or
 ``ingest_pdf_bytes_task.kiq(...)`` from any handler — the worker picks
@@ -46,24 +47,23 @@ returns immediately with a task ID.
 
 BACKENDS: python
 REQUIRES: rag.backend ≠ none + async.task_queue = true.""",
-        category=FeatureCategory.ASYNC_WORK,
-        stability="experimental",
-        enables={True: ("rag_sync_tasks",)},
-        # rag_sync_tasks depends on rag_pipeline -> conversation_persistence
-        # (DB-backed). Init #7 follow-up: codex flagged this gap.
-        requires_database=True,
+            category=FeatureCategory.ASYNC_WORK,
+            stability="experimental",
+            enables={True: ("rag_sync_tasks",)},
+            # rag_sync_tasks depends on rag_pipeline -> conversation_persistence
+            # (DB-backed). Init #7 follow-up: codex flagged this gap.
+            requires_database=True,
+        )
     )
-)
 
-
-register_option(
-    Option(
-        path="queue.backend",
-        type=OptionType.ENUM,
-        default="none",
-        options=("none", "redis", "sqs", "bullmq", "apalis"),
-        summary="Background-work queue — selects the QueuePort adapter (per RFC-012).",
-        description="""\
+    api.add_option(
+        Option(
+            path="queue.backend",
+            type=OptionType.ENUM,
+            default="none",
+            options=("none", "redis", "sqs", "bullmq", "apalis"),
+            summary="Background-work queue — selects the QueuePort adapter (per RFC-012).",
+            description="""\
 Selects which queue implementation the ``QueuePort`` resolves to.
 Each value is scoped to the backend language whose adapter ecosystem
 it belongs to — see docs/rfcs/RFC-012-forgequeue-port.md for the
@@ -84,12 +84,12 @@ BACKENDS: python (redis, sqs), node (bullmq), rust (apalis)
 DEPENDENCY: redis-py (redis), aioboto3 (sqs), bullmq+ioredis
     (bullmq), apalis+apalis-redis (apalis)
 ENV: REDIS_URL / AWS_REGION / TASKIQ_BROKER_URL""",
-        category=FeatureCategory.ASYNC_WORK,
-        enables={
-            "redis": ("queue_port", "queue_redis"),
-            "sqs": ("queue_port", "queue_sqs"),
-            "bullmq": ("queue_port", "queue_bullmq"),
-            "apalis": ("queue_port", "queue_apalis"),
-        },
+            category=FeatureCategory.ASYNC_WORK,
+            enables={
+                "redis": ("queue_port", "queue_redis"),
+                "sqs": ("queue_port", "queue_sqs"),
+                "bullmq": ("queue_port", "queue_bullmq"),
+                "apalis": ("queue_port", "queue_apalis"),
+            },
+        )
     )
-)

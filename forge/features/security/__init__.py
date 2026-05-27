@@ -1,15 +1,8 @@
-"""``security.*`` features — CSP nginx config + SBOM workflow.
-
-Distinct from ``middleware.security_headers`` (which is in
-``forge.features.middleware`` and sets HTTP response headers in the
-request path); these fragments are project-scope (``security_csp``
-ships an external CSP config) or build-time (``security_sbom`` emits
-a software-bill-of-materials artifact).
-"""
-
+"""CSP nginx config + SBOM workflow."""
 from __future__ import annotations
+from forge.api import ForgeAPI
 
-from forge.features.security import (  # noqa: F401, E402
-    fragments,
-    options,
-)
+def register(api: ForgeAPI) -> None:
+    from forge.features.security import options, fragments
+    options.register_all(api)
+    fragments.register_all(api)
