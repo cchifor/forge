@@ -199,9 +199,7 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("metrics_middleware", "python"),
-                    dependencies=(
-                        "opentelemetry-api>=1.20.0",
-                    ),
+                    dependencies=("opentelemetry-api>=1.20.0",),
                 ),
             },
         )

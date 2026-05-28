@@ -40,15 +40,32 @@ logger = logging.getLogger(__name__)
 
 LOADED_FEATURES: list[FeatureManifest] = []
 
+# Per-phase idempotency. ``LOADED_FEATURES`` is the introspection roster;
+# ``_BUILTINS_LOADED`` is the fast-path guard for "the built-in discovery +
+# register pass already ran in this process". They are distinct because
+# ``load_all()`` must NOT early-return before the plugin-load + freeze
+# phases just because built-ins are present — the built-ins are now
+# registered at ``import forge`` time (see ``forge/__init__``), so a single
+# ``if LOADED_FEATURES: return`` guard would skip plugins + freeze whenever
+# the CLI/conftest later calls ``load_all()``.
+_BUILTINS_LOADED: bool = False
 
-def load_all() -> list[FeatureManifest]:
-    """Discover and load all features + plugins. Idempotent."""
-    if LOADED_FEATURES:
+
+def load_builtin_features() -> list[FeatureManifest]:
+    """Discover and register the built-in features under ``forge/features/``.
+
+    Idempotent via ``_BUILTINS_LOADED``. Does NOT load external plugins and
+    does NOT freeze the registries — that orchestration lives in
+    ``load_all()``. ``forge/__init__`` calls this at import so any
+    programmatic consumer (``tests/matrix/runner.py``, library users) sees a
+    populated ``OPTION_REGISTRY`` / ``FRAGMENT_REGISTRY`` without going
+    through ``cli.main()``.
+    """
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return LOADED_FEATURES
 
-    # ------------------------------------------------------------------
-    # 1. Discover internal features
-    # ------------------------------------------------------------------
+    # 1. Discover internal feature manifests.
     features_dir = Path(__file__).resolve().parent / "features"
     manifests: list[FeatureManifest] = []
     for toml_path in sorted(features_dir.glob("*/feature.toml")):
@@ -60,22 +77,19 @@ def load_all() -> list[FeatureManifest]:
         manifests.append(manifest)
         logger.debug("discovered feature %r (%s)", manifest.name, manifest.version)
 
-    # ------------------------------------------------------------------
-    # 2. Topological sort by depends
-    # ------------------------------------------------------------------
+    # 2. Topological sort by depends.
     ordered = _topo_sort(manifests)
 
-    # ------------------------------------------------------------------
-    # 3. Load features in dependency order
-    # ------------------------------------------------------------------
+    # 3. Register features in dependency order.
     for manifest in ordered:
         # Idempotency at the registry level: if this feature's declared
         # contract is already registered (e.g. a prior load populated the
         # registries while LOADED_FEATURES was reset out of sync), keep the
-        # list consistent instead of re-registering — which would raise a
+        # roster consistent instead of re-registering — which would raise a
         # PLUGIN_COLLISION on the already-present options/fragments.
         if _already_registered(manifest):
-            LOADED_FEATURES.append(manifest)
+            if manifest not in LOADED_FEATURES:
+                LOADED_FEATURES.append(manifest)
             continue
 
         mod = importlib.import_module(manifest.module_path)
@@ -106,32 +120,43 @@ def load_all() -> list[FeatureManifest]:
         LOADED_FEATURES.append(manifest)
         logger.debug("loaded feature %r", manifest.name)
 
-    # ------------------------------------------------------------------
-    # 4. Load external plugins (entry-point-based)
-    # ------------------------------------------------------------------
+    _BUILTINS_LOADED = True
+    return LOADED_FEATURES
+
+
+def load_all() -> list[FeatureManifest]:
+    """Load built-ins + external plugins, then freeze + validate.
+
+    Per-phase idempotent: each phase guards itself, so calling this after
+    ``forge/__init__`` already ran ``load_builtin_features()`` still loads
+    plugins and freezes the registry.
+    """
+    # Phase 1-3: built-in features (idempotent on _BUILTINS_LOADED).
+    load_builtin_features()
+
+    # Phase 4: external plugins (idempotent on plugins' own guards).
     from forge.plugins import load_all as _load_plugins  # noqa: PLC0415
 
     _load_plugins()
 
-    # ------------------------------------------------------------------
-    # 5. Freeze registries
-    # ------------------------------------------------------------------
-    try:
-        FRAGMENT_REGISTRY.freeze()
-    except FragmentError as exc:
-        from forge.plugins import FAILED_PLUGINS  # noqa: PLC0415
+    # Phase 5: freeze the fragment registry — only once.
+    if not FRAGMENT_REGISTRY.frozen:
+        try:
+            FRAGMENT_REGISTRY.freeze()
+        except FragmentError as exc:
+            from forge.plugins import FAILED_PLUGINS  # noqa: PLC0415
 
-        FAILED_PLUGINS.append(("<registry audit>", f"{type(exc).__name__}: {exc}"))
-        logger.error("FRAGMENT_REGISTRY audit failed: %s", exc)
+            FAILED_PLUGINS.append(("<registry audit>", f"{type(exc).__name__}: {exc}"))
+            logger.error("FRAGMENT_REGISTRY audit failed: %s", exc)
 
-    # ------------------------------------------------------------------
-    # 6. Validate contracts (warn-only)
-    # ------------------------------------------------------------------
+    # Phase 6: validate manifest contracts (warn-only).
     registered_options = frozenset(OPTION_REGISTRY.keys())
     registered_fragments = frozenset(FRAGMENT_REGISTRY.keys())
     for manifest in LOADED_FEATURES:
         violations = validate_manifest_contracts(
-            manifest, registered_options, registered_fragments,
+            manifest,
+            registered_options,
+            registered_fragments,
         )
         for msg in violations:
             logger.warning("contract violation (%s): %s", FEATURE_CONTRACT_VIOLATION, msg)
@@ -187,9 +212,7 @@ def _topo_sort(manifests: list[FeatureManifest]) -> list[FeatureManifest]:
             in_degree[m.name] += 1
 
     # Seed queue with features that have no dependencies.
-    queue: deque[str] = deque(
-        name for name, degree in sorted(in_degree.items()) if degree == 0
-    )
+    queue: deque[str] = deque(name for name, degree in sorted(in_degree.items()) if degree == 0)
 
     ordered: list[FeatureManifest] = []
     while queue:
@@ -213,4 +236,6 @@ def _topo_sort(manifests: list[FeatureManifest]) -> list[FeatureManifest]:
 
 def reset_for_tests() -> None:
     """Clear loaded features state -- test-only."""
+    global _BUILTINS_LOADED
     LOADED_FEATURES.clear()
+    _BUILTINS_LOADED = False
