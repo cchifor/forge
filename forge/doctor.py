@@ -99,6 +99,36 @@ def check_tool_on_path(
     )
 
 
+# Minimum Python forge supports — keep in sync with ``requires-python`` in
+# pyproject.toml (">=3.13").
+MIN_PYTHON: tuple[int, int] = (3, 13)
+
+
+def check_python_interpreter(min_version: tuple[int, int] = MIN_PYTHON) -> CheckResult:
+    """Verify the running interpreter meets forge's minimum Python.
+
+    forge can't import at all on an interpreter below the floor, so in
+    practice this reports ``ok``; making it a real version comparison (vs.
+    a hardcoded assertion) means a too-old interpreter surfaces a clear,
+    actionable failure instead of an opaque import error upstream.
+    """
+    current = sys.version_info[:2]
+    want = f"{min_version[0]}.{min_version[1]}"
+    have = f"{current[0]}.{current[1]}"
+    if current < min_version:
+        return CheckResult(
+            name="runtime:python",
+            status="fail",
+            detail=f"Python {have} at {sys.executable}; forge requires >= {want}",
+            fix=f"Install Python {want}+ and run forge under it (e.g. via uv or pyenv).",
+        )
+    return CheckResult(
+        name="runtime:python",
+        status="ok",
+        detail=f"Python {sys.version.split()[0]} at {sys.executable}",
+    )
+
+
 def check_docker_reachable() -> CheckResult:
     """Verify ``docker info`` returns cleanly — enough to boot compose later."""
     exe = shutil.which("docker")
@@ -334,15 +364,9 @@ def run(project_path: Path | None = None) -> DoctorReport:
     project_path = project_path or Path.cwd()
     report = DoctorReport()
 
-    # Python is required — forge itself can't run otherwise, so this is an
-    # assertion rather than a variable check.
-    report.results.append(
-        CheckResult(
-            name="runtime:python",
-            status="ok",
-            detail=f"Python {sys.version.split()[0]} at {sys.executable}",
-        )
-    )
+    # Python is required — verify the running interpreter meets forge's
+    # minimum (a real version check, not a hardcoded assertion).
+    report.results.append(check_python_interpreter())
     report.results.append(check_tool_on_path("git", kind="vcs"))
     report.results.append(check_tool_on_path("uv", kind="tool"))
     report.results.append(check_tool_on_path("node", kind="tool"))

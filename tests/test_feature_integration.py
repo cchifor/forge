@@ -33,6 +33,7 @@ def _reset():
     saved_aliases = dict(OPTION_ALIAS_INDEX)
     saved_frags = dict(FRAGMENT_REGISTRY)
     saved_frags_frozen = FRAGMENT_REGISTRY.frozen
+    saved_loaded = list(feature_loader.LOADED_FEATURES)
 
     feature_loader.reset_for_tests()
     plugins.reset_for_tests()
@@ -54,6 +55,10 @@ def _reset():
     FRAGMENT_REGISTRY.clear()
     FRAGMENT_REGISTRY.update(saved_frags)
     FRAGMENT_REGISTRY.frozen = saved_frags_frozen
+    # Restore LOADED_FEATURES in sync with the registries we just restored,
+    # so a later load_all() sees a consistent state and correctly no-ops.
+    feature_loader.LOADED_FEATURES.clear()
+    feature_loader.LOADED_FEATURES.extend(saved_loaded)
 
 
 # ------------------------------------------------------------------
@@ -157,6 +162,31 @@ class TestLoadAll:
         second = feature_loader.load_all()
         assert first is second
         assert len(first) == 18
+
+    def test_load_all_tolerates_loaded_features_desync(self) -> None:
+        """load_all() must not re-register when registries are already
+        populated but LOADED_FEATURES was cleared out of sync.
+
+        Reproduces the class of bug where in-process state drifts (e.g. a
+        test fixture clears LOADED_FEATURES but leaves OPTION_REGISTRY
+        populated). A naive re-register would raise PLUGIN_COLLISION on the
+        already-present options; the registry-level idempotency guard must
+        skip those features instead.
+        """
+        feature_loader.load_all()
+        assert len(feature_loader.LOADED_FEATURES) == 18
+        n_options = len(OPTION_REGISTRY)
+        n_fragments = len(FRAGMENT_REGISTRY)
+
+        # Simulate the desync: registries stay populated, list is emptied.
+        feature_loader.LOADED_FEATURES.clear()
+
+        # Must not raise PluginError("already registered"), and must rebuild
+        # the list to a consistent state without duplicating registrations.
+        result = feature_loader.load_all()
+        assert len(result) == 18
+        assert len(OPTION_REGISTRY) == n_options
+        assert len(FRAGMENT_REGISTRY) == n_fragments
 
 
 class TestContractValidation:

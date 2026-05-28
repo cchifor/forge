@@ -33,6 +33,7 @@ def _reset():
     saved_aliases = dict(OPTION_ALIAS_INDEX)
     saved_frags = dict(FRAGMENT_REGISTRY)
     saved_frags_frozen = FRAGMENT_REGISTRY.frozen
+    saved_loaded = list(feature_loader.LOADED_FEATURES)
 
     feature_loader.reset_for_tests()
     plugins.reset_for_tests()
@@ -53,6 +54,11 @@ def _reset():
     FRAGMENT_REGISTRY.clear()
     FRAGMENT_REGISTRY.update(saved_frags)
     FRAGMENT_REGISTRY.frozen = saved_frags_frozen
+    # Restore LOADED_FEATURES in sync with the registries we just restored,
+    # so a later load_all() (e.g. from a subsequent test's cli.main()) sees a
+    # consistent state and correctly no-ops instead of re-registering.
+    feature_loader.LOADED_FEATURES.clear()
+    feature_loader.LOADED_FEATURES.extend(saved_loaded)
 
 
 @pytest.fixture()
