@@ -46,7 +46,9 @@ def register_all(api: ForgeAPI) -> None:
                     name="correlation_id",
                     backend=BackendLanguage.PYTHON,
                     order=90,
-                    import_snippet=("from app.middleware.correlation import CorrelationIdMiddleware"),
+                    import_snippet=(
+                        "from app.middleware.correlation import CorrelationIdMiddleware"
+                    ),
                     register_snippet=(
                         "# Correlation ID (outermost — runs first, sets context for all inner middleware)\n"
                         "app.add_middleware(CorrelationIdMiddleware)"
@@ -61,7 +63,9 @@ def register_all(api: ForgeAPI) -> None:
             name="rate_limit",
             order=50,
             implementations={
-                BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir=_impl("rate_limit", "python")),
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("rate_limit", "python")
+                ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("rate_limit", "node"),
                     dependencies=("@fastify/rate-limit@10.3.0",),

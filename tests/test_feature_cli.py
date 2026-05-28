@@ -59,6 +59,10 @@ def _reset():
     # consistent state and correctly no-ops instead of re-registering.
     feature_loader.LOADED_FEATURES.clear()
     feature_loader.LOADED_FEATURES.extend(saved_loaded)
+    # Keep the per-phase guard in sync with the restored roster: the
+    # built-ins ARE registered (we restored the registries above), so the
+    # next load_builtin_features()/load_all() must no-op, not re-discover.
+    feature_loader._BUILTINS_LOADED = bool(saved_loaded)
 
 
 @pytest.fixture()
@@ -71,13 +75,19 @@ def _loaded():
 # Helper: run forge as a subprocess
 # ------------------------------------------------------------------
 
+# Repo root derived from this file's location (tests/ -> repo root), so the
+# subprocess runs from a real, deterministic directory on any machine/CI —
+# not a hardcoded path that only exists on one developer's box.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 def _run_forge(*args: str) -> tuple[int, str, str]:
     """Run forge CLI and return (returncode, stdout, stderr)."""
     result = subprocess.run(
         [sys.executable, "-m", "forge", *args],
         capture_output=True,
         text=True,
-        cwd="/tmp/forge",
+        cwd=str(_REPO_ROOT),
         timeout=30,
     )
     return result.returncode, result.stdout, result.stderr

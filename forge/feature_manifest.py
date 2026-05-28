@@ -8,7 +8,6 @@ from pathlib import Path
 import tomlkit
 
 from forge.errors import (
-    FEATURE_CONTRACT_VIOLATION,
     FEATURE_MANIFEST_INVALID,
     FEATURE_MANIFEST_MISSING,
     PluginError,

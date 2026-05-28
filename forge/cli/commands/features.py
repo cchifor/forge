@@ -15,7 +15,6 @@ import json
 import keyword
 import sys
 from pathlib import Path
-from typing import Any
 
 
 def _dispatch_features(
@@ -32,8 +31,7 @@ def _dispatch_features(
     if subcommand == "deps":
         if not name:
             print(
-                "deps requires a feature name: "
-                "`forge --features-cmd deps --features-name <NAME>`",
+                "deps requires a feature name: `forge --features-cmd deps --features-name <NAME>`",
                 file=sys.stderr,
             )
             sys.exit(2)
@@ -146,7 +144,9 @@ def _validate_features(*, json_output: bool = False) -> None:
     all_errors: dict[str, list[str]] = {}
     for manifest in LOADED_FEATURES:
         violations = validate_manifest_contracts(
-            manifest, registered_options, registered_fragments,
+            manifest,
+            registered_options,
+            registered_fragments,
         )
         if violations:
             all_errors[manifest.name] = violations
@@ -282,10 +282,10 @@ def register_all(api: ForgeAPI) -> None:
     )
 
     print(f"  Created forge/features/{name}/")
-    print(f"  ├── feature.toml")
-    print(f"  ├── __init__.py")
-    print(f"  ├── options.py")
-    print(f"  ├── fragments.py")
-    print(f"  └── templates/")
+    print("  ├── feature.toml")
+    print("  ├── __init__.py")
+    print("  ├── options.py")
+    print("  ├── fragments.py")
+    print("  └── templates/")
     print()
-    print(f"  Next: edit feature.toml, options.py, and fragments.py to define your feature.")
+    print("  Next: edit feature.toml, options.py, and fragments.py to define your feature.")

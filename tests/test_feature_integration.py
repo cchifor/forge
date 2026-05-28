@@ -59,6 +59,8 @@ def _reset():
     # so a later load_all() sees a consistent state and correctly no-ops.
     feature_loader.LOADED_FEATURES.clear()
     feature_loader.LOADED_FEATURES.extend(saved_loaded)
+    # Keep the per-phase guard in sync with the restored roster.
+    feature_loader._BUILTINS_LOADED = bool(saved_loaded)
 
 
 # ------------------------------------------------------------------
@@ -178,11 +180,15 @@ class TestLoadAll:
         n_options = len(OPTION_REGISTRY)
         n_fragments = len(FRAGMENT_REGISTRY)
 
-        # Simulate the desync: registries stay populated, list is emptied.
+        # Simulate the desync: registries stay populated, but the loader's
+        # in-process state is reset (roster emptied + _BUILTINS_LOADED
+        # cleared) — exactly what reset_for_tests() does when a fixture has
+        # restored the registries out of band.
         feature_loader.LOADED_FEATURES.clear()
+        feature_loader._BUILTINS_LOADED = False
 
         # Must not raise PluginError("already registered"), and must rebuild
-        # the list to a consistent state without duplicating registrations.
+        # the roster to a consistent state without duplicating registrations.
         result = feature_loader.load_all()
         assert len(result) == 18
         assert len(OPTION_REGISTRY) == n_options
