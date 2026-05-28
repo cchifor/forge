@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1155,
+      "size": 1146,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -89,8 +89,8 @@
       "sha256": "f82c96be4a079032"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 18689,
-      "sha256": "91c4fa82805003da"
+      "size": 19125,
+      "sha256": "c60b65280fed594b"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
@@ -1421,7 +1421,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 513,
+      "size": 504,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -2049,7 +2049,7 @@
       "sha256": "f21659e2eb07890b"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 562,
+      "size": 553,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

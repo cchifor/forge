@@ -1,0 +1,11 @@
+[feature]
+name = "connectors"
+version = "1.0.0"
+summary = "Pluggable read/write adapters via weld-connectors."
+category = "knowledge"
+
+[feature.depends]
+
+[feature.provides]
+options = ["connectors.enabled", "connectors.backends"]
+fragments = ["connectors_registry"]

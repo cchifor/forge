@@ -25,12 +25,14 @@ const routes = [
       ...settingsRoutes,
     ],
   },
+{%- if include_auth %}
   {
     path: '/auth/stuck',
     name: 'auth-stuck',
     component: () => import('@/features/auth/ui/AuthStuckPage.vue'),
     meta: { requiresAuth: false, title: 'Sign-in delayed' },
   },
+{%- endif %}
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

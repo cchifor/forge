@@ -1,3 +1,12 @@
 """Shared library scaffold — cross-backend code sharing."""
-from forge.features.shared_lib import options as _options  # noqa: F401
-from forge.features.shared_lib import fragments as _fragments  # noqa: F401
+
+from __future__ import annotations
+
+from forge.api import ForgeAPI
+
+
+def register(api: ForgeAPI) -> None:
+    from forge.features.shared_lib import fragments, options
+
+    options.register_all(api)
+    fragments.register_all(api)

@@ -2,5 +2,11 @@
 
 from __future__ import annotations
 
-from forge.features.testing_enhanced import fragments as _fragments  # noqa: F401
-from forge.features.testing_enhanced import options as _options  # noqa: F401
+from forge.api import ForgeAPI
+
+
+def register(api: ForgeAPI) -> None:
+    from forge.features.testing_enhanced import fragments, options
+
+    options.register_all(api)
+    fragments.register_all(api)
