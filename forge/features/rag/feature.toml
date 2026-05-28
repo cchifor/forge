@@ -1,0 +1,32 @@
+[feature]
+name = "rag"
+version = "1.0.0"
+summary = "Retrieval-augmented generation stack with pluggable vector backends."
+category = "knowledge"
+stability = "experimental"
+
+[feature.depends]
+conversation = "*"
+async_work = "*"
+
+[feature.provides]
+options = ["rag.backend", "rag.embeddings", "rag.reranker", "rag.top_k"]
+fragments = [
+    "rag_pipeline",
+    "rag_sync_tasks",
+    "rag_embeddings_voyage",
+    "rag_reranking",
+    "rag_milvus",
+    "rag_weaviate",
+    "rag_pinecone",
+    "rag_chroma",
+    "rag_postgresql",
+    "rag_qdrant",
+    "vector_store_port",
+    "vector_store_qdrant",
+    "vector_store_chroma",
+    "vector_store_pinecone",
+    "vector_store_milvus",
+    "vector_store_weaviate",
+    "vector_store_postgres",
+]

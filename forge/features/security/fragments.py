@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from forge.api import ForgeAPI
 from forge.config import BackendLanguage
-from forge.fragments._registry import register_fragment
 from forge.fragments._spec import Fragment, FragmentImplSpec
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -26,27 +26,27 @@ def _project(name: str) -> str:
     return str(_TEMPLATES / name)
 
 
-# Project-scoped: same nginx config for every backend.
-_CSP_IMPL = FragmentImplSpec(fragment_dir=_project("security_csp"), scope="project")
-register_fragment(
-    Fragment(
-        name="security_csp",
-        implementations={
-            BackendLanguage.PYTHON: _CSP_IMPL,
-            BackendLanguage.NODE: _CSP_IMPL,
-            BackendLanguage.RUST: _CSP_IMPL,
-        },
+def register_all(api: ForgeAPI) -> None:
+    # Project-scoped: same nginx config for every backend.
+    _CSP_IMPL = FragmentImplSpec(fragment_dir=_project("security_csp"), scope="project")
+    api.add_fragment(
+        Fragment(
+            name="security_csp",
+            implementations={
+                BackendLanguage.PYTHON: _CSP_IMPL,
+                BackendLanguage.NODE: _CSP_IMPL,
+                BackendLanguage.RUST: _CSP_IMPL,
+            },
+        )
     )
-)
 
-
-register_fragment(
-    Fragment(
-        name="security_sbom",
-        implementations={
-            BackendLanguage.PYTHON: FragmentImplSpec(
-                fragment_dir=_impl("security_sbom", "python"),
-            ),
-        },
+    api.add_fragment(
+        Fragment(
+            name="security_sbom",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("security_sbom", "python"),
+                ),
+            },
+        )
     )
-)

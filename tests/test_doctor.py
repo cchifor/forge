@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from forge.doctor import (
     DoctorReport,
     check_forge_toml,
     check_port_free,
+    check_python_interpreter,
     check_tool_on_path,
     check_ts_morph_toolchain,
     render_text,
@@ -46,14 +48,33 @@ class TestDoctorReport:
 
 class TestCheckToolOnPath:
     def test_found_tool(self) -> None:
-        # Python's own executable is always on PATH while running pytest.
-        result = check_tool_on_path("python")
+        # sys.executable is the running interpreter's absolute path; it
+        # always exists and is executable, so it exercises the found-tool
+        # path without assuming a bare ``python`` symlink is on PATH.
+        result = check_tool_on_path(sys.executable)
         assert result.status == "ok"
 
     def test_missing_tool(self) -> None:
         result = check_tool_on_path("this_tool_does_not_exist_anywhere")
         assert result.status == "fail"
         assert "not found" in result.detail
+
+
+class TestCheckPythonInterpreter:
+    def test_current_interpreter_passes(self) -> None:
+        # The interpreter running the suite is >= forge's floor by definition.
+        result = check_python_interpreter()
+        assert result.status == "ok"
+        assert result.name == "runtime:python"
+
+    def test_too_old_interpreter_fails(self) -> None:
+        # Demand a floor above the current interpreter to exercise the
+        # failure path deterministically.
+        future = (sys.version_info[0], sys.version_info[1] + 1)
+        result = check_python_interpreter(min_version=future)
+        assert result.status == "fail"
+        assert "requires >=" in result.detail
+        assert result.fix is not None
 
 
 class TestCheckPortFree:

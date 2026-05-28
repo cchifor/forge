@@ -1,0 +1,21 @@
+[feature]
+name = "reliability"
+version = "1.0.0"
+summary = "Connection pools, circuit breakers, and generic K/V cache port + adapters."
+category = "reliability"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "reliability.connection_pool",
+    "reliability.circuit_breaker",
+    "reliability.cache",
+]
+fragments = [
+    "reliability_connection_pool",
+    "reliability_circuit_breaker",
+    "cache_port",
+    "cache_memory",
+    "cache_redis",
+]

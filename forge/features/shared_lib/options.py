@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from forge.api import ForgeAPI
 from forge.options._registry import (
     FeatureCategory,
     Option,
     OptionType,
-    register_option,
 )
 
-register_option(
-    Option(
-        path="platform.shared_lib",
-        type=OptionType.BOOL,
-        default=False,
-        summary="Scaffold a shared Python package in sdks/ for cross-backend code reuse.",
-        description="""\
+
+def register_all(api: ForgeAPI) -> None:
+    api.add_option(
+        Option(
+            path="platform.shared_lib",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Scaffold a shared Python package in sdks/ for cross-backend code reuse.",
+            description="""\
 Drops a ready-to-import ``shared`` Python package at
 ``<project>/sdks/shared/`` with Pydantic domain models, a utilities
 namespace, and smoke tests. Every Python backend can reference it as
@@ -27,7 +29,7 @@ models, or pure-logic helpers without duplicating code across services.
 
 BACKENDS: python
 ENDPOINTS: none — library only.""",
-        category=FeatureCategory.PLATFORM,
-        enables={True: ("shared_lib_python",)},
+            category=FeatureCategory.PLATFORM,
+            enables={True: ("shared_lib_python",)},
+        )
     )
-)

@@ -56,5 +56,5 @@ keycloak_client_id:
   default: ""
 
 _tasks:
-  - command: python _tasks/post_generate.py
+  - command: "{{ _copier_python }} _tasks/post_generate.py"
     when: "{{ True }}"

@@ -1,0 +1,27 @@
+[feature]
+name = "agent"
+version = "1.0.0"
+summary = "LLM agent platform — streaming, tools, pydantic-ai loop, and LLM provider adapters."
+category = "conversational_ai"
+stability = "experimental"
+
+[feature.depends]
+conversation = "*"
+
+[feature.provides]
+options = [
+    "agent.streaming",
+    "agent.tools",
+    "agent.llm",
+    "llm.provider",
+]
+fragments = [
+    "agent_streaming",
+    "agent_tools",
+    "agent",
+    "llm_port",
+    "llm_openai",
+    "llm_anthropic",
+    "llm_ollama",
+    "llm_bedrock",
+]

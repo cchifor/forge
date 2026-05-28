@@ -269,6 +269,17 @@ const DEV_USER: AuthUser = {
   roles: ['admin', 'user'], customerId: '00000000-0000-0000-0000-000000000001', orgId: null,
 }
 
+// Auth disabled: the dev user is always authenticated, so there is never a
+// post-login redirect to persist. These no-ops keep the export surface
+// identical to the full useAuth so consumers (e.g. router guards) compile.
+export const POST_LOGIN_REDIRECT_KEY = 'auth.post_login_redirect'
+
+export function persistPostLoginRedirect(_target: string): void {}
+
+export function consumePostLoginRedirect(): string | null {
+  return null
+}
+
 export function useAuth() {
   const isAuthenticated = computed(() => !!user.value)
   async function init() { if (!isInitialized.value) { user.value = DEV_USER; isLoading.value = false; isInitialized.value = true } }
