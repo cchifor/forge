@@ -137,4 +137,4 @@ default_color_scheme:
 # ─── Tasks (post-generation) ───
 
 _tasks:
-  - "python scripts/post_generate.py"
+  - "{{ _copier_python }} scripts/post_generate.py"

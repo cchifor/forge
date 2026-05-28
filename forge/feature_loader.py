@@ -69,6 +69,15 @@ def load_all() -> list[FeatureManifest]:
     # 3. Load features in dependency order
     # ------------------------------------------------------------------
     for manifest in ordered:
+        # Idempotency at the registry level: if this feature's declared
+        # contract is already registered (e.g. a prior load populated the
+        # registries while LOADED_FEATURES was reset out of sync), keep the
+        # list consistent instead of re-registering — which would raise a
+        # PLUGIN_COLLISION on the already-present options/fragments.
+        if _already_registered(manifest):
+            LOADED_FEATURES.append(manifest)
+            continue
+
         mod = importlib.import_module(manifest.module_path)
         register_fn = getattr(mod, "register", None)
         if register_fn is None or not callable(register_fn):
@@ -133,6 +142,19 @@ def load_all() -> list[FeatureManifest]:
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
+
+
+def _already_registered(manifest: FeatureManifest) -> bool:
+    """True if every option/fragment the manifest declares is already registered.
+
+    A feature with an empty contract (no provides) is never considered
+    already-registered, so it always runs its ``register()`` at least once.
+    """
+    if not manifest.provides_options and not manifest.provides_fragments:
+        return False
+    return all(o in OPTION_REGISTRY for o in manifest.provides_options) and all(
+        f in FRAGMENT_REGISTRY for f in manifest.provides_fragments
+    )
 
 
 def _topo_sort(manifests: list[FeatureManifest]) -> list[FeatureManifest]:
