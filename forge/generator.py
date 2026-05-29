@@ -33,6 +33,7 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
     frontend_uses_subdirectory,
+    validate_slug,
 )
 from forge.docker_manager import (
     render_compose,
@@ -127,6 +128,11 @@ def generate(
     test harnesses + headless callers that don't need the richer
     payload.
     """
+    # Defence-in-depth for callers that build a ProjectConfig programmatically
+    # and skip ``config.validate()``: reject a traversal/separator slug before
+    # it is joined onto any path (staging, dry-run temp dir, or final root).
+    validate_slug(config.project_slug)
+
     if dry_run:
         # dry_run: generate into a throwaway temp dir as before.
         project_root = _create_root(config, dry_run=True)

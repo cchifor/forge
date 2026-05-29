@@ -290,3 +290,26 @@ class TestGeneratorPathContainment:
         root = _resolve_final_root(tmp_path, "my_platform")
         assert root.is_relative_to(tmp_path.resolve())
         assert root.name == "my_platform"
+
+    def _traversal_config(self):
+        return ProjectConfig(
+            project_name="../../escape",
+            backends=[BackendConfig(project_name="svc")],
+            frontend=None,
+        )
+
+    def test_generate_rejects_traversal_dry_run(self):
+        """Public generate() guards the dry-run temp-dir join too."""
+        from forge.generator import generate
+
+        with pytest.raises(ValueError):
+            generate(self._traversal_config(), dry_run=True)
+
+    def test_generate_rejects_traversal_real(self, tmp_path):
+        """Public generate() guards the staging join too."""
+        from forge.generator import generate
+
+        cfg = self._traversal_config()
+        cfg.output_dir = str(tmp_path)
+        with pytest.raises(ValueError):
+            generate(cfg, dry_run=False)
