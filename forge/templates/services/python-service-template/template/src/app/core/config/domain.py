@@ -79,13 +79,33 @@ class SecurityConfig(BaseModel):
     @model_validator(mode="after")
     def _reject_default_secret_in_prod(self) -> "SecurityConfig":
         env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production"))
-        if self.secret_key == "CHANGEME" and env.lower() not in (
-            "development", "dev", "local", "test",
-        ):
+        if env.lower() in ("development", "dev", "local", "test", "testing"):
+            return self
+        # Fail closed: reject blank, the shipped "CHANGEME..." placeholder
+        # (the default.yaml ships "CHANGEME-use-a-real-secret-in-production",
+        # which an exact "CHANGEME" check silently let through), and any
+        # secret too short to be cryptographically sound.
+        value = self.secret_key.strip()
+        if not value or value.upper().startswith("CHANGEME") or len(value) < 32:
             raise ValueError(
-                "security.secret_key is still 'CHANGEME' — set a strong "
-                "random value before running in production."
+                "security.secret_key is unset or a placeholder — set a strong "
+                "random value (>= 32 chars, e.g. "
+                "`python -c \"import secrets; print(secrets.token_hex(32))\"`) "
+                "before running in production."
             )
+        # When auth is enabled (the production.yaml default), the OIDC client
+        # secret must also be overridden — default.yaml ships
+        # ``client_secret: "changeme"``.
+        # Direct field access (not getattr) so a future AuthConfig schema drift
+        # fails loudly instead of silently skipping this security check.
+        if self.auth.enabled:
+            client_secret = (self.auth.client_secret or "").strip()
+            if not client_secret or client_secret.upper().startswith("CHANGEME"):
+                raise ValueError(
+                    "security.auth.client_secret is unset or a placeholder — "
+                    "set the real OIDC client secret before running in "
+                    "production."
+                )
         return self
 
 
