@@ -78,6 +78,25 @@ TEMPLATE_DIRS = {
 }
 
 
+def _resolve_final_root(output_dir: str | Path, project_slug: str) -> Path:
+    """Resolve ``<output_dir>/<project_slug>``, refusing any result that escapes
+    ``output_dir``.
+
+    Defence-in-depth behind ``validate_slug`` (config-level): callers that build
+    a ``ProjectConfig`` programmatically may skip ``validate()``, so the
+    generator independently refuses a slug that would resolve outside the output
+    directory (path traversal via a crafted project name).
+    """
+    output_base = Path(output_dir).resolve()
+    final_root = (output_base / project_slug).resolve()
+    if final_root == output_base or not final_root.is_relative_to(output_base):
+        raise GeneratorError(
+            f"Refusing to generate outside the output directory: {final_root}",
+            hint="The project name derives an unsafe slug; choose a different name.",
+        )
+    return final_root
+
+
 def generate(
     config: ProjectConfig,
     quiet: bool = False,
@@ -116,7 +135,7 @@ def generate(
 
     # Real generation: check that the final output_dir doesn't already exist,
     # then generate into a staging directory and move on success.
-    final_root = Path(config.output_dir).resolve() / config.project_slug
+    final_root = _resolve_final_root(config.output_dir, config.project_slug)
     if final_root.exists():
         raise GeneratorError(
             f"Output directory already exists: {final_root}",
