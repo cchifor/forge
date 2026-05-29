@@ -1617,8 +1617,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 4187,
-      "sha256": "8941c31f165088c0"
+      "size": 5447,
+      "sha256": "1e134c968b088b10"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
