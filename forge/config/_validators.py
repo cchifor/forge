@@ -8,6 +8,7 @@ of ``forge.config``.
 from __future__ import annotations
 
 import keyword
+import os
 import re
 
 # Keycloak realm that maps to Host(`app.localhost`) for Gatekeeper tenant extraction.
@@ -44,3 +45,28 @@ def validate_features(features: list[str]) -> None:
         if f in seen:
             raise ValueError(f"Duplicate feature: '{f}'")
         seen.add(f)
+
+
+def validate_slug(slug: str) -> None:
+    """Reject derived project slugs that could escape the output directory.
+
+    ``project_slug`` is joined directly onto ``output_dir`` during generation,
+    so a slug containing a path separator or that is a parent-directory segment
+    would let a crafted project name write outside the intended tree. The slug
+    is *derived* (lowercased, spaces/hyphens → underscores), so this guards the
+    slug rather than imposing a strict regex on the human-facing project name
+    (ordinary names like "My Platform" must keep working).
+    """
+    if not slug or slug in (".", ".."):
+        raise ValueError(
+            f"Project name derives an unusable slug {slug!r}; "
+            "choose a name with at least one letter or digit."
+        )
+    seps = {"/", "\\", os.sep}
+    if os.altsep:
+        seps.add(os.altsep)
+    if any(sep in slug for sep in seps):
+        raise ValueError(
+            f"Project name derives a slug {slug!r} containing a path separator; "
+            "use only letters, digits, spaces, hyphens, and underscores."
+        )

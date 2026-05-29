@@ -49,6 +49,7 @@ from forge.config._validators import (
     keycloak_client_id_from,
     validate_features,
     validate_port,
+    validate_slug,
 )
 
 __all__ = [
@@ -81,4 +82,5 @@ __all__ = [
     "keycloak_client_id_from",
     "validate_features",
     "validate_port",
+    "validate_slug",
 ]
