@@ -92,6 +92,33 @@ def test_rechain_is_idempotent(tmp_path: Path) -> None:
     assert second == [], "second rechain must touch nothing"
 
 
+def test_rechain_never_collides_with_skipped_revision(tmp_path: Path) -> None:
+    """A non-rewritable file (e.g. a hand-authored merge migration with a tuple
+    down_revision) is skipped wholesale, but its revision id must still be
+    reserved: renumbering the rewritable files from 0001 must NOT land on a
+    revision already held by a skipped file, or alembic rejects the directory
+    with 'Multiple revisions present'."""
+    _write(tmp_path / "0001_initial.py", rev="0001", down="None")
+    # Merge migration: tuple down_revision -> not rewritable, gets skipped.
+    # It holds revision "0002"; the naive renumber would also assign "0002"
+    # to the next rewritable file below.
+    (tmp_path / "0002_merge.py").write_text(
+        '"""merge."""\nfrom typing import Union\n'
+        'revision: str = "0002"\n'
+        'down_revision: Union[str, tuple] = ("0001", "abc")\n'
+        "def upgrade() -> None: ...\n"
+        "def downgrade() -> None: ...\n",
+        encoding="utf-8",
+    )
+    _write(tmp_path / "0003_chat.py", rev="0003", down="0002")
+
+    rechain_migrations(tmp_path)
+
+    files = sorted(p for p in tmp_path.glob("*.py") if not p.name.startswith("__"))
+    revs = [_rev(p) for p in files]
+    assert len(set(revs)) == len(revs), f"duplicate revision after rechain: {revs}"
+
+
 def _assert_valid_chain(versions_dir: Path) -> None:
     files = sorted(p for p in versions_dir.glob("*.py") if not p.name.startswith("__"))
     revs = [_rev(p) for p in files]
