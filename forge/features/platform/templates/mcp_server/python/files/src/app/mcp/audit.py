@@ -8,7 +8,8 @@ Every call to ``POST /mcp/invoke`` passes through the audit pipeline:
      service for the same (server, tool, input-hash) tuple. Tampered or
      replayed tokens are rejected.
   3. ``record_invocation`` appends a single JSON line to the audit log
-     with the user identity (from request headers) + tool identity +
+     with the user identity (from the verified token, or null when the
+     call was auto-approved with no subject) + tool identity +
      SHA-256 of the input + the decision.
 
 Two-file audit design: ``audit.jsonl`` is append-only; a daily rotation

@@ -42,10 +42,11 @@ _CONV_REPO = (
 
 def test_conversation_repo_is_user_scoped() -> None:
     src = _CONV_REPO.read_text(encoding="utf-8")
-    # list_conversations + get_conversation + append_message ownership check +
-    # archive must each scope by user_id (within-tenant IDOR guard).
-    assert src.count("ConversationModel.user_id == self.user_id") >= 4, (
-        "get_conversation / append_message / archive must scope by user_id"
+    # list_conversations + get_conversation + append_message + record_tool_call
+    # + archive must each scope by user_id (within-tenant IDOR guard).
+    assert src.count("ConversationModel.user_id == self.user_id") >= 5, (
+        "get_conversation / append_message / record_tool_call / archive must "
+        "scope by user_id"
     )
     assert "PermissionDeniedError" in src, (
         "append_message must reject conversations the user does not own"
