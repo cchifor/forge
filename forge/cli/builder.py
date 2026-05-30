@@ -66,6 +66,21 @@ def _normalize_features(raw: Any, default: list[str] | None = None) -> list[str]
     return [f.strip() for f in str(raw).split(",") if f.strip()]
 
 
+def _backend_language(value: object) -> BackendLanguage:
+    """Resolve a backend language string, erroring on unknown values.
+
+    An absent key defaults to ``"python"`` at the call sites; a *present* but
+    unknown value (e.g. ``language: cobol``) is a user mistake worth surfacing
+    rather than silently coercing to Python.
+    """
+    if value in ("python", "node", "rust"):
+        return BackendLanguage(value)
+    raise ValueError(
+        f"Unknown backend language {value!r}; valid languages are "
+        "python, node, rust."
+    )
+
+
 def _build_backends_from_cfg(
     r: _Resolver, project_name: str, description: str
 ) -> list[BackendConfig]:
@@ -84,12 +99,7 @@ def _build_backends_from_cfg(
             if not isinstance(raw, dict):
                 continue
             be_cfg = cast("dict[str, Any]", raw)
-            lang = be_cfg.get("language", "python")
-            language = (
-                BackendLanguage(lang)
-                if lang in ("python", "node", "rust")
-                else BackendLanguage.PYTHON
-            )
+            language = _backend_language(be_cfg.get("language", "python"))
             backends.append(
                 BackendConfig(
                     name=be_cfg.get("name", f"backend-{i}"),
@@ -107,11 +117,8 @@ def _build_backends_from_cfg(
         return backends
 
     # Single backend (backward compat for `backend:` shape and CLI-only invocations)
-    lang_str = r.get("backend_language", "backend", "language", default="python")
-    language = (
-        BackendLanguage(lang_str)
-        if lang_str in ("python", "node", "rust")
-        else BackendLanguage.PYTHON
+    language = _backend_language(
+        r.get("backend_language", "backend", "language", default="python")
     )
     return [
         BackendConfig(
