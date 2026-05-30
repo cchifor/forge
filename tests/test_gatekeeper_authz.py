@@ -120,3 +120,32 @@ class TestEndToEndDecision:
     def test_payload_without_roles_denied(self, authz) -> None:
         roles = authz.extract_realm_roles({"sub": "u1"})
         assert authz.is_authorized(roles, "admin") is False
+
+
+class TestIsSubsetOfRoles:
+    """``is_subset_of_roles`` bounds API-key role delegation: an admin may only
+    mint a key with roles they themselves hold."""
+
+    def test_empty_requested_is_noop_delegation(self, authz) -> None:
+        assert authz.is_subset_of_roles([], ["admin", "user"]) is True
+
+    def test_proper_subset(self, authz) -> None:
+        assert authz.is_subset_of_roles(["user"], ["admin", "user"]) is True
+
+    def test_full_set(self, authz) -> None:
+        assert authz.is_subset_of_roles(["admin", "user"], ["admin", "user"]) is True
+
+    def test_not_a_subset(self, authz) -> None:
+        assert authz.is_subset_of_roles(["superadmin"], ["admin", "user"]) is False
+
+    def test_partial_overlap_rejected(self, authz) -> None:
+        assert authz.is_subset_of_roles(["admin", "superadmin"], ["admin"]) is False
+
+    def test_empty_allowed_rejects_any_request(self, authz) -> None:
+        assert authz.is_subset_of_roles(["admin"], []) is False
+
+    def test_empty_both_is_noop(self, authz) -> None:
+        assert authz.is_subset_of_roles([], []) is True
+
+    def test_case_sensitive(self, authz) -> None:
+        assert authz.is_subset_of_roles(["Admin"], ["admin"]) is False

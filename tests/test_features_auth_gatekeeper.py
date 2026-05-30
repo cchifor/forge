@@ -228,6 +228,39 @@ def test_apikeys_state_changing_endpoints_check_origin() -> None:
     )
 
 
+def test_apikeys_create_bounds_role_delegation_to_admin_roles() -> None:
+    """``POST /api/v1/api-keys`` must reject (422) a key whose requested roles
+    exceed the creating admin's own realm roles.
+
+    Minted-key roles become effective identity on the machine ``/auth`` track,
+    so without this bound a tenant admin could escalate by issuing a key
+    carrying a higher-privileged role than their own. The handler captures the
+    admin's verified roles from ``_require_admin`` and gates ``body.roles``
+    through ``authz.is_subset_of_roles`` before persisting.
+
+    ``apikeys_api.py`` can't be imported in forge CI, so assert on the source
+    (matching the sibling api-keys structural tests)."""
+    src = _apikeys_api_src()
+
+    # _require_admin must hand back the verified roles so create_key can bound.
+    assert "admin_roles = await _require_admin(" in src, (
+        "create_key must capture the admin's verified roles from _require_admin"
+    )
+    assert (
+        "async def _require_admin(request: Request, session: ServerSession) -> list[str]:"
+        in src
+    ), "_require_admin must return the verified role list"
+
+    # The delegation bound + its 422 rejection.
+    assert "authz.is_subset_of_roles(body.roles, admin_roles)" in src, (
+        "create_key must reject roles that exceed the admin's own via "
+        "authz.is_subset_of_roles"
+    )
+    assert "status_code=422" in src, (
+        "an over-broad role delegation must be rejected with HTTP 422"
+    )
+
+
 def test_gatekeeper_dockerfile_shipped() -> None:
     dockerfile = _gatekeeper_root() / "Dockerfile"
     assert dockerfile.is_file()
