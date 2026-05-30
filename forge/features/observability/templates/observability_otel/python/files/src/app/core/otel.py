@@ -52,6 +52,16 @@ def configure_otel(service_name: str) -> None:
         from opentelemetry.sdk.resources import SERVICE_NAME, Resource  # noqa: PLC0415
         from opentelemetry.sdk.trace import TracerProvider  # noqa: PLC0415
         from opentelemetry.sdk.trace.export import BatchSpanProcessor  # noqa: PLC0415
+
+        # Metrics SDK (same grpc OTLP package as the span exporter above).
+        from opentelemetry import metrics  # noqa: PLC0415
+        from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (  # noqa: PLC0415
+            OTLPMetricExporter,
+        )
+        from opentelemetry.sdk.metrics import MeterProvider  # noqa: PLC0415
+        from opentelemetry.sdk.metrics.export import (  # noqa: PLC0415
+            PeriodicExportingMetricReader,
+        )
     except ImportError as e:
         logger.warning("OpenTelemetry not installed, skipping setup: %s", e)
         return
@@ -71,6 +81,18 @@ def configure_otel(service_name: str) -> None:
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     trace.set_tracer_provider(provider)
+
+    # Install a MeterProvider so the import-time meter in
+    # app/middleware/metrics.py (a no-op proxy until a provider exists) upgrades
+    # to a real meter and actually exports its RED counters/histograms. gRPC
+    # infers the metrics path from the endpoint — pass it bare, exactly like the
+    # span exporter above (appending an HTTP-style path suffix breaks gRPC).
+    metric_reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(endpoint=endpoint)
+    )
+    metrics.set_meter_provider(
+        MeterProvider(resource=resource, metric_readers=[metric_reader])
+    )
 
     HTTPXClientInstrumentor().instrument()
     logger.info("OpenTelemetry configured: endpoint=%s service=%s", endpoint, service_name)
