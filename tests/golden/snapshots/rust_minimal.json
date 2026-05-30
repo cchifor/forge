@@ -465,8 +465,8 @@
       "sha256": "84a5285ef7f1685f"
     },
     "services/api/src/config.rs": {
-      "size": 9586,
-      "sha256": "927b2d7610ee00b7"
+      "size": 10196,
+      "sha256": "a3d2d9bcd4a12255"
     },
     "services/api/src/data/mod.rs": {
       "size": 22,
