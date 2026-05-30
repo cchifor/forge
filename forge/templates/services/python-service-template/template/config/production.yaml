@@ -1,6 +1,9 @@
 server:
   port: 5000
   max_workers: 4
+  # default.yaml ships "critical" (quiet local/test runs); production needs
+  # uvicorn access + info logs for observability, so override it here.
+  log_level: "info"
 
 db:
   url: "${DATABASE_URL}"
