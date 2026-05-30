@@ -30,10 +30,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
 
 # -- fragment-registry shape --------------------------------------------------
@@ -314,14 +316,18 @@ def test_resolver_targets_node_in_mixed_python_node_project() -> None:
     assert BackendLanguage.NODE in adapter_targets
 
 
-def test_resolver_skips_anthropic_silently_on_node_only_project() -> None:
-    """``llm.provider=anthropic`` enables (llm_port, llm_anthropic) as a
-    bundle. On a Node-only project, ``llm_port`` lands (now has a
-    Node impl from Pillar D.2) but ``llm_anthropic`` is Python-only
-    and silently skips — adapter-less startup means first LLM call
-    errors with a clear "no adapter wired" message, not a generate-
-    time crash. This is the documented Pillar D.2 trade-off."""
-    plan = resolve(_node_project({"llm.provider": "anthropic"}))
+def test_resolver_rejects_anthropic_on_node_only_project() -> None:
+    """``llm.provider=anthropic`` ships only a Python adapter. On a Node-only
+    project it must hard-error at config time, rather than silently emitting
+    the abstract ``llm_port`` with no adapter (a service that starts and then
+    fails at the first LLM call)."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"llm.provider": "anthropic"}))
+
+
+def test_resolver_allows_openai_on_node_only_project() -> None:
+    """openai has a real Node SDK — it must NOT be rejected (false-positive
+    guard for the polyglot value check)."""
+    plan = resolve(_node_project({"llm.provider": "openai"}))
     names = [rf.fragment.name for rf in plan.ordered]
-    assert "llm_port" in names
-    assert "llm_anthropic" not in names
+    assert "llm_openai" in names

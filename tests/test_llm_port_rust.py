@@ -17,10 +17,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
 
 # -- fragment-registry shape --------------------------------------------------
@@ -302,12 +304,9 @@ def test_three_backend_project_with_openai_targets_all_three() -> None:
     assert set(by_name["llm_openai"].target_backends) == expected
 
 
-def test_resolver_skips_anthropic_silently_on_rust_only_project() -> None:
-    """``llm.provider=anthropic`` on a Rust project resolves the port
-    (now tier-1) but silently skips ``llm_anthropic`` (Python-only).
-    Adapter-less Rust startup errors at first LLM call, not generate
-    time — the documented Pillar D.2 trade-off."""
-    plan = resolve(_rust_project({"llm.provider": "anthropic"}))
-    names = [rf.fragment.name for rf in plan.ordered]
-    assert "llm_port" in names
-    assert "llm_anthropic" not in names
+def test_resolver_rejects_anthropic_on_rust_only_project() -> None:
+    """``llm.provider=anthropic`` ships only a Python adapter, so on a
+    Rust-only project it must hard-error at config time instead of emitting
+    a portless service that fails at the first LLM call."""
+    with pytest.raises(OptionsError):
+        resolve(_rust_project({"llm.provider": "anthropic"}))
