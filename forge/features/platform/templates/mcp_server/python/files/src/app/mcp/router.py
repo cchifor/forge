@@ -141,16 +141,23 @@ class McpMintResponse(BaseModel):
 
 
 @router.post("/approval/mint", response_model=McpMintResponse)
-async def mint_approval(req: McpMintRequest) -> McpMintResponse:
-    """Issue a signed approval token tied to (server, tool, input-hash).
+async def mint_approval(
+    req: McpMintRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> McpMintResponse:
+    """Issue a signed approval token tied to (subject, server, tool, input-hash).
 
     The frontend's ApprovalDialog calls this after the user approves and
     then includes the returned token in the subsequent ``/mcp/invoke``
-    request. Tokens expire after an hour; the signature binds the
-    decision to the specific tool + payload so a token granted for one
-    call cannot be replayed against a different input.
+    request. Tokens expire after an hour; the signature binds the decision to
+    the authenticated subject + specific tool + payload, so a token granted to
+    one user for one call cannot be replayed against a different input or
+    redeemed by a different user.
     """
-    token = mint_approval_token(server=req.server, tool=req.tool, input_payload=req.input)
+    user_id = str(user.id) if user is not None else None
+    token = mint_approval_token(
+        server=req.server, tool=req.tool, input_payload=req.input, subject=user_id
+    )
     return McpMintResponse(token=token)
 
 
@@ -193,7 +200,11 @@ async def invoke_tool(
     if approval_mode != "auto":
         token = req.approval_token or ""
         if not verify_approval_token(
-            token, server=req.server, tool=req.tool, input_payload=req.input
+            token,
+            server=req.server,
+            tool=req.tool,
+            input_payload=req.input,
+            subject=user_id,
         ):
             record_invocation(
                 AuditEntry(

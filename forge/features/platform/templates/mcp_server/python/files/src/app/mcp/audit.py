@@ -35,11 +35,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ApprovalToken:
-    """Parsed approval token — server/tool/input_hash + HMAC signature."""
+    """Parsed approval token — server/tool/input_hash/subject + HMAC signature."""
 
     server: str
     tool: str
     input_hash: str
+    subject: str  # authenticated user id the approval is bound to ("" if anon)
     issued_at: int  # unix seconds
     signature: str
 
@@ -102,28 +103,37 @@ def hash_input(input_payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def mint_approval_token(*, server: str, tool: str, input_payload: dict[str, Any]) -> str:
+def mint_approval_token(
+    *,
+    server: str,
+    tool: str,
+    input_payload: dict[str, Any],
+    subject: str | None = None,
+) -> str:
     """Produce a new approval token for a tool call.
 
     The frontend's ApprovalDialog requests a mint when the user approves,
-    and sends the returned token back on the next /mcp/invoke call.
-    Tokens don't carry user identity — they certify "this specific
-    (server, tool, input) was approved by some user of this service" and
-    are non-transferable since the input_hash binds the payload.
+    and sends the returned token back on the next /mcp/invoke call. The token
+    is bound to the authenticated ``subject`` (user id) as well as the
+    (server, tool, input) — so it is non-transferable across users: a token
+    minted for one user fails verification for another. ``subject`` is ``""``
+    when auth is disabled (dev), and verification then also requires no
+    subject, keeping the binding exact.
     """
     input_hash = hash_input(input_payload)
     issued_at = int(time.time())
-    message = f"{server}|{tool}|{input_hash}|{issued_at}".encode("utf-8")
+    subj = subject or ""
+    message = f"{server}|{tool}|{input_hash}|{subj}|{issued_at}".encode("utf-8")
     signature = hmac.new(_get_secret(), message, hashlib.sha256).hexdigest()
-    return ":".join([server, tool, input_hash, str(issued_at), signature])
+    return ":".join([server, tool, input_hash, subj, str(issued_at), signature])
 
 
 def parse_approval_token(token: str) -> ApprovalToken | None:
     """Decompose a token string. Returns ``None`` on malformed input."""
     parts = token.split(":")
-    if len(parts) != 5:
+    if len(parts) != 6:
         return None
-    server, tool, input_hash, issued_at, signature = parts
+    server, tool, input_hash, subject, issued_at, signature = parts
     try:
         issued_int = int(issued_at)
     except ValueError:
@@ -132,6 +142,7 @@ def parse_approval_token(token: str) -> ApprovalToken | None:
         server=server,
         tool=tool,
         input_hash=input_hash,
+        subject=subject,
         issued_at=issued_int,
         signature=signature,
     )
@@ -143,23 +154,31 @@ def verify_approval_token(
     server: str,
     tool: str,
     input_payload: dict[str, Any],
+    subject: str | None = None,
     max_age_seconds: int = 3600,
 ) -> bool:
-    """Verify that a token is valid for a specific tool call.
+    """Verify that a token is valid for a specific tool call by this caller.
 
-    Checks: signature matches, not expired, (server, tool, input_hash)
-    matches. Returns ``False`` for any failure — callers log and reject.
+    Checks: signature matches, not expired, (server, tool, input_hash) matches,
+    and the token's bound subject matches ``subject`` (the authenticated caller)
+    so one user cannot redeem another's approval. Returns ``False`` for any
+    failure — callers log and reject.
     """
     parsed = parse_approval_token(token)
     if parsed is None:
         return False
     if parsed.server != server or parsed.tool != tool:
         return False
+    if parsed.subject != (subject or ""):
+        return False
     if parsed.input_hash != hash_input(input_payload):
         return False
     if time.time() - parsed.issued_at > max_age_seconds:
         return False
-    message = f"{parsed.server}|{parsed.tool}|{parsed.input_hash}|{parsed.issued_at}".encode("utf-8")
+    message = (
+        f"{parsed.server}|{parsed.tool}|{parsed.input_hash}"
+        f"|{parsed.subject}|{parsed.issued_at}"
+    ).encode("utf-8")
     expected = hmac.new(_get_secret(), message, hashlib.sha256).hexdigest()
     return hmac.compare_digest(parsed.signature, expected)
 
