@@ -128,6 +128,21 @@ fn default_db_url() -> String {
         .unwrap_or_else(|_| "postgresql://localhost:5432/app".to_string())
 }
 
+impl Default for DbConfig {
+    // Needed so `#[serde(default)]` on AppConfig.db lets load() succeed even
+    // when the whole `db` section is absent (e.g. a configless run) — the
+    // startup config load must reach the fail-closed auth guard, then the real
+    // DB connection (which reads DATABASE_URL) can fail naturally afterwards.
+    fn default() -> Self {
+        Self {
+            url: default_db_url(),
+            pool_min: default_pool_min(),
+            pool_max: default_pool_max(),
+            statement_timeout_ms: default_statement_timeout_ms(),
+        }
+    }
+}
+
 fn default_pool_min() -> u32 {
     2
 }
@@ -182,6 +197,7 @@ pub struct AppConfig {
     pub app: AppInfo,
     #[serde(default)]
     pub server: ServerConfig,
+    #[serde(default)]
     pub db: DbConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
