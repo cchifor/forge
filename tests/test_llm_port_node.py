@@ -331,3 +331,46 @@ def test_resolver_allows_openai_on_node_only_project() -> None:
     plan = resolve(_node_project({"llm.provider": "openai"}))
     names = [rf.fragment.name for rf in plan.ordered]
     assert "llm_openai" in names
+
+
+@pytest.mark.parametrize("provider", ["anthropic", "ollama", "bedrock"])
+def test_resolver_rejects_python_only_providers_on_node(provider: str) -> None:
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"llm.provider": provider}))
+
+
+def test_resolver_allows_python_only_provider_on_mixed_project() -> None:
+    """A python+node project may select anthropic — the Python backend serves it."""
+    config = ProjectConfig(
+        project_name="P",
+        backends=[
+            BackendConfig(
+                name="py", project_name="P", language=BackendLanguage.PYTHON, server_port=5000
+            ),
+            BackendConfig(
+                name="js", project_name="P", language=BackendLanguage.NODE, server_port=5001
+            ),
+        ],
+        frontend=None,
+        options={"llm.provider": "anthropic"},
+    )
+    resolve(config)  # must not raise
+
+
+def test_resolver_skips_python_only_provider_when_default_origin() -> None:
+    """A persisted default (origin != user) must never hard-error."""
+    config = _node_project({"llm.provider": "anthropic"})
+    config.option_origins = {"llm.provider": "default"}
+    resolve(config)  # must not raise
+
+
+def test_resolver_rejects_rag_backend_on_node_only_project() -> None:
+    """The RAG vector-store stack is Python-only in 1.x."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"rag.backend": "qdrant"}))
+
+
+def test_resolver_rejects_mcp_on_node_only_project() -> None:
+    """The MCP server fragments are Python-only."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"platform.mcp": True}))

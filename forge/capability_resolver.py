@@ -297,6 +297,19 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
     ("llm.provider", "bedrock"): frozenset({BackendLanguage.PYTHON}),
 }
 
+# Options where EVERY "active" (non-none / non-false) value is Python-only in
+# 1.x — the whole RAG vector-store stack and the MCP server fragments ship
+# Python implementations only, so selecting them on a Node/Rust-only project
+# yields a service with zero of the requested capability. Checked the same way
+# as ``_VALUE_REQUIRES_BACKEND`` but without enumerating every provider value.
+_PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
+    "rag.backend": frozenset({BackendLanguage.PYTHON}),
+    "platform.mcp": frozenset({BackendLanguage.PYTHON}),
+}
+
+# Values that mean "feature off" for the options in _PYTHON_ONLY_WHEN_ACTIVE.
+_INACTIVE_VALUES: frozenset[object] = frozenset({None, "", "none", False})
+
 
 def _check_value_backend_support(
     config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
@@ -318,6 +331,13 @@ def _check_value_backend_support(
         except TypeError:
             # Unhashable value (list/dict option) — never constrained here.
             continue
+        if required is None and path in _PYTHON_ONLY_WHEN_ACTIVE:
+            try:
+                active = value not in _INACTIVE_VALUES
+            except TypeError:
+                active = True
+            if active:
+                required = _PYTHON_ONLY_WHEN_ACTIVE[path]
         if required is None or not present.isdisjoint(required):
             continue
         req = ", ".join(sorted(b.value for b in required))
