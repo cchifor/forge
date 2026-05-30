@@ -142,9 +142,36 @@ async def validate_api_key(plain_key: str) -> APIKeyRecord | None:
 
 async def revoke_api_key(key_hash: str, tenant_id: str) -> bool:
     """
-    Remove an API key from Redis.  Returns ``True`` if the key existed.
+    Remove an API key from Redis **iff it belongs to** *tenant_id*.
+
+    Returns ``True`` only when the key existed, was owned by ``tenant_id``,
+    and was deleted; ``False`` otherwise (unknown key, corrupt record, or a
+    key owned by a different tenant).
+
+    The ownership check is mandatory: the key hash is the only thing the
+    caller supplies, so deleting on the hash alone would let an admin of one
+    tenant revoke another tenant's key by knowing/guessing its hash
+    (cross-tenant IDOR). We load the record first and compare its stored
+    ``tenant_id`` before deleting.
     """
     r = get_redis()
+    raw = await r.get(_redis_key(key_hash))
+    if raw is None:
+        return False
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Corrupt record — refuse to delete on an unverifiable owner.
+        logger.warning("Corrupt API key record on revoke: hash=%s", key_hash[:12])
+        return False
+    if data.get("tenant_id") != tenant_id:
+        # Belongs to another tenant: do not touch its key or its index.
+        logger.warning(
+            "Cross-tenant API key revoke blocked: hash=%s requesting_tenant=%s",
+            key_hash[:12],
+            tenant_id,
+        )
+        return False
     deleted = await r.delete(_redis_key(key_hash))
     await r.srem(f"apikeys_by_tenant:{tenant_id}", key_hash)
     return deleted > 0
