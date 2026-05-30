@@ -199,6 +199,11 @@ register_fragment(
 register_fragment(
     Fragment(
         name="observability_metrics_middleware",
+        # The MeterProvider that backs this middleware's meter is installed by
+        # observability_otel's configure_otel; without it the import-time proxy
+        # instruments forward to the API no-op and metrics silently never
+        # export. Require otel so the resolver always pulls it in.
+        depends_on=("observability_otel",),
         implementations={
             BackendLanguage.PYTHON: FragmentImplSpec(
                 fragment_dir=_impl("metrics_middleware", "python"),
