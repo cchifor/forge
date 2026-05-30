@@ -38,6 +38,7 @@ class GatekeeperSettings(BaseSettings):
     | KEY_BACKEND               | file | kms (Phase 0 ships file only)         |
     | SIGNING_KEY_DIR           | PEM directory for FileKeyRing                |
     | KMS_KEY_ARN               | AWS KMS asymmetric key ARN (kms backend)     |
+    | ADMIN_ROLE                | Realm role required to manage API keys       |
     """
 
     model_config = SettingsConfigDict(
@@ -74,6 +75,14 @@ class GatekeeperSettings(BaseSettings):
     default_tenant_id: str = "00000000-0000-0000-0000-000000000001"
     tenant_id_claim: str = "https://platform/tenant_id"
     keycloak_admin_realm: str = "app"
+
+    # ── Authorization ─────────────────────────────────────────────────
+    # Realm role (from the Keycloak access token's ``realm_access.roles``)
+    # that a user must hold to manage API keys via ``/api/v1/api-keys``
+    # (create / list / revoke). These endpoints mint tenant-wide
+    # credentials, so they are gated behind an explicit admin role rather
+    # than mere authentication. Operator-overridable via ``ADMIN_ROLE``.
+    admin_role: str = "admin"
 
     # Internal test bypass (disabled by default, dev/test environments only)
     test_bypass_enabled: bool = False

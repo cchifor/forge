@@ -18,6 +18,7 @@ Cross-reference: implementation plan at
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from forge.config import BackendLanguage
@@ -114,6 +115,116 @@ def test_apikeys_endpoints_derive_tenant_from_verified_session() -> None:
     assert "x_gatekeeper_tenant" not in src, (
         "api-keys must not read tenant from the client-supplied "
         "X-Gatekeeper-Tenant header (spoofable on the directly-exposed :5000)"
+    )
+
+
+def _apikeys_api_src() -> str:
+    return (
+        _gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py"
+    ).read_text(encoding="utf-8")
+
+
+def test_apikeys_endpoints_enforce_admin_role() -> None:
+    """The ``/api/v1/api-keys`` endpoints must require an ADMIN realm role,
+    not merely an authenticated session.
+
+    Minting / listing / revoking API keys yields tenant-wide credentials, so
+    any authenticated tenant user being able to do it is a privilege-
+    escalation hole. The gate reads the role set from the verified Keycloak
+    access token (``realm_access.roles``, exactly as ``/auth/userinfo`` does),
+    checks it against the operator-configurable ``admin_role`` setting, and
+    returns 403 when the role is absent. It must FAIL CLOSED: a missing /
+    expired / invalid access token denies access rather than allowing it.
+
+    ``apikeys_api.py`` cannot be imported in forge CI (heavy runtime deps),
+    so we assert on the source text, matching the sibling
+    ``test_apikeys_endpoints_derive_tenant_from_verified_session``.
+    """
+    src = _apikeys_api_src()
+
+    # Roles come from the verified access token, via the pure authz helper.
+    assert "authz" in src and "extract_realm_roles" in src, (
+        "api-keys must extract roles via the authz.extract_realm_roles helper"
+    )
+    assert "is_authorized" in src, (
+        "api-keys must decide access via authz.is_authorized"
+    )
+    assert "verify_token" in src and "realm_access" in src.lower() or (
+        "verify_token" in src and "extract_realm_roles" in src
+    ), (
+        "api-keys must verify the session access token and read realm roles "
+        "(mirroring /auth/userinfo) to determine admin authorization"
+    )
+
+    # The required role is the operator-configurable admin_role setting.
+    assert "admin_role" in src, (
+        "api-keys must gate on the operator-configurable settings.admin_role"
+    )
+
+    # An unauthorized caller is rejected with 403.
+    assert "403" in src, (
+        "api-keys must return HTTP 403 when the caller lacks the admin role"
+    )
+
+
+def test_apikeys_state_changing_endpoints_check_origin() -> None:
+    """The state-changing API-key endpoints (POST create, DELETE revoke) must
+    apply a CSRF Origin/Referer check.
+
+    The session cookie is ``SameSite=Lax`` (so deep-links keep a session),
+    which still permits some cross-site state-changing requests; OWASP / the
+    OAuth BCP require an explicit Origin/Referer second factor on unsafe
+    methods. ``check_origin`` already exists in ``helpers.py`` and is used by
+    ``GET /auth``; the api-keys POST + DELETE must reuse it and reject
+    mismatches with 403.
+
+    Read-only ``GET /api/v1/api-keys`` (list) is not state-changing and is
+    not required to carry the check.
+    """
+    src = _apikeys_api_src()
+
+    # The CSRF primitive must be imported from helpers and actually invoked.
+    assert "check_origin" in src, (
+        "api-keys must use helpers.check_origin for CSRF defense"
+    )
+    assert "check_origin(" in src, (
+        "check_origin must be CALLED, not merely imported"
+    )
+
+    def _handler_body(decorator: str, signature: str) -> str:
+        start = src.index(decorator)
+        body_start = src.index(signature, start)
+        nxt = src.find("@router.", body_start + 1)
+        return src[body_start : nxt if nxt != -1 else len(src)]
+
+    # Identify the name of the CSRF guard helper that wraps check_origin (the
+    # implementation factors the call out of the handlers into one place).
+    # Find the `def <name>(...)` whose body contains `check_origin(`.
+    csrf_guards: list[str] = []
+    for m in re.finditer(r"^(async )?def (\w+)\(", src, flags=re.MULTILINE):
+        name = m.group(2)
+        nxt = re.search(
+            r"^(async )?def ", src[m.end():], flags=re.MULTILINE
+        )
+        fn_body = src[m.end():][: nxt.start()] if nxt else src[m.end():]
+        if "check_origin(" in fn_body:
+            csrf_guards.append(name)
+
+    def _has_csrf(body: str) -> bool:
+        if "check_origin(" in body:
+            return True
+        return any(f"{g}(" in body for g in csrf_guards)
+
+    create_body = _handler_body('@router.post(""', "async def create_key(")
+    revoke_body = _handler_body("@router.delete(", "async def revoke_key(")
+
+    assert _has_csrf(create_body), (
+        "POST create_key must run the CSRF Origin/Referer check "
+        "(directly or via a guard wrapping check_origin)"
+    )
+    assert _has_csrf(revoke_body), (
+        "DELETE revoke_key must run the CSRF Origin/Referer check "
+        "(directly or via a guard wrapping check_origin)"
     )
 
 

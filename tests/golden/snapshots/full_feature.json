@@ -1001,7 +1001,7 @@
       "sha256": "05f1129d97d2fc8c"
     },
     "forge.toml": {
-      "size": 124259,
+      "size": 124501,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1161,12 +1161,16 @@
       "sha256": "c2ea7e9cb40aea17"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 5824,
-      "sha256": "1edda7372af9082d"
+      "size": 10009,
+      "sha256": "89b61bfe215c7332"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/authz.py": {
+      "size": 2322,
+      "sha256": "d68cc56057747cfd"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 10855,
-      "sha256": "4dece5a6c49782c1"
+      "size": 11501,
+      "sha256": "d2194d49c80ca634"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
