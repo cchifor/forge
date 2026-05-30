@@ -465,7 +465,7 @@ class TestEditPath:
             # path; write our edited content there.
             scratch = Path(cmd[-1])
             scratch.write_text(edited_content, encoding="utf-8")
-            return original_run(["python", "-c", "import sys; sys.exit(0)"], **kwargs)
+            return original_run([sys.executable, "-c", "import sys; sys.exit(0)"], **kwargs)
 
         monkeypatch.setattr(
             "forge.sync.forge_to_project.resolver.subprocess.run", fake_run
@@ -473,7 +473,7 @@ class TestEditPath:
         # Make sure shutil.which returns SOMETHING so the editor lookup
         # passes — point it at the real Python binary which will be
         # invoked through our fake_run wrapper.
-        monkeypatch.setenv("EDITOR", "python")
+        monkeypatch.setenv("EDITOR", sys.executable)
 
         with _patch_select("edit"):
             report = resolve_sidecars(tmp_path, quiet=True)
@@ -511,7 +511,7 @@ class TestEditPath:
         monkeypatch.setattr(
             "forge.sync.forge_to_project.resolver.subprocess.run", fake_run
         )
-        monkeypatch.setenv("EDITOR", "python")
+        monkeypatch.setenv("EDITOR", sys.executable)
 
         with _patch_select("edit"):
             report = resolve_sidecars(tmp_path, quiet=True)
@@ -694,7 +694,7 @@ class TestEditorReturncodeNonzero:
         """
         meta = _scaffold_file_project(tmp_path)
         original_target = meta["target"].read_text()
-        monkeypatch.setenv("EDITOR", "python")
+        monkeypatch.setenv("EDITOR", sys.executable)
 
         def fake_run(cmd, **kwargs):
             return subprocess.CompletedProcess(args=cmd, returncode=1)
@@ -936,25 +936,24 @@ class TestOpenEditor:
         rc = _open_editor(scratch)
         assert rc == -1
 
-    def test_open_editor_passes_path_as_last_arg(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The editor receives the scratch path as the final argument."""
+    def test_open_editor_passes_path_as_last_arg(self, tmp_path: Path) -> None:
+        """The editor receives the scratch path as the final argument.
+
+        Uses the injectable ``resolve``/``run`` seams so the test depends on
+        neither ``$EDITOR`` nor a binary on PATH.
+        """
         scratch = tmp_path / "scratch.txt"
         scratch.write_text("x", encoding="utf-8")
-        monkeypatch.setenv("EDITOR", "python")
         seen = {}
 
         def fake_run(cmd, **kwargs):
             seen["cmd"] = cmd
             return subprocess.CompletedProcess(args=cmd, returncode=0)
 
-        monkeypatch.setattr(
-            "forge.sync.forge_to_project.resolver.subprocess.run", fake_run
-        )
-        rc = _open_editor(scratch)
+        rc = _open_editor(scratch, resolve=lambda: [sys.executable], run=fake_run)
         assert rc == 0
         assert seen["cmd"][-1] == str(scratch)
+        assert seen["cmd"][0] == sys.executable
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,23 @@
+[feature]
+name = "observability"
+version = "1.0.0"
+summary = "Tracing, OpenTelemetry, deep health checks, and error envelope port."
+category = "observability"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "observability.tracing",
+    "observability.health",
+    "observability.error_envelope",
+    "observability.otel",
+]
+fragments = [
+    "observability",
+    "enhanced_health",
+    "error_port",
+    "observability_otel",
+    "observability_metrics_middleware",
+]

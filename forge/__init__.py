@@ -2,14 +2,16 @@
 
 __version__ = "1.2.0a1"
 
-# Eagerly import built-in feature subpackages so OPTION_REGISTRY and
-# FRAGMENT_REGISTRY are fully populated by the time any caller reaches
-# them. Order matters: ``forge.options`` and ``forge.fragments`` must
-# import first, since each feature module calls ``register_option`` /
-# ``register_fragment`` from the ``_registry`` submodules at import
-# time. Features migrated under ``forge.features`` are equivalent to
-# the namespace modules under ``forge.options.*`` / ``forge.fragments.*``
-# but colocate options + fragments + templates per feature.
-from forge import features as _features  # noqa: F401, E402
+# Importing these populates the option/fragment registry singletons (and,
+# transitively via feature_loader, makes them available before any feature
+# registers into them).
+from forge import feature_loader as _feature_loader  # noqa: E402
 from forge import fragments as _fragments  # noqa: F401, E402
 from forge import options as _options  # noqa: F401, E402
+
+# Register built-in features at import so any programmatic consumer
+# (tests/matrix/runner.py, library users importing forge.generator /
+# forge.cli.builder directly) sees populated registries without going
+# through cli.main(). Loads ONLY built-ins — external plugins + the registry
+# freeze stay in feature_loader.load_all() (called by cli.main() + conftest).
+_feature_loader.load_builtin_features()

@@ -1,0 +1,12 @@
+[feature]
+name = "conversation"
+version = "1.0.0"
+summary = "Chat history persistence and file uploads."
+category = "conversational_ai"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = ["conversation.persistence", "chat.attachments"]
+fragments = ["conversation_persistence", "file_upload"]

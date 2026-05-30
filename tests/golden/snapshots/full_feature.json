@@ -89,8 +89,8 @@
       "sha256": "f82c96be4a079032"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 18689,
-      "sha256": "91c4fa82805003da"
+      "size": 19125,
+      "sha256": "c60b65280fed594b"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
