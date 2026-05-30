@@ -144,5 +144,5 @@ keycloak_client_id:
 # ── Tasks ──────────────────────────────────────────────────────
 
 _tasks:
-  - command: python _build/post_generate.py
+  - command: "{{ _copier_python }} _build/post_generate.py"
     when: "{{ True }}"

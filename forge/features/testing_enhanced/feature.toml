@@ -1,0 +1,12 @@
+[feature]
+name = "testing_enhanced"
+version = "1.0.0"
+summary = "Enhanced testing infrastructure — failure forensics + coverage registry."
+category = "platform"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = ["platform.testing_enhanced"]
+fragments = ["testing_enhanced_python"]

@@ -10,6 +10,7 @@ import contextlib
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Any, Literal
@@ -156,14 +157,12 @@ class ResolveReport:
             stream.write(f"  ... and {remaining} more (use --json for full output)\n")
 
 
-def _open_editor(scratch_path: Path) -> int:
-    """Open ``$EDITOR`` on ``scratch_path``; return the editor's exit code.
+def _resolve_editor_cmd() -> list[str] | None:
+    """Resolve the editor command prefix from ``$EDITOR``/``$VISUAL``.
 
-    Falls back to ``$VISUAL`` then ``notepad`` (Windows) / ``vi``
-    (POSIX). Returns the subprocess return code so the caller can
-    treat a non-zero exit (editor refused to run, user aborted) as a
-    skip. Returns ``-1`` when no editor could be located at all — the
-    caller surfaces that as an ``error`` entry.
+    Falls back to ``notepad`` (Windows) / ``vi`` (POSIX). Returns the
+    resolved argv prefix (editor binary absolute path + any flags), or
+    ``None`` when no editor binary can be located on PATH.
     """
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
     if not editor:
@@ -172,10 +171,34 @@ def _open_editor(scratch_path: Path) -> int:
     parts = editor.split()
     resolved = shutil.which(parts[0]) if parts else None
     if resolved is None:
+        return None
+    return [resolved, *parts[1:]]
+
+
+def _open_editor(
+    scratch_path: Path,
+    *,
+    resolve: Callable[[], list[str] | None] | None = None,
+    run: Callable[..., subprocess.CompletedProcess[Any]] | None = None,
+) -> int:
+    """Open the configured editor on ``scratch_path``; return its exit code.
+
+    ``resolve`` and ``run`` are injectable seams for testing; production
+    callers use the defaults (``$EDITOR``/``$VISUAL`` resolution and
+    ``subprocess.run``). ``run`` is looked up at call time so a
+    module-level ``subprocess.run`` monkeypatch still takes effect.
+
+    Returns the editor's return code, or ``-1`` when no editor could be
+    located at all — the caller surfaces that as an ``error`` entry.
+    """
+    resolve = resolve or _resolve_editor_cmd
+    cmd_prefix = resolve()
+    if cmd_prefix is None:
         return -1
-    cmd = [resolved, *parts[1:], str(scratch_path)]
+    cmd = [*cmd_prefix, str(scratch_path)]
+    runner = run if run is not None else subprocess.run
     try:
-        result = subprocess.run(cmd, check=False)
+        result = runner(cmd, check=False)
     except (OSError, subprocess.SubprocessError):
         return -1
     return result.returncode

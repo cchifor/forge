@@ -1,0 +1,11 @@
+[feature]
+name = "airlock"
+version = "1.0.0"
+summary = "Client for the Airlock sandbox orchestrator (weld-airlock)."
+category = "platform"
+
+[feature.depends]
+
+[feature.provides]
+options = ["airlock.client"]
+fragments = ["airlock_client"]

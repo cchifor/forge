@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import warnings
 
+import pytest
+
 
 def pytest_configure(config):  # noqa: ARG001
     warnings.filterwarnings(
@@ -19,3 +21,16 @@ def pytest_configure(config):  # noqa: ARG001
         message=r".*forge\.errors\.GeneratorError is deprecated.*",
         category=DeprecationWarning,
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _load_features():
+    """Populate registries at session start, mirroring CLI startup.
+
+    Features are no longer eagerly loaded at ``import forge`` time;
+    the CLI calls ``feature_loader.load_all()`` before parsing args.
+    Tests need the same initialization.
+    """
+    from forge import feature_loader
+
+    feature_loader.load_all()

@@ -13,21 +13,23 @@ fragment for the Python backend. Subsequent phases extend this module:
 
 from __future__ import annotations
 
+from forge.api import ForgeAPI
 from forge.options._registry import (
     FeatureCategory,
     Option,
     OptionType,
-    register_option,
 )
 
-register_option(
-    Option(
-        path="auth.mode",
-        type=OptionType.ENUM,
-        default="generate",
-        options=("generate", "none"),
-        summary="Whether forge scaffolds the platform-auth stack for this project.",
-        description="""\
+
+def register_all(api: ForgeAPI) -> None:
+    api.add_option(
+        Option(
+            path="auth.mode",
+            type=OptionType.ENUM,
+            default="generate",
+            options=("generate", "none"),
+            summary="Whether forge scaffolds the platform-auth stack for this project.",
+            description="""\
 Layer discriminator for the authentication subsystem. ``generate`` ships
 the platform-auth model end-to-end:
 
@@ -63,66 +65,66 @@ ENDPOINTS: none directly — the SDKs are libraries; service templates
 wire them into request middleware.
 REQUIRES: Keycloak realm (existing) for the human-login flow;
 Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
-        category=FeatureCategory.PLATFORM,
-        enables={
-            "generate": (
-                # SDK ports — one per backend language. Ship to
-                # ``<project>/sdks/platform-auth*/`` (a NEW path, no
-                # collision with forge's existing service templates).
-                "platform_auth_sdk_python",
-                "platform_auth_sdk_node",
-                "platform_auth_sdk_rust",
-                # Per-frontend SPA session-timeout — ships composable
-                # + modal at conventional Vue / Svelte / Flutter paths
-                # using NEW filenames (``useSessionTimeout`` /
-                # ``session-timeout.svelte.ts`` /
-                # ``session_timeout_service.dart``) — no collision
-                # with the existing per-frontend auth files.
-                "platform_auth_session_timeout_vue",
-                "platform_auth_session_timeout_svelte",
-                "platform_auth_session_timeout_flutter",
-                # Phase 3 Wave 2 (cut over) — Python service-template
-                # middleware. Legacy ``service/security/providers/``,
-                # ``service/security/{auth,base}.py``,
-                # ``service/client/auth.py`` were removed from the
-                # python-service-template; the fragment ships their
-                # platform-auth replacements at the same paths.
-                # ``app/core/lifecycle.py``'s auth setup block was
-                # rewritten to use ``build_auth_guard`` +
-                # ``initialize_auth(bundle=...)``.
-                "platform_auth_python_middleware",
-                # Phase 5 Wave 2 (cut over) — Node service-template
-                # middleware. Legacy ``middleware/tenant.ts``,
-                # ``lib/http-client.ts`` removed; Repository/Service/
-                # route layers refactored from ``TenantContext``
-                # (userId / customerId / email / roles) to
-                # ``IdentityContext`` (tenantId / subject / scopes /
-                # roles). The fragment's ``bootstrapAuth(app)`` is
-                # injected at the FORGE markers in ``app.ts``.
-                "platform_auth_node_middleware",
-                # Phase 7 Wave 2 (cut over) — Rust service-template
-                # middleware. Legacy ``middleware/tenant.rs`` (header-
-                # trust ``FromRequestParts``) and ``client.rs`` (S2S
-                # header propagation) removed; Repository / service /
-                # route layers refactored to take ``&IdentityContext``
-                # from ``platform_auth``. ``main.rs`` calls
-                # ``init_auth()`` (injected at FORGE:STARTUP_INIT) and
-                # ``app.rs`` adds the ``axum::middleware::from_fn``
-                # auth_middleware layer.
-                "platform_auth_rust_middleware",
-                # Phase 2 Wave 2 (cut over) — Gatekeeper as token
-                # authority + signing-key init service. Imperative
-                # gatekeeper compose block in
-                # ``forge/templates/deploy/docker-compose.yml.j2`` and
-                # the legacy ``forge/templates/infra/gatekeeper/``
-                # tree were removed. Declarative ``compose.yaml``
-                # entries on these two fragments register the
-                # gatekeeper + gatekeeper-keygen sidecars via
-                # ``forge.services.fragment_compose``.
-                "platform_auth_gatekeeper",
-                "platform_auth_gatekeeper_keygen",
-                "platform_auth_tenant_context",
-            ),
-        },
+            category=FeatureCategory.PLATFORM,
+            enables={
+                "generate": (
+                    # SDK ports — one per backend language. Ship to
+                    # ``<project>/sdks/platform-auth*/`` (a NEW path, no
+                    # collision with forge's existing service templates).
+                    "platform_auth_sdk_python",
+                    "platform_auth_sdk_node",
+                    "platform_auth_sdk_rust",
+                    # Per-frontend SPA session-timeout — ships composable
+                    # + modal at conventional Vue / Svelte / Flutter paths
+                    # using NEW filenames (``useSessionTimeout`` /
+                    # ``session-timeout.svelte.ts`` /
+                    # ``session_timeout_service.dart``) — no collision
+                    # with the existing per-frontend auth files.
+                    "platform_auth_session_timeout_vue",
+                    "platform_auth_session_timeout_svelte",
+                    "platform_auth_session_timeout_flutter",
+                    # Phase 3 Wave 2 (cut over) — Python service-template
+                    # middleware. Legacy ``service/security/providers/``,
+                    # ``service/security/{auth,base}.py``,
+                    # ``service/client/auth.py`` were removed from the
+                    # python-service-template; the fragment ships their
+                    # platform-auth replacements at the same paths.
+                    # ``app/core/lifecycle.py``'s auth setup block was
+                    # rewritten to use ``build_auth_guard`` +
+                    # ``initialize_auth(bundle=...)``.
+                    "platform_auth_python_middleware",
+                    # Phase 5 Wave 2 (cut over) — Node service-template
+                    # middleware. Legacy ``middleware/tenant.ts``,
+                    # ``lib/http-client.ts`` removed; Repository/Service/
+                    # route layers refactored from ``TenantContext``
+                    # (userId / customerId / email / roles) to
+                    # ``IdentityContext`` (tenantId / subject / scopes /
+                    # roles). The fragment's ``bootstrapAuth(app)`` is
+                    # injected at the FORGE markers in ``app.ts``.
+                    "platform_auth_node_middleware",
+                    # Phase 7 Wave 2 (cut over) — Rust service-template
+                    # middleware. Legacy ``middleware/tenant.rs`` (header-
+                    # trust ``FromRequestParts``) and ``client.rs`` (S2S
+                    # header propagation) removed; Repository / service /
+                    # route layers refactored to take ``&IdentityContext``
+                    # from ``platform_auth``. ``main.rs`` calls
+                    # ``init_auth()`` (injected at FORGE:STARTUP_INIT) and
+                    # ``app.rs`` adds the ``axum::middleware::from_fn``
+                    # auth_middleware layer.
+                    "platform_auth_rust_middleware",
+                    # Phase 2 Wave 2 (cut over) — Gatekeeper as token
+                    # authority + signing-key init service. Imperative
+                    # gatekeeper compose block in
+                    # ``forge/templates/deploy/docker-compose.yml.j2`` and
+                    # the legacy ``forge/templates/infra/gatekeeper/``
+                    # tree were removed. Declarative ``compose.yaml``
+                    # entries on these two fragments register the
+                    # gatekeeper + gatekeeper-keygen sidecars via
+                    # ``forge.services.fragment_compose``.
+                    "platform_auth_gatekeeper",
+                    "platform_auth_gatekeeper_keygen",
+                    "platform_auth_tenant_context",
+                ),
+            },
+        )
     )
-)
