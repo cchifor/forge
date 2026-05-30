@@ -90,10 +90,13 @@ def session_fp(session_id: str | None) -> str:
     reaching the log. ``None`` / empty ids are handled without raising.
 
     The output never contains more than the leading prefix of the id, and
-    never the full value.
+    never the full value. A non-string id (defensive: callers are typed
+    ``str | None``) is coerced to ``str`` so logging can never raise.
     """
     if not session_id:
         return "-"
+    if not isinstance(session_id, str):
+        session_id = str(session_id)
     return session_id[:_FP_PREFIX_LEN] + "..."
 
 

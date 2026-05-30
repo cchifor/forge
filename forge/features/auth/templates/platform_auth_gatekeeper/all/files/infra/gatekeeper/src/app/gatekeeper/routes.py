@@ -179,14 +179,14 @@ async def _pop_auth_state(state: str) -> dict[str, Any] | None:
     except (json.JSONDecodeError, TypeError) as exc:
         logger.warning(
             "Corrupt auth-state envelope for state=%s — rejecting: %s",
-            state,
+            session_fp(state),
             exc,
         )
         return None
     if not isinstance(envelope, dict):
         logger.warning(
             "auth-state envelope for state=%s is not an object — rejecting",
-            state,
+            session_fp(state),
         )
         return None
     # Defense-in-depth: re-check the TTL window even though Redis already
@@ -197,7 +197,9 @@ async def _pop_auth_state(state: str) -> dict[str, Any] | None:
     if not isinstance(issued_at, int) or (
         int(time.time()) - issued_at > cfg.oidc_state_envelope_ttl_seconds
     ):
-        logger.warning("Expired auth-state envelope for state=%s — rejecting", state)
+        logger.warning(
+            "Expired auth-state envelope for state=%s — rejecting", session_fp(state)
+        )
         return None
     return envelope
 
