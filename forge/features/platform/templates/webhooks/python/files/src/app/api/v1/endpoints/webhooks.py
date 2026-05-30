@@ -10,15 +10,19 @@ from __future__ import annotations
 import uuid
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from weld.fastapi.security.auth import get_current_user
 
 from app.core.ioc import PublicUnitOfWork
 from app.data.models.webhook import Webhook as WebhookModel
 from app.domain.webhook import Webhook, WebhookCreate, WebhookDeliveryResult
 from app.services.webhook_service import deliver, generate_secret
 
-router = APIRouter()
+# Webhook CRUD + test-fire must be authenticated: test-fire performs an
+# outbound request to a caller-controlled URL (SSRF surface). (Restricting
+# the target URL + scoping rows to the verified tenant are follow-ups.)
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _ANON = uuid.UUID("00000000-0000-0000-0000-000000000000")
 

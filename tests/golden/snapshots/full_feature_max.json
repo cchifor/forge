@@ -1585,8 +1585,8 @@
       "sha256": "3e799c04904069d8"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
-      "size": 2375,
-      "sha256": "c3c962ba48af5f4e"
+      "size": 2693,
+      "sha256": "e87e07e7a50a1e49"
     },
     "services/api/src/app/api/v1/endpoints/health.py": {
       "size": 1048,
@@ -1613,12 +1613,12 @@
       "sha256": "cce2fd26c7f8e38f"
     },
     "services/api/src/app/api/v1/endpoints/tools.py": {
-      "size": 1399,
-      "sha256": "d9910921b12765cd"
+      "size": 1656,
+      "sha256": "340e37c21a3514b3"
     },
     "services/api/src/app/api/v1/endpoints/webhooks.py": {
-      "size": 2980,
-      "sha256": "d68ff1e3ce086adc"
+      "size": 3304,
+      "sha256": "39dafe3c64bb8640"
     },
     "services/api/src/app/cli/__init__.py": {
       "size": 752,
