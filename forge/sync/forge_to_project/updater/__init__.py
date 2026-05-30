@@ -567,6 +567,17 @@ def _update_locked(
     # v4 in place. Re-stamp only the real on-disk backends — drop the
     # synth ``_frontend_only`` placeholder so the manifest doesn't
     # claim a Python backend the project doesn't have.
+    # Rechain alembic migrations BEFORE restamping provenance: re-applying
+    # fragments rewrote each backend's migrations back to their hard-coded
+    # (colliding/gapped) revisions, so renumber them into a valid linear chain
+    # and refresh provenance, matching the fresh-generation path. Without this,
+    # an --update would leave a project that crashes on ``alembic upgrade head``.
+    from forge.codegen.migration_chain import (  # noqa: PLC0415
+        rechain_backend_migrations,
+    )
+
+    rechain_backend_migrations(config, project_root, collector)
+
     real_backends = tuple(bc for bc in config.backends if bc.name != "_frontend_only")
     _restamp_forge_toml(
         manifest=manifest,

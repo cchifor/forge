@@ -204,7 +204,11 @@ def _generate_into(
     # chain BEFORE provenance is stamped (so forge.toml records the rewritten
     # content): fragments ship colliding/gapped revision numbers that alembic
     # would otherwise reject, crashing ``alembic upgrade head`` at boot.
-    _rechain_backend_migrations(config, project_root, collector)
+    from forge.codegen.migration_chain import (  # noqa: PLC0415
+        rechain_backend_migrations,
+    )
+
+    rechain_backend_migrations(config, project_root, collector)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -216,29 +220,6 @@ def _generate_into(
     from forge.hooks import _fire_generate_complete  # noqa: PLC0415
 
     _fire_generate_complete(report)
-
-
-def _rechain_backend_migrations(
-    config: ProjectConfig, project_root: Path, collector: ProvenanceCollector
-) -> None:
-    """Renumber each Python backend's alembic migrations into a valid linear
-    chain, refreshing provenance for any rewritten file (the SHA was recorded
-    at write time, before this rewrite). No-op for backends without an
-    ``alembic/versions`` directory."""
-    from dataclasses import replace  # noqa: PLC0415
-
-    from forge.codegen.migration_chain import rechain_migrations  # noqa: PLC0415
-    from forge.sync.provenance import sha256_of  # noqa: PLC0415
-
-    for bc in config.backends:
-        if bc.language is not BackendLanguage.PYTHON:
-            continue
-        versions = project_root / "services" / bc.name / "alembic" / "versions"
-        for path in rechain_migrations(versions):
-            key = path.relative_to(project_root).as_posix()
-            rec = collector.records.get(key)
-            if rec is not None:
-                collector.records[key] = replace(rec, sha256=sha256_of(path))
 
 
 def _create_root(config: ProjectConfig, dry_run: bool) -> Path:

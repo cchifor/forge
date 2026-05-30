@@ -79,3 +79,61 @@ def test_rechain_preserves_order_and_is_deterministic(tmp_path: Path) -> None:
 
 def test_rechain_noop_on_missing_dir(tmp_path: Path) -> None:
     rechain_migrations(tmp_path / "nope")  # must not raise
+
+
+def test_rechain_is_idempotent(tmp_path: Path) -> None:
+    """Re-running on an already-valid chain is a no-op (the --update path
+    rechains every time; it must converge, not churn)."""
+    _write(tmp_path / "0001_initial.py", rev="0001", down="None")
+    _write(tmp_path / "0002_conv.py", rev="0002", down="0001")
+    _write(tmp_path / "0005_webhooks.py", rev="0005", down="0004")
+    rechain_migrations(tmp_path)
+    second = rechain_migrations(tmp_path)
+    assert second == [], "second rechain must touch nothing"
+
+
+def _assert_valid_chain(versions_dir: Path) -> None:
+    files = sorted(p for p in versions_dir.glob("*.py") if not p.name.startswith("__"))
+    revs = [_rev(p) for p in files]
+    downs = [_down(p) for p in files]
+    assert len(set(revs)) == len(revs), f"duplicate revisions: {revs}"
+    assert downs.count("None") == 1, f"expected one root, got downs={downs}"
+    present = set(revs)
+    for d in downs:
+        if d != "None":
+            assert d in present, f"down_revision {d} missing from {present}"
+    heads = present - {d for d in downs if d != "None"}
+    assert len(heads) == 1, f"expected one head, got {heads}"
+
+
+def test_update_preserves_rechained_migrations(tmp_path: Path) -> None:
+    """forge --update re-applies the fragments' hard-coded migrations; the
+    update path must rechain afterwards or the project regresses to a broken
+    (collision/gap) chain that crashes `alembic upgrade head`."""
+    from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+    from forge.generator import generate
+    from forge.sync.forge_to_project.updater import update_project
+
+    opts = {"conversation.persistence": True, "platform.webhooks": True}
+    cfg = ProjectConfig(
+        project_name="Upd Mig",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="Upd Mig",
+                language=BackendLanguage.PYTHON,
+                server_port=8020,
+                features=["items"],
+            )
+        ],
+        frontend=None,
+        options=opts,
+        option_origins={k: "user" for k in opts},
+        output_dir=str(tmp_path),
+    )
+    cfg.validate()
+    root = generate(cfg, quiet=True, dry_run=False)
+    versions = root / "services" / "api" / "alembic" / "versions"
+    _assert_valid_chain(versions)  # fresh generation
+    update_project(root, quiet=True)
+    _assert_valid_chain(versions)  # MUST still be valid after --update
