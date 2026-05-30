@@ -789,8 +789,8 @@
       "sha256": "03aaca310beae07a"
     },
     "services/api-py/config/production.yaml": {
-      "size": 258,
-      "sha256": "9043413c9c096b3b"
+      "size": 425,
+      "sha256": "34ff0de7a81f7123"
     },
     "services/api-py/config/testing.yaml": {
       "size": 148,
@@ -845,8 +845,8 @@
       "sha256": "6e33ca61761d70f8"
     },
     "services/api-py/src/app/api/v1/endpoints/health.py": {
-      "size": 1048,
-      "sha256": "0040db44f11f6b54"
+      "size": 1505,
+      "sha256": "45ddbefb8e3c392c"
     },
     "services/api-py/src/app/api/v1/endpoints/home.py": {
       "size": 444,
