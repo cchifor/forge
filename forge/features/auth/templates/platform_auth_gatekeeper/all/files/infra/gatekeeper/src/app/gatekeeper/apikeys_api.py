@@ -141,14 +141,16 @@ def _enforce_csrf(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Origin mismatch")
 
 
-async def _require_admin(request: Request, session: ServerSession) -> None:
-    """Enforce the admin realm role on the verified *session*.
+async def _require_admin(request: Request, session: ServerSession) -> list[str]:
+    """Enforce the admin realm role on the verified *session*; return its roles.
 
     Roles live in the Keycloak access token's ``realm_access.roles`` claim,
     not in the server-side session row, so we re-verify the session's access
     token exactly as ``/auth/userinfo`` does (same ``verify_token`` signature,
     same tenant argument, same per-tenant OIDC config) and read the roles off
-    the verified payload via :func:`authz.extract_realm_roles`.
+    the verified payload via :func:`authz.extract_realm_roles`. The verified
+    role list is returned so callers can bound delegation (e.g. an admin may
+    only grant a minted key roles they themselves hold).
 
     Fails CLOSED: if the access token is missing / expired / invalid so the
     role set cannot be established, access is denied (401/403) rather than
@@ -195,6 +197,7 @@ async def _require_admin(request: Request, session: ServerSession) -> None:
             cfg.admin_role,
         )
         raise HTTPException(status_code=403, detail="Admin role required")
+    return roles
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
@@ -208,8 +211,24 @@ async def create_key(
     """Generate a new API key for the authenticated tenant (admin only)."""
     _enforce_csrf(request)
     session = await _verified_session(request)
-    await _require_admin(request, session)
+    admin_roles = await _require_admin(request, session)
     tenant, owner = session.tenant_id, (session.sub or "unknown")
+
+    # Bound delegation: an admin may only mint a key with roles they hold, so a
+    # tenant admin cannot escalate by issuing a key with a higher-privileged
+    # role than their own. Reject the whole request rather than silently
+    # dropping the offending roles.
+    if not authz.is_subset_of_roles(body.roles, admin_roles):
+        logger.warning(
+            "API-keys role-delegation denial: requested=%s admin_roles=%s owner=%s",
+            body.roles,
+            admin_roles,
+            owner,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="Requested roles must be a subset of your own realm roles",
+        )
 
     plain_key, key_hash = generate_api_key(tenant)
     key_id = secrets.token_hex(8)

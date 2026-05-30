@@ -173,12 +173,12 @@
       "sha256": "31aaf37d14fefc23"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 10009,
-      "sha256": "89b61bfe215c7332"
+      "size": 10873,
+      "sha256": "dc8fffecf676de0e"
     },
     "infra/gatekeeper/src/app/gatekeeper/authz.py": {
-      "size": 2322,
-      "sha256": "d68cc56057747cfd"
+      "size": 2901,
+      "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
       "size": 11994,
