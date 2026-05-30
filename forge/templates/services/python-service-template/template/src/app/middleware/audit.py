@@ -9,6 +9,17 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 
+def _path_matches_prefix(path: str, prefix: str) -> bool:
+    """Return True if ``path`` is ``prefix`` or a child segment of it.
+
+    Boundary-safe: ``/api/v1/health`` matches ``/api/v1/health`` and
+    ``/api/v1/health/live`` but not ``/api/v1/healthz-records``. Health probes
+    hit nested routes (the v1 router mounts the health router under
+    ``/api/v1/health``), so an exact-equality check never skipped them.
+    """
+    return path == prefix or path.startswith(prefix + "/")
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
     """Records HTTP operations for audit trail."""
 
@@ -21,16 +32,23 @@ class AuditMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.excluded_paths = excluded_paths or {
             "/health",
+            "/api/v1/health",
+            "/api/v1/healthz",
             "/metrics",
             "/docs",
             "/openapi.json",
+            "/favicon.ico",
         }
         self.excluded_methods = excluded_methods or {"OPTIONS", "HEAD"}
+
+    def _is_excluded(self, path: str) -> bool:
+        """Return True if ``path`` falls under any excluded prefix."""
+        return any(_path_matches_prefix(path, p) for p in self.excluded_paths)
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.method in self.excluded_methods or request.url.path in self.excluded_paths:
+        if request.method in self.excluded_methods or self._is_excluded(request.url.path):
             return await call_next(request)
 
         start = time.perf_counter()

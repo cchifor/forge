@@ -793,8 +793,8 @@
       "sha256": "fc4635dcb0b2a6d1"
     },
     "services/api-py/config/default.yaml": {
-      "size": 2015,
-      "sha256": "f24b14a7afa04b5f"
+      "size": 2354,
+      "sha256": "52f3eff373b3a35a"
     },
     "services/api-py/config/development.yaml": {
       "size": 129,
@@ -893,8 +893,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api-py/src/app/core/config/domain.py": {
-      "size": 5447,
-      "sha256": "1e134c968b088b10"
+      "size": 5500,
+      "sha256": "3e06ec5c6a320fa5"
     },
     "services/api-py/src/app/core/config/loader.py": {
       "size": 3530,
@@ -1013,16 +1013,16 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api-py/src/app/main.py": {
-      "size": 5454,
-      "sha256": "8f4d90f26bdb6af1"
+      "size": 5490,
+      "sha256": "cd7f29700ee9a0ca"
     },
     "services/api-py/src/app/middleware/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/middleware/audit.py": {
-      "size": 1541,
-      "sha256": "239e47e157cbde86"
+      "size": 2311,
+      "sha256": "69c0177a04826249"
     },
     "services/api-py/src/app/middleware/auth_context.py": {
       "size": 2369,
@@ -1037,8 +1037,8 @@
       "sha256": "d3cd3c78f97a73cd"
     },
     "services/api-py/src/app/middleware/logging.py": {
-      "size": 4820,
-      "sha256": "bd1b3f38852fbdf5"
+      "size": 5497,
+      "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api-py/src/app/middleware/rate_limit.py": {
       "size": 2443,

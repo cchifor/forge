@@ -151,6 +151,8 @@ class AuditConfig(BaseModel):
     max_body_size: int = Field(51200)
     excluded_paths: set[str] = {
         "/health",
+        "/api/v1/health",
+        "/api/v1/healthz",
         "/metrics",
         "/docs",
         "/openapi.json",
