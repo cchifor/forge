@@ -1462,7 +1462,7 @@
     },
     "services/api/alembic/versions/0003_add_rag_tables.py": {
       "size": 2807,
-      "sha256": "fb31ea64620908aa"
+      "sha256": "6d78eb5a5c30c06d"
     },
     "services/api/alembic/versions/0005_add_webhooks.py": {
       "size": 1596,
