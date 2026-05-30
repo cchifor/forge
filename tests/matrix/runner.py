@@ -618,7 +618,12 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
         # than polling ourselves. Compose-v2 only; Compose-v1 will fail
         # and we surface it as a lane-C fail rather than try to simulate.
         up_result = subprocess.run(
-            [docker_exe, "compose", "-f", str(compose_file), "up", "-d", "--wait"],
+            # ``--build`` is essential: without it compose reuses any cached
+            # image of the same name from a prior run, so the smoke lane would
+            # silently test STALE generated source (a fixed template could
+            # appear to still ship the bug). Mirrors the real deploy path in
+            # ``forge.docker_manager`` which also builds.
+            [docker_exe, "compose", "-f", str(compose_file), "up", "-d", "--wait", "--build"],
             capture_output=True,
             text=True,
             timeout=600,

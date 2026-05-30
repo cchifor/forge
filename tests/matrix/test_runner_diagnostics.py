@@ -680,3 +680,34 @@ class TestSkippedLaneAnnotations:
         assert "1 sub-check(s) skipped" in summary
         # Empty when nothing was skipped — silent on the happy path.
         assert _format_skip_summary([results[-1]]) == ""
+
+def test_smoke_compose_up_uses_build(tmp_path, monkeypatch):
+    """Lane C must ``compose up --build`` so it tests the CURRENT generated
+    source. Without --build, compose reuses a stale cached image and the
+    smoke lane can pass on outdated templates (observed: a fixed validator
+    that still booted because the image predated the fix)."""
+    monkeypatch.setenv("FORGE_MATRIX_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None
+    )
+    monkeypatch.setattr("forge.generator.generate", _fake_generate(tmp_path))
+
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(list(cmd))
+        result = MagicMock(spec=subprocess.CompletedProcess)
+        # Fail the up call so the lane returns before assert_contract (no HTTP).
+        result.returncode = 1 if ("up" in cmd and "-d" in cmd) else 0
+        result.stdout = ""
+        result.stderr = "boom"
+        if "stdout" in kwargs and hasattr(kwargs["stdout"], "write"):
+            kwargs["stdout"].write("x\n")
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    run_lane_smoke(_make_scenario())
+
+    up_cmds = [c for c in seen if "up" in c and "-d" in c]
+    assert up_cmds, f"no compose-up invocation seen: {seen}"
+    assert "--build" in up_cmds[0], f"smoke compose-up must include --build: {up_cmds[0]}"
