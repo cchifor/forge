@@ -237,8 +237,8 @@
       "sha256": "bebbec570db9b36e"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 38369,
-      "sha256": "5db8a8a81e5eacd6"
+      "size": 38427,
+      "sha256": "6bad66f463667f8b"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
@@ -285,8 +285,8 @@
       "sha256": "8c8d63d3825703e6"
     },
     "infra/gatekeeper/src/app/middleware/log_redaction.py": {
-      "size": 3875,
-      "sha256": "89d32384436251e0"
+      "size": 4068,
+      "sha256": "4147b8b1df4b0262"
     },
     "infra/gatekeeper/src/app/middleware/logging.py": {
       "size": 3741,
