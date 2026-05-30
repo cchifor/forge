@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from weld.fastapi.security.auth import get_current_user
 
 from app.agents import tool_registry
 
-router = APIRouter()
+# Tool listing + invocation must be authenticated (invocation runs registered
+# tools). ``get_current_user`` raises 401 when no valid token is present.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("")
