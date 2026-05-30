@@ -1761,8 +1761,8 @@
       "sha256": "e0bb914b562cc421"
     },
     "services/api/src/app/data/repositories/conversation_repository.py": {
-      "size": 4457,
-      "sha256": "fdf074a11a7ec834"
+      "size": 5555,
+      "sha256": "4454e5b7f9d7bd7a"
     },
     "services/api/src/app/data/repositories/item_repository.py": {
       "size": 2579,

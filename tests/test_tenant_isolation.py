@@ -32,3 +32,21 @@ def test_rag_search_tool_is_tenant_scoped() -> None:
     assert "RagRetriever(session)" not in src, (
         "rag_search must not build an un-scoped retriever (cross-tenant leak)"
     )
+
+
+_CONV_REPO = (
+    _BASE
+    / "forge/features/conversation/templates/conversation_persistence/python/files/src/app/data/repositories/conversation_repository.py"
+)
+
+
+def test_conversation_repo_is_user_scoped() -> None:
+    src = _CONV_REPO.read_text(encoding="utf-8")
+    # list_conversations + get_conversation + append_message ownership check +
+    # archive must each scope by user_id (within-tenant IDOR guard).
+    assert src.count("ConversationModel.user_id == self.user_id") >= 4, (
+        "get_conversation / append_message / archive must scope by user_id"
+    )
+    assert "PermissionDeniedError" in src, (
+        "append_message must reject conversations the user does not own"
+    )
