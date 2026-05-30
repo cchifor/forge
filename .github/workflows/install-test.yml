@@ -17,13 +17,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       # The install script invokes `uv tool install git+<repo>` which
       # needs a Python interpreter visible to uv. GitHub-hosted runners
       # ship Python, but pinning via setup-python keeps the version
       # deterministic and ensures uv can discover it.
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.13"
 
