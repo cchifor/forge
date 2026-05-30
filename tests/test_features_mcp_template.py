@@ -131,3 +131,25 @@ def test_mcp_via_agent_tool_calling_with_auth_none_is_rejected() -> None:
 
 def test_mcp_via_agent_tool_calling_with_auth_generate_is_allowed() -> None:
     resolve(_py_mcp_project({"agent.mode": "tool_calling", "auth.mode": "generate"}))
+
+
+_MCP_ROUTER = (
+    Path(__file__).resolve().parent.parent
+    / "forge/features/platform/templates/mcp_server/python/files/src/app/mcp/router.py"
+)
+
+
+def test_mcp_invoke_attributes_to_verified_user_not_header() -> None:
+    """invoke_tool must take the audit user_id from the verified token, not the
+    spoofable x-gatekeeper-user-id header."""
+    src = _MCP_ROUTER.read_text(encoding="utf-8")
+    assert "str(user.id) if user is not None else None" in src
+    assert 'user_id = request.headers.get("x-gatekeeper-user-id")' not in src
+
+
+def test_mcp_audit_entry_matches_on_disk_shape() -> None:
+    """McpAuditEntry must mirror the on-disk JSONL (ts float, user_id nullable)
+    or GET /mcp/audit 500s on real entries."""
+    src = _MCP_ROUTER.read_text(encoding="utf-8")
+    assert "ts: float" in src
+    assert "user_id: str | None = None" in src

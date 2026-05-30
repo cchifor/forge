@@ -20,7 +20,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -155,7 +155,11 @@ async def mint_approval(req: McpMintRequest) -> McpMintResponse:
 
 
 @router.post("/invoke", response_model=McpInvokeResponse)
-async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeResponse:
+async def invoke_tool(
+    req: McpInvokeRequest,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> McpInvokeResponse:
     """Proxy a tool call to the named server (audit + approval enforced).
 
     Pipeline:
@@ -180,7 +184,9 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
     server_config = (config.get("servers") or {}).get(req.server) or {}
     approval_mode = str(server_config.get("approvalMode") or default_mode)
 
-    user_id = request.headers.get("x-gatekeeper-user-id")
+    # Identity comes from the verified token (the router-level
+    # get_current_user gate), NOT the spoofable x-gatekeeper-user-id header.
+    user_id = str(user.id) if user is not None else None
     audit_ts = time.time()
     audit_hash = hash_input(req.input)
 
@@ -251,8 +257,12 @@ class McpAuditEntry(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    ts: str
-    user_id: str
+    # Mirror the on-disk JSONL shape: ``ts`` is a float epoch and
+    # ``user_id`` is null for entries recorded without an authenticated
+    # subject (e.g. auto-approved). Declaring them str / non-optional made
+    # GET /mcp/audit 500 on real entries.
+    ts: float
+    user_id: str | None = None
     server: str
     tool: str
     input_hash: str
