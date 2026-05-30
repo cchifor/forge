@@ -22,8 +22,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from weld.fastapi.security.auth import get_current_user
 
 from app.mcp.audit import (
     AuditEntry,
@@ -59,7 +60,15 @@ class McpInvokeResponse(BaseModel):
     error: str | None = None
 
 
-router = APIRouter(prefix="/mcp", tags=["mcp"])
+# Every /mcp route requires an authenticated user: the server exposes tool
+# invocation (subprocess execution), approval-token minting, and an audit
+# log of user identities. ``get_current_user`` raises 401 when no valid
+# bearer token is present (``oauth2_scheme`` alone is auto_error=False and
+# would NOT gate). platform.mcp requires auth.mode=generate (enforced in the
+# resolver), so the auth stack is always present here.
+router = APIRouter(
+    prefix="/mcp", tags=["mcp"], dependencies=[Depends(get_current_user)]
+)
 
 
 def _config_path() -> Path:
