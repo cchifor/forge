@@ -445,3 +445,301 @@ def test_gatekeeper_keygen_compose_yaml_parses() -> None:
         "keygen service must mount gatekeeper_signing_keys to write keys "
         "into the shared named volume."
     )
+
+
+# ── WS-2.5: OIDC PKCE + nonce + bound state ──────────────────────────────────
+#
+# These are source-assertion (structural) tests — the gatekeeper modules carry
+# heavy runtime deps (fastapi / redis / PyJWT) that forge CI does not install,
+# so we assert on the shipped template text, exactly like the sibling
+# ``test_apikeys_*`` tests above. Behavioural coverage of the pure crypto
+# helpers lives in ``tests/test_gatekeeper_oidc_pkce.py`` (importlib-loaded).
+
+
+def _gk_src(module: str) -> str:
+    return (
+        _gatekeeper_root() / "src" / "app" / "gatekeeper" / module
+    ).read_text(encoding="utf-8")
+
+
+def test_oidc_pkce_pure_helper_module_shipped() -> None:
+    """The stdlib-only PKCE/nonce helper module must ship and stay dep-free.
+
+    It is importlib-loaded by forge CI without fastapi/redis/PyJWT, so any
+    heavy import would break the behavioural test suite.
+    """
+    src = _gk_src("oidc_pkce.py")
+    for fn in (
+        "def generate_pkce_verifier(",
+        "def pkce_challenge_s256(",
+        "def generate_state(",
+        "def generate_nonce(",
+        "def nonces_equal(",
+    ):
+        assert fn in src, f"oidc_pkce.py missing {fn!r}"
+    # S256 must be computed from sha256 + urlsafe base64 with padding stripped.
+    assert "sha256" in src and "urlsafe_b64encode" in src and 'rstrip(b"="' in src
+    # Dependency-free: no heavy runtime imports.
+    for forbidden in ("import fastapi", "import redis", "import jwt", "from app."):
+        assert forbidden not in src, (
+            f"oidc_pkce.py must stay stdlib-only — found {forbidden!r}"
+        )
+
+
+def test_config_has_oidc_state_envelope_ttl() -> None:
+    """A configurable TTL bounds the PKCE/nonce/state envelope lifetime."""
+    src = _gk_src("config.py")
+    assert "oidc_state_envelope_ttl_seconds" in src, (
+        "config must expose oidc_state_envelope_ttl_seconds for the bound-"
+        "state envelope TTL"
+    )
+
+
+def test_build_login_url_accepts_pkce_and_nonce_params() -> None:
+    """``build_login_url`` must forward nonce + S256 challenge to Keycloak."""
+    src = _gk_src("helpers.py")
+    assert "def build_login_url(" in src
+    sig = src.split("def build_login_url(")[1].split(")")[0]
+    assert "nonce" in sig, "build_login_url must accept a nonce parameter"
+    assert "code_challenge" in sig, (
+        "build_login_url must accept a code_challenge parameter"
+    )
+    assert "code_challenge_method" in sig, (
+        "build_login_url must accept a code_challenge_method parameter"
+    )
+    # The challenge method must be sent as S256 (not 'plain').
+    assert "S256" in src, "build_login_url must default the method to S256"
+
+
+def test_exchange_code_accepts_code_verifier() -> None:
+    """``exchange_code`` must send the PKCE ``code_verifier`` on token POST."""
+    src = _gk_src("oidc.py")
+    sig = src.split("def exchange_code(")[1].split(") -> dict")[0]
+    assert "code_verifier" in sig, "exchange_code must accept a code_verifier param"
+    # And it must actually be added to the token-endpoint payload.
+    assert 'payload["code_verifier"]' in src or "payload['code_verifier']" in src, (
+        "exchange_code must inject code_verifier into the token POST payload"
+    )
+
+
+def test_routes_define_bound_state_envelope_store() -> None:
+    """The module must define a server-side envelope store keyed by state,
+    persisted via atomic set-with-TTL using the configurable lifetime."""
+    src = _gk_src("routes.py")
+    # The bound-state key prefix + the Redis client are wired at module level.
+    assert "gk:auth-state:" in src, (
+        "routes must persist the envelope under a gk:auth-state:{state} key"
+    )
+    assert "get_redis" in src, "routes must use the redis client for the envelope"
+    # Atomic set-with-TTL using the configurable lifetime.
+    assert "oidc_state_envelope_ttl_seconds" in src
+    assert "setex(" in src or "ex=" in src, (
+        "envelope must be stored with a TTL (setex / ex=)"
+    )
+    # Single-use: the envelope is popped with an ATOMIC get-and-delete
+    # (GETDEL) — never a get-then-delete TOCTOU pair.
+    assert "getdel(" in src, (
+        "the envelope pop must use an atomic getdel (single-use, no TOCTOU)"
+    )
+
+
+def test_login_handler_stores_envelope_and_sends_pkce_nonce() -> None:
+    """``/auth/login`` must mint + store the bound-state envelope and send
+    the S256 challenge + nonce on the authorization request.
+
+    The minting now lives in the shared :func:`_begin_oidc_login` helper
+    (WS-2.5 review fix F1) so both /auth/login and the session-expiry
+    redirect share one path; we assert that path exists and does the work.
+    """
+    src = _gk_src("routes.py")
+    # /auth/login delegates to the shared minting helper.
+    login = src.split("async def auth_login(")[1].split("\nasync def ")[0]
+    assert "_begin_oidc_login(" in login, (
+        "/auth/login must delegate to the shared _begin_oidc_login helper"
+    )
+
+    # The shared helper mints state/nonce/verifier, stores the envelope, and
+    # forwards PKCE S256 + nonce through build_login_url.
+    begin = src.split("async def _begin_oidc_login(")[1].split("\n@router")[0]
+    begin = begin.split("\nasync def ")[0]
+    for helper in (
+        "generate_state(",
+        "generate_nonce(",
+        "generate_pkce_verifier(",
+        "pkce_challenge_s256(",
+    ):
+        assert helper in begin, f"_begin_oidc_login must call {helper!r}"
+    assert "_store_auth_state(" in begin, (
+        "_begin_oidc_login must store the bound-state envelope"
+    )
+    assert "code_challenge" in begin
+    assert "code_challenge_method" in begin and "S256" in begin
+    assert "nonce" in begin
+
+
+def test_callback_pops_envelope_verifies_nonce_passes_verifier() -> None:
+    """``/callback`` must pop the envelope (single-use), pass the verifier to
+    the token exchange, verify the id_token nonce, and fail closed on any
+    missing/expired/mismatched piece."""
+    src = _gk_src("routes.py")
+    cb = src.split("async def callback(")[1]
+
+    # Looks the envelope up + deletes it (single-use) via the pop helper.
+    assert "_pop_auth_state(" in cb, (
+        "/callback must pop (get-then-delete) the bound-state envelope"
+    )
+
+    # Fails closed when the envelope is missing/expired.
+    assert "400" in cb or "401" in cb, (
+        "/callback must reject (400/401) when the envelope is missing/expired"
+    )
+
+    # The PKCE verifier from the envelope is passed to the token exchange.
+    assert "code_verifier" in cb, (
+        "/callback must pass the envelope's code_verifier to exchange_code"
+    )
+
+    # The id_token nonce is read and compared against the stored nonce.
+    assert "id_token" in cb, "/callback must read the id_token to verify the nonce"
+    assert "nonces_equal(" in cb, (
+        "/callback must verify the id_token nonce against the envelope nonce"
+    )
+
+
+# ── WS-2.5 review fixes (structural) ─────────────────────────────────────────
+
+
+def _routes_func(name: str) -> str:
+    """Return the body of the top-level ``async def``/``def`` *name* in
+    routes.py (up to the next top-level def/decorator)."""
+    src = _gk_src("routes.py")
+    marker = f"def {name}("
+    body = src.split(marker, 1)[1]
+    # Cut at the next top-level definition or router decorator.
+    cut = len(body)
+    for sep in ("\n@router", "\nasync def ", "\ndef "):
+        idx = body.find(sep)
+        if idx != -1:
+            cut = min(cut, idx)
+    return body[:cut]
+
+
+def test_shared_begin_login_helper_exists() -> None:
+    """F1: a single shared helper mints+stores the envelope and 302s to KC."""
+    src = _gk_src("routes.py")
+    assert "async def _begin_oidc_login(" in src, (
+        "a shared _begin_oidc_login helper must own the envelope-minting path"
+    )
+    begin = _routes_func("_begin_oidc_login")
+    # The helper actually mints + stores + sends the PKCE/nonce/state.
+    assert "_store_auth_state(" in begin
+    assert "generate_state(" in begin
+    assert "generate_nonce(" in begin
+    assert "generate_pkce_verifier(" in begin
+    assert "code_challenge" in begin
+
+
+def test_session_expiry_redirect_mints_envelope() -> None:
+    """F1 CRITICAL: the session-miss/expiry redirect must funnel through the
+    shared minting helper so /callback's envelope requirement is satisfied —
+    it must NOT build a bare login URL that bypasses _store_auth_state."""
+    src = _gk_src("routes.py")
+    redirect = _routes_func("_redirect_to_login")
+    assert "_begin_oidc_login(" in redirect, (
+        "_redirect_to_login must delegate to _begin_oidc_login (envelope mint)"
+    )
+    # It must be async (it awaits the minting helper) ...
+    assert "async def _redirect_to_login(" in src
+    # ... and every caller must await it.
+    assert "_redirect_to_login(request" in src
+    non_await = src.count(
+        "return _redirect_to_login(request, tenant, forwarded_host, tc=tc)"
+    )
+    assert non_await == 0, "all _redirect_to_login call sites must be awaited"
+    await_calls = src.count(
+        "await _redirect_to_login(request, tenant, forwarded_host, tc=tc)"
+    )
+    assert await_calls >= 5, "expected the auth/refresh call sites to be awaited"
+
+
+def test_no_bare_login_url_bypasses_envelope() -> None:
+    """No caller may build a login URL keyed on the raw return URI — that was
+    the pre-WS-2.5 bypass that skipped the bound-state envelope."""
+    src = _gk_src("routes.py")
+    assert "state=original_uri" not in src
+    assert "state=return_uri" not in src
+    assert "state=safe_redirect" not in src
+
+
+def test_begin_login_store_failure_returns_503() -> None:
+    """F5: a store/redis failure while persisting auth state must surface as a
+    503, never a leaked 500."""
+    begin = _routes_func("_begin_oidc_login")
+    assert "try:" in begin and "except" in begin, (
+        "_begin_oidc_login must guard _store_auth_state with try/except"
+    )
+    assert "503" in begin, "store failure must return 503"
+
+
+def test_pop_auth_state_is_atomic_single_use() -> None:
+    """F2 HIGH: the pop must use an atomic getdel, not get-then-delete."""
+    pop = _routes_func("_pop_auth_state")
+    assert "getdel(" in pop, "_pop_auth_state must use atomic getdel"
+    assert "redis.get(" not in pop or "getdel" in pop
+    assert "redis.delete(" not in pop, (
+        "_pop_auth_state must not do a separate delete (TOCTOU)"
+    )
+
+
+def test_callback_rejects_empty_code_verifier_and_nonce() -> None:
+    """F3 + F4: missing/empty code_verifier or nonce must fail closed — no
+    empty-string defaults reaching exchange_code / nonces_equal."""
+    src = _gk_src("routes.py")
+    assert 'envelope.get("code_verifier", "")' not in src
+    assert 'envelope.get("nonce", "")' not in src
+    assert "envelope_code_verifier(" in src
+    assert "envelope_nonce(" in src
+
+
+def test_corrupt_envelope_log_includes_state_and_exc() -> None:
+    """F7: the corrupt-envelope warning must include the state and exception."""
+    pop = _routes_func("_pop_auth_state")
+    assert "Corrupt auth-state envelope for state=%s" in pop
+    # state + exc are interpolated into the message.
+    tail = pop.split("Corrupt auth-state envelope", 1)[1]
+    assert "state" in tail and "exc" in tail
+
+
+def test_build_login_url_method_default_none() -> None:
+    """F6: code_challenge_method defaults to None and is only emitted when both
+    the challenge and the method are provided."""
+    src = _gk_src("helpers.py")
+    assert "code_challenge_method: str | None = None" in src
+    assert (
+        "if code_challenge is not None and code_challenge_method is not None:" in src
+    ), "build_login_url must require BOTH challenge and method before appending"
+
+
+def test_oidc_pkce_envelope_extractors_shipped() -> None:
+    """F3/F4: the fail-closed envelope extractors ship in the pure module."""
+    src = _gk_src("oidc_pkce.py")
+    assert "def envelope_code_verifier(" in src
+    assert "def envelope_nonce(" in src
+    # nonces_equal must reject empty/empty (not just None).
+    eq = src.split("def nonces_equal(", 1)[1].split("\ndef ", 1)[0]
+    assert "if not expected or not actual:" in eq, (
+        "nonces_equal must fail closed on empty strings, not only None"
+    )
+
+
+def test_redis_client_exposes_atomic_getdel() -> None:
+    """F2: the resilient client + in-memory fallback + pipelines expose an
+    atomic getdel so single-use semantics hold across all backends."""
+    src = _gk_src("redis.py")
+    # InMemoryStore + ResilientRedis both define async getdel.
+    assert src.count("async def getdel(") >= 2, (
+        "both InMemoryStore and ResilientRedis must define async getdel"
+    )
+    # Pipelines (sync command builders) expose getdel too.
+    assert "def getdel(self, key: str) -> InMemoryPipeline:" in src
+    assert "def getdel(self, key: str) -> ResilientPipeline:" in src

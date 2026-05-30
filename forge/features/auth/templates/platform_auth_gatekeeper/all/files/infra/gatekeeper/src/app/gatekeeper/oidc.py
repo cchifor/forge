@@ -31,6 +31,7 @@ async def exchange_code(
     issuer_url: str | None = None,
     client_id: str | None = None,
     client_secret: str | None = None,
+    code_verifier: str | None = None,
 ) -> dict[str, Any]:
     """
     Exchange an authorization *code* for tokens (access + refresh).
@@ -49,6 +50,11 @@ async def exchange_code(
         Per-tenant OIDC client ID.  Falls back to static config.
     client_secret:
         Per-tenant OIDC client secret.  Falls back to static config.
+    code_verifier:
+        PKCE ``code_verifier`` (RFC 7636) matching the ``code_challenge``
+        sent on the authorization request. When provided it is added to
+        the token POST so Keycloak can verify the proof-of-possession.
+        ``None`` preserves the pre-PKCE behaviour.
 
     Returns
     -------
@@ -66,6 +72,8 @@ async def exchange_code(
         "client_secret": client_secret or cfg.gatekeeper_client_secret,
         "redirect_uri": redirect_uri,
     }
+    if code_verifier:
+        payload["code_verifier"] = code_verifier
 
     logger.debug("Exchanging auth code for tenant=%s at %s", tenant, url)
 
