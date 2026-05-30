@@ -1881,8 +1881,8 @@
       "sha256": "97ba9d1a27a2c50a"
     },
     "services/api/src/app/rag/rag_search_tool.py": {
-      "size": 4176,
-      "sha256": "8ba6681402a5ee1d"
+      "size": 4955,
+      "sha256": "c7aac25c27f4b62f"
     },
     "services/api/src/app/rag/reranker.py": {
       "size": 3912,
