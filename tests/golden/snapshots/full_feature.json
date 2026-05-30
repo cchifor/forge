@@ -1169,8 +1169,8 @@
       "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 11994,
-      "sha256": "916284503fe569b2"
+      "size": 15261,
+      "sha256": "b408789d90301e17"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
