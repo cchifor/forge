@@ -211,3 +211,38 @@ class TestDockerfileEnvParity:
             "Rust runtime stage must COPY config/ so the prod profile exists "
             "at runtime (matches Python/Node)"
         )
+
+
+class TestRustComposeDevEnv:
+    """The Rust image pins ENV=production and main.rs now runs the fail-closed
+    auth guard at startup. So the local compose stacks MUST override ENV to a
+    dev value, or `docker compose up` loads production.yaml (auth.enabled=true)
+    and the guard aborts boot because compose sets no GATEKEEPER_ISSUER/
+    SERVICE_AUDIENCE. Node/Python compose set a dev env; Rust must match."""
+
+    _RUST_COMPOSE = (
+        _TEMPLATES / "rust-service-template" / "template" / "docker-compose.yaml.jinja"
+    )
+    _RUST_COMPOSE_FRAGMENT = (
+        _TEMPLATES
+        / "rust-service-template"
+        / "template"
+        / "docker-compose.fragment.yaml.jinja"
+    )
+
+    def test_standalone_compose_sets_dev_env(self):
+        src = self._RUST_COMPOSE.read_text(encoding="utf-8")
+        assert "ENV: development" in src, (
+            "rust docker-compose.yaml.jinja must set ENV: development so the "
+            "local stack does not inherit the image's ENV=production and trip "
+            "the fail-closed auth guard"
+        )
+
+    def test_fragment_compose_sets_dev_env(self):
+        src = self._RUST_COMPOSE_FRAGMENT.read_text(encoding="utf-8")
+        # The app service block (not just migrate) must run in development.
+        assert "ENV: development" in src, (
+            "rust docker-compose.fragment.yaml.jinja must set ENV: development "
+            "on the service so a multi-service deploy-up does not trip the "
+            "fail-closed auth guard"
+        )
