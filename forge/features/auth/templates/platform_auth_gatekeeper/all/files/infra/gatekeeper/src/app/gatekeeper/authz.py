@@ -57,4 +57,16 @@ def is_authorized(roles: list[str], required_role: str) -> bool:
     return required_role in roles
 
 
-__all__ = ["extract_realm_roles", "is_authorized"]
+def is_subset_of_roles(requested: list[str], allowed: list[str]) -> bool:
+    """Return ``True`` iff every role in *requested* is also in *allowed*.
+
+    Enforces role-delegation bounds: an admin minting an API key may only grant
+    roles they themselves hold. Fails closed and exactly mirrors
+    :func:`is_authorized`'s contract — exact, case-sensitive membership. An
+    empty *requested* list is a valid (no-op) delegation; an empty *allowed*
+    list authorizes only an empty request.
+    """
+    return all(role in allowed for role in requested)
+
+
+__all__ = ["extract_realm_roles", "is_authorized", "is_subset_of_roles"]
