@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 _NUMERIC_PREFIX = re.compile(r"^(\d+)_")
 _REV_LINE = re.compile(r'^(revision\s*(?::[^=\n]+)?=\s*)("[^"]*"|None)(.*)$', re.M)
@@ -49,8 +50,15 @@ def rechain_migrations(versions_dir: Path) -> list[Path]:
         (p for p in versions_dir.glob("*.py") if not p.name.startswith("__")),
         key=_sort_key,
     )
+
+    def _is_rewritable(text: str) -> bool:
+        # Require BOTH a revision and a down_revision we can rewrite. A file
+        # whose down_revision uses an unsupported shape (tuple merge, multiline)
+        # is skipped wholesale rather than half-rewritten (stale down_revision).
+        return bool(_REV_LINE.search(text) and _DOWN_LINE.search(text))
+
     migrations = [
-        p for p in candidates if _REV_LINE.search(p.read_text(encoding="utf-8"))
+        p for p in candidates if _is_rewritable(p.read_text(encoding="utf-8"))
     ]
     modified: list[Path] = []
     prev: str | None = None
@@ -65,3 +73,29 @@ def rechain_migrations(versions_dir: Path) -> list[Path]:
             modified.append(path)
         prev = new_rev
     return modified
+
+
+def rechain_backend_migrations(config: Any, project_root: Path, collector: Any) -> None:
+    """Rechain every Python backend's alembic migrations and refresh provenance.
+
+    Shared by ``forge.generator`` (fresh ``forge new``) and the ``forge --update``
+    path: both write the fragments' hard-coded (colliding/gapped) revisions, so
+    both must renumber afterwards. The provenance SHA is refreshed for each
+    rewritten file so ``forge.toml`` matches on disk — without this, the next
+    ``--update`` would see "fragment changed, user didn't" and overwrite the
+    rechained file with the broken original.
+    """
+    from dataclasses import replace  # noqa: PLC0415
+
+    from forge.config import BackendLanguage  # noqa: PLC0415
+    from forge.sync.provenance import sha256_of  # noqa: PLC0415
+
+    for bc in config.backends:
+        if bc.language is not BackendLanguage.PYTHON:
+            continue
+        versions = project_root / "services" / bc.name / "alembic" / "versions"
+        for path in rechain_migrations(versions):
+            key = path.relative_to(project_root).as_posix()
+            rec = collector.records.get(key)
+            if rec is not None:
+                collector.records[key] = replace(rec, sha256=sha256_of(path))
