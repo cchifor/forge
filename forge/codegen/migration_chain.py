@@ -57,13 +57,29 @@ def rechain_migrations(versions_dir: Path) -> list[Path]:
         # is skipped wholesale rather than half-rewritten (stale down_revision).
         return bool(_REV_LINE.search(text) and _DOWN_LINE.search(text))
 
-    migrations = [
-        p for p in candidates if _is_rewritable(p.read_text(encoding="utf-8"))
-    ]
+    migrations: list[Path] = []
+    reserved: set[str] = set()
+    for p in candidates:
+        text = p.read_text(encoding="utf-8")
+        if _is_rewritable(text):
+            migrations.append(p)
+        else:
+            # Skipped file keeps its current revision id. Reserve it so the
+            # sequential renumber below never lands on the same value, which
+            # would make alembic reject the directory (duplicate revision).
+            m = _REV_LINE.search(text)
+            if m and m.group(2) != "None":
+                reserved.add(m.group(2).strip('"'))
+
     modified: list[Path] = []
     prev: str | None = None
-    for i, path in enumerate(migrations):
-        new_rev = f"{i + 1:04d}"
+    counter = 0
+    for path in migrations:
+        counter += 1
+        new_rev = f"{counter:04d}"
+        while new_rev in reserved:
+            counter += 1
+            new_rev = f"{counter:04d}"
         text = path.read_text(encoding="utf-8")
         new_text = _REV_LINE.sub(rf'\g<1>"{new_rev}"\g<3>', text, count=1)
         down_value = f'"{prev}"' if prev is not None else "None"
