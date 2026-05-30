@@ -120,3 +120,14 @@ def test_mcp_router_requires_authentication() -> None:
     src = router.read_text(encoding="utf-8")
     assert "from weld.fastapi.security.auth import get_current_user" in src
     assert "dependencies=[Depends(get_current_user)]" in src
+
+
+def test_mcp_via_agent_tool_calling_with_auth_none_is_rejected() -> None:
+    """agent.mode=tool_calling ALSO enables mcp_server — it must require auth
+    too (the guard checks the resolved fragment set, not just platform.mcp)."""
+    with pytest.raises(OptionsError):
+        resolve(_py_mcp_project({"agent.mode": "tool_calling", "auth.mode": "none"}))
+
+
+def test_mcp_via_agent_tool_calling_with_auth_generate_is_allowed() -> None:
+    resolve(_py_mcp_project({"agent.mode": "tool_calling", "auth.mode": "generate"}))

@@ -64,7 +64,8 @@ class McpInvokeResponse(BaseModel):
 # invocation (subprocess execution), approval-token minting, and an audit
 # log of user identities. ``get_current_user`` raises 401 when no valid
 # bearer token is present (``oauth2_scheme`` alone is auto_error=False and
-# would NOT gate). platform.mcp requires auth.mode=generate (enforced in the
+# would NOT gate). Enabling the MCP server (platform.mcp OR
+# agent.mode=tool_calling) requires auth.mode=generate (enforced in the
 # resolver), so the auth stack is always present here.
 router = APIRouter(
     prefix="/mcp", tags=["mcp"], dependencies=[Depends(get_current_user)]
