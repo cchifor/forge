@@ -44,14 +44,29 @@ async fn main() {
     // FORGE:TRACING_LAYERS
     registry.init();
 
+    // Load + validate config at startup so the fail-closed auth guard
+    // (config::AppConfig::validate) actually runs: it rejects a production-like
+    // env with auth enabled but GATEKEEPER_ISSUER/SERVICE_AUDIENCE unset.
+    // Fail closed — exit non-zero rather than boot a misconfigured service.
+    let config = match config::AppConfig::load() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            tracing::error!("configuration error: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(env = %config.app.env, "configuration validated");
+
     // FORGE:STARTUP_INIT
 
     let pool = db::create_pool().await;
     let app = app::create_app(pool);
+    // PORT env stays authoritative for the listen port (container/compose set
+    // it); the validated config supplies the fallback.
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(5000);
+        .unwrap_or(config.server.port);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Server running on {}", addr);
 

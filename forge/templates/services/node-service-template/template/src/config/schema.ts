@@ -54,61 +54,13 @@ export const AppInfoSchema = z.object({
 		.default("development"),
 });
 
-/**
- * Environments that are EXEMPT from the production fail-closed auth check.
- * Mirrors the Python ``SecurityConfig._reject_default_secret_in_prod``
- * exemption set so all three backends behave identically (WS-2.1 parity).
- */
-const AUTH_GUARD_EXEMPT_ENVS = new Set([
-	"development",
-	"dev",
-	"local",
-	"test",
-	"testing",
-]);
-
-/**
- * Fail closed in production-like environments when auth is enabled.
- *
- * The platform auth middleware reads the OIDC issuer/audience from the
- * ``GATEKEEPER_ISSUER`` / ``SERVICE_AUDIENCE`` env vars (NOT the loaded
- * config), and throws at bootstrap if they are missing. This guard surfaces
- * the same misconfiguration earlier — at config load — with a clear message,
- * before the server starts wiring middleware.
- *
- * Like the Python validator, the effective env is resolved from ``ENV`` /
- * ``NODE_ENV`` and defaults to ``production`` when unset (fail closed). Only
- * the explicit dev/test names above are exempt.
- */
-export const AppConfigSchema = z
-	.object({
-		app: AppInfoSchema.default({}),
-		server: ServerConfigSchema.default({}),
-		db: DbConfigSchema,
-		logging: LoggingConfigSchema.default({}),
-		security: SecurityConfigSchema.default({}),
-	})
-	.superRefine((cfg, ctx) => {
-		const env = (process.env.ENV ?? process.env.NODE_ENV ?? "production")
-			.trim()
-			.toLowerCase();
-		if (AUTH_GUARD_EXEMPT_ENVS.has(env)) return;
-		if (!cfg.security.auth.enabled) return;
-
-		for (const varName of ["GATEKEEPER_ISSUER", "SERVICE_AUDIENCE"]) {
-			const value = (process.env[varName] ?? "").trim();
-			if (!value) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					path: ["security", "auth"],
-					message:
-						`${varName} is unset or blank but security.auth.enabled is true — ` +
-						"set the real Gatekeeper issuer/audience before running in " +
-						"production (the auth middleware reads these env vars).",
-				});
-			}
-		}
-	});
+export const AppConfigSchema = z.object({
+	app: AppInfoSchema.default({}),
+	server: ServerConfigSchema.default({}),
+	db: DbConfigSchema,
+	logging: LoggingConfigSchema.default({}),
+	security: SecurityConfigSchema.default({}),
+});
 
 export type CorsConfig = z.infer<typeof CorsConfigSchema>;
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
