@@ -23,7 +23,6 @@ from pathlib import Path
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 # The 25 modules under src/app/gatekeeper/ that make Gatekeeper a token
 # authority rather than just a ForwardAuth proxy. Phase 10 documents which
 # ones are load-bearing for which subsystems.
