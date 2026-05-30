@@ -1001,7 +1001,7 @@
       "sha256": "05f1129d97d2fc8c"
     },
     "forge.toml": {
-      "size": 133034,
+      "size": 133280,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1169,16 +1169,16 @@
       "sha256": "d68cc56057747cfd"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 11501,
-      "sha256": "d2194d49c80ca634"
+      "size": 11994,
+      "sha256": "916284503fe569b2"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
       "sha256": "e633845c8e719bca"
     },
     "infra/gatekeeper/src/app/gatekeeper/helpers.py": {
-      "size": 9935,
-      "sha256": "fe56bb0856916a61"
+      "size": 11176,
+      "sha256": "550b68fe9ec298bd"
     },
     "infra/gatekeeper/src/app/gatekeeper/http_client.py": {
       "size": 4803,
@@ -1209,20 +1209,24 @@
       "sha256": "7b3deae1cb54bd9e"
     },
     "infra/gatekeeper/src/app/gatekeeper/oidc.py": {
-      "size": 3405,
-      "sha256": "ef154def12b37f3c"
+      "size": 3801,
+      "sha256": "c90fe005c73617ce"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/oidc_pkce.py": {
+      "size": 4901,
+      "sha256": "7600958719f667d7"
     },
     "infra/gatekeeper/src/app/gatekeeper/ratelimit.py": {
       "size": 2766,
       "sha256": "27019929bb1db31d"
     },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
-      "size": 23675,
-      "sha256": "0a48e5b3cdaf5622"
+      "size": 24989,
+      "sha256": "bebbec570db9b36e"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 30812,
-      "sha256": "fe28a13e76aacde2"
+      "size": 38369,
+      "sha256": "5db8a8a81e5eacd6"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,

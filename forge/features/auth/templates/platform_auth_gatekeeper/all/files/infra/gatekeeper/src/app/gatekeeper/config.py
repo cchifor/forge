@@ -64,6 +64,14 @@ class GatekeeperSettings(BaseSettings):
     # Tenant config cache (dynamic resolution via TMS)
     tenant_config_cache_ttl: int = 60  # seconds
 
+    # ── OIDC PKCE + nonce + bound state (WS-2.5) ──────────────────────
+    # Lifetime of the server-side Authorization-Code-flow envelope
+    # (random ``state`` → {nonce, code_verifier, login_uri}). It must be
+    # long enough for a human to complete the Keycloak login but short
+    # enough to bound replay of a leaked ``state``. Mirrors the typical
+    # OAuth redirect timeout.
+    oidc_state_envelope_ttl_seconds: int = 300  # 5 min
+
     # Auto-assignment of tenant_id for self-registered users.
     # The Keycloak built-in registration form does not collect tenant_id, so
     # newly-registered users would otherwise produce tokens missing the

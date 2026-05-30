@@ -72,6 +72,9 @@ def build_login_url(
     *,
     issuer_url: str | None = None,
     client_id: str | None = None,
+    nonce: str | None = None,
+    code_challenge: str | None = None,
+    code_challenge_method: str | None = None,
 ) -> str:
     """
     Construct the Keycloak Authorization Endpoint URL for the given tenant.
@@ -83,26 +86,45 @@ def build_login_url(
     redirect_uri:
         The ``/callback`` URL the user should be sent back to.
     state:
-        Opaque value forwarded through the OIDC flow — we use the
-        originally-requested URI so we can redirect back after login.
+        Opaque, high-entropy value forwarded through the OIDC flow. It is
+        the server-side lookup key for the bound-state envelope (CSRF
+        defense); the originally-requested return URI lives inside that
+        envelope, not here.
     issuer_url:
         Per-tenant issuer URL from TMS.  Falls back to static config.
     client_id:
         Per-tenant OIDC client ID.  Falls back to static config.
+    nonce:
+        OIDC ``nonce`` (replay binding). Echoed back inside the
+        ``id_token`` and verified on ``/callback``. Omitted from the URL
+        when ``None`` (keeps callers that have not opted in unchanged).
+    code_challenge:
+        PKCE ``code_challenge`` derived from a per-flow ``code_verifier``.
+        Sent with ``code_challenge_method`` so the IdP binds the issued
+        code to the verifier. Omitted when ``None``.
+    code_challenge_method:
+        PKCE transform — callers pass ``"S256"``. Defaults to ``None`` and is
+        only emitted when **both** ``code_challenge`` and this method are
+        provided (so a challenge is never sent without a declared method, and
+        a method is never sent without a challenge).
     """
     cfg = get_settings()
     base_url = issuer_url or f"{cfg.keycloak_base_url}/{tenant}"
     cid = client_id or cfg.gatekeeper_client_id
     base = f"{base_url}/protocol/openid-connect/auth"
-    params = urllib.parse.urlencode(
-        {
-            "response_type": "code",
-            "client_id": cid,
-            "redirect_uri": redirect_uri,
-            "scope": "openid email profile",
-            "state": state,
-        }
-    )
+    params_dict: dict[str, str] = {
+        "response_type": "code",
+        "client_id": cid,
+        "redirect_uri": redirect_uri,
+        "scope": "openid email profile",
+        "state": state,
+    }
+    if nonce is not None:
+        params_dict["nonce"] = nonce
+    if code_challenge is not None and code_challenge_method is not None:
+        params_dict["code_challenge"] = code_challenge
+        params_dict["code_challenge_method"] = code_challenge_method
+    params = urllib.parse.urlencode(params_dict)
     return f"{base}?{params}"
 
 
