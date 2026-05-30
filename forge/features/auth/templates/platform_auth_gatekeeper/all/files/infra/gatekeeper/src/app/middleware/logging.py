@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.middleware.log_redaction import redact_query_params
+
 access_logger = logging.getLogger("api.access")
 
 
@@ -89,7 +91,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "source": source,
             "method": request.method,
             "path": request.url.path,
-            "query": dict(request.query_params),
+            # Redact OAuth secrets (OIDC callback code/state, refresh_token,
+            # ...) out of the query before they reach the access log.
+            "query": redact_query_params(dict(request.query_params)),
             "status": status_code,
             "duration_ms": round(duration, 2),
         }
