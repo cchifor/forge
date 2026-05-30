@@ -271,6 +271,50 @@ impl AppConfig {
         builder = builder.set_override("app.env", env.clone())?;
 
         let built = builder.build()?;
-        built.try_deserialize::<AppConfig>()
+        let cfg = built.try_deserialize::<AppConfig>()?;
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    /// Fail closed in production-like environments when auth is enabled.
+    ///
+    /// The platform auth middleware reads the OIDC issuer/audience from the
+    /// `GATEKEEPER_ISSUER` / `SERVICE_AUDIENCE` env vars (NOT this loaded
+    /// config), and returns 500 at request time if they are missing. This
+    /// guard surfaces the same misconfiguration earlier — at config load —
+    /// with a clear error, before the server starts.
+    ///
+    /// Mirrors the Python `SecurityConfig._reject_default_secret_in_prod`
+    /// scope: the effective env is resolved from `ENV` / `APP_ENV` and
+    /// defaults to `production` when unset (fail closed); only the explicit
+    /// dev/test names are exempt (WS-2.1 parity).
+    fn validate(&self) -> Result<(), ConfigError> {
+        let env = std::env::var("ENV")
+            .ok()
+            .or_else(|| std::env::var("APP_ENV").ok())
+            .unwrap_or_else(|| "production".to_string())
+            .trim()
+            .to_lowercase();
+
+        const EXEMPT_ENVS: [&str; 5] = ["development", "dev", "local", "test", "testing"];
+        if EXEMPT_ENVS.contains(&env.as_str()) {
+            return Ok(());
+        }
+        if !self.security.auth.enabled {
+            return Ok(());
+        }
+
+        for var_name in ["GATEKEEPER_ISSUER", "SERVICE_AUDIENCE"] {
+            let value = std::env::var(var_name).unwrap_or_default();
+            if value.trim().is_empty() {
+                return Err(ConfigError::Message(format!(
+                    "{var_name} is unset or blank but security.auth.enabled is true \
+                     — set the real Gatekeeper issuer/audience before running in \
+                     production (the auth middleware reads these env vars)."
+                )));
+            }
+        }
+
+        Ok(())
     }
 }

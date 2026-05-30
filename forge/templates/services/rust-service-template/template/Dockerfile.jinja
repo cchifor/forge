@@ -70,6 +70,13 @@ RUN groupadd --gid 10001 appuser \
 USER appuser
 
 ENV PORT={{ server_port }}
+# Default the runtime environment to production so the container loads the
+# production config profile and the fail-closed auth guard applies (parity with
+# the Python and Node service images, which set ENV/NODE_ENV=production). The
+# config loader treats an UNSET env as the "development" profile, which ships
+# auth disabled -- a containerized service must not silently fail open. Override
+# at deploy time (e.g. -e ENV=staging) when appropriate.
+ENV ENV=production
 EXPOSE {{ server_port }}
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

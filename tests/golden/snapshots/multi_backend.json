@@ -605,8 +605,8 @@
       "sha256": "464568672fa5bba4"
     },
     "services/api-node/src/config/schema.ts": {
-      "size": 2292,
-      "sha256": "7b2b51e61547a7c1"
+      "size": 3962,
+      "sha256": "683f8eb1145e45db"
     },
     "services/api-node/src/data/repositories/base-repository.ts": {
       "size": 1480,
