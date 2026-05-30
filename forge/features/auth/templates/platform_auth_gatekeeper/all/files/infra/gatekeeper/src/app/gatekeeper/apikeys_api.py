@@ -2,18 +2,23 @@
 """
 REST API for API key lifecycle management (create, list, revoke).
 
-These endpoints are **protected by the Gatekeeper itself** — the caller
-must already be authenticated (human or machine) and carry admin-level
-roles.  Tenant identity is read from the ``X-Gatekeeper-Tenant`` header
-injected by Traefik's ForwardAuth middleware.
+Tenant + user identity is resolved from the **verified server-side session**
+(the ``tenant_session_id`` cookie -> Redis), never from a client-supplied
+``X-Gatekeeper-*`` request header. The Gatekeeper is reachable directly
+(compose maps ``5000:5000``) and nothing strips inbound identity headers, so a
+raw header is spoofable -- trusting it would let any caller mint / list /
+revoke API keys for an arbitrary tenant. This mirrors the rest of the platform,
+where the legacy plain-header trust path was removed in favour of verified
+credentials.
 """
 
 from __future__ import annotations
 
 import logging
 import secrets
+import time
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.gatekeeper.apikeys import (
@@ -23,6 +28,7 @@ from app.gatekeeper.apikeys import (
     revoke_api_key,
     store_api_key,
 )
+from app.gatekeeper.config import get_settings
 from app.gatekeeper.metrics import APIKEY_OPERATIONS
 
 logger = logging.getLogger(__name__)
@@ -77,18 +83,24 @@ class RevokeKeyResponse(BaseModel):
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _require_tenant(
-    x_gatekeeper_tenant: str | None,
-) -> str:
-    """
-    Extract the tenant from the Gatekeeper header.
+async def _authenticated_identity(request: Request) -> tuple[str, str]:
+    """Resolve ``(tenant_id, user_id)`` from the verified server-side session.
 
-    In production, Traefik always injects ``X-Gatekeeper-Tenant`` on
-    requests that have already passed ``/auth``.  If missing, we reject.
+    The tenant is read from the Redis-backed session keyed by the
+    ``tenant_session_id`` cookie -- never from a client-supplied
+    ``X-Gatekeeper-*`` header, which is spoofable on the directly-exposed
+    Gatekeeper port. A request without a valid, unexpired session is rejected
+    with 401.
     """
-    if not x_gatekeeper_tenant:
-        raise HTTPException(status_code=401, detail="Missing tenant context")
-    return x_gatekeeper_tenant
+    cfg = get_settings()
+    session_id = request.cookies.get(cfg.session_id_cookie_name)
+    server_session = getattr(request.app.state, "server_session", None)
+    if not session_id or server_session is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    session = await server_session.check_validity(session_id, now=int(time.time()))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return session.tenant_id, (session.sub or "unknown")
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
@@ -97,12 +109,10 @@ def _require_tenant(
 @router.post("", response_model=CreateKeyResponse, status_code=201)
 async def create_key(
     body: CreateKeyRequest,
-    x_gatekeeper_tenant: str | None = Header(None),
-    x_gatekeeper_user_id: str | None = Header(None),
+    request: Request,
 ) -> CreateKeyResponse:
     """Generate a new API key for the authenticated tenant."""
-    tenant = _require_tenant(x_gatekeeper_tenant)
-    owner = x_gatekeeper_user_id or "unknown"
+    tenant, owner = await _authenticated_identity(request)
 
     plain_key, key_hash = generate_api_key(tenant)
     key_id = secrets.token_hex(8)
@@ -137,10 +147,10 @@ async def create_key(
 
 @router.get("", response_model=ListKeysResponse)
 async def list_keys(
-    x_gatekeeper_tenant: str | None = Header(None),
+    request: Request,
 ) -> ListKeysResponse:
     """List all active API keys for the authenticated tenant."""
-    tenant = _require_tenant(x_gatekeeper_tenant)
+    tenant, _owner = await _authenticated_identity(request)
     records = await list_api_keys(tenant)
     APIKEY_OPERATIONS.labels(tenant_id=tenant, operation="listed").inc()
     return ListKeysResponse(keys=[KeySummary(**r) for r in records])
@@ -149,7 +159,7 @@ async def list_keys(
 @router.delete("/{key_hash}")
 async def revoke_key(
     key_hash: str,
-    x_gatekeeper_tenant: str | None = Header(None),
+    request: Request,
 ) -> RevokeKeyResponse:
     """
     Revoke (delete) an API key by its hash.
@@ -157,7 +167,7 @@ async def revoke_key(
     Takes effect immediately — the next ``/auth`` call with this key
     will be rejected.
     """
-    tenant = _require_tenant(x_gatekeeper_tenant)
+    tenant, _owner = await _authenticated_identity(request)
     deleted = await revoke_api_key(key_hash, tenant)
 
     if deleted:
