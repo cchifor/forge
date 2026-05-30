@@ -4,9 +4,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from forge.config import BackendLanguage
+import pytest
+
+from forge.capability_resolver import resolve
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.options import OPTION_REGISTRY
+
+
+def _py_mcp_project(options: dict[str, object]) -> ProjectConfig:
+    return ProjectConfig(
+        project_name="P",
+        backends=[
+            BackendConfig(
+                name="api", project_name="P", language=BackendLanguage.PYTHON, server_port=5000
+            )
+        ],
+        frontend=None,
+        options=options,
+    )
 
 
 def test_mcp_template_options_registered() -> None:
@@ -72,3 +89,17 @@ def test_mcp_template_server_inject_mounts_on_main_app() -> None:
     text = inject.read_text(encoding="utf-8")
     assert "src/app/main.py" in text
     assert 'app.mount("/mcp"' in text
+
+
+def test_mcp_with_auth_none_is_rejected() -> None:
+    """The MCP server exposes tool invocation; auth.mode=none + mcp must error."""
+    with pytest.raises(OptionsError):
+        resolve(_py_mcp_project({"platform.mcp": True, "auth.mode": "none"}))
+
+
+def test_mcp_with_auth_generate_is_allowed() -> None:
+    resolve(_py_mcp_project({"platform.mcp": True, "auth.mode": "generate"}))
+
+
+def test_auth_none_without_mcp_is_allowed() -> None:
+    resolve(_py_mcp_project({"auth.mode": "none"}))
