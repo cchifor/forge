@@ -89,6 +89,35 @@ def test_gatekeeper_keygen_script_shipped() -> None:
     assert keygen.is_file(), f"scripts/keygen.py missing — gatekeeper-keygen will fail: {keygen}"
 
 
+def test_apikeys_endpoints_derive_tenant_from_verified_session() -> None:
+    """The ``/api/v1/api-keys`` endpoints must derive the tenant from the
+    verified server-side session (cookie -> Redis), NOT a client-supplied
+    ``X-Gatekeeper-Tenant`` request header.
+
+    The Gatekeeper is reachable directly (``compose.yaml`` maps ``5000:5000``)
+    and nothing strips inbound ``X-Gatekeeper-*`` headers, so a raw header is
+    trivially spoofable: a request carrying ``X-Gatekeeper-Tenant: victim``
+    straight to ``:5000/api/v1/api-keys`` would mint / list / revoke keys for
+    an arbitrary tenant. Tenant identity must come from a verified credential,
+    matching how downstream
+    services consume the verified bearer JWT (the legacy plain-header trust
+    path is gone everywhere else)."""
+    src = (
+        _gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py"
+    ).read_text(encoding="utf-8")
+
+    # Positive: tenant comes from the verified session store.
+    assert "server_session" in src and "check_validity" in src, (
+        "api-keys must resolve tenant from the verified session store "
+        "(request.app.state.server_session.check_validity)"
+    )
+    # Negative: no endpoint accepts the spoofable tenant header as a parameter.
+    assert "x_gatekeeper_tenant" not in src, (
+        "api-keys must not read tenant from the client-supplied "
+        "X-Gatekeeper-Tenant header (spoofable on the directly-exposed :5000)"
+    )
+
+
 def test_gatekeeper_dockerfile_shipped() -> None:
     dockerfile = _gatekeeper_root() / "Dockerfile"
     assert dockerfile.is_file()
