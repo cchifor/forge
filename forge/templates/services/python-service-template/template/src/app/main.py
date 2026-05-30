@@ -40,7 +40,7 @@ def _configure_middleware(app: FastAPI, settings: Settings) -> None:
     app.add_middleware(RequestLoggingMiddleware, skip_paths=excluded_paths)
 
     if settings.audit.enabled:
-        app.add_middleware(AuditMiddleware)
+        app.add_middleware(AuditMiddleware, excluded_paths=set(excluded_paths))
 
     # FORGE:MIDDLEWARE_REGISTRATION
 
