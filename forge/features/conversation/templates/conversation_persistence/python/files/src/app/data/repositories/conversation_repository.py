@@ -123,6 +123,24 @@ class ConversationRepository(TenantScopedRepository):
         error: str | None = None,
         duration_ms: float | None = None,
     ) -> None:
+        # Ownership check: the message's parent conversation must belong to this
+        # tenant + user (IDOR — record a tool call against another user's thread).
+        owner = await self.session.execute(
+            select(MessageModel.id)
+            .join(
+                ConversationModel,
+                MessageModel.conversation_id == ConversationModel.id,
+            )
+            .where(
+                MessageModel.id == message_id,
+                ConversationModel.customer_id == self.customer_id,
+                ConversationModel.user_id == self.user_id,
+            )
+        )
+        if owner.scalar_one_or_none() is None:
+            raise PermissionDeniedError(
+                "Message does not belong to the current user."
+            )
         tc = ToolCallModel(
             message_id=message_id,
             customer_id=self.customer_id,
