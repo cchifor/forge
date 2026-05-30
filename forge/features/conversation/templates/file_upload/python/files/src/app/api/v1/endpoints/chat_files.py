@@ -1,9 +1,9 @@
 """Chat file upload / download endpoints.
 
-Not auth-gated by default (matches /tools and /ws/agent). Wrap with your
-project's auth dependency before production. Files land under ``UPLOAD_DIR``
-(default ``./uploads``), namespaced by the ``customer_id`` form field —
-supply it from your auth layer to keep tenants isolated.
+Auth-gated: the router below requires an authenticated user
+(``Depends(get_current_user)``). Files land under ``UPLOAD_DIR`` (default
+``./uploads``), namespaced by the ``customer_id`` form field — a follow-up
+should derive that from the verified identity rather than trust the caller.
 
 Persistence of ``ChatFile`` DB rows is left to the caller: the upload
 response includes everything needed (``id``, ``storage_path``, ``size_bytes``,
