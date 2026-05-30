@@ -58,3 +58,15 @@ def test_otel_metric_exporter_passes_endpoint_bare_for_grpc() -> None:
     assert "/v1/metrics" not in src, (
         "gRPC OTLP metric exporter must not append /v1/metrics to the endpoint"
     )
+
+
+def test_metrics_middleware_requires_otel_fragment() -> None:
+    """The MeterProvider lives in observability_otel's configure_otel. The
+    metrics middleware only records into the meter, so selecting it without
+    observability_otel would install no provider and silently export nothing.
+    Enforce the dependency so the resolver always pulls otel in."""
+    frag = FRAGMENT_REGISTRY["observability_metrics_middleware"]
+    assert "observability_otel" in frag.depends_on, (
+        "observability_metrics_middleware must depend on observability_otel so "
+        "a MeterProvider is always installed when metrics are enabled"
+    )
