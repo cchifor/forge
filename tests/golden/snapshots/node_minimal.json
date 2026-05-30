@@ -477,12 +477,12 @@
       "sha256": "676b8c3ebb724100"
     },
     "services/api/src/config/loader.ts": {
-      "size": 3290,
-      "sha256": "464568672fa5bba4"
+      "size": 5270,
+      "sha256": "aa221de6e653bb96"
     },
     "services/api/src/config/schema.ts": {
-      "size": 3962,
-      "sha256": "683f8eb1145e45db"
+      "size": 2292,
+      "sha256": "7b2b51e61547a7c1"
     },
     "services/api/src/data/repositories/base-repository.ts": {
       "size": 1480,

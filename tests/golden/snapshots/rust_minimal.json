@@ -417,8 +417,8 @@
       "sha256": "a5ad4f2c2ac0626e"
     },
     "services/api/Dockerfile": {
-      "size": 3581,
-      "sha256": "e64ffd69560cd590"
+      "size": 3975,
+      "sha256": "f2ec3f88c4dcddb8"
     },
     "services/api/README.md": {
       "size": 1281,
@@ -465,8 +465,8 @@
       "sha256": "84a5285ef7f1685f"
     },
     "services/api/src/config.rs": {
-      "size": 8623,
-      "sha256": "99e93bffea1ad425"
+      "size": 9586,
+      "sha256": "927b2d7610ee00b7"
     },
     "services/api/src/data/mod.rs": {
       "size": 22,
@@ -509,8 +509,8 @@
       "sha256": "4007d90545bcff2f"
     },
     "services/api/src/main.rs": {
-      "size": 2217,
-      "sha256": "3f60189fd03340ef"
+      "size": 2947,
+      "sha256": "4e1636e2e682b20d"
     },
     "services/api/src/middleware/auth.rs": {
       "size": 8936,

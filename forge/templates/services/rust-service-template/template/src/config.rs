@@ -109,6 +109,7 @@ impl Default for ServerConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DbConfig {
+    #[serde(default = "default_db_url")]
     pub url: String,
     #[serde(default = "default_pool_min")]
     pub pool_min: u32,
@@ -116,6 +117,15 @@ pub struct DbConfig {
     pub pool_max: u32,
     #[serde(default = "default_statement_timeout_ms")]
     pub statement_timeout_ms: u64,
+}
+
+fn default_db_url() -> String {
+    // The runtime image copies config/ (which sets db.url), but give the field
+    // a fallback so AppConfig::load() — called at startup to run the fail-closed
+    // auth guard — never fails to deserialize if config/ is somehow absent.
+    // Mirrors the DATABASE_URL the pool actually connects with.
+    std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://localhost:5432/app".to_string())
 }
 
 fn default_pool_min() -> u32 {
@@ -272,7 +282,18 @@ impl AppConfig {
 
         let built = builder.build()?;
         let cfg = built.try_deserialize::<AppConfig>()?;
-        cfg.validate()?;
+        // Resolve the effective env the SAME way the profile selection did
+        // (honors LoadOptions.env), but the guard treats an UNSET env as
+        // production (fail closed) rather than the development default the
+        // profile loader uses. Passing it in keeps validate() consistent with
+        // the profile that was actually loaded instead of re-reading globals.
+        let guard_env = options
+            .env
+            .clone()
+            .or_else(|| std::env::var("ENV").ok())
+            .or_else(|| std::env::var("APP_ENV").ok())
+            .unwrap_or_else(|| "production".to_string());
+        cfg.validate(&guard_env)?;
         Ok(cfg)
     }
 
@@ -285,16 +306,11 @@ impl AppConfig {
     /// with a clear error, before the server starts.
     ///
     /// Mirrors the Python `SecurityConfig._reject_default_secret_in_prod`
-    /// scope: the effective env is resolved from `ENV` / `APP_ENV` and
-    /// defaults to `production` when unset (fail closed); only the explicit
+    /// scope: `env` is the effective environment resolved by the loader
+    /// (defaulting to `production` when unset, fail closed); only the explicit
     /// dev/test names are exempt (WS-2.1 parity).
-    fn validate(&self) -> Result<(), ConfigError> {
-        let env = std::env::var("ENV")
-            .ok()
-            .or_else(|| std::env::var("APP_ENV").ok())
-            .unwrap_or_else(|| "production".to_string())
-            .trim()
-            .to_lowercase();
+    fn validate(&self, env: &str) -> Result<(), ConfigError> {
+        let env = env.trim().to_lowercase();
 
         const EXEMPT_ENVS: [&str; 5] = ["development", "dev", "local", "test", "testing"];
         if EXEMPT_ENVS.contains(&env.as_str()) {
