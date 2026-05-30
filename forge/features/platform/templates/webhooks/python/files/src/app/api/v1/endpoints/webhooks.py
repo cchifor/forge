@@ -1,8 +1,9 @@
 """Webhook CRUD + test-fire endpoints.
 
-Not auth-gated by default. Wrap the router with your auth dependency
-before production exposure — webhook URLs are credentials (they receive
-your event stream).
+Auth-gated: the router below requires an authenticated user
+(``Depends(get_current_user)``). Webhook URLs are credentials (they receive
+your event stream), and test-fire makes an outbound request to a
+caller-controlled URL — a follow-up should restrict that target (SSRF).
 """
 
 from __future__ import annotations

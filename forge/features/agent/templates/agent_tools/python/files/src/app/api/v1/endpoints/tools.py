@@ -1,9 +1,8 @@
 """List / inspect / invoke registered agent tools.
 
-Not auth-gated by default. Lock this down before exposing in production —
-a leaking /tools endpoint tells attackers exactly which integrations the
-service has. Wrap the routes with your auth dependency once you understand
-the exposure surface.
+Auth-gated: the router below requires an authenticated user
+(``Depends(get_current_user)``). A leaking /tools endpoint tells attackers
+which integrations the service has, and invocation runs registered tools.
 """
 
 from __future__ import annotations
