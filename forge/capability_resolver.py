@@ -356,23 +356,25 @@ def _check_value_backend_support(
         )
 
 
-def _check_security_constraints(config: ProjectConfig) -> None:
+def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -> None:
     """Cross-option safety rules enforced at config time.
 
     The generated MCP server exposes tool invocation + an audit log; shipping
     it with the auth stack disabled would leave those endpoints open behind no
-    identity at all. ``auth.mode`` defaults to ``"generate"``, so this only
-    fires when a user explicitly opts out of auth while enabling MCP.
+    identity at all. Checked against the RESOLVED fragment set so it covers
+    every path that pulls in ``mcp_server`` — both ``platform.mcp=true`` and
+    ``agent.mode=tool_calling``. ``auth.mode`` defaults to ``"generate"``, so
+    this only fires when a user explicitly opts out of auth.
     """
-    opts = config.options
-    if opts.get("platform.mcp") is True and opts.get("auth.mode") == "none":
+    if "mcp_server" in fragment_set and config.options.get("auth.mode") == "none":
         raise OptionsError(
-            "platform.mcp=true requires authentication, but auth.mode=none. "
-            "The generated MCP server exposes tool invocation and an audit log; "
-            "generating it without the auth stack would leave those endpoints "
-            "open. Set auth.mode=generate, or disable platform.mcp.",
+            "Enabling the MCP server (platform.mcp=true or "
+            "agent.mode=tool_calling) requires authentication, but "
+            "auth.mode=none. The MCP server exposes tool invocation and an "
+            "audit log; generating it without the auth stack would leave those "
+            "endpoints open. Set auth.mode=generate, or disable MCP.",
             code=OPTIONS_INVALID_VALUE,
-            context={"platform.mcp": True, "auth.mode": "none"},
+            context={"fragment": "mcp_server", "auth.mode": "none"},
         )
 
 
@@ -385,11 +387,11 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     """
     project_backends = tuple(bc.language for bc in config.backends)
     _check_value_backend_support(config, project_backends)
-    _check_security_constraints(config)
 
     option_values = _apply_option_defaults(config.options)
     fragment_set = _collect_fragments(option_values)
     fragment_set = _expand_deps(fragment_set)
+    _check_security_constraints(config, fragment_set)
     _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set)
     order = _topo_sort(fragment_set)
