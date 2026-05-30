@@ -285,6 +285,57 @@ def _validate_reads_options(fragment_names: set[str]) -> None:
                     )
 
 
+# Option values whose only real implementation is on a subset of backend
+# languages. A user-selected value with no compatible project backend
+# hard-errors at config time instead of silently emitting the abstract port
+# with no adapter (a service that starts, then fails at the first call).
+# ``openai`` is intentionally absent: its TS (``@ai-sdk/openai``) and Rust
+# (``async-openai``) SDKs are real, so it stays valid on every backend.
+_VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = {
+    ("llm.provider", "anthropic"): frozenset({BackendLanguage.PYTHON}),
+    ("llm.provider", "ollama"): frozenset({BackendLanguage.PYTHON}),
+    ("llm.provider", "bedrock"): frozenset({BackendLanguage.PYTHON}),
+}
+
+
+def _check_value_backend_support(
+    config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
+) -> None:
+    """Reject user-selected option values that no project backend supports.
+
+    Implements the "fail at config time, not silently at runtime" policy for
+    polyglot footguns (e.g. ``llm.provider=anthropic`` on a Node/Rust-only
+    project). Only user-origin selections are checked — a persisted default
+    must never hard-error. See ``_VALUE_REQUIRES_BACKEND``.
+    """
+    origins = config.option_origins or {}
+    present = set(project_backends)
+    for path, value in config.options.items():
+        if origins.get(path, "user") != "user":
+            continue
+        try:
+            required = _VALUE_REQUIRES_BACKEND.get((path, value))
+        except TypeError:
+            # Unhashable value (list/dict option) — never constrained here.
+            continue
+        if required is None or not present.isdisjoint(required):
+            continue
+        req = ", ".join(sorted(b.value for b in required))
+        have = ", ".join(b.value for b in project_backends) or "(none)"
+        raise OptionsError(
+            f"Option '{path}={value!r}' is only supported on backend "
+            f"language(s) {req}, but this project's backends are {have}. "
+            f"Choose a value supported on your backend, or add a {req} backend.",
+            code=OPTIONS_INVALID_VALUE,
+            context={
+                "option": path,
+                "value": value,
+                "required_backends": sorted(b.value for b in required),
+                "project_backends": [b.value for b in project_backends],
+            },
+        )
+
+
 def resolve(config: ProjectConfig) -> ResolvedPlan:
     """Produce an ordered ResolvedPlan from ``config.options``.
 
@@ -293,6 +344,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     the injector).
     """
     project_backends = tuple(bc.language for bc in config.backends)
+    _check_value_backend_support(config, project_backends)
 
     option_values = _apply_option_defaults(config.options)
     fragment_set = _collect_fragments(option_values)
