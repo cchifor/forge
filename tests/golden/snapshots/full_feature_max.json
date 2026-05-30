@@ -1001,7 +1001,7 @@
       "sha256": "05f1129d97d2fc8c"
     },
     "forge.toml": {
-      "size": 133280,
+      "size": 133530,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1241,8 +1241,8 @@
       "sha256": "9c78204cea910aa0"
     },
     "infra/gatekeeper/src/app/gatekeeper/server_session.py": {
-      "size": 14783,
-      "sha256": "1da538f263b59d69"
+      "size": 14896,
+      "sha256": "52c90aac44694e93"
     },
     "infra/gatekeeper/src/app/gatekeeper/service_registry.py": {
       "size": 5174,
@@ -1272,9 +1272,13 @@
       "size": 2177,
       "sha256": "8c8d63d3825703e6"
     },
+    "infra/gatekeeper/src/app/middleware/log_redaction.py": {
+      "size": 3875,
+      "sha256": "89d32384436251e0"
+    },
     "infra/gatekeeper/src/app/middleware/logging.py": {
-      "size": 3511,
-      "sha256": "c8f39561fc59b453"
+      "size": 3741,
+      "sha256": "712ce80f20efea6b"
     },
     "infra/gatekeeper/src/app/middleware/security_headers.py": {
       "size": 1434,
