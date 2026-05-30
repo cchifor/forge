@@ -36,8 +36,14 @@ class TestSecureDefaults:
 
     def test_no_hardcoded_client_secret(self):
         src = _read()
+        # The field must default to empty (no baked-in secret). Check the field
+        # default precisely rather than scanning for the substring anywhere — the
+        # WS-2.4 dev-secret guard legitimately *names* the insecure placeholders
+        # in a denylist to REJECT them, which a broad substring scan would
+        # mistake for a hardcoded default.
         assert 'gatekeeper_client_secret: str = ""' in src
-        assert "super-secret-string" not in src.split("get_settings")[0]
+        assert 'gatekeeper_client_secret: str = "super-secret-string"' not in src
+        assert 'gatekeeper_client_secret: str = "gatekeeper-dev-secret"' not in src
 
     def test_cookie_secure_defaults_true(self):
         src = _read()
@@ -100,9 +106,7 @@ class TestDevSecretProdGuard:
             "the prod dev-secret guard must exit on bad secret / cookie / backend"
         )
 
-    def test_compose_still_ships_dev_values_for_local_use(self):
-        # Sanity: the dev compose intentionally keeps the dev values (the guard
-        # only rejects them in prod), so the two stay in sync.
+    def _dev_compose(self):
         feature_root = next(
             p
             for p in _CONFIG_PATH.parents
@@ -110,5 +114,21 @@ class TestDevSecretProdGuard:
         )
         compose = feature_root / "compose.yaml"
         assert compose.is_file(), compose
-        text = compose.read_text(encoding="utf-8")
-        assert "gatekeeper-dev-secret" in text
+        return compose.read_text(encoding="utf-8")
+
+    def test_compose_still_ships_dev_values_for_local_use(self):
+        # Sanity: the dev compose intentionally keeps the dev values (the guard
+        # only rejects them in prod), so the two stay in sync.
+        assert "gatekeeper-dev-secret" in self._dev_compose()
+
+    def test_dev_compose_pins_env_development(self):
+        # CRITICAL: the gatekeeper image bakes ENV=production (Dockerfile), and
+        # the guard treats an unset env as production. The dev compose ships the
+        # dev sentinels, so it MUST pin ENV=development or `docker compose up`
+        # would hit the prod guard and refuse to boot. (Parity with the Rust
+        # service compose, which pins ENV=development for the same reason.)
+        text = self._dev_compose()
+        assert ('ENV: "development"' in text) or ("ENV: development" in text), (
+            "gatekeeper dev compose must set ENV=development so the prod "
+            "dev-secret guard does not break local `docker compose up`"
+        )
