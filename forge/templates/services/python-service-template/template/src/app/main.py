@@ -70,10 +70,17 @@ def create_app() -> FastAPI:
     app = FastAPI(
         **settings.app.model_dump(),
         lifespan=AppLifecycle.lifespan,
+        # WS-6.4 — every handler now serialises through the single richer
+        # ``Error{message, type, detail}`` model, so advertise it for the
+        # domain status codes (401/403/404/409) too, not just 400/422/500.
         responses={
             status.HTTP_400_BAD_REQUEST: {"model": Error},
-            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": Error},
+            status.HTTP_401_UNAUTHORIZED: {"model": Error},
+            status.HTTP_403_FORBIDDEN: {"model": Error},
+            status.HTTP_404_NOT_FOUND: {"model": Error},
+            status.HTTP_409_CONFLICT: {"model": Error},
             status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": Error},
+            status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": Error},
         },
     )
 
