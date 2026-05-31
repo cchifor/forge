@@ -181,8 +181,8 @@
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 5865,
-      "sha256": "e58d69e4db903bc2"
+      "size": 6074,
+      "sha256": "35b2ae2ecf202a7f"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
