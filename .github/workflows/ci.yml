@@ -249,13 +249,12 @@ jobs:
       - name: Run lane B (verify) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane verify
 
-  # Task 7 / 3A — CVE scanning. Advisory-only gate (continue-on-error)
-  # so known-unfixed vulnerabilities don't block PRs, but the signal is
-  # visible in the checks list. Python deps via pip-audit, Node workspace
-  # packages via npm audit.
+  # WS-8.1 — CVE scanning as a BLOCKING gate. High/critical vulnerabilities
+  # fail CI rather than being advisory-only. Python deps via pip-audit (exits
+  # non-zero on any advisory), Node workspace packages via npm audit at the
+  # high severity threshold.
   security-scan:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -281,9 +280,10 @@ jobs:
 
       - name: npm audit (Node workspace packages)
         run: |
+          set -euo pipefail
           for pkg in packages/canvas-core packages/canvas-vue packages/canvas-svelte; do
             echo "::group::npm audit — $pkg"
-            (cd "$pkg" && npm install --package-lock-only && npm audit --audit-level=high) || true
+            (cd "$pkg" && npm install --package-lock-only && npm audit --audit-level=high)
             echo "::endgroup::"
           done
 
