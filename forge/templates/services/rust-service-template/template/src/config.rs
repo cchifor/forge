@@ -124,8 +124,7 @@ fn default_db_url() -> String {
     // a fallback so AppConfig::load() — called at startup to run the fail-closed
     // auth guard — never fails to deserialize if config/ is somehow absent.
     // Mirrors the DATABASE_URL the pool actually connects with.
-    std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://localhost:5432/app".to_string())
+    std::env::var("DATABASE_URL").unwrap_or_else(|_| "postgresql://localhost:5432/app".to_string())
 }
 
 impl Default for DbConfig {
