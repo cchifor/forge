@@ -4,8 +4,15 @@ The forge venv can't import the generated FastAPI app, so these tests read
 the template text and assert on the hardening invariants the generator must
 preserve:
 
-* WS-8.2 — the python service Dockerfile pins deps with ``uv sync --frozen``
-  so the committed ``uv.lock`` is authoritative (no silent re-resolve).
+* WS-8.2 — the python service Dockerfile installs prod deps with
+  ``uv sync --no-dev --no-editable`` and must NOT pass ``--frozen``. The
+  build deliberately strips ``[tool.uv.sources]`` from pyproject (so weld-*
+  resolve from ``/wheels`` instead of the build-context source path), and
+  the rendered pyproject is feature-conditional — both make a single
+  committed ``uv.lock`` inconsistent with what is actually synced, so a
+  frozen sync fails ("lockfile needs to be updated"). The committed lock
+  ships as a resolution hint; a generation-time relock that makes the lock
+  authoritative is tracked under WS-8.2's lockfile-ownership story.
 * WS-6.4 — the OpenAPI ``responses`` advertise the single richer
   ``Error{message, type, detail}`` model for *every* error status code
   (400/401/403/404/409/422/500), the HTTP/validation/global handlers all
@@ -43,16 +50,22 @@ def _read(rel: str) -> str:
     return (TEMPLATE / rel).read_text(encoding="utf-8")
 
 
-# --- WS-8.2: frozen install ---------------------------------------------------
+# --- WS-8.2: prod install (re-resolve, not frozen) --------------------------
 
 
-def test_dockerfile_uv_sync_is_frozen():
+def test_dockerfile_uv_sync_is_not_frozen():
     df = _read("Dockerfile.jinja")
-    # Every ``uv sync`` invocation must pin to the committed lockfile.
+    # The build strips [tool.uv.sources] before syncing and the rendered
+    # pyproject is feature-conditional, so a committed lock can't stay
+    # consistent with what is synced. ``--frozen`` would therefore fail the
+    # image build ("lockfile needs to be updated"); the sync must re-resolve.
     sync_lines = [ln for ln in df.splitlines() if "uv sync" in ln and "RUN" in ln]
     assert sync_lines, "expected at least one `RUN uv sync` line in the Dockerfile"
     for line in sync_lines:
-        assert "--frozen" in line, f"`uv sync` line is not frozen: {line!r}"
+        assert "--frozen" not in line, (
+            f"`uv sync` must re-resolve, not pin a (feature-variable, "
+            f"sources-stripped) lock: {line!r}"
+        )
 
 
 def test_dockerfile_keeps_no_dev_no_editable():
