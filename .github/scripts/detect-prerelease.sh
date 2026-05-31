@@ -21,8 +21,13 @@ set -euo pipefail
 
 emit() {
   echo "is_prerelease=$1"
+  # The GITHUB_OUTPUT append is a best-effort side channel for workflow
+  # consumers. Never let it abort the script: under ``set -e`` a failed
+  # redirect (e.g. a git-bash runner where GITHUB_OUTPUT is a Windows path
+  # the shell can't open) would otherwise exit non-zero and mask the real
+  # stdout contract that callers/tests rely on.
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    echo "is_prerelease=$1" >>"$GITHUB_OUTPUT"
+    echo "is_prerelease=$1" >>"$GITHUB_OUTPUT" 2>/dev/null || true
   fi
 }
 
