@@ -45,3 +45,15 @@ def test_dependabot_covers_polyglot_ecosystems():
     ecos = {u["package-ecosystem"] for u in doc["updates"]}
     for required in ("pip", "github-actions", "npm", "cargo", "pub"):
         assert required in ecos, f"dependabot missing ecosystem: {required}"
+
+
+def test_ci_wires_the_dormant_quality_gates():
+    """WS-9.1: the parity contract, fuzz suite, and codegen-drift check must
+    actually run in CI, not just exist in the tree."""
+    ci = (_WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+    doc = yaml.safe_load(ci)
+    assert "quality-gates" in doc["jobs"], "ci.yml must define a quality-gates job"
+    steps = yaml.dump(doc["jobs"]["quality-gates"])
+    assert "tests/contract/auth_sdk_parity" in steps, "auth-SDK parity contract must run"
+    assert "-m fuzz" in steps, "the fuzz suite must run"
+    assert "gen_features_doc.py" in steps, "codegen-drift (FEATURES.md) check must run"
