@@ -345,3 +345,38 @@ jobs:
           name: compose-logs-${{ matrix.scenario }}
           path: compose-logs/
           if-no-files-found: ignore
+
+  # WS-9.1 — wire the previously-dormant quality gates so they actually run
+  # on every PR instead of being advertised-but-never-executed:
+  #   * auth-SDK cross-language parity contract (tests/contract/auth_sdk_parity)
+  #   * the fuzz suite (excluded from the main test lane via `-m "not fuzz"`)
+  #   * codegen-drift: docs/FEATURES.md must match the generator's output
+  quality-gates:
+    name: Quality gates (parity / fuzz / codegen-drift)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        with:
+          enable-cache: true
+
+      - name: Install forge + parity deps
+        run: uv sync --all-extras --dev
+
+      - name: Auth-SDK cross-language parity contract
+        run: uv run pytest tests/contract/auth_sdk_parity -q --no-cov -p no:cacheprovider
+
+      - name: Fuzz suite
+        run: uv run pytest -m fuzz -q --no-cov -p no:cacheprovider
+
+      - name: Codegen drift — docs/FEATURES.md is up to date
+        run: |
+          uv run python tools/gen_features_doc.py
+          if ! git diff --quiet -- docs/FEATURES.md; then
+            echo "::error::docs/FEATURES.md is stale. Run tools/gen_features_doc.py and commit."
+            git --no-pager diff -- docs/FEATURES.md
+            exit 1
+          fi
