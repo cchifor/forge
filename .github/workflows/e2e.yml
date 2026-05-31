@@ -77,6 +77,13 @@ jobs:
           - node-svelte
           - rust-no-frontend
           - multi-backend-with-keycloak
+          # WS-5.1 — un-dark the chat-on type-check lanes. These map to
+          # test_vue_chat_on_typechecks / test_svelte_chat_on_typechecks /
+          # test_flutter_full_analyzes, which existed but were never selected
+          # by the matrix, so the generated chat surfaces shipped untested.
+          - vue-chat
+          - svelte-chat
+          - flutter-full
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
