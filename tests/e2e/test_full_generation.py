@@ -314,6 +314,17 @@ def test_vue_chat_on_typechecks(
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.xfail(
+    reason=(
+        "WS-5.2: the generated chat frontend pins @forge/canvas-core as "
+        "`workspace:*` (unpublished). A standalone `npm install` outside the "
+        "forge workspace can't resolve that protocol, and svelte-check needs "
+        "node_modules (unlike vue-tsc, which tolerates the missing module), so "
+        "this can't pass until canvas-core is published to npm — or the e2e job "
+        "builds it and rewrites the dep to a file: path. Tracked under WS-5.2."
+    ),
+    strict=False,
+)
 def test_svelte_chat_on_typechecks(
     tmp_path: Path, require_uv: None, require_npm: None, require_git: None
 ) -> None:
