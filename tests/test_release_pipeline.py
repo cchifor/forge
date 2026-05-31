@@ -13,9 +13,22 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+# These helpers are POSIX release-pipeline scripts that only ever run on the
+# ubuntu release runners (`.github/workflows/release.yml`). Exercising them
+# through git-bash on windows-latest tests a scenario that never happens in
+# production and trips a git-bash quirk where the script exits non-zero after a
+# successful `GITHUB_OUTPUT` append (even with the write guarded). The logic is
+# fully covered on the ubuntu + macos legs.
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="release helper bash scripts run only on ubuntu CI (release.yml); "
+    "not a supported target on Windows.",
+)
 
 _REPO = Path(__file__).resolve().parent.parent
 _DETECT = _REPO / ".github" / "scripts" / "detect-prerelease.sh"
