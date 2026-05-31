@@ -1,0 +1,29 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: app
+spec:
+  # Point scaleTargetRef.name at the per-backend Deployment you want to
+  # autoscale (e.g. app-python). One HPA per Deployment; copy this block
+  # per backend as needed.
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app-python
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

@@ -1,0 +1,38 @@
+# Default values for the app chart. Override per environment with
+# `helm install -f values-prod.yaml` or `--set`.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/example/app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+env:
+  ENV: production
+  LOG_LEVEL: info
+
+# Pod security: run as a non-root user by default.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
