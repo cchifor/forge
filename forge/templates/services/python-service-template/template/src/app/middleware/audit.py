@@ -30,15 +30,19 @@ class AuditMiddleware(BaseHTTPMiddleware):
         excluded_methods: set[str] | None = None,
     ):
         super().__init__(app)
-        self.excluded_paths = excluded_paths or {
-            "/health",
-            "/api/v1/health",
-            "/api/v1/healthz",
-            "/metrics",
-            "/docs",
-            "/openapi.json",
-            "/favicon.ico",
-        }
+        self.excluded_paths = (
+            excluded_paths
+            if excluded_paths is not None
+            else {
+                "/health",
+                "/api/v1/health",
+                "/api/v1/healthz",
+                "/metrics",
+                "/docs",
+                "/openapi.json",
+                "/favicon.ico",
+            }
+        )
         self.excluded_methods = excluded_methods or {"OPTIONS", "HEAD"}
 
     def _is_excluded(self, path: str) -> bool:

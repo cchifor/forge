@@ -1725,8 +1725,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/middleware/audit.py": {
-      "size": 2311,
-      "sha256": "69c0177a04826249"
+      "size": 2423,
+      "sha256": "102f4d35b032f83d"
     },
     "services/api/src/app/middleware/auth_context.py": {
       "size": 2369,
