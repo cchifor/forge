@@ -75,10 +75,7 @@ def _backend_language(value: object) -> BackendLanguage:
     """
     if value in ("python", "node", "rust"):
         return BackendLanguage(value)
-    raise ValueError(
-        f"Unknown backend language {value!r}; valid languages are "
-        "python, node, rust."
-    )
+    raise ValueError(f"Unknown backend language {value!r}; valid languages are python, node, rust.")
 
 
 def _build_backends_from_cfg(
@@ -117,9 +114,7 @@ def _build_backends_from_cfg(
         return backends
 
     # Single backend (backward compat for `backend:` shape and CLI-only invocations)
-    language = _backend_language(
-        r.get("backend_language", "backend", "language", default="python")
-    )
+    language = _backend_language(r.get("backend_language", "backend", "language", default="python"))
     return [
         BackendConfig(
             name=r.get("backend_name", "backend", "name", default="backend"),

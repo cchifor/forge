@@ -57,9 +57,7 @@ def _is_generate_signature_mismatch(exc: TypeError) -> bool:
     # NOT be mistaken for a signature mismatch — that would silently retry and
     # mask the real bug. Each marker names one of our own kwargs.
     modern_kwargs = ("dry_run", "report", "keep_partial")
-    return any(
-        f"unexpected keyword argument '{kw}'" in msg for kw in modern_kwargs
-    )
+    return any(f"unexpected keyword argument '{kw}'" in msg for kw in modern_kwargs)
 
 
 def _exit_code_for(err: ForgeError) -> int:
