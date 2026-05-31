@@ -55,6 +55,59 @@ def _tenant_id_from_request(request: Any) -> uuid.UUID | None:
     return None
 
 
+def _admin_role() -> str:
+    """The realm role required to use the admin panel (env-configurable)."""
+    return os.environ.get("ADMIN_ROLE", "admin").strip()
+
+
+def _caller_roles(request: Any) -> set[str]:
+    """Roles the gateway forwarded for this caller.
+
+    Gatekeeper's ForwardAuth endpoint emits the verified realm roles as a
+    comma-separated ``X-Gatekeeper-Roles`` header (Traefik strips any
+    client-supplied copy, so the value is trustworthy at the edge).
+    """
+    raw = request.headers.get("x-gatekeeper-roles", "")
+    return {r.strip() for r in raw.split(",") if r.strip()}
+
+
+def _caller_is_admin(request: Any) -> bool:
+    return _admin_role() in _caller_roles(request)
+
+
+def _build_auth_backend() -> Any | None:
+    """SQLAdmin auth backend that gates /admin on the admin realm role.
+
+    The panel sits behind Gatekeeper's ForwardAuth edge, which authenticates
+    every request and forwards ``X-Gatekeeper-*`` identity headers. This
+    backend adds the *authorization* layer on top: a caller who is
+    authenticated but lacks the admin role is refused (fail closed). Login is
+    a no-op — there is no interactive form; identity comes from the edge.
+    """
+    try:
+        from sqladmin.authentication import AuthenticationBackend  # type: ignore
+    except ImportError:
+        return None
+
+    class GatekeeperAuthBackend(AuthenticationBackend):
+        async def login(self, request: Any) -> bool:  # noqa: ARG002
+            # No interactive login: Gatekeeper's ForwardAuth already
+            # authenticated the request before it reached us.
+            return False
+
+        async def logout(self, request: Any) -> bool:  # noqa: ARG002
+            return True
+
+        async def authenticate(self, request: Any) -> bool:
+            return _caller_is_admin(request)
+
+    # secret_key is required by the base class but unused (no session cookie
+    # is minted here — auth state lives in the forwarded headers).
+    return GatekeeperAuthBackend(
+        secret_key=os.environ.get("ADMIN_PANEL_SECRET_KEY", "forwarded-auth-no-session")
+    )
+
+
 def _build_tenant_scoped_base() -> tuple[Any, Any]:
     """Return (TenantScopedModelView, ModelView) or (None, None) if missing deps."""
     try:
@@ -99,7 +152,7 @@ def _build_tenant_scoped_base() -> tuple[Any, Any]:
 
 def mount_admin(app: FastAPI) -> None:
     mode = os.environ.get("ADMIN_PANEL_MODE", "disabled").strip().lower()
-    env = os.environ.get("ENVIRONMENT", "local").strip().lower()
+    env = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "local")).strip().lower()
 
     if mode == "disabled":
         return
@@ -133,7 +186,15 @@ def mount_admin(app: FastAPI) -> None:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     engine = create_async_engine(url)
-    admin = Admin(app, engine, title="forge admin")
+    # WS-2.8: gate the panel on the admin realm role. The auth backend reads
+    # the gateway-forwarded X-Gatekeeper-Roles header; a caller who is
+    # authenticated at the edge but lacks the admin role is refused.
+    admin = Admin(
+        app,
+        engine,
+        title="forge admin",
+        authentication_backend=_build_auth_backend(),
+    )
 
     for view in _auto_views():
         try:

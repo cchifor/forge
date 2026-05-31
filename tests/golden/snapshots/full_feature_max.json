@@ -1465,8 +1465,8 @@
       "sha256": "170e1e980e583e2b"
     },
     "services/api/src/app/admin.py": {
-      "size": 8206,
-      "sha256": "226d74fbb20aed12"
+      "size": 10615,
+      "sha256": "5f9bc49fbe340c39"
     },
     "services/api/src/app/agents/__init__.py": {
       "size": 472,
