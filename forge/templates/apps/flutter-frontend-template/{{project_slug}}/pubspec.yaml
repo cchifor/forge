@@ -4,8 +4,11 @@ publish_to: none
 version: {{version}}+1
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=3.24.0"
+  # The dependency set below targets a modern Flutter: flutter_lints ^6,
+  # riverpod ^3, freezed ^3 and go_router ^17 all floor at Dart ^3.8.0
+  # (Flutter 3.32+). Keep this constraint consistent with them.
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.32.0"
 
 dependencies:
   flutter:
