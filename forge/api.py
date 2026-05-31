@@ -837,3 +837,21 @@ class ForgeAPI:
         from forge.hooks import register_hook  # noqa: PLC0415
 
         register_hook(hook)
+
+
+# The stable plugin API surface. The module docstring's "Stable Public API"
+# table is the human-facing contract; this tuple is the machine-readable one.
+# ``ForgeAPI`` exposes the add_* registration methods (stable + provisional
+# per the table); the Plugin*Registration dataclasses are the introspection
+# records ``forge --plugins list`` reads; ``SDK_VERSION`` is the negotiated
+# plugin-SDK version. Mutating this tuple requires a docs/SDK_CHANGELOG.md
+# entry (see the module docstring) — adding a name is additive, removing one
+# is a major bump.
+__all__ = (
+    "ForgeAPI",
+    "PluginRegistration",
+    "PluginExtractorRegistration",
+    "PluginOptionRegistration",
+    "PluginEmitterRegistration",
+    "SDK_VERSION",
+)
