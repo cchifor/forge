@@ -280,6 +280,35 @@ def test_vue_auth_off_typechecks(
 
 
 # -----------------------------------------------------------------------------
+# Case 5b: Vue with include_chat=True — mirrors the Svelte chat-on case so the
+# Vue chat composables (useAgentClient, canvas-vue wiring) get type-checked.
+# -----------------------------------------------------------------------------
+
+
+def test_vue_chat_on_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E Vue Chat",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=True, with_chat=True),
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    assert (frontend_dir / "package.json").exists()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for chat-on project:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 6: Svelte with include_chat=True — the Svelte matrix previously only
 # exercised chat=False; this covers the chat-on type-check path.
 # -----------------------------------------------------------------------------
