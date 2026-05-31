@@ -33,7 +33,7 @@
       "sha256": "6d57f688b839e51b"
     },
     "forge.toml": {
-      "size": 83317,
+      "size": 83370,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
