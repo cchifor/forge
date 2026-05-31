@@ -196,7 +196,7 @@ def _generate_into(
     _generate_backends(
         config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
     )
-    _generate_frontend_phase(config, project_root, quiet=quiet)
+    _generate_frontend_phase(config, project_root, quiet=quiet, dry_run=dry_run)
     _render_docker_stack(config, plan, project_root, quiet=quiet)
     _generate_frontend_extras(config, project_root, quiet=quiet)
     _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
@@ -417,7 +417,9 @@ def _generate_backends(
             )
 
 
-def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
+def _generate_frontend_phase(
+    config: ProjectConfig, project_root: Path, *, quiet: bool, dry_run: bool = False
+) -> None:
     """Phase 2: render the frontend via Copier when configured."""
 
     def _log(msg: str) -> None:
@@ -432,7 +434,7 @@ def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet
             "generate.copier.frontend",
             framework=config.frontend.framework.value,
         ):
-            _generate_frontend(config, project_root, quiet=quiet)
+            _generate_frontend(config, project_root, quiet=quiet, dry_run=dry_run)
 
 
 def _render_docker_stack(
@@ -870,7 +872,14 @@ def _frontend_manifest_data(config: ProjectConfig):
     )
 
 
-def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet: bool) -> None:
+def _run_copier(
+    template_path: Path,
+    dst_path: Path,
+    data: dict[str, Any],
+    quiet: bool,
+    *,
+    dry_run: bool = False,
+) -> None:
     """Invoke Copier and translate its failures into GeneratorError.
 
     After a successful copy, writes a ``.copier-answers.yml`` inside the
@@ -880,6 +889,12 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
     ships ``{{ _copier_conf.answers_file }}.jinja``; forge's templates
     don't, so we write it ourselves from the exact ``data`` dict we just
     passed in.
+
+    When ``dry_run`` is set we pass ``skip_tasks=True`` so Copier does NOT
+    execute the template's ``_tasks`` (npm install, vue-tsc, eslint, git
+    init/commit) on the host — keeping ``--dry-run`` side-effect-free
+    (WS-3.2). File rendering still happens (into the dry-run temp dir the
+    caller set up), so the preview is faithful.
 
     Raised errors include the template path so JSON-mode callers see a useful
     envelope instead of a raw Copier traceback.
@@ -899,6 +914,7 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
             defaults=True,
             overwrite=True,
             quiet=quiet,
+            skip_tasks=dry_run,
         )
     except ForgeError:
         raise
@@ -1023,7 +1039,9 @@ def _generate_single_backend(
     return dst
 
 
-def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+def _generate_frontend(
+    config: ProjectConfig, project_root: Path, quiet: bool = False, dry_run: bool = False
+) -> Path:
     """Generate frontend using Copier."""
     if config.frontend is None:
         raise GeneratorError("_generate_frontend called without a frontend configured")
@@ -1043,7 +1061,7 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
     else:
         dst = project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
-    _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet)
+    _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet, dry_run=dry_run)
     return project_root / "apps" / config.frontend_slug
 
 
