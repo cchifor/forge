@@ -769,8 +769,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api-py/Dockerfile": {
-      "size": 3603,
-      "sha256": "f232be0290376062"
+      "size": 3824,
+      "sha256": "b1e783cc0b64c415"
     },
     "services/api-py/README.md": {
       "size": 33689,
