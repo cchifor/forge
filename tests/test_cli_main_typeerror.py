@@ -36,11 +36,11 @@ def test_unexpected_keyword_is_a_signature_mismatch():
 @pytest.mark.parametrize(
     "msg",
     [
+        # Only the modern kwargs main() actually passes count as a
+        # signature mismatch — those are the args an older generate() rejects.
         "generate() got an unexpected keyword argument 'dry_run'",
         "generate() got an unexpected keyword argument 'report'",
         "generate() got an unexpected keyword argument 'keep_partial'",
-        "generate() takes 1 positional argument but 2 were given",
-        "generate() missing 1 required positional argument: 'config'",
     ],
 )
 def test_arg_binding_messages_are_signature_mismatches(msg):
@@ -54,6 +54,16 @@ def test_arg_binding_messages_are_signature_mismatches(msg):
         "'NoneType' object is not subscriptable",
         "can only concatenate str (not \"int\") to str",
         "argument of type 'int' is not iterable",
+        # A genuine TypeError from a HELPER inside generate()'s body that
+        # happens to mention an unexpected keyword must NOT be swallowed
+        # (codex finding): the matcher keys on our own kwarg names only.
+        "helper() got an unexpected keyword argument 'foo'",
+        "build_thing() got an unexpected keyword argument 'verbose'",
+        # Positional-count errors can't come from main()'s call shape
+        # (config is always passed positionally + is required), so they are
+        # real bugs, not a legacy-signature fallback trigger.
+        "generate() takes 1 positional argument but 2 were given",
+        "generate() missing 1 required positional argument: 'config'",
     ],
 )
 def test_real_bugs_are_not_signature_mismatches(msg):

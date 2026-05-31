@@ -51,14 +51,15 @@ def _is_generate_signature_mismatch(exc: TypeError) -> bool:
     errors; anything else is a real bug and should surface.
     """
     msg = str(exc)
-    signature_markers = (
-        "unexpected keyword argument",
-        "positional argument",
-        "required positional argument",
-        "required keyword-only argument",
-        "got multiple values for",
+    # Narrow to the EXACT modern kwargs main() passes that an older generate()
+    # (or a pre-update plugin shim) wouldn't accept. A generic "unexpected
+    # keyword argument 'foo'" from a helper deep inside generate()'s body must
+    # NOT be mistaken for a signature mismatch — that would silently retry and
+    # mask the real bug. Each marker names one of our own kwargs.
+    modern_kwargs = ("dry_run", "report", "keep_partial")
+    return any(
+        f"unexpected keyword argument '{kw}'" in msg for kw in modern_kwargs
     )
-    return any(marker in msg for marker in signature_markers)
 
 
 def _exit_code_for(err: ForgeError) -> int:

@@ -189,11 +189,22 @@ def mount_admin(app: FastAPI) -> None:
     # WS-2.8: gate the panel on the admin realm role. The auth backend reads
     # the gateway-forwarded X-Gatekeeper-Roles header; a caller who is
     # authenticated at the edge but lacks the admin role is refused.
+    #
+    # Fail closed: if the auth backend can't be built (sqladmin.authentication
+    # missing), DO NOT mount — an unauthenticated panel is worse than no panel.
+    auth_backend = _build_auth_backend()
+    if auth_backend is None:
+        logger.error(
+            "admin_panel: could not build the authentication backend "
+            "(sqladmin.authentication unavailable); refusing to mount an "
+            "unauthenticated admin panel."
+        )
+        return
     admin = Admin(
         app,
         engine,
         title="forge admin",
-        authentication_backend=_build_auth_backend(),
+        authentication_backend=auth_backend,
     )
 
     for view in _auto_views():

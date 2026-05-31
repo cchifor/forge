@@ -34,7 +34,7 @@ spec:
                 name: app-python-config
           livenessProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health/live
               port: http
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -42,7 +42,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /health
+              path: /api/v1/health/ready
               port: http
             initialDelaySeconds: 10
             periodSeconds: 5

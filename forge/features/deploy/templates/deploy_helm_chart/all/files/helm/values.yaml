@@ -1,6 +1,10 @@
 # Default values for the app chart. Override per environment with
 # `helm install -f values-prod.yaml` or `--set`.
 
+# Chart name overrides (consumed by templates/_helpers.tpl).
+nameOverride: ""
+fullnameOverride: ""
+
 replicaCount: 2
 
 image:
