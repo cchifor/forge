@@ -29,18 +29,20 @@ if [ ! -f "$changelog" ]; then
   exit 2
 fi
 
+# String-prefix matching (no dynamic regex — version strings contain '.' and
+# '[' which are regex-significant). A section opens with "## [<ver>]" or
+# "## [<ver> " (space before a date / "targeting" suffix) and closes at the
+# next "## [" heading.
 body="$(
   awk -v ver="$version" '
-    BEGIN { in_section = 0; found = 0 }
-    # A new "## [" heading ends the current section.
+    BEGIN {
+      open_exact = "## [" ver "]"
+      open_space = "## [" ver " "
+    }
     /^## \[/ {
       if (in_section) { exit }
-      # Does this heading open the requested section? Match "## [<ver>]"
-      # or "## [<ver> " (date / "targeting" suffixes after a space).
-      hdr = $0
-      if (hdr ~ ("^## \\[" ver "\\]") || hdr ~ ("^## \\[" ver "[][ ]")) {
+      if (index($0, open_exact) == 1 || index($0, open_space) == 1) {
         in_section = 1
-        found = 1
         next
       }
       next
@@ -49,8 +51,18 @@ body="$(
   ' "$changelog"
 )"
 
-# Trim leading/trailing blank lines.
-body="$(printf '%s\n' "$body" | sed -e '/./,$!d' | sed -e ':a' -e '/^\s*$/{$d;N;ba}')"
+# Trim leading and trailing blank lines.
+body="$(printf '%s\n' "$body" | awk '
+  { lines[NR] = $0 }
+  END {
+    first = 0; last = 0
+    for (i = 1; i <= NR; i++) {
+      if (lines[i] ~ /[^[:space:]]/) { if (first == 0) first = i; last = i }
+    }
+    if (first == 0) exit
+    for (i = first; i <= last; i++) print lines[i]
+  }
+')"
 
 if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
   echo "extract-changelog.sh: section [$version] not found or empty in $changelog" >&2
