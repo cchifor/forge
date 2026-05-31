@@ -10,6 +10,39 @@ from weld.fastapi.api.errors import Error
 logger = logging.getLogger("app.errors")
 
 
+# --- Error envelope contract (WS-6.4) ----------------------------------------
+#
+# CHANGELOG / DEPRECATION NOTICE:
+#   This service serialises errors through ONE documented response model —
+#   ``weld.fastapi.api.errors.Error{message, type, detail}`` — which is the
+#   only model advertised in the OpenAPI ``responses`` (see ``main.py``) for
+#   every error status code (400/401/403/404/409/422/500). The HTTP,
+#   validation and global handlers build that model directly via the shared
+#   ``_envelope`` helper, with the platform-wide RFC-007 ``code`` /
+#   ``correlation_id`` and any structured ``context`` carried inside
+#   ``detail``.
+#
+#   The domain (``ApplicationError``) handler still emits the RFC-007
+#   ``{"error": {code, message, type, context, correlation_id}}`` envelope on
+#   the wire. That is a deliberate CROSS-STACK contract: the node and rust
+#   backends emit a byte-identical ``{"error": {...}}`` via the same
+#   ``ErrorPort`` adapter, and ``tests/test_error_port.py`` locks that
+#   tri-language parity. Collapsing the domain envelope into the flat
+#   ``Error{message, type, detail}`` shape would break that parity, so it must
+#   be done in lockstep across the python/node/rust ``ErrorPort`` adapters and
+#   their parity tests — not in this single template.
+#
+#   .. deprecated::
+#      Reading domain errors via ``body["error"]["code"]`` is on the path to
+#      removal. The WS-6.4 target end-state is for the domain handler to also
+#      return ``Error{message, type, detail}`` (``code`` / ``correlation_id`` /
+#      ``context`` under ``detail``), matching the other three handlers and the
+#      already-unified OpenAPI contract. Until the cross-stack ``ErrorPort``
+#      adapters flip together, consumers should read domain errors defensively:
+#      prefer the documented ``body["detail"]["code"]`` shape and treat the
+#      nested ``body["error"]["code"]`` form as legacy.
+
+
 # --- Application Error Hierarchy ---
 
 
@@ -318,6 +351,11 @@ def _envelope_response(
     The serialiser produces the envelope skeleton with an empty
     ``correlation_id`` (it has no request context); the handler owns
     the correlation-id propagation per RFC-007 §"Correlation id".
+
+    WS-6.4: the domain wire body intentionally stays the cross-stack
+    RFC-007 ``{"error": {...}}`` envelope — see the module-level
+    "Error envelope contract" note for why the domain handler can't be
+    flipped to ``Error{message, type, detail}`` in isolation.
     """
     envelope["error"]["correlation_id"] = _correlation_id(request)
     return JSONResponse(status_code=status_code, content=envelope)

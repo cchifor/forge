@@ -1445,8 +1445,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/Dockerfile": {
-      "size": 3591,
-      "sha256": "158d68be001abf81"
+      "size": 3600,
+      "sha256": "5ae273f3f0459a60"
     },
     "services/api/README.md": {
       "size": 33686,
@@ -1589,8 +1589,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/endpoints/admin.py": {
-      "size": 1361,
-      "sha256": "6e33ca61761d70f8"
+      "size": 2714,
+      "sha256": "eb85438faf026857"
     },
     "services/api/src/app/api/v1/endpoints/agent.py": {
       "size": 3026,
@@ -1693,8 +1693,8 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api/src/app/core/errors.py": {
-      "size": 15631,
-      "sha256": "e8991647107a6e27"
+      "size": 17824,
+      "sha256": "ed087e9e2e048760"
     },
     "services/api/src/app/core/health_checks.py": {
       "size": 2791,
@@ -1829,8 +1829,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 5729,
-      "sha256": "3c49a1052699666f"
+      "size": 6184,
+      "sha256": "5ebd8d14016b3e2d"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
