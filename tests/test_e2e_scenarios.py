@@ -75,7 +75,14 @@ def _stub_frontend_copier(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     calls: list[Path] = []
     real_run_copier = generator._run_copier  # type: ignore[attr-defined]
 
-    def _maybe_skip(template_path: Path, dst_path: Path, data: dict, quiet: bool) -> None:
+    def _maybe_skip(
+        template_path: Path,
+        dst_path: Path,
+        data: dict,
+        quiet: bool,
+        *,
+        dry_run: bool = False,
+    ) -> None:
         calls.append(template_path)
         # Skip frontend templates (apps/) and e2e scaffolding (tests/) —
         # they cost minutes. Backends go through for real.
@@ -83,7 +90,7 @@ def _stub_frontend_copier(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
         if "frontend-template" in name or "e2e-testing-template" in name:
             dst_path.mkdir(parents=True, exist_ok=True)
             return
-        real_run_copier(template_path, dst_path, data, quiet)
+        real_run_copier(template_path, dst_path, data, quiet, dry_run=dry_run)
 
     monkeypatch.setattr(generator, "_run_copier", _maybe_skip)
     return calls
