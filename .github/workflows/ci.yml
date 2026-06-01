@@ -244,6 +244,16 @@ jobs:
         # The setup-rust actions add churn; one-liner is stable + cached
         # implicitly by the runner image on ubuntu-latest.
         run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      # Generated projects' post_generate.py runs `git init && git commit` to
+      # seed an initial commit; without a configured identity that fails with
+      # "fatal: empty ident name not allowed" and the verify lane's toolchain
+      # build aborts. matrix-generate / matrix-smoke-fast already configure
+      # this — matrix-verify was missing it, so the rust verify scenarios
+      # flaked depending on the runner's ambient git config.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
       - name: Install forge
         run: uv sync --all-extras --dev
       - name: Run lane B (verify) for ${{ matrix.scenario }}
