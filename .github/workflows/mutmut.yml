@@ -440,13 +440,35 @@ jobs:
             echo "::group::mutmut run on $file"
             # Fresh cache per file so each module's results are independent.
             rm -rf .mutmut-cache
+            # Scope the test runner to this module's own tests (see
+            # ``pr_gate_test_map`` in tests/mutmut_baselines.json). The default
+            # ``pytest`` collects the entire tree (e2e scaffolds + golden
+            # full-generation) under the --cov addopts, so a *surviving* mutant
+            # runs that slow suite to completion and blows the per-shard
+            # timeout -> every mutant is recorded as a timeout -> 0 evaluable
+            # -> the gate fails with no signal. ``-o addopts=`` drops the
+            # coverage plugin (irrelevant to mutation testing and a needless
+            # tax per mutant).
+            tests=$(uv run python -c "
+          import json
+          m = json.load(open('tests/mutmut_baselines.json')).get('pr_gate_test_map', {})
+          print(' '.join(m.get('$file', [])))
+          ")
+            if [ -n "$tests" ]; then
+              runner="pytest -x -o addopts= -p no:cacheprovider $tests"
+            else
+              # No mapping -> fall back to the full suite (slower; may time out).
+              echo "::warning::no pr_gate_test_map entry for $file; using full-suite runner"
+              runner="pytest -x"
+            fi
+            echo "runner: $runner"
             # ``mutmut run`` exit codes are bit-flags (1=fatal, 2=survived,
             # 4=timeout, 8=slow); a non-zero exit can mean "some mutants
             # survived" which is data we still want. ``|| true`` lets the
             # enforce step read the cache regardless.
             uvx "mutmut@${MUTMUT_VERSION}" run \
               --paths-to-mutate "$file" \
-              --runner "pytest -x" || true
+              --runner "$runner" || true
             # ``mutmut results`` text output triggers a pony-ORM bytecode
             # decompile crash on Python 3.13 (mutmut 2.5.0); read the
             # SQLite cache directly for a portable kill-rate summary.
