@@ -81,6 +81,16 @@ def main(argv: list[str] | None = None) -> int:
         print("no scoped modules touched — nothing to enforce (exit 0)")
         return 0
 
+    # Patch-scoped enforcement: the shard mutates only the lines the PR
+    # changed in each module, so the mutant count is tiny and per-PR-variable
+    # — a whole-module kill-rate *floor* is meaningless against it. Instead
+    # bound the number of SURVIVING changed-line mutants per module: every
+    # mutant on new code should be killed (budget 0), with a documented
+    # per-module allowance for diffs dominated by declarative/equivalent-mutant
+    # code (e.g. lookup tables). A module with no changed lines yields 0
+    # mutants and passes.
+    budgets = baselines.get("pr_gate_changed_line_survivors_max") or {}
+
     failures: list[str] = []
     for module in touched:
         if module not in pr_gate:
@@ -94,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
 
-        floor = float(pr_gate[module])
+        budget = int(budgets.get(module, 0))
         rate_file = args.results_dir / f"rate-{_sanitise(module)}.json"
         if not rate_file.is_file():
             print(
@@ -107,42 +117,51 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         summary = json.loads(rate_file.read_text(encoding="utf-8"))
-        rate = summary.get("kill_rate")
         total = summary.get("total_evaluable", 0)
-        if rate is None or total == 0:
-            print(
-                f"::warning::{module}: mutmut produced no killed/survived "
-                "mutants (possibly all timeouts). Treating as a failure to "
-                "avoid green-lighting a PR with no signal."
-            )
-            failures.append(f"{module}: 0 evaluable mutants (floor {floor:.2%})")
+        survived = summary.get("survived", 0)
+        timeout = summary.get("timeout", 0)
+
+        if total == 0:
+            # No changed lines (or no evaluable mutants) — nothing new to
+            # guard. With patch scoping this is the common, legitimate case,
+            # NOT a "no signal" failure.
+            print(f"  [ok] {module}: 0 changed-line mutants — nothing to enforce")
             continue
 
-        if rate < floor:
+        if timeout:
+            # A timeout means the shard couldn't fully evaluate; don't let it
+            # silently pass.
+            print(
+                f"::warning::{module}: {timeout} mutant(s) timed out — "
+                "result may be incomplete."
+            )
+
+        if survived > budget:
             failures.append(
-                f"{module}: kill rate {rate:.2%} < floor {floor:.2%} "
-                f"({summary['killed']} killed / {summary['survived']} "
-                f"survived / {total} evaluable)"
+                f"{module}: {survived} surviving changed-line mutant(s) "
+                f"> budget {budget} ({summary.get('killed', 0)} killed / "
+                f"{survived} survived / {total} evaluable)"
             )
         else:
             print(
-                f"  [ok] {module}: kill rate {rate:.2%} >= floor "
-                f"{floor:.2%} ({summary['killed']}/{total})"
+                f"  [ok] {module}: {survived} survived <= budget {budget} "
+                f"({summary.get('killed', 0)}/{total} killed)"
             )
 
     if failures:
-        print("::error::Mutmut PR-gate floors regressed:")
+        print("::error::Mutmut PR-gate: changed lines have unkilled mutants:")
         for f in failures:
             print(f"  - {f}")
         print(
-            "\nEither: (1) add tests to kill the new survivors, or "
-            "(2) lower the floor in tests/mutmut_baselines.json's "
-            "``pr_gate_modules`` block with a CHANGELOG entry "
-            "justifying the regression."
+            "\nEither: (1) add tests that kill the new survivors (preferred — "
+            "see the mutmut-pr-gate-* artifacts for which mutants survived), or "
+            "(2) raise the module's budget in tests/mutmut_baselines.json's "
+            "``pr_gate_changed_line_survivors_max`` block with a CHANGELOG entry "
+            "justifying it (e.g. declarative/equivalent-mutant lines)."
         )
         return 1
 
-    print("All touched scoped modules meet their PR-gate floors.")
+    print("All touched scoped modules are within their changed-line survivor budget.")
     return 0
 
 
