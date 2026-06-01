@@ -38,6 +38,28 @@ from forge.generator import generate
 from forge.reports import GenerationReport, HiddenMutation
 
 
+def _is_generate_signature_mismatch(exc: TypeError) -> bool:
+    """True when ``exc`` is an argument-binding mismatch on a generate() call.
+
+    main() calls ``generate()`` with the modern kwargs and falls back to the
+    legacy signature on TypeError. The fallback must fire ONLY for a real
+    signature mismatch (an older generate(), or a plugin shim that predates
+    the dry_run/report/keep_partial kwargs) — NOT for a genuine TypeError
+    raised from *inside* generate()'s body, which would otherwise be silently
+    swallowed and retried, masking the real bug. We match on the messages
+    Python's argument binder produces for missing/unexpected/positional-count
+    errors; anything else is a real bug and should surface.
+    """
+    msg = str(exc)
+    # Narrow to the EXACT modern kwargs main() passes that an older generate()
+    # (or a pre-update plugin shim) wouldn't accept. A generic "unexpected
+    # keyword argument 'foo'" from a helper deep inside generate()'s body must
+    # NOT be mistaken for a signature mismatch — that would silently retry and
+    # mask the real bug. Each marker names one of our own kwargs.
+    modern_kwargs = ("dry_run", "report", "keep_partial")
+    return any(f"unexpected keyword argument '{kw}'" in msg for kw in modern_kwargs)
+
+
 def _exit_code_for(err: ForgeError) -> int:
     """Map a :class:`ForgeError` subclass to a CLI exit code.
 
@@ -430,10 +452,21 @@ def main() -> None:
         project_root = generate(
             config, quiet=quiet, dry_run=dry_run, report=report, keep_partial=keep_partial
         )
-    except TypeError:
+    except TypeError as te:
         # generate() older signature (no dry_run kwarg) — fall back.
         # This branch also covers plugin-supplied generate() shims that
         # haven't been updated for the report= kwarg; they still work.
+        # But ONLY for a genuine signature mismatch: a TypeError raised from
+        # inside generate()'s body is a real bug and must surface, not trigger
+        # a silent retry that hides the original traceback (WS-3.3b).
+        if not _is_generate_signature_mismatch(te):
+            raise ForgeError(
+                f"generate() raised an unexpected TypeError: {te}",
+                hint=(
+                    "This is a bug inside generate() (or a plugin), not a CLI "
+                    "argument problem. Re-run with --json for the full context."
+                ),
+            ) from te
         project_root = generate(config, quiet=quiet)
     except ForgeError as e:
         if getattr(args, "json_output", False):

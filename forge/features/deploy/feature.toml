@@ -1,0 +1,18 @@
+[feature]
+name = "deploy"
+version = "1.0.0"
+summary = "Kubernetes/Helm deployment scaffolding — Deployment, Service, HPA, probes, Helm chart."
+category = "platform"
+stability = "beta"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "deploy.target",
+]
+fragments = [
+    "deploy_kubernetes",
+    "deploy_k8s_hpa",
+    "deploy_helm_chart",
+]

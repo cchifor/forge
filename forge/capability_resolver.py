@@ -285,6 +285,99 @@ def _validate_reads_options(fragment_names: set[str]) -> None:
                     )
 
 
+# Option values whose only real implementation is on a subset of backend
+# languages. A user-selected value with no compatible project backend
+# hard-errors at config time instead of silently emitting the abstract port
+# with no adapter (a service that starts, then fails at the first call).
+# ``openai`` is intentionally absent: its TS (``@ai-sdk/openai``) and Rust
+# (``async-openai``) SDKs are real, so it stays valid on every backend.
+_VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = {
+    ("llm.provider", "anthropic"): frozenset({BackendLanguage.PYTHON}),
+    ("llm.provider", "ollama"): frozenset({BackendLanguage.PYTHON}),
+    ("llm.provider", "bedrock"): frozenset({BackendLanguage.PYTHON}),
+}
+
+# Options where EVERY "active" (non-none / non-false) value is Python-only in
+# 1.x — the whole RAG vector-store stack and the MCP server fragments ship
+# Python implementations only, so selecting them on a Node/Rust-only project
+# yields a service with zero of the requested capability. Checked the same way
+# as ``_VALUE_REQUIRES_BACKEND`` but without enumerating every provider value.
+_PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
+    "rag.backend": frozenset({BackendLanguage.PYTHON}),
+    "platform.mcp": frozenset({BackendLanguage.PYTHON}),
+}
+
+# Values that mean "feature off" for the options in _PYTHON_ONLY_WHEN_ACTIVE.
+_INACTIVE_VALUES: frozenset[object] = frozenset({None, "", "none", False})
+
+
+def _check_value_backend_support(
+    config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
+) -> None:
+    """Reject user-selected option values that no project backend supports.
+
+    Implements the "fail at config time, not silently at runtime" policy for
+    polyglot footguns (e.g. ``llm.provider=anthropic`` on a Node/Rust-only
+    project). Only user-origin selections are checked — a persisted default
+    must never hard-error. See ``_VALUE_REQUIRES_BACKEND``.
+    """
+    origins = config.option_origins or {}
+    present = set(project_backends)
+    for path, value in config.options.items():
+        if origins.get(path, "user") != "user":
+            continue
+        try:
+            required = _VALUE_REQUIRES_BACKEND.get((path, value))
+        except TypeError:
+            # Unhashable value (list/dict option) — never constrained here.
+            continue
+        if required is None and path in _PYTHON_ONLY_WHEN_ACTIVE:
+            try:
+                active = value not in _INACTIVE_VALUES
+            except TypeError:
+                active = True
+            if active:
+                required = _PYTHON_ONLY_WHEN_ACTIVE[path]
+        if required is None or not present.isdisjoint(required):
+            continue
+        req = ", ".join(sorted(b.value for b in required))
+        have = ", ".join(b.value for b in project_backends) or "(none)"
+        raise OptionsError(
+            f"Option '{path}={value!r}' is only supported on backend "
+            f"language(s) {req}, but this project's backends are {have}. "
+            f"Choose a value supported on your backend, or add a {req} backend.",
+            code=OPTIONS_INVALID_VALUE,
+            context={
+                "option": path,
+                "value": value,
+                "required_backends": sorted(b.value for b in required),
+                "project_backends": [b.value for b in project_backends],
+            },
+        )
+
+
+def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -> None:
+    """Cross-option safety rules enforced at config time.
+
+    The generated MCP server exposes tool invocation + an audit log; shipping
+    it with the auth stack disabled would leave those endpoints open behind no
+    identity at all. Checked against the RESOLVED fragment set so it covers
+    every path that pulls in ``mcp_server`` — both ``platform.mcp=true`` and
+    ``agent.mode=tool_calling``. ``auth.mode`` defaults to ``"generate"``, so
+    this only fires when a user explicitly opts out of auth.
+    """
+    if "mcp_server" in fragment_set and config.options.get("auth.mode") == "none":
+        raise OptionsError(
+            "Enabling the MCP server (platform.mcp=true or "
+            "agent.mode=tool_calling) requires authentication, but "
+            "auth.mode=none. The MCP server exposes tool invocation and an "
+            "audit log; generating it without the auth stack would leave those "
+            "endpoints open. Set auth.mode=generate, or disable MCP.",
+            code=OPTIONS_INVALID_VALUE,
+            context={"fragment": "mcp_server", "auth.mode": "none"},
+        )
+
+
 def resolve(config: ProjectConfig) -> ResolvedPlan:
     """Produce an ordered ResolvedPlan from ``config.options``.
 
@@ -293,10 +386,12 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     the injector).
     """
     project_backends = tuple(bc.language for bc in config.backends)
+    _check_value_backend_support(config, project_backends)
 
     option_values = _apply_option_defaults(config.options)
     fragment_set = _collect_fragments(option_values)
     fragment_set = _expand_deps(fragment_set)
+    _check_security_constraints(config, fragment_set)
     _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set)
     order = _topo_sort(fragment_set)

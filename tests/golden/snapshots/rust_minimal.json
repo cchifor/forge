@@ -29,11 +29,11 @@
       "sha256": "884c369a3d3c9a14"
     },
     "docker-compose.yml": {
-      "size": 6927,
-      "sha256": "90e4f82380777f4e"
+      "size": 6952,
+      "sha256": "408067fc2e02ad17"
     },
     "forge.toml": {
-      "size": 42186,
+      "size": 42977,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -169,24 +169,28 @@
       "sha256": "34bcdba3aaf1d37b"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 5135,
-      "sha256": "c2ea7e9cb40aea17"
+      "size": 6284,
+      "sha256": "31aaf37d14fefc23"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 5071,
-      "sha256": "1cbdfff43149d109"
+      "size": 10873,
+      "sha256": "dc8fffecf676de0e"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/authz.py": {
+      "size": 2901,
+      "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 10855,
-      "sha256": "4dece5a6c49782c1"
+      "size": 15261,
+      "sha256": "b408789d90301e17"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
       "sha256": "e633845c8e719bca"
     },
     "infra/gatekeeper/src/app/gatekeeper/helpers.py": {
-      "size": 9935,
-      "sha256": "fe56bb0856916a61"
+      "size": 11176,
+      "sha256": "550b68fe9ec298bd"
     },
     "infra/gatekeeper/src/app/gatekeeper/http_client.py": {
       "size": 4803,
@@ -217,20 +221,24 @@
       "sha256": "7b3deae1cb54bd9e"
     },
     "infra/gatekeeper/src/app/gatekeeper/oidc.py": {
-      "size": 3405,
-      "sha256": "ef154def12b37f3c"
+      "size": 3801,
+      "sha256": "c90fe005c73617ce"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/oidc_pkce.py": {
+      "size": 4901,
+      "sha256": "7600958719f667d7"
     },
     "infra/gatekeeper/src/app/gatekeeper/ratelimit.py": {
       "size": 2766,
       "sha256": "27019929bb1db31d"
     },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
-      "size": 23675,
-      "sha256": "0a48e5b3cdaf5622"
+      "size": 24989,
+      "sha256": "bebbec570db9b36e"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 30812,
-      "sha256": "fe28a13e76aacde2"
+      "size": 38427,
+      "sha256": "6bad66f463667f8b"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
@@ -245,8 +253,8 @@
       "sha256": "9c78204cea910aa0"
     },
     "infra/gatekeeper/src/app/gatekeeper/server_session.py": {
-      "size": 14783,
-      "sha256": "1da538f263b59d69"
+      "size": 14896,
+      "sha256": "52c90aac44694e93"
     },
     "infra/gatekeeper/src/app/gatekeeper/service_registry.py": {
       "size": 5174,
@@ -276,9 +284,13 @@
       "size": 2177,
       "sha256": "8c8d63d3825703e6"
     },
+    "infra/gatekeeper/src/app/middleware/log_redaction.py": {
+      "size": 4068,
+      "sha256": "4147b8b1df4b0262"
+    },
     "infra/gatekeeper/src/app/middleware/logging.py": {
-      "size": 3511,
-      "sha256": "c8f39561fc59b453"
+      "size": 3741,
+      "sha256": "712ce80f20efea6b"
     },
     "infra/gatekeeper/src/app/middleware/security_headers.py": {
       "size": 1434,
@@ -413,8 +425,8 @@
       "sha256": "a5ad4f2c2ac0626e"
     },
     "services/api/Dockerfile": {
-      "size": 3113,
-      "sha256": "4e4ba1aa7ac2aaf9"
+      "size": 3975,
+      "sha256": "f2ec3f88c4dcddb8"
     },
     "services/api/README.md": {
       "size": 1281,
@@ -437,12 +449,12 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1851,
-      "sha256": "eb6bfeb2634bd6b5"
+      "size": 2170,
+      "sha256": "ff04888b0a9406a4"
     },
     "services/api/docker-compose.yaml": {
-      "size": 836,
-      "sha256": "c242f2f5c34d0194"
+      "size": 1184,
+      "sha256": "75b5e8e3cc47181c"
     },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,
@@ -461,8 +473,8 @@
       "sha256": "84a5285ef7f1685f"
     },
     "services/api/src/config.rs": {
-      "size": 6766,
-      "sha256": "98fe0e28d61e9814"
+      "size": 10187,
+      "sha256": "cd90acd9b143c99a"
     },
     "services/api/src/data/mod.rs": {
       "size": 22,
@@ -505,8 +517,8 @@
       "sha256": "4007d90545bcff2f"
     },
     "services/api/src/main.rs": {
-      "size": 2217,
-      "sha256": "3f60189fd03340ef"
+      "size": 2947,
+      "sha256": "4e1636e2e682b20d"
     },
     "services/api/src/middleware/auth.rs": {
       "size": 8936,

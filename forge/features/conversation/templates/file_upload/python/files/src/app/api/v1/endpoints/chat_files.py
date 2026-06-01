@@ -1,9 +1,9 @@
 """Chat file upload / download endpoints.
 
-Not auth-gated by default (matches /tools and /ws/agent). Wrap with your
-project's auth dependency before production. Files land under ``UPLOAD_DIR``
-(default ``./uploads``), namespaced by the ``customer_id`` form field —
-supply it from your auth layer to keep tenants isolated.
+Auth-gated: the router below requires an authenticated user
+(``Depends(get_current_user)``). Files land under ``UPLOAD_DIR`` (default
+``./uploads``), namespaced by the ``customer_id`` form field — a follow-up
+should derive that from the verified identity rather than trust the caller.
 
 Persistence of ``ChatFile`` DB rows is left to the caller: the upload
 response includes everything needed (``id``, ``storage_path``, ``size_bytes``,
@@ -15,12 +15,16 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
+from weld.fastapi.security.auth import get_current_user
 
 from app.services.chat_file_service import get_storage, save_uploaded_file
 
-router = APIRouter()
+# Chat-file upload/download must be authenticated. (Tenant scoping of the
+# stored files from the verified identity — rather than the caller-supplied
+# customer_id form field — is a follow-up hardening step.)
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # UUID used when no customer_id is supplied — dev-mode convenience, NOT
 # safe for multi-tenant production use.

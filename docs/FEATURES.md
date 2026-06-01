@@ -807,10 +807,12 @@ BACKENDS:
   - ollama     python                (Python-only — ollama-python is the canonical client)
   - bedrock    python                (Python-only — aioboto3)
 
-Non-Python backends selecting ``anthropic`` / ``ollama`` / ``bedrock``
-resolve the abstract ``llm_port`` only; the adapter fragment is
-Python-only and silently skips on Node/Rust. Plugin authors fill the
-gap (Featured Plugin tier — see ``docs/known-issues.md``).
+Selecting ``anthropic`` / ``ollama`` / ``bedrock`` on a project with no
+Python backend is REJECTED at config time: the adapter is Python-only, so
+the service would otherwise start with the abstract ``llm_port`` wired to
+no adapter and fail at the first call. Add a Python backend, pick
+``openai`` (works on all three), or install a plugin-provided adapter
+(Featured Plugin tier — see ``docs/known-issues.md``).
 
 DEPENDENCY: provider-specific SDK (openai / @ai-sdk/openai / async-openai
             / anthropic / ollama / aioboto3)
@@ -978,6 +980,37 @@ ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN
 
 **Enables fragments:**
 - on `true` → `airlock_client`
+
+### `deploy.target`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `beta` · **Backends:** node, python, rust
+
+**Allowed values:** `none`, `docker-compose`, `kubernetes`
+
+_Deployment target — none, docker-compose, or Kubernetes + Helm._
+
+Selects the deployment infrastructure scaffold.
+
+- ``none`` (default): no deployment files beyond the standard generated
+  ``docker-compose.yml`` forge already emits for local dev.
+- ``docker-compose``: reserved for explicit compose-targeted tweaks; today
+  identical to ``none`` since compose is always generated.
+- ``kubernetes``: emits Kubernetes-native manifests under each backend's
+  ``k8s/`` (Deployment + Service + ConfigMap), a project-level
+  HorizontalPodAutoscaler, AND a Helm chart under ``helm/`` for templated,
+  multi-environment promotion.
+
+KUBERNETES manifests wire liveness/readiness probes to ``/health``, set
+resource requests/limits, and run as a non-root user. Per-environment
+values (image, replicas, namespace) live in the Helm chart's
+``values.yaml`` and resolve at ``helm install`` time; the raw ``k8s/``
+manifests use generic labels + an ``envFrom`` ConfigMap so they apply
+cleanly with ``kubectl apply -k`` / kustomize overlays.
+
+BACKENDS: python, node, rust (tier 1 — manifests are language-agnostic).
+
+**Enables fragments:**
+- on `kubernetes` → `deploy_kubernetes`, `deploy_k8s_hpa`, `deploy_helm_chart`
 
 ### `mcp_template.openapi_to_tools`
 

@@ -10,6 +10,14 @@ async def authenticate_request(*args: Any, **kwargs: Any) -> Any:
     return None
 
 
+async def get_current_user(*args: Any, **kwargs: Any) -> Any:
+    """Stub. Real impl raises HTTP 401 when no valid token is present; used as a
+    router-level FastAPI dependency to gate /mcp. Permissive here so generated
+    projects import + run their toolchains against the stub without standing up
+    a real auth stack (router-level deps discard the return value)."""
+    return None
+
+
 def initialize_auth(*args: Any, **kwargs: Any) -> None:
     """Stub. Real impl wires the AuthGuardBundle into FastAPI app state."""
 

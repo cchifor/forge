@@ -64,12 +64,26 @@ WORKDIR /app
 COPY --from=builder /workspace/target/release/{{ project_name }} /app/{{ project_name }}
 COPY --from=builder /workspace/target/release/migrate /app/migrate
 
+# Layered config profiles (RFC-008). The startup config load resolves
+# config/<ENV>.yaml relative to the working dir, so the profiles must exist in
+# the runtime image — parity with the Python and Node images, which both COPY
+# config/ into their runtime stage. Without this the prod profile (and the
+# fail-closed auth guard's view of it) would be silently absent.
+COPY config /app/config
+
 RUN groupadd --gid 10001 appuser \
     && useradd --uid 10001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
 ENV PORT={{ server_port }}
+# Default the runtime environment to production so the container loads the
+# production config profile and the fail-closed auth guard applies (parity with
+# the Python and Node service images, which set ENV/NODE_ENV=production). The
+# config loader treats an UNSET env as the "development" profile, which ships
+# auth disabled -- a containerized service must not silently fail open. Override
+# at deploy time (e.g. -e ENV=staging) when appropriate.
+ENV ENV=production
 EXPOSE {{ server_port }}
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

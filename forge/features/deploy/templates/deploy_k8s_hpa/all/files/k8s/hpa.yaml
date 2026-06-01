@@ -1,0 +1,32 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: app
+spec:
+  # EDIT REQUIRED: set scaleTargetRef.name to the per-backend Deployment you
+  # want to autoscale. Deployments are named ``app-<backend>`` — e.g.
+  # ``app-python``, ``app-node``, ``app-rust`` — matching the backends your
+  # project generated under ``k8s/``. One HPA targets one Deployment; copy
+  # this manifest per backend you want to scale. (This is a project-scoped
+  # template, so it ships a placeholder rather than guessing your backend mix.)
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app-REPLACE_WITH_BACKEND  # e.g. app-python / app-node / app-rust
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

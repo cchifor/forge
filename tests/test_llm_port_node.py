@@ -30,10 +30,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
 
 # -- fragment-registry shape --------------------------------------------------
@@ -314,14 +316,61 @@ def test_resolver_targets_node_in_mixed_python_node_project() -> None:
     assert BackendLanguage.NODE in adapter_targets
 
 
-def test_resolver_skips_anthropic_silently_on_node_only_project() -> None:
-    """``llm.provider=anthropic`` enables (llm_port, llm_anthropic) as a
-    bundle. On a Node-only project, ``llm_port`` lands (now has a
-    Node impl from Pillar D.2) but ``llm_anthropic`` is Python-only
-    and silently skips — adapter-less startup means first LLM call
-    errors with a clear "no adapter wired" message, not a generate-
-    time crash. This is the documented Pillar D.2 trade-off."""
-    plan = resolve(_node_project({"llm.provider": "anthropic"}))
+def test_resolver_rejects_anthropic_on_node_only_project() -> None:
+    """``llm.provider=anthropic`` ships only a Python adapter. On a Node-only
+    project it must hard-error at config time, rather than silently emitting
+    the abstract ``llm_port`` with no adapter (a service that starts and then
+    fails at the first LLM call)."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"llm.provider": "anthropic"}))
+
+
+def test_resolver_allows_openai_on_node_only_project() -> None:
+    """openai has a real Node SDK — it must NOT be rejected (false-positive
+    guard for the polyglot value check)."""
+    plan = resolve(_node_project({"llm.provider": "openai"}))
     names = [rf.fragment.name for rf in plan.ordered]
-    assert "llm_port" in names
-    assert "llm_anthropic" not in names
+    assert "llm_openai" in names
+
+
+@pytest.mark.parametrize("provider", ["anthropic", "ollama", "bedrock"])
+def test_resolver_rejects_python_only_providers_on_node(provider: str) -> None:
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"llm.provider": provider}))
+
+
+def test_resolver_allows_python_only_provider_on_mixed_project() -> None:
+    """A python+node project may select anthropic — the Python backend serves it."""
+    config = ProjectConfig(
+        project_name="P",
+        backends=[
+            BackendConfig(
+                name="py", project_name="P", language=BackendLanguage.PYTHON, server_port=5000
+            ),
+            BackendConfig(
+                name="js", project_name="P", language=BackendLanguage.NODE, server_port=5001
+            ),
+        ],
+        frontend=None,
+        options={"llm.provider": "anthropic"},
+    )
+    resolve(config)  # must not raise
+
+
+def test_resolver_skips_python_only_provider_when_default_origin() -> None:
+    """A persisted default (origin != user) must never hard-error."""
+    config = _node_project({"llm.provider": "anthropic"})
+    config.option_origins = {"llm.provider": "default"}
+    resolve(config)  # must not raise
+
+
+def test_resolver_rejects_rag_backend_on_node_only_project() -> None:
+    """The RAG vector-store stack is Python-only in 1.x."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"rag.backend": "qdrant"}))
+
+
+def test_resolver_rejects_mcp_on_node_only_project() -> None:
+    """The MCP server fragments are Python-only."""
+    with pytest.raises(OptionsError):
+        resolve(_node_project({"platform.mcp": True}))

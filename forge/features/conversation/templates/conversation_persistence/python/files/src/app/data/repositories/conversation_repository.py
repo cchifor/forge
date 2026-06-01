@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from sqlalchemy import desc, select
 from sqlalchemy.orm import selectinload
 
+from app.core.errors import PermissionDeniedError
 from app.data.models.conversation import (
     Conversation as ConversationModel,
     Message as MessageModel,
@@ -50,6 +51,10 @@ class ConversationRepository(TenantScopedRepository):
             .where(
                 ConversationModel.id == conversation_id,
                 ConversationModel.customer_id == self.customer_id,
+                # Scope to the owning user: conversations are per-user within a
+                # tenant (see list_conversations), so without this a user could
+                # read another user's conversation by id (IDOR).
+                ConversationModel.user_id == self.user_id,
             )
             .options(selectinload(ConversationModel.messages).selectinload(MessageModel.tool_calls))
         )
@@ -82,6 +87,19 @@ class ConversationRepository(TenantScopedRepository):
         content: str,
         metadata_json: dict | None = None,
     ) -> Message:
+        # Ownership check: refuse to append to a conversation that does not
+        # belong to this tenant + user (IDOR — append to another user's thread).
+        owner = await self.session.execute(
+            select(ConversationModel.id).where(
+                ConversationModel.id == conversation_id,
+                ConversationModel.customer_id == self.customer_id,
+                ConversationModel.user_id == self.user_id,
+            )
+        )
+        if owner.scalar_one_or_none() is None:
+            raise PermissionDeniedError(
+                "Conversation does not belong to the current user."
+            )
         model = MessageModel(
             conversation_id=conversation_id,
             customer_id=self.customer_id,
@@ -105,6 +123,24 @@ class ConversationRepository(TenantScopedRepository):
         error: str | None = None,
         duration_ms: float | None = None,
     ) -> None:
+        # Ownership check: the message's parent conversation must belong to this
+        # tenant + user (IDOR — record a tool call against another user's thread).
+        owner = await self.session.execute(
+            select(MessageModel.id)
+            .join(
+                ConversationModel,
+                MessageModel.conversation_id == ConversationModel.id,
+            )
+            .where(
+                MessageModel.id == message_id,
+                ConversationModel.customer_id == self.customer_id,
+                ConversationModel.user_id == self.user_id,
+            )
+        )
+        if owner.scalar_one_or_none() is None:
+            raise PermissionDeniedError(
+                "Message does not belong to the current user."
+            )
         tc = ToolCallModel(
             message_id=message_id,
             customer_id=self.customer_id,
@@ -124,6 +160,8 @@ class ConversationRepository(TenantScopedRepository):
         stmt = select(ConversationModel).where(
             ConversationModel.id == conversation_id,
             ConversationModel.customer_id == self.customer_id,
+            # Scope to the owning user (IDOR — archive another user's thread).
+            ConversationModel.user_id == self.user_id,
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()

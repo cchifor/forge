@@ -28,7 +28,11 @@ from forge.config._frontend import FRONTEND_RESERVED, FrontendConfig, FrontendFr
 
 if TYPE_CHECKING:
     from forge.options import Option
-from forge.config._validators import TRAEFIK_DASHBOARD_PORT, validate_port
+from forge.config._validators import (
+    TRAEFIK_DASHBOARD_PORT,
+    validate_port,
+    validate_slug,
+)
 from forge.config.typed_config import (
     FrontendExternal,
     FrontendGenerate,
@@ -225,6 +229,7 @@ class ProjectConfig:
         """
         if not self.project_name.strip():
             raise ValueError("Project name cannot be empty.")
+        validate_slug(self.project_slug)
         for bc in self.backends:
             bc.validate()
         if self.frontend:

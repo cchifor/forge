@@ -33,6 +33,7 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
     frontend_uses_subdirectory,
+    validate_slug,
 )
 from forge.docker_manager import (
     render_compose,
@@ -78,6 +79,25 @@ TEMPLATE_DIRS = {
 }
 
 
+def _resolve_final_root(output_dir: str | Path, project_slug: str) -> Path:
+    """Resolve ``<output_dir>/<project_slug>``, refusing any result that escapes
+    ``output_dir``.
+
+    Defence-in-depth behind ``validate_slug`` (config-level): callers that build
+    a ``ProjectConfig`` programmatically may skip ``validate()``, so the
+    generator independently refuses a slug that would resolve outside the output
+    directory (path traversal via a crafted project name).
+    """
+    output_base = Path(output_dir).resolve()
+    final_root = (output_base / project_slug).resolve()
+    if final_root == output_base or not final_root.is_relative_to(output_base):
+        raise GeneratorError(
+            f"Refusing to generate outside the output directory: {final_root}",
+            hint="The project name derives an unsafe slug; choose a different name.",
+        )
+    return final_root
+
+
 def generate(
     config: ProjectConfig,
     quiet: bool = False,
@@ -108,6 +128,11 @@ def generate(
     test harnesses + headless callers that don't need the richer
     payload.
     """
+    # Defence-in-depth for callers that build a ProjectConfig programmatically
+    # and skip ``config.validate()``: reject a traversal/separator slug before
+    # it is joined onto any path (staging, dry-run temp dir, or final root).
+    validate_slug(config.project_slug)
+
     if dry_run:
         # dry_run: generate into a throwaway temp dir as before.
         project_root = _create_root(config, dry_run=True)
@@ -116,7 +141,7 @@ def generate(
 
     # Real generation: check that the final output_dir doesn't already exist,
     # then generate into a staging directory and move on success.
-    final_root = Path(config.output_dir).resolve() / config.project_slug
+    final_root = _resolve_final_root(config.output_dir, config.project_slug)
     if final_root.exists():
         raise GeneratorError(
             f"Output directory already exists: {final_root}",
@@ -171,10 +196,19 @@ def _generate_into(
     _generate_backends(
         config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
     )
-    _generate_frontend_phase(config, project_root, quiet=quiet)
+    _generate_frontend_phase(config, project_root, quiet=quiet, dry_run=dry_run)
     _render_docker_stack(config, plan, project_root, quiet=quiet)
     _generate_frontend_extras(config, project_root, quiet=quiet)
     _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
+    # Renumber each Python backend's alembic migrations into a valid linear
+    # chain BEFORE provenance is stamped (so forge.toml records the rewritten
+    # content): fragments ship colliding/gapped revision numbers that alembic
+    # would otherwise reject, crashing ``alembic upgrade head`` at boot.
+    from forge.codegen.migration_chain import (  # noqa: PLC0415
+        rechain_backend_migrations,
+    )
+
+    rechain_backend_migrations(config, project_root, collector)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -383,7 +417,9 @@ def _generate_backends(
             )
 
 
-def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
+def _generate_frontend_phase(
+    config: ProjectConfig, project_root: Path, *, quiet: bool, dry_run: bool = False
+) -> None:
     """Phase 2: render the frontend via Copier when configured."""
 
     def _log(msg: str) -> None:
@@ -398,7 +434,7 @@ def _generate_frontend_phase(config: ProjectConfig, project_root: Path, *, quiet
             "generate.copier.frontend",
             framework=config.frontend.framework.value,
         ):
-            _generate_frontend(config, project_root, quiet=quiet)
+            _generate_frontend(config, project_root, quiet=quiet, dry_run=dry_run)
 
 
 def _render_docker_stack(
@@ -836,7 +872,14 @@ def _frontend_manifest_data(config: ProjectConfig):
     )
 
 
-def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet: bool) -> None:
+def _run_copier(
+    template_path: Path,
+    dst_path: Path,
+    data: dict[str, Any],
+    quiet: bool,
+    *,
+    dry_run: bool = False,
+) -> None:
     """Invoke Copier and translate its failures into GeneratorError.
 
     After a successful copy, writes a ``.copier-answers.yml`` inside the
@@ -846,6 +889,12 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
     ships ``{{ _copier_conf.answers_file }}.jinja``; forge's templates
     don't, so we write it ourselves from the exact ``data`` dict we just
     passed in.
+
+    When ``dry_run`` is set we pass ``skip_tasks=True`` so Copier does NOT
+    execute the template's ``_tasks`` (npm install, vue-tsc, eslint, git
+    init/commit) on the host — keeping ``--dry-run`` side-effect-free
+    (WS-3.2). File rendering still happens (into the dry-run temp dir the
+    caller set up), so the preview is faithful.
 
     Raised errors include the template path so JSON-mode callers see a useful
     envelope instead of a raw Copier traceback.
@@ -865,6 +914,7 @@ def _run_copier(template_path: Path, dst_path: Path, data: dict[str, Any], quiet
             defaults=True,
             overwrite=True,
             quiet=quiet,
+            skip_tasks=dry_run,
         )
     except ForgeError:
         raise
@@ -989,7 +1039,9 @@ def _generate_single_backend(
     return dst
 
 
-def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+def _generate_frontend(
+    config: ProjectConfig, project_root: Path, quiet: bool = False, dry_run: bool = False
+) -> Path:
     """Generate frontend using Copier."""
     if config.frontend is None:
         raise GeneratorError("_generate_frontend called without a frontend configured")
@@ -1009,7 +1061,7 @@ def _generate_frontend(config: ProjectConfig, project_root: Path, quiet: bool = 
     else:
         dst = project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
-    _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet)
+    _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet, dry_run=dry_run)
     return project_root / "apps" / config.frontend_slug
 
 

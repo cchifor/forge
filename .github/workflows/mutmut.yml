@@ -365,27 +365,20 @@ jobs:
           esac
           exit 0
 
-  # Scoped PR-gate (blocking).
-  #
-  # Fires on every PR (not gated by ``breaking-change`` label). The
-  # scope is intentionally narrow — only the three highest-blast-radius
-  # modules listed in ``tests/mutmut_baselines.json:pr_gate_modules``
-  # — so the wall-clock cost stays sub-20-minutes per shard. Files
-  # touched by the PR are intersected with that scoped set; if no
-  # scoped file is touched the gate exits 0 with a "no scoped modules
-  # touched" log line and no mutation analysis runs.
-  #
-  # Failure mode: a touched module's mutmut kill rate drops below its
-  # baseline floor in ``pr_gate_modules`` -> the workflow fails and the
-  # PR is blocked. Either add tests to kill the new survivors or
-  # lower the floor with a CHANGELOG entry + reviewer sign-off.
-  pr_gate:
+  # Scoped PR-gate (blocking) — split into setup -> per-module shards ->
+  # enforce so each module mutates in its own parallel job. The three
+  # scoped modules together generate ~480 mutants; run serially in one
+  # job they overflow the per-job timeout, so each module gets its own
+  # shard (wall-clock = slowest single module, not the sum). Files
+  # touched by the PR are intersected with the scoped set; if none is
+  # touched every job no-ops and the gate passes.
+  pr_gate_setup:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 10
+    outputs:
+      skip: ${{ steps.scope.outputs.skip }}
+      paths: ${{ steps.scope.outputs.paths }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -426,53 +419,162 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "paths=$paths_json" >> "$GITHUB_OUTPUT"
 
-      - name: Run mutmut on each touched scoped module
-        if: steps.scope.outputs.skip != 'true'
+  pr_gate_shard:
+    needs: pr_gate_setup
+    if: needs.pr_gate_setup.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    # Each shard mutates ONE module against its own (scoped) test set, so
+    # 75 min is ample headroom for the heaviest module on a slow runner.
+    timeout-minutes: 75
+    strategy:
+      # One shard per touched scoped module — independent, so don't cancel
+      # siblings if one regresses; the enforce job aggregates all results.
+      fail-fast: false
+      matrix:
+        path: ${{ fromJSON(needs.pr_gate_setup.outputs.paths) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Run mutmut on ${{ matrix.path }}
         run: |
           set -euo pipefail
           mkdir -p pr-gate-results
-          paths='${{ steps.scope.outputs.paths }}'
-          echo "$paths" | uv run python -c "
-          import json, sys
-          for p in json.load(sys.stdin):
-              print(p)
-          " | while IFS= read -r file; do
-            echo "::group::mutmut run on $file"
-            # Fresh cache per file so each module's results are independent.
-            rm -rf .mutmut-cache
-            # ``mutmut run`` exit codes are bit-flags (1=fatal, 2=survived,
-            # 4=timeout, 8=slow); a non-zero exit can mean "some mutants
-            # survived" which is data we still want. ``|| true`` lets the
-            # enforce step read the cache regardless.
-            uvx "mutmut@${MUTMUT_VERSION}" run \
-              --paths-to-mutate "$file" \
-              --runner "pytest -x" || true
-            # ``mutmut results`` text output triggers a pony-ORM bytecode
-            # decompile crash on Python 3.13 (mutmut 2.5.0); read the
-            # SQLite cache directly for a portable kill-rate summary.
-            uv run python .github/workflows/scripts/mutmut_kill_rate.py \
-              .mutmut-cache > "pr-gate-results/rate-${file//\//_}.json"
+          file="${{ matrix.path }}"
+          echo "::group::mutmut run on $file"
+          rm -rf .mutmut-cache
+
+          # PATCH-SCOPED: mutate ONLY the lines this PR added/changed in the
+          # module (``--use-patch-file``), not the whole module. The three
+          # scoped modules generate ~480 mutants in total; whole-module sweeps
+          # run for hours on a 2-core CI runner (~2 min/mutant) and overflow
+          # the job timeout. Scoping to the diff keeps each shard to the handful
+          # of mutants the PR actually introduced — and is truer to intent:
+          # the gate guards that NEW code is mutation-tested.
+          git diff "origin/${{ github.base_ref }}...HEAD" -- "$file" > module.patch
+          echo "changed-line patch for $file:"
+          cat module.patch || true
+          if [ ! -s module.patch ]; then
+            echo "no changed lines in $file — 0 mutants (pass)."
+            echo '{"killed": 0, "survived": 0, "timeout": 0, "suspicious": 0, "untested": 0, "total_evaluable": 0, "kill_rate": null, "patch_scoped": true}' \
+              > "pr-gate-results/rate-${file//\//_}.json"
             echo "::endgroup::"
-          done
+            exit 0
+          fi
+
+          # Scope the test runner to this module's own tests (see
+          # ``pr_gate_test_map`` in tests/mutmut_baselines.json). The default
+          # ``pytest`` collects the entire tree (e2e scaffolds + golden
+          # full-generation) under the --cov addopts, so a surviving mutant
+          # runs that slow suite to completion. ``-o addopts=`` drops the
+          # coverage plugin (irrelevant to mutation testing).
+          tests=$(uv run python -c "
+          import json
+          m = json.load(open('tests/mutmut_baselines.json')).get('pr_gate_test_map', {})
+          print(' '.join(m.get('$file', [])))
+          ")
+          # mutmut execs the runner as a bare command; ``pytest`` is not on
+          # PATH inside ``uvx mutmut``'s isolated env, so invoke it through
+          # ``uv run`` (the project venv) — same pattern as every other
+          # pytest call in this workflow. ``--no-sync`` skips a redundant
+          # re-resolve per mutant.
+          if [ -n "$tests" ]; then
+            runner="uv run --no-sync pytest -x -o addopts= -p no:cacheprovider $tests"
+          else
+            echo "::warning::no pr_gate_test_map entry for $file; using full-suite runner"
+            runner="uv run --no-sync pytest -x"
+          fi
+          echo "runner: $runner"
+          # ``mutmut run`` exit codes are bit-flags (1=fatal, 2=survived,
+          # 4=timeout, 8=slow); a non-zero exit can mean "some mutants
+          # survived" which is data we still want. ``|| true`` lets the
+          # enforce step read the cache regardless. ``--use-patch-file`` needs
+          # the ``whatthepatch`` lib, hence the ``--with``.
+          uvx "mutmut@${MUTMUT_VERSION}" --with whatthepatch run \
+            --paths-to-mutate "$file" \
+            --use-patch-file module.patch \
+            --runner "$runner" || true
+          # ``mutmut results`` text output triggers a pony-ORM bytecode
+          # decompile crash on Python 3.13 (mutmut 2.5.0); read the
+          # SQLite cache directly for a portable kill-rate summary.
+          uv run python .github/workflows/scripts/mutmut_kill_rate.py \
+            .mutmut-cache > "pr-gate-results/rate-${file//\//_}.json"
+          echo "::endgroup::"
+
+      - name: Sanitize artifact name
+        id: artname
+        run: |
+          path="${{ matrix.path }}"
+          echo "name=mutmut-pr-gate-${path//\//_}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload shard result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.artname.outputs.name }}
+          path: pr-gate-results/
+          retention-days: 14
+          if-no-files-found: warn
+
+  pr_gate:
+    # Final blocking gate: aggregate every shard's kill-rate JSON and
+    # enforce the floors. ``always()`` so a regressed/empty shard still
+    # reaches the enforce script (which fails on missing/zero-signal data)
+    # rather than the gate being skipped.
+    needs: [pr_gate_setup, pr_gate_shard]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          enable-cache: true
+
+      - name: Set Python 3.13
+        run: uv python install 3.13
+
+      - name: Install
+        run: uv sync --all-extras --dev
+
+      - name: Note skip
+        if: needs.pr_gate_setup.outputs.skip == 'true'
+        run: echo "no scoped modules touched — mutation analysis skipped (exit 0)"
+
+      - name: Fail if any shard did not succeed
+        if: needs.pr_gate_setup.outputs.skip != 'true' && needs.pr_gate_shard.result != 'success'
+        run: |
+          echo "::error::a pr_gate_shard job did not succeed (result=${{ needs.pr_gate_shard.result }}); cannot trust the kill-rate data."
+          exit 1
+
+      - name: Download all shard results
+        if: needs.pr_gate_setup.outputs.skip != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mutmut-pr-gate-*
+          path: pr-gate-results
+          merge-multiple: true
 
       - name: Enforce per-module kill-rate floors (blocking)
-        if: steps.scope.outputs.skip != 'true'
+        if: needs.pr_gate_setup.outputs.skip != 'true'
         run: |
           set -euo pipefail
           uv run python .github/workflows/scripts/mutmut_pr_gate.py \
             --baselines tests/mutmut_baselines.json \
             --results-dir pr-gate-results \
-            --touched '${{ steps.scope.outputs.paths }}'
-
-      - name: Upload PR-gate results
-        if: always() && steps.scope.outputs.skip != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mutmut-pr-gate-results
-          path: pr-gate-results/
-          retention-days: 14
-          if-no-files-found: warn
-
-      - name: Note skip
-        if: steps.scope.outputs.skip == 'true'
-        run: echo "no scoped modules touched — mutation analysis skipped (exit 0)"
+            --touched '${{ needs.pr_gate_setup.outputs.paths }}'

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -246,8 +247,21 @@ def _utc_now_iso() -> str:
 
     Format: ``YYYY-MM-DDTHH:MM:SSZ`` — matches the lexicographic-sortable
     form harvest uses to rank candidates by recency.
+
+    Honors ``SOURCE_DATE_EPOCH`` (the reproducible-builds standard): when set
+    to a valid integer, the timestamp is pinned to that epoch so two
+    otherwise-identical generations produce a byte-identical ``forge.toml``
+    (WS-3.3d). A missing or malformed value falls back to the wall clock.
     """
-    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if epoch:
+        try:
+            ts = datetime.datetime.fromtimestamp(int(epoch), datetime.UTC)
+        except (ValueError, OverflowError, OSError):
+            ts = datetime.datetime.now(datetime.UTC)
+    else:
+        ts = datetime.datetime.now(datetime.UTC)
+    return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def sha256_of(path: Path) -> str:

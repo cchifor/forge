@@ -13,6 +13,17 @@ access_logger = logging.getLogger("api.access")
 CORRELATION_HEADER = "x-request-id"
 
 
+def _path_matches_prefix(path: str, prefix: str) -> bool:
+    """Return True if ``path`` is ``prefix`` or a child segment of it.
+
+    Boundary-safe: ``/api/v1/health`` matches ``/api/v1/health`` and
+    ``/api/v1/health/live`` but not ``/api/v1/healthz-records``. Health probes
+    hit nested routes (the v1 router mounts the health router under
+    ``/api/v1/health``), so an exact-equality check never skipped them.
+    """
+    return path == prefix or path.startswith(prefix + "/")
+
+
 def _ensure_correlation_id(request: Request) -> str:
     """Return the correlation id for this request, generating one if absent.
 
@@ -42,6 +53,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self.logger = logger
         self.skip_paths = set(skip_paths or [])
 
+    def _should_skip(self, path: str) -> bool:
+        """Return True if ``path`` falls under any skip prefix."""
+        return any(_path_matches_prefix(path, p) for p in self.skip_paths)
+
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
@@ -49,7 +64,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # short-circuit and error paths carry a correlation id.
         correlation_id = _ensure_correlation_id(request)
 
-        if request.url.path in self.skip_paths:
+        if self._should_skip(request.url.path):
             response = await call_next(request)
             response.headers[CORRELATION_HEADER] = correlation_id
             return response

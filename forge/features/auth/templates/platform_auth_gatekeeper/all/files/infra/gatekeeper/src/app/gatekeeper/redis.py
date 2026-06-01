@@ -47,8 +47,8 @@ _RECONNECT_ERRORS = (
 class InMemoryStore:
     """
     Async in-memory key-value store that implements the Redis API subset
-    used by the Gatekeeper (``get``, ``set``, ``delete``, ``incr``,
-    ``expire``, ``sadd``, ``smembers``, ``srem``, ``pipeline``).
+    used by the Gatekeeper (``get``, ``getdel``, ``set``, ``delete``,
+    ``incr``, ``expire``, ``sadd``, ``smembers``, ``srem``, ``pipeline``).
     """
 
     def __init__(self) -> None:
@@ -71,6 +71,19 @@ class InMemoryStore:
     async def get(self, key: str) -> str | None:
         self._evict_if_expired(key)
         return self._data.get(key)
+
+    async def getdel(self, key: str) -> str | None:
+        """GETDEL key — atomically return the value and delete the key.
+
+        Returns ``None`` (and deletes nothing) when the key is absent or has
+        already expired. Mirrors Redis ``GETDEL`` so callers get true
+        single-use semantics without a get-then-delete TOCTOU window.
+        """
+        self._evict_if_expired(key)
+        value = self._data.pop(key, None)
+        if value is not None:
+            self._expiry.pop(key, None)
+        return value
 
     async def set(self, key: str, value: str, **kwargs: Any) -> None:  # noqa: A003
         self._data[key] = value
@@ -209,6 +222,10 @@ class InMemoryPipeline:
         self._commands.append(("get", (key,)))
         return self
 
+    def getdel(self, key: str) -> InMemoryPipeline:
+        self._commands.append(("getdel", (key,)))
+        return self
+
     async def execute(self) -> list[Any]:
         results: list[Any] = []
         for entry in self._commands:
@@ -323,6 +340,14 @@ class ResilientPipeline:
             self._redis_pipe.get(key)
         elif self._memory_pipe is not None:
             self._memory_pipe.get(key)
+        return self
+
+    def getdel(self, key: str) -> ResilientPipeline:
+        self._commands.append(("getdel", (key,)))
+        if self._redis_pipe is not None:
+            self._redis_pipe.getdel(key)
+        elif self._memory_pipe is not None:
+            self._memory_pipe.getdel(key)
         return self
 
     async def execute(self) -> list[Any]:
@@ -503,6 +528,14 @@ class ResilientRedis:
 
     async def get(self, key: str) -> str | None:
         return await self._exec("get", key)  # type: ignore[return-value]
+
+    async def getdel(self, key: str) -> str | None:
+        """GETDEL key — atomic get-and-delete (single-use semantics).
+
+        Delegates to live Redis ``GETDEL`` when connected, falling back to
+        the in-memory store's atomic ``getdel`` on connection failure.
+        """
+        return await self._exec("getdel", key)  # type: ignore[return-value]
 
     async def set(self, key: str, value: str, **kwargs: Any) -> None:  # noqa: A003
         await self._exec("set", key, value, **kwargs)

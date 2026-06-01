@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1147,
+      "size": 1156,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -47,10 +47,6 @@
     "apps/frontend/Dockerfile": {
       "size": 300,
       "sha256": "b111e771b45b6c55"
-    },
-    "apps/frontend/README.md": {
-      "size": 1182,
-      "sha256": "7ba6c525b10d7ce6"
     },
     "apps/frontend/components.json": {
       "size": 430,
@@ -88,6 +84,14 @@
       "size": 2104,
       "sha256": "f82c96be4a079032"
     },
+    "apps/frontend/scripts/answers.json": {
+      "size": 590,
+      "sha256": "2c025bd04a1e8576"
+    },
+    "apps/frontend/scripts/feature_templates.py": {
+      "size": 27777,
+      "sha256": "851e3e6e2a5c28f0"
+    },
     "apps/frontend/scripts/post_generate.py": {
       "size": 19125,
       "sha256": "c60b65280fed594b"
@@ -121,8 +125,8 @@
       "sha256": "873d6525e07e36ef"
     },
     "apps/frontend/src/app/router/index.ts": {
-      "size": 1283,
-      "sha256": "feac198e6d894d28"
+      "size": 1142,
+      "sha256": "0fe8a31dae1278f2"
     },
     "apps/frontend/src/app/styles/main.css": {
       "size": 5811,
@@ -177,8 +181,8 @@
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 5865,
-      "sha256": "e58d69e4db903bc2"
+      "size": 6074,
+      "sha256": "35b2ae2ecf202a7f"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
@@ -341,16 +345,16 @@
       "sha256": "25b4298c7a345e43"
     },
     "apps/frontend/src/features/home/api/useHealth.ts": {
-      "size": 818,
-      "sha256": "4f4d5252a9af463c"
+      "size": 810,
+      "sha256": "0103bfbbe9bd0a0c"
     },
     "apps/frontend/src/features/home/api/useInfo.test.ts": {
       "size": 1283,
       "sha256": "8a43fd01dc4174b4"
     },
     "apps/frontend/src/features/home/api/useInfo.ts": {
-      "size": 463,
-      "sha256": "be2f5aa372e00889"
+      "size": 459,
+      "sha256": "959cbd20001c7fb5"
     },
     "apps/frontend/src/features/home/index.ts": {
       "size": 258,
@@ -359,70 +363,6 @@
     "apps/frontend/src/features/home/ui/HomePage.vue": {
       "size": 4751,
       "sha256": "2861c7ad74ae5fce"
-    },
-    "apps/frontend/src/features/items/api/queryKeys.ts": {
-      "size": 312,
-      "sha256": "2bb5879b534efebe"
-    },
-    "apps/frontend/src/features/items/api/useItems.ts": {
-      "size": 3051,
-      "sha256": "94a493b4bd9e1c8d"
-    },
-    "apps/frontend/src/features/items/index.ts": {
-      "size": 708,
-      "sha256": "d218cc69b4862001"
-    },
-    "apps/frontend/src/features/items/model/item.schema.test.ts": {
-      "size": 1190,
-      "sha256": "00bc53fcb5a5db26"
-    },
-    "apps/frontend/src/features/items/model/item.schema.ts": {
-      "size": 518,
-      "sha256": "e0cf1b1bf4ed785f"
-    },
-    "apps/frontend/src/features/items/ui/ItemCreatePage.vue": {
-      "size": 2548,
-      "sha256": "0118dd6abc7f694a"
-    },
-    "apps/frontend/src/features/items/ui/ItemDetailPage.vue": {
-      "size": 5017,
-      "sha256": "d91349e4f1478efc"
-    },
-    "apps/frontend/src/features/items/ui/ItemsListPage.vue": {
-      "size": 5911,
-      "sha256": "81f6a6ad1006fb5a"
-    },
-    "apps/frontend/src/features/orders/api/queryKeys.ts": {
-      "size": 318,
-      "sha256": "3038e9010043c006"
-    },
-    "apps/frontend/src/features/orders/api/useOrders.ts": {
-      "size": 3075,
-      "sha256": "c4d3832292aa7e95"
-    },
-    "apps/frontend/src/features/orders/index.ts": {
-      "size": 733,
-      "sha256": "af3ef73313f65213"
-    },
-    "apps/frontend/src/features/orders/model/order.schema.test.ts": {
-      "size": 1207,
-      "sha256": "54d8f8864f7a3e3d"
-    },
-    "apps/frontend/src/features/orders/model/order.schema.ts": {
-      "size": 525,
-      "sha256": "eb10df8f171e4662"
-    },
-    "apps/frontend/src/features/orders/ui/OrderCreatePage.vue": {
-      "size": 2571,
-      "sha256": "b2fe767ba4cb09f9"
-    },
-    "apps/frontend/src/features/orders/ui/OrderDetailPage.vue": {
-      "size": 5061,
-      "sha256": "9edc9e0d10383275"
-    },
-    "apps/frontend/src/features/orders/ui/OrdersListPage.vue": {
-      "size": 5956,
-      "sha256": "e27a085c6771742a"
     },
     "apps/frontend/src/features/profile/index.ts": {
       "size": 169,
@@ -477,8 +417,8 @@
       "sha256": "54d6d5deab16fb0f"
     },
     "apps/frontend/src/shared/components/AppSidebar.vue": {
-      "size": 6561,
-      "sha256": "4f8be92f23032940"
+      "size": 6461,
+      "sha256": "b7f71c10aa8ed8e1"
     },
     "apps/frontend/src/shared/components/ConfirmDialog.vue": {
       "size": 1475,
@@ -565,24 +505,16 @@
       "sha256": "fb850d02c8328e6d"
     },
     "apps/frontend/src/shared/mocks/handlers.test.ts": {
-      "size": 1823,
-      "sha256": "7ce023f34c5c4e16"
+      "size": 1807,
+      "sha256": "4006fb723cc43d50"
     },
     "apps/frontend/src/shared/mocks/handlers.ts": {
-      "size": 1012,
-      "sha256": "d1010cf021893a21"
-    },
-    "apps/frontend/src/shared/mocks/items.handlers.ts": {
-      "size": 2539,
-      "sha256": "18cd511626b7b37b"
+      "size": 859,
+      "sha256": "a0a5598bb994e380"
     },
     "apps/frontend/src/shared/mocks/node.ts": {
       "size": 125,
       "sha256": "ee73808045d6c550"
-    },
-    "apps/frontend/src/shared/mocks/orders.handlers.ts": {
-      "size": 2553,
-      "sha256": "503c17c907e1287c"
     },
     "apps/frontend/src/shared/mocks/scenarios.ts": {
       "size": 644,
@@ -997,11 +929,11 @@
       "sha256": "37ed3cbd161c1509"
     },
     "docker-compose.yml": {
-      "size": 7883,
-      "sha256": "05f1129d97d2fc8c"
+      "size": 7908,
+      "sha256": "b42d2f6577197732"
     },
     "forge.toml": {
-      "size": 124259,
+      "size": 121452,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1157,24 +1089,28 @@
       "sha256": "34bcdba3aaf1d37b"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 5135,
-      "sha256": "c2ea7e9cb40aea17"
+      "size": 6284,
+      "sha256": "31aaf37d14fefc23"
     },
     "infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 5071,
-      "sha256": "1cbdfff43149d109"
+      "size": 10873,
+      "sha256": "dc8fffecf676de0e"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/authz.py": {
+      "size": 2901,
+      "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 10855,
-      "sha256": "4dece5a6c49782c1"
+      "size": 15261,
+      "sha256": "b408789d90301e17"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
       "sha256": "e633845c8e719bca"
     },
     "infra/gatekeeper/src/app/gatekeeper/helpers.py": {
-      "size": 9935,
-      "sha256": "fe56bb0856916a61"
+      "size": 11176,
+      "sha256": "550b68fe9ec298bd"
     },
     "infra/gatekeeper/src/app/gatekeeper/http_client.py": {
       "size": 4803,
@@ -1205,20 +1141,24 @@
       "sha256": "7b3deae1cb54bd9e"
     },
     "infra/gatekeeper/src/app/gatekeeper/oidc.py": {
-      "size": 3405,
-      "sha256": "ef154def12b37f3c"
+      "size": 3801,
+      "sha256": "c90fe005c73617ce"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/oidc_pkce.py": {
+      "size": 4901,
+      "sha256": "7600958719f667d7"
     },
     "infra/gatekeeper/src/app/gatekeeper/ratelimit.py": {
       "size": 2766,
       "sha256": "27019929bb1db31d"
     },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
-      "size": 23675,
-      "sha256": "0a48e5b3cdaf5622"
+      "size": 24989,
+      "sha256": "bebbec570db9b36e"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 30812,
-      "sha256": "fe28a13e76aacde2"
+      "size": 38427,
+      "sha256": "6bad66f463667f8b"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
@@ -1233,8 +1173,8 @@
       "sha256": "9c78204cea910aa0"
     },
     "infra/gatekeeper/src/app/gatekeeper/server_session.py": {
-      "size": 14783,
-      "sha256": "1da538f263b59d69"
+      "size": 14896,
+      "sha256": "52c90aac44694e93"
     },
     "infra/gatekeeper/src/app/gatekeeper/service_registry.py": {
       "size": 5174,
@@ -1264,9 +1204,13 @@
       "size": 2177,
       "sha256": "8c8d63d3825703e6"
     },
+    "infra/gatekeeper/src/app/middleware/log_redaction.py": {
+      "size": 4068,
+      "sha256": "4147b8b1df4b0262"
+    },
     "infra/gatekeeper/src/app/middleware/logging.py": {
-      "size": 3511,
-      "sha256": "c8f39561fc59b453"
+      "size": 3741,
+      "sha256": "712ce80f20efea6b"
     },
     "infra/gatekeeper/src/app/middleware/security_headers.py": {
       "size": 1434,
@@ -1421,7 +1365,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 504,
+      "size": 513,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1433,8 +1377,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/Dockerfile": {
-      "size": 3591,
-      "sha256": "158d68be001abf81"
+      "size": 3821,
+      "sha256": "293555405c6304ad"
     },
     "services/api/README.md": {
       "size": 33686,
@@ -1462,23 +1406,23 @@
     },
     "services/api/alembic/versions/0005_add_webhooks.py": {
       "size": 1596,
-      "sha256": "bc1ab3338579862d"
+      "sha256": "926ff9342980654c"
     },
     "services/api/alembic.ini": {
       "size": 621,
       "sha256": "fc4635dcb0b2a6d1"
     },
     "services/api/config/default.yaml": {
-      "size": 2003,
-      "sha256": "d3bcce5d2bb8c815"
+      "size": 2342,
+      "sha256": "c7ed56a09bdea768"
     },
     "services/api/config/development.yaml": {
       "size": 129,
       "sha256": "03aaca310beae07a"
     },
     "services/api/config/production.yaml": {
-      "size": 258,
-      "sha256": "9043413c9c096b3b"
+      "size": 425,
+      "sha256": "34ff0de7a81f7123"
     },
     "services/api/config/testing.yaml": {
       "size": 148,
@@ -1549,16 +1493,16 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/endpoints/admin.py": {
-      "size": 1361,
-      "sha256": "6e33ca61761d70f8"
+      "size": 2714,
+      "sha256": "eb85438faf026857"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
-      "size": 2375,
-      "sha256": "c3c962ba48af5f4e"
+      "size": 2699,
+      "sha256": "f6220cc951413ee6"
     },
     "services/api/src/app/api/v1/endpoints/health.py": {
-      "size": 1048,
-      "sha256": "0040db44f11f6b54"
+      "size": 1505,
+      "sha256": "45ddbefb8e3c392c"
     },
     "services/api/src/app/api/v1/endpoints/health_deep.py": {
       "size": 964,
@@ -1573,12 +1517,12 @@
       "sha256": "cf53af97da845701"
     },
     "services/api/src/app/api/v1/endpoints/tools.py": {
-      "size": 1399,
-      "sha256": "d9910921b12765cd"
+      "size": 1619,
+      "sha256": "25f42343a8d4d7ef"
     },
     "services/api/src/app/api/v1/endpoints/webhooks.py": {
-      "size": 2980,
-      "sha256": "d68ff1e3ce086adc"
+      "size": 3416,
+      "sha256": "9afdf1ccd4d976b0"
     },
     "services/api/src/app/cli/__init__.py": {
       "size": 752,
@@ -1617,8 +1561,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 4187,
-      "sha256": "8941c31f165088c0"
+      "size": 5500,
+      "sha256": "3e06ec5c6a320fa5"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -1641,8 +1585,8 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api/src/app/core/errors.py": {
-      "size": 15631,
-      "sha256": "e8991647107a6e27"
+      "size": 17824,
+      "sha256": "ed087e9e2e048760"
     },
     "services/api/src/app/core/health_checks.py": {
       "size": 2791,
@@ -1717,8 +1661,8 @@
       "sha256": "e0bb914b562cc421"
     },
     "services/api/src/app/data/repositories/conversation_repository.py": {
-      "size": 4457,
-      "sha256": "fdf074a11a7ec834"
+      "size": 6321,
+      "sha256": "a1dab5395668cbc7"
     },
     "services/api/src/app/data/repositories/item_repository.py": {
       "size": 2579,
@@ -1773,16 +1717,16 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 5454,
-      "sha256": "8f4d90f26bdb6af1"
+      "size": 5945,
+      "sha256": "1760eb9f4176bb65"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/middleware/audit.py": {
-      "size": 1541,
-      "sha256": "239e47e157cbde86"
+      "size": 2423,
+      "sha256": "102f4d35b032f83d"
     },
     "services/api/src/app/middleware/auth_context.py": {
       "size": 2369,
@@ -1797,8 +1741,8 @@
       "sha256": "d3cd3c78f97a73cd"
     },
     "services/api/src/app/middleware/logging.py": {
-      "size": 4820,
-      "sha256": "bd1b3f38852fbdf5"
+      "size": 5497,
+      "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api/src/app/middleware/rate_limit.py": {
       "size": 2443,
@@ -1953,7 +1897,7 @@
       "sha256": "ac8e4981a661ce9e"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 554,
+      "size": 563,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

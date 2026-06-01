@@ -150,7 +150,9 @@ export function useAgentClient() {
     if (!hasRun || isRunning.value) return
     const idx = messages.value.findIndex((m) => m.id === messageId)
     if (idx === -1) return
-    messages.value = messages.value.slice(0, idx)
+    // `messages` is a read-only computed view into the snapshot — truncate the
+    // source snapshot instead of assigning to the computed (mirrors editAndResend).
+    snapshot.value = { ...snapshot.value, messages: snapshot.value.messages.slice(0, idx) }
     error.value = null
     runAgent(lastRunOptions)
   }

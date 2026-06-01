@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 import hmac
+import json
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -40,7 +41,17 @@ from app.gatekeeper.helpers import (
 from app.gatekeeper.jwks import verify_token
 from app.gatekeeper.metrics import RATE_LIMIT_REJECTIONS, AuthMetricsRecorder
 from app.gatekeeper.oidc import exchange_code, refresh_tokens
+from app.gatekeeper.oidc_pkce import (
+    envelope_code_verifier,
+    envelope_nonce,
+    generate_nonce,
+    generate_pkce_verifier,
+    generate_state,
+    nonces_equal,
+    pkce_challenge_s256,
+)
 from app.gatekeeper.ratelimit import enforce_rate_limit, get_tenant_quota
+from app.gatekeeper.redis import get_redis
 from app.gatekeeper.tenant_config import (
     TenantConfig,
     get_fallback_config,
@@ -105,6 +116,92 @@ def _synthetic_keycloak_payload(
         "realm_access": {"roles": list(roles)},
         "https://platform/tenant_id": tenant_id,
     }
+
+
+# ── OIDC PKCE + nonce bound-state envelope (WS-2.5) ─────────────────────────
+
+_AUTH_STATE_PREFIX = "gk:auth-state:"
+
+
+def _auth_state_key(state: str) -> str:
+    return f"{_AUTH_STATE_PREFIX}{state}"
+
+
+async def _store_auth_state(
+    *,
+    state: str,
+    nonce: str,
+    code_verifier: str,
+    login_uri: str,
+) -> None:
+    """Persist the Authorization-Code-flow envelope server-side.
+
+    Keyed by the opaque ``state`` and given a bounded TTL so a leaked
+    ``state`` cannot be replayed indefinitely. Atomic set-with-TTL via
+    ``setex``.
+    """
+    cfg = get_settings()
+    envelope = {
+        "state": state,
+        "nonce": nonce,
+        "code_verifier": code_verifier,
+        "login_uri": login_uri,
+        "issued_at": int(time.time()),
+    }
+    redis = get_redis()
+    await redis.setex(
+        _auth_state_key(state),
+        cfg.oidc_state_envelope_ttl_seconds,
+        json.dumps(envelope),
+    )
+
+
+async def _pop_auth_state(state: str) -> dict[str, Any] | None:
+    """Atomically look up **and delete** the envelope for *state*.
+
+    Uses a single ``GETDEL`` so the read and the delete are one atomic
+    operation — there is no get-then-delete window in which a concurrent
+    ``/callback`` could consume the same envelope twice (single-use,
+    TOCTOU-free). Returns the parsed envelope, or ``None`` when the key is
+    absent (expired / never issued / already consumed) or corrupt. A
+    malformed row is still consumed by the ``GETDEL`` so it cannot be
+    replayed either.
+    """
+    redis = get_redis()
+    key = _auth_state_key(state)
+    # Atomic single-use pop: GETDEL returns the value and deletes it in one
+    # round-trip (no separate delete -> no TOCTOU race).
+    raw = await redis.getdel(key)
+    if not raw:
+        return None
+    try:
+        envelope = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning(
+            "Corrupt auth-state envelope for state=%s — rejecting: %s",
+            session_fp(state),
+            exc,
+        )
+        return None
+    if not isinstance(envelope, dict):
+        logger.warning(
+            "auth-state envelope for state=%s is not an object — rejecting",
+            session_fp(state),
+        )
+        return None
+    # Defense-in-depth: re-check the TTL window even though Redis already
+    # expires the key (the in-memory fallback's TTL semantics may differ, so
+    # this keeps the in-memory path single-use AND TTL-bounded).
+    cfg = get_settings()
+    issued_at = envelope.get("issued_at", 0)
+    if not isinstance(issued_at, int) or (
+        int(time.time()) - issued_at > cfg.oidc_state_envelope_ttl_seconds
+    ):
+        logger.warning(
+            "Expired auth-state envelope for state=%s — rejecting", session_fp(state)
+        )
+        return None
+    return envelope
 
 
 # ── GET /metrics ────────────────────────────────────────────────────────────
@@ -223,15 +320,73 @@ async def auth_userinfo(request: Request) -> Response:
 # ── GET /auth/login ────────────────────────────────────────────────────────
 
 
+async def _begin_oidc_login(
+    request: Request,
+    tenant: str,
+    forwarded_host: str | None,
+    return_uri: str,
+    *,
+    tc: TenantConfig | None = None,
+) -> Response:
+    """Mint + store the bound-state envelope and 302 to Keycloak.
+
+    The **single** code path that starts an OIDC Authorization Code flow.
+    It mints a per-flow PKCE verifier + nonce + opaque ``state``, persists
+    the bound-state envelope server-side (carrying the validated return URI,
+    so open-redirect protection lives in the envelope rather than the raw
+    ``state``), and sends the S256 challenge + nonce on the authorization
+    request. Both :func:`auth_login` (explicit login) and
+    :func:`_redirect_to_login` (session miss/expiry) funnel through here so
+    neither can ever build a login URL that ``/callback`` would then reject
+    for a missing envelope.
+
+    Returns 503 when the envelope cannot be persisted (Redis/store failure)
+    rather than leaking a 500.
+    """
+    scheme = request.headers.get("x-forwarded-proto", "http")
+    host = forwarded_host or request.headers.get("host", "localhost")
+    callback_uri = f"{scheme}://{host}/callback"
+
+    safe_redirect = validate_state(return_uri)
+
+    random_state = generate_state()
+    nonce = generate_nonce()
+    code_verifier = generate_pkce_verifier()
+    code_challenge = pkce_challenge_s256(code_verifier)
+    try:
+        await _store_auth_state(
+            state=random_state,
+            nonce=nonce,
+            code_verifier=code_verifier,
+            login_uri=safe_redirect,
+        )
+    except Exception as exc:  # noqa: BLE001 — fail closed on any store error
+        logger.error("Could not persist OIDC bound-state envelope: %s", exc)
+        return Response(status_code=503, content="Auth state store unavailable")
+
+    login_url = build_login_url(
+        tenant,
+        callback_uri,
+        state=random_state,
+        issuer_url=tc.issuer_url if tc else None,
+        client_id=tc.client_id if tc else None,
+        nonce=nonce,
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+    )
+    return RedirectResponse(url=login_url, status_code=302)
+
+
 @router.get("/auth/login")
 async def auth_login(request: Request, redirect_uri: str = "/") -> Response:
     """
     Login initiation endpoint for the frontend.
 
-    Builds the Keycloak authorization URL and redirects the browser to start
-    the OIDC Authorization Code flow.  The ``redirect_uri`` query parameter
-    is forwarded as OIDC ``state`` so the user is sent back to the correct
-    page after login.
+    Builds the Keycloak authorization URL (with PKCE S256 + nonce + a
+    server-side bound-state envelope) and redirects the browser to start the
+    OIDC Authorization Code flow. The ``redirect_uri`` query parameter is the
+    page to return to after login; it rides inside the envelope, not the raw
+    ``state``.
     """
     forwarded_host = request.headers.get("x-forwarded-host")
     try:
@@ -244,20 +399,9 @@ async def auth_login(request: Request, redirect_uri: str = "/") -> Response:
     if tc is None:
         tc = get_fallback_config(tenant)
 
-    scheme = request.headers.get("x-forwarded-proto", "http")
-    host = forwarded_host or request.headers.get("host", "localhost")
-    callback_uri = f"{scheme}://{host}/callback"
-
-    safe_redirect = validate_state(redirect_uri)
-
-    login_url = build_login_url(
-        tenant,
-        callback_uri,
-        state=safe_redirect,
-        issuer_url=tc.issuer_url if tc else None,
-        client_id=tc.client_id if tc else None,
+    return await _begin_oidc_login(
+        request, tenant, forwarded_host, redirect_uri, tc=tc
     )
-    return RedirectResponse(url=login_url, status_code=302)
 
 
 # ── GET /auth ───────────────────────────────────────────────────────────────
@@ -424,7 +568,7 @@ async def auth(request: Request) -> Response:
     if not session_id or server_session is None:
         metrics.method = "none"
         metrics.record("redirected")
-        return _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
     # 3. Look up the session row (read-only — does not extend idle TTL).
     # When ``session_timeout_enabled`` is on we go through
@@ -448,7 +592,7 @@ async def auth(request: Request) -> Response:
             metrics.record("session_absolute_expired")
         else:
             metrics.record("redirected")
-        return _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
     # 4. Validate the access token from the session row.
     try:
@@ -485,7 +629,7 @@ async def auth(request: Request) -> Response:
     except jwt.InvalidTokenError as exc:
         logger.warning("JWT validation failed for tenant=%s: %s", tenant, exc)
         metrics.record("failed")
-        return _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
 
 async def _try_refresh_or_redirect(
@@ -509,7 +653,7 @@ async def _try_refresh_or_redirect(
         # Shouldn't happen in steady state — lifecycle wires this up.
         # Defensive redirect rather than a 500.
         metrics.record("failed")
-        return _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
     try:
         token_data = await refresh_tokens(
@@ -550,43 +694,39 @@ async def _try_refresh_or_redirect(
     except (httpx.HTTPStatusError, jwt.InvalidTokenError, KeyError) as exc:
         logger.warning("Token refresh failed: %s", exc)
         metrics.record("failed")
-        return _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
 
-def _redirect_to_login(
+async def _redirect_to_login(
     request: Request,
     tenant: str,
     forwarded_host: str | None,
     *,
     tc: TenantConfig | None = None,
 ) -> Response | RedirectResponse:
-    """Build a 302 redirect to the Keycloak login page for *tenant*.
+    """Begin a fresh OIDC login on session miss/expiry.
 
     For API requests (URI starts with ``/api/``), return 401 instead of
     302 so the frontend's XHR/fetch client can handle it gracefully.
     A 302 redirect on an API call causes the browser to follow it across
     origins (to Keycloak), which triggers a CORS error.
+
+    For page navigations this delegates to :func:`_begin_oidc_login`, which
+    mints + stores the PKCE/nonce/state envelope before redirecting. This is
+    essential: ``/callback`` unconditionally requires a stored envelope, so a
+    bare login URL minted here (the pre-WS-2.5 behaviour) would make every
+    login-after-session-expiry fail with "Invalid or expired state".
     """
     original_uri = request.headers.get("x-forwarded-uri", "/")
 
-    # API requests get 401 — the frontend handles re-authentication
+    # API requests get 401 — the frontend handles re-authentication.
     if original_uri.startswith("/api/"):
         return Response(status_code=401, content="Session expired")
 
-    # Page navigations get 302 — redirect to Keycloak login
-    # The callback must be reachable from the browser, so use the forwarded host
-    scheme = request.headers.get("x-forwarded-proto", "http")
-    host = forwarded_host or request.headers.get("host", "localhost")
-    redirect_uri = f"{scheme}://{host}/callback"
-
-    login_url = build_login_url(
-        tenant,
-        redirect_uri,
-        state=original_uri,
-        issuer_url=tc.issuer_url if tc else None,
-        client_id=tc.client_id if tc else None,
+    # Page navigations get 302 — mint+store the envelope and redirect to KC.
+    return await _begin_oidc_login(
+        request, tenant, forwarded_host, original_uri, tc=tc
     )
-    return RedirectResponse(url=login_url, status_code=302)
 
 
 # ── GET /callback ───────────────────────────────────────────────────────────
@@ -610,6 +750,11 @@ async def callback(
     if not code:
         return Response(status_code=400, content="Missing authorization code")
 
+    # WS-2.5: a returned ``state`` is mandatory — it keys the bound-state
+    # envelope. No state ⇒ this was not a flow we initiated ⇒ fail closed.
+    if not state:
+        return Response(status_code=400, content="Missing state parameter")
+
     # 1. Resolve tenant
     forwarded_host = request.headers.get("x-forwarded-host")
     host_header = request.headers.get("host")
@@ -618,8 +763,23 @@ async def callback(
     except ValueError:
         return Response(status_code=400, content="Missing host information")
 
-    # 2. Validate state (open-redirect protection)
-    safe_state = validate_state(state)
+    # 2. WS-2.5: pop the bound-state envelope (single-use). A miss means the
+    # state is forged, expired, or already consumed — reject. The envelope
+    # carries the PKCE code_verifier, the expected nonce, and the original
+    # return URI (open-redirect protection moves here from the raw state).
+    envelope = await _pop_auth_state(state)
+    if envelope is None:
+        logger.warning("Invalid or expired OIDC state on /callback")
+        return Response(status_code=400, content="Invalid or expired state")
+    # Fail closed: a missing/empty code_verifier or nonce must reject the flow
+    # rather than silently disabling PKCE / nonce binding with an empty value.
+    try:
+        envelope_verifier = envelope_code_verifier(envelope)
+        expected_nonce = envelope_nonce(envelope)
+    except ValueError as exc:
+        logger.warning("Malformed bound-state envelope on /callback: %s", exc)
+        return Response(status_code=400, content="Invalid auth state")
+    safe_state = validate_state(envelope.get("login_uri", "/"))
 
     # 3. Build the redirect_uri that matches what we sent to Keycloak
     scheme = request.headers.get("x-forwarded-proto", "http")
@@ -631,7 +791,8 @@ async def callback(
     if tc is None:
         tc = get_fallback_config(tenant)
 
-    # 4. Exchange code for tokens
+    # 4. Exchange code for tokens — PKCE: send the verifier bound to the
+    # challenge we minted at /auth/login.
     try:
         token_data = await exchange_code(
             tenant,
@@ -640,6 +801,7 @@ async def callback(
             issuer_url=tc.issuer_url,
             client_id=tc.client_id,
             client_secret=tc.client_secret,
+            code_verifier=envelope_verifier,
         )
     except httpx.HTTPStatusError as exc:
         logger.error("Token exchange failed: %s", exc)
@@ -647,6 +809,32 @@ async def callback(
 
     access_token = token_data.get("access_token", "")
     refresh_token = token_data.get("refresh_token", "")
+
+    # 4a. WS-2.5: verify the OIDC nonce echoed in the id_token matches the
+    # value we bound to this flow. The id_token arrives over the TLS back-
+    # channel directly from the IdP token endpoint, so an unverified decode
+    # to READ the nonce is sufficient here (it mirrors the existing unverified
+    # decode of the access token below); PKCE + bound-state already defeat
+    # code injection/CSRF. Fail closed on a missing or mismatched nonce.
+    id_token = token_data.get("id_token", "")
+    if not id_token:
+        logger.error("Token response missing id_token — cannot verify nonce")
+        return Response(status_code=502, content="IdP did not return an id_token")
+    try:
+        id_claims = jwt.decode(
+            id_token,
+            options={
+                "verify_signature": False,
+                "verify_aud": False,
+                "verify_exp": False,
+            },
+        )
+    except jwt.InvalidTokenError as exc:
+        logger.error("Could not decode id_token to verify nonce: %s", exc)
+        return Response(status_code=502, content="Malformed id_token from IdP")
+    if not nonces_equal(expected_nonce, id_claims.get("nonce")):
+        logger.warning("OIDC nonce mismatch on /callback — rejecting")
+        return Response(status_code=401, content="Nonce verification failed")
 
     # 4b. Auto-assign tenant_id for self-registered users.
     # Keycloak's built-in registration form does not collect the

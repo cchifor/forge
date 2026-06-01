@@ -55,12 +55,30 @@ def _get_session_factory():
 
 async def _rag_search(query: str, top_k: int = 5) -> dict:
     """Semantic search over ingested RAG chunks. Returns the top matches
-    ordered by cosine similarity."""
+    ordered by cosine similarity.
+
+    Tenant-scoped and FAIL-CLOSED: the retriever is bound to the authenticated
+    ``customer_id`` read from the request context (set by the auth middleware /
+    ``set_auth_context``). If no tenant is in context — e.g. an unauthenticated
+    agent call — ``get_customer_id`` raises and the tool refuses to run, rather
+    than searching across *every* tenant's documents (cross-tenant leak)."""
+    import uuid
+
+    from weld.core.context import get_customer_id
+
     from app.rag.retriever import RagRetriever
+
+    cid = get_customer_id()
+    if cid is None:
+        raise PermissionError(
+            "rag_search requires an authenticated tenant context; refusing to "
+            "search across all tenants."
+        )
+    customer_id = cid if isinstance(cid, uuid.UUID) else uuid.UUID(str(cid))
 
     factory = _get_session_factory()
     async with factory() as session:
-        retriever = RagRetriever(session)
+        retriever = RagRetriever(session, customer_id=customer_id)
         hits = await retriever.search(query, top_k=top_k)
     return {
         "query": query,
