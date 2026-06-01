@@ -454,12 +454,17 @@ jobs:
           m = json.load(open('tests/mutmut_baselines.json')).get('pr_gate_test_map', {})
           print(' '.join(m.get('$file', [])))
           ")
+            # mutmut execs the runner as a bare command; ``pytest`` is not on
+            # PATH inside ``uvx mutmut``'s isolated env, so invoke it through
+            # ``uv run`` (the project venv) — same pattern as every other
+            # pytest call in this workflow. ``--no-sync`` skips a redundant
+            # re-resolve per mutant.
             if [ -n "$tests" ]; then
-              runner="pytest -x -o addopts= -p no:cacheprovider $tests"
+              runner="uv run --no-sync pytest -x -o addopts= -p no:cacheprovider $tests"
             else
               # No mapping -> fall back to the full suite (slower; may time out).
               echo "::warning::no pr_gate_test_map entry for $file; using full-suite runner"
-              runner="pytest -x"
+              runner="uv run --no-sync pytest -x"
             fi
             echo "runner: $runner"
             # ``mutmut run`` exit codes are bit-flags (1=fatal, 2=survived,
