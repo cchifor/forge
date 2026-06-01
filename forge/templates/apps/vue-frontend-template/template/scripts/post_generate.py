@@ -330,6 +330,15 @@ def patch_conditional_files() -> None:
         if layout.exists():
             layout.write_text(MAIN_LAYOUT_NO_CHAT, encoding="utf-8")
 
+        # The vendored canvas-core lives under src/features/ai_chat/ (deleted
+        # below when chat is off), so drop its tsconfig path alias too — a
+        # mapping pointing at a removed dir is dead config.
+        tsconfig = PROJECT_DIR / "tsconfig.app.json"
+        if tsconfig.exists():
+            content = tsconfig.read_text(encoding="utf-8")
+            lines = [l for l in content.splitlines(keepends=True) if "@forge/canvas-core" not in l]
+            tsconfig.write_text("".join(lines), encoding="utf-8")
+
     if not INCLUDE_AUTH:
         auth_file = PROJECT_DIR / "src" / "shared" / "composables" / "useAuth.ts"
         auth_file.write_text(USE_AUTH_NO_KEYCLOAK, encoding="utf-8")
