@@ -152,7 +152,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 	// Helper: drive an assistant reply through the AG-UI event subscriber
 	// so we get a real assistant message without mutating module state.
 	async function seedAssistantReply(asstId: string, asstContent: string) {
-		runAgent.mockImplementationOnce(async (_p: unknown, sub: any) => {
+		mockRunAgent.mockImplementationOnce(async (_p: unknown, sub: any) => {
 			await sub.onTextMessageStartEvent({
 				event: { messageId: asstId, role: 'assistant' }
 			});
@@ -170,40 +170,40 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.setApprovalMode('bypass');
 		await seedAssistantReply('asst-1', 'first reply');
 		expect(store.messages).toHaveLength(2);
-		const firstThreadId = runAgent.mock.calls[0][0].threadId;
+		const firstThreadId = mockRunAgent.mock.calls[0][0].threadId;
 
-		runAgent.mockResolvedValueOnce(undefined);
+		mockRunAgent.mockResolvedValueOnce(undefined);
 		store.regenerate('asst-1');
 		await Promise.resolve();
 
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 		// ── Load-bearing: regenerate keeps the thread. ──
-		expect(runAgent.mock.calls[1][0].threadId).toBe(firstThreadId);
+		expect(mockRunAgent.mock.calls[1][0].threadId).toBe(firstThreadId);
 	});
 
 	it('regenerate re-uses lastRunOptions (model + approval)', async () => {
 		store.setModel('gpt-4.1');
 		store.setApprovalMode('bypass');
 		await seedAssistantReply('asst-2', 'reply');
-		const firstProps = runAgent.mock.calls[0][0].forwardedProps;
+		const firstProps = mockRunAgent.mock.calls[0][0].forwardedProps;
 
-		runAgent.mockResolvedValueOnce(undefined);
+		mockRunAgent.mockResolvedValueOnce(undefined);
 		store.regenerate('asst-2');
 		await Promise.resolve();
 
-		expect(runAgent.mock.calls[1][0].forwardedProps).toEqual(firstProps);
+		expect(mockRunAgent.mock.calls[1][0].forwardedProps).toEqual(firstProps);
 	});
 
 	it('regenerate is a no-op for unknown messageId', async () => {
 		await seedAssistantReply('asst-3', 'reply');
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 
 		store.regenerate('does-not-exist');
 		await Promise.resolve();
 
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 		expect(store.messages).toHaveLength(2);
 	});
 
@@ -214,18 +214,18 @@ describe('getChatStore (AG-UI agent client)', () => {
 
 		// Now start a never-resolving run.
 		let resolveRun: (() => void) | null = null;
-		runAgent.mockImplementationOnce(
+		mockRunAgent.mockImplementationOnce(
 			() => new Promise<void>((resolve) => { resolveRun = resolve })
 		);
 		store.addUserMessage('follow up');
 		await Promise.resolve();
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
 		store.regenerate('asst-4');
 		store.regenerate('asst-4');
 
 		// Still 2 — both regens no-op'd while isRunning=true.
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
 		resolveRun?.();
 	});
@@ -235,9 +235,9 @@ describe('getChatStore (AG-UI agent client)', () => {
 		// any runAgent has captured lastRunOptions would otherwise
 		// fall through to runAgent(undefined), silently re-running
 		// with empty forwardedProps.
-		runAgent.mockReset();
+		mockRunAgent.mockReset();
 		store.addUserMessage('hi');
 		store.regenerate('some-id-that-may-or-may-not-exist');
-		expect(runAgent).not.toHaveBeenCalled();
+		expect(mockRunAgent).not.toHaveBeenCalled();
 	});
 });

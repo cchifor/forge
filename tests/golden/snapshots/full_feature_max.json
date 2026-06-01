@@ -81,8 +81,8 @@
       "sha256": "d2d885f0408dc4b5"
     },
     "apps/frontend/package.json": {
-      "size": 2104,
-      "sha256": "3f06b42fbbdfbc45"
+      "size": 2063,
+      "sha256": "7e0de2024be13c14"
     },
     "apps/frontend/scripts/answers.json": {
       "size": 588,
@@ -93,8 +93,8 @@
       "sha256": "851e3e6e2a5c28f0"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 19125,
-      "sha256": "c60b65280fed594b"
+      "size": 19649,
+      "sha256": "c39d5e1171143d95"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
@@ -175,6 +175,38 @@
     "apps/frontend/src/features/ai_chat/canvas/registry.ts": {
       "size": 1301,
       "sha256": "fc7fa326dfbebdf0"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/README.md": {
+      "size": 558,
+      "sha256": "f89e31d1e0084541"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/ag_ui_client.ts": {
+      "size": 10415,
+      "sha256": "c4bc5f8e195de690"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/events.ts": {
+      "size": 6997,
+      "sha256": "73e36291e78d82cb"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/index.ts": {
+      "size": 2616,
+      "sha256": "6a7a55d21cff41f4"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/mcp_approval_client.ts": {
+      "size": 9352,
+      "sha256": "40ae4117024e959d"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.ts": {
+      "size": 13725,
+      "sha256": "1f0f5032a873d259"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/reducer.ts": {
+      "size": 9390,
+      "sha256": "f31e2def86a08fe0"
+    },
+    "apps/frontend/src/features/ai_chat/canvas-core/snapshot.ts": {
+      "size": 3739,
+      "sha256": "990e9c5aa92441eb"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
       "size": 16059,
@@ -913,8 +945,8 @@
       "sha256": "e309286e33878d5e"
     },
     "apps/frontend/tsconfig.app.json": {
-      "size": 720,
-      "sha256": "cf2582278e480fd1"
+      "size": 797,
+      "sha256": "91e3653b6511656f"
     },
     "apps/frontend/tsconfig.json": {
       "size": 119,
@@ -925,15 +957,15 @@
       "sha256": "19e3cea2b4231a91"
     },
     "apps/frontend/vite.config.ts": {
-      "size": 1958,
-      "sha256": "37ed3cbd161c1509"
+      "size": 2335,
+      "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
       "size": 7908,
       "sha256": "b42d2f6577197732"
     },
     "forge.toml": {
-      "size": 129985,
+      "size": 131738,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
