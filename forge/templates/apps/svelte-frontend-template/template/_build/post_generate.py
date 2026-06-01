@@ -488,6 +488,16 @@ def remove_optional_files():
 
     if not INCLUDE_CHAT:
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "chat")
+        # The vendored canvas-core lived under the chat dir just removed, so
+        # drop its svelte.config.js alias line — a mapping at a deleted dir is
+        # dead config. (An empty `alias: {}` left behind is valid SvelteKit.)
+        svelte_config = PROJECT_DIR / "svelte.config.js"
+        if svelte_config.exists():
+            content = svelte_config.read_text(encoding="utf-8")
+            lines = [
+                l for l in content.splitlines(keepends=True) if "@forge/canvas-core" not in l
+            ]
+            svelte_config.write_text("".join(lines), encoding="utf-8")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatDrawer.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatBottomSheet.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "VerticalSplitHandle.svelte")

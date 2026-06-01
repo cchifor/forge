@@ -1,0 +1,35 @@
+name: forge_canvas
+description: Canvas registry + AG-UI SSE client for forge-generated Flutter applications.
+version: 1.0.0-alpha.7
+repository: https://github.com/forge-project/forge
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  forge_canvas_core: ^1.0.0-alpha.1
+  dio: ^5.7.0
+  http: ^1.2.0
+  json_annotation: ^4.9.0
+  flutter_markdown: ^0.7.4
+  flutter_highlight: ^0.7.0
+  json_patch: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  json_serializable: ^6.8.0
+  build_runner: ^2.4.13
+  mocktail: ^1.0.4
+  flutter_lints: ^5.0.0
+
+# Local-dev path resolution so the on-disk sibling resolves without
+# requiring `forge_canvas_core` to be published on pub.dev first.
+# Removed at publish time by the release pipeline (pub.dev forbids
+# `dependency_overrides` in published packages).
+dependency_overrides:
+  forge_canvas_core:
+    path: ../forge_canvas_core

@@ -636,6 +636,10 @@ def remove_optional_files():
         remove_path(lib_src / "features" / "chat")
         remove_path(lib_src / "shared" / "widgets" / "chat_button.dart")
         remove_path(test_src / "features" / "chat")
+        # The vendored canvas packages are only consumed by the chat feature;
+        # drop them (and their pubspec path: dep below) when chat is off.
+        remove_path(PROJECT_DIR / "packages" / "forge_canvas")
+        remove_path(PROJECT_DIR / "packages" / "forge_canvas_core")
         _patch_app_layout_shell_no_chat(lib_src / "shared" / "layout" / "app_layout_shell.dart")
         _patch_working_area_header_no_chat(lib_src / "shared" / "layout" / "working_area_header.dart")
         removed.append("chat")

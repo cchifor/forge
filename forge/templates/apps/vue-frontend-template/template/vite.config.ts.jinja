@@ -38,6 +38,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+{%- if include_chat %}
+      // canvas-core is vendored into the project (src/features/ai_chat/canvas-core/)
+      // rather than pinned as a published package — keep the `@forge/canvas-core`
+      // import specifier working by aliasing it to the vendored source.
+      '@forge/canvas-core': fileURLToPath(
+        new URL('./src/features/ai_chat/canvas-core/index.ts', import.meta.url),
+      ),
+{%- endif %}
     },
   },
   build: {
