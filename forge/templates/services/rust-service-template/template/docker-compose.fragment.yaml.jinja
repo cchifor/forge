@@ -35,6 +35,11 @@ services:
     ports:
       - "{{ server_port }}:{{ server_port }}"
     environment:
+      # Dev stack overrides the image's ENV=production so the startup auth guard
+      # (main.rs -> AppConfig::load) does not abort boot — the production profile
+      # enables auth but this stack sets no GATEKEEPER_ISSUER/SERVICE_AUDIENCE.
+      # Matches the Node/Python service fragments.
+      ENV: development
       RUST_LOG: info
       PORT: "{{ server_port }}"
       DATABASE_URL: "postgres://postgres:postgres@postgres:5432/{{ db_name }}"

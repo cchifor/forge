@@ -17,6 +17,18 @@
     "  block on a PR triggers a mutmut shard and a blocking floor",
     "  check; touching no path skips the gate entirely.",
     "",
+    "pr_gate_test_map: per-module list of test files the PR-gate mutmut",
+    "  runner executes for that module. The runner uses these instead of",
+    "  the whole suite: the default ``pytest`` collects the entire tree",
+    "  (e2e scaffolds + golden full-generation) under the --cov addopts,",
+    "  so a *surviving* mutant runs that slow suite to completion and",
+    "  exceeds the per-shard timeout -> mutmut records every mutant as a",
+    "  timeout -> total_evaluable==0 -> the gate fails with no signal.",
+    "  Scoping to each module's own tests keeps a shard at 1-5 min while",
+    "  still clearing the floors above (measured: provenance ~0.67,",
+    "  capability_resolver ~0.58, resolver ~0.5x). A module absent from",
+    "  this map falls back to the default runner.",
+    "",
     "Update policy mirrors docs/coverage-policy.md's ratchet rules —",
     "tightening floors needs a sprint; loosening them needs a CHANGELOG",
     "entry + RFC-002 justification."
@@ -25,6 +37,62 @@
     "forge/capability_resolver.py": 0.42,
     "forge/sync/forge_to_project/resolver/__init__.py": 0.50,
     "forge/sync/provenance.py": 0.62
+  },
+  "pr_gate_changed_line_survivors_max": {
+    "_comment": [
+      "Patch-scoped PR-gate budget: the gate mutates ONLY the lines a PR",
+      "changed in each module (mutmut --use-patch-file), because whole-module",
+      "sweeps take hours on CI's 2-core runners. Against a per-PR-variable",
+      "mutant set a kill-rate floor is meaningless, so the gate instead caps",
+      "the number of SURVIVING changed-line mutants per module. 0 = every",
+      "mutant on new code must be killed; a higher cap is a documented",
+      "allowance for diffs dominated by declarative / equivalent-mutant lines.",
+      "Ratchet down over time (loosening needs a CHANGELOG entry).",
+      "capability_resolver=24: the WS-7 polyglot-reject change added the",
+      "_check_value_backend_support FUNCTION (now fully unit-tested in",
+      "tests/test_value_backend_support.py — those logic mutants are killed)",
+      "PLUS three declarative lookup tables (_VALUE_REQUIRES_BACKEND,",
+      "_PYTHON_ONLY_WHEN_ACTIVE, _INACTIVE_VALUES) whose ~24 literal mutants",
+      "are largely equivalent (the tables' shape is asserted, but mutating an",
+      "individual frozenset/key isn't distinguishable per-line). Drops to a",
+      "handful once those table lines age out of the diff."
+    ],
+    "forge/capability_resolver.py": 24,
+    "forge/sync/forge_to_project/resolver/__init__.py": 0,
+    "forge/sync/provenance.py": 1
+  },
+  "pr_gate_test_map": {
+    "forge/capability_resolver.py": [
+      "tests/test_capability_resolver.py",
+      "tests/test_options.py",
+      "tests/test_resolve.py",
+      "tests/test_option_aliases.py",
+      "tests/test_plan_and_dryrun.py",
+      "tests/test_plan_validator.py",
+      "tests/test_fragment_cheap_wins.py",
+      "tests/test_fragment_context.py",
+      "tests/test_llm_port_node.py",
+      "tests/test_llm_port_rust.py",
+      "tests/test_cache_port.py",
+      "tests/test_error_port.py",
+      "tests/test_forgequeue_node.py",
+      "tests/test_forgequeue_rust.py",
+      "tests/test_agent_mode.py",
+      "tests/test_feature_injector.py",
+      "tests/test_plugin_emitters.py"
+    ],
+    "forge/sync/forge_to_project/resolver/__init__.py": [
+      "tests/test_resolve.py",
+      "tests/test_copier_update.py",
+      "tests/test_reapply_baseline.py",
+      "tests/test_three_way_merge.py"
+    ],
+    "forge/sync/provenance.py": [
+      "tests/test_provenance.py",
+      "tests/test_forge_toml_reproducible.py",
+      "tests/test_migrate_provenance_v2.py",
+      "tests/test_manifest.py"
+    ]
   },
   "modules": {
     "forge/appliers/injection.py": {

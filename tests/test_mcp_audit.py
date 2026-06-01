@@ -143,6 +143,89 @@ class TestMintAndVerify:
         )
 
 
+class TestSubjectBinding:
+    """An approval token must be bound to the authenticated subject so a token
+    minted for one user cannot be redeemed by another (the approval gate is
+    per-user, not per-service)."""
+
+    def test_roundtrip_with_subject(self, audit_module) -> None:
+        token = audit_module.mint_approval_token(
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-alice",
+        )
+        assert audit_module.verify_approval_token(
+            token,
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-alice",
+        )
+
+    def test_rejects_different_subject(self, audit_module) -> None:
+        token = audit_module.mint_approval_token(
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-alice",
+        )
+        assert not audit_module.verify_approval_token(
+            token,
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-mallory",
+        )
+
+    def test_subject_is_signed_not_just_embedded(self, audit_module) -> None:
+        """Forging the embedded subject to match the attacker must fail the
+        signature check, not slip through."""
+        token = audit_module.mint_approval_token(
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-alice",
+        )
+        # layout: server:tool:input_hash:subject:issued_at:signature
+        parts = token.split(":")
+        parts[3] = "user-mallory"
+        forged = ":".join(parts)
+        assert not audit_module.verify_approval_token(
+            forged,
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-mallory",
+        )
+
+    def test_anonymous_subject_roundtrips(self, audit_module) -> None:
+        """No subject (auth disabled / dev) still works: None on both sides."""
+        token = audit_module.mint_approval_token(
+            server="fs", tool="read_file", input_payload={"path": "/tmp/a.txt"}
+        )
+        assert audit_module.verify_approval_token(
+            token,
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+        )
+
+    def test_anonymous_token_not_redeemable_by_identified_user(
+        self, audit_module
+    ) -> None:
+        token = audit_module.mint_approval_token(
+            server="fs", tool="read_file", input_payload={"path": "/tmp/a.txt"}
+        )
+        assert not audit_module.verify_approval_token(
+            token,
+            server="fs",
+            tool="read_file",
+            input_payload={"path": "/tmp/a.txt"},
+            subject="user-alice",
+        )
+
+
 class TestRecordInvocation:
     def test_writes_jsonl_line(self, audit_module, tmp_path, monkeypatch) -> None:
         import json

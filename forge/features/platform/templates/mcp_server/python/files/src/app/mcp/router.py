@@ -20,10 +20,11 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from weld.fastapi.security.auth import get_current_user
 
 from app.mcp.audit import (
     AuditEntry,
@@ -59,7 +60,16 @@ class McpInvokeResponse(BaseModel):
     error: str | None = None
 
 
-router = APIRouter(prefix="/mcp", tags=["mcp"])
+# Every /mcp route requires an authenticated user: the server exposes tool
+# invocation (subprocess execution), approval-token minting, and an audit
+# log of user identities. ``get_current_user`` raises 401 when no valid
+# bearer token is present (``oauth2_scheme`` alone is auto_error=False and
+# would NOT gate). Enabling the MCP server (platform.mcp OR
+# agent.mode=tool_calling) requires auth.mode=generate (enforced in the
+# resolver), so the auth stack is always present here.
+router = APIRouter(
+    prefix="/mcp", tags=["mcp"], dependencies=[Depends(get_current_user)]
+)
 
 
 def _config_path() -> Path:
@@ -131,21 +141,32 @@ class McpMintResponse(BaseModel):
 
 
 @router.post("/approval/mint", response_model=McpMintResponse)
-async def mint_approval(req: McpMintRequest) -> McpMintResponse:
-    """Issue a signed approval token tied to (server, tool, input-hash).
+async def mint_approval(
+    req: McpMintRequest,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> McpMintResponse:
+    """Issue a signed approval token tied to (subject, server, tool, input-hash).
 
     The frontend's ApprovalDialog calls this after the user approves and
     then includes the returned token in the subsequent ``/mcp/invoke``
-    request. Tokens expire after an hour; the signature binds the
-    decision to the specific tool + payload so a token granted for one
-    call cannot be replayed against a different input.
+    request. Tokens expire after an hour; the signature binds the decision to
+    the authenticated subject + specific tool + payload, so a token granted to
+    one user for one call cannot be replayed against a different input or
+    redeemed by a different user.
     """
-    token = mint_approval_token(server=req.server, tool=req.tool, input_payload=req.input)
+    user_id = str(user.id) if user is not None else None
+    token = mint_approval_token(
+        server=req.server, tool=req.tool, input_payload=req.input, subject=user_id
+    )
     return McpMintResponse(token=token)
 
 
 @router.post("/invoke", response_model=McpInvokeResponse)
-async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeResponse:
+async def invoke_tool(
+    req: McpInvokeRequest,
+    request: Request,
+    user: Annotated[Any, Depends(get_current_user)],
+) -> McpInvokeResponse:
     """Proxy a tool call to the named server (audit + approval enforced).
 
     Pipeline:
@@ -170,14 +191,20 @@ async def invoke_tool(req: McpInvokeRequest, request: Request) -> McpInvokeRespo
     server_config = (config.get("servers") or {}).get(req.server) or {}
     approval_mode = str(server_config.get("approvalMode") or default_mode)
 
-    user_id = request.headers.get("x-gatekeeper-user-id")
+    # Identity comes from the verified token (the router-level
+    # get_current_user gate), NOT the spoofable x-gatekeeper-user-id header.
+    user_id = str(user.id) if user is not None else None
     audit_ts = time.time()
     audit_hash = hash_input(req.input)
 
     if approval_mode != "auto":
         token = req.approval_token or ""
         if not verify_approval_token(
-            token, server=req.server, tool=req.tool, input_payload=req.input
+            token,
+            server=req.server,
+            tool=req.tool,
+            input_payload=req.input,
+            subject=user_id,
         ):
             record_invocation(
                 AuditEntry(
@@ -241,8 +268,12 @@ class McpAuditEntry(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    ts: str
-    user_id: str
+    # Mirror the on-disk JSONL shape: ``ts`` is a float epoch and
+    # ``user_id`` is null for entries recorded without an authenticated
+    # subject (e.g. auto-approved). Declaring them str / non-optional made
+    # GET /mcp/audit 500 on real entries.
+    ts: float
+    user_id: str | None = None
     server: str
     tool: str
     input_hash: str

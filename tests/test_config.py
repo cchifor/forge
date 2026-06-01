@@ -9,6 +9,7 @@ from forge.config import (
     ProjectConfig,
     validate_features,
     validate_port,
+    validate_slug,
 )
 
 # -- validate_port ------------------------------------------------------------
@@ -190,6 +191,21 @@ class TestProjectConfig:
         assert cfg.backend_slug == "backend"
         assert cfg.frontend_slug == "frontend"
 
+    def test_rejects_parent_traversal_name(self):
+        """A name whose slug escapes the output dir must be rejected."""
+        cfg = self._make_config(project_name="../../evil")
+        with pytest.raises(ValueError):
+            cfg.validate()
+
+    def test_rejects_name_with_path_separator(self):
+        cfg = self._make_config(project_name="a/b")
+        with pytest.raises(ValueError):
+            cfg.validate()
+
+    def test_accepts_normal_spaced_name(self):
+        """Regression: ordinary names must still validate (no raw-name regex)."""
+        self._make_config(project_name="My Platform").validate()
+
     def test_flutter_excluded_from_port_check(self):
         """Flutter doesn't use host ports in Docker, so no collision."""
         cfg = self._make_config(
@@ -238,3 +254,62 @@ class TestProjectConfig:
             frontend=None,
         )
         cfg.validate()  # should not raise
+
+
+# -- validate_slug ------------------------------------------------------------
+
+
+class TestValidateSlug:
+    @pytest.mark.parametrize("slug", ["my_platform", "svc2", "a_b_c", "x"])
+    def test_accepts_safe_slugs(self, slug):
+        validate_slug(slug)  # must not raise
+
+    @pytest.mark.parametrize(
+        "slug",
+        ["", ".", "..", "../evil", "a/b", "a\\b", "/etc/passwd", "..\\win"],
+    )
+    def test_rejects_unsafe_slugs(self, slug):
+        with pytest.raises(ValueError):
+            validate_slug(slug)
+
+
+# -- generator path containment (defence-in-depth) ----------------------------
+
+
+class TestGeneratorPathContainment:
+    def test_traversal_slug_cannot_escape_output_dir(self, tmp_path):
+        from forge.errors import GeneratorError
+        from forge.generator import _resolve_final_root
+
+        with pytest.raises(GeneratorError):
+            _resolve_final_root(tmp_path, "../../escape")
+
+    def test_normal_slug_resolves_within_output_dir(self, tmp_path):
+        from forge.generator import _resolve_final_root
+
+        root = _resolve_final_root(tmp_path, "my_platform")
+        assert root.is_relative_to(tmp_path.resolve())
+        assert root.name == "my_platform"
+
+    def _traversal_config(self):
+        return ProjectConfig(
+            project_name="../../escape",
+            backends=[BackendConfig(project_name="svc")],
+            frontend=None,
+        )
+
+    def test_generate_rejects_traversal_dry_run(self):
+        """Public generate() guards the dry-run temp-dir join too."""
+        from forge.generator import generate
+
+        with pytest.raises(ValueError):
+            generate(self._traversal_config(), dry_run=True)
+
+    def test_generate_rejects_traversal_real(self, tmp_path):
+        """Public generate() guards the staging join too."""
+        from forge.generator import generate
+
+        cfg = self._traversal_config()
+        cfg.output_dir = str(tmp_path)
+        with pytest.raises(ValueError):
+            generate(cfg, dry_run=False)

@@ -38,6 +38,7 @@ class GatekeeperSettings(BaseSettings):
     | KEY_BACKEND               | file | kms (Phase 0 ships file only)         |
     | SIGNING_KEY_DIR           | PEM directory for FileKeyRing                |
     | KMS_KEY_ARN               | AWS KMS asymmetric key ARN (kms backend)     |
+    | ADMIN_ROLE                | Realm role required to manage API keys       |
     """
 
     model_config = SettingsConfigDict(
@@ -63,6 +64,14 @@ class GatekeeperSettings(BaseSettings):
     # Tenant config cache (dynamic resolution via TMS)
     tenant_config_cache_ttl: int = 60  # seconds
 
+    # ── OIDC PKCE + nonce + bound state (WS-2.5) ──────────────────────
+    # Lifetime of the server-side Authorization-Code-flow envelope
+    # (random ``state`` → {nonce, code_verifier, login_uri}). It must be
+    # long enough for a human to complete the Keycloak login but short
+    # enough to bound replay of a leaked ``state``. Mirrors the typical
+    # OAuth redirect timeout.
+    oidc_state_envelope_ttl_seconds: int = 300  # 5 min
+
     # Auto-assignment of tenant_id for self-registered users.
     # The Keycloak built-in registration form does not collect tenant_id, so
     # newly-registered users would otherwise produce tokens missing the
@@ -74,6 +83,14 @@ class GatekeeperSettings(BaseSettings):
     default_tenant_id: str = "00000000-0000-0000-0000-000000000001"
     tenant_id_claim: str = "https://platform/tenant_id"
     keycloak_admin_realm: str = "app"
+
+    # ── Authorization ─────────────────────────────────────────────────
+    # Realm role (from the Keycloak access token's ``realm_access.roles``)
+    # that a user must hold to manage API keys via ``/api/v1/api-keys``
+    # (create / list / revoke). These endpoints mint tenant-wide
+    # credentials, so they are gated behind an explicit admin role rather
+    # than mere authentication. Operator-overridable via ``ADMIN_ROLE``.
+    admin_role: str = "admin"
 
     # Internal test bypass (disabled by default, dev/test environments only)
     test_bypass_enabled: bool = False
@@ -156,8 +173,31 @@ class GatekeeperSettings(BaseSettings):
 _instance: GatekeeperSettings | None = None
 
 
+#: Environments exempt from the production dev-secret rejection. Mirrors the
+#: generated python-service ``SecurityConfig._reject_default_secret_in_prod``
+#: exemption set so all secret guards behave identically.
+_DEV_SECRET_EXEMPT_ENVS = frozenset(
+    {"development", "dev", "local", "test", "testing"}
+)
+
+#: Known dev sentinel values shipped in the gatekeeper dev compose. Booting a
+#: production-like environment with any of these means the operator forgot to
+#: override it, so the gatekeeper refuses to start (fail closed). Keep in sync
+#: with ``platform_auth_gatekeeper/compose.yaml``.
+_DEV_SECRET_SENTINELS = frozenset(
+    {
+        "gatekeeper-dev-secret",  # GATEKEEPER_CLIENT_SECRET
+        "super-secret-string",  # legacy placeholder
+        "L9dXzDhHXxIbDpzmUrNSCMUgCl0rYmQ6j6lwtWXH_A4=",  # SESSION_FERNET_KEY
+        "UVEc0SmYvD9UcwKTlz_fMTusqFVVTNLliJ96ChlPDCI=",  # DELEGATION_GRANT_FERNET_KEY
+        "dev-gatekeeper-secret-override-in-production",  # shipped secret_key
+    }
+)
+
+
 def get_settings() -> GatekeeperSettings:
     """Return (and cache) the singleton settings instance."""
+    import os as _os
     import sys as _sys
     import logging as _log
 
@@ -176,6 +216,50 @@ def get_settings() -> GatekeeperSettings:
                 "unique value before starting the gatekeeper."
             )
             _sys.exit(1)
+
+        # ── Security: refuse to boot a prod env with dev sentinels ────────
+        # The dev compose ships real dev secrets (client secret, both Fernet
+        # keys, COOKIE_SECURE=false, the preshared S2S backend). They are fine
+        # locally but a production-like deploy that still carries them means the
+        # operator forgot to override — fail closed. Env resolved exactly as the
+        # python-service secret guard does; only explicit dev/test names exempt.
+        _env = _os.getenv("ENV", _os.getenv("ENVIRONMENT", "production"))
+        if _env.strip().lower() not in _DEV_SECRET_EXEMPT_ENVS:
+            _bad_secrets = [
+                name
+                for name, value in (
+                    ("GATEKEEPER_CLIENT_SECRET", _instance.gatekeeper_client_secret),
+                    ("SESSION_FERNET_KEY", _instance.session_fernet_key),
+                    ("DELEGATION_GRANT_FERNET_KEY", _instance.delegation_grant_fernet_key),
+                )
+                if value in _DEV_SECRET_SENTINELS
+            ]
+            if _bad_secrets:
+                _logger.critical(
+                    "Refusing to start in env=%s: these secrets still hold the "
+                    "shipped dev value(s) %s. Override them with strong unique "
+                    "values (Fernet keys via "
+                    "`python -c 'from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())'`).",
+                    _env,
+                    _bad_secrets,
+                )
+                _sys.exit(1)
+            if not _instance.cookie_secure:
+                _logger.critical(
+                    "Refusing to start in env=%s: COOKIE_SECURE is false. "
+                    "Session cookies must be HTTPS-only in production.",
+                    _env,
+                )
+                _sys.exit(1)
+            if _instance.svc_auth_backend == "preshared":
+                _logger.critical(
+                    "Refusing to start in env=%s: SVC_AUTH_BACKEND=preshared is "
+                    "a dev-only service-to-service backend. Use 'k8s' or 'mtls' "
+                    "in production.",
+                    _env,
+                )
+                _sys.exit(1)
 
         # ── Security: validate signing key material ───────────────────────
         if _instance.key_backend == "file":

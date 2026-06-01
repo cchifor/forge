@@ -77,6 +77,13 @@ jobs:
           - node-svelte
           - rust-no-frontend
           - multi-backend-with-keycloak
+          # WS-5.1 — un-dark the chat-on type-check lanes. These map to
+          # test_vue_chat_on_typechecks / test_svelte_chat_on_typechecks /
+          # test_flutter_full_analyzes, which existed but were never selected
+          # by the matrix, so the generated chat surfaces shipped untested.
+          - vue-chat
+          - svelte-chat
+          - flutter-full
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -91,13 +98,17 @@ jobs:
           node-version: "22"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned stable
 
       - name: Install Flutter (only for flutter presets)
         if: startsWith(matrix.preset, 'flutter-') || matrix.preset == 'multi-backend-keycloak'
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: "3.24.x"
+          # The generated Flutter app targets a modern toolchain (flutter_lints
+          # ^6, riverpod ^3, freezed ^3, go_router ^17 all floor at Dart ^3.8.0).
+          # Track the latest stable so `flutter pub get` can resolve them; the
+          # old 3.24.x pin shipped Dart 3.5.4 and failed version solving.
+          channel: stable
           cache: true
 
       - name: Cache cargo registry & target

@@ -85,6 +85,59 @@ export interface LoadOptions {
 	processEnv?: NodeJS.ProcessEnv;
 }
 
+/**
+ * Environments EXEMPT from the production fail-closed auth check. Mirrors the
+ * Python ``SecurityConfig._reject_default_secret_in_prod`` exemption set so all
+ * three backends behave identically (WS-2.1 parity).
+ */
+const AUTH_GUARD_EXEMPT_ENVS = new Set([
+	"development",
+	"dev",
+	"local",
+	"test",
+	"testing",
+]);
+
+/**
+ * Fail closed in production-like environments when auth is enabled.
+ *
+ * The platform auth middleware reads the OIDC issuer/audience from the
+ * ``GATEKEEPER_ISSUER`` / ``SERVICE_AUDIENCE`` env vars (NOT the loaded
+ * config), and throws at bootstrap if they are missing. This surfaces the same
+ * misconfiguration earlier — at config load — with a clear message. Runs here
+ * (not in the zod schema) so it reads the SAME resolved ``processEnv`` the
+ * loader used, honoring ``options.processEnv``/``options.env``. The guard
+ * treats an unset env as ``production`` (fail closed) regardless of the
+ * profile-selection default.
+ */
+function assertProdAuthConfigured(
+	config: AppConfig,
+	processEnv: NodeJS.ProcessEnv,
+	resolvedEnv: string | undefined,
+): void {
+	const env = (
+		resolvedEnv ??
+		processEnv.ENV ??
+		processEnv.NODE_ENV ??
+		"production"
+	)
+		.trim()
+		.toLowerCase();
+	if (AUTH_GUARD_EXEMPT_ENVS.has(env)) return;
+	if (!config.security.auth.enabled) return;
+
+	for (const varName of ["GATEKEEPER_ISSUER", "SERVICE_AUDIENCE"]) {
+		const value = (processEnv[varName] ?? "").trim();
+		if (!value) {
+			throw new Error(
+				`${varName} is unset or blank but security.auth.enabled is true — ` +
+					"set the real Gatekeeper issuer/audience before running in " +
+					"production (the auth middleware reads these env vars).",
+			);
+		}
+	}
+}
+
 export function loadConfig(options: LoadOptions = {}): AppConfig {
 	const processEnv = options.processEnv ?? process.env;
 	const env =
@@ -110,5 +163,10 @@ export function loadConfig(options: LoadOptions = {}): AppConfig {
 	const appLayer = merged.app as Dict;
 	if (typeof appLayer.env !== "string") appLayer.env = env;
 
-	return AppConfigSchema.parse(merged);
+	const config = AppConfigSchema.parse(merged);
+	// Fail closed on a production-like env with auth enabled but the auth
+	// middleware's required env vars missing — uses the resolved processEnv so
+	// it honors the options.processEnv/options.env hooks.
+	assertProdAuthConfigured(config, processEnv, options.env);
+	return config;
 }

@@ -92,7 +92,12 @@ audit:
   log_request_body: false
   max_body_size: 51200
   excluded_paths:
+    # Health probes are mounted at /api/v1/health/{live,ready}; the skip match
+    # is prefix-aware so "/api/v1/health" covers both. "/health" stays as a bare
+    # alias. This list REPLACES the model default at config-load time, so the
+    # real mounted prefix MUST be listed here or probes get audited + logged.
     - "/health"
+    - "/api/v1/health"
     - "/metrics"
     - "/docs"
     - "/openapi.json"

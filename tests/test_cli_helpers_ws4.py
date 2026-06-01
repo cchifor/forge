@@ -107,6 +107,17 @@ class TestBuildBackendsFromCfg:
         assert backends[1].server_port == 5001
         assert backends[2].server_port == 5002
 
+    def test_unknown_language_in_list_raises(self) -> None:
+        """An unknown language must error, not silently coerce to Python."""
+        cfg = {"backends": [{"name": "svc", "language": "cobol"}]}
+        with pytest.raises(ValueError, match="[Ll]anguage"):
+            _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
+
+    def test_unknown_single_backend_language_raises(self) -> None:
+        cfg = {"backend": {"language": "cobol"}}
+        with pytest.raises(ValueError, match="[Ll]anguage"):
+            _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")
+
     def test_invalid_backend_entry_skipped(self) -> None:
         cfg = {"backends": [{"name": "ok"}, "garbage", 42, {"name": "also-ok"}]}
         backends = _build_backends_from_cfg(_Resolver(_empty_args(), cfg), "Proj", "desc")

@@ -112,11 +112,12 @@ function editAndResend(messageId: string, newContent: string, options?: ChatRunO
 }
 
 function regenerate(messageId: string) {
-	if (!hasRun || isRunning) return;
-	const idx = messages.findIndex((m) => m.id === messageId);
+	if (!hasRun || snapshot.isRunning) return;
+	const idx = snapshot.messages.findIndex((m) => m.id === messageId);
 	if (idx === -1) return;
-	messages = messages.slice(0, idx);
-	lastError = null;
+	// Truncate the source snapshot (mirrors editAndResend); `isRunning` /
+	// `messages` / `error` are fields of `snapshot`, not free variables.
+	snapshot = { ...snapshot, messages: snapshot.messages.slice(0, idx), error: null };
 	void runAgent(lastRunOptions);
 }
 

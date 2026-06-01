@@ -221,26 +221,16 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
-      - name: Extract most recent dated section
-        # Re-runs the exact awk pattern release.yml uses (line 165 of
-        # release.yml) against the most recent dated `## [X.Y.Z]`
-        # section. A CHANGELOG.md that shipped without its per-version
-        # section would produce an empty extract — a release day
-        # nightmare we prefer to catch here.
+      - name: Validate the [Unreleased] section extracts cleanly
+        # WS-4.2: validate the SAME section release.yml actually publishes —
+        # the [Unreleased] block — via the shared extractor, which exits
+        # non-zero on an empty/missing section. The old code validated the
+        # most-recent *dated* section instead, so the dry-run could pass while
+        # the real release shipped empty notes (or vice versa).
         run: |
           set -euo pipefail
-          version=$(grep -oP '^## \[\K\d+\.\d+\.\d+(?:[a-z]+\d+)?' CHANGELOG.md | head -1)
-          if [ -z "$version" ]; then
-            echo "::error::No dated ## [X.Y.Z] section found in CHANGELOG.md"
-            exit 1
-          fi
-          echo "Most recent dated version section: $version"
-          awk -v v="$version" '/^## \[/ { in_section=0 } $0 ~ "^## \\[" v "\\]" { in_section=1; next } in_section' CHANGELOG.md > release-notes.md
-          if [ ! -s release-notes.md ]; then
-            echo "::error::Extraction for $version produced empty output"
-            exit 1
-          fi
-          echo "--- First 30 lines ---"
+          bash .github/scripts/extract-changelog.sh Unreleased CHANGELOG.md > release-notes.md
+          echo "--- Release notes that would publish (first 30 lines) ---"
           head -30 release-notes.md
 
   dryrun-ok:

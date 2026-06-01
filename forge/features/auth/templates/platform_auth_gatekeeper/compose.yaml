@@ -48,6 +48,11 @@ service:
     - gatekeeper_signing_keys
 
   environment:
+    # Local dev stack: the get_settings() guard defaults an UNSET env to
+    # production and then refuses to boot with the dev secrets below, so the
+    # dev compose must pin ENV=development (the guard exempts dev/test). A real
+    # production deploy overrides these secrets AND sets ENV=production.
+    ENV: "development"
     # ── Keycloak bridge (login form + Admin API consumer) ────────────
     KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
     KEYCLOAK_ADMIN_REALM: "app"

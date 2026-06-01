@@ -4,6 +4,11 @@ services:
     ports:
       - "{{ server_port }}:{{ server_port }}"
     environment:
+      # Local compose runs in development: the image pins ENV=production (so a
+      # bare `docker run` is fail-closed), but the dev stack must override it or
+      # the startup auth guard aborts boot (production profile enables auth but
+      # this stack sets no GATEKEEPER_ISSUER/SERVICE_AUDIENCE). Matches Node/Python.
+      ENV: development
       PORT: "{{ server_port }}"
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
       RUST_LOG: info

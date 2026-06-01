@@ -106,14 +106,21 @@ jobs:
       - name: Build sdist + wheel
         run: uv build
 
+      # PEP440-aware prerelease detection — a1/b1/rc1/.devN have NO hyphen,
+      # so the old contains(ref,'-') check published an alpha as a stable
+      # release. See .github/scripts/detect-prerelease.sh (WS-4.1).
+      - name: Detect prerelease
+        id: prerelease
+        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
+
       - name: Publish to TestPyPI (pre-release)
-        if: contains(github.ref_name, '-')
+        if: steps.prerelease.outputs.is_prerelease == 'true'
         env:
           UV_PUBLISH_URL: https://test.pypi.org/legacy/
         run: uv publish
 
       - name: Publish to PyPI (stable)
-        if: "!contains(github.ref_name, '-')"
+        if: steps.prerelease.outputs.is_prerelease == 'false'
         run: uv publish
 
   publish-npm-canvas-vue:
@@ -136,22 +143,21 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publish (alpha tag)
-        if: contains(github.ref_name, 'alpha')
-        working-directory: packages/canvas-vue
-        run: npm publish --tag alpha --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+      - name: Detect prerelease
+        id: prerelease
+        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
 
-      - name: Publish (beta tag)
-        if: contains(github.ref_name, 'beta')
+      # Prerelease tags publish under the npm "next" dist-tag so they never
+      # become the default `npm install` target; stable tags take "latest".
+      - name: Publish (prerelease → next)
+        if: steps.prerelease.outputs.is_prerelease == 'true'
         working-directory: packages/canvas-vue
-        run: npm publish --tag beta --access public
+        run: npm publish --tag next --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
       - name: Publish (latest)
-        if: "!contains(github.ref_name, '-')"
+        if: steps.prerelease.outputs.is_prerelease == 'false'
         working-directory: packages/canvas-vue
         run: npm publish --access public
         env:
@@ -177,15 +183,19 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publish (alpha tag)
-        if: contains(github.ref_name, 'alpha')
+      - name: Detect prerelease
+        id: prerelease
+        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
+
+      - name: Publish (prerelease → next)
+        if: steps.prerelease.outputs.is_prerelease == 'true'
         working-directory: packages/canvas-svelte
-        run: npm publish --tag alpha --access public
+        run: npm publish --tag next --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
       - name: Publish (latest)
-        if: "!contains(github.ref_name, '-')"
+        if: steps.prerelease.outputs.is_prerelease == 'false'
         working-directory: packages/canvas-svelte
         run: npm publish --access public
         env:
@@ -280,13 +290,19 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Detect prerelease
+        id: prerelease
+        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
+
       - name: Extract changelog section
         id: changelog
         run: |
-          version="${{ github.ref_name }}"
-          version="${version#v}"
-          # Pull the dated section matching this version out of CHANGELOG.md
-          awk -v v="$version" '/^## \[/ { in_section=0 } $0 ~ "^## \\[" v "\\]" { in_section=1; next } in_section' CHANGELOG.md > release-notes.md
+          # Shared extractor (WS-4.2): pull the [Unreleased] section's body
+          # for the release notes and FAIL if it is empty/missing, so a
+          # release never ships blank notes. The cut-Unreleased→dated step
+          # belongs in the tag-cutting workflow; at publish time the section
+          # being released still lives under [Unreleased].
+          bash .github/scripts/extract-changelog.sh Unreleased CHANGELOG.md > release-notes.md
           cat release-notes.md
 
       # Task 7 / 3B — CycloneDX SBOM. Generates a machine-readable
@@ -295,13 +311,16 @@ jobs:
       - name: Generate CycloneDX SBOM
         run: |
           uv sync --all-extras --dev
-          uvx cyclonedx-bom --format json --output forge-sbom.cdx.json
+          # cyclonedx-py is the actual CLI shipped by the cyclonedx-bom
+          # package; `cyclonedx-bom` is not an executable form (WS-4.5).
+          uvx --from cyclonedx-bom cyclonedx-py environment \
+            --output-format json --output-file forge-sbom.cdx.json
 
       - name: Create release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           body_path: release-notes.md
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
 
       - name: Attach SBOM to release
         env:

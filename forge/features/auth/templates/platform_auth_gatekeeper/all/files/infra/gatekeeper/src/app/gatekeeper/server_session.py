@@ -44,6 +44,8 @@ from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from app.middleware.log_redaction import session_fp
+
 logger = logging.getLogger(__name__)
 
 
@@ -141,7 +143,7 @@ class ServerSessionStore:
 
         logger.info(
             "server_session_issued session_id=%s tenant=%s sub=%s idle=%ds abs=%ds",
-            session_id,
+            session_fp(session_id),
             tenant_id,
             sub,
             idle_timeout_seconds,
@@ -299,7 +301,7 @@ class ServerSessionStore:
             results = await pipe.execute()
         deleted = any(bool(r) for r in results)
         if deleted:
-            logger.info("server_session_deleted session_id=%s", session_id)
+            logger.info("server_session_deleted session_id=%s", session_fp(session_id))
         return deleted
 
     async def remaining(
@@ -343,7 +345,7 @@ class ServerSessionStore:
         except InvalidToken:
             logger.warning(
                 "server_session_decrypt_failed session_id=%s — key rotated?",
-                session_id,
+                session_fp(session_id),
             )
             return None
         try:
@@ -351,7 +353,7 @@ class ServerSessionStore:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             logger.warning(
                 "server_session_body_malformed session_id=%s err=%s",
-                session_id,
+                session_fp(session_id),
                 exc,
             )
             return None
@@ -369,7 +371,7 @@ class ServerSessionStore:
         except (KeyError, ValueError, TypeError) as exc:
             logger.warning(
                 "server_session_schema_drift session_id=%s err=%s",
-                session_id,
+                session_fp(session_id),
                 exc,
             )
             return None

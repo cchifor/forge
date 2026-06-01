@@ -12,7 +12,7 @@ service will refuse to start if they are missing or insecure.
 | Variable | How to generate | Notes |
 | --- | --- | --- |
 | `ENV` | Set to `production` | Controls fail-closed behavior for secrets |
-| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_hex(32))"` | Must not be `CHANGEME` in production |
+| `APP__SECURITY__SECRET_KEY` | `python -c "import secrets; print(secrets.token_hex(32))"` | Bound via `APP__` env prefix (`config.SettingsConfigDict`). Production refuses to boot if unset, blank, a `CHANGEME…` placeholder, or shorter than 32 chars. |
 
 ### Auth-enabled projects (Gatekeeper)
 
@@ -35,7 +35,8 @@ service will refuse to start if they are missing or insecure.
 Before going live, verify:
 
 - [ ] `ENV=production` is set on all services
-- [ ] `SECRET_KEY` is a strong random value (not `CHANGEME`)
+- [ ] `APP__SECURITY__SECRET_KEY` is a strong random value (>= 32 chars, not a `CHANGEME…` placeholder)
+- [ ] `APP__SECURITY__AUTH__CLIENT_SECRET` is the real OIDC client secret (not `changeme`) when auth is enabled
 - [ ] `GATEKEEPER_CLIENT_SECRET` is set (not empty, not `super-secret-string`)
 - [ ] `COOKIE_SECURE=true` is set (or omitted — defaults to `true`)
 - [ ] `SESSION_FERNET_KEY` is set (if using BFF sessions)

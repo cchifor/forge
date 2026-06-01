@@ -313,7 +313,7 @@ flutter_frontend/
 
 | Category | Technology | Purpose |
 |----------|-----------|---------|
-| **Framework** | Flutter 3.41+ / Dart 3.10+ | Cross-platform UI |
+| **Framework** | Flutter 3.32+ / Dart 3.8+ | Cross-platform UI |
 | **State Management** | Riverpod 2.6 (`@riverpod` codegen) | Global state, DI, server state caching |
 | **Ephemeral State** | flutter_hooks (`HookConsumerWidget`) | Widget-scoped controllers, animations |
 | **Networking** | Dio 5.x | HTTP client with interceptor pipeline |
@@ -406,8 +406,8 @@ flutter_frontend/
 
 ### Prerequisites
 
-- **Flutter SDK** >= 3.29.0 (tested with 3.41.3)
-- **Dart SDK** >= 3.10.4
+- **Flutter SDK** >= 3.32.0
+- **Dart SDK** >= 3.8.0
 - For Keycloak auth (production): Keycloak server running on `localhost:8080`
 - For API integration: Python backend running on `localhost:5000`
 
