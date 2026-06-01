@@ -38,6 +38,29 @@
     "forge/sync/forge_to_project/resolver/__init__.py": 0.50,
     "forge/sync/provenance.py": 0.62
   },
+  "pr_gate_changed_line_survivors_max": {
+    "_comment": [
+      "Patch-scoped PR-gate budget: the gate mutates ONLY the lines a PR",
+      "changed in each module (mutmut --use-patch-file), because whole-module",
+      "sweeps take hours on CI's 2-core runners. Against a per-PR-variable",
+      "mutant set a kill-rate floor is meaningless, so the gate instead caps",
+      "the number of SURVIVING changed-line mutants per module. 0 = every",
+      "mutant on new code must be killed; a higher cap is a documented",
+      "allowance for diffs dominated by declarative / equivalent-mutant lines.",
+      "Ratchet down over time (loosening needs a CHANGELOG entry).",
+      "capability_resolver=24: the WS-7 polyglot-reject change added the",
+      "_check_value_backend_support FUNCTION (now fully unit-tested in",
+      "tests/test_value_backend_support.py — those logic mutants are killed)",
+      "PLUS three declarative lookup tables (_VALUE_REQUIRES_BACKEND,",
+      "_PYTHON_ONLY_WHEN_ACTIVE, _INACTIVE_VALUES) whose ~24 literal mutants",
+      "are largely equivalent (the tables' shape is asserted, but mutating an",
+      "individual frozenset/key isn't distinguishable per-line). Drops to a",
+      "handful once those table lines age out of the diff."
+    ],
+    "forge/capability_resolver.py": 24,
+    "forge/sync/forge_to_project/resolver/__init__.py": 0,
+    "forge/sync/provenance.py": 1
+  },
   "pr_gate_test_map": {
     "forge/capability_resolver.py": [
       "tests/test_capability_resolver.py",

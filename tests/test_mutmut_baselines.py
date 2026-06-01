@@ -162,3 +162,34 @@ def test_pr_gate_test_map_files_exist(pr_gate_test_map: dict, module: str) -> No
             f"{target} does not exist. Update the map in the same PR as "
             "the rename/delete."
         )
+
+
+@pytest.fixture(scope="module")
+def survivor_budgets(baselines: dict) -> dict:
+    assert "pr_gate_changed_line_survivors_max" in baselines, (
+        "tests/mutmut_baselines.json must declare a "
+        "``pr_gate_changed_line_survivors_max`` block; the patch-scoped "
+        "PR-gate enforces a survivor budget per module (a kill-rate floor "
+        "is meaningless against a per-PR-variable changed-line mutant set)."
+    )
+    return baselines["pr_gate_changed_line_survivors_max"]
+
+
+def test_survivor_budget_covers_every_gated_module(
+    pr_gate: dict, survivor_budgets: dict
+) -> None:
+    """Every gated module needs a budget (a non-negative int). A missing
+    entry defaults to 0 in the enforce script — pin it explicitly so the
+    intended allowance is reviewed, not implicit."""
+    # ``_comment`` is documentation, not a module entry.
+    modules = {k: v for k, v in survivor_budgets.items() if not k.startswith("_")}
+    missing = sorted(pr_gate.keys() - modules.keys())
+    assert not missing, (
+        f"pr_gate_changed_line_survivors_max is missing entries for "
+        f"{missing}; set an explicit budget per gated module."
+    )
+    for module, budget in modules.items():
+        assert isinstance(budget, int) and not isinstance(budget, bool), (
+            f"survivor budget for {module!r} must be an int, got {budget!r}"
+        )
+        assert budget >= 0, f"survivor budget for {module!r} must be >= 0, got {budget}"
