@@ -115,3 +115,50 @@ def test_pr_gate_source_path_exists(module: str) -> None:
         "exist on disk. If the module was renamed, update the key in "
         "the same PR."
     )
+
+
+@pytest.fixture(scope="module")
+def pr_gate_test_map(baselines: dict) -> dict:
+    assert "pr_gate_test_map" in baselines, (
+        "tests/mutmut_baselines.json must declare a ``pr_gate_test_map`` "
+        "block; the scoped PR-gate workflow reads it to pick a fast, "
+        "per-module test runner (a full-suite runner times out and the "
+        "gate then reports 0 evaluable mutants)."
+    )
+    return baselines["pr_gate_test_map"]
+
+
+def test_pr_gate_test_map_covers_every_gated_module(
+    pr_gate: dict, pr_gate_test_map: dict
+) -> None:
+    """Every gated module needs a non-empty test list.
+
+    A module in ``pr_gate_modules`` without a ``pr_gate_test_map`` entry
+    falls back to the full-suite runner, which is the exact timeout the
+    map exists to prevent. Keep the two blocks in lock-step.
+    """
+    missing = sorted(pr_gate.keys() - pr_gate_test_map.keys())
+    assert not missing, (
+        f"pr_gate_test_map is missing entries for {missing}; add the "
+        "module's own test files so the gate uses a fast runner."
+    )
+    for module, tests in pr_gate_test_map.items():
+        assert isinstance(tests, list) and tests, (
+            f"pr_gate_test_map[{module!r}] must be a non-empty list of "
+            f"test files, got {tests!r}"
+        )
+
+
+@pytest.mark.parametrize("module", REQUIRED_SCOPED_MODULES)
+def test_pr_gate_test_map_files_exist(pr_gate_test_map: dict, module: str) -> None:
+    """A mapped test file that was renamed/deleted silently shrinks the
+    runner's coverage and can drop the measured kill-rate below the floor
+    for a reason unrelated to the change under test. Catch it at edit time.
+    """
+    for rel in pr_gate_test_map.get(module, []):
+        target = REPO_ROOT / rel
+        assert target.is_file(), (
+            f"pr_gate_test_map[{module!r}] references {rel!r} but "
+            f"{target} does not exist. Update the map in the same PR as "
+            "the rename/delete."
+        )
