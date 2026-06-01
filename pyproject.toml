@@ -38,7 +38,7 @@ dev = [
     # passing canary run is the precondition for bumping this pin. See
     # .github/workflows/ty-upgrade.yml and tests/test_ty_canary.py for the
     # upgrade dance.
-    "ty==0.0.40",
+    "ty==0.0.41",
     "pre-commit>=4.6.0",
     "hypothesis>=6.153.0",
     "pytest-xdist>=3.8.0",
