@@ -212,10 +212,15 @@ describe('getChatStore (AG-UI agent client)', () => {
 		await seedAssistantReply('asst-4', 'first reply');
 		expect(store.messages).toHaveLength(2);
 
-		// Now start a never-resolving run.
-		let resolveRun: (() => void) | null = null;
+		// Now start a never-resolving run. Seed the resolver with a no-op so
+		// its type is a plain `() => void` — annotating it `| null` made TS
+		// narrow the call site to `never` ("expression is not callable").
+		let resolveRun: () => void = () => {};
 		mockRunAgent.mockImplementationOnce(
-			() => new Promise<void>((resolve) => { resolveRun = resolve })
+			() =>
+				new Promise<void>((resolve) => {
+					resolveRun = resolve;
+				})
 		);
 		store.addUserMessage('follow up');
 		await Promise.resolve();
@@ -227,7 +232,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 		// Still 2 — both regens no-op'd while isRunning=true.
 		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
-		resolveRun?.();
+		resolveRun();
 	});
 
 	it('regenerate is a no-op when no prior runAgent has fired (hasRun gate)', () => {
