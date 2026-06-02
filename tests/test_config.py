@@ -170,10 +170,13 @@ class TestProjectConfig:
         with pytest.raises(ValueError, match="list of component-name strings"):
             self._make_config(components="Panel").validate()
 
-    def test_valid_components_list_passes_shape(self):
-        # Shape is fine; existence/layering is deferred to resolve time, so an
-        # as-yet-unregistered name does not trip validate().
-        self._make_config(components=["SomeComponent"]).validate()
+    def test_unknown_component_rejected_eagerly(self):
+        # Shape is fine (a list of strings), but validate() runs resolve()
+        # eagerly, so an unregistered component fails fast — same fail-fast
+        # contract as an unknown option. (Surfaced as ValueError by
+        # _resolve_once.)
+        with pytest.raises(ValueError, match="not registered"):
+            self._make_config(components=["NoSuchComponent"]).validate()
 
     def test_valid(self):
         cfg = self._make_config()

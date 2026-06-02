@@ -402,3 +402,63 @@ class TestOriginAwareSelection:
         )
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_node"]
+
+
+class TestComponentResolution:
+    """resolve() expands ProjectConfig.components into their emitter fragments
+    (additive; empty components leaves the existing flow byte-identical)."""
+
+    def _setup(self, fragments, comp_reg, nodes):
+        from forge.components import component_fragments
+
+        for node in nodes:
+            comp_reg[node.name] = node
+            frag = component_fragments(node)[0]
+            fragments[frag.name] = frag
+
+    def test_selected_component_fragment_enters_plan(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        from forge.components import ComponentNode
+
+        comp_reg: dict = {}
+        self._setup(fragments, comp_reg, [ComponentNode(name="Card", layer=1)])
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Card"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        assert any(rf.fragment.name == "component_Card" for rf in plan.ordered)
+
+    def test_child_component_ordered_before_parent(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        from forge.components import ComponentNode
+
+        comp_reg: dict = {}
+        self._setup(
+            fragments,
+            comp_reg,
+            [
+                ComponentNode(name="Leaf", layer=1),
+                ComponentNode(name="Panel", layer=2, children={"Leaf": "*"}),
+            ],
+        )
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Panel"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        names = [rf.fragment.name for rf in plan.ordered]
+        assert "component_Leaf" in names and "component_Panel" in names
+        assert names.index("component_Leaf") < names.index("component_Panel")
+
+    def test_empty_components_is_noop(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        cfg = _project([BackendLanguage.PYTHON])  # components defaults to []
+        plan = resolve(cfg)
+        assert plan.ordered == ()
+
+    def test_unknown_component_raises(self, isolated_registries) -> None:
+        from forge.errors import PluginError
+
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Ghost"]
+        with patch("forge.components.COMPONENT_REGISTRY", {}), pytest.raises(PluginError):
+            resolve(cfg)

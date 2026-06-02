@@ -378,6 +378,29 @@ def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -
         )
 
 
+def _collect_component_fragments(config: ProjectConfig) -> set[str]:
+    """Expand ``config.components`` into their emitter-fragment names.
+
+    Additive + guarded: a project with no selected components returns the empty
+    set, so the existing option/fragment flow is byte-identical. Component
+    resolution (layering, versions, cycles, dependents) happens in
+    ``forge.components.resolve_components`` and reuses the same error codes.
+    """
+    components = list(getattr(config, "components", None) or [])
+    if not components:
+        return set()
+    # Local import avoids a module-load cycle (forge.components imports
+    # forge.fragments/feature_manifest, which the resolver also touches).
+    from forge.components import (  # noqa: PLC0415
+        COMPONENT_REGISTRY,
+        component_fragment_name,
+        resolve_components,
+    )
+
+    resolved = resolve_components(components, COMPONENT_REGISTRY)
+    return {component_fragment_name(name) for name in resolved.ordered}
+
+
 def resolve(config: ProjectConfig) -> ResolvedPlan:
     """Produce an ordered ResolvedPlan from ``config.options``.
 
@@ -390,6 +413,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
 
     option_values = _apply_option_defaults(config.options)
     fragment_set = _collect_fragments(option_values)
+    fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
     _check_security_constraints(config, fragment_set)
     _validate_reads_options(fragment_set)
