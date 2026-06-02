@@ -196,6 +196,7 @@ def _emit_contract_bindings(
 
     from forge.codegen.openapi_binding import (  # noqa: PLC0415
         build_bindings_document,
+        emit_capabilities,
         emit_transform_adapter,
         load_openapi_spec,
         parse_bindings_document,
@@ -247,6 +248,19 @@ def _emit_contract_bindings(
         "\n".join(adapter_chunks),
         collector,
         template_name="_transform_adapters",
+    )
+
+    # §F: the agent transport is "external" iff a subscribe-kind op is bound.
+    # Validation above guarantees every declared op has a binding, so a declared
+    # subscribe op is necessarily bound; absence of one ⇒ inert "stub" surface.
+    has_agent_op = any(
+        op.kind == "subscribe" for contract in named.values() for op in contract.operations
+    )
+    _write(
+        api_dir / "capabilities.ts",
+        emit_capabilities("external" if has_agent_op else "stub"),
+        collector,
+        template_name="_capabilities",
     )
 
 

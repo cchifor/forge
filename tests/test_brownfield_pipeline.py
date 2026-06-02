@@ -123,3 +123,31 @@ def test_emits_ts_adapters_for_valid_bindings(tmp_path: Path) -> None:
     assert "export function forgeBool" in body  # prelude
     assert "mapEntityListListResponse" in body
     assert 'items: upstream["data"]' in body
+    # No subscribe op in the contract ⇒ the agent surface is an inert stub.
+    caps = (api / "capabilities.ts").read_text()
+    assert 'agentTransport = "stub"' in caps
+
+
+def test_capabilities_external_when_subscribe_op_bound(tmp_path: Path) -> None:
+    # A spec with a streaming op the chat contract subscribes to.
+    spec = tmp_path / "spec_agent.json"
+    spec.write_text(json.dumps({"paths": {"/agent": {"get": {"operationId": "streamAgent",
+        "responses": {"200": {"content": {"application/json": {"schema": {"type": "object"}}}}}}}}}))
+    cc = tmp_path / "cc_agent"
+    cc.mkdir()
+    (cc / "AgentChat.props.schema.json").write_text('{"title": "AgentChatProps", "type": "object"}')
+    (cc / "AgentChat.contract.json").write_text(json.dumps({"component": "AgentChat",
+        "operations": [{"name": "stream", "kind": "subscribe", "input": {}, "output": {}}]}))
+    cfg = ProjectConfig(
+        project_name="App", backends=[BackendConfig(project_name="App")],
+        frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="App"),
+        components=["AgentChat"], options={"frontend.openapi_spec_url": str(spec)})
+    proj = tmp_path / "proj"
+    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api.mkdir(parents=True)
+    (api / "contract-bindings.toml").write_text(
+        '[contract_bindings.AgentChat.stream]\noperation_id = "streamAgent"\n'
+    )
+    _emit_contract_bindings(cfg, proj, None, components_root=cc)
+    caps = (api / "capabilities.ts").read_text()
+    assert 'agentTransport = "external"' in caps
