@@ -238,3 +238,62 @@ class TestValidateContracts:
         assert "obs.port" in mentioned
         assert "obs_log" in mentioned
         assert "obs_metric" in mentioned
+
+
+class TestComponentLayerField:
+    """The additive `[feature].layer` (component_layer) + `stability` fields.
+
+    These let a feature.toml double as a layered-component manifest. Both are
+    optional so every existing manifest keeps parsing unchanged. The TOML key is
+    `layer` (per spec); the dataclass field is `component_layer` to stay clearly
+    distinct from `fragments._spec.ParityTier` (an orthogonal {1,2,3} concept).
+    """
+
+    def test_layer_absent_defaults_to_none(self, _write_toml) -> None:
+        m = parse_feature_manifest(
+            _write_toml(MINIMAL_TOML), module_path="forge.features.auth"
+        )
+        assert m.component_layer is None
+        assert m.stability is None
+
+    @pytest.mark.parametrize("layer", [1, 2, 3])
+    def test_parses_valid_layer(self, _write_toml, layer: int) -> None:
+        toml = (
+            "[feature]\n"
+            'name = "stat_card"\n'
+            'version = "1.0.0"\n'
+            'summary = "A KPI card"\n'
+            'category = "component"\n'
+            'stability = "beta"\n'
+            f"layer = {layer}\n"
+        )
+        m = parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert m.component_layer == layer
+        assert m.stability == "beta"
+
+    @pytest.mark.parametrize("bad", [0, 4, 5, -1])
+    def test_layer_out_of_range_rejected(self, _write_toml, bad: int) -> None:
+        toml = (
+            "[feature]\n"
+            'name = "x"\n'
+            'version = "1"\n'
+            'summary = "s"\n'
+            'category = "c"\n'
+            f"layer = {bad}\n"
+        )
+        with pytest.raises(PluginError, match="layer") as exc:
+            parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID
+
+    def test_layer_non_integer_rejected(self, _write_toml) -> None:
+        toml = (
+            "[feature]\n"
+            'name = "x"\n'
+            'version = "1"\n'
+            'summary = "s"\n'
+            'category = "c"\n'
+            'layer = "two"\n'
+        )
+        with pytest.raises(PluginError, match="layer") as exc:
+            parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID

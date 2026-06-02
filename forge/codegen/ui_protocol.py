@@ -91,6 +91,74 @@ def load_all(root: Path) -> list[Schema]:
     return schemas
 
 
+# -- Subset enforcement -------------------------------------------------------
+#
+# The module docstring promises an explicit error when a schema uses a feature
+# outside the supported subset. The per-target emitters only raise on an
+# unknown ``type`` value; ``$ref`` / ``oneOf`` / etc. carry no ``type`` and
+# would slip through as ``unknown``. ``assert_supported_schema`` makes the
+# promise real: callers that accept *arbitrary* author-supplied schemas (the
+# component data contract, brownfield OpenAPI binding) validate up-front and
+# fail loud, instead of silently emitting ``unknown``.
+
+_SUPPORTED_TYPES: frozenset[str] = frozenset(
+    {"object", "string", "integer", "number", "boolean", "array"}
+)
+
+# JSON-Schema keywords explicitly out of scope for this subset (see the module
+# docstring). Encountering any of them is a hard error — extend the emitters
+# here rather than hand-rolling a second type system.
+_UNSUPPORTED_KEYWORDS: tuple[str, ...] = (
+    "$ref",
+    "oneOf",
+    "anyOf",
+    "allOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "patternProperties",
+    "discriminator",
+)
+
+
+def assert_supported_schema(schema: dict[str, Any], *, where: str = "schema") -> None:
+    """Raise ``GeneratorError`` if ``schema`` leaves the supported subset.
+
+    Walks the schema tree (properties, array ``items``, nested objects) and
+    rejects any out-of-scope keyword or unknown ``type``. ``enum`` / ``const``
+    nodes are accepted with or without a ``type`` (the emitters handle them).
+    ``where`` is woven into the message so the caller can point at the
+    offending contract operation / field.
+    """
+    if not isinstance(schema, dict):
+        raise GeneratorError(f"{where}: schema node must be an object, got {type(schema).__name__}")
+
+    for keyword in _UNSUPPORTED_KEYWORDS:
+        if keyword in schema:
+            raise GeneratorError(
+                f"{where}: unsupported JSON Schema keyword '{keyword}'. The "
+                "ui-protocol subset covers object/string/integer/number/boolean/"
+                "array + enum/const/nested objects only. Extend "
+                "forge.codegen.ui_protocol if a contract genuinely needs this."
+            )
+
+    ty = schema.get("type")
+    if ty is not None and ty not in _SUPPORTED_TYPES:
+        raise GeneratorError(f"{where}: unsupported JSON Schema type {ty!r}")
+
+    # enum/const are leaf descriptors — nothing further to recurse into.
+    if "enum" in schema or "const" in schema:
+        return
+
+    for name, sub in (schema.get("properties") or {}).items():
+        assert_supported_schema(sub, where=f"{where}.{name}")
+
+    items = schema.get("items")
+    if isinstance(items, dict):
+        assert_supported_schema(items, where=f"{where}[]")
+
+
 # -- Emitters -----------------------------------------------------------------
 #
 # Each emitter produces a SELF-CONTAINED file body for one target: no shared

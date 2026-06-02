@@ -27,6 +27,12 @@ class FeatureManifest:
     provides_fragments: tuple[str, ...]
     module_path: str
     manifest_path: str
+    # Optional, additive (layered-component model). Absent in non-component
+    # features. ``component_layer`` is the TOML ``[feature].layer`` (1/2/3); the
+    # field is named distinctly to avoid confusion with the orthogonal
+    # ``fragments._spec.ParityTier`` ({1,2,3} cross-backend coverage).
+    component_layer: int | None = None
+    stability: str | None = None
 
 
 def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
@@ -72,6 +78,28 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
                 context={"path": str(path), "field": field},
             )
 
+    # Optional additive fields (layered-component model). Absent ⇒ None, so
+    # every existing manifest parses unchanged.
+    component_layer: int | None = None
+    if "layer" in feature:
+        layer_raw = feature["layer"]
+        # bool is an int subclass — reject it explicitly. The TOML key accepts
+        # only the integers 1, 2, 3 (Layer-1/2/3 component tiers).
+        if (
+            isinstance(layer_raw, bool)
+            or not isinstance(layer_raw, int)
+            or layer_raw not in (1, 2, 3)
+        ):
+            raise PluginError(
+                f"[feature].layer must be 1, 2, or 3 (got {layer_raw!r})",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path), "layer": layer_raw},
+            )
+        component_layer = int(layer_raw)
+
+    stability_raw = feature.get("stability")
+    stability = str(stability_raw) if stability_raw is not None else None
+
     depends_raw = feature.get("depends", {})
     if not isinstance(depends_raw, dict):
         raise PluginError(
@@ -113,6 +141,8 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
         provides_fragments=tuple(str(f) for f in fragments_raw),
         module_path=module_path,
         manifest_path=str(path),
+        component_layer=component_layer,
+        stability=stability,
     )
 
 
