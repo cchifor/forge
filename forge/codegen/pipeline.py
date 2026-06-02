@@ -226,6 +226,16 @@ def _emit_contract_bindings(
             collector,
             template_name="_contract_bindings",
         )
+        # Emit a default "stub" capabilities.ts now so a chat component that
+        # imports it always resolves — bindings aren't filled yet, so no agent
+        # op is bound. The validated re-run below overwrites it with "external"
+        # once a subscribe op is bound.
+        _write(
+            api_dir / "capabilities.ts",
+            emit_capabilities("stub"),
+            collector,
+            template_name="_capabilities",
+        )
         return
 
     # Re-run on a (possibly hand-edited) mapping: validate, then emit adapters.
