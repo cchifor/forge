@@ -127,14 +127,26 @@ class TestPubspecDeclaresForgeCanvas:
             "forge_canvas dependency must be declared in template pubspec"
         )
 
-    def test_forge_canvas_pin_matches_published_alpha(self) -> None:
+    def test_forge_canvas_is_vendored_via_path(self) -> None:
         pubspec = _TEMPLATE_ROOT / "pubspec.yaml"
         text = pubspec.read_text(encoding="utf-8")
-        # The pin should reference an alpha that ships the generic
-        # AgUiClient<E> API (alpha.6+).
-        assert "forge_canvas: ^1.0.0-alpha." in text, (
-            "forge_canvas pin must use the 1.0.0-alpha.x range"
+        # forge does NOT publish canvas — the generated project vendors
+        # `forge_canvas` (+ `forge_canvas_core`) under packages/ and references
+        # it via a local `path:` dep, so a generated app is self-contained and
+        # the developer owns the code (decides whether to publish). Assert the
+        # path dep rather than an unpublished pub.dev version pin.
+        assert "path: packages/forge_canvas" in text, (
+            "forge_canvas must be a vendored `path: packages/forge_canvas` dep, "
+            "not a published pub.dev version pin"
         )
+
+    def test_forge_canvas_packages_are_vendored(self) -> None:
+        # The vendored package sources must ship in the template so a generated
+        # project resolves the path dep without a registry.
+        core = _TEMPLATE_ROOT / "packages" / "forge_canvas_core" / "pubspec.yaml"
+        fc = _TEMPLATE_ROOT / "packages" / "forge_canvas" / "pubspec.yaml"
+        assert fc.is_file(), f"vendored forge_canvas missing at {fc}"
+        assert core.is_file(), f"vendored forge_canvas_core missing at {core}"
 
 
 # ---------------------------------------------------------------------------
