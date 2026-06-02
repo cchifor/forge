@@ -110,3 +110,42 @@ class TestLayer3Templates:
         res = resolve_components(["Console"], COMPONENT_REGISTRY)
         assert set(res.ordered) == {"Console", "StatCard"}
         assert res.ordered.index("StatCard") < res.ordered.index("Console")
+
+
+class TestTelemetry:
+    """The component/template verbs emit one bounded-vocabulary event each."""
+
+    def _local_sink(self, tmp_path: Path) -> Path:
+        from forge import telemetry
+
+        sink = tmp_path / "telemetry.jsonl"
+        telemetry.configure(telemetry.TelemetryConfig(mode="local", sink_path=sink))
+        return sink
+
+    def _events(self, sink: Path) -> list[dict]:
+        from forge import telemetry
+
+        telemetry.shutdown(wait=True)
+        return [json.loads(line) for line in sink.read_text().splitlines() if line.strip()]
+
+    def test_component_list_emits_component_ran(self, _loaded, capsys, tmp_path) -> None:
+        from forge import telemetry
+
+        sink = self._local_sink(tmp_path)
+        with pytest.raises(SystemExit):
+            _dispatch_components("list", json_output=True)
+        capsys.readouterr()
+        events = self._events(sink)
+        assert [e["event"] for e in events] == [telemetry.EVENT_COMPONENT_RAN]
+        assert events[0]["action"] == "list"
+
+    def test_template_list_emits_template_ran(self, _loaded, capsys, tmp_path) -> None:
+        from forge import telemetry
+
+        sink = self._local_sink(tmp_path)
+        with pytest.raises(SystemExit):
+            _dispatch_templates("list", json_output=True)
+        capsys.readouterr()
+        events = self._events(sink)
+        assert [e["event"] for e in events] == [telemetry.EVENT_TEMPLATE_RAN]
+        assert events[0]["action"] == "list"
