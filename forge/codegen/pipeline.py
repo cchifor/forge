@@ -108,6 +108,7 @@ def run_codegen(
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
+    _emit_contract_bindings(config, project_root, collector)
     _emit_canvas_props_pydantic(config, project_root, collector)
     _emit_canvas_lint_packages(config, project_root, collector)
     _emit_event_union_pydantic(config, project_root, collector)
@@ -167,6 +168,67 @@ def _emit_canvas_manifests(
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
     target = project_root / config.frontend_slug / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
+
+
+def _emit_contract_bindings(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    components_root: Path | None = None,
+) -> None:
+    """Emit the brownfield ``[contract_bindings]`` mapping artifact.
+
+    No-op unless ``frontend.openapi_spec_url`` is set (greenfield) and at least
+    one selected component declares a contract. On first run it writes the
+    proposal (contract-op → operationId) for the user to edit; on a re-run where
+    the file already exists, it re-validates the (possibly hand-edited) bindings
+    against the spec and fails loud (``FEATURE_CONTRACT_VIOLATION``) on any
+    violation. ``components_root`` is a test seam.
+    """
+    layout = _frontend_layout(config)
+    if layout is None:
+        return
+    spec_url = str(config.options.get("frontend.openapi_spec_url", "") or "")
+    if not spec_url:
+        return  # greenfield — nothing to bind
+
+    from forge.codegen.openapi_binding import (  # noqa: PLC0415
+        build_bindings_document,
+        load_openapi_spec,
+        parse_bindings_document,
+        validate_bindings_document,
+    )
+    from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
+
+    comps = {c.name: c for c in load_canvas_components(components_root)}
+    named = {
+        name: comps[name].contract
+        for name in config.components
+        if name in comps and comps[name].contract is not None
+    }
+    if not named:
+        return
+
+    spec = load_openapi_spec(spec_url)
+    target = (
+        project_root / config.frontend_slug / "src" / "shared" / "api" / "contract-bindings.toml"
+    )
+    if target.is_file():
+        document = parse_bindings_document(target.read_text(encoding="utf-8"))
+        violations = validate_bindings_document(named, document, spec)
+        if violations:
+            raise PluginError(
+                "contract binding validation failed:\n  - " + "\n  - ".join(violations),
+                code=FEATURE_CONTRACT_VIOLATION,
+            )
+    else:
+        _write(
+            target,
+            build_bindings_document(named, spec),
+            collector,
+            template_name="_contract_bindings",
+        )
 
 
 def _emit_canvas_props_pydantic(
