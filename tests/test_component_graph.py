@@ -109,6 +109,17 @@ class TestLayeringRules:
         with pytest.raises(PluginError, match="[Ll]ayer.?3|template"):
             resolve_components(["B"], reg)
 
+    @pytest.mark.parametrize(
+        ("parent_layer", "child_layer"),
+        [(2, 1), (3, 1), (3, 2)],
+    )
+    def test_allows_downward_edges(self, parent_layer: int, child_layer: int) -> None:
+        reg = _reg(
+            _node("Child", child_layer),
+            _node("Parent", parent_layer, children={"Child": "*"}),
+        )
+        assert set(resolve_components(["Parent"], reg).ordered) == {"Child", "Parent"}
+
 
 class TestCycleDetection:
     def test_cycle_raises_options_dep_cycle(self) -> None:
@@ -119,8 +130,17 @@ class TestCycleDetection:
         with pytest.raises(OptionsError) as exc:
             resolve_components(["A"], reg)
         assert exc.value.code == OPTIONS_DEP_CYCLE
-        # The cycle members are surfaced for the dependency-graph diff.
+        # The cycle members + a concrete closing path are surfaced for the diff.
         assert set(exc.value.context.get("components", [])) >= {"A", "B"}
+        path = exc.value.context.get("cycle_path", [])
+        assert path and path[0] == path[-1]
+
+    def test_self_loop_is_a_cycle(self) -> None:
+        reg = _reg(_node("A", 2, children={"A": "*"}))
+        with pytest.raises(OptionsError) as exc:
+            resolve_components(["A"], reg)
+        assert exc.value.code == OPTIONS_DEP_CYCLE
+        assert exc.value.context.get("cycle_path") == ["A", "A"]
 
 
 class TestVersionSatisfaction:
@@ -151,6 +171,31 @@ class TestVersionSatisfaction:
     def test_star_spec_matches_any(self) -> None:
         reg = _reg(_node("A", 1, version="9.9.9"), _node("P", 2, children={"A": "*"}))
         assert set(resolve_components(["P"], reg).ordered) == {"A", "P"}
+
+    @pytest.mark.parametrize(
+        ("spec", "version", "ok"),
+        [
+            ("^1.0", "1.4.0", True),
+            ("^1.0", "2.0.0", False),
+            ("^1.2.3", "1.2.3", True),
+            ("^1.2.3", "1.9.0", True),
+            ("^1.2.3", "2.0.0", False),
+            ("^0.2.0", "0.2.5", True),
+            ("^0.2.0", "0.3.0", False),
+            ("^0.0.3", "0.0.3", True),
+            ("^0.0.3", "0.0.4", False),
+        ],
+    )
+    def test_caret_spec(self, spec: str, version: str, ok: bool) -> None:
+        # The plan's manifest examples use caret ranges; the resolver must
+        # honor them (npm/cargo semantics), not reject as "unparseable".
+        reg = _reg(_node("A", 1, version=version), _node("P", 2, children={"A": spec}))
+        if ok:
+            assert set(resolve_components(["P"], reg).ordered) == {"A", "P"}
+        else:
+            with pytest.raises(PluginError) as exc:
+                resolve_components(["P"], reg)
+            assert exc.value.code == FEATURE_DEPENDENCY_MISSING
 
 
 class TestContracts:

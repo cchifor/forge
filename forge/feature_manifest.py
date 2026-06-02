@@ -120,7 +120,13 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
                 context={"path": str(path)},
             )
         contract_raw = component_raw.get("contract")
-        component_contract = str(contract_raw) if contract_raw is not None else None
+        if contract_raw is not None and not isinstance(contract_raw, str):
+            raise PluginError(
+                f"[feature.component].contract must be a string, got {type(contract_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        component_contract = contract_raw
 
         children_raw = component_raw.get("children", {})
         if not isinstance(children_raw, dict):
@@ -130,7 +136,15 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
                 code=FEATURE_MANIFEST_INVALID,
                 context={"path": str(path)},
             )
-        component_children = {str(k): str(v) for k, v in children_raw.items()}
+        for child_name, spec in children_raw.items():
+            if not isinstance(spec, str):
+                raise PluginError(
+                    f"[feature.component.children].{child_name} must be a "
+                    f"version-spec string, got {type(spec).__name__}",
+                    code=FEATURE_MANIFEST_INVALID,
+                    context={"path": str(path), "child": str(child_name)},
+                )
+        component_children = {str(k): v for k, v in children_raw.items()}
 
         aggregates_raw = component_raw.get("aggregates", [])
         if not isinstance(aggregates_raw, list):
@@ -140,7 +154,15 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
                 code=FEATURE_MANIFEST_INVALID,
                 context={"path": str(path)},
             )
-        component_aggregates = tuple(str(a) for a in aggregates_raw)
+        for agg in aggregates_raw:
+            if not isinstance(agg, str):
+                raise PluginError(
+                    "[feature.component].aggregates entries must be strings, got "
+                    f"{type(agg).__name__}",
+                    code=FEATURE_MANIFEST_INVALID,
+                    context={"path": str(path)},
+                )
+        component_aggregates = tuple(aggregates_raw)
 
     depends_raw = feature.get("depends", {})
     if not isinstance(depends_raw, dict):

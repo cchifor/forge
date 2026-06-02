@@ -23,8 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from packaging.specifiers import InvalidSpecifier, SpecifierSet
-from packaging.version import InvalidVersion, Version
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 
 from forge.components._spec import ComponentNode
 from forge.errors import (
@@ -36,6 +36,35 @@ from forge.errors import (
 )
 
 _ANY_SPECS = frozenset({"", "*"})
+
+
+def _caret_to_range(version: str) -> str:
+    """Translate an npm/cargo caret version into a PEP 440 range.
+
+    ``^1.2.3`` → ``>=1.2.3,<2.0.0``; ``^0.2.0`` → ``>=0.2.0,<0.3.0``;
+    ``^0.0.3`` → ``>=0.0.3,<0.0.4``. 1- and 2-component forms pad with zeros
+    (``^1.0`` → ``>=1.0.0,<2.0.0``). Raises ``ValueError`` on a non-numeric
+    component (the caller maps that to an unparseable-spec error).
+    """
+    nums = [int(p) for p in version.split(".")]
+    while len(nums) < 3:
+        nums.append(0)
+    major, minor, patch = nums[0], nums[1], nums[2]
+    if major > 0:
+        upper = f"{major + 1}.0.0"
+    elif minor > 0:
+        upper = f"0.{minor + 1}.0"
+    else:
+        upper = f"0.0.{patch + 1}"
+    return f">={major}.{minor}.{patch},<{upper}"
+
+
+def _to_specifier_set(spec: str) -> SpecifierSet:
+    """Build a SpecifierSet, supporting the caret (``^``) range shorthand."""
+    s = spec.strip()
+    if s.startswith("^"):
+        return SpecifierSet(_caret_to_range(s[1:]))
+    return SpecifierSet(s)
 
 
 @dataclass(frozen=True)
@@ -61,8 +90,8 @@ def _version_satisfies(parent: str, child: str, child_version: str, spec: str) -
     if spec.strip() in _ANY_SPECS:
         return
     try:
-        satisfied = Version(child_version) in SpecifierSet(spec)
-    except (InvalidSpecifier, InvalidVersion) as exc:
+        satisfied = Version(child_version) in _to_specifier_set(spec)
+    except ValueError as exc:  # InvalidSpecifier/InvalidVersion subclass ValueError
         raise PluginError(
             f"Component {parent!r} declares an unparseable version spec "
             f"{spec!r} for child {child!r}: {exc}",

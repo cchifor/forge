@@ -347,3 +347,30 @@ class TestComponentTable:
         with pytest.raises(PluginError, match="children") as exc:
             parse_feature_manifest(_write_toml(toml), module_path="m")
         assert exc.value.code == FEATURE_MANIFEST_INVALID
+
+    _BASE = (
+        "[feature]\n"
+        'name = "x"\n'
+        'version = "1"\n'
+        'summary = "s"\n'
+        'category = "c"\n'
+        "layer = 2\n"
+        "\n"
+        "[feature.component]\n"
+    )
+
+    def test_non_string_contract_rejected(self, _write_toml) -> None:
+        with pytest.raises(PluginError, match="contract") as exc:
+            parse_feature_manifest(_write_toml(self._BASE + "contract = 123\n"), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID
+
+    def test_non_string_child_spec_rejected(self, _write_toml) -> None:
+        toml = self._BASE + "[feature.component.children]\nFoo = 1\n"
+        with pytest.raises(PluginError, match="children") as exc:
+            parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID
+
+    def test_non_string_aggregate_rejected(self, _write_toml) -> None:
+        with pytest.raises(PluginError, match="aggregates") as exc:
+            parse_feature_manifest(_write_toml(self._BASE + "aggregates = [1, 2]\n"), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID
