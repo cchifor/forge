@@ -138,6 +138,9 @@ def apply_transform(upstream: dict[str, Any], transform: dict[str, Any]) -> dict
 # ---------------------------------------------------------------------------
 
 
+_HTTP_METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch", "trace"})
+
+
 def _media_schema(content: Any) -> dict[str, Any] | None:
     """First media-type schema under an OpenAPI ``content`` block."""
     if not isinstance(content, dict):
@@ -148,20 +151,57 @@ def _media_schema(content: Any) -> dict[str, Any] | None:
     return None
 
 
+def _select_2xx(responses: Any) -> dict[str, Any] | None:
+    """Pick a success response: prefer 200/201, then any 2xx, then 2XX/default."""
+    if not isinstance(responses, dict):
+        return None
+    for pref in ("200", "201"):
+        if isinstance(responses.get(pref), dict):
+            return responses[pref]
+    for code, entry in responses.items():
+        if isinstance(code, str) and code.startswith("2") and isinstance(entry, dict):
+            return entry
+    for code in ("2XX", "default"):
+        if isinstance(responses.get(code), dict):
+            return responses[code]
+    return None
+
+
+def _schema_has_path(schema: Any, path: str) -> bool:
+    """True if a dotted property ``path`` resolves through ``schema.properties``."""
+    cur = schema
+    for part in path.split("."):
+        if not isinstance(cur, dict):
+            return False
+        props = cur.get("properties")
+        if not isinstance(props, dict) or part not in props:
+            return False
+        cur = props[part]
+    return True
+
+
 def index_operations(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Parse an OpenAPI doc into ``operationId -> {request, response}`` schemas.
 
-    Request/response schemas are flattened (``$ref``s inlined) so downstream
-    shape checks see the ui-protocol subset. Operations without an
-    ``operationId`` are skipped.
+    Request/response schemas are flattened (``$ref``s inlined). Only true HTTP
+    methods are scanned; operations without an ``operationId`` are skipped. Any
+    success (2xx) response with content is used. Robust to malformed nodes
+    (non-dict ``paths``/``components``/``responses``).
     """
-    components = (spec.get("components") or {}).get("schemas") or {}
+    if not isinstance(spec, dict):
+        return {}
+    components_node = spec.get("components")
+    schemas = components_node.get("schemas") if isinstance(components_node, dict) else None
+    components = schemas if isinstance(schemas, dict) else {}
+    paths = spec.get("paths")
     index: dict[str, dict[str, Any]] = {}
-    for methods in (spec.get("paths") or {}).values():
+    if not isinstance(paths, dict):
+        return index
+    for methods in paths.values():
         if not isinstance(methods, dict):
             continue
-        for op in methods.values():
-            if not isinstance(op, dict):
+        for method, op in methods.items():
+            if method not in _HTTP_METHODS or not isinstance(op, dict):
                 continue
             op_id = op.get("operationId")
             if not isinstance(op_id, str) or not op_id:
@@ -170,14 +210,10 @@ def index_operations(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
             request_body = op.get("requestBody")
             if isinstance(request_body, dict):
                 req = _media_schema(request_body.get("content"))
-            resp = None
-            responses = op.get("responses") or {}
-            for code in ("200", "201", "2XX", "default"):
-                entry = responses.get(code)
-                if isinstance(entry, dict):
-                    resp = _media_schema(entry.get("content"))
-                    if resp is not None:
-                        break
+            resp_entry = _select_2xx(op.get("responses"))
+            resp = (
+                _media_schema(resp_entry.get("content")) if isinstance(resp_entry, dict) else None
+            )
             index[op_id] = {
                 "request": flatten_refs(req, components=components) if req else {},
                 "response": flatten_refs(resp, components=components) if resp else {},
@@ -185,26 +221,19 @@ def index_operations(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return index
 
 
-def _available_keys(transform: Any, upstream_schema: Any) -> set[str]:
-    keys: set[str] = set()
-    if isinstance(transform, dict):
-        keys |= {str(k) for k in transform}
-    if isinstance(upstream_schema, dict):
-        props = upstream_schema.get("properties")
-        if isinstance(props, dict):
-            keys |= {str(k) for k in props}
-    return keys
-
-
 def validate_bindings(
     contract: DataContract, bindings: dict[str, Any], spec: dict[str, Any]
 ) -> list[str]:
     """Return binding violations for a contract against an OpenAPI spec + mapping.
 
-    A violation is raised (by the caller) when: a contract operation has no
-    binding, its ``operation_id`` is absent from the spec, or its required
-    output fields are not satisfied by the bound operation's response (after
-    applying the per-binding ``response`` transform's renames).
+    Violations: a contract op has no binding; its ``operation_id`` is unknown; a
+    transform rule's source path doesn't resolve in the bound response schema;
+    or a required output field is satisfied by neither a (valid) transform dest
+    nor an upstream response property.
+
+    Note (v1): satisfaction is *shape-presence* by field name — it does not
+    propagate the upstream's own ``required`` set (an upstream-optional property
+    still counts). Documented limitation.
     """
     index = index_operations(spec)
     violations: list[str] = []
@@ -219,8 +248,33 @@ def validate_bindings(
             continue
         response_schema = index[op_id]["response"]
         transform = binding.get("response", {})
+        transform = transform if isinstance(transform, dict) else {}
+
+        # Transform dests count toward satisfaction only if their source path
+        # actually resolves in the upstream response schema.
+        valid_dests: set[str] = set()
+        for dest, rule in transform.items():
+            src = rule.get("from") if isinstance(rule, dict) else rule
+            if not isinstance(src, str):
+                violations.append(
+                    f"binding {op.name!r}: transform rule {dest!r} has no source path"
+                )
+                continue
+            if _schema_has_path(response_schema, src):
+                valid_dests.add(dest)
+            else:
+                violations.append(
+                    f"binding {op.name!r}: transform source path {src!r} not found in "
+                    f"operationId {op_id!r} response"
+                )
+
+        upstream_props = (
+            set((response_schema.get("properties") or {}).keys())
+            if isinstance(response_schema, dict)
+            else set()
+        )
         required = set(op.output.get("required", [])) if isinstance(op.output, dict) else set()
-        missing = sorted(required - _available_keys(transform, response_schema))
+        missing = sorted(required - (valid_dests | upstream_props))
         if missing:
             violations.append(
                 f"contract operation {op.name!r} output requires {missing} "
