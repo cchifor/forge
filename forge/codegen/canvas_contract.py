@@ -82,12 +82,21 @@ def data_contract_from_dict(data: dict[str, Any]) -> DataContract:
     for entry in ops_raw:
         if not isinstance(entry, dict):
             raise GeneratorError(f"{component}: each operation must be an object")
+        name = str(entry.get("name") or "")
+        op_input = entry.get("input", {})
+        op_output = entry.get("output", {})
+        for field, value in (("input", op_input), ("output", op_output)):
+            if not isinstance(value, dict):
+                raise GeneratorError(
+                    f"{component}.{name or '<unnamed>'}: operation {field} must be "
+                    f"a schema object, got {type(value).__name__}"
+                )
         ops.append(
             ContractOperation(
-                name=str(entry.get("name") or ""),
+                name=name,
                 kind=str(entry.get("kind") or ""),
-                input=dict(entry.get("input") or {}),
-                output=dict(entry.get("output") or {}),
+                input=dict(op_input),
+                output=dict(op_output),
             )
         )
     return DataContract(component=component, operations=tuple(ops))
@@ -145,6 +154,11 @@ def load_components(root: Path | None = None) -> list[CanvasComponentSpec]:
         contract_path = path.parent / f"{name}.contract.json"
         if contract_path.is_file():
             contract = load_data_contract(contract_path)
+            if contract.component != name:
+                raise GeneratorError(
+                    f"{contract_path}: contract component {contract.component!r} "
+                    f"does not match the props-derived component name {name!r}"
+                )
             validate_data_contract(contract)
         components.append(
             CanvasComponentSpec(
