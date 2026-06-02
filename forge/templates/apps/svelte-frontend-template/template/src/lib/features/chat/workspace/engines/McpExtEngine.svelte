@@ -63,15 +63,19 @@
 			localBridge.sendToolInput({ arguments: initial as Record<string, unknown> });
 		};
 
-		localBridge.onmessage = async ({ content }: { content: Array<{ type?: string; text?: string }> }) => {
+		localBridge.onmessage = async (msg) => {
+			// The upstream MCP message carries an array of content blocks; the
+			// canvas-core BridgeMessage type models `content` as a string, so go
+			// through `unknown` to read the richer runtime shape.
+			const content = (msg as unknown as { content?: Array<{ type?: string; text?: string }> })
+				.content;
 			const text = content?.find((c) => c.type === 'text')?.text;
 			if (text) emitAction({ type: 'mcp_message', data: { text } });
-			return {};
 		};
 
-		localBridge.onopenlink = async ({ url }: { url: string }) => {
-			window.open(url, '_blank', 'noopener,noreferrer');
-			return {};
+		localBridge.onopenlink = async (req) => {
+			const url = (req as { url?: string }).url;
+			if (url) window.open(url, '_blank', 'noopener,noreferrer');
 		};
 
 		localBridge.onsizechange = ({ height }) => {
@@ -100,7 +104,9 @@
 			// sandbox resource into a dead bridge.
 			if (bridge !== localBridge) return;
 			const html = (activity.content as Record<string, unknown>).html;
-			if (typeof html === 'string') {
+			// sendSandboxResourceReady is optional on the bridge surface — only
+			// the iframe sandbox-resource flow implements it. Guard the call.
+			if (typeof html === 'string' && typeof localBridge.sendSandboxResourceReady === 'function') {
 				localBridge.sendSandboxResourceReady({
 					html,
 					csp: (activity.content as Record<string, unknown>).csp as string | undefined,
