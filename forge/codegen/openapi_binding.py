@@ -19,6 +19,7 @@ field synthesis, conditionals.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import tomlkit
@@ -365,7 +366,10 @@ def bindings_from_toml(text: str) -> dict[str, Any]:
 # Transform DSL -> TypeScript adapter (plan §E)
 # ---------------------------------------------------------------------------
 
-_TS_COERCE = {"int": "Number", "float": "Number", "str": "String", "bool": "Boolean"}
+# int/float -> Number, str -> String (JS semantics match closely enough);
+# bool -> forgeBool (a helper that matches the DSL's truthy set, NOT JS
+# Boolean(), which would make "false"/"0" truthy).
+_TS_COERCE = {"int": "Number", "float": "Number", "str": "String", "bool": "forgeBool"}
 
 
 def _pascal_op(name: str) -> str:
@@ -373,15 +377,42 @@ def _pascal_op(name: str) -> str:
 
 
 def _ts_path(path: str) -> str:
-    return "upstream" + "".join(f'["{part}"]' for part in path.split("."))
+    # json.dumps each segment so a hand-edited path with quotes/specials can't
+    # produce invalid TS or inject code.
+    return "upstream" + "".join(f"[{json.dumps(part)}]" for part in path.split("."))
+
+
+def _ts_key(dest: str) -> str:
+    """A safe TS object key: bare for valid identifiers, quoted otherwise."""
+    s = str(dest)
+    if s and (s[0].isalpha() or s[0] in "_$") and all(c.isalnum() or c in "_$" for c in s):
+        return s
+    return json.dumps(s)
+
+
+def transform_adapter_prelude() -> str:
+    """Shared TS helpers the generated transform adapters depend on.
+
+    ``forgeBool`` mirrors the Python ``coerce_value`` bool semantics (true/1/yes
+    are true, everything else false) so the runtime adapter agrees with the
+    build-time binding validation — unlike JS ``Boolean()``.
+    """
+    return (
+        "// Shared brownfield transform helpers (forge). Do not edit by hand.\n"
+        "export function forgeBool(v: unknown): boolean {\n"
+        '  return v === true || v === 1 || v === "true" || v === "1" || v === "yes";\n'
+        "}\n"
+    )
 
 
 def emit_transform_adapter(component: str, op_name: str, transform: dict[str, Any]) -> str:
     """Emit a TS function mapping an upstream payload onto the contract shape.
 
-    Renames become bracket-path reads; coercions map to ``Number``/``String``/
-    ``Boolean``. An empty transform emits a pass-through. The generated function
-    is named ``map<Component><Op>Response``.
+    Renames become (escaped) bracket-path reads; coercions map to
+    ``Number``/``String``/``forgeBool`` (see :func:`transform_adapter_prelude`).
+    Object keys are emitted as string literals so non-identifier dest names are
+    valid. An empty transform emits a pass-through. The function is named
+    ``map<Component><Op>Response``.
     """
     fn = f"map{component}{_pascal_op(op_name)}Response"
     header = "// Generated transform adapter (forge brownfield binding). Do not edit by hand."
@@ -401,6 +432,6 @@ def emit_transform_adapter(component: str, op_name: str, transform: dict[str, An
             if wrap is None:
                 raise GeneratorError(f"Unknown coercion {coerce!r} for TS adapter.")
             expr = f"{wrap}({expr})"
-        lines.append(f"    {dest}: {expr},")
+        lines.append(f"    {_ts_key(dest)}: {expr},")
     lines += ["  };", "}", ""]
     return "\n".join(lines)
