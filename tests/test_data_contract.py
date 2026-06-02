@@ -159,6 +159,77 @@ class TestBuildManifestContract:
         assert "contract" not in manifest["components"]["StatCard"]
 
 
+class TestSubsetHardening:
+    """Codex Phase-B findings: author-facing validation must fail loud, never
+    crash with AttributeError/ValueError or silently accept out-of-subset shapes.
+    """
+
+    def _contract(self, output: dict) -> dict:
+        return {
+            "component": "X",
+            "operations": [{"name": "get", "kind": "read", "input": {}, "output": output}],
+        }
+
+    def test_rejects_tuple_items(self) -> None:
+        # array `items` as a LIST is tuple-validation — out of subset.
+        bad = self._contract({"type": "array", "items": [{"type": "string"}]})
+        with pytest.raises(GeneratorError, match="items"):
+            validate_data_contract(load_data_contract_from_dict(bad))
+
+    def test_rejects_non_dict_properties(self) -> None:
+        bad = self._contract({"type": "object", "properties": []})
+        with pytest.raises(GeneratorError, match="properties"):
+            validate_data_contract(load_data_contract_from_dict(bad))
+
+    def test_rejects_non_bool_additional_properties(self) -> None:
+        bad = self._contract({"type": "object", "additionalProperties": {"type": "string"}})
+        with pytest.raises(GeneratorError, match="additionalProperties"):
+            validate_data_contract(load_data_contract_from_dict(bad))
+
+    def test_rejects_non_dict_input(self) -> None:
+        bad = {
+            "component": "X",
+            "operations": [{"name": "go", "kind": "write", "input": [["a", 1]], "output": {}}],
+        }
+        with pytest.raises(GeneratorError, match="input"):
+            load_data_contract_from_dict(bad)
+
+    def test_contract_component_must_match_filename(self, tmp_path: Path) -> None:
+        # Sibling contract whose `component` disagrees with the props-derived
+        # name must be rejected (guards against a mismatched/stale contract file).
+        props = {**_PROPS, "title": "EntityListProps"}
+        wrong = {**_CONTRACT, "component": "SomethingElse"}
+        _write_component(tmp_path, "EntityList", props, wrong)
+        with pytest.raises(GeneratorError, match="component"):
+            load_components(tmp_path)
+
+
+class TestContractlessManifestStability:
+    def test_contractless_manifest_is_exactly_v1(self) -> None:
+        # A contract-less component must emit a byte-stable v1 manifest entry
+        # with NO contract key and the v1 $schema URL — proving the v2 bump is
+        # strictly opt-in and old readers see no change.
+        spec = CanvasComponentSpec(
+            name="StatCard",
+            props_schema={"title": "StatCardProps", "type": "object", "properties": {}},
+            description="d",
+        )
+        assert build_manifest([spec]) == {
+            "$schema": "https://forge.dev/schemas/canvas-manifest-v1.json",
+            "version": 1,
+            "components": {
+                "StatCard": {
+                    "description": "d",
+                    "props_schema": {
+                        "title": "StatCardProps",
+                        "type": "object",
+                        "properties": {},
+                    },
+                }
+            },
+        }
+
+
 # A tiny helper used by the validation tests so they don't need tmp files.
 def load_data_contract_from_dict(data: dict) -> DataContract:
     from forge.codegen.canvas_contract import data_contract_from_dict

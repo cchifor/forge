@@ -147,15 +147,36 @@ def assert_supported_schema(schema: dict[str, Any], *, where: str = "schema") ->
     if ty is not None and ty not in _SUPPORTED_TYPES:
         raise GeneratorError(f"{where}: unsupported JSON Schema type {ty!r}")
 
+    # additionalProperties is true/false only in this subset; a schema-valued
+    # form (constrained extra props) is out of scope and the emitters treat
+    # anything but ``True`` as closed — reject it rather than mis-emit.
+    ap = schema.get("additionalProperties")
+    if ap is not None and not isinstance(ap, bool):
+        raise GeneratorError(
+            f"{where}: additionalProperties must be true or false (got {type(ap).__name__})"
+        )
+
     # enum/const are leaf descriptors — nothing further to recurse into.
     if "enum" in schema or "const" in schema:
         return
 
-    for name, sub in (schema.get("properties") or {}).items():
-        assert_supported_schema(sub, where=f"{where}.{name}")
+    props = schema.get("properties")
+    if props is not None:
+        if not isinstance(props, dict):
+            raise GeneratorError(f"{where}: properties must be an object")
+        for name, sub in props.items():
+            assert_supported_schema(sub, where=f"{where}.{name}")
 
-    items = schema.get("items")
-    if isinstance(items, dict):
+    # Only single-schema ``items`` is supported. A list (tuple validation) or a
+    # scalar is out of subset; fail loud instead of letting emitters call
+    # ``.get()`` on a list later.
+    if "items" in schema:
+        items = schema["items"]
+        if not isinstance(items, dict):
+            raise GeneratorError(
+                f"{where}: array items must be a single schema object "
+                "(tuple/positional items are unsupported)"
+            )
         assert_supported_schema(items, where=f"{where}[]")
 
 
