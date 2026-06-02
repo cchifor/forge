@@ -88,7 +88,8 @@ class ProjectConfig:
     # ``[feature].layer``. Empty for projects that use only the flat
     # option/fragment surface, so existing call sites are unaffected. Deep
     # validation (existence, layering, versions) happens at resolve time via
-    # ``forge.components.resolve_components``; ``validate()`` only shape-checks.
+    # ``forge.components.resolve_components``; ``validate()`` shape-checks via
+    # ``_validate_components_shape``.
     components: list[str] = field(default_factory=list)
     component_origins: dict[str, str] = field(default_factory=dict)
 
@@ -248,8 +249,24 @@ class ProjectConfig:
         if self.include_keycloak:
             self._validate_keycloak_ports(ports)
         self._validate_options()
+        self._validate_components_shape()
         self._validate_layer_modes()
         self._resolve_once()
+
+    def _validate_components_shape(self) -> None:
+        """Shape-check the additive component selection.
+
+        Semantic validation (existence, layering, versions) is deferred to
+        ``forge.components.resolve_components`` at generate time; here we only
+        guard against a misconstructed config (e.g. ``components="Panel"``,
+        which would otherwise be silently treated as a list of characters).
+        """
+        if not isinstance(self.components, list) or not all(
+            isinstance(c, str) for c in self.components
+        ):
+            raise ValueError("ProjectConfig.components must be a list of component-name strings.")
+        if not isinstance(self.component_origins, dict):
+            raise ValueError("ProjectConfig.component_origins must be a dict[str, str].")
 
     def _validate_layer_modes(self) -> None:
         """Enforce coherence between ``backend.mode`` and the rest of the config.

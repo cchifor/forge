@@ -64,7 +64,41 @@ class TestComponentUpdateDiff:
         assert names == list(resolved.ordered)
 
 
+class TestRegenerateSet:
+    def test_regenerate_set_is_changed_plus_dependents(self) -> None:
+        from forge.components import regenerate_set
+
+        resolved = resolve_components(["Page"], _chain())
+        assert regenerate_set({"A"}, resolved) == frozenset({"A", "Panel", "Page"})
+        assert regenerate_set({"Panel"}, resolved) == frozenset({"Panel", "Page"})
+        assert regenerate_set(set(), resolved) == frozenset()
+
+
+class TestChangedComponents:
+    def test_absent_baseline_is_changed(self) -> None:
+        from forge.components import changed_components, component_fingerprint
+
+        a = _node("A", 1, version="1.0.0")
+        b = _node("B", 1, version="1.0.0")
+        # A has a matching baseline; B is absent ⇒ B counts as changed.
+        baselines = {"A": component_fingerprint(a)}
+        assert changed_components([a, b], baselines) == frozenset({"B"})
+
+    def test_drift_detected(self) -> None:
+        from forge.components import changed_components, component_fingerprint
+
+        a = _node("A", 1, version="1.0.0")
+        baselines = {"A": component_fingerprint(a)}
+        a2 = _node("A", 1, version="2.0.0")  # version changed
+        assert changed_components([a2], baselines) == frozenset({"A"})
+
+
 class TestComponentFingerprint:
+    def test_aggregate_order_independent(self) -> None:
+        a = _node("P", 2, aggregates=("C1", "C2"))
+        b = _node("P", 2, aggregates=("C2", "C1"))
+        assert component_fingerprint(a) == component_fingerprint(b)
+
     def test_stable_for_equal_nodes(self) -> None:
         a = _node("Panel", 2, version="1.0.0", children={"A": "*", "B": "^1.0"})
         b = _node("Panel", 2, version="1.0.0", children={"B": "^1.0", "A": "*"})
@@ -125,4 +159,4 @@ class TestRegistryPopulation:
         feature_loader.reset_for_tests()
         COMPONENT_REGISTRY.clear()
         manifests = feature_loader.load_builtin_features()
-        assert COMPONENT_REGISTRY == build_registry_from_manifests(manifests)
+        assert build_registry_from_manifests(manifests) == COMPONENT_REGISTRY
