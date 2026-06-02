@@ -11,6 +11,11 @@ the dependents closure only.
 
 from __future__ import annotations
 
+from forge.components._compile import (
+    COMPONENT_TEMPLATES_ROOT,
+    component_fragment_name,
+    component_fragments,
+)
 from forge.components._plan import (
     ComponentAction,
     changed_components,
@@ -31,7 +36,10 @@ from forge.components._spec import ComponentNode
 
 __all__ = [
     "COMPONENT_REGISTRY",
+    "COMPONENT_TEMPLATES_ROOT",
     "ComponentAction",
+    "component_fragment_name",
+    "component_fragments",
     "ComponentNode",
     "ResolvedComponents",
     "build_registry_from_manifests",
