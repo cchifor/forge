@@ -410,10 +410,23 @@ edits (§D); (4) brownfield needs ui_protocol `$ref` flattening for real specs
 `parity_tier` terminology + `canvas.manifest.json` v2 + mapping-artifact
 provenance + reverse-index spec. No pushbacks; convergence in one round.
 
-**During execution**, the full **codex-reviewed-planning** lifecycle runs with
-git commits as the rendezvous (a writable forge clone is the prerequisite):
-Phase A re-confirms the finalized plan (≤2 rounds); Phase B reviews each phase's
-implementation diff against the plan (≤2 rounds).
+**Phase A (done, in-repo, verifiable real codex):** `codex exec -m gpt-5.5`
+re-confirmed this plan against HEAD. **Verdict: Phase 0 SAFE** — no
+BLOCKER/IMPORTANT; all four Phase-0 safety claims confirmed with file:line
+(`canvas_contract.py:22,49,67`, `ui_protocol.py:145,252,369`,
+`feature_manifest.py:59,75,83,106`), HEAD delta confirmed non-conflicting. One
+NIT: the conditional `canvas.manifest.json` v1→v2 bump must keep contract-less
+manifests at v1 so `tests/test_canvas_contract.py:37,58` (version-1 assertions)
+stay green — the plan's bump is already conditional-on-contract-present, so no
+change to contract-less manifests.
+
+**Codex model availability (honest note):** in this environment the ChatGPT-account
+auth rejects `gpt-5.3-codex`/`gpt-5-codex` (the `review` profile's model); only
+`gpt-5.5` is reachable. So the *real* codex reviews use `gpt-5.5` (the
+`plan-review` profile / explicit `-m gpt-5.5`). Per-phase **Phase B** impl reviews
+will likewise run `codex exec -m gpt-5.5` (not the `review` profile) until codex
+model access is fixed. The earlier round-1 subagent reviews were corroborated by
+this verifiable direct run.
 
 ## Decisions (confirmed with user)
 1. **Agent transport:** AG-UI-over-`features/agent` **only** — no second transport stack (§F).
@@ -426,4 +439,6 @@ feat/layered-component-model` → confirm clean tree → move this plan into
 `forge/plans/` and run **codex-reviewed-planning Phase A** (re-confirm), then TDD
 the phases above with **Phase B** codex review per phase.
 
-<!-- codex-review-status: pending -->
+<!-- codex-review-status: finalized -->
+<!-- phase-A verdict: Phase 0 SAFE (codex gpt-5.5, HEAD ba6abaa) -->
+<!-- phase-B model: codex exec -m gpt-5.5 (gpt-5.3-codex blocked for this account) -->
