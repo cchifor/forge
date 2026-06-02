@@ -11,12 +11,13 @@ Phase 1.2 of the 1.0 roadmap.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from forge.codegen._schema_cache import load_json_schema
-from forge.codegen.ui_protocol import assert_supported_schema
+from forge.codegen.ui_protocol import Schema, assert_supported_schema, emit_typescript
 from forge.errors import GeneratorError
 
 # Operation kinds a data contract may declare. ``read`` fetches, ``write``
@@ -125,6 +126,32 @@ def validate_data_contract(contract: DataContract) -> None:
             )
         assert_supported_schema(op.input, where=f"{where}.input")
         assert_supported_schema(op.output, where=f"{where}.output")
+
+
+def _pascal(name: str) -> str:
+    """``list`` → ``List``; ``get_summary`` / ``get-summary`` → ``GetSummary``."""
+    return "".join(part[:1].upper() + part[1:] for part in re.split(r"[-_\s]+", name) if part)
+
+
+def emit_contract_types(contract: DataContract) -> str:
+    """Emit TypeScript interfaces for a contract's operation input/output.
+
+    Reuses the ui_protocol TS emitter (no second type system). Each operation
+    yields ``<Component><Op>Input`` / ``<Component><Op>Output`` interfaces. An
+    empty (or non-object) schema becomes an empty object interface; v1 contract
+    op bodies are expected to be objects (request/response shapes).
+    """
+    schemas: list[Schema] = []
+    for op in contract.operations:
+        op_name = _pascal(op.name)
+        for suffix, body in (("Input", op.input), ("Output", op.output)):
+            obj = (
+                body
+                if body.get("type") == "object"
+                else {"type": "object", "properties": body.get("properties", {})}
+            )
+            schemas.append(Schema(title=f"{contract.component}{op_name}{suffix}", body=obj))
+    return emit_typescript(schemas)
 
 
 def load_components(root: Path | None = None) -> list[CanvasComponentSpec]:
