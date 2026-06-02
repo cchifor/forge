@@ -114,8 +114,9 @@ class AuthRepository {
   /// expired) — caller must logout and force re-login.
   Future<DateTime?> refreshAccessToken() async {
     if (_authDisabled || _useGatekeeper) return null;
-    final expiresAt = await _keycloakService!.refreshAccessToken();
-    _accessToken = _keycloakService!.accessToken;
+    final kc = _keycloakService!;
+    final expiresAt = await kc.refreshAccessToken();
+    _accessToken = kc.accessToken;
     return expiresAt;
   }
 

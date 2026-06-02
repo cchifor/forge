@@ -1,7 +1,7 @@
 import 'package:{{project_slug}}/src/features/auth/domain/user_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../../fixtures/user.dart';
+import '../../../../fixtures/user.dart';
 
 void main() {
   group('User creation', () {
