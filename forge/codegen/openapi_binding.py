@@ -69,11 +69,13 @@ def flatten_refs(
 
 
 def coerce_value(value: Any, kind: str) -> Any:
-    """Apply one whitelisted scalar coercion. Unknown kind → ``GeneratorError``."""
-    if kind == "int":
-        return int(value)
-    if kind == "float":
-        return float(value)
+    """Apply one whitelisted scalar coercion. Unknown kind / un-coercible value
+    → ``GeneratorError`` (so the caller maps it to FEATURE_CONTRACT_VIOLATION)."""
+    if kind in ("int", "float"):
+        try:
+            return int(value) if kind == "int" else float(value)
+        except (ValueError, TypeError) as exc:
+            raise GeneratorError(f"Cannot coerce {value!r} to {kind}: {exc}") from exc
     if kind == "str":
         return str(value)
     if kind == "bool":
@@ -102,7 +104,14 @@ def apply_transform(upstream: dict[str, Any], transform: dict[str, Any]) -> dict
 
     Each ``dest`` maps to either a dotted source-path string (rename) or a
     ``{"from": <path>, "coerce": <kind>}`` table (rename + coercion).
+
+    v1 limits (documented, like array-element source paths): ``dest`` keys are
+    flat (a literal output key — ``"user.id"`` does NOT nest into
+    ``{"user": {"id": ...}}``); array-element remapping (``items[].id``) and
+    field synthesis are out of scope.
     """
+    if not isinstance(transform, dict):
+        raise GeneratorError(f"transform must be a table, got {type(transform).__name__}.")
     out: dict[str, Any] = {}
     for dest, rule in transform.items():
         if isinstance(rule, str):
