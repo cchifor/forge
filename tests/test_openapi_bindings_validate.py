@@ -101,6 +101,12 @@ class TestValidateBindings:
         assert any("count" in v for v in violations)
 
     def test_assert_raises_on_violation(self) -> None:
-        with pytest.raises(GeneratorError) as exc:
+        from forge.cli.main import _exit_code_for
+        from forge.errors import PluginError
+
+        with pytest.raises(GeneratorError) as exc:  # PluginError is a ForgeError
             assert_bindings_valid(_CONTRACT, {}, _SPEC)
         assert exc.value.code == "FEATURE_CONTRACT_VIOLATION"
+        # Contract violation must map to exit code 6 (PluginError), not 2.
+        assert isinstance(exc.value, PluginError)
+        assert _exit_code_for(exc.value) == 6

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from forge.errors import FEATURE_CONTRACT_VIOLATION, GeneratorError
+from forge.errors import FEATURE_CONTRACT_VIOLATION, GeneratorError, PluginError
 
 if TYPE_CHECKING:
     from forge.codegen.canvas_contract import DataContract
@@ -235,7 +235,9 @@ def assert_bindings_valid(
     """Raise ``FEATURE_CONTRACT_VIOLATION`` if any binding is invalid."""
     violations = validate_bindings(contract, bindings, spec)
     if violations:
-        raise GeneratorError(
+        # PluginError (not the GeneratorError base) so the CLI maps
+        # FEATURE_CONTRACT_VIOLATION to exit code 6, per the plan's error table.
+        raise PluginError(
             "contract binding validation failed:\n  - " + "\n  - ".join(violations),
             code=FEATURE_CONTRACT_VIOLATION,
         )
