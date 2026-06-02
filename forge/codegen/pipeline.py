@@ -37,6 +37,7 @@ from forge.codegen import canvas_lint as canvas_lint_codegen
 from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen import event_union as event_union_codegen
 from forge.codegen.canvas_contract import build_manifest as build_canvas_manifest
+from forge.codegen.canvas_contract import emit_contract_types
 from forge.codegen.canvas_contract import load_components as load_canvas_components
 from forge.codegen.enums import emit_all as emit_enum_all
 from forge.codegen.enums import load_enum_yaml
@@ -109,6 +110,7 @@ def run_codegen(
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
+    _emit_contract_types(config, project_root, collector)
     _emit_contract_bindings(config, project_root, collector)
     _emit_canvas_props_pydantic(config, project_root, collector)
     _emit_canvas_lint_packages(config, project_root, collector)
@@ -169,6 +171,39 @@ def _emit_canvas_manifests(
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
     target = project_root / config.frontend_slug / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
+
+
+def _emit_contract_types(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    components_root: Path | None = None,
+) -> None:
+    """Emit ``<Component>.contract.ts`` for each selected contract-bearing component.
+
+    Reuses ``emit_contract_types`` (ui_protocol under the hood — no second type
+    system) to write the op input/output TS interfaces into the frontend's
+    ``shared/api`` dir. A generated ``.vue`` imports these so a later contract
+    change surfaces as a ``vue-tsc`` error rather than a silent runtime break
+    (plan §D drift-safety). Mode-independent: runs for greenfield + brownfield.
+    ``components_root`` is a test seam.
+    """
+    layout = _frontend_layout(config)
+    if layout is None or not config.components:
+        return
+    comps = {c.name: c for c in load_canvas_components(components_root)}
+    api_dir = project_root / config.frontend_slug / "src" / "shared" / "api"
+    for name in config.components:
+        comp = comps.get(name)
+        if comp is None or comp.contract is None:
+            continue
+        _write(
+            api_dir / f"{name}.contract.ts",
+            emit_contract_types(comp.contract),
+            collector,
+            template_name="_contract_types",
+        )
 
 
 def _emit_contract_bindings(
