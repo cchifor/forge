@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge';
+	import type { UpstreamAppBridge } from '@forge/canvas-core';
 
 	import type { WorkspaceAction, WorkspaceActivity } from '../../chat.types';
 
@@ -26,7 +27,12 @@
 	}: { activity: WorkspaceActivity; onAction?: (a: WorkspaceAction) => void } = $props();
 
 	let iframeEl: HTMLIFrameElement | undefined = $state();
-	let bridge: AppBridge | null = null;
+	// Typed as canvas-core's UpstreamAppBridge — the permissive host-facing
+	// surface (onsizechange/teardownResource/sendSandboxResourceReady) that
+	// matches the `new AppBridge(null, …)` construction below. The upstream
+	// package's own exported type is stricter (expects a Client first arg and
+	// a domains-object `permissions`), so we adapt at the construction seam.
+	let bridge: UpstreamAppBridge | null = null;
 
 	function emitAction(action: WorkspaceAction) {
 		// MCP tool callouts mirror AG-UI submit semantics — the agent reducer
@@ -39,7 +45,9 @@
 		if (!iframe?.contentWindow) return;
 
 		const localBridge = new AppBridge(
-			null,
+			// host has no MCP Client in this iframe-sandbox flow; the upstream
+			// ctor accepts null at runtime — adapt to the permissive host surface.
+			null as never,
 			{ name: activity.activityType || 'mcp-app', version: '1.0.0' },
 			{ openLinks: {}, logging: {} },
 			{
@@ -48,7 +56,7 @@
 					displayMode: 'inline'
 				}
 			}
-		);
+		) as unknown as UpstreamAppBridge;
 
 		localBridge.oninitialized = () => {
 			const initial = (activity.content as Record<string, unknown>).initialContext ?? activity.content;
@@ -66,7 +74,7 @@
 			return {};
 		};
 
-		localBridge.onsizechange = ({ height }: { height: number }) => {
+		localBridge.onsizechange = ({ height }) => {
 			if (height && iframe) iframe.style.height = `${height}px`;
 		};
 

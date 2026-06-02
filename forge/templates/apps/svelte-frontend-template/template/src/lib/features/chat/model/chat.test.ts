@@ -123,9 +123,12 @@ describe('getChatStore (AG-UI agent client)', () => {
 	});
 
 	it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
-		let resolveRun: (() => void) | null = null;
+		let resolveRun: () => void = () => {};
 		mockRunAgent.mockImplementation(
-			() => new Promise<void>((resolve) => { resolveRun = resolve }),
+			() =>
+				new Promise<void>((resolve) => {
+					resolveRun = resolve;
+				}),
 		);
 		store.addUserMessage('Hello');
 		await Promise.resolve();  // let isRunning flip
@@ -134,7 +137,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.retryLastRun();
 		store.retryLastRun();
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);  // still 1
-		resolveRun?.();
+		resolveRun();
 	});
 
 	it('dismissError clears the error without re-running', () => {
