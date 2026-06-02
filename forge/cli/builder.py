@@ -344,6 +344,11 @@ def _build_config(
         frontend.keycloak_realm = kc_realm
         frontend.keycloak_client_id = kc_client_id
 
+    # Layered-component selection: a top-level `components: [Name, ...]` list in
+    # the config file (additive; absent ⇒ flat option/fragment generation).
+    components_raw = r.cfg.get("components")
+    components = [str(c) for c in components_raw] if isinstance(components_raw, list) else []
+
     return ProjectConfig(
         project_name=project_name,
         output_dir=str(output_dir),
@@ -353,4 +358,6 @@ def _build_config(
         keycloak_port=keycloak_port,
         options=options,
         option_origins=option_origins,
+        components=components,
+        component_origins={c: "user" for c in components},
     )

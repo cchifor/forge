@@ -45,6 +45,8 @@ def test_layer1_pure_ui_has_no_dependencies(tmp_path: Path) -> None:
     frag = component_fragments(node, templates_root=tmp_path)[0]
     assert frag.depends_on == ()
     assert frag.target_frontends == (FrontendFramework.VUE,)
+    # RFC-011 opt-out: Vue-first, so a skip reason is declared.
+    assert frag.frontend_skip_reason
 
 
 def test_svelte_target_is_selectable(tmp_path: Path) -> None:
