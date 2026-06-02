@@ -15,6 +15,7 @@ from forge.components._compile import (
     COMPONENT_TEMPLATES_ROOT,
     component_fragment_name,
     component_fragments,
+    register_component_fragments,
 )
 from forge.components._plan import (
     ComponentAction,
@@ -50,6 +51,7 @@ __all__ = [
     "populate_from_manifests",
     "regenerate_set",
     "register_component",
+    "register_component_fragments",
     "reset_for_tests",
     "resolve_components",
 ]

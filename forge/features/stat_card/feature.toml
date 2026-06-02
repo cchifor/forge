@@ -1,0 +1,7 @@
+[feature]
+name = "StatCard"
+version = "1.0.0"
+summary = "A KPI stat card — Layer-1 pure-UI component."
+category = "component"
+stability = "experimental"
+layer = 1
