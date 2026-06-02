@@ -123,6 +123,7 @@ def apply_project_features(
     collector: ProvenanceCollector | None = None,
     option_values: Mapping[str, Any] | None = None,
     frontend_framework: FrontendFramework | None = None,
+    frontend_dir: Path | None = None,
 ) -> None:
     """Apply project-scoped fragment implementations at the project root.
 
@@ -154,15 +155,26 @@ def apply_project_features(
                     f"project frontend={frontend_framework.value}"
                 )
             continue
+        # Layered-component emitter fragments (``component_<Name>``) emit into the
+        # active frontend app (apps/<slug>/), not the project root — their files
+        # use the app-relative ``files/src/...`` convention. Scoped to component
+        # fragments so existing frontend fragments (auth, etc.) keep their current
+        # placement; ``frontend_dir=None`` (updater path) also preserves it.
+        is_component = rf.fragment.name.startswith("component_")
+        apply_root = (
+            frontend_dir
+            if (frontend_dir is not None and is_component and rf.fragment.target_frontends)
+            else project_root
+        )
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
             if impl.scope == "project":
                 if not quiet:
-                    print(f"  [frag] applying '{rf.fragment.name}' to project root")
+                    print(f"  [frag] applying '{rf.fragment.name}' to {apply_root}")
                 proxy = BackendConfig(name="project", project_name="", language=lang)
                 ctx = FragmentContext.filtered(
                     backend_config=proxy,
-                    backend_dir=project_root,
+                    backend_dir=apply_root,
                     project_root=project_root,
                     option_values=option_values,
                     reads_options=impl.reads_options,
