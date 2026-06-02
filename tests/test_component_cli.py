@@ -77,6 +77,23 @@ class TestScaffoldComponent:
         with pytest.raises(SystemExit):
             _scaffold_component("not a pascal name!", layer=1, root=tmp_path)
 
+    @pytest.mark.parametrize("layer", [2, 3])
+    def test_scaffold_honours_layer(self, tmp_path: Path, layer: int) -> None:
+        _scaffold_component("Panel", layer=layer, root=tmp_path)
+        assert f"layer = {layer}" in (tmp_path / "panel" / "feature.toml").read_text()
+
+    def test_dispatch_scaffold_threads_layer(self, tmp_path, monkeypatch) -> None:
+        # --component-cmd scaffold --component-layer N must reach _scaffold_component.
+        import forge.cli.commands.components as mod
+
+        seen = {}
+        monkeypatch.setattr(
+            mod, "_scaffold_component", lambda name, *, layer=1, **kw: seen.update(name=name, layer=layer)
+        )
+        with pytest.raises(SystemExit):
+            mod._dispatch_components("scaffold", name="Panel", layer=2)
+        assert seen == {"name": "Panel", "layer": 2}
+
 
 class TestLayer3Templates:
     def test_seed_templates_present(self, _loaded) -> None:

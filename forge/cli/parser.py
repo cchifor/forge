@@ -345,6 +345,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="PascalCase component name for `--component-cmd scaffold`.",
     )
     p.add_argument(
+        "--component-layer",
+        dest="component_layer",
+        type=int,
+        choices=[1, 2, 3],
+        default=1,
+        help="Layer (1/2/3) for `--component-cmd scaffold` (default: 1).",
+    )
+    p.add_argument(
         "--template-cmd",
         dest="template_subcommand",
         choices=["list"],
