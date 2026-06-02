@@ -110,3 +110,37 @@ class TestValidateBindings:
         # Contract violation must map to exit code 6 (PluginError), not 2.
         assert isinstance(exc.value, PluginError)
         assert _exit_code_for(exc.value) == 6
+
+
+class TestBindingRobustness:
+    def test_202_response_is_indexed(self) -> None:
+        spec = {
+            "paths": {
+                "/x": {"post": {"operationId": "doX", "responses": {"202": {"content": {
+                    "application/json": {"schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}}}}}}}}
+            }
+        }
+        idx = index_operations(spec)
+        assert idx["doX"]["response"]["properties"]["ok"] == {"type": "boolean"}
+
+    def test_malformed_spec_does_not_crash(self) -> None:
+        assert index_operations({"paths": "nope"}) == {}
+        assert index_operations({"paths": {"/x": {"get": {"operationId": "g", "responses": "bad"}}}}) == {"g": {"request": {}, "response": {}}}
+
+    def test_non_http_method_key_not_indexed(self) -> None:
+        # A path-item `parameters` (or extension) key with an operationId-like
+        # dict must not be treated as an operation.
+        spec = {"paths": {"/x": {"parameters": {"operationId": "notAnOp"}, "get": {"operationId": "realOp", "responses": {}}}}}
+        idx = index_operations(spec)
+        assert "realOp" in idx and "notAnOp" not in idx
+
+    def test_transform_source_must_exist_in_response(self) -> None:
+        spec = {"paths": {"/i": {"get": {"operationId": "listItems", "responses": {"200": {"content": {
+            "application/json": {"schema": {"type": "object", "properties": {"data": {"type": "array"}}}}}}}}}}}
+        contract = DataContract(component="E", operations=(ContractOperation(
+            name="list", kind="read", input={},
+            output={"type": "object", "properties": {"items": {"type": "array"}}, "required": ["items"]}),))
+        # transform maps items <- a path that doesn't exist in the response.
+        bindings = {"list": {"operation_id": "listItems", "response": {"items": "ghost.path"}}}
+        violations = validate_bindings(contract, bindings, spec)
+        assert any("ghost.path" in v or "source" in v.lower() for v in violations)
