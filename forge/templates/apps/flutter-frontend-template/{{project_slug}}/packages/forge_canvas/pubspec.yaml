@@ -10,7 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  forge_canvas_core: ^1.0.0-alpha.1
+  # Vendored sibling — resolved by relative path. `dependency_overrides` in a
+  # *dependency* package are ignored by the pub solver (only the root app's
+  # overrides apply), so the path must live here in `dependencies` directly.
+  forge_canvas_core:
+    path: ../forge_canvas_core
   dio: ^5.7.0
   http: ^1.2.0
   json_annotation: ^4.9.0
@@ -25,11 +29,3 @@ dev_dependencies:
   build_runner: ^2.4.13
   mocktail: ^1.0.4
   flutter_lints: ^5.0.0
-
-# Local-dev path resolution so the on-disk sibling resolves without
-# requiring `forge_canvas_core` to be published on pub.dev first.
-# Removed at publish time by the release pipeline (pub.dev forbids
-# `dependency_overrides` in published packages).
-dependency_overrides:
-  forge_canvas_core:
-    path: ../forge_canvas_core
