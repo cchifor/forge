@@ -91,3 +91,35 @@ def test_hand_edited_invalid_binding_fails_loud(tmp_path: Path) -> None:
     with pytest.raises(GeneratorError) as exc:
         _emit_contract_bindings(cfg, proj, None, components_root=cc)
     assert exc.value.code == "FEATURE_CONTRACT_VIOLATION"
+
+
+def test_emits_ts_adapters_for_valid_bindings(tmp_path: Path) -> None:
+    # A spec whose listItems response has a `data` property the transform reads.
+    spec = tmp_path / "spec2.json"
+    spec.write_text(json.dumps({"paths": {"/i": {"get": {"operationId": "listItems", "responses": {
+        "200": {"content": {"application/json": {"schema": {"type": "object",
+                "properties": {"data": {"type": "array"}}}}}}}}}}}))
+    cc = tmp_path / "cc3"
+    cc.mkdir()
+    (cc / "EntityList.props.schema.json").write_text('{"title": "EntityListProps", "type": "object"}')
+    (cc / "EntityList.contract.json").write_text(json.dumps({"component": "EntityList",
+        "operations": [{"name": "list", "kind": "read", "input": {}, "output": {}}]}))
+    cfg = ProjectConfig(
+        project_name="App", backends=[BackendConfig(project_name="App")],
+        frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="App"),
+        components=["EntityList"], options={"frontend.openapi_spec_url": str(spec)})
+    proj = tmp_path / "proj"
+    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api.mkdir(parents=True)
+    # A valid hand-edited bindings file with a response transform.
+    (api / "contract-bindings.toml").write_text(
+        '[contract_bindings.EntityList.list]\noperation_id = "listItems"\n'
+        '[contract_bindings.EntityList.list.response]\nitems = "data"\n'
+    )
+    _emit_contract_bindings(cfg, proj, None, components_root=cc)
+    adapters = api / "transform-adapters.ts"
+    assert adapters.is_file()
+    body = adapters.read_text()
+    assert "export function forgeBool" in body  # prelude
+    assert "mapEntityListListResponse" in body
+    assert 'items: upstream["data"]' in body

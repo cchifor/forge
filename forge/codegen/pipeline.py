@@ -71,6 +71,7 @@ from forge.logging import get_logger, log_event
 if TYPE_CHECKING:
     from forge.api import PluginEmitterRegistration
     from forge.capability_resolver import ResolvedPlan
+    from forge.codegen.canvas_contract import DataContract
     from forge.config import ProjectConfig
     from forge.sync.provenance import ProvenanceCollector
 
@@ -195,40 +196,58 @@ def _emit_contract_bindings(
 
     from forge.codegen.openapi_binding import (  # noqa: PLC0415
         build_bindings_document,
+        emit_transform_adapter,
         load_openapi_spec,
         parse_bindings_document,
+        transform_adapter_prelude,
         validate_bindings_document,
     )
     from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
 
     comps = {c.name: c for c in load_canvas_components(components_root)}
-    named = {
-        name: comps[name].contract
-        for name in config.components
-        if name in comps and comps[name].contract is not None
-    }
+    named: dict[str, DataContract] = {}
+    for name in config.components:
+        comp = comps.get(name)
+        if comp is not None and comp.contract is not None:
+            named[name] = comp.contract
     if not named:
         return
 
     spec = load_openapi_spec(spec_url)
-    target = (
-        project_root / config.frontend_slug / "src" / "shared" / "api" / "contract-bindings.toml"
-    )
-    if target.is_file():
-        document = parse_bindings_document(target.read_text(encoding="utf-8"))
-        violations = validate_bindings_document(named, document, spec)
-        if violations:
-            raise PluginError(
-                "contract binding validation failed:\n  - " + "\n  - ".join(violations),
-                code=FEATURE_CONTRACT_VIOLATION,
-            )
-    else:
+    api_dir = project_root / config.frontend_slug / "src" / "shared" / "api"
+    target = api_dir / "contract-bindings.toml"
+    if not target.is_file():
+        # First run: write the editable proposal. Adapters are emitted on the
+        # next run, once the user has filled in operationIds + transforms.
         _write(
             target,
             build_bindings_document(named, spec),
             collector,
             template_name="_contract_bindings",
         )
+        return
+
+    # Re-run on a (possibly hand-edited) mapping: validate, then emit adapters.
+    document = parse_bindings_document(target.read_text(encoding="utf-8"))
+    violations = validate_bindings_document(named, document, spec)
+    if violations:
+        raise PluginError(
+            "contract binding validation failed:\n  - " + "\n  - ".join(violations),
+            code=FEATURE_CONTRACT_VIOLATION,
+        )
+
+    adapter_chunks = [transform_adapter_prelude()]
+    for component, contract in named.items():
+        comp_bindings = document.get(component, {})
+        for op in contract.operations:
+            transform = comp_bindings.get(op.name, {}).get("response", {})
+            adapter_chunks.append(emit_transform_adapter(component, op.name, transform))
+    _write(
+        api_dir / "transform-adapters.ts",
+        "\n".join(adapter_chunks),
+        collector,
+        template_name="_transform_adapters",
+    )
 
 
 def _emit_canvas_props_pydantic(
