@@ -65,7 +65,11 @@ def _print_rows(rows: list[dict[str, object]], *, json_output: bool, empty_msg: 
 
 
 def _dispatch_components(
-    subcommand: str, *, json_output: bool = False, name: str | None = None
+    subcommand: str,
+    *,
+    json_output: bool = False,
+    name: str | None = None,
+    layer: int = 1,
 ) -> None:
     """Dispatch a ``--component-cmd`` subcommand and exit."""
     if subcommand == "list":
@@ -82,7 +86,7 @@ def _dispatch_components(
                 file=sys.stderr,
             )
             sys.exit(2)
-        _scaffold_component(name)
+        _scaffold_component(name, layer=layer)
         telemetry.emit(telemetry.EVENT_COMPONENT_RAN, action="scaffold")
         sys.exit(0)
 

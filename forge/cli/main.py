@@ -231,6 +231,7 @@ def main() -> None:
             args.component_subcommand,
             json_output=getattr(args, "json_output", False),
             name=getattr(args, "component_name", None),
+            layer=getattr(args, "component_layer", 1),
         )
 
     if getattr(args, "template_subcommand", None):
