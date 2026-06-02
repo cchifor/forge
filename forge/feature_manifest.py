@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomlkit
@@ -33,6 +33,12 @@ class FeatureManifest:
     # ``fragments._spec.ParityTier`` ({1,2,3} cross-backend coverage).
     component_layer: int | None = None
     stability: str | None = None
+    # ``[feature.component]`` — the component's data contract (consumed),
+    # child components (name → version-spec, mirroring ``[feature.depends]``),
+    # and aggregated contracts. All empty/None for non-component features.
+    component_contract: str | None = None
+    component_children: dict[str, str] = field(default_factory=dict)
+    component_aggregates: tuple[str, ...] = ()
 
 
 def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
@@ -70,12 +76,12 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
             context={"path": str(path), "missing": missing},
         )
 
-    for field in ("name", "version", "summary", "category"):
-        if not str(feature[field]).strip():
+    for field_name in ("name", "version", "summary", "category"):
+        if not str(feature[field_name]).strip():
             raise PluginError(
-                f"[feature].{field} must not be empty",
+                f"[feature].{field_name} must not be empty",
                 code=FEATURE_MANIFEST_INVALID,
-                context={"path": str(path), "field": field},
+                context={"path": str(path), "field": field_name},
             )
 
     # Optional additive fields (layered-component model). Absent ⇒ None, so
@@ -99,6 +105,42 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
 
     stability_raw = feature.get("stability")
     stability = str(stability_raw) if stability_raw is not None else None
+
+    # ``[feature.component]`` table — the layered-component edges. Optional;
+    # absent ⇒ a non-composing component (or a plain feature).
+    component_contract: str | None = None
+    component_children: dict[str, str] = {}
+    component_aggregates: tuple[str, ...] = ()
+    component_raw = feature.get("component")
+    if component_raw is not None:
+        if not isinstance(component_raw, dict):
+            raise PluginError(
+                f"[feature.component] must be a table, got {type(component_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        contract_raw = component_raw.get("contract")
+        component_contract = str(contract_raw) if contract_raw is not None else None
+
+        children_raw = component_raw.get("children", {})
+        if not isinstance(children_raw, dict):
+            raise PluginError(
+                "[feature.component.children] must be a table "
+                f"(name → version-spec), got {type(children_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        component_children = {str(k): str(v) for k, v in children_raw.items()}
+
+        aggregates_raw = component_raw.get("aggregates", [])
+        if not isinstance(aggregates_raw, list):
+            raise PluginError(
+                "[feature.component].aggregates must be a list, got "
+                f"{type(aggregates_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        component_aggregates = tuple(str(a) for a in aggregates_raw)
 
     depends_raw = feature.get("depends", {})
     if not isinstance(depends_raw, dict):
@@ -143,6 +185,9 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
         manifest_path=str(path),
         component_layer=component_layer,
         stability=stability,
+        component_contract=component_contract,
+        component_children=component_children,
+        component_aggregates=component_aggregates,
     )
 
 
