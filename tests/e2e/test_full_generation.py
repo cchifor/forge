@@ -280,6 +280,42 @@ def test_vue_auth_off_typechecks(
 
 
 # -----------------------------------------------------------------------------
+# Case 5a-bis: Layer-3 Console template (greenfield) — the pre-validation gate
+# (plan §H/§J). Selecting the Console template must pull in its StatCard child
+# and emit a DashboardPage that imports it; vue-tsc proves the composed surface
+# (page → StatCard) type-checks, so a "pre-validated" template ships green.
+# -----------------------------------------------------------------------------
+
+
+def test_console_template_greenfield_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E Console Template",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["Console"],
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    # The L3 template composes its L1 child: both the page and StatCard land.
+    assert (frontend_dir / "src" / "shared" / "components" / "StatCard.vue").is_file()
+    assert (
+        frontend_dir / "src" / "features" / "console" / "ui" / "DashboardPage.vue"
+    ).is_file()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for Console template:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 5b: Vue with include_chat=True — mirrors the Svelte chat-on case so the
 # Vue chat composables (useAgentClient, canvas-vue wiring) get type-checked.
 # -----------------------------------------------------------------------------
