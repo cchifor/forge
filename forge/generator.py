@@ -566,6 +566,9 @@ def _apply_project_scope(
     )
 
     with phase_timer(_logger, "generate.apply_project_features"):
+        _has_frontend = (
+            config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
+        )
         apply_project_features(
             project_root,
             plan.ordered,
@@ -575,6 +578,9 @@ def _apply_project_scope(
             frontend_framework=(
                 config.frontend.framework if config.frontend else FrontendFramework.NONE
             ),
+            # Frontend-targeted project fragments (layered components, auth Vue
+            # fragments) emit into the active app at apps/<slug>/, not the root.
+            frontend_dir=(project_root / "apps" / config.frontend_slug if _has_frontend else None),
         )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)
