@@ -60,6 +60,25 @@ compilation, (e) brownfield contract↔operationId binding + validation, (f)
 Layer-3 manifest-driven shell/route/nav composition, (g) two seed templates.
 Everything else is reuse.
 
+### §0.1 HEAD re-verification (execution, `ba6abaa` — newer ancestor of `88d5d61`)
+Re-checked the ~22 commits since grounding; all favorable, none conflicting:
+- `capability_resolver.py` gained config-time validation passes
+  `_check_value_backend_support` / `_check_security_constraints` invoked from
+  `resolve()` — the **precedent** §A/§C component-layer + version + layering
+  checks mirror (validation passes raising existing `OptionsError`/`PluginError`).
+  `_topo_sort`/`resolve` extension points are intact.
+- `provenance.py:_utc_now_iso` now honors `SOURCE_DATE_EPOCH` → byte-identical
+  `forge.toml`; **strengthens** §D determinism / `--verify`-clean tests.
+- `migration_chain.rechain_backend_migrations` now runs inside `_update_locked`
+  before restamping — a clean precedent for where component-regen codegen hooks.
+- **canvas_contract.py / ui_protocol.py / `_shared/canvas-components/` unchanged**
+  → §B contract seam intact. The `feat/vendor-canvas-core` (#156) change vendors
+  the AG-UI client into the *generated* Vue app
+  (`features/ai_chat/canvas-core/{ag_ui_client,events,reducer,mcp_bridge}.ts` +
+  `composables/useAgentClient.ts`) — §F's chat component binds to this vendored
+  in-project client; the brownfield stub is a flag `useAgentClient` reads
+  (aligns with §F `capabilities.ts`).
+
 ---
 
 ## Approach
