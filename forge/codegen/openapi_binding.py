@@ -354,6 +354,53 @@ def bindings_from_toml(text: str) -> dict[str, Any]:
         response = binding.get("response") or {}
         out[str(op_name)] = {
             "operation_id": str(binding.get("operation_id", "")),
-            "response": {str(k): v for k, v in response.items()} if isinstance(response, dict) else {},
+            "response": {str(k): v for k, v in response.items()}
+            if isinstance(response, dict)
+            else {},
         }
     return out
+
+
+# ---------------------------------------------------------------------------
+# Transform DSL -> TypeScript adapter (plan §E)
+# ---------------------------------------------------------------------------
+
+_TS_COERCE = {"int": "Number", "float": "Number", "str": "String", "bool": "Boolean"}
+
+
+def _pascal_op(name: str) -> str:
+    return "".join(p[:1].upper() + p[1:] for p in name.replace("-", "_").split("_") if p)
+
+
+def _ts_path(path: str) -> str:
+    return "upstream" + "".join(f'["{part}"]' for part in path.split("."))
+
+
+def emit_transform_adapter(component: str, op_name: str, transform: dict[str, Any]) -> str:
+    """Emit a TS function mapping an upstream payload onto the contract shape.
+
+    Renames become bracket-path reads; coercions map to ``Number``/``String``/
+    ``Boolean``. An empty transform emits a pass-through. The generated function
+    is named ``map<Component><Op>Response``.
+    """
+    fn = f"map{component}{_pascal_op(op_name)}Response"
+    header = "// Generated transform adapter (forge brownfield binding). Do not edit by hand."
+    if not transform:
+        return f"{header}\nexport function {fn}(upstream: any): any {{\n  return upstream;\n}}\n"
+
+    lines = [header, f"export function {fn}(upstream: any) {{", "  return {"]
+    for dest, rule in transform.items():
+        if isinstance(rule, dict):
+            src = str(rule.get("from", ""))
+            coerce = rule.get("coerce")
+        else:
+            src, coerce = str(rule), None
+        expr = _ts_path(src)
+        if coerce:
+            wrap = _TS_COERCE.get(coerce)
+            if wrap is None:
+                raise GeneratorError(f"Unknown coercion {coerce!r} for TS adapter.")
+            expr = f"{wrap}({expr})"
+        lines.append(f"    {dest}: {expr},")
+    lines += ["  };", "}", ""]
+    return "\n".join(lines)
