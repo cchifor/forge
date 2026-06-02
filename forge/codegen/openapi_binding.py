@@ -435,3 +435,69 @@ def emit_transform_adapter(component: str, op_name: str, transform: dict[str, An
         lines.append(f"    {_ts_key(dest)}: {expr},")
     lines += ["  };", "}", ""]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Multi-contract bindings document (one mapping artifact per project)
+# ---------------------------------------------------------------------------
+
+
+def build_bindings_document(named_contracts: dict[str, DataContract], spec: dict[str, Any]) -> str:
+    """Aggregate per-component binding proposals into one TOML artifact.
+
+    Sections are ``[contract_bindings.<Component>.<op>]`` so a single
+    project-level file covers every selected contract-bearing component.
+    """
+    doc = tomlkit.document()
+    root = tomlkit.table()
+    for component, contract in named_contracts.items():
+        comp_tbl = tomlkit.table()
+        for op_name, binding in propose_bindings(contract, spec).items():
+            entry = tomlkit.table()
+            entry["operation_id"] = str(binding.get("operation_id", ""))
+            response = tomlkit.table()
+            for key, value in (binding.get("response") or {}).items():
+                response[str(key)] = value
+            entry["response"] = response
+            comp_tbl[str(op_name)] = entry
+        root[str(component)] = comp_tbl
+    doc["contract_bindings"] = root
+    return tomlkit.dumps(doc)
+
+
+def parse_bindings_document(text: str) -> dict[str, dict[str, Any]]:
+    """Parse a multi-component bindings document into ``{component: bindings}``."""
+    doc = tomlkit.parse(text)
+    root = doc.get("contract_bindings", {})
+    out: dict[str, dict[str, Any]] = {}
+    if not isinstance(root, dict):
+        return out
+    for component, comp_tbl in root.items():
+        if not isinstance(comp_tbl, dict):
+            continue
+        bindings: dict[str, Any] = {}
+        for op_name, binding in comp_tbl.items():
+            if not isinstance(binding, dict):
+                continue
+            response = binding.get("response") or {}
+            bindings[str(op_name)] = {
+                "operation_id": str(binding.get("operation_id", "")),
+                "response": {str(k): v for k, v in response.items()}
+                if isinstance(response, dict)
+                else {},
+            }
+        out[str(component)] = bindings
+    return out
+
+
+def validate_bindings_document(
+    named_contracts: dict[str, DataContract],
+    document: dict[str, dict[str, Any]],
+    spec: dict[str, Any],
+) -> list[str]:
+    """Validate every component's bindings; violations are tagged ``[Component]``."""
+    violations: list[str] = []
+    for component, contract in named_contracts.items():
+        bindings = document.get(component, {})
+        violations.extend(f"[{component}] {v}" for v in validate_bindings(contract, bindings, spec))
+    return violations
