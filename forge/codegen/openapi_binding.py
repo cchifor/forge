@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import tomlkit
+
 from forge.errors import FEATURE_CONTRACT_VIOLATION, GeneratorError, PluginError
 
 if TYPE_CHECKING:
@@ -295,3 +297,63 @@ def assert_bindings_valid(
             "contract binding validation failed:\n  - " + "\n  - ".join(violations),
             code=FEATURE_CONTRACT_VIOLATION,
         )
+
+
+# ---------------------------------------------------------------------------
+# Mapping artifact: the editable [contract_bindings] TOML
+# ---------------------------------------------------------------------------
+
+
+def propose_bindings(contract: DataContract, spec: dict[str, Any]) -> dict[str, Any]:
+    """Propose contract-op → operationId bindings (best-effort, user-editable).
+
+    Each contract operation gets an entry whose ``operation_id`` is the first
+    upstream operationId containing the op name (case-insensitive), or ``""``
+    when no candidate matches — the user fills/edits it. ``response`` is an
+    empty transform table for the user to populate.
+    """
+    op_ids = sorted(index_operations(spec).keys())
+    proposed: dict[str, Any] = {}
+    for op in contract.operations:
+        match = ""
+        for oid in op_ids:
+            if op.name.lower() in oid.lower():
+                match = oid
+                break
+        proposed[op.name] = {"operation_id": match, "response": {}}
+    return proposed
+
+
+def bindings_to_toml(bindings: dict[str, Any]) -> str:
+    """Serialize a bindings mapping to a ``[contract_bindings]`` TOML string."""
+    doc = tomlkit.document()
+    root = tomlkit.table()
+    for op_name, binding in bindings.items():
+        entry = tomlkit.table()
+        entry["operation_id"] = str(binding.get("operation_id", ""))
+        response = tomlkit.table()
+        for key, value in (binding.get("response") or {}).items():
+            response[str(key)] = value
+        entry["response"] = response
+        root[str(op_name)] = entry
+    doc["contract_bindings"] = root
+    return tomlkit.dumps(doc)
+
+
+def bindings_from_toml(text: str) -> dict[str, Any]:
+    """Parse a ``[contract_bindings]`` TOML string into the bindings mapping
+    that :func:`validate_bindings` consumes."""
+    doc = tomlkit.parse(text)
+    root = doc.get("contract_bindings", {})
+    out: dict[str, Any] = {}
+    if not isinstance(root, dict):
+        return out
+    for op_name, binding in root.items():
+        if not isinstance(binding, dict):
+            continue
+        response = binding.get("response") or {}
+        out[str(op_name)] = {
+            "operation_id": str(binding.get("operation_id", "")),
+            "response": {str(k): v for k, v in response.items()} if isinstance(response, dict) else {},
+        }
+    return out
