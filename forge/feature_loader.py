@@ -120,6 +120,13 @@ def load_builtin_features() -> list[FeatureManifest]:
         LOADED_FEATURES.append(manifest)
         logger.debug("loaded feature %r", manifest.name)
 
+    # Project the loaded manifests onto the component tier (layered-component
+    # model). Components are features whose feature.toml sets [feature].layer;
+    # this keeps COMPONENT_REGISTRY in sync with LOADED_FEATURES.
+    from forge.components import populate_from_manifests  # noqa: PLC0415
+
+    populate_from_manifests(LOADED_FEATURES)
+
     _BUILTINS_LOADED = True
     return LOADED_FEATURES
 

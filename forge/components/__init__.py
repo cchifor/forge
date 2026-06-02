@@ -11,10 +11,18 @@ the dependents closure only.
 
 from __future__ import annotations
 
+from forge.components._plan import (
+    ComponentAction,
+    changed_components,
+    component_fingerprint,
+    component_update_diff,
+    regenerate_set,
+)
 from forge.components._registry import (
     COMPONENT_REGISTRY,
     build_registry_from_manifests,
     component_node_from_manifest,
+    populate_from_manifests,
     register_component,
     reset_for_tests,
 )
@@ -23,10 +31,16 @@ from forge.components._spec import ComponentNode
 
 __all__ = [
     "COMPONENT_REGISTRY",
+    "ComponentAction",
     "ComponentNode",
     "ResolvedComponents",
     "build_registry_from_manifests",
+    "changed_components",
+    "component_fingerprint",
     "component_node_from_manifest",
+    "component_update_diff",
+    "populate_from_manifests",
+    "regenerate_set",
     "register_component",
     "reset_for_tests",
     "resolve_components",
