@@ -314,17 +314,6 @@ def test_vue_chat_on_typechecks(
 # -----------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "WS-5.2: the generated chat frontend pins @forge/canvas-core as "
-        "`workspace:*` (unpublished). A standalone `npm install` outside the "
-        "forge workspace can't resolve that protocol, and svelte-check needs "
-        "node_modules (unlike vue-tsc, which tolerates the missing module), so "
-        "this can't pass until canvas-core is published to npm — or the e2e job "
-        "builds it and rewrites the dep to a file: path. Tracked under WS-5.2."
-    ),
-    strict=False,
-)
 def test_svelte_chat_on_typechecks(
     tmp_path: Path, require_uv: None, require_npm: None, require_git: None
 ) -> None:
@@ -384,9 +373,16 @@ def test_flutter_minimal_analyzes(
     assert pub_get.returncode == 0, f"flutter pub get failed:\n{pub_get.stderr}"
 
     result = _run(["flutter", "analyze", "--no-fatal-infos"], cwd=frontend_dir)
-    assert result.returncode == 0, (
-        f"flutter analyze found errors:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
+    # `flutter analyze` exits non-zero whenever *any* issue is found — including
+    # `info`-level lints (const-constructor / trailing-comma style nits that
+    # shift with each Flutter release) even with `--no-fatal-infos`. The gate we
+    # actually owe a generated project is "no errors or warnings"; infos are
+    # advisory style. So assert on the severity lines, not the exit code.
+    analyze_out = f"{result.stdout}\n{result.stderr}"
+    severe = [
+        ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln
+    ]
+    assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)
 
 
 # -----------------------------------------------------------------------------
@@ -395,19 +391,6 @@ def test_flutter_minimal_analyzes(
 # -----------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Flutter null-safety debt: with the CI Flutter bumped to channel:stable "
-        "(Dart >=3.8), `flutter pub get` now resolves and `flutter analyze` runs "
-        "— but it reports ~500 `unchecked_use_of_nullable_value` errors across "
-        "~46 generated files (the templates access nullable API-response fields "
-        "like `response.title` / `data['x']` without `?.`/`!`). Dart 3.5.4 (the "
-        "old 3.24.x pin) did not flag these. Fixing them is a real template "
-        "sweep tracked separately; the e2e now proves resolution + analyze run, "
-        "and xfails on the analyzer findings rather than masking them."
-    ),
-    strict=False,
-)
 def test_flutter_full_analyzes(
     tmp_path: Path, require_uv: None, require_flutter: None, require_git: None
 ) -> None:
@@ -449,7 +432,30 @@ def test_flutter_full_analyzes(
     pub_get = _run(["flutter", "pub", "get"], cwd=frontend_dir)
     assert pub_get.returncode == 0, f"flutter pub get failed:\n{pub_get.stderr}"
 
-    result = _run(["flutter", "analyze", "--no-fatal-infos"], cwd=frontend_dir)
-    assert result.returncode == 0, (
-        f"flutter analyze found errors:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # The generated app is built on freezed / json_serializable / retrofit /
+    # riverpod_generator — its hand-written sources reference the `.freezed.dart`
+    # and `.g.dart` part files those builders emit. `flutter analyze` resolves
+    # `part` directives, so without the generated code the analyzer reports a
+    # large cascade of undefined-symbol errors that has nothing to do with the
+    # template's actual correctness. Run build_runner first (exactly as a real
+    # developer does after `flutter pub get`) so analyze sees the complete,
+    # generated app.
+    build = _run(
+        ["dart", "run", "build_runner", "build", "--delete-conflicting-outputs"],
+        cwd=frontend_dir,
     )
+    assert build.returncode == 0, (
+        f"build_runner failed:\nSTDOUT:\n{build.stdout}\nSTDERR:\n{build.stderr}"
+    )
+
+    result = _run(["flutter", "analyze", "--no-fatal-infos"], cwd=frontend_dir)
+    # `flutter analyze` exits non-zero whenever *any* issue is found — including
+    # `info`-level lints (const-constructor / trailing-comma style nits that
+    # shift with each Flutter release) even with `--no-fatal-infos`. The gate we
+    # actually owe a generated project is "no errors or warnings"; infos are
+    # advisory style. So assert on the severity lines, not the exit code.
+    analyze_out = f"{result.stdout}\n{result.stderr}"
+    severe = [
+        ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln
+    ]
+    assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)

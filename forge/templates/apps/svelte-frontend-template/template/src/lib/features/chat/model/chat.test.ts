@@ -123,9 +123,12 @@ describe('getChatStore (AG-UI agent client)', () => {
 	});
 
 	it('retryLastRun is a no-op while a run is in flight (anti-double-retry)', async () => {
-		let resolveRun: (() => void) | null = null;
+		let resolveRun: () => void = () => {};
 		mockRunAgent.mockImplementation(
-			() => new Promise<void>((resolve) => { resolveRun = resolve }),
+			() =>
+				new Promise<void>((resolve) => {
+					resolveRun = resolve;
+				}),
 		);
 		store.addUserMessage('Hello');
 		await Promise.resolve();  // let isRunning flip
@@ -134,7 +137,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.retryLastRun();
 		store.retryLastRun();
 		expect(mockRunAgent).toHaveBeenCalledTimes(1);  // still 1
-		resolveRun?.();
+		resolveRun();
 	});
 
 	it('dismissError clears the error without re-running', () => {
@@ -152,7 +155,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 	// Helper: drive an assistant reply through the AG-UI event subscriber
 	// so we get a real assistant message without mutating module state.
 	async function seedAssistantReply(asstId: string, asstContent: string) {
-		runAgent.mockImplementationOnce(async (_p: unknown, sub: any) => {
+		mockRunAgent.mockImplementationOnce(async (_p: unknown, sub: any) => {
 			await sub.onTextMessageStartEvent({
 				event: { messageId: asstId, role: 'assistant' }
 			});
@@ -170,40 +173,40 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.setApprovalMode('bypass');
 		await seedAssistantReply('asst-1', 'first reply');
 		expect(store.messages).toHaveLength(2);
-		const firstThreadId = runAgent.mock.calls[0][0].threadId;
+		const firstThreadId = mockRunAgent.mock.calls[0][0].threadId;
 
-		runAgent.mockResolvedValueOnce(undefined);
+		mockRunAgent.mockResolvedValueOnce(undefined);
 		store.regenerate('asst-1');
 		await Promise.resolve();
 
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 		// ── Load-bearing: regenerate keeps the thread. ──
-		expect(runAgent.mock.calls[1][0].threadId).toBe(firstThreadId);
+		expect(mockRunAgent.mock.calls[1][0].threadId).toBe(firstThreadId);
 	});
 
 	it('regenerate re-uses lastRunOptions (model + approval)', async () => {
 		store.setModel('gpt-4.1');
 		store.setApprovalMode('bypass');
 		await seedAssistantReply('asst-2', 'reply');
-		const firstProps = runAgent.mock.calls[0][0].forwardedProps;
+		const firstProps = mockRunAgent.mock.calls[0][0].forwardedProps;
 
-		runAgent.mockResolvedValueOnce(undefined);
+		mockRunAgent.mockResolvedValueOnce(undefined);
 		store.regenerate('asst-2');
 		await Promise.resolve();
 
-		expect(runAgent.mock.calls[1][0].forwardedProps).toEqual(firstProps);
+		expect(mockRunAgent.mock.calls[1][0].forwardedProps).toEqual(firstProps);
 	});
 
 	it('regenerate is a no-op for unknown messageId', async () => {
 		await seedAssistantReply('asst-3', 'reply');
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 
 		store.regenerate('does-not-exist');
 		await Promise.resolve();
 
-		expect(runAgent).toHaveBeenCalledTimes(1);
+		expect(mockRunAgent).toHaveBeenCalledTimes(1);
 		expect(store.messages).toHaveLength(2);
 	});
 
@@ -212,22 +215,27 @@ describe('getChatStore (AG-UI agent client)', () => {
 		await seedAssistantReply('asst-4', 'first reply');
 		expect(store.messages).toHaveLength(2);
 
-		// Now start a never-resolving run.
-		let resolveRun: (() => void) | null = null;
-		runAgent.mockImplementationOnce(
-			() => new Promise<void>((resolve) => { resolveRun = resolve })
+		// Now start a never-resolving run. Seed the resolver with a no-op so
+		// its type is a plain `() => void` — annotating it `| null` made TS
+		// narrow the call site to `never` ("expression is not callable").
+		let resolveRun: () => void = () => {};
+		mockRunAgent.mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveRun = resolve;
+				})
 		);
 		store.addUserMessage('follow up');
 		await Promise.resolve();
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
 		store.regenerate('asst-4');
 		store.regenerate('asst-4');
 
 		// Still 2 — both regens no-op'd while isRunning=true.
-		expect(runAgent).toHaveBeenCalledTimes(2);
+		expect(mockRunAgent).toHaveBeenCalledTimes(2);
 
-		resolveRun?.();
+		resolveRun();
 	});
 
 	it('regenerate is a no-op when no prior runAgent has fired (hasRun gate)', () => {
@@ -235,9 +243,9 @@ describe('getChatStore (AG-UI agent client)', () => {
 		// any runAgent has captured lastRunOptions would otherwise
 		// fall through to runAgent(undefined), silently re-running
 		// with empty forwardedProps.
-		runAgent.mockReset();
+		mockRunAgent.mockReset();
 		store.addUserMessage('hi');
 		store.regenerate('some-id-that-may-or-may-not-exist');
-		expect(runAgent).not.toHaveBeenCalled();
+		expect(mockRunAgent).not.toHaveBeenCalled();
 	});
 });

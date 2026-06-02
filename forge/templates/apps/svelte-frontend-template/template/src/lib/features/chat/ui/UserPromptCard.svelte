@@ -17,18 +17,13 @@
 		{prompt.question}
 	</p>
 	<div class="flex flex-wrap gap-2">
-		{#each prompt.options as opt (opt.label)}
+		{#each prompt.options as opt (opt.id)}
 			<button
 				type="button"
 				onclick={() => onRespond(opt.label)}
 				class="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
-				title={opt.description}
-				data-recommended={opt.recommended}
 			>
 				{opt.label}
-				{#if opt.recommended}
-					<span class="ml-1 text-[10px] uppercase tracking-wide text-amber-600">recommended</span>
-				{/if}
 			</button>
 		{/each}
 	</div>

@@ -307,7 +307,7 @@ void main() {
       );
       await notifier.regenerate('msg-1');
       verifyNever(
-        () => client.runAgent(
+        () => mockClient.runAgent(
           threadId: any(named: 'threadId'),
           runId: any(named: 'runId'),
           messages: any(named: 'messages'),

@@ -10,11 +10,13 @@
 	let {
 		message,
 		toolCalls = [],
-		onRegenerate
+		onRegenerate,
+		isStreaming = false
 	}: {
 		message: Message;
 		toolCalls?: ToolCallInfo[];
 		onRegenerate?: (messageId: string) => void;
+		isStreaming?: boolean;
 	} = $props();
 
 	const isAssistant = $derived(message.role !== 'user');
