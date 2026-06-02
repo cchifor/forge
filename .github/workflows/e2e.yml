@@ -84,9 +84,10 @@ jobs:
           - vue-chat
           - svelte-chat
           - flutter-full
-          # Layer-3 Console template (greenfield) — the pre-validation gate:
-          # maps to test_console_template_greenfield_typechecks.
+          # Layer-3 seed templates (greenfield) — the pre-validation gate:
+          # map to test_console_template_* / test_chatfirst_template_*.
           - console-template
+          - chatfirst-template
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
