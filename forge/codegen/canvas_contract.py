@@ -16,21 +16,106 @@ from pathlib import Path
 from typing import Any
 
 from forge.codegen._schema_cache import load_json_schema
+from forge.codegen.ui_protocol import assert_supported_schema
 from forge.errors import GeneratorError
+
+# Operation kinds a data contract may declare. ``read`` fetches, ``write``
+# mutates, ``subscribe`` opens a stream (e.g. the agent WS).
+_VALID_OPERATION_KINDS: frozenset[str] = frozenset({"read", "write", "subscribe"})
+
+
+@dataclass(frozen=True)
+class ContractOperation:
+    """One named operation in a component's data contract.
+
+    ``input`` / ``output`` are JSON-Schema objects in the ui-protocol subset
+    (validated via :func:`forge.codegen.ui_protocol.assert_supported_schema`).
+    """
+
+    name: str
+    kind: str  # read | write | subscribe
+    input: dict[str, Any]
+    output: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class DataContract:
+    """A component's data-dependency set: a named set of operations.
+
+    An empty ``operations`` tuple is a legal, representable state — it means a
+    pure-UI component with no data dependency.
+    """
+
+    component: str
+    operations: tuple[ContractOperation, ...] = ()
 
 
 @dataclass(frozen=True)
 class CanvasComponentSpec:
-    """One canvas component and the JSON Schema for its props."""
+    """One canvas component: its props (UI surface) + optional data contract."""
 
     name: str
     props_schema: dict[str, Any]
     description: str = ""
+    # The data-dependency set. ``None`` ⇒ pure-UI component (no contract file).
+    contract: DataContract | None = None
 
 
 DEFAULT_SCHEMA_ROOT = (
     Path(__file__).resolve().parent.parent / "templates" / "_shared" / "canvas-components"
 )
+
+
+def data_contract_from_dict(data: dict[str, Any]) -> DataContract:
+    """Build a :class:`DataContract` from a parsed ``*.contract.json`` dict.
+
+    Structural parse only (shape + types); semantic validation — operation
+    kinds and schema-subset compliance — is :func:`validate_data_contract`.
+    """
+    if not isinstance(data, dict):
+        raise GeneratorError(f"data contract must be an object, got {type(data).__name__}")
+    component = str(data.get("component") or "")
+    ops_raw = data.get("operations", [])
+    if not isinstance(ops_raw, list):
+        raise GeneratorError(f"{component or '<contract>'}: operations must be a list")
+    ops: list[ContractOperation] = []
+    for entry in ops_raw:
+        if not isinstance(entry, dict):
+            raise GeneratorError(f"{component}: each operation must be an object")
+        ops.append(
+            ContractOperation(
+                name=str(entry.get("name") or ""),
+                kind=str(entry.get("kind") or ""),
+                input=dict(entry.get("input") or {}),
+                output=dict(entry.get("output") or {}),
+            )
+        )
+    return DataContract(component=component, operations=tuple(ops))
+
+
+def load_data_contract(path: Path) -> DataContract:
+    """Load and structurally parse a ``<Component>.contract.json`` file."""
+    raw = load_json_schema(path)
+    return data_contract_from_dict(raw)
+
+
+def validate_data_contract(contract: DataContract) -> None:
+    """Raise ``GeneratorError`` if any operation is malformed or out-of-subset.
+
+    Checks: each operation has a name, a ``kind`` in {read, write, subscribe},
+    and ``input``/``output`` schemas that stay inside the ui-protocol subset.
+    """
+    for op in contract.operations:
+        where = f"{contract.component}.{op.name or '<unnamed>'}"
+        if not op.name:
+            raise GeneratorError(f"{contract.component}: operation is missing a name")
+        if op.kind not in _VALID_OPERATION_KINDS:
+            raise GeneratorError(
+                f"{where}: invalid operation kind {op.kind!r} "
+                f"(must be one of {sorted(_VALID_OPERATION_KINDS)})"
+            )
+        assert_supported_schema(op.input, where=f"{where}.input")
+        assert_supported_schema(op.output, where=f"{where}.output")
 
 
 def load_components(root: Path | None = None) -> list[CanvasComponentSpec]:
@@ -54,28 +139,66 @@ def load_components(root: Path | None = None) -> list[CanvasComponentSpec]:
                 f"{path}: canvas props schema title must end with 'Props' (got {title!r})"
             )
         name = title[: -len("Props")]
+        # Optional sibling data contract: ``<Component>.contract.json`` next to
+        # the props schema. Absent ⇒ pure-UI component.
+        contract: DataContract | None = None
+        contract_path = path.parent / f"{name}.contract.json"
+        if contract_path.is_file():
+            contract = load_data_contract(contract_path)
+            validate_data_contract(contract)
         components.append(
             CanvasComponentSpec(
                 name=name,
                 props_schema=raw,
                 description=str(raw.get("description") or ""),
+                contract=contract,
             )
         )
     return components
 
 
-def build_manifest(components: list[CanvasComponentSpec]) -> dict[str, Any]:
-    """Produce ``canvas.manifest.json`` — one entry per component."""
+def _contract_to_manifest(contract: DataContract) -> dict[str, Any]:
+    """Serialize a contract's operations for ``canvas.manifest.json``."""
     return {
-        "$schema": "https://forge.dev/schemas/canvas-manifest-v1.json",
-        "version": 1,
-        "components": {
-            c.name: {
-                "description": c.description,
-                "props_schema": c.props_schema,
+        "operations": [
+            {
+                "name": op.name,
+                "kind": op.kind,
+                "input": op.input,
+                "output": op.output,
             }
-            for c in components
-        },
+            for op in contract.operations
+        ]
+    }
+
+
+def build_manifest(components: list[CanvasComponentSpec]) -> dict[str, Any]:
+    """Produce ``canvas.manifest.json`` — one entry per component.
+
+    The manifest is **version 2** only when at least one component carries a
+    data contract; otherwise it stays **version 1** so contract-less projects
+    (every shipped component today) emit a byte-identical v1 manifest and old
+    readers are unaffected. A v2 reader treats a missing ``contract`` key as a
+    pure-UI component.
+    """
+    has_contract = any(c.contract is not None for c in components)
+    version = 2 if has_contract else 1
+    schema_url = f"https://forge.dev/schemas/canvas-manifest-v{version}.json"
+
+    entries: dict[str, Any] = {}
+    for c in components:
+        entry: dict[str, Any] = {
+            "description": c.description,
+            "props_schema": c.props_schema,
+        }
+        if c.contract is not None:
+            entry["contract"] = _contract_to_manifest(c.contract)
+        entries[c.name] = entry
+
+    return {
+        "$schema": schema_url,
+        "version": version,
+        "components": entries,
     }
 
 
