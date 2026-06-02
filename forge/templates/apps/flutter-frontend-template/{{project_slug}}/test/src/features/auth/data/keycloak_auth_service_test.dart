@@ -1,9 +1,9 @@
-/// Unit tests for KeycloakAuthService.
-///
-/// Covers the public surface — login(), init(), refreshAccessToken(),
-/// logout() — by injecting a mocked FlutterAppAuth and a mocked
-/// secure storage. The new refreshAccessToken() method is the focus
-/// of the native auth-refresh feature.
+// Unit tests for KeycloakAuthService.
+//
+// Covers the public surface — login(), init(), refreshAccessToken(),
+// logout() — by injecting a mocked FlutterAppAuth and a mocked
+// secure storage. The new refreshAccessToken() method is the focus
+// of the native auth-refresh feature.
 
 import 'dart:convert';
 
@@ -35,7 +35,7 @@ void main() {
       AuthorizationTokenRequest('client', 'redirect', issuer: 'http://x'),
     );
     registerFallbackValue(
-      const TokenRequest('client', 'redirect', issuer: 'http://x'),
+      TokenRequest('client', 'redirect', issuer: 'http://x'),
     );
   });
 
