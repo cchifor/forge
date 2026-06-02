@@ -164,6 +164,17 @@ class TestProjectConfig:
         defaults.update(overrides)
         return ProjectConfig(**defaults)
 
+    def test_components_must_be_list_of_str(self):
+        # A misconstructed `components="Panel"` would otherwise be treated as a
+        # list of characters downstream — shape validation rejects it.
+        with pytest.raises(ValueError, match="list of component-name strings"):
+            self._make_config(components="Panel").validate()
+
+    def test_valid_components_list_passes_shape(self):
+        # Shape is fine; existence/layering is deferred to resolve time, so an
+        # as-yet-unregistered name does not trip validate().
+        self._make_config(components=["SomeComponent"]).validate()
+
     def test_valid(self):
         cfg = self._make_config()
         cfg.validate()
