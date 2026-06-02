@@ -56,11 +56,15 @@ def test_emits_bindings_artifact_when_spec_set(tmp_path: Path) -> None:
     proj = tmp_path / "proj"
     (proj / cfg.frontend_slug).mkdir(parents=True)
     _emit_contract_bindings(cfg, proj, None, components_root=_contract_component_root(tmp_path))
-    out = proj / cfg.frontend_slug / "src" / "shared" / "api" / "contract-bindings.toml"
+    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    out = api / "contract-bindings.toml"
     assert out.is_file()
     text = out.read_text()
     assert "[contract_bindings.EntityList.list]" in text
     assert 'operation_id = "listItems"' in text
+    # First run also drops a default-stub capabilities.ts so a chat component
+    # that imports it resolves before bindings are filled in.
+    assert 'agentTransport = "stub"' in (api / "capabilities.ts").read_text()
 
 
 def test_noop_when_no_spec(tmp_path: Path) -> None:
