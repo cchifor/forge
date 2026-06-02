@@ -1,7 +1,7 @@
 import 'package:{{project_slug}}/src/features/auth/domain/auth_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../../fixtures/user.dart';
+import '../../../../fixtures/user.dart';
 
 void main() {
   group('AuthState', () {
@@ -11,7 +11,7 @@ void main() {
         accessToken: 'tok-123',
       );
       expect(state, isA<Authenticated>());
-      final auth = state as Authenticated;
+      const auth = state as Authenticated;
       expect(auth.user, testUser);
       expect(auth.accessToken, 'tok-123');
     });

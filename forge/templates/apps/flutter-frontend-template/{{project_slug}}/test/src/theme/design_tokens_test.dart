@@ -36,7 +36,7 @@ void main() {
         expect(
           spacings[i],
           greaterThan(spacings[i - 1]),
-          reason: 'spacing[${i}] should be > spacing[${i - 1}]',
+          reason: 'spacing[$i] should be > spacing[${i - 1}]',
         );
       }
     });
@@ -61,7 +61,7 @@ void main() {
         expect(
           radii[i],
           greaterThan(radii[i - 1]),
-          reason: 'radius[${i}] should be > radius[${i - 1}]',
+          reason: 'radius[$i] should be > radius[${i - 1}]',
         );
       }
     });
@@ -87,7 +87,7 @@ void main() {
         expect(
           icons[i],
           greaterThan(icons[i - 1]),
-          reason: 'icon[${i}] should be > icon[${i - 1}]',
+          reason: 'icon[$i] should be > icon[${i - 1}]',
         );
       }
     });

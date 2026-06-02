@@ -196,7 +196,7 @@ void main() {
     });
 
     test('ACTIVITY_SNAPSHOT routes by content.target', () {
-      final canvasEvent = const ActivitySnapshotEvent(
+      const canvasEvent = ActivitySnapshotEvent(
         messageId: 'm1',
         activityType: 'dynamic-form',
         content: {'target': 'canvas', 'engine': 'ag-ui'},

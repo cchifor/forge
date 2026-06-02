@@ -5,7 +5,7 @@ import 'user_model.dart';
 part 'auth_state.freezed.dart';
 
 @freezed
-abstract class AuthState with _$AuthState {
+sealed class AuthState with _$AuthState {
   const factory AuthState.authenticated({
     required User user,
     required String accessToken,

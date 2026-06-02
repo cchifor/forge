@@ -16,7 +16,7 @@ void main() {
     mockHandler = MockErrorInterceptorHandler();
   });
 
-  DioException _createDioException({
+  DioException createDioException({
     int? statusCode,
     dynamic data,
     DioExceptionType type = DioExceptionType.badResponse,
@@ -38,7 +38,7 @@ void main() {
   group('ErrorInterceptor', () {
     group('HTTP status code mapping', () {
       test('maps 401 to UnauthorizedException', () {
-        final err = _createDioException(statusCode: 401);
+        final err = createDioException(statusCode: 401);
 
         interceptor.onError(err, mockHandler);
 
@@ -53,7 +53,7 @@ void main() {
       });
 
       test('maps 403 to UnauthorizedException with access denied', () {
-        final err = _createDioException(statusCode: 403);
+        final err = createDioException(statusCode: 403);
 
         interceptor.onError(err, mockHandler);
 
@@ -68,7 +68,7 @@ void main() {
       });
 
       test('maps 404 to NotFoundException', () {
-        final err = _createDioException(statusCode: 404);
+        final err = createDioException(statusCode: 404);
 
         interceptor.onError(err, mockHandler);
 
@@ -83,7 +83,7 @@ void main() {
       });
 
       test('maps 409 to ConflictException', () {
-        final err = _createDioException(statusCode: 409);
+        final err = createDioException(statusCode: 409);
 
         interceptor.onError(err, mockHandler);
 
@@ -98,7 +98,7 @@ void main() {
       });
 
       test('maps 422 to ValidationException', () {
-        final err = _createDioException(statusCode: 422);
+        final err = createDioException(statusCode: 422);
 
         interceptor.onError(err, mockHandler);
 
@@ -113,7 +113,7 @@ void main() {
       });
 
       test('maps 500 to ServerException', () {
-        final err = _createDioException(statusCode: 500);
+        final err = createDioException(statusCode: 500);
 
         interceptor.onError(err, mockHandler);
 
@@ -130,7 +130,7 @@ void main() {
 
     group('network errors', () {
       test('maps connectionTimeout to NetworkException', () {
-        final err = _createDioException(
+        final err = createDioException(
           type: DioExceptionType.connectionTimeout,
         );
 
@@ -147,7 +147,7 @@ void main() {
       });
 
       test('maps connectionError to NetworkException', () {
-        final err = _createDioException(
+        final err = createDioException(
           type: DioExceptionType.connectionError,
         );
 
@@ -184,7 +184,7 @@ void main() {
 
     group('API error parsing', () {
       test('uses message from API error response body', () {
-        final err = _createDioException(
+        final err = createDioException(
           statusCode: 404,
           data: <String, dynamic>{
             'message': 'User not found',
@@ -212,7 +212,7 @@ void main() {
     // ``AppException`` family whenever the body does not match.
     group('RFC-007 envelope parsing', () {
       test('parses envelope body into typed api.AppException', () {
-        final err = _createDioException(
+        final err = createDioException(
           statusCode: 404,
           data: <String, dynamic>{
             'error': <String, dynamic>{
@@ -245,7 +245,7 @@ void main() {
         // pre-1.2.0 shape and must keep flowing through the existing
         // status-code switch (this asserts the fallback path stays
         // intact for any backend that has not yet adopted RFC-007).
-        final err = _createDioException(
+        final err = createDioException(
           statusCode: 409,
           data: <String, dynamic>{
             'message': 'Item already exists',
