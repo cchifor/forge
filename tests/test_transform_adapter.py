@@ -29,8 +29,30 @@ def test_bool_and_str_coercions() -> None:
     ts = emit_transform_adapter(
         "E", "get", {"flag": {"from": "f", "coerce": "bool"}, "name": {"from": "n", "coerce": "str"}}
     )
-    assert 'flag: Boolean(upstream["f"])' in ts
+    # bool uses a helper matching the DSL semantics, not JS Boolean() (which
+    # would make "false"/"0" truthy).
+    assert 'forgeBool(upstream["f"])' in ts
     assert 'name: String(upstream["n"])' in ts
+
+
+def test_non_identifier_dest_key_is_quoted() -> None:
+    ts = emit_transform_adapter("E", "get", {"data-x": "a"})
+    assert '"data-x": upstream["a"]' in ts
+
+
+def test_source_segment_is_escaped() -> None:
+    # A quote in a (hand-edited) source path must be escaped, not break the TS.
+    ts = emit_transform_adapter("E", "get", {"v": 'a"b'})
+    assert r'["a\"b"]' in ts
+    assert '["a"b"]' not in ts  # never the unescaped/invalid form
+
+
+def test_prelude_bool_helper_matches_dsl() -> None:
+    from forge.codegen.openapi_binding import transform_adapter_prelude
+
+    prelude = transform_adapter_prelude()
+    assert "export function forgeBool" in prelude
+    assert '"true"' in prelude and '"1"' in prelude
 
 
 def test_empty_transform_emits_passthrough() -> None:
