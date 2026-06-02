@@ -297,3 +297,53 @@ class TestComponentLayerField:
         with pytest.raises(PluginError, match="layer") as exc:
             parse_feature_manifest(_write_toml(toml), module_path="m")
         assert exc.value.code == FEATURE_MANIFEST_INVALID
+
+
+class TestComponentTable:
+    """The additive ``[feature.component]`` table: a component's data contract,
+    child components (name→version-spec, reusing the ``[feature.depends]``
+    form), and aggregated contracts."""
+
+    def test_absent_component_table_defaults(self, _write_toml) -> None:
+        m = parse_feature_manifest(_write_toml(MINIMAL_TOML), module_path="m")
+        assert m.component_contract is None
+        assert m.component_children == {}
+        assert m.component_aggregates == ()
+
+    def test_parses_component_table(self, _write_toml) -> None:
+        toml = (
+            "[feature]\n"
+            'name = "ReportsPanel"\n'
+            'version = "1.0.0"\n'
+            'summary = "Reporting panel"\n'
+            'category = "component"\n'
+            "layer = 2\n"
+            "\n"
+            "[feature.component]\n"
+            'contract = "ReportingContract"\n'
+            'aggregates = ["ReportingContract"]\n'
+            "\n"
+            "[feature.component.children]\n"
+            'FilterBar = "^1.0"\n'
+            'DataTable = "*"\n'
+        )
+        m = parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert m.component_contract == "ReportingContract"
+        assert m.component_children == {"FilterBar": "^1.0", "DataTable": "*"}
+        assert m.component_aggregates == ("ReportingContract",)
+
+    def test_children_must_be_table(self, _write_toml) -> None:
+        toml = (
+            "[feature]\n"
+            'name = "x"\n'
+            'version = "1"\n'
+            'summary = "s"\n'
+            'category = "c"\n'
+            "layer = 2\n"
+            "\n"
+            "[feature.component]\n"
+            'children = "not-a-table"\n'
+        )
+        with pytest.raises(PluginError, match="children") as exc:
+            parse_feature_manifest(_write_toml(toml), module_path="m")
+        assert exc.value.code == FEATURE_MANIFEST_INVALID

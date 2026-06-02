@@ -24,6 +24,11 @@ dependencies = [
     # ``forge sync`` runs on Axum/other Rust targets.
     "tree-sitter>=0.25.2,<1",
     "tree-sitter-rust>=0.24.2,<1",
+    # Layered-component model — semver range satisfaction for component
+    # `[feature.component.children]` version specs. Previously transitively
+    # present via copier; declared explicitly so the dependency surface is
+    # honest (mirrors the pydantic note above).
+    "packaging>=24",
 ]
 
 [dependency-groups]
