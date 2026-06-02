@@ -1,0 +1,7 @@
+[feature]
+name = "ChatFirst"
+version = "0.1.0"
+summary = "Chat-first app template — results surface above a docked agent chat (Layer-3)."
+category = "template"
+stability = "experimental"
+layer = 3
