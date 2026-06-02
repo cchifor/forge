@@ -1,0 +1,10 @@
+[feature]
+name = "Console"
+version = "0.1.0"
+summary = "Console app template — left-nav + dashboard with KPI cards (Layer-3)."
+category = "template"
+stability = "experimental"
+layer = 3
+
+[feature.component.children]
+StatCard = "*"
