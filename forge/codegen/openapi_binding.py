@@ -20,6 +20,7 @@ field synthesis, conditionals.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import tomlkit
@@ -501,3 +502,27 @@ def validate_bindings_document(
         bindings = document.get(component, {})
         violations.extend(f"[{component}] {v}" for v in validate_bindings(contract, bindings, spec))
     return violations
+
+
+def load_openapi_spec(path: str) -> dict[str, Any]:
+    """Read + parse an OpenAPI document from a local file (JSON or YAML).
+
+    URL fetching is intentionally out of scope here (a network concern the
+    caller can layer on); a missing/invalid file fails loud.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise GeneratorError(f"OpenAPI spec not found: {path}")
+    text = p.read_text(encoding="utf-8")
+    try:
+        if p.suffix.lower() in (".yaml", ".yml"):
+            import yaml  # noqa: PLC0415
+
+            data = yaml.safe_load(text)
+        else:
+            data = json.loads(text)
+    except Exception as exc:  # noqa: BLE001 — surface any parse error uniformly
+        raise GeneratorError(f"Failed to parse OpenAPI spec {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise GeneratorError(f"OpenAPI spec {path} must be a mapping at the top level.")
+    return data
