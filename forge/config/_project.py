@@ -83,6 +83,14 @@ class ProjectConfig:
     # pre-WS2 behavior. Populated from ``forge.toml`` schema v3+
     # (see :mod:`forge.sync.manifest`).
     option_origins: dict[str, str] = field(default_factory=dict)
+    # Layered-component model (additive): the components the project selects.
+    # Each name resolves to a feature whose ``feature.toml`` sets
+    # ``[feature].layer``. Empty for projects that use only the flat
+    # option/fragment surface, so existing call sites are unaffected. Deep
+    # validation (existence, layering, versions) happens at resolve time via
+    # ``forge.components.resolve_components``; ``validate()`` only shape-checks.
+    components: list[str] = field(default_factory=list)
+    component_origins: dict[str, str] = field(default_factory=dict)
 
     # Backward compatibility: single backend access
     @property

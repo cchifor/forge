@@ -64,3 +64,14 @@ def build_registry_from_manifests(
     return {
         m.name: component_node_from_manifest(m) for m in manifests if m.component_layer is not None
     }
+
+
+def populate_from_manifests(manifests: Iterable[FeatureManifest]) -> None:
+    """Replace :data:`COMPONENT_REGISTRY` with the components in ``manifests``.
+
+    Idempotent: clears first, so the loader can call it after each feature load
+    without accumulating stale entries. Plain (non-component) features are
+    skipped.
+    """
+    COMPONENT_REGISTRY.clear()
+    COMPONENT_REGISTRY.update(build_registry_from_manifests(manifests))
