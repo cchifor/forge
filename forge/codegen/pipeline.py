@@ -531,7 +531,9 @@ def _emit_shared_enums(
         ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
         emitter_key = "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
         path = (
-            _frontend_root(config, project_root) / layout.shared_enums_dir / f"{enum_file.stem}{ext}"
+            _frontend_root(config, project_root)
+            / layout.shared_enums_dir
+            / f"{enum_file.stem}{ext}"
         )
         _write(path, targets[emitter_key], collector)
 
@@ -911,7 +913,23 @@ def _write(
     for this PR). RFC-010 §"Generation pipeline" point 5 specifies
     ``origin="domain-emitter"``; promoting the synthetic-name tag to
     a first-class origin literal is tracked as follow-up work.
+
+    Harvested-edit guard: ``forge --update`` now re-runs codegen with a collector
+    seeded from the project's prior provenance. If the user has harvested a
+    generated file (its record carries ``origin="user"``), codegen must NOT
+    overwrite it or demote it back to ``base-template`` — leave both the file
+    and the record untouched, mirroring the ``user`` zone contract in the sync
+    stack. On fresh generation the collector has no seeded records, so this is
+    inert.
     """
+    if collector is not None:
+        try:
+            rel = target.relative_to(collector.project_root).as_posix()
+        except ValueError:
+            rel = None
+        prior = collector.records.get(rel) if rel is not None else None
+        if prior is not None and prior.origin == "user":
+            return
     target.parent.mkdir(parents=True, exist_ok=True)
     new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
     if target.is_file():

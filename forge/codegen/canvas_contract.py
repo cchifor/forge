@@ -112,9 +112,15 @@ def load_data_contract(path: Path) -> DataContract:
 def validate_data_contract(contract: DataContract) -> None:
     """Raise ``GeneratorError`` if any operation is malformed or out-of-subset.
 
-    Checks: each operation has a name, a ``kind`` in {read, write, subscribe},
-    and ``input``/``output`` schemas that stay inside the ui-protocol subset.
+    Checks: a non-empty ``component`` name; each operation has a name, a ``kind``
+    in {read, write, subscribe}, ``input``/``output`` schemas inside the
+    ui-protocol subset, and a PascalCase op name unique within the contract
+    (two ops that pascalize to the same prefix would emit duplicate
+    ``<Component><Op>Input/Output`` TS interfaces).
     """
+    if not contract.component:
+        raise GeneratorError("data contract is missing its 'component' name")
+    seen_pascal: dict[str, str] = {}
     for op in contract.operations:
         where = f"{contract.component}.{op.name or '<unnamed>'}"
         if not op.name:
@@ -124,6 +130,14 @@ def validate_data_contract(contract: DataContract) -> None:
                 f"{where}: invalid operation kind {op.kind!r} "
                 f"(must be one of {sorted(_VALID_OPERATION_KINDS)})"
             )
+        pascal = _pascal(op.name)
+        if pascal in seen_pascal:
+            raise GeneratorError(
+                f"{contract.component}: operations {seen_pascal[pascal]!r} and "
+                f"{op.name!r} both map to the TS type prefix {pascal!r} — rename one "
+                "(they would emit duplicate interfaces)."
+            )
+        seen_pascal[pascal] = op.name
         assert_supported_schema(op.input, where=f"{where}.input")
         assert_supported_schema(op.output, where=f"{where}.output")
 

@@ -93,10 +93,10 @@ function addUserMessage(content: string) {
 function respondToPrompt(answer: string) {
 	if (!snapshot.pendingPrompt) return;
 	const hitlResponse: HitlResponse = {
-		tool_call_id: snapshot.pendingPrompt.toolCallId,
+		tool_call_id: snapshot.pendingPrompt.tool_call_id,
 		answer
 	};
-	snapshot = clearPendingPromptIfMatches(snapshot, snapshot.pendingPrompt.toolCallId);
+	snapshot = clearPendingPromptIfMatches(snapshot, snapshot.pendingPrompt.tool_call_id);
 	addUserMessage(answer);
 	void runAgent({ hitlResponse });
 }

@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from forge.config import BackendLanguage, ProjectConfig
+from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
 from forge.errors import (
     OPTIONS_DEP_CYCLE,
     OPTIONS_FRAGMENT_CONFLICT,
@@ -437,6 +437,27 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
         frag = FRAGMENT_REGISTRY[name]
         targets = _target_backends(frag, project_backends)
         if not targets:
+            # A project-scoped fragment gated on the active frontend (a Vue
+            # component, an auth session-timeout fragment, …) applies to the
+            # frontend app at apps/<slug>/ — NOT a backend — via a proxy impl.
+            # Its backend target-set can be empty (no backend matches the proxy
+            # impl's language, e.g. a Vue + Node-only project), but it must still
+            # be applied. Keep it, targeting its (single) project-scoped impl
+            # language so ``apply_project_features`` applies it exactly once.
+            project_frontend = (
+                config.frontend.framework if config.frontend else FrontendFramework.NONE
+            )
+            if (
+                frag.target_frontends
+                and project_frontend in frag.target_frontends
+                and any(impl.scope == "project" for impl in frag.implementations.values())
+            ):
+                project_lang = next(
+                    lang for lang, impl in frag.implementations.items() if impl.scope == "project"
+                )
+                resolved.append(ResolvedFragment(fragment=frag, target_backends=(project_lang,)))
+                capabilities.update(frag.capabilities)
+                continue
             # A fragment was pulled in (via option value or transitive
             # dep) but none of the project's backends support it. If the
             # user explicitly asked for the fragment (via an option

@@ -101,3 +101,28 @@ def test_update_drops_provenance_for_pruned_codegen(tmp_path: Path) -> None:
     assert f'[forge.provenance."{rel}"]' not in toml.read_text(encoding="utf-8"), (
         "stale provenance record for the pruned orphaned file was not dropped"
     )
+
+
+def test_update_preserves_user_harvested_generated_file(tmp_path: Path) -> None:
+    # If a user has harvested a generated codegen file (provenance origin=user),
+    # `forge --update`'s codegen pass must NOT overwrite it or demote its origin.
+    root = _vue_chat_project(tmp_path)
+    gen = root / _GEN_REL
+    assert gen.is_file()
+    rel = _GEN_REL.as_posix()
+    marker = "// HAND-EDITED — must survive update\n"
+    gen.write_text(marker, encoding="utf-8")
+    # Flip the existing codegen provenance record for this file to origin=user
+    # (simulating a `forge --harvest` promotion). The record already exists, so
+    # edit it in place rather than appending a duplicate table.
+    toml = root / "forge.toml"
+    content = toml.read_text(encoding="utf-8")
+    hdr = f'[forge.provenance."{rel}"]'
+    assert hdr in content, "codegen should have recorded this file's provenance"
+    o = content.index("origin = ", content.index(hdr))
+    toml.write_text(content[:o] + 'origin = "user"' + content[content.index("\n", o) :], "utf-8")
+
+    update_project(root, quiet=True, no_lock=True)
+
+    assert gen.read_text(encoding="utf-8") == marker, "harvested generated file was overwritten"
+    assert 'origin = "user"' in toml.read_text(encoding="utf-8")
