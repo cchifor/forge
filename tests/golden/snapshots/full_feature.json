@@ -12,10 +12,6 @@
       "size": 491,
       "sha256": "3f1ced030f22fea7"
     },
-    ".keep": {
-      "size": 1,
-      "sha256": "01ba4719c80b6fe9"
-    },
     ".pre-commit-config.yaml": {
       "size": 471,
       "sha256": "52e8e600cab57fa5"
@@ -961,11 +957,11 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 7908,
-      "sha256": "b42d2f6577197732"
+      "size": 5326,
+      "sha256": "1086afe0298235a7"
     },
     "forge.toml": {
-      "size": 123205,
+      "size": 95966,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -988,290 +984,6 @@
       "size": 236,
       "sha256": "d93d8731bb37d0ab"
     },
-    "infra/gatekeeper/.gitignore": {
-      "size": 494,
-      "sha256": "f27b7dd313f5239b"
-    },
-    "infra/gatekeeper/Dockerfile": {
-      "size": 1437,
-      "sha256": "6f7ab7e130a98c5b"
-    },
-    "infra/gatekeeper/README.md": {
-      "size": 549,
-      "sha256": "2feeb9c03f762d51"
-    },
-    "infra/gatekeeper/config/default.yaml": {
-      "size": 1868,
-      "sha256": "c8926c3bb62484b7"
-    },
-    "infra/gatekeeper/config/development.yaml": {
-      "size": 69,
-      "sha256": "8ee9220daf14615a"
-    },
-    "infra/gatekeeper/config/production.yaml": {
-      "size": 1184,
-      "sha256": "96b81110decce336"
-    },
-    "infra/gatekeeper/config/secrets.production.yaml.example": {
-      "size": 280,
-      "sha256": "7201c2d371db6668"
-    },
-    "infra/gatekeeper/config/staging.yaml": {
-      "size": 1222,
-      "sha256": "4245b692a1baee92"
-    },
-    "infra/gatekeeper/pyproject.toml": {
-      "size": 2951,
-      "sha256": "955c6604957e47cc"
-    },
-    "infra/gatekeeper/scripts/keygen.py": {
-      "size": 2372,
-      "sha256": "2a5586db95c1d4c0"
-    },
-    "infra/gatekeeper/scripts/validate_internal.py": {
-      "size": 7196,
-      "sha256": "3dd39703278871b7"
-    },
-    "infra/gatekeeper/scripts/validate_tenant_hook.py": {
-      "size": 15202,
-      "sha256": "f8b434c00b837a9c"
-    },
-    "infra/gatekeeper/secrets/service_registry.yaml": {
-      "size": 2862,
-      "sha256": "45fd3463d175a0ba"
-    },
-    "infra/gatekeeper/src/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/__main__.py": {
-      "size": 80,
-      "sha256": "ddb60cabe1d6edc6"
-    },
-    "infra/gatekeeper/src/app/__init__.py": {
-      "size": 50,
-      "sha256": "781242d150234ed5"
-    },
-    "infra/gatekeeper/src/app/__main__.py": {
-      "size": 84,
-      "sha256": "ab441efaf55e32d6"
-    },
-    "infra/gatekeeper/src/app/api/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/api/v1/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/api/v1/api.py": {
-      "size": 321,
-      "sha256": "f01af98a66c34ffe"
-    },
-    "infra/gatekeeper/src/app/api/v1/endpoints/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/api/v1/endpoints/health.py": {
-      "size": 4428,
-      "sha256": "f2bc1bdc54baf42f"
-    },
-    "infra/gatekeeper/src/app/api/v1/endpoints/home.py": {
-      "size": 372,
-      "sha256": "13486d784b639bdc"
-    },
-    "infra/gatekeeper/src/app/cli/__init__.py": {
-      "size": 247,
-      "sha256": "eae2e82e1018d93c"
-    },
-    "infra/gatekeeper/src/app/cli/server.py": {
-      "size": 1685,
-      "sha256": "896e570285d3db89"
-    },
-    "infra/gatekeeper/src/app/core/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/core/config/__init__.py": {
-      "size": 805,
-      "sha256": "824f021819eeddd5"
-    },
-    "infra/gatekeeper/src/app/core/config/domain.py": {
-      "size": 1656,
-      "sha256": "5f3b89bb799096c7"
-    },
-    "infra/gatekeeper/src/app/core/config/loader.py": {
-      "size": 3683,
-      "sha256": "b4af3995425e4cde"
-    },
-    "infra/gatekeeper/src/app/core/config/sources.py": {
-      "size": 5179,
-      "sha256": "245bbc9d767021be"
-    },
-    "infra/gatekeeper/src/app/core/errors.py": {
-      "size": 2298,
-      "sha256": "c286523002cca398"
-    },
-    "infra/gatekeeper/src/app/core/lifecycle.py": {
-      "size": 8118,
-      "sha256": "e834286c9f50172e"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/__init__.py": {
-      "size": 697,
-      "sha256": "34bcdba3aaf1d37b"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 6284,
-      "sha256": "31aaf37d14fefc23"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 10873,
-      "sha256": "dc8fffecf676de0e"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/authz.py": {
-      "size": 2901,
-      "sha256": "0d031823b3226dd2"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 15261,
-      "sha256": "b408789d90301e17"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
-      "size": 6936,
-      "sha256": "e633845c8e719bca"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/helpers.py": {
-      "size": 11176,
-      "sha256": "550b68fe9ec298bd"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/http_client.py": {
-      "size": 4803,
-      "sha256": "f5df6111bae0c0c4"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/internal_token.py": {
-      "size": 6382,
-      "sha256": "5e7682e23dbfc2f6"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/internal_token_cache.py": {
-      "size": 10468,
-      "sha256": "f0da55e56b2f527b"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/jwks.py": {
-      "size": 5403,
-      "sha256": "fcc96e0e7ed39129"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/key_store.py": {
-      "size": 8629,
-      "sha256": "5d560ac4905cd9b7"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/keycloak_admin.py": {
-      "size": 3880,
-      "sha256": "10c76a115a0f2b2c"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/metrics.py": {
-      "size": 4897,
-      "sha256": "7b3deae1cb54bd9e"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/oidc.py": {
-      "size": 3801,
-      "sha256": "c90fe005c73617ce"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/oidc_pkce.py": {
-      "size": 4901,
-      "sha256": "7600958719f667d7"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/ratelimit.py": {
-      "size": 2766,
-      "sha256": "27019929bb1db31d"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/redis.py": {
-      "size": 24989,
-      "sha256": "bebbec570db9b36e"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 38427,
-      "sha256": "6bad66f463667f8b"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
-      "size": 1839,
-      "sha256": "a291d21841b463ae"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/routes_session.py": {
-      "size": 7983,
-      "sha256": "b5c68a17d8814c64"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/scopes.py": {
-      "size": 1718,
-      "sha256": "9c78204cea910aa0"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/server_session.py": {
-      "size": 14896,
-      "sha256": "52c90aac44694e93"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/service_registry.py": {
-      "size": 5174,
-      "sha256": "6563dea9c17783ba"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/service_token.py": {
-      "size": 25742,
-      "sha256": "944da518d8353b80"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/service_verifier.py": {
-      "size": 18301,
-      "sha256": "57ac8f8bd6d5c3fe"
-    },
-    "infra/gatekeeper/src/app/gatekeeper/tenant_config.py": {
-      "size": 5035,
-      "sha256": "c020a2c009f31501"
-    },
-    "infra/gatekeeper/src/app/main.py": {
-      "size": 3848,
-      "sha256": "9836ccaf2c9bb3af"
-    },
-    "infra/gatekeeper/src/app/middleware/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/middleware/api_version.py": {
-      "size": 2177,
-      "sha256": "8c8d63d3825703e6"
-    },
-    "infra/gatekeeper/src/app/middleware/log_redaction.py": {
-      "size": 4068,
-      "sha256": "4147b8b1df4b0262"
-    },
-    "infra/gatekeeper/src/app/middleware/logging.py": {
-      "size": 3741,
-      "sha256": "712ce80f20efea6b"
-    },
-    "infra/gatekeeper/src/app/middleware/security_headers.py": {
-      "size": 1434,
-      "sha256": "7df306e69c1e0749"
-    },
-    "infra/gatekeeper/src/app/observability/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/src/app/observability/json_logging.py": {
-      "size": 2442,
-      "sha256": "e59c43fba7d12bae"
-    },
-    "infra/gatekeeper/src/app/observability/metrics.py": {
-      "size": 4039,
-      "sha256": "d686b6e46321522b"
-    },
-    "infra/gatekeeper/src/app/observability/tracing.py": {
-      "size": 3373,
-      "sha256": "38e9323eee76a69c"
-    },
-    "infra/gatekeeper/src/py.typed": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "infra/gatekeeper/uv.lock": {
-      "size": 215882,
-      "sha256": "2055f09092c3f0b5"
-    },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
@@ -1280,124 +992,8 @@
       "size": 490,
       "sha256": "ad4b41688ef6d746"
     },
-    "sdks/platform-auth/README.md": {
-      "size": 1468,
-      "sha256": "9c06875bd132381d"
-    },
-    "sdks/platform-auth/pyproject.toml": {
-      "size": 1368,
-      "sha256": "4d9c7acb2299e4fb"
-    },
-    "sdks/platform-auth/src/platform_auth/__init__.py": {
-      "size": 1490,
-      "sha256": "f89b9b770112c796"
-    },
-    "sdks/platform-auth/src/platform_auth/auth_guard.py": {
-      "size": 20927,
-      "sha256": "aa2ff755bbac82fa"
-    },
-    "sdks/platform-auth/src/platform_auth/exceptions.py": {
-      "size": 3572,
-      "sha256": "3bc6b1044252cf7d"
-    },
-    "sdks/platform-auth/src/platform_auth/identity.py": {
-      "size": 3270,
-      "sha256": "cb553a1cd1e23402"
-    },
-    "sdks/platform-auth/src/platform_auth/jwks.py": {
-      "size": 8694,
-      "sha256": "94512b209c637d91"
-    },
-    "sdks/platform-auth/src/platform_auth/may_act.py": {
-      "size": 3475,
-      "sha256": "3165b352ef048e2d"
-    },
-    "sdks/platform-auth/src/platform_auth/revocation.py": {
-      "size": 3477,
-      "sha256": "1037b6bf08105da5"
-    },
-    "sdks/platform-auth/src/platform_auth/s2s_client.py": {
-      "size": 14321,
-      "sha256": "59f11508546bd665"
-    },
-    "sdks/platform-auth/src/platform_auth/scopes.py": {
-      "size": 5190,
-      "sha256": "17c5ba9839c89cd8"
-    },
-    "sdks/platform-auth/src/platform_auth/testing.py": {
-      "size": 13715,
-      "sha256": "e7d1d4bb00f1e8a0"
-    },
-    "sdks/platform-auth/src/platform_auth/trust.py": {
-      "size": 5793,
-      "sha256": "08d3cad0ab84903e"
-    },
-    "sdks/platform-auth/tests/README.md": {
-      "size": 1245,
-      "sha256": "0afc5d668d2a43a1"
-    },
-    "sdks/platform-auth/tests/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "sdks/platform-auth/tests/conftest.py": {
-      "size": 442,
-      "sha256": "f02ef1b9a90a1070"
-    },
-    "sdks/platform-auth/tests/unit/__init__.py": {
-      "size": 0,
-      "sha256": "e3b0c44298fc1c14"
-    },
-    "sdks/platform-auth/tests/unit/test_auth_guard.py": {
-      "size": 28344,
-      "sha256": "603c207b81defbf8"
-    },
-    "sdks/platform-auth/tests/unit/test_exceptions.py": {
-      "size": 3263,
-      "sha256": "518dea43aee23632"
-    },
-    "sdks/platform-auth/tests/unit/test_identity.py": {
-      "size": 4403,
-      "sha256": "0d530c468751e489"
-    },
-    "sdks/platform-auth/tests/unit/test_jwks.py": {
-      "size": 17042,
-      "sha256": "01782d9bb8229327"
-    },
-    "sdks/platform-auth/tests/unit/test_may_act.py": {
-      "size": 3104,
-      "sha256": "fa24827c8a26ac11"
-    },
-    "sdks/platform-auth/tests/unit/test_require_scope.py": {
-      "size": 4685,
-      "sha256": "55e8d7c5d07a24f8"
-    },
-    "sdks/platform-auth/tests/unit/test_revocation.py": {
-      "size": 4212,
-      "sha256": "84179ea433e24a59"
-    },
-    "sdks/platform-auth/tests/unit/test_s2s_client.py": {
-      "size": 20250,
-      "sha256": "d578dd0735e223fb"
-    },
-    "sdks/platform-auth/tests/unit/test_s2s_client_tenant.py": {
-      "size": 7477,
-      "sha256": "69924b50bac28b87"
-    },
-    "sdks/platform-auth/tests/unit/test_scopes.py": {
-      "size": 6527,
-      "sha256": "16076a88259dbac9"
-    },
-    "sdks/platform-auth/tests/unit/test_trust.py": {
-      "size": 6026,
-      "sha256": "92b4d508b4aa3d9b"
-    },
-    "sdks/platform-auth/uv.lock": {
-      "size": 140520,
-      "sha256": "d776524c5649390a"
-    },
     "services/api/.copier-answers.yml": {
-      "size": 513,
+      "size": 514,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1409,8 +1005,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/Dockerfile": {
-      "size": 3821,
-      "sha256": "293555405c6304ad"
+      "size": 3395,
+      "sha256": "a54a86f23c8aa9a8"
     },
     "services/api/README.md": {
       "size": 33686,
@@ -1473,8 +1069,8 @@
       "sha256": "941241dd501b2eb9"
     },
     "services/api/pyproject.toml": {
-      "size": 4112,
-      "sha256": "d20f09185ed8346a"
+      "size": 4041,
+      "sha256": "9e2c86fad2896889"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,
@@ -1583,10 +1179,6 @@
     "services/api/src/app/core/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
-    },
-    "services/api/src/app/core/auth.py": {
-      "size": 1921,
-      "sha256": "ca5fd2c0ee8fdbe8"
     },
     "services/api/src/app/core/config/__init__.py": {
       "size": 605,
@@ -1749,8 +1341,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 5945,
-      "sha256": "1760eb9f4176bb65"
+      "size": 5569,
+      "sha256": "6613ca1d5883bde5"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1759,10 +1351,6 @@
     "services/api/src/app/middleware/audit.py": {
       "size": 2423,
       "sha256": "102f4d35b032f83d"
-    },
-    "services/api/src/app/middleware/auth_context.py": {
-      "size": 2369,
-      "sha256": "3dc4801a7a2cfe7c"
     },
     "services/api/src/app/middleware/body_limit.py": {
       "size": 3120,
@@ -1783,10 +1371,6 @@
     "services/api/src/app/middleware/security_headers.py": {
       "size": 1970,
       "sha256": "73d6af1b448c85e5"
-    },
-    "services/api/src/app/middleware/tenant_context.py": {
-      "size": 879,
-      "sha256": "3900b28ccbedbfe0"
     },
     "services/api/src/app/ports/error_port.py": {
       "size": 2600,
@@ -1811,22 +1395,6 @@
     "services/api/src/app/services/webhook_service.py": {
       "size": 3929,
       "sha256": "b9665a7507afe4f4"
-    },
-    "services/api/src/service/client/auth.py": {
-      "size": 2305,
-      "sha256": "ecd6e0b353befaf6"
-    },
-    "services/api/src/service/core/context.py": {
-      "size": 889,
-      "sha256": "5667d36eb9d86bbf"
-    },
-    "services/api/src/service/security/auth.py": {
-      "size": 6641,
-      "sha256": "814ffe38f7cad128"
-    },
-    "services/api/src/service/security/platform_auth_setup.py": {
-      "size": 2110,
-      "sha256": "eedd498758e3a111"
     },
     "services/api/tests/__init__.py": {
       "size": 0,
@@ -1915,14 +1483,6 @@
     "services/api/uv.lock": {
       "size": 201791,
       "sha256": "56f7ae592dc80128"
-    },
-    "src/features/auth/components/SessionTimeoutModal.vue": {
-      "size": 4487,
-      "sha256": "30841dcb97710d3c"
-    },
-    "src/shared/composables/useSessionTimeout.ts": {
-      "size": 9925,
-      "sha256": "35a26e80e20a90bb"
     },
     "tests/e2e/.agent-context/prompt.md": {
       "size": 2453,

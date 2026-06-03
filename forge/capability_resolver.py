@@ -412,6 +412,14 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     _check_value_backend_support(config, project_backends)
 
     option_values = _apply_option_defaults(config.options)
+    # The platform-auth gatekeeper stack depends on the keycloak + redis
+    # services, which render only under ``include_keycloak``. The CLI builder
+    # coerces ``auth.mode``→``none`` when keycloak is off so the compose stays
+    # valid (no gatekeeper service with an undefined ``depends_on``); apply the
+    # SAME coercion here so direct ProjectConfig/generate() construction (matrix
+    # runner, headless fixtures, e2e) is covered too, not just the CLI path.
+    if not config.include_keycloak and option_values.get("auth.mode") == "generate":
+        option_values["auth.mode"] = "none"
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
