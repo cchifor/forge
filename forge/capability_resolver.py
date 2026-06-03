@@ -356,17 +356,21 @@ def _check_value_backend_support(
         )
 
 
-def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -> None:
+def _check_security_constraints(
+    option_values: dict[str, object], fragment_set: set[str]
+) -> None:
     """Cross-option safety rules enforced at config time.
 
     The generated MCP server exposes tool invocation + an audit log; shipping
     it with the auth stack disabled would leave those endpoints open behind no
     identity at all. Checked against the RESOLVED fragment set so it covers
     every path that pulls in ``mcp_server`` — both ``platform.mcp=true`` and
-    ``agent.mode=tool_calling``. ``auth.mode`` defaults to ``"generate"``, so
-    this only fires when a user explicitly opts out of auth.
+    ``agent.mode=tool_calling``. Checked against the EFFECTIVE ``auth.mode``
+    (``option_values``, post-coercion) — not raw ``config.options`` — so the
+    no-keycloak coercion (``auth.mode``→``none``) can't slip an unauthenticated
+    MCP server past this guard.
     """
-    if "mcp_server" in fragment_set and config.options.get("auth.mode") == "none":
+    if "mcp_server" in fragment_set and option_values.get("auth.mode") == "none":
         raise OptionsError(
             "Enabling the MCP server (platform.mcp=true or "
             "agent.mode=tool_calling) requires authentication, but "
@@ -423,7 +427,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
-    _check_security_constraints(config, fragment_set)
+    _check_security_constraints(option_values, fragment_set)
     _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set)
     order = _topo_sort(fragment_set)

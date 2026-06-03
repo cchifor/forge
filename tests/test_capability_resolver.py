@@ -514,3 +514,42 @@ class TestAuthKeycloakCoercion:
         plan = resolve(self._cfg(include_keycloak=False, options={"auth.mode": "generate"}))
         assert plan.option_values["auth.mode"] == "none"
         assert "gatekeeper" not in plan.capabilities
+
+
+class TestMcpAuthGuardWithCoercion:
+    """The MCP-requires-auth guard checks the EFFECTIVE auth.mode.
+
+    Regression for the coercion interaction: mcp + auth.mode=generate +
+    include_keycloak=False used to slip past the guard because it read raw
+    config.options (still 'generate') while the effective auth.mode coerced to
+    'none' — an unauthenticated MCP server. The guard now reads option_values.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _features(self):
+        from forge import feature_loader
+
+        feature_loader.reset_for_tests()
+        feature_loader.load_builtin_features()
+        yield
+        feature_loader.reset_for_tests()
+
+    def test_mcp_without_keycloak_raises_not_silently_unauthed(self) -> None:
+        cfg = ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            include_keycloak=False,
+            options={"platform.mcp": True, "auth.mode": "generate"},
+        )
+        with pytest.raises(OptionsError):
+            resolve(cfg)
+
+    def test_mcp_with_keycloak_resolves(self) -> None:
+        cfg = ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            include_keycloak=True,
+            options={"platform.mcp": True, "auth.mode": "generate"},
+        )
+        plan = resolve(cfg)  # auth stays generate → guard satisfied
+        assert plan.option_values["auth.mode"] == "generate"
