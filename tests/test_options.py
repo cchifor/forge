@@ -725,10 +725,18 @@ def _multi_backend_project(options: dict[str, object] | None = None) -> ProjectC
     """Project with python + node + rust backends so fragment-per-backend
     resolution exercises all three language branches."""
     options = options or {}
-    # auth.mode=generate requires Keycloak (the gatekeeper stack depends on the
+    # Platform-auth requires Keycloak (the gatekeeper stack depends on the
     # keycloak+redis services); the resolver coerces auth.mode→none when keycloak
-    # is off, so set include_keycloak to keep the platform-auth fanout effective.
-    include_keycloak = options.get("auth.mode") == "generate"
+    # is off. Enable keycloak whenever the config needs auth — an explicit
+    # auth.mode=generate, or an MCP surface (platform.mcp / agent.mode=
+    # tool_calling) which the security guard requires auth for — so the
+    # platform-auth fanout stays effective and the MCP guard is satisfied.
+    needs_auth = (
+        options.get("auth.mode") == "generate"
+        or options.get("platform.mcp") is True
+        or options.get("agent.mode") == "tool_calling"
+    )
+    include_keycloak = needs_auth
     return ProjectConfig(
         project_name="p",
         backends=[
