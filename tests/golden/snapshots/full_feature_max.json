@@ -84,6 +84,10 @@
       "size": 2063,
       "sha256": "7e0de2024be13c14"
     },
+    "apps/frontend/public/canvas.manifest.json": {
+      "size": 7130,
+      "sha256": "d73104adb44ccb05"
+    },
     "apps/frontend/scripts/answers.json": {
       "size": 588,
       "sha256": "2734e54b7a365728"
@@ -244,6 +248,10 @@
       "size": 1076,
       "sha256": "793bd4c4061e467f"
     },
+    "apps/frontend/src/features/ai_chat/events.gen.ts": {
+      "size": 4113,
+      "sha256": "8ef3f1499f5d7f0a"
+    },
     "apps/frontend/src/features/ai_chat/index.ts": {
       "size": 786,
       "sha256": "6e4b72b152c36197"
@@ -287,6 +295,10 @@
     "apps/frontend/src/features/ai_chat/ui/UserPromptCard.vue": {
       "size": 3004,
       "sha256": "83e8c460ecf0fddc"
+    },
+    "apps/frontend/src/features/ai_chat/ui_protocol.gen.ts": {
+      "size": 2159,
+      "sha256": "6d8a3245a9e411e7"
     },
     "apps/frontend/src/features/ai_chat/workspace/ApprovalReview.test.ts": {
       "size": 2765,
@@ -515,6 +527,14 @@
     "apps/frontend/src/shared/config/runtime.ts": {
       "size": 6266,
       "sha256": "c6619a3445a56769"
+    },
+    "apps/frontend/src/shared/enums/approval_mode.ts": {
+      "size": 284,
+      "sha256": "614efe149a0be14b"
+    },
+    "apps/frontend/src/shared/enums/item_status.ts": {
+      "size": 236,
+      "sha256": "d93d8731bb37d0ab"
     },
     "apps/frontend/src/shared/layouts/AuthLayout.vue": {
       "size": 200,
@@ -965,28 +985,8 @@
       "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 133545,
+      "size": 133570,
       "sha256": "<version-dependent>"
-    },
-    "frontend/public/canvas.manifest.json": {
-      "size": 7130,
-      "sha256": "d73104adb44ccb05"
-    },
-    "frontend/src/features/ai_chat/events.gen.ts": {
-      "size": 4113,
-      "sha256": "8ef3f1499f5d7f0a"
-    },
-    "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
-      "size": 2159,
-      "sha256": "6d8a3245a9e411e7"
-    },
-    "frontend/src/shared/enums/approval_mode.ts": {
-      "size": 284,
-      "sha256": "614efe149a0be14b"
-    },
-    "frontend/src/shared/enums/item_status.ts": {
-      "size": 236,
-      "sha256": "d93d8731bb37d0ab"
     },
     "infra/gatekeeper/.gitignore": {
       "size": 494,
