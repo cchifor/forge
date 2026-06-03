@@ -508,7 +508,9 @@ def main() -> None:
             ]
             result["backend_dir"] = str(project_root / config.backends[0].name)
         if config.frontend and config.frontend.framework != FrontendFramework.NONE:
-            result["frontend_dir"] = str(project_root / config.frontend_slug)
+            # The frontend app lives at apps/<slug>/ (the generator's layout),
+            # not project_root/<slug>/ — report the real path to automation.
+            result["frontend_dir"] = str(project_root / "apps" / config.frontend_slug)
             result["framework"] = config.frontend.framework.value
             result["features"] = config.all_features
         # Init #5 — additive: emit the agent-grade GenerationReport
