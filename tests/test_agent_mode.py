@@ -50,6 +50,16 @@ _EXPECTED_BUNDLES: dict[str, set[str]] = {
 
 
 def _python_project(options: dict[str, object] | None = None) -> ProjectConfig:
+    options = options or {}
+    # agent.mode=tool_calling (and multi_agent) pull in the MCP server, which the
+    # security guard requires auth for; platform-auth in turn requires Keycloak
+    # (the resolver coerces auth.mode→none when keycloak is off). Enable keycloak
+    # for the auth-bearing configs so the MCP guard is satisfied.
+    needs_auth = (
+        options.get("auth.mode") == "generate"
+        or options.get("platform.mcp") is True
+        or options.get("agent.mode") in ("tool_calling", "multi_agent")
+    )
     return ProjectConfig(
         project_name="P",
         backends=[
@@ -61,7 +71,8 @@ def _python_project(options: dict[str, object] | None = None) -> ProjectConfig:
             )
         ],
         frontend=None,
-        options=options or {},
+        include_keycloak=needs_auth,
+        options=options,
     )
 
 
