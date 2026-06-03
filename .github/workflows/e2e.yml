@@ -89,7 +89,8 @@ jobs:
           - console-template
           - chatfirst-template
           # Layer-1 EntityList — greenfield contract-types + brownfield binding
-          # gates: -k entitylist matches both test_entitylist_* functions.
+          # (static vue-tsc) + brownfield runtime (mock server -> generated
+          # adapter): -k entitylist matches all three test_entitylist_* functions.
           - entitylist
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

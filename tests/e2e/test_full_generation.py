@@ -434,6 +434,135 @@ def test_entitylist_brownfield_binding_typechecks(
 
 
 # -----------------------------------------------------------------------------
+# Case 5a-brownfield-runtime: the RUNTIME half of the brownfield profile (§J).
+# A mock server serves the upstream OpenAPI response; the GENERATED transform
+# adapter (esbuild-transpiled) is run against a live fetch from that mock and
+# must map the upstream shape onto the contract shape. Uses a portable Node mock
+# server (the stoplight/prism image is amd64-only); CI on amd64 can swap in
+# `stoplight/prism mock` via docker-compose for the same check.
+# -----------------------------------------------------------------------------
+
+# A Node harness: start an http mock serving the upstream payload, fetch it,
+# run the generated adapter, and assert it produced the contract shape.
+# ``__ADAPTER_URL__`` is replaced with the esbuilt adapter's file:// URL.
+_RUNTIME_HARNESS = r"""
+import http from 'node:http';
+import { mapEntityListListResponse } from '__ADAPTER_URL__';
+const upstream = { data: ['alpha', 'beta'] };  // upstream uses `data`
+const server = http.createServer((req, res) => {
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify(upstream));
+});
+server.listen(0, async () => {
+  const port = server.address().port;
+  try {
+    const resp = await fetch(`http://127.0.0.1:${port}/items`);
+    const body = await resp.json();
+    const mapped = mapEntityListListResponse(body);
+    // The contract wants `items`; the binding renames upstream `data` -> `items`.
+    const ok = JSON.stringify(mapped.items) === JSON.stringify(upstream.data);
+    if (!ok) { console.error('MAP MISMATCH', JSON.stringify(mapped)); process.exit(2); }
+    console.log('RUNTIME_OK', JSON.stringify(mapped));
+    process.exit(0);
+  } catch (e) { console.error('HARNESS ERROR', e); process.exit(3); }
+  finally { server.close(); }
+});
+"""
+
+
+def test_entitylist_brownfield_runtime_adapter(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    import json as _json
+
+    from forge.codegen.pipeline import run_codegen
+
+    # Spec whose listItems response uses `data`; the binding renames data->items
+    # so the adapter is exercised (not a passthrough).
+    spec = tmp_path / "openapi.json"
+    spec.write_text(
+        _json.dumps(
+            {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/items": {
+                        "get": {
+                            "operationId": "listItems",
+                            "responses": {
+                                "200": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "data": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+        )
+    )
+    config = ProjectConfig(
+        project_name="E2E EntityList Runtime",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        options={"frontend.openapi_spec_url": str(spec)},
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    api_dir = project_root / "apps" / "frontend" / "src" / "shared" / "api"
+    # Fill the binding with a response rename (upstream `data` -> contract `items`)
+    # and re-run codegen so the adapter is emitted.
+    (api_dir / "contract-bindings.toml").write_text(
+        "[contract_bindings.EntityList.list]\n"
+        'operation_id = "listItems"\n'
+        "[contract_bindings.EntityList.list.response]\n"
+        'items = "data"\n'
+    )
+    run_codegen(config, project_root, collector=None, resolved=None)
+    adapter_ts = api_dir / "transform-adapters.ts"
+    assert adapter_ts.is_file()
+    assert 'items: upstream["data"]' in adapter_ts.read_text()
+
+    # Transpile the generated adapter (self-contained TS — prelude + fns) to ESM.
+    adapter_mjs = tmp_path / "transform-adapters.mjs"
+    esbuild = _run(
+        [
+            "npx",
+            "--yes",
+            "esbuild@0.21.5",
+            str(adapter_ts),
+            "--format=esm",
+            f"--outfile={adapter_mjs}",
+        ],
+        cwd=tmp_path,
+    )
+    assert esbuild.returncode == 0, f"esbuild failed:\n{esbuild.stdout}\n{esbuild.stderr}"
+    assert adapter_mjs.is_file()
+
+    # Run the harness: mock server -> live fetch -> generated adapter -> assert.
+    harness = tmp_path / "runtime_harness.mjs"
+    harness.write_text(_RUNTIME_HARNESS.replace("__ADAPTER_URL__", adapter_mjs.as_uri()))
+    res = _run(["node", str(harness)], cwd=tmp_path)
+    assert res.returncode == 0 and "RUNTIME_OK" in res.stdout, (
+        f"brownfield runtime adapter check failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 5a-ter: Layer-3 Chat-first template (greenfield) — second seed template's
 # pre-validation gate (plan §H/§J). A single-page results surface; vue-tsc proves
 # the emitted page type-checks so the template ships green.
