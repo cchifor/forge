@@ -54,7 +54,7 @@ class TestUiProtocolEmission:
         run_codegen(config, project_root)
         target = (
             project_root
-            / config.frontend_slug
+            / "apps" / config.frontend_slug
             / "src"
             / "features"
             / "ai_chat"
@@ -68,7 +68,7 @@ class TestUiProtocolEmission:
         run_codegen(config, project_root)
         target = (
             project_root
-            / config.frontend_slug
+            / "apps" / config.frontend_slug
             / "lib"
             / "src"
             / "features"
@@ -84,7 +84,7 @@ class TestCanvasManifest:
     def test_writes_manifest_into_vue_public(self, tmp_path: Path) -> None:
         config, project_root = _make_python_project(tmp_path, FrontendFramework.VUE)
         run_codegen(config, project_root)
-        target = project_root / config.frontend_slug / "public" / "canvas.manifest.json"
+        target = project_root / "apps" / config.frontend_slug / "public" / "canvas.manifest.json"
         assert target.is_file()
         body = target.read_text(encoding="utf-8")
         assert "DataTable" in body
@@ -93,7 +93,7 @@ class TestCanvasManifest:
     def test_writes_manifest_into_flutter_assets(self, tmp_path: Path) -> None:
         config, project_root = _make_python_project(tmp_path, FrontendFramework.FLUTTER)
         run_codegen(config, project_root)
-        target = project_root / config.frontend_slug / "assets" / "canvas.manifest.json"
+        target = project_root / "apps" / config.frontend_slug / "assets" / "canvas.manifest.json"
         assert target.is_file()
 
     def test_no_manifest_without_frontend(self, tmp_path: Path) -> None:
@@ -200,7 +200,7 @@ class TestCanvasEventsUnion:
         config, project_root = _make_python_project(tmp_path, FrontendFramework.VUE)
         run_codegen(config, project_root)
         target = (
-            project_root / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
+            project_root / "apps" / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
         )
         assert target.is_file()
         body = target.read_text(encoding="utf-8")
@@ -216,7 +216,7 @@ class TestCanvasEventsUnion:
         run_codegen(config, project_root)
         target = (
             project_root
-            / config.frontend_slug
+            / "apps" / config.frontend_slug
             / "src"
             / "lib"
             / "features"
@@ -235,7 +235,7 @@ class TestCanvasEventsUnion:
         run_codegen(config, project_root)
         target = (
             project_root
-            / config.frontend_slug
+            / "apps" / config.frontend_slug
             / "lib"
             / "src"
             / "features"
@@ -256,7 +256,7 @@ class TestCanvasEventsUnion:
             project_root / "services" / "api" / "src" / "app" / "domain" / "canvas_events.py"
         )
         ts_target = (
-            project_root / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
+            project_root / "apps" / config.frontend_slug / "src" / "features" / "ai_chat" / "events.gen.ts"
         )
         first_py = py_target.read_bytes()
         first_ts = ts_target.read_bytes()
@@ -281,7 +281,7 @@ class TestSharedEnums:
         run_codegen(config, project_root)
         target = (
             project_root
-            / config.frontend_slug
+            / "apps" / config.frontend_slug
             / "src"
             / "shared"
             / "enums"

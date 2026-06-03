@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomlkit
@@ -27,6 +27,18 @@ class FeatureManifest:
     provides_fragments: tuple[str, ...]
     module_path: str
     manifest_path: str
+    # Optional, additive (layered-component model). Absent in non-component
+    # features. ``component_layer`` is the TOML ``[feature].layer`` (1/2/3); the
+    # field is named distinctly to avoid confusion with the orthogonal
+    # ``fragments._spec.ParityTier`` ({1,2,3} cross-backend coverage).
+    component_layer: int | None = None
+    stability: str | None = None
+    # ``[feature.component]`` — the component's data contract (consumed),
+    # child components (name → version-spec, mirroring ``[feature.depends]``),
+    # and aggregated contracts. All empty/None for non-component features.
+    component_contract: str | None = None
+    component_children: dict[str, str] = field(default_factory=dict)
+    component_aggregates: tuple[str, ...] = ()
 
 
 def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
@@ -64,13 +76,93 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
             context={"path": str(path), "missing": missing},
         )
 
-    for field in ("name", "version", "summary", "category"):
-        if not str(feature[field]).strip():
+    for field_name in ("name", "version", "summary", "category"):
+        if not str(feature[field_name]).strip():
             raise PluginError(
-                f"[feature].{field} must not be empty",
+                f"[feature].{field_name} must not be empty",
                 code=FEATURE_MANIFEST_INVALID,
-                context={"path": str(path), "field": field},
+                context={"path": str(path), "field": field_name},
             )
+
+    # Optional additive fields (layered-component model). Absent ⇒ None, so
+    # every existing manifest parses unchanged.
+    component_layer: int | None = None
+    if "layer" in feature:
+        layer_raw = feature["layer"]
+        # bool is an int subclass — reject it explicitly. The TOML key accepts
+        # only the integers 1, 2, 3 (Layer-1/2/3 component tiers).
+        if (
+            isinstance(layer_raw, bool)
+            or not isinstance(layer_raw, int)
+            or layer_raw not in (1, 2, 3)
+        ):
+            raise PluginError(
+                f"[feature].layer must be 1, 2, or 3 (got {layer_raw!r})",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path), "layer": layer_raw},
+            )
+        component_layer = int(layer_raw)
+
+    stability_raw = feature.get("stability")
+    stability = str(stability_raw) if stability_raw is not None else None
+
+    # ``[feature.component]`` table — the layered-component edges. Optional;
+    # absent ⇒ a non-composing component (or a plain feature).
+    component_contract: str | None = None
+    component_children: dict[str, str] = {}
+    component_aggregates: tuple[str, ...] = ()
+    component_raw = feature.get("component")
+    if component_raw is not None:
+        if not isinstance(component_raw, dict):
+            raise PluginError(
+                f"[feature.component] must be a table, got {type(component_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        contract_raw = component_raw.get("contract")
+        if contract_raw is not None and not isinstance(contract_raw, str):
+            raise PluginError(
+                f"[feature.component].contract must be a string, got {type(contract_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        component_contract = contract_raw
+
+        children_raw = component_raw.get("children", {})
+        if not isinstance(children_raw, dict):
+            raise PluginError(
+                "[feature.component.children] must be a table "
+                f"(name → version-spec), got {type(children_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        for child_name, spec in children_raw.items():
+            if not isinstance(spec, str):
+                raise PluginError(
+                    f"[feature.component.children].{child_name} must be a "
+                    f"version-spec string, got {type(spec).__name__}",
+                    code=FEATURE_MANIFEST_INVALID,
+                    context={"path": str(path), "child": str(child_name)},
+                )
+        component_children = {str(k): v for k, v in children_raw.items()}
+
+        aggregates_raw = component_raw.get("aggregates", [])
+        if not isinstance(aggregates_raw, list):
+            raise PluginError(
+                "[feature.component].aggregates must be a list, got "
+                f"{type(aggregates_raw).__name__}",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        for agg in aggregates_raw:
+            if not isinstance(agg, str):
+                raise PluginError(
+                    "[feature.component].aggregates entries must be strings, got "
+                    f"{type(agg).__name__}",
+                    code=FEATURE_MANIFEST_INVALID,
+                    context={"path": str(path)},
+                )
+        component_aggregates = tuple(aggregates_raw)
 
     depends_raw = feature.get("depends", {})
     if not isinstance(depends_raw, dict):
@@ -113,6 +205,11 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
         provides_fragments=tuple(str(f) for f in fragments_raw),
         module_path=module_path,
         manifest_path=str(path),
+        component_layer=component_layer,
+        stability=stability,
+        component_contract=component_contract,
+        component_children=component_children,
+        component_aggregates=component_aggregates,
     )
 
 

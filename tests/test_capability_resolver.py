@@ -220,14 +220,15 @@ class TestBackendCompatibility:
             enables={"generate": ("sdk_python", "sdk_node", "sdk_rust")},
         )
         # User explicitly sets auth.mode=generate, but project only has Python.
-        plan = resolve(
-            _project([BackendLanguage.PYTHON], {"auth.mode": "generate"})
-        )
+        # include_keycloak=True keeps the auth.mode→none coercion (which fires
+        # when keycloak is off) inert — this test exercises discriminator fanout.
+        cfg = _project([BackendLanguage.PYTHON], {"auth.mode": "generate"})
+        cfg.include_keycloak = True
+        plan = resolve(cfg)
         # Only the Python SDK was applied — Node and Rust silently skipped.
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_python"], (
-            f"discriminator fanout must skip incompatible-backend fragments silently, "
-            f"got {applied}"
+            f"discriminator fanout must skip incompatible-backend fragments silently, got {applied}"
         )
 
     def test_target_backends_preserves_project_order(self, isolated_registries) -> None:
@@ -309,9 +310,7 @@ class TestOriginAwareSelection:
         # origin=default, the resolved plan must not include it.
         assert plan.ordered == ()
 
-    def test_defaulted_second_fragment_skips_when_other_user_set(
-        self, isolated_registries
-    ) -> None:
+    def test_defaulted_second_fragment_skips_when_other_user_set(self, isolated_registries) -> None:
         """Mixed origins: per-key check (not whole-config gate).
 
         One option user-set + compatible, another defaulted + incompatible
@@ -362,9 +361,7 @@ class TestOriginAwareSelection:
                 )
             )
 
-    def test_discriminator_fanout_unaffected_by_origins(
-        self, isolated_registries
-    ) -> None:
+    def test_discriminator_fanout_unaffected_by_origins(self, isolated_registries) -> None:
         """Discriminator (multi-fragment) options still silently fan out.
 
         Origins gate the user-set check; the discriminator-vs-single-
@@ -393,12 +390,182 @@ class TestOriginAwareSelection:
             enables={"generate": ("sdk_python", "sdk_node")},
         )
         # User explicitly picked generate; only Node backend present.
-        plan = resolve(
-            _project(
-                [BackendLanguage.NODE],
-                options={"auth.mode": "generate"},
-                option_origins={"auth.mode": "user"},
-            )
+        # include_keycloak=True keeps the auth.mode→none coercion inert.
+        cfg = _project(
+            [BackendLanguage.NODE],
+            options={"auth.mode": "generate"},
+            option_origins={"auth.mode": "user"},
         )
+        cfg.include_keycloak = True
+        plan = resolve(cfg)
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_node"]
+
+
+class TestComponentResolution:
+    """resolve() expands ProjectConfig.components into their emitter fragments
+    (additive; empty components leaves the existing flow byte-identical)."""
+
+    def _setup(self, fragments, comp_reg, nodes):
+        from forge.components import component_fragments
+
+        for node in nodes:
+            comp_reg[node.name] = node
+            frag = component_fragments(node)[0]
+            fragments[frag.name] = frag
+
+    def test_selected_component_fragment_enters_plan(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        from forge.components import ComponentNode
+
+        comp_reg: dict = {}
+        self._setup(fragments, comp_reg, [ComponentNode(name="Card", layer=1)])
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Card"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        assert any(rf.fragment.name == "component_Card" for rf in plan.ordered)
+
+    def test_vue_component_kept_on_non_python_backend(self, isolated_registries) -> None:
+        # Regression: a Vue component compiles to a project-scoped, VUE-gated
+        # fragment with a proxy PYTHON impl. On a Vue + Node-only project its
+        # backend target-set is empty — it must still be kept (applies to
+        # apps/<slug>/), not silently dropped.
+        from forge.components import ComponentNode
+        from forge.config import FrontendConfig, FrontendFramework
+
+        options, fragments = isolated_registries
+        comp_reg: dict = {}
+        self._setup(fragments, comp_reg, [ComponentNode(name="Card", layer=1)])
+        cfg = _project([BackendLanguage.NODE])
+        cfg.frontend = FrontendConfig(framework=FrontendFramework.VUE, project_name="P")
+        cfg.components = ["Card"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        kept = [rf for rf in plan.ordered if rf.fragment.name == "component_Card"]
+        assert len(kept) == 1, "Vue component dropped on a non-Python backend project"
+        # Targeted at a single (proxy) language so it applies exactly once.
+        assert len(kept[0].target_backends) == 1
+
+    def test_child_component_ordered_before_parent(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        from forge.components import ComponentNode
+
+        comp_reg: dict = {}
+        self._setup(
+            fragments,
+            comp_reg,
+            [
+                ComponentNode(name="Leaf", layer=1),
+                ComponentNode(name="Panel", layer=2, children={"Leaf": "*"}),
+            ],
+        )
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Panel"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        names = [rf.fragment.name for rf in plan.ordered]
+        assert "component_Leaf" in names and "component_Panel" in names
+        assert names.index("component_Leaf") < names.index("component_Panel")
+
+    def test_empty_components_is_noop(self, isolated_registries) -> None:
+        options, fragments = isolated_registries
+        cfg = _project([BackendLanguage.PYTHON])  # components defaults to []
+        plan = resolve(cfg)
+        assert plan.ordered == ()
+
+    def test_unknown_component_raises(self, isolated_registries) -> None:
+        from forge.errors import PluginError
+
+        cfg = _project([BackendLanguage.PYTHON])
+        cfg.components = ["Ghost"]
+        with patch("forge.components.COMPONENT_REGISTRY", {}), pytest.raises(PluginError):
+            resolve(cfg)
+
+
+class TestAuthKeycloakCoercion:
+    """include_keycloak=False ⇒ auth.mode coerced to 'none' at resolve time.
+
+    The platform-auth gatekeeper stack depends on the keycloak + redis services,
+    which only render under include_keycloak. The CLI builder already coerces
+    auth.mode→none when keycloak is off; resolve() applies the SAME coercion so
+    direct ProjectConfig/generate() construction (matrix runner, headless
+    fixtures, e2e) also produces a valid docker-compose — no gatekeeper service
+    with an undefined depends_on.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _features(self):
+        from forge import feature_loader
+
+        feature_loader.reset_for_tests()
+        feature_loader.load_builtin_features()
+        yield
+        feature_loader.reset_for_tests()
+
+    def _cfg(self, *, include_keycloak: bool, options=None) -> ProjectConfig:
+        return ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            frontend=None,
+            include_keycloak=include_keycloak,
+            keycloak_port=18080,
+            options=options or {},
+        )
+
+    def test_no_keycloak_coerces_auth_mode_none(self) -> None:
+        plan = resolve(self._cfg(include_keycloak=False))
+        assert plan.option_values["auth.mode"] == "none"
+        # The gatekeeper capability/service must NOT be provisioned.
+        assert "gatekeeper" not in plan.capabilities
+
+    def test_keycloak_keeps_generate(self) -> None:
+        plan = resolve(self._cfg(include_keycloak=True))
+        assert plan.option_values["auth.mode"] == "generate"
+        assert "gatekeeper" in plan.capabilities
+
+    def test_explicit_generate_without_keycloak_still_coerced(self) -> None:
+        # Matches the CLI: an explicit auth.mode=generate with no keycloak is
+        # coerced to none rather than emitting an orphaned gatekeeper.
+        plan = resolve(self._cfg(include_keycloak=False, options={"auth.mode": "generate"}))
+        assert plan.option_values["auth.mode"] == "none"
+        assert "gatekeeper" not in plan.capabilities
+
+
+class TestMcpAuthGuardWithCoercion:
+    """The MCP-requires-auth guard checks the EFFECTIVE auth.mode.
+
+    Regression for the coercion interaction: mcp + auth.mode=generate +
+    include_keycloak=False used to slip past the guard because it read raw
+    config.options (still 'generate') while the effective auth.mode coerced to
+    'none' — an unauthenticated MCP server. The guard now reads option_values.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _features(self):
+        from forge import feature_loader
+
+        feature_loader.reset_for_tests()
+        feature_loader.load_builtin_features()
+        yield
+        feature_loader.reset_for_tests()
+
+    def test_mcp_without_keycloak_raises_not_silently_unauthed(self) -> None:
+        cfg = ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            include_keycloak=False,
+            options={"platform.mcp": True, "auth.mode": "generate"},
+        )
+        with pytest.raises(OptionsError):
+            resolve(cfg)
+
+    def test_mcp_with_keycloak_resolves(self) -> None:
+        cfg = ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            include_keycloak=True,
+            options={"platform.mcp": True, "auth.mode": "generate"},
+        )
+        plan = resolve(cfg)  # auth stays generate → guard satisfied
+        assert plan.option_values["auth.mode"] == "generate"

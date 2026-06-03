@@ -224,6 +224,24 @@ def main() -> None:
             name=getattr(args, "features_name", None),
         )
 
+    if getattr(args, "component_subcommand", None):
+        from forge.cli.commands.components import _dispatch_components  # noqa: PLC0415
+
+        _dispatch_components(
+            args.component_subcommand,
+            json_output=getattr(args, "json_output", False),
+            name=getattr(args, "component_name", None),
+            layer=getattr(args, "component_layer", 1),
+        )
+
+    if getattr(args, "template_subcommand", None):
+        from forge.cli.commands.components import _dispatch_templates  # noqa: PLC0415
+
+        _dispatch_templates(
+            args.template_subcommand,
+            json_output=getattr(args, "json_output", False),
+        )
+
     if getattr(args, "canvas_subcommand", None):
         from forge.cli.commands.canvas import _dispatch_canvas  # noqa: PLC0415
 
@@ -490,7 +508,9 @@ def main() -> None:
             ]
             result["backend_dir"] = str(project_root / config.backends[0].name)
         if config.frontend and config.frontend.framework != FrontendFramework.NONE:
-            result["frontend_dir"] = str(project_root / config.frontend_slug)
+            # The frontend app lives at apps/<slug>/ (the generator's layout),
+            # not project_root/<slug>/ — report the real path to automation.
+            result["frontend_dir"] = str(project_root / "apps" / config.frontend_slug)
             result["framework"] = config.frontend.framework.value
             result["features"] = config.all_features
         # Init #5 — additive: emit the agent-grade GenerationReport

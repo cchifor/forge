@@ -82,19 +82,23 @@
     },
     "apps/frontend/package.json": {
       "size": 2063,
-      "sha256": "7e0de2024be13c14"
+      "sha256": "822135562aea0e77"
+    },
+    "apps/frontend/public/canvas.manifest.json": {
+      "size": 7130,
+      "sha256": "d73104adb44ccb05"
     },
     "apps/frontend/scripts/answers.json": {
       "size": 588,
       "sha256": "2734e54b7a365728"
     },
     "apps/frontend/scripts/feature_templates.py": {
-      "size": 27777,
-      "sha256": "851e3e6e2a5c28f0"
+      "size": 27528,
+      "sha256": "cff5eb4442cf6d95"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 19649,
-      "sha256": "c39d5e1171143d95"
+      "size": 20042,
+      "sha256": "11281f4bd366de67"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
@@ -113,8 +117,8 @@
       "sha256": "5f8fcddfc32bbc7c"
     },
     "apps/frontend/src/app/providers/query-client.ts": {
-      "size": 1932,
-      "sha256": "01732af3e27edee5"
+      "size": 1950,
+      "sha256": "dc8146d5380a1094"
     },
     "apps/frontend/src/app/router/guards.test.ts": {
       "size": 6254,
@@ -149,16 +153,16 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2825,
-      "sha256": "9a961a8a61e1960a"
+      "size": 2814,
+      "sha256": "b8be2c62ce65a61a"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
       "sha256": "ed465afed298b456"
     },
     "apps/frontend/src/features/ai_chat/canvas/DataTable.vue": {
-      "size": 6731,
-      "sha256": "1e9fd7bd0fd3df70"
+      "size": 6628,
+      "sha256": "b8c233583361c12e"
     },
     "apps/frontend/src/features/ai_chat/canvas/DynamicForm.vue": {
       "size": 4806,
@@ -196,25 +200,29 @@
       "size": 9352,
       "sha256": "40ae4117024e959d"
     },
+    "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.roundtrip.test.ts": {
+      "size": 4099,
+      "sha256": "f65128f867d3c9fe"
+    },
     "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.ts": {
-      "size": 13725,
-      "sha256": "1f0f5032a873d259"
+      "size": 16674,
+      "sha256": "b4748ca72182aaf8"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/reducer.ts": {
-      "size": 9390,
-      "sha256": "f31e2def86a08fe0"
+      "size": 9766,
+      "sha256": "f8da2c6b116e77a8"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/snapshot.ts": {
-      "size": 3739,
-      "sha256": "990e9c5aa92441eb"
+      "size": 4073,
+      "sha256": "d1cd3399acbe2aeb"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
       "size": 16059,
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 6074,
-      "sha256": "35b2ae2ecf202a7f"
+      "size": 6286,
+      "sha256": "7d9fcf5275ebcd6d"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
@@ -237,12 +245,16 @@
       "sha256": "e37d36647fbfb565"
     },
     "apps/frontend/src/features/ai_chat/composables/useWorkspace.ts": {
-      "size": 517,
-      "sha256": "a713be009ee65273"
+      "size": 467,
+      "sha256": "ab07a4bcb9c0e3ed"
     },
     "apps/frontend/src/features/ai_chat/constants.ts": {
       "size": 1076,
       "sha256": "793bd4c4061e467f"
+    },
+    "apps/frontend/src/features/ai_chat/events.gen.ts": {
+      "size": 4093,
+      "sha256": "1f4a2ec3204179bd"
     },
     "apps/frontend/src/features/ai_chat/index.ts": {
       "size": 786,
@@ -287,6 +299,10 @@
     "apps/frontend/src/features/ai_chat/ui/UserPromptCard.vue": {
       "size": 3004,
       "sha256": "83e8c460ecf0fddc"
+    },
+    "apps/frontend/src/features/ai_chat/ui_protocol.gen.ts": {
+      "size": 2139,
+      "sha256": "23d26ad54546e2c1"
     },
     "apps/frontend/src/features/ai_chat/workspace/ApprovalReview.test.ts": {
       "size": 2765,
@@ -341,8 +357,8 @@
       "sha256": "c8c61f4290a202f2"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
-      "size": 3056,
-      "sha256": "d3ec8702cc1de873"
+      "size": 3403,
+      "sha256": "4d0cf3ebc801850a"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
       "size": 118,
@@ -393,16 +409,16 @@
       "sha256": "7d33b8e23a42017f"
     },
     "apps/frontend/src/features/home/ui/HomePage.vue": {
-      "size": 4751,
-      "sha256": "2861c7ad74ae5fce"
+      "size": 4743,
+      "sha256": "6a86f564b410a5c2"
     },
     "apps/frontend/src/features/profile/index.ts": {
       "size": 169,
       "sha256": "ae25dd85810c96f7"
     },
     "apps/frontend/src/features/profile/ui/ProfilePage.vue": {
-      "size": 2850,
-      "sha256": "a44c2ecbe1dd4938"
+      "size": 2844,
+      "sha256": "c9556456cd3253ca"
     },
     "apps/frontend/src/features/settings/index.ts": {
       "size": 174,
@@ -501,8 +517,8 @@
       "sha256": "754919cf7282ac23"
     },
     "apps/frontend/src/shared/composables/useUrlState.ts": {
-      "size": 2087,
-      "sha256": "df9cf329fde7c046"
+      "size": 2077,
+      "sha256": "5039bdfa053a4be8"
     },
     "apps/frontend/src/shared/composables/useZodForm.test.ts": {
       "size": 3106,
@@ -513,16 +529,24 @@
       "sha256": "778439e2871912bd"
     },
     "apps/frontend/src/shared/config/runtime.ts": {
-      "size": 6266,
-      "sha256": "c6619a3445a56769"
+      "size": 5844,
+      "sha256": "bbbd5f3d9eaa19b5"
+    },
+    "apps/frontend/src/shared/enums/approval_mode.ts": {
+      "size": 284,
+      "sha256": "614efe149a0be14b"
+    },
+    "apps/frontend/src/shared/enums/item_status.ts": {
+      "size": 236,
+      "sha256": "d93d8731bb37d0ab"
     },
     "apps/frontend/src/shared/layouts/AuthLayout.vue": {
       "size": 200,
       "sha256": "a00660e1261b5925"
     },
     "apps/frontend/src/shared/layouts/MainLayout.vue": {
-      "size": 5996,
-      "sha256": "f853a29e2f44107e"
+      "size": 5958,
+      "sha256": "567f021c20dd4208"
     },
     "apps/frontend/src/shared/lib/utils.test.ts": {
       "size": 811,
@@ -553,8 +577,8 @@
       "sha256": "00a6a11aafe3b2db"
     },
     "apps/frontend/src/shared/observability/sentry.ts": {
-      "size": 3637,
-      "sha256": "a5decc8b14d4bd59"
+      "size": 3935,
+      "sha256": "546780df05447bbf"
     },
     "apps/frontend/src/shared/observability/telemetry.ts": {
       "size": 3020,
@@ -945,8 +969,8 @@
       "sha256": "e309286e33878d5e"
     },
     "apps/frontend/tsconfig.app.json": {
-      "size": 797,
-      "sha256": "91e3653b6511656f"
+      "size": 878,
+      "sha256": "2bb3a6a707553eb2"
     },
     "apps/frontend/tsconfig.json": {
       "size": 119,
@@ -961,32 +985,12 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 7908,
-      "sha256": "b42d2f6577197732"
+      "size": 9839,
+      "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 131738,
+      "size": 133805,
       "sha256": "<version-dependent>"
-    },
-    "frontend/public/canvas.manifest.json": {
-      "size": 7130,
-      "sha256": "d73104adb44ccb05"
-    },
-    "frontend/src/features/ai_chat/events.gen.ts": {
-      "size": 4113,
-      "sha256": "8ef3f1499f5d7f0a"
-    },
-    "frontend/src/features/ai_chat/ui_protocol.gen.ts": {
-      "size": 2159,
-      "sha256": "6d8a3245a9e411e7"
-    },
-    "frontend/src/shared/enums/approval_mode.ts": {
-      "size": 284,
-      "sha256": "614efe149a0be14b"
-    },
-    "frontend/src/shared/enums/item_status.ts": {
-      "size": 236,
-      "sha256": "d93d8731bb37d0ab"
     },
     "infra/gatekeeper/.gitignore": {
       "size": 494,
@@ -1272,9 +1276,29 @@
       "size": 215882,
       "sha256": "2055f09092c3f0b5"
     },
+    "infra/keycloak/Dockerfile": {
+      "size": 368,
+      "sha256": "173308d6bc79f077"
+    },
+    "infra/keycloak/themes/vscode/login/resources/css/styles.css": {
+      "size": 23360,
+      "sha256": "99556c5a29cc552f"
+    },
+    "infra/keycloak/themes/vscode/login/theme.properties": {
+      "size": 64,
+      "sha256": "b0d710cd06b5c9d2"
+    },
+    "infra/keycloak-realm.json": {
+      "size": 4481,
+      "sha256": "4f61e09c806d312a"
+    },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
+    },
+    "init-db.sh": {
+      "size": 337,
+      "sha256": "da27485bdd9e4e50"
     },
     "package.json": {
       "size": 488,
@@ -2021,11 +2045,11 @@
       "sha256": "35a26e80e20a90bb"
     },
     "tests/e2e/.agent-context/prompt.md": {
-      "size": 2452,
-      "sha256": "f21659e2eb07890b"
+      "size": 2572,
+      "sha256": "d3c7f25811409282"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 562,
+      "size": 580,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
@@ -2044,17 +2068,29 @@
       "size": 1123,
       "sha256": "9480f7f2fd0f9c1a"
     },
+    "tests/e2e/e2e-platform/auth/AuthManager.ts": {
+      "size": 1292,
+      "sha256": "bdbc6c4dc5192c35"
+    },
+    "tests/e2e/e2e-platform/auth/global-setup.ts": {
+      "size": 1574,
+      "sha256": "417364421f57de6b"
+    },
     "tests/e2e/e2e-platform/fixtures/app.ts": {
-      "size": 640,
-      "sha256": "04b170aa1a0a0f67"
+      "size": 770,
+      "sha256": "0002aa59bb6cb351"
     },
     "tests/e2e/package.json": {
       "size": 519,
       "sha256": "ff34599358409f1b"
     },
     "tests/e2e/playwright.config.ts": {
-      "size": 624,
-      "sha256": "09b7861016063555"
+      "size": 679,
+      "sha256": "2c7caa2c24f2d7cd"
+    },
+    "tests/e2e/tests/auth.spec.ts": {
+      "size": 2051,
+      "sha256": "856529e75f1be47e"
     },
     "tests/e2e/tests/items.spec.ts": {
       "size": 3516,
@@ -2067,6 +2103,10 @@
     "tests/e2e/tsconfig.json": {
       "size": 499,
       "sha256": "33ee667c28346d4c"
+    },
+    "validate.sh": {
+      "size": 1380,
+      "sha256": "94b74b73ba42f532"
     }
   }
 }

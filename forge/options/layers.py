@@ -128,6 +128,25 @@ Empty string means the template falls back to local inference
 
 register_option(
     Option(
+        path="frontend.openapi_spec_url",
+        type=OptionType.STR,
+        default="",
+        summary="Upstream OpenAPI spec file path for brownfield contract binding.",
+        description="""\
+Local file path to an existing backend's OpenAPI document. When set (brownfield),
+Forge ingests it to bind component data-contract operations to upstream
+``operationId``s via the contract-bindings mapping artifact + transform DSL (see
+``forge.codegen.openapi_binding``). Empty ⇒ greenfield (Forge emits the backend
+slice from the contract). Note: a local file path only — remote URL fetching is
+out of scope (``load_openapi_spec`` reads from disk); download the spec and point
+this at the file.""",
+        category=FeatureCategory.PLATFORM,
+    )
+)
+
+
+register_option(
+    Option(
         path="database.mode",
         type=OptionType.ENUM,
         default="generate",

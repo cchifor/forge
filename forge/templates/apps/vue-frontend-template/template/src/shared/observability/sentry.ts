@@ -38,8 +38,12 @@ export async function initSentry(app: App, router: Router): Promise<void> {
   if (!dsn) return
 
   try {
-    // Dynamic import keeps bundler optional; types stay minimal.
-    _sentry = (await import(/* @vite-ignore */ '@sentry/vue')) as unknown as SentryModule
+    // Dynamic import keeps bundler optional; types stay minimal. The specifier
+    // is held in a variable so `tsc` doesn't resolve the (optional, possibly
+    // uninstalled) module — without this it errors TS2307 when @sentry/vue
+    // isn't a dependency. ``@vite-ignore`` keeps the bundler from eager-resolving.
+    const sentrySpecifier = '@sentry/vue'
+    _sentry = (await import(/* @vite-ignore */ sentrySpecifier)) as unknown as SentryModule
   } catch {
     // SDK not installed — don't block app boot; log once so the dev knows.
     console.warn(

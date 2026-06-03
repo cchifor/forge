@@ -84,6 +84,14 @@ jobs:
           - vue-chat
           - svelte-chat
           - flutter-full
+          # Layer-3 seed templates (greenfield) — the pre-validation gate:
+          # map to test_console_template_* / test_chatfirst_template_*.
+          - console-template
+          - chatfirst-template
+          # Layer-1 EntityList — greenfield contract-types + brownfield binding
+          # (static vue-tsc) + brownfield runtime (mock server -> generated
+          # adapter): -k entitylist matches all three test_entitylist_* functions.
+          - entitylist
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 

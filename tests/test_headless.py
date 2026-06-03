@@ -79,6 +79,21 @@ class TestBuildConfig:
         assert config.backend.features == ["products", "orders"]
         assert config.all_features == ["products", "orders"]
 
+    def test_components_list_from_config(self):
+        config = _build_config(_default_args(), {"components": ["StatCard", "Panel"]})
+        assert config.components == ["StatCard", "Panel"]
+
+    def test_components_absent_defaults_empty(self):
+        assert _build_config(_default_args(), {}).components == []
+
+    def test_malformed_components_raises(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="list of component-name strings"):
+            _build_config(_default_args(), {"components": "StatCard"})
+        with pytest.raises(ValueError, match="list of component-name strings"):
+            _build_config(_default_args(), {"components": [123]})
+
     def test_cli_flags_override_config(self):
         cfg = {"project_name": "from-file"}
         args = _default_args(project_name="from-flag")

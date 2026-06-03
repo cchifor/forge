@@ -26,7 +26,7 @@ declare module '@tanstack/vue-query' {
  * background refetches keep the previous data on screen, so an extra
  * toast would be noisy without adding information.
  */
-function isUserVisibleQueryFailure(query: Query): boolean {
+function isUserVisibleQueryFailure(query: Query<unknown, unknown>): boolean {
   // Background refetch path: data was already in cache.
   if (query.state.data !== undefined) return false
   // Opt-out for surfaces that render their own error UI.

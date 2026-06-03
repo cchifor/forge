@@ -69,14 +69,14 @@ export interface ToolCallInfo {
 
 // UserPromptPayload + its option type are produced by the canvas-core reducer
 // into `snapshot.pendingPrompt`, so re-export the canvas-core definitions as the
-// single source of truth (camelCase `toolCallId`) instead of a divergent local
-// copy — the UI consumes the same shape the reducer emits.
+// single source of truth (snake_case `tool_call_id`, matching the ui-protocol
+// wire shape) instead of a divergent local copy — the UI consumes the same
+// shape the reducer emits.
 export type { UserPromptOption, UserPromptPayload } from '@forge/canvas-core';
 
 // HitlResponse is the WIRE payload forwarded to the backend (as
 // `hitl_response`), so it keeps the snake_case `tool_call_id` the server
-// expects. `respondToPrompt` maps the canvas-core camelCase `toolCallId` to
-// this at the boundary.
+// expects — the same field name the canvas-core payload now carries.
 export interface HitlResponse {
 	tool_call_id: string;
 	answer: string;

@@ -1012,6 +1012,20 @@ BACKENDS: python, node, rust (tier 1 — manifests are language-agnostic).
 **Enables fragments:**
 - on `kubernetes` → `deploy_kubernetes`, `deploy_k8s_hpa`, `deploy_helm_chart`
 
+### `frontend.openapi_spec_url`
+
+**Type:** `str` · **Default:** `""` · **Stability:** `stable` · **Backends:** —
+
+_Upstream OpenAPI spec file path for brownfield contract binding._
+
+Local file path to an existing backend's OpenAPI document. When set (brownfield),
+Forge ingests it to bind component data-contract operations to upstream
+``operationId``s via the contract-bindings mapping artifact + transform DSL (see
+``forge.codegen.openapi_binding``). Empty ⇒ greenfield (Forge emits the backend
+slice from the contract). Note: a local file path only — remote URL fetching is
+out of scope (``load_openapi_spec`` reads from disk); download the spec and point
+this at the file.
+
 ### `mcp_template.openapi_to_tools`
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python

@@ -37,6 +37,7 @@ from forge.codegen import canvas_lint as canvas_lint_codegen
 from forge.codegen import canvas_props as canvas_props_codegen
 from forge.codegen import event_union as event_union_codegen
 from forge.codegen.canvas_contract import build_manifest as build_canvas_manifest
+from forge.codegen.canvas_contract import emit_contract_types
 from forge.codegen.canvas_contract import load_components as load_canvas_components
 from forge.codegen.enums import emit_all as emit_enum_all
 from forge.codegen.enums import load_enum_yaml
@@ -71,6 +72,7 @@ from forge.logging import get_logger, log_event
 if TYPE_CHECKING:
     from forge.api import PluginEmitterRegistration
     from forge.capability_resolver import ResolvedPlan
+    from forge.codegen.canvas_contract import DataContract
     from forge.config import ProjectConfig
     from forge.sync.provenance import ProvenanceCollector
 
@@ -108,6 +110,8 @@ def run_codegen(
     """
     _emit_ui_protocol(config, project_root, collector)
     _emit_canvas_manifests(config, project_root, collector)
+    _emit_contract_types(config, project_root, collector)
+    _emit_contract_bindings(config, project_root, collector)
     _emit_canvas_props_pydantic(config, project_root, collector)
     _emit_canvas_lint_packages(config, project_root, collector)
     _emit_event_union_pydantic(config, project_root, collector)
@@ -135,7 +139,7 @@ def _emit_ui_protocol(
 
     layout = _frontend_layout(config)
     if layout is not None:
-        target = project_root / config.frontend_slug / layout.ui_protocol_path
+        target = _frontend_root(config, project_root) / layout.ui_protocol_path
         if layout.ui_protocol_emitter == "typescript":
             body = emit_typescript(schemas)
         else:
@@ -165,8 +169,210 @@ def _emit_canvas_manifests(
         return
     components = load_canvas_components()
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
-    target = project_root / config.frontend_slug / layout.canvas_manifest_path
+    target = _frontend_root(config, project_root) / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
+
+
+def _selected_contracts(
+    config: ProjectConfig, components_root: Path | None
+) -> dict[str, DataContract]:
+    """Load the data contract for each selected component, feature-local.
+
+    A component's contract lives in its own feature dir (``forge/features/<f>/
+    <Component>.contract.json``), NOT in the shared canvas-components dir — so a
+    contract never flips the global ``canvas.manifest.json`` to v2 or leaks into
+    projects that don't select the component. ``components_root`` is a test seam
+    meaning "a dir of ``<name>.contract.json`` files"; in production each name is
+    resolved to its ``FeatureManifest.manifest_path`` parent.
+    """
+    from forge.codegen.canvas_contract import (  # noqa: PLC0415
+        load_data_contract,
+        validate_data_contract,
+    )
+    from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
+
+    def _dir_for(name: str) -> Path | None:
+        if components_root is not None:
+            return components_root
+        from forge.feature_loader import LOADED_FEATURES  # noqa: PLC0415
+
+        for manifest in LOADED_FEATURES:
+            if manifest.name == name:
+                return Path(manifest.manifest_path).parent
+        return None
+
+    contracts: dict[str, DataContract] = {}
+    for name in config.components:
+        base = _dir_for(name)
+        if base is None:
+            continue
+        path = base / f"{name}.contract.json"
+        if path.is_file():
+            contract = load_data_contract(path)
+            # Guard the name↔file link and op subset that load alone skips —
+            # else a typo'd ``component`` emits ``<Other>.contract.ts`` interfaces
+            # the ``.vue``'s import can't resolve.
+            if contract.component != name:
+                raise PluginError(
+                    f"contract file {path.name!r} declares component "
+                    f"{contract.component!r}, expected {name!r}",
+                    code=FEATURE_CONTRACT_VIOLATION,
+                    context={"path": str(path)},
+                )
+            validate_data_contract(contract)
+            contracts[name] = contract
+    return contracts
+
+
+def _frontend_root(config: ProjectConfig, project_root: Path) -> Path:
+    """The real built frontend app root — ``<project_root>/apps/<slug>/``.
+
+    The deployed Vue/Svelte/Flutter app (package.json, Dockerfile target, where
+    ``npm run build`` runs) and every component fragment live under
+    ``apps/<frontend_slug>/`` (see ``generator``). All frontend codegen outputs
+    MUST land here so the app's imports resolve — NOT the legacy
+    ``project_root/<slug>`` tree, which is orphaned (nothing builds it).
+    """
+    return project_root / "apps" / config.frontend_slug
+
+
+def _frontend_api_dir(config: ProjectConfig, project_root: Path) -> Path:
+    """The real built app's ``src/shared/api`` dir — ``apps/<slug>/``.
+
+    Component fragments (and the deployed Vue app: package.json, Dockerfile) live
+    under ``apps/<frontend_slug>/`` (see ``generator``). Contract artifacts that a
+    generated ``.vue`` imports MUST co-locate there so ``vue-tsc`` resolves them —
+    not the legacy ``project_root/<slug>`` codegen tree.
+    """
+    return _frontend_root(config, project_root) / "src" / "shared" / "api"
+
+
+def _emit_contract_types(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    components_root: Path | None = None,
+) -> None:
+    """Emit ``<Component>.contract.ts`` for each selected contract-bearing component.
+
+    Reuses ``emit_contract_types`` (ui_protocol under the hood — no second type
+    system) to write the op input/output TS interfaces into the frontend's
+    ``shared/api`` dir. A generated ``.vue`` imports these so a later contract
+    change surfaces as a ``vue-tsc`` error rather than a silent runtime break
+    (plan §D drift-safety). Mode-independent: runs for greenfield + brownfield.
+    ``components_root`` is a test seam.
+    """
+    layout = _frontend_layout(config)
+    if layout is None or not config.components:
+        return
+    contracts = _selected_contracts(config, components_root)
+    api_dir = _frontend_api_dir(config, project_root)
+    for name, contract in contracts.items():
+        _write(
+            api_dir / f"{name}.contract.ts",
+            emit_contract_types(contract),
+            collector,
+            template_name="_contract_types",
+        )
+
+
+def _emit_contract_bindings(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector | None,
+    *,
+    components_root: Path | None = None,
+) -> None:
+    """Emit the brownfield ``[contract_bindings]`` mapping artifact.
+
+    No-op unless ``frontend.openapi_spec_url`` is set (greenfield) and at least
+    one selected component declares a contract. On first run it writes the
+    proposal (contract-op → operationId) for the user to edit; on a re-run where
+    the file already exists, it re-validates the (possibly hand-edited) bindings
+    against the spec and fails loud (``FEATURE_CONTRACT_VIOLATION``) on any
+    violation. ``components_root`` is a test seam.
+    """
+    layout = _frontend_layout(config)
+    if layout is None:
+        return
+    spec_url = str(config.options.get("frontend.openapi_spec_url", "") or "")
+    if not spec_url:
+        return  # greenfield — nothing to bind
+
+    from forge.codegen.openapi_binding import (  # noqa: PLC0415
+        build_bindings_document,
+        emit_capabilities,
+        emit_transform_adapter,
+        load_openapi_spec,
+        parse_bindings_document,
+        transform_adapter_prelude,
+        validate_bindings_document,
+    )
+    from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
+
+    named = _selected_contracts(config, components_root)
+    if not named:
+        return
+
+    spec = load_openapi_spec(spec_url)
+    api_dir = _frontend_api_dir(config, project_root)
+    target = api_dir / "contract-bindings.toml"
+    if not target.is_file():
+        # First run: write the editable proposal. Adapters are emitted on the
+        # next run, once the user has filled in operationIds + transforms.
+        _write(
+            target,
+            build_bindings_document(named, spec),
+            collector,
+            template_name="_contract_bindings",
+        )
+        # Emit a default "stub" capabilities.ts now so a chat component that
+        # imports it always resolves — bindings aren't filled yet, so no agent
+        # op is bound. The validated re-run below overwrites it with "external"
+        # once a subscribe op is bound.
+        _write(
+            api_dir / "capabilities.ts",
+            emit_capabilities("stub"),
+            collector,
+            template_name="_capabilities",
+        )
+        return
+
+    # Re-run on a (possibly hand-edited) mapping: validate, then emit adapters.
+    document = parse_bindings_document(target.read_text(encoding="utf-8"))
+    violations = validate_bindings_document(named, document, spec)
+    if violations:
+        raise PluginError(
+            "contract binding validation failed:\n  - " + "\n  - ".join(violations),
+            code=FEATURE_CONTRACT_VIOLATION,
+        )
+
+    adapter_chunks = [transform_adapter_prelude()]
+    for component, contract in named.items():
+        comp_bindings = document.get(component, {})
+        for op in contract.operations:
+            transform = comp_bindings.get(op.name, {}).get("response", {})
+            adapter_chunks.append(emit_transform_adapter(component, op.name, transform))
+    _write(
+        api_dir / "transform-adapters.ts",
+        "\n".join(adapter_chunks),
+        collector,
+        template_name="_transform_adapters",
+    )
+
+    # §F: the agent transport is "external" iff a subscribe-kind op is bound.
+    # Validation above guarantees every declared op has a binding, so a declared
+    # subscribe op is necessarily bound; absence of one ⇒ inert "stub" surface.
+    has_agent_op = any(
+        op.kind == "subscribe" for contract in named.values() for op in contract.operations
+    )
+    _write(
+        api_dir / "capabilities.ts",
+        emit_capabilities("external" if has_agent_op else "stub"),
+        collector,
+        template_name="_capabilities",
+    )
 
 
 def _emit_canvas_props_pydantic(
@@ -251,7 +457,7 @@ def _emit_event_union_pydantic(
     layout = _frontend_layout(config)
     if layout is None or not layout.event_union_path:
         return
-    target = project_root / config.frontend_slug / layout.event_union_path
+    target = _frontend_root(config, project_root) / layout.event_union_path
     if layout.ui_protocol_emitter == "typescript":
         fe_body = event_union_codegen.emit_typescript(schemas)
     else:
@@ -325,7 +531,9 @@ def _emit_shared_enums(
         ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
         emitter_key = "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
         path = (
-            project_root / config.frontend_slug / layout.shared_enums_dir / f"{enum_file.stem}{ext}"
+            _frontend_root(config, project_root)
+            / layout.shared_enums_dir
+            / f"{enum_file.stem}{ext}"
         )
         _write(path, targets[emitter_key], collector)
 
@@ -705,7 +913,23 @@ def _write(
     for this PR). RFC-010 §"Generation pipeline" point 5 specifies
     ``origin="domain-emitter"``; promoting the synthetic-name tag to
     a first-class origin literal is tracked as follow-up work.
+
+    Harvested-edit guard: ``forge --update`` now re-runs codegen with a collector
+    seeded from the project's prior provenance. If the user has harvested a
+    generated file (its record carries ``origin="user"``), codegen must NOT
+    overwrite it or demote it back to ``base-template`` — leave both the file
+    and the record untouched, mirroring the ``user`` zone contract in the sync
+    stack. On fresh generation the collector has no seeded records, so this is
+    inert.
     """
+    if collector is not None:
+        try:
+            rel = target.relative_to(collector.project_root).as_posix()
+        except ValueError:
+            rel = None
+        prior = collector.records.get(rel) if rel is not None else None
+        if prior is not None and prior.origin == "user":
+            return
     target.parent.mkdir(parents=True, exist_ok=True)
     new_sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
     if target.is_file():

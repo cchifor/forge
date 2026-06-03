@@ -66,6 +66,9 @@ EVENT_ACCEPT_HARVESTED_RAN = "accept_harvested.ran"
 EVENT_REAPPLY_BASELINE_RAN = "reapply_baseline.ran"
 EVENT_EMIT_PR_RAN = "emit_pr.ran"
 EVENT_RESOLVE_RAN = "resolve.ran"
+# Layered-component model verbs.
+EVENT_COMPONENT_RAN = "component.ran"
+EVENT_TEMPLATE_RAN = "template.ran"
 
 # Schema version is part of every emitted record. Bump when the on-wire
 # shape changes — the local sink stays append-only, so consumers

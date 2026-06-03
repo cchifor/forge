@@ -327,6 +327,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Feature name for `--features-cmd deps` or `--features-cmd scaffold`.",
     )
 
+    # Layered components / templates
+    p.add_argument(
+        "--component-cmd",
+        dest="component_subcommand",
+        choices=["list", "scaffold"],
+        metavar="SUBCMD",
+        help=(
+            "Layered-component management: `list` shows registered components "
+            "(all layers); `scaffold` renders a layer-aware component skeleton."
+        ),
+    )
+    p.add_argument(
+        "--component-name",
+        dest="component_name",
+        metavar="NAME",
+        help="PascalCase component name for `--component-cmd scaffold`.",
+    )
+    p.add_argument(
+        "--component-layer",
+        dest="component_layer",
+        type=int,
+        choices=[1, 2, 3],
+        default=1,
+        help="Layer (1/2/3) for `--component-cmd scaffold` (default: 1).",
+    )
+    p.add_argument(
+        "--template-cmd",
+        dest="template_subcommand",
+        choices=["list"],
+        metavar="SUBCMD",
+        help="Layer-3 template management: `list` shows available templates.",
+    )
+
     # Canvas
     p.add_argument(
         "--canvas",

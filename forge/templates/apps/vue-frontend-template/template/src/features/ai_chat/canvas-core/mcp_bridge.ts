@@ -68,11 +68,28 @@ export interface BridgeMessage {
  * `AppBridge` and passes it in via {@link createMcpBridge}.
  */
 export interface UpstreamAppBridge {
-  oninitialized: () => void
-  onmessage: (msg: BridgeMessage) => void | Promise<void>
-  onopenlink: (req: OpenLinkRequest) => void | Promise<void>
-  onsizechange: (size: IframeSizeChange) => void
-  ontoolcall: (req: ToolCallRequest) => Promise<unknown>
+  // Inbound event setters mirror the REAL @modelcontextprotocol/ext-apps@0.4.2
+  // AppBridge signatures STRUCTURALLY (no SDK import — canvas-core stays
+  // dep-free): the SDK invokes these with structured params + awaits a result
+  // object. ``mountMcpExtBridge`` / ``createMcpBridge`` assign adapters here
+  // that translate to the simplified caller callbacks (BridgeMessage etc.).
+  oninitialized: (params?: unknown) => void
+  onmessage: (
+    params: {
+      role: string
+      content: ReadonlyArray<{ type?: string; text?: string; [k: string]: unknown }>
+    },
+    extra?: unknown,
+  ) => Promise<Record<string, unknown>>
+  onopenlink: (params: { url: string }, extra?: unknown) => Promise<Record<string, unknown>>
+  onsizechange: (params: { width?: number; height?: number }) => void
+  // ``oncalltool`` (NOT ``ontoolcall``) — the SDK's actual setter name. The
+  // empty {} results below are valid: McpUiMessageResult / McpUiOpenLinkResult
+  // have no required fields in 0.4.2 (verified against app-bridge.d.ts).
+  oncalltool: (
+    params: { name: string; arguments?: Record<string, unknown> },
+    extra?: unknown,
+  ) => Promise<Record<string, unknown>>
   connect(transport: unknown): Promise<void>
   sendToolInput(args: { arguments: Record<string, unknown> }): void
   sendToolResult(result: unknown): void
@@ -143,14 +160,70 @@ export const MCP_BRIDGE_AVAILABLE: boolean =
  *   const bridge = createMcpBridge(upstream)
  *   bridge.on({ onToolCall: async (req) => await invokeTool(req) })
  */
+/** Concatenated text from an SDK message's content-block array. */
+function extractMessageText(
+  content: ReadonlyArray<{ type?: string; text?: string }>,
+): string {
+  return (content ?? [])
+    .filter((c) => c && c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text as string)
+    .join('')
+}
+
+/**
+ * Wire the simplified caller callbacks onto the upstream bridge, ADAPTING the
+ * real ext-apps@0.4.2 handler signatures to canvas-core's dep-free shapes:
+ * the SDK calls onmessage/oncalltool/onopenlink with structured params and
+ * awaits a result object (empty {} is valid — those result types have no
+ * required fields in 0.4.2). ``onToolCall`` callers are responsible for
+ * returning an SDK-compatible CallToolResult payload (passed through verbatim).
+ * ``oninitialized`` differs per caller (mount passes a sendToolInput handle), so
+ * it's wired by each caller, not here.
+ */
+function adaptInboundHandlers(
+  bridge: UpstreamAppBridge,
+  h: {
+    onMessage?: (msg: BridgeMessage) => void | Promise<void>
+    onOpenLink?: (req: OpenLinkRequest) => void | Promise<void>
+    onSizeChange?: (size: IframeSizeChange) => void
+    onToolCall?: (req: ToolCallRequest) => Promise<unknown>
+  },
+): void {
+  if (h.onMessage) {
+    bridge.onmessage = async (params) => {
+      const text = extractMessageText(params?.content ?? [])
+      if (text) await h.onMessage!({ content: text })
+      return {}
+    }
+  }
+  if (h.onOpenLink) {
+    bridge.onopenlink = async (params) => {
+      await h.onOpenLink!({ url: params.url })
+      return {}
+    }
+  }
+  if (h.onSizeChange) {
+    bridge.onsizechange = (params) => {
+      h.onSizeChange!({ width: params.width, height: params.height ?? 0 })
+    }
+  }
+  if (h.onToolCall) {
+    bridge.oncalltool = async (params) => {
+      const result = await h.onToolCall!({ name: params.name, arguments: params.arguments ?? {} })
+      // oncalltool must return a CallToolResult (a `content` array is required);
+      // default to an empty-content result when the caller returns nothing usable.
+      return result && typeof result === 'object'
+        ? (result as Record<string, unknown>)
+        : { content: [] }
+    }
+  }
+}
+
 export function createMcpBridge(upstream: UpstreamAppBridge): McpBridge {
   return {
     on(handlers: McpBridgeHandlers): void {
-      if (handlers.onInitialized) upstream.oninitialized = handlers.onInitialized
-      if (handlers.onMessage) upstream.onmessage = handlers.onMessage
-      if (handlers.onOpenLink) upstream.onopenlink = handlers.onOpenLink
-      if (handlers.onSizeChange) upstream.onsizechange = handlers.onSizeChange
-      if (handlers.onToolCall) upstream.ontoolcall = handlers.onToolCall
+      if (handlers.onInitialized) upstream.oninitialized = () => handlers.onInitialized!()
+      adaptInboundHandlers(upstream, handlers)
     },
     sendToolResult(result: unknown): void {
       upstream.sendToolResult(result)
@@ -168,6 +241,10 @@ export function createMcpBridge(upstream: UpstreamAppBridge): McpBridge {
  * of that dep by accepting the class as a parameter.
  */
 export type AppBridgeConstructor = new (
+  // The "client/parent" position — the host always injects `null` here. The
+  // real AppBridge class is reconciled to this dep-free adapter ctor type via
+  // an `as unknown as AppBridgeConstructor` cast at the injection site (the
+  // SDK uses branded/version-specific types this interface deliberately omits).
   parent: unknown,
   identity: AppBridgeIdentity,
   capabilities: AppBridgeCapabilities,
@@ -328,10 +405,7 @@ export function mountMcpExtBridge(
   bridge.oninitialized = (): void => {
     callbacks.onInitialized?.({ sendToolInput })
   }
-  if (callbacks.onMessage) bridge.onmessage = callbacks.onMessage
-  if (callbacks.onOpenLink) bridge.onopenlink = callbacks.onOpenLink
-  if (callbacks.onSizeChange) bridge.onsizechange = callbacks.onSizeChange
-  if (callbacks.onToolCall) bridge.ontoolcall = callbacks.onToolCall
+  adaptInboundHandlers(bridge, callbacks)
 
   const transport = new transportCtor(contentWindow, contentWindow)
 

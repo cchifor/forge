@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from forge.config import BackendLanguage, ProjectConfig
+from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
 from forge.errors import (
     OPTIONS_DEP_CYCLE,
     OPTIONS_FRAGMENT_CONFLICT,
@@ -356,17 +356,19 @@ def _check_value_backend_support(
         )
 
 
-def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -> None:
+def _check_security_constraints(option_values: dict[str, object], fragment_set: set[str]) -> None:
     """Cross-option safety rules enforced at config time.
 
     The generated MCP server exposes tool invocation + an audit log; shipping
     it with the auth stack disabled would leave those endpoints open behind no
     identity at all. Checked against the RESOLVED fragment set so it covers
     every path that pulls in ``mcp_server`` — both ``platform.mcp=true`` and
-    ``agent.mode=tool_calling``. ``auth.mode`` defaults to ``"generate"``, so
-    this only fires when a user explicitly opts out of auth.
+    ``agent.mode=tool_calling``. Checked against the EFFECTIVE ``auth.mode``
+    (``option_values``, post-coercion) — not raw ``config.options`` — so the
+    no-keycloak coercion (``auth.mode``→``none``) can't slip an unauthenticated
+    MCP server past this guard.
     """
-    if "mcp_server" in fragment_set and config.options.get("auth.mode") == "none":
+    if "mcp_server" in fragment_set and option_values.get("auth.mode") == "none":
         raise OptionsError(
             "Enabling the MCP server (platform.mcp=true or "
             "agent.mode=tool_calling) requires authentication, but "
@@ -376,6 +378,29 @@ def _check_security_constraints(config: ProjectConfig, fragment_set: set[str]) -
             code=OPTIONS_INVALID_VALUE,
             context={"fragment": "mcp_server", "auth.mode": "none"},
         )
+
+
+def _collect_component_fragments(config: ProjectConfig) -> set[str]:
+    """Expand ``config.components`` into their emitter-fragment names.
+
+    Additive + guarded: a project with no selected components returns the empty
+    set, so the existing option/fragment flow is byte-identical. Component
+    resolution (layering, versions, cycles, dependents) happens in
+    ``forge.components.resolve_components`` and reuses the same error codes.
+    """
+    components = list(getattr(config, "components", None) or [])
+    if not components:
+        return set()
+    # Local import avoids a module-load cycle (forge.components imports
+    # forge.fragments/feature_manifest, which the resolver also touches).
+    from forge.components import (  # noqa: PLC0415
+        COMPONENT_REGISTRY,
+        component_fragment_name,
+        resolve_components,
+    )
+
+    resolved = resolve_components(components, COMPONENT_REGISTRY)
+    return {component_fragment_name(name) for name in resolved.ordered}
 
 
 def resolve(config: ProjectConfig) -> ResolvedPlan:
@@ -389,9 +414,18 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     _check_value_backend_support(config, project_backends)
 
     option_values = _apply_option_defaults(config.options)
+    # The platform-auth gatekeeper stack depends on the keycloak + redis
+    # services, which render only under ``include_keycloak``. The CLI builder
+    # coerces ``auth.mode``→``none`` when keycloak is off so the compose stays
+    # valid (no gatekeeper service with an undefined ``depends_on``); apply the
+    # SAME coercion here so direct ProjectConfig/generate() construction (matrix
+    # runner, headless fixtures, e2e) is covered too, not just the CLI path.
+    if not config.include_keycloak and option_values.get("auth.mode") == "generate":
+        option_values["auth.mode"] = "none"
     fragment_set = _collect_fragments(option_values)
+    fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
-    _check_security_constraints(config, fragment_set)
+    _check_security_constraints(option_values, fragment_set)
     _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set)
     order = _topo_sort(fragment_set)
@@ -403,6 +437,27 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
         frag = FRAGMENT_REGISTRY[name]
         targets = _target_backends(frag, project_backends)
         if not targets:
+            # A project-scoped fragment gated on the active frontend (a Vue
+            # component, an auth session-timeout fragment, …) applies to the
+            # frontend app at apps/<slug>/ — NOT a backend — via a proxy impl.
+            # Its backend target-set can be empty (no backend matches the proxy
+            # impl's language, e.g. a Vue + Node-only project), but it must still
+            # be applied. Keep it, targeting its (single) project-scoped impl
+            # language so ``apply_project_features`` applies it exactly once.
+            project_frontend = (
+                config.frontend.framework if config.frontend else FrontendFramework.NONE
+            )
+            if (
+                frag.target_frontends
+                and project_frontend in frag.target_frontends
+                and any(impl.scope == "project" for impl in frag.implementations.values())
+            ):
+                project_lang = next(
+                    lang for lang, impl in frag.implementations.items() if impl.scope == "project"
+                )
+                resolved.append(ResolvedFragment(fragment=frag, target_backends=(project_lang,)))
+                capabilities.update(frag.capabilities)
+                continue
             # A fragment was pulled in (via option value or transitive
             # dep) but none of the project's backends support it. If the
             # user explicitly asked for the fragment (via an option

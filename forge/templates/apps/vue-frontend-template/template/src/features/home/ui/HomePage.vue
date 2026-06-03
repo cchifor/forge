@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Package, Plus, User, Settings, Activity, Server, Info } from 'lucide-vue-next'
+import { Package, Plus, User, Settings, Activity, Info } from 'lucide-vue-next'
 import {
   Card,
   CardHeader,
