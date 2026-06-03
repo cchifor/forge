@@ -344,6 +344,22 @@ def _build_config(
         frontend.keycloak_realm = kc_realm
         frontend.keycloak_client_id = kc_client_id
 
+    # Layered-component selection: a top-level `components: [Name, ...]` list in
+    # the config file (additive; absent ⇒ flat option/fragment generation).
+    # Fail loud on a malformed shape rather than silently coercing
+    # (`components: StatCard` → [] or `[123]` → ["123"]).
+    components_raw = r.cfg.get("components")
+    if components_raw is None:
+        components: list[str] = []
+    elif isinstance(components_raw, list) and all(isinstance(c, str) for c in components_raw):
+        # isinstance in the comprehension lets the type checker narrow to str.
+        components = [c for c in components_raw if isinstance(c, str)]
+    else:
+        raise ValueError(
+            "config `components` must be a list of component-name strings, got "
+            f"{type(components_raw).__name__}."
+        )
+
     return ProjectConfig(
         project_name=project_name,
         output_dir=str(output_dir),
@@ -353,4 +369,6 @@ def _build_config(
         keycloak_port=keycloak_port,
         options=options,
         option_origins=option_origins,
+        components=components,
+        component_origins={c: "user" for c in components},
     )

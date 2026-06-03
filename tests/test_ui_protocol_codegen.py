@@ -68,10 +68,12 @@ class TestEmitTypescript:
         assert '"running" | "completed" | "error"' in out
 
     def test_additional_properties_becomes_index_signature(self) -> None:
-        # AgentState has additionalProperties: true
+        # AgentState has additionalProperties: true — open dynamic objects use
+        # `any` (not `unknown`) so consumers can read arbitrary keys directly
+        # (e.g. a canvas component reading content.code) without a cast.
         schemas = load_all(DEFAULT_SCHEMA_ROOT)
         out = emit_typescript(schemas)
-        assert "[key: string]: unknown;" in out
+        assert "[key: string]: any;" in out
 
     def test_optional_fields_marked_with_question(self) -> None:
         schemas = load_all(DEFAULT_SCHEMA_ROOT)

@@ -63,21 +63,6 @@ function positiveIntEnv(label: string, fallback: number) {
     })
 }
 
-/** Non-empty string env var. Missing / empty → fallback. */
-function stringEnv(label: string, fallback: string) {
-  return z.unknown().transform((raw, ctx) => {
-    if (isMissing(raw)) return fallback
-    if (typeof raw !== 'string') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `${label} must be a string (got ${typeof raw})`,
-      })
-      return z.NEVER
-    }
-    return raw
-  })
-}
-
 // ── Defaults ─────────────────────────────────────────────────────────
 
 const DEFAULTS = {

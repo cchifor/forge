@@ -254,7 +254,6 @@ import {{ toast }} from 'vue-sonner'
 import {{ Card, CardContent }} from '@/shared/ui/card'
 import {{ Button }} from '@/shared/ui/button'
 import {{ Input }} from '@/shared/ui/input'
-import {{ Badge }} from '@/shared/ui/badge'
 import {{ Skeleton }} from '@/shared/ui/skeleton'
 import {{
   DropdownMenu,
@@ -309,13 +308,6 @@ async function handleDelete() {{
     // handled by global mutation onError
   }}
   {singular}ToDelete.value = null
-}}
-
-function formatDate(dateStr: string | null): string {{
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString(undefined, {{
-    year: 'numeric', month: 'short', day: 'numeric',
-  }})
 }}
 </script>
 

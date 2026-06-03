@@ -14,7 +14,7 @@ export default defineConfig({
       include: ['src/**/*.ts', 'src/**/*.vue'],
       outDir: 'dist',
       staticImport: true,
-      rollupTypes: true,
+      rollupTypes: false,
     }),
   ],
   resolve: {

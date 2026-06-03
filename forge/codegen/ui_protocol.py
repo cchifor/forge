@@ -91,6 +91,95 @@ def load_all(root: Path) -> list[Schema]:
     return schemas
 
 
+# -- Subset enforcement -------------------------------------------------------
+#
+# The module docstring promises an explicit error when a schema uses a feature
+# outside the supported subset. The per-target emitters only raise on an
+# unknown ``type`` value; ``$ref`` / ``oneOf`` / etc. carry no ``type`` and
+# would slip through as ``unknown``. ``assert_supported_schema`` makes the
+# promise real: callers that accept *arbitrary* author-supplied schemas (the
+# component data contract, brownfield OpenAPI binding) validate up-front and
+# fail loud, instead of silently emitting ``unknown``.
+
+_SUPPORTED_TYPES: frozenset[str] = frozenset(
+    {"object", "string", "integer", "number", "boolean", "array"}
+)
+
+# JSON-Schema keywords explicitly out of scope for this subset (see the module
+# docstring). Encountering any of them is a hard error — extend the emitters
+# here rather than hand-rolling a second type system.
+_UNSUPPORTED_KEYWORDS: tuple[str, ...] = (
+    "$ref",
+    "oneOf",
+    "anyOf",
+    "allOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "patternProperties",
+    "discriminator",
+)
+
+
+def assert_supported_schema(schema: dict[str, Any], *, where: str = "schema") -> None:
+    """Raise ``GeneratorError`` if ``schema`` leaves the supported subset.
+
+    Walks the schema tree (properties, array ``items``, nested objects) and
+    rejects any out-of-scope keyword or unknown ``type``. ``enum`` / ``const``
+    nodes are accepted with or without a ``type`` (the emitters handle them).
+    ``where`` is woven into the message so the caller can point at the
+    offending contract operation / field.
+    """
+    if not isinstance(schema, dict):
+        raise GeneratorError(f"{where}: schema node must be an object, got {type(schema).__name__}")
+
+    for keyword in _UNSUPPORTED_KEYWORDS:
+        if keyword in schema:
+            raise GeneratorError(
+                f"{where}: unsupported JSON Schema keyword '{keyword}'. The "
+                "ui-protocol subset covers object/string/integer/number/boolean/"
+                "array + enum/const/nested objects only. Extend "
+                "forge.codegen.ui_protocol if a contract genuinely needs this."
+            )
+
+    ty = schema.get("type")
+    if ty is not None and ty not in _SUPPORTED_TYPES:
+        raise GeneratorError(f"{where}: unsupported JSON Schema type {ty!r}")
+
+    # additionalProperties is true/false only in this subset; a schema-valued
+    # form (constrained extra props) is out of scope and the emitters treat
+    # anything but ``True`` as closed — reject it rather than mis-emit.
+    ap = schema.get("additionalProperties")
+    if ap is not None and not isinstance(ap, bool):
+        raise GeneratorError(
+            f"{where}: additionalProperties must be true or false (got {type(ap).__name__})"
+        )
+
+    # enum/const are leaf descriptors — nothing further to recurse into.
+    if "enum" in schema or "const" in schema:
+        return
+
+    props = schema.get("properties")
+    if props is not None:
+        if not isinstance(props, dict):
+            raise GeneratorError(f"{where}: properties must be an object")
+        for name, sub in props.items():
+            assert_supported_schema(sub, where=f"{where}.{name}")
+
+    # Only single-schema ``items`` is supported. A list (tuple validation) or a
+    # scalar is out of subset; fail loud instead of letting emitters call
+    # ``.get()`` on a list later.
+    if "items" in schema:
+        items = schema["items"]
+        if not isinstance(items, dict):
+            raise GeneratorError(
+                f"{where}: array items must be a single schema object "
+                "(tuple/positional items are unsupported)"
+            )
+        assert_supported_schema(items, where=f"{where}[]")
+
+
 # -- Emitters -----------------------------------------------------------------
 #
 # Each emitter produces a SELF-CONTAINED file body for one target: no shared
@@ -137,7 +226,10 @@ def _ts_object_body(body: dict[str, Any]) -> str:
             lines.append(f"  /** {desc} */")
         lines.append(f"  {name}{optional_mark}: {ts_type};")
     if body.get("additionalProperties") is True:
-        lines.append("  [key: string]: unknown;")
+        # ``any`` (not ``unknown``) for open dynamic objects: consumers read
+        # arbitrary keys off these payloads (e.g. a canvas component reading
+        # ``content.code``); ``unknown`` would force a cast at every access.
+        lines.append("  [key: string]: any;")
     lines.append("}")
     return "\n".join(lines)
 
@@ -163,7 +255,9 @@ def _ts_type_for(prop: dict[str, Any]) -> str:
             # Inline anonymous type
             return _ts_object_body(prop)
         if prop.get("additionalProperties") is True:
-            return "Record<string, unknown>"
+            # ``any`` (not ``unknown``) — these are open dynamic payloads whose
+            # keys are read directly by consumers (e.g. canvas ``content.code``).
+            return "Record<string, any>"
         return "Record<string, never>"
     if ty is None:
         return "unknown"

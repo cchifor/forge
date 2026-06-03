@@ -115,10 +115,10 @@ export function useAgentClient() {
     const prompt = snapshot.value.pendingPrompt
     if (!prompt) return
     const hitlResponse: HitlResponse = {
-      tool_call_id: prompt.toolCallId,
+      tool_call_id: prompt.tool_call_id,
       answer,
     }
-    snapshot.value = clearPendingPromptIfMatches(snapshot.value, prompt.toolCallId)
+    snapshot.value = clearPendingPromptIfMatches(snapshot.value, prompt.tool_call_id)
     addUserMessage(answer)
     runAgent({ hitlResponse })
   }
@@ -183,7 +183,10 @@ export function useAgentClient() {
     messages: readonly(messages),
     state: readonly(state),
     customState: readonly(customState),
-    pendingPrompt: readonly(pendingPrompt),
+    // Expose the computed directly (already immutable) rather than wrapping in
+    // readonly(): the DeepReadonly proxy type isn't assignable to a component's
+    // UserPromptPayload prop (deep-readonly options array vs mutable).
+    pendingPrompt,
     canvasActivity: readonly(canvasActivity),
     workspaceActivity: readonly(workspaceActivity),
     activeToolCalls: readonly(activeToolCalls),

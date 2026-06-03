@@ -1,5 +1,4 @@
 import { computed, readonly } from 'vue'
-import type { WorkspaceActivity } from '../types'
 import { useAgentClient } from './useAgentClient'
 
 export function useWorkspace() {

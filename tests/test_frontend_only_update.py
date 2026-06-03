@@ -446,6 +446,9 @@ class TestResolverBridgeForFrontendOnly:
                 ),
             ],
             frontend=fc,
+            # include_keycloak so auth.mode=generate stays effective (the
+            # resolver coerces it to none when keycloak is off).
+            include_keycloak=True,
             options={"backend.mode": "none", "auth.mode": "generate"},
             option_origins={"backend.mode": "user", "auth.mode": "user"},
         )

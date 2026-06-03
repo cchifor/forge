@@ -120,6 +120,20 @@ def load_builtin_features() -> list[FeatureManifest]:
         LOADED_FEATURES.append(manifest)
         logger.debug("loaded feature %r", manifest.name)
 
+    # Project the loaded manifests onto the component tier (layered-component
+    # model). Components are features whose feature.toml sets [feature].layer;
+    # this keeps COMPONENT_REGISTRY in sync with LOADED_FEATURES.
+    from forge.components import (  # noqa: PLC0415
+        populate_from_manifests,
+        register_component_fragments,
+    )
+
+    populate_from_manifests(LOADED_FEATURES)
+    # Register each component's emitter fragment into FRAGMENT_REGISTRY (still
+    # unfrozen during built-in discovery) so a selected component's .vue files
+    # are emitted by the existing file applier.
+    register_component_fragments(LOADED_FEATURES)
+
     _BUILTINS_LOADED = True
     return LOADED_FEATURES
 

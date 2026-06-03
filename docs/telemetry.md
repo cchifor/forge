@@ -138,6 +138,22 @@ available; the count is the only signal. A future PR may add path / fragment.)
 | `skipped`            | integer         | `skipped` count.                           |
 | `errored`            | integer         | Per-sidecar error count.                   |
 
+#### `component.ran` — `forge --component-cmd ...` summary
+
+Emitted by the Layer-1/2 component verbs (`list`, `scaffold`).
+
+| Field    | Type   | Description                                       |
+|----------|--------|---------------------------------------------------|
+| `action` | string | The subcommand: `"list"` / `"scaffold"`.          |
+
+#### `template.ran` — `forge --template-cmd ...` summary
+
+Emitted by the Layer-3 template verbs (`list`).
+
+| Field    | Type   | Description                                       |
+|----------|--------|---------------------------------------------------|
+| `action` | string | The subcommand: `"list"`.                         |
+
 ## 2. Opt-in mechanism
 
 Forge reads the resolved mode from (in order, first match wins):

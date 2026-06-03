@@ -164,6 +164,20 @@ class TestProjectConfig:
         defaults.update(overrides)
         return ProjectConfig(**defaults)
 
+    def test_components_must_be_list_of_str(self):
+        # A misconstructed `components="Panel"` would otherwise be treated as a
+        # list of characters downstream — shape validation rejects it.
+        with pytest.raises(ValueError, match="list of component-name strings"):
+            self._make_config(components="Panel").validate()
+
+    def test_unknown_component_rejected_eagerly(self):
+        # Shape is fine (a list of strings), but validate() runs resolve()
+        # eagerly, so an unregistered component fails fast — same fail-fast
+        # contract as an unknown option. (Surfaced as ValueError by
+        # _resolve_once.)
+        with pytest.raises(ValueError, match="not registered"):
+            self._make_config(components=["NoSuchComponent"]).validate()
+
     def test_valid(self):
         cfg = self._make_config()
         cfg.validate()

@@ -59,6 +59,25 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _real_typecheck_errors(frontend_dir: Path) -> list[str]:
+    """Return ALL ``tsc`` errors from a REAL type-check of the app source.
+
+    The app's root ``tsconfig.json`` is solution-style (``files: []`` +
+    references), so ``vue-tsc --noEmit`` (no ``-p``/``--build``) type-checks
+    almost nothing — a near-no-op gate. This runs the real check against
+    ``tsconfig.app.json`` so every ``error TS…`` line in the generated app
+    source is surfaced (codegen co-location, HITL contract shapes, unused vars,
+    the MCP-ext bridge, …). With ``_inject_weld_stubs`` providing the workspace
+    SDK stubs, a correctly-generated chat app yields zero.
+    """
+    res = _run(["npx", "--yes", "vue-tsc", "--noEmit", "-p", "tsconfig.app.json"], cwd=frontend_dir)
+    return [
+        line.strip()
+        for line in (res.stdout + "\n" + res.stderr).splitlines()
+        if "error TS" in line
+    ]
+
+
 def _make_python_backend(name: str = "backend", port: int = 5000) -> BackendConfig:
     return BackendConfig(
         name=name,
@@ -280,6 +299,322 @@ def test_vue_auth_off_typechecks(
 
 
 # -----------------------------------------------------------------------------
+# Case 5a-bis: Layer-3 Console template (greenfield) — the pre-validation gate
+# (plan §H/§J). Selecting the Console template must pull in its StatCard child
+# and emit a DashboardPage that imports it; vue-tsc proves the composed surface
+# (page → StatCard) type-checks, so a "pre-validated" template ships green.
+# -----------------------------------------------------------------------------
+
+
+def test_console_template_greenfield_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E Console Template",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["Console"],
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    # The L3 template composes its L1 child: both the page and StatCard land.
+    assert (frontend_dir / "src" / "shared" / "components" / "StatCard.vue").is_file()
+    assert (
+        frontend_dir / "src" / "features" / "console" / "ui" / "DashboardPage.vue"
+    ).is_file()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for Console template:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Case 5a-quater: Layer-1 EntityList (contract-bearing) — proves the §D
+# drift-safety wiring: the emitted EntityList.vue imports its generated
+# EntityList.contract.ts (op interfaces), so vue-tsc resolving the import +
+# type-checking the prop is the gate that a contract change can't silently break.
+# -----------------------------------------------------------------------------
+
+
+def test_entitylist_component_contract_types_typecheck(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E EntityList",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    # Both the component and its contract types land, and the .vue imports them.
+    assert (frontend_dir / "src" / "shared" / "components" / "EntityList.vue").is_file()
+    assert (frontend_dir / "src" / "shared" / "api" / "EntityList.contract.ts").is_file()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for EntityList component:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Case 5a-brownfield: bind EntityList to an EXTERNAL OpenAPI backend (plan §E/§J).
+# The brownfield profile: generate against a spec (proposal + stub capabilities),
+# hand-fill the binding, regenerate (adapters + capabilities), then vue-tsc the
+# emitted brownfield TS (contract.ts + transform-adapters.ts + capabilities.ts)
+# in the real app. The static gate of the brownfield CI profile.
+# -----------------------------------------------------------------------------
+
+
+def test_entitylist_brownfield_binding_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    import json as _json
+
+    from forge.codegen.pipeline import run_codegen
+
+    # A minimal external OpenAPI spec whose listItems response already carries the
+    # contract's required `items`, so the binding needs no transform.
+    spec = tmp_path / "openapi.json"
+    spec.write_text(
+        _json.dumps(
+            {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/items": {
+                        "get": {
+                            "operationId": "listItems",
+                            "responses": {
+                                "200": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+        )
+    )
+    config = ProjectConfig(
+        project_name="E2E EntityList Brownfield",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        options={"frontend.openapi_spec_url": str(spec)},
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    api_dir = project_root / "apps" / "frontend" / "src" / "shared" / "api"
+    # First pass emitted the editable proposal + a default-stub capabilities.ts.
+    assert (api_dir / "contract-bindings.toml").is_file()
+    assert 'agentTransport = "stub"' in (api_dir / "capabilities.ts").read_text()
+
+    # Hand-fill the binding (operationId only — no transform needed) and re-run
+    # codegen: this is the validated re-run that emits the transform adapter.
+    (api_dir / "contract-bindings.toml").write_text(
+        '[contract_bindings.EntityList.list]\noperation_id = "listItems"\n'
+    )
+    run_codegen(config, project_root, collector=None, resolved=None)
+    assert (api_dir / "transform-adapters.ts").is_file()
+
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for EntityList brownfield binding:\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Case 5a-brownfield-runtime: the RUNTIME half of the brownfield profile (§J).
+# A mock server serves the upstream OpenAPI response; the GENERATED transform
+# adapter (esbuild-transpiled) is run against a live fetch from that mock and
+# must map the upstream shape onto the contract shape. Uses a portable Node mock
+# server (the stoplight/prism image is amd64-only); CI on amd64 can swap in
+# `stoplight/prism mock` via docker-compose for the same check.
+# -----------------------------------------------------------------------------
+
+# A Node harness: start an http mock serving the upstream payload, fetch it,
+# run the generated adapter, and assert it produced the contract shape.
+# ``__ADAPTER_URL__`` is replaced with the esbuilt adapter's file:// URL.
+_RUNTIME_HARNESS = r"""
+import http from 'node:http';
+import { mapEntityListListResponse } from '__ADAPTER_URL__';
+const upstream = { data: ['alpha', 'beta'] };  // upstream uses `data`
+const server = http.createServer((req, res) => {
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify(upstream));
+});
+server.listen(0, async () => {
+  const port = server.address().port;
+  try {
+    const resp = await fetch(`http://127.0.0.1:${port}/items`);
+    const body = await resp.json();
+    const mapped = mapEntityListListResponse(body);
+    // The contract wants `items`; the binding renames upstream `data` -> `items`.
+    const ok = JSON.stringify(mapped.items) === JSON.stringify(upstream.data);
+    if (!ok) { console.error('MAP MISMATCH', JSON.stringify(mapped)); process.exit(2); }
+    console.log('RUNTIME_OK', JSON.stringify(mapped));
+    process.exit(0);
+  } catch (e) { console.error('HARNESS ERROR', e); process.exit(3); }
+  finally { server.close(); }
+});
+"""
+
+
+def test_entitylist_brownfield_runtime_adapter(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    import json as _json
+
+    from forge.codegen.pipeline import run_codegen
+
+    # Spec whose listItems response uses `data`; the binding renames data->items
+    # so the adapter is exercised (not a passthrough).
+    spec = tmp_path / "openapi.json"
+    spec.write_text(
+        _json.dumps(
+            {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/items": {
+                        "get": {
+                            "operationId": "listItems",
+                            "responses": {
+                                "200": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "data": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+        )
+    )
+    config = ProjectConfig(
+        project_name="E2E EntityList Runtime",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        options={"frontend.openapi_spec_url": str(spec)},
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    api_dir = project_root / "apps" / "frontend" / "src" / "shared" / "api"
+    # Fill the binding with a response rename (upstream `data` -> contract `items`)
+    # and re-run codegen so the adapter is emitted.
+    (api_dir / "contract-bindings.toml").write_text(
+        "[contract_bindings.EntityList.list]\n"
+        'operation_id = "listItems"\n'
+        "[contract_bindings.EntityList.list.response]\n"
+        'items = "data"\n'
+    )
+    run_codegen(config, project_root, collector=None, resolved=None)
+    adapter_ts = api_dir / "transform-adapters.ts"
+    assert adapter_ts.is_file()
+    assert 'items: upstream["data"]' in adapter_ts.read_text()
+
+    # Transpile the generated adapter (self-contained TS — prelude + fns) to ESM.
+    adapter_mjs = tmp_path / "transform-adapters.mjs"
+    esbuild = _run(
+        [
+            "npx",
+            "--yes",
+            "esbuild@0.21.5",
+            str(adapter_ts),
+            "--format=esm",
+            f"--outfile={adapter_mjs}",
+        ],
+        cwd=tmp_path,
+    )
+    assert esbuild.returncode == 0, f"esbuild failed:\n{esbuild.stdout}\n{esbuild.stderr}"
+    assert adapter_mjs.is_file()
+
+    # Run the harness: mock server -> live fetch -> generated adapter -> assert.
+    harness = tmp_path / "runtime_harness.mjs"
+    harness.write_text(_RUNTIME_HARNESS.replace("__ADAPTER_URL__", adapter_mjs.as_uri()))
+    res = _run(["node", str(harness)], cwd=tmp_path)
+    assert res.returncode == 0 and "RUNTIME_OK" in res.stdout, (
+        f"brownfield runtime adapter check failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
+# Case 5a-ter: Layer-3 Chat-first template (greenfield) — second seed template's
+# pre-validation gate (plan §H/§J). A single-page results surface; vue-tsc proves
+# the emitted page type-checks so the template ships green.
+# -----------------------------------------------------------------------------
+
+
+def test_chatfirst_template_greenfield_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E ChatFirst Template",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["ChatFirst"],
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    assert (
+        frontend_dir / "src" / "features" / "chatfirst" / "ui" / "ResultsPage.vue"
+    ).is_file()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for ChatFirst template:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 5b: Vue with include_chat=True — mirrors the Svelte chat-on case so the
 # Vue chat composables (useAgentClient, canvas-vue wiring) get type-checked.
 # -----------------------------------------------------------------------------
@@ -302,9 +637,21 @@ def test_vue_chat_on_typechecks(
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
-    assert result.returncode == 0, (
-        f"vue-tsc failed for chat-on project:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # Regression guard (codegen co-location): the chat app imports ui_protocol.gen
+    # / events.gen — they MUST land in this app, not an orphaned project_root/
+    # frontend/ tree that nothing builds.
+    for gen in ("ui_protocol.gen.ts", "events.gen.ts"):
+        assert (frontend_dir / "src" / "features" / "ai_chat" / gen).is_file()
+    assert (frontend_dir / "public" / "canvas.manifest.json").is_file()
+    assert not (project_root / "frontend").exists(), "orphaned frontend/ codegen tree"
+
+    # Real type-check: the bare `vue-tsc --noEmit` is a near-no-op on the
+    # solution-style root tsconfig, so assert against tsconfig.app.json — a
+    # correctly-generated chat app (codegen co-located, HITL contracts aligned,
+    # MCP-ext bridge on the pinned SDK) type-checks with ZERO errors.
+    errors = _real_typecheck_errors(frontend_dir)
+    assert not errors, (
+        f"vue-tsc -p tsconfig.app.json reported {len(errors)} error(s):\n" + "\n".join(errors)
     )
 
 
