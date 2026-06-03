@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Home, Package, User, Settings } from 'lucide-vue-next'
 import AppSidebar from '@/shared/components/AppSidebar.vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
@@ -11,7 +11,6 @@ import { useBreakpoint } from '@/shared/composables/useBreakpoint'
 import { useUiStore } from '@/shared/stores/ui.store'
 
 const route = useRoute()
-const router = useRouter()
 const { chatOpen, closeChat } = useAiChat()
 const { isCompact, isMedium, isExpanded, width: viewportWidth } = useBreakpoint()
 const uiStore = useUiStore()

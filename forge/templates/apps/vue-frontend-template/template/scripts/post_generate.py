@@ -355,6 +355,11 @@ def remove_conditional_files() -> list[str]:
     if not INCLUDE_OPENAPI:
         delete_file(PROJECT_DIR / "openapi-snapshot.json")
         delete_file(PROJECT_DIR / "openapi-ts.config.ts")
+        # namespace.ts re-exports the generated client (src/shared/api/generated),
+        # which is only produced by `npm run codegen` when openapi is enabled.
+        # Without openapi it's orphaned (nothing imports it) and would fail
+        # type-check with TS2307. Nothing else references it, so drop it too.
+        delete_file(PROJECT_DIR / "src" / "shared" / "api" / "namespace.ts")
         removed.append("openapi")
     return removed
 
