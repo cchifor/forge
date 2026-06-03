@@ -10,7 +10,7 @@ const props = defineProps<{
   state?: AgentState
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   action: [action: { type: string; data: Record<string, any> }]
 }>()
 
@@ -24,8 +24,6 @@ const sortDir = ref<'asc' | 'desc'>(schema.value.defaultSort?.direction || 'asc'
 const filterText = ref('')
 const currentPage = ref(1)
 const selectedIds = ref<Set<number | string>>(new Set())
-
-const filterableColumns = computed(() => columns.value.filter((c: any) => c.filterable))
 
 const filteredRows = computed(() => {
   if (!filterText.value) return allRows.value
