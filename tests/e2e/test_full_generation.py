@@ -350,6 +350,90 @@ def test_entitylist_component_contract_types_typecheck(
 
 
 # -----------------------------------------------------------------------------
+# Case 5a-brownfield: bind EntityList to an EXTERNAL OpenAPI backend (plan §E/§J).
+# The brownfield profile: generate against a spec (proposal + stub capabilities),
+# hand-fill the binding, regenerate (adapters + capabilities), then vue-tsc the
+# emitted brownfield TS (contract.ts + transform-adapters.ts + capabilities.ts)
+# in the real app. The static gate of the brownfield CI profile.
+# -----------------------------------------------------------------------------
+
+
+def test_entitylist_brownfield_binding_typechecks(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    import json as _json
+
+    from forge.codegen.pipeline import run_codegen
+
+    # A minimal external OpenAPI spec whose listItems response already carries the
+    # contract's required `items`, so the binding needs no transform.
+    spec = tmp_path / "openapi.json"
+    spec.write_text(
+        _json.dumps(
+            {
+                "openapi": "3.0.0",
+                "paths": {
+                    "/items": {
+                        "get": {
+                            "operationId": "listItems",
+                            "responses": {
+                                "200": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "items": {
+                                                        "type": "array",
+                                                        "items": {"type": "string"},
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    }
+                },
+            }
+        )
+    )
+    config = ProjectConfig(
+        project_name="E2E EntityList Brownfield",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        options={"frontend.openapi_spec_url": str(spec)},
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    api_dir = project_root / "apps" / "frontend" / "src" / "shared" / "api"
+    # First pass emitted the editable proposal + a default-stub capabilities.ts.
+    assert (api_dir / "contract-bindings.toml").is_file()
+    assert 'agentTransport = "stub"' in (api_dir / "capabilities.ts").read_text()
+
+    # Hand-fill the binding (operationId only — no transform needed) and re-run
+    # codegen: this is the validated re-run that emits the transform adapter.
+    (api_dir / "contract-bindings.toml").write_text(
+        '[contract_bindings.EntityList.list]\noperation_id = "listItems"\n'
+    )
+    run_codegen(config, project_root, collector=None, resolved=None)
+    assert (api_dir / "transform-adapters.ts").is_file()
+
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for EntityList brownfield binding:\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 5a-ter: Layer-3 Chat-first template (greenfield) — second seed template's
 # pre-validation gate (plan §H/§J). A single-page results surface; vue-tsc proves
 # the emitted page type-checks so the template ships green.
