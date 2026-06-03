@@ -82,7 +82,7 @@
     },
     "apps/frontend/package.json": {
       "size": 2063,
-      "sha256": "7e0de2024be13c14"
+      "sha256": "822135562aea0e77"
     },
     "apps/frontend/public/canvas.manifest.json": {
       "size": 7130,
@@ -353,8 +353,8 @@
       "sha256": "c8c61f4290a202f2"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
-      "size": 2938,
-      "sha256": "73aa2cca394a2719"
+      "size": 3248,
+      "sha256": "463d166d60e11bf5"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
       "size": 118,

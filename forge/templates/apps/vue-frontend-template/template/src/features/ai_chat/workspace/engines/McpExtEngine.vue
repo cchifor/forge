@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge'
-import { mountMcpExtBridge, type MountMcpExtBridgeHandle } from '../../canvas-core/mcp_bridge'
+import {
+  mountMcpExtBridge,
+  type MountMcpExtBridgeHandle,
+  type AppBridgeConstructor,
+  type PostMessageTransportConstructor,
+} from '../../canvas-core/mcp_bridge'
 import type { WorkspaceActivity, AgentState } from '../../types'
 
 const props = defineProps<{
@@ -24,8 +29,10 @@ onMounted(() => {
   const iframe = iframeRef.value
   if (!iframe?.contentWindow) return
   handle = mountMcpExtBridge({
-    appBridgeCtor: AppBridge,
-    transportCtor: PostMessageTransport,
+    // UpstreamAppBridge is canvas-core's deliberate dep-free adapter contract,
+    // not a structural match for the upstream class — cast at the seam.
+    appBridgeCtor: AppBridge as unknown as AppBridgeConstructor,
+    transportCtor: PostMessageTransport as unknown as PostMessageTransportConstructor,
     iframe,
     identity: { name: props.activity.activityType || 'mcp-app', version: '1.0.0' },
     capabilities: { openLinks: {}, logging: {} },
