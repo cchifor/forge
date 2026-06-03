@@ -356,9 +356,7 @@ def _check_value_backend_support(
         )
 
 
-def _check_security_constraints(
-    option_values: dict[str, object], fragment_set: set[str]
-) -> None:
+def _check_security_constraints(option_values: dict[str, object], fragment_set: set[str]) -> None:
     """Cross-option safety rules enforced at config time.
 
     The generated MCP server exposes tool invocation + an audit log; shipping
