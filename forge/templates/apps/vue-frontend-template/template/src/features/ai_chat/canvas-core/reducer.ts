@@ -219,7 +219,9 @@ function reduceCustom(
 function parseUserPrompt(value: unknown): UserPromptPayload | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
-  const toolCallId = String(v['toolCallId'] ?? '')
+  // The wire payload uses snake_case `tool_call_id` (the ui-protocol schema);
+  // accept the camelCase form too for resilience to older producers.
+  const toolCallId = String(v['tool_call_id'] ?? v['toolCallId'] ?? '')
   const question = String(v['question'] ?? '')
   if (!toolCallId || !question) return null
   const rawOptions = Array.isArray(v['options']) ? v['options'] : []

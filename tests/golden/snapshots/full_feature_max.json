@@ -205,8 +205,8 @@
       "sha256": "8b6922dd3f303f35"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/reducer.ts": {
-      "size": 9596,
-      "sha256": "78e36abb4178907e"
+      "size": 9766,
+      "sha256": "f8da2c6b116e77a8"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/snapshot.ts": {
       "size": 4073,
