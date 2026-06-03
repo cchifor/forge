@@ -1,0 +1,22 @@
+{
+  "component": "EntityList",
+  "operations": [
+    {
+      "name": "list",
+      "kind": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["items"]
+      }
+    }
+  ]
+}

@@ -316,6 +316,40 @@ def test_console_template_greenfield_typechecks(
 
 
 # -----------------------------------------------------------------------------
+# Case 5a-quater: Layer-1 EntityList (contract-bearing) — proves the §D
+# drift-safety wiring: the emitted EntityList.vue imports its generated
+# EntityList.contract.ts (op interfaces), so vue-tsc resolving the import +
+# type-checking the prop is the gate that a contract change can't silently break.
+# -----------------------------------------------------------------------------
+
+
+def test_entitylist_component_contract_types_typecheck(
+    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E EntityList",
+        output_dir=str(tmp_path),
+        backends=[_make_python_backend()],
+        frontend=_make_frontend(FrontendFramework.VUE, with_auth=False),
+        components=["EntityList"],
+        include_keycloak=False,
+    )
+    config.validate()
+
+    project_root = generate(config, quiet=True)
+    _inject_weld_stubs(project_root)
+    frontend_dir = project_root / "apps" / "frontend"
+    # Both the component and its contract types land, and the .vue imports them.
+    assert (frontend_dir / "src" / "shared" / "components" / "EntityList.vue").is_file()
+    assert (frontend_dir / "src" / "shared" / "api" / "EntityList.contract.ts").is_file()
+
+    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    assert result.returncode == 0, (
+        f"vue-tsc failed for EntityList component:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+# -----------------------------------------------------------------------------
 # Case 5a-ter: Layer-3 Chat-first template (greenfield) — second seed template's
 # pre-validation gate (plan §H/§J). A single-page results surface; vue-tsc proves
 # the emitted page type-checks so the template ships green.

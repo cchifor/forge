@@ -173,6 +173,52 @@ def _emit_canvas_manifests(
     _write(target, manifest_body, collector)
 
 
+def _selected_contracts(
+    config: ProjectConfig, components_root: Path | None
+) -> dict[str, DataContract]:
+    """Load the data contract for each selected component, feature-local.
+
+    A component's contract lives in its own feature dir (``forge/features/<f>/
+    <Component>.contract.json``), NOT in the shared canvas-components dir — so a
+    contract never flips the global ``canvas.manifest.json`` to v2 or leaks into
+    projects that don't select the component. ``components_root`` is a test seam
+    meaning "a dir of ``<name>.contract.json`` files"; in production each name is
+    resolved to its ``FeatureManifest.manifest_path`` parent.
+    """
+    from forge.codegen.canvas_contract import load_data_contract  # noqa: PLC0415
+
+    def _dir_for(name: str) -> Path | None:
+        if components_root is not None:
+            return components_root
+        from forge.feature_loader import LOADED_FEATURES  # noqa: PLC0415
+
+        for manifest in LOADED_FEATURES:
+            if manifest.name == name:
+                return Path(manifest.manifest_path).parent
+        return None
+
+    contracts: dict[str, DataContract] = {}
+    for name in config.components:
+        base = _dir_for(name)
+        if base is None:
+            continue
+        path = base / f"{name}.contract.json"
+        if path.is_file():
+            contracts[name] = load_data_contract(path)
+    return contracts
+
+
+def _frontend_api_dir(config: ProjectConfig, project_root: Path) -> Path:
+    """The real built app's ``src/shared/api`` dir — ``apps/<slug>/``.
+
+    Component fragments (and the deployed Vue app: package.json, Dockerfile) live
+    under ``apps/<frontend_slug>/`` (see ``generator``). Contract artifacts that a
+    generated ``.vue`` imports MUST co-locate there so ``vue-tsc`` resolves them —
+    not the legacy ``project_root/<slug>`` codegen tree.
+    """
+    return project_root / "apps" / config.frontend_slug / "src" / "shared" / "api"
+
+
 def _emit_contract_types(
     config: ProjectConfig,
     project_root: Path,
@@ -192,15 +238,12 @@ def _emit_contract_types(
     layout = _frontend_layout(config)
     if layout is None or not config.components:
         return
-    comps = {c.name: c for c in load_canvas_components(components_root)}
-    api_dir = project_root / config.frontend_slug / "src" / "shared" / "api"
-    for name in config.components:
-        comp = comps.get(name)
-        if comp is None or comp.contract is None:
-            continue
+    contracts = _selected_contracts(config, components_root)
+    api_dir = _frontend_api_dir(config, project_root)
+    for name, contract in contracts.items():
         _write(
             api_dir / f"{name}.contract.ts",
-            emit_contract_types(comp.contract),
+            emit_contract_types(contract),
             collector,
             template_name="_contract_types",
         )
@@ -240,17 +283,12 @@ def _emit_contract_bindings(
     )
     from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
 
-    comps = {c.name: c for c in load_canvas_components(components_root)}
-    named: dict[str, DataContract] = {}
-    for name in config.components:
-        comp = comps.get(name)
-        if comp is not None and comp.contract is not None:
-            named[name] = comp.contract
+    named = _selected_contracts(config, components_root)
     if not named:
         return
 
     spec = load_openapi_spec(spec_url)
-    api_dir = project_root / config.frontend_slug / "src" / "shared" / "api"
+    api_dir = _frontend_api_dir(config, project_root)
     target = api_dir / "contract-bindings.toml"
     if not target.is_file():
         # First run: write the editable proposal. Adapters are emitted on the
