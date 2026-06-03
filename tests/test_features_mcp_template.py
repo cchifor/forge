@@ -14,6 +14,15 @@ from forge.options import OPTION_REGISTRY
 
 
 def _py_mcp_project(options: dict[str, object]) -> ProjectConfig:
+    # MCP requires auth, and platform-auth requires Keycloak (the resolver
+    # coerces auth.mode→none when keycloak is off). Enable keycloak when the
+    # config opts into auth so a valid mcp+auth combo stays valid; the
+    # auth.mode=none cases deliberately leave it off to exercise the guard.
+    needs_auth = (
+        options.get("auth.mode") == "generate"
+        or options.get("platform.mcp") is True
+        or options.get("agent.mode") == "tool_calling"
+    ) and options.get("auth.mode") != "none"
     return ProjectConfig(
         project_name="P",
         backends=[
@@ -22,6 +31,7 @@ def _py_mcp_project(options: dict[str, object]) -> ProjectConfig:
             )
         ],
         frontend=None,
+        include_keycloak=needs_auth,
         options=options,
     )
 
