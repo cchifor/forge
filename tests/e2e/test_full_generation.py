@@ -59,31 +59,23 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _unresolved_relative_imports(frontend_dir: Path) -> list[str]:
-    """Return TS2307 'Cannot find module ./...' errors from a REAL type-check.
+def _real_typecheck_errors(frontend_dir: Path) -> list[str]:
+    """Return ALL ``tsc`` errors from a REAL type-check of the app source.
 
     The app's root ``tsconfig.json`` is solution-style (``files: []`` +
     references), so ``vue-tsc --noEmit`` (no ``-p``/``--build``) type-checks
-    almost nothing. A real check via ``-p tsconfig.app.json`` is used here to
-    catch the import-resolution regression class — e.g. codegen outputs
-    (``events.gen``/``ui_protocol.gen``/``canvas.manifest``) landing in an
-    orphaned tree instead of ``apps/<slug>/``.
-
-    Only *relative* unresolved imports are returned. Bare-package imports
-    (optional deps like ``@sentry/vue``) and the openapi client under
-    ``./generated/`` (produced by the separate ``npm run codegen`` build step,
-    not run in this harness) are tolerated, as are the weld-stub TS2339 noise
-    from the minimal ``@forge/canvas-*`` stubs ``_inject_weld_stubs`` provides.
+    almost nothing — a near-no-op gate. This runs the real check against
+    ``tsconfig.app.json`` so every ``error TS…`` line in the generated app
+    source is surfaced (codegen co-location, HITL contract shapes, unused vars,
+    the MCP-ext bridge, …). With ``_inject_weld_stubs`` providing the workspace
+    SDK stubs, a correctly-generated chat app yields zero.
     """
     res = _run(["npx", "--yes", "vue-tsc", "--noEmit", "-p", "tsconfig.app.json"], cwd=frontend_dir)
-    bad: list[str] = []
-    for line in (res.stdout + "\n" + res.stderr).splitlines():
-        if "TS2307" not in line or "Cannot find module './" not in line:
-            continue
-        if "./generated/" in line:  # openapi client — separate build step
-            continue
-        bad.append(line.strip())
-    return bad
+    return [
+        line.strip()
+        for line in (res.stdout + "\n" + res.stderr).splitlines()
+        if "error TS" in line
+    ]
 
 
 def _make_python_backend(name: str = "backend", port: int = 5000) -> BackendConfig:
@@ -653,16 +645,13 @@ def test_vue_chat_on_typechecks(
     assert (frontend_dir / "public" / "canvas.manifest.json").is_file()
     assert not (project_root / "frontend").exists(), "orphaned frontend/ codegen tree"
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
-    assert result.returncode == 0, (
-        f"vue-tsc failed for chat-on project:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
-
-    # Real type-check (the --noEmit above is near-no-op on the solution tsconfig):
-    # no generated/component import may be unresolved.
-    unresolved = _unresolved_relative_imports(frontend_dir)
-    assert not unresolved, "unresolved relative imports under a real type-check:\n" + "\n".join(
-        unresolved
+    # Real type-check: the bare `vue-tsc --noEmit` is a near-no-op on the
+    # solution-style root tsconfig, so assert against tsconfig.app.json — a
+    # correctly-generated chat app (codegen co-located, HITL contracts aligned,
+    # MCP-ext bridge on the pinned SDK) type-checks with ZERO errors.
+    errors = _real_typecheck_errors(frontend_dir)
+    assert not errors, (
+        f"vue-tsc -p tsconfig.app.json reported {len(errors)} error(s):\n" + "\n".join(errors)
     )
 
 
