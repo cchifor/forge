@@ -276,6 +276,10 @@ PRESETS = {
             include_chat=True,
             include_openapi=True,
         ),
+        # Keycloak ON so this kitchen-sink preset keeps exercising the full
+        # platform-auth/gatekeeper stack in its VALID form (gatekeeper now
+        # requires keycloak+redis; without keycloak auth.mode coerces to none).
+        include_keycloak=True,
         options={
             "observability.tracing": True,
             "observability.health": True,
@@ -307,13 +311,18 @@ def test_golden_snapshot(preset_name: str, tmp_path: Path) -> None:
     snapshots are the regression-detection layer).
     """
     config = PRESETS[preset_name]
-    # Rewrite output_dir to the tempdir so we don't pollute the repo.
+    # Rewrite output_dir to the tempdir so we don't pollute the repo. Preserve
+    # include_keycloak/keycloak_port — they gate the keycloak+redis+gatekeeper
+    # stack (and the auth.mode→none coercion when keycloak is off), so dropping
+    # them would silently strip a preset's auth coverage.
     config_copy = ProjectConfig(
         project_name=config.project_name,
         output_dir=str(tmp_path),
         backends=list(config.backends),
         frontend=config.frontend,
         options=dict(config.options),
+        include_keycloak=config.include_keycloak,
+        keycloak_port=config.keycloak_port,
     )
 
     project_root = generate(config_copy, quiet=True, dry_run=True)

@@ -220,9 +220,11 @@ class TestBackendCompatibility:
             enables={"generate": ("sdk_python", "sdk_node", "sdk_rust")},
         )
         # User explicitly sets auth.mode=generate, but project only has Python.
-        plan = resolve(
-            _project([BackendLanguage.PYTHON], {"auth.mode": "generate"})
-        )
+        # include_keycloak=True keeps the auth.mode→none coercion (which fires
+        # when keycloak is off) inert — this test exercises discriminator fanout.
+        cfg = _project([BackendLanguage.PYTHON], {"auth.mode": "generate"})
+        cfg.include_keycloak = True
+        plan = resolve(cfg)
         # Only the Python SDK was applied — Node and Rust silently skipped.
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_python"], (
@@ -393,13 +395,14 @@ class TestOriginAwareSelection:
             enables={"generate": ("sdk_python", "sdk_node")},
         )
         # User explicitly picked generate; only Node backend present.
-        plan = resolve(
-            _project(
-                [BackendLanguage.NODE],
-                options={"auth.mode": "generate"},
-                option_origins={"auth.mode": "user"},
-            )
+        # include_keycloak=True keeps the auth.mode→none coercion inert.
+        cfg = _project(
+            [BackendLanguage.NODE],
+            options={"auth.mode": "generate"},
+            option_origins={"auth.mode": "user"},
         )
+        cfg.include_keycloak = True
+        plan = resolve(cfg)
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_node"]
 
@@ -462,3 +465,52 @@ class TestComponentResolution:
         cfg.components = ["Ghost"]
         with patch("forge.components.COMPONENT_REGISTRY", {}), pytest.raises(PluginError):
             resolve(cfg)
+
+
+class TestAuthKeycloakCoercion:
+    """include_keycloak=False ⇒ auth.mode coerced to 'none' at resolve time.
+
+    The platform-auth gatekeeper stack depends on the keycloak + redis services,
+    which only render under include_keycloak. The CLI builder already coerces
+    auth.mode→none when keycloak is off; resolve() applies the SAME coercion so
+    direct ProjectConfig/generate() construction (matrix runner, headless
+    fixtures, e2e) also produces a valid docker-compose — no gatekeeper service
+    with an undefined depends_on.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _features(self):
+        from forge import feature_loader
+
+        feature_loader.reset_for_tests()
+        feature_loader.load_builtin_features()
+        yield
+        feature_loader.reset_for_tests()
+
+    def _cfg(self, *, include_keycloak: bool, options=None) -> ProjectConfig:
+        return ProjectConfig(
+            project_name="P",
+            backends=[BackendConfig(name="svc", project_name="P", language=BackendLanguage.PYTHON)],
+            frontend=None,
+            include_keycloak=include_keycloak,
+            keycloak_port=18080,
+            options=options or {},
+        )
+
+    def test_no_keycloak_coerces_auth_mode_none(self) -> None:
+        plan = resolve(self._cfg(include_keycloak=False))
+        assert plan.option_values["auth.mode"] == "none"
+        # The gatekeeper capability/service must NOT be provisioned.
+        assert "gatekeeper" not in plan.capabilities
+
+    def test_keycloak_keeps_generate(self) -> None:
+        plan = resolve(self._cfg(include_keycloak=True))
+        assert plan.option_values["auth.mode"] == "generate"
+        assert "gatekeeper" in plan.capabilities
+
+    def test_explicit_generate_without_keycloak_still_coerced(self) -> None:
+        # Matches the CLI: an explicit auth.mode=generate with no keycloak is
+        # coerced to none rather than emitting an orphaned gatekeeper.
+        plan = resolve(self._cfg(include_keycloak=False, options={"auth.mode": "generate"}))
+        assert plan.option_values["auth.mode"] == "none"
+        assert "gatekeeper" not in plan.capabilities

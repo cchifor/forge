@@ -961,11 +961,11 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 7908,
-      "sha256": "b42d2f6577197732"
+      "size": 9839,
+      "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 131738,
+      "size": 133545,
       "sha256": "<version-dependent>"
     },
     "frontend/public/canvas.manifest.json": {
@@ -1272,9 +1272,29 @@
       "size": 215882,
       "sha256": "2055f09092c3f0b5"
     },
+    "infra/keycloak/Dockerfile": {
+      "size": 368,
+      "sha256": "173308d6bc79f077"
+    },
+    "infra/keycloak/themes/vscode/login/resources/css/styles.css": {
+      "size": 23360,
+      "sha256": "99556c5a29cc552f"
+    },
+    "infra/keycloak/themes/vscode/login/theme.properties": {
+      "size": 64,
+      "sha256": "b0d710cd06b5c9d2"
+    },
+    "infra/keycloak-realm.json": {
+      "size": 4481,
+      "sha256": "4f61e09c806d312a"
+    },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
+    },
+    "init-db.sh": {
+      "size": 337,
+      "sha256": "da27485bdd9e4e50"
     },
     "package.json": {
       "size": 488,
@@ -2021,11 +2041,11 @@
       "sha256": "35a26e80e20a90bb"
     },
     "tests/e2e/.agent-context/prompt.md": {
-      "size": 2452,
-      "sha256": "f21659e2eb07890b"
+      "size": 2572,
+      "sha256": "d3c7f25811409282"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 562,
+      "size": 580,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
@@ -2044,17 +2064,29 @@
       "size": 1123,
       "sha256": "9480f7f2fd0f9c1a"
     },
+    "tests/e2e/e2e-platform/auth/AuthManager.ts": {
+      "size": 1292,
+      "sha256": "bdbc6c4dc5192c35"
+    },
+    "tests/e2e/e2e-platform/auth/global-setup.ts": {
+      "size": 1574,
+      "sha256": "417364421f57de6b"
+    },
     "tests/e2e/e2e-platform/fixtures/app.ts": {
-      "size": 640,
-      "sha256": "04b170aa1a0a0f67"
+      "size": 770,
+      "sha256": "0002aa59bb6cb351"
     },
     "tests/e2e/package.json": {
       "size": 519,
       "sha256": "ff34599358409f1b"
     },
     "tests/e2e/playwright.config.ts": {
-      "size": 624,
-      "sha256": "09b7861016063555"
+      "size": 679,
+      "sha256": "2c7caa2c24f2d7cd"
+    },
+    "tests/e2e/tests/auth.spec.ts": {
+      "size": 2051,
+      "sha256": "856529e75f1be47e"
     },
     "tests/e2e/tests/items.spec.ts": {
       "size": 3516,
@@ -2067,6 +2099,10 @@
     "tests/e2e/tsconfig.json": {
       "size": 499,
       "sha256": "33ee667c28346d4c"
+    },
+    "validate.sh": {
+      "size": 1380,
+      "sha256": "94b74b73ba42f532"
     }
   }
 }
