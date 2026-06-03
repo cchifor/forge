@@ -168,7 +168,11 @@ export function createMcpBridge(upstream: UpstreamAppBridge): McpBridge {
  * of that dep by accepting the class as a parameter.
  */
 export type AppBridgeConstructor = new (
-  parent: unknown,
+  // The "client/parent" position — the host always injects `null` here, while
+  // the upstream AppBridge types it as a required `Client`. `any` keeps the
+  // real `AppBridge` class assignable to this injected-ctor type (a stricter
+  // type would reject `typeof AppBridge` on its contravariant first param).
+  parent: any,
   identity: AppBridgeIdentity,
   capabilities: AppBridgeCapabilities,
   context: AppBridgeContext,

@@ -201,8 +201,8 @@
       "sha256": "40ae4117024e959d"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.ts": {
-      "size": 13725,
-      "sha256": "1f0f5032a873d259"
+      "size": 14034,
+      "sha256": "8b6922dd3f303f35"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/reducer.ts": {
       "size": 9596,
@@ -353,8 +353,8 @@
       "sha256": "c8c61f4290a202f2"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
-      "size": 3056,
-      "sha256": "d3ec8702cc1de873"
+      "size": 2938,
+      "sha256": "73aa2cca394a2719"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
       "size": 118,
