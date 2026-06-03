@@ -228,8 +228,7 @@ class TestBackendCompatibility:
         # Only the Python SDK was applied — Node and Rust silently skipped.
         applied = sorted(rf.fragment.name for rf in plan.ordered)
         assert applied == ["sdk_python"], (
-            f"discriminator fanout must skip incompatible-backend fragments silently, "
-            f"got {applied}"
+            f"discriminator fanout must skip incompatible-backend fragments silently, got {applied}"
         )
 
     def test_target_backends_preserves_project_order(self, isolated_registries) -> None:
@@ -311,9 +310,7 @@ class TestOriginAwareSelection:
         # origin=default, the resolved plan must not include it.
         assert plan.ordered == ()
 
-    def test_defaulted_second_fragment_skips_when_other_user_set(
-        self, isolated_registries
-    ) -> None:
+    def test_defaulted_second_fragment_skips_when_other_user_set(self, isolated_registries) -> None:
         """Mixed origins: per-key check (not whole-config gate).
 
         One option user-set + compatible, another defaulted + incompatible
@@ -364,9 +361,7 @@ class TestOriginAwareSelection:
                 )
             )
 
-    def test_discriminator_fanout_unaffected_by_origins(
-        self, isolated_registries
-    ) -> None:
+    def test_discriminator_fanout_unaffected_by_origins(self, isolated_registries) -> None:
         """Discriminator (multi-fragment) options still silently fan out.
 
         Origins gate the user-set check; the discriminator-vs-single-
@@ -430,6 +425,27 @@ class TestComponentResolution:
         with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
             plan = resolve(cfg)
         assert any(rf.fragment.name == "component_Card" for rf in plan.ordered)
+
+    def test_vue_component_kept_on_non_python_backend(self, isolated_registries) -> None:
+        # Regression: a Vue component compiles to a project-scoped, VUE-gated
+        # fragment with a proxy PYTHON impl. On a Vue + Node-only project its
+        # backend target-set is empty — it must still be kept (applies to
+        # apps/<slug>/), not silently dropped.
+        from forge.components import ComponentNode
+        from forge.config import FrontendConfig, FrontendFramework
+
+        options, fragments = isolated_registries
+        comp_reg: dict = {}
+        self._setup(fragments, comp_reg, [ComponentNode(name="Card", layer=1)])
+        cfg = _project([BackendLanguage.NODE])
+        cfg.frontend = FrontendConfig(framework=FrontendFramework.VUE, project_name="P")
+        cfg.components = ["Card"]
+        with patch("forge.components.COMPONENT_REGISTRY", comp_reg):
+            plan = resolve(cfg)
+        kept = [rf for rf in plan.ordered if rf.fragment.name == "component_Card"]
+        assert len(kept) == 1, "Vue component dropped on a non-Python backend project"
+        # Targeted at a single (proxy) language so it applies exactly once.
+        assert len(kept[0].target_backends) == 1
 
     def test_child_component_ordered_before_parent(self, isolated_registries) -> None:
         options, fragments = isolated_registries

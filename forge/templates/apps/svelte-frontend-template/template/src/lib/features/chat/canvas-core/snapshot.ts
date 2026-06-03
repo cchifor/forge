@@ -29,12 +29,17 @@ export interface ToolCallInfo {
 }
 
 export interface UserPromptOption {
-  id: string
+  // Matches the generated ui-protocol option shape consumed by UserPromptCard
+  // (renders ``label`` + ``recommended``); no synthetic ``id``.
   label: string
+  description?: string
+  recommended?: string
 }
 
 export interface UserPromptPayload {
-  toolCallId: string
+  // snake_case to match the generated ui-protocol UserPromptPayload (the wire
+  // format) consumed by UserPromptCard — see events.gen.ts / the schema.
+  tool_call_id: string
   question: string
   options: UserPromptOption[]
 }

@@ -897,7 +897,9 @@ def _cleanup_orphaned_frontend_codegen(
     with contextlib.suppress(OSError):
         stale_root.rmdir()
     if removed and not quiet:
-        print(f"  [update] removed {removed} stale codegen file(s) from orphaned {stale_root.name}/")
+        print(
+            f"  [update] removed {removed} stale codegen file(s) from orphaned {stale_root.name}/"
+        )
 
 
 def _frontend_framework_from_manifest(

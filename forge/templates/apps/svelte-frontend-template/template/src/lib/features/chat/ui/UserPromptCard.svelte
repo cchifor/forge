@@ -17,11 +17,13 @@
 		{prompt.question}
 	</p>
 	<div class="flex flex-wrap gap-2">
-		{#each prompt.options as opt (opt.id)}
+		{#each prompt.options as opt (opt.label)}
 			<button
 				type="button"
 				onclick={() => onRespond(opt.label)}
 				class="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+				class:ring-2={opt.recommended === 'true'}
+				class:ring-amber-500={opt.recommended === 'true'}
 			>
 				{opt.label}
 			</button>
