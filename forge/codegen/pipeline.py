@@ -139,7 +139,7 @@ def _emit_ui_protocol(
 
     layout = _frontend_layout(config)
     if layout is not None:
-        target = project_root / config.frontend_slug / layout.ui_protocol_path
+        target = _frontend_root(config, project_root) / layout.ui_protocol_path
         if layout.ui_protocol_emitter == "typescript":
             body = emit_typescript(schemas)
         else:
@@ -169,7 +169,7 @@ def _emit_canvas_manifests(
         return
     components = load_canvas_components()
     manifest_body = json.dumps(build_canvas_manifest(components), indent=2) + "\n"
-    target = project_root / config.frontend_slug / layout.canvas_manifest_path
+    target = _frontend_root(config, project_root) / layout.canvas_manifest_path
     _write(target, manifest_body, collector)
 
 
@@ -224,6 +224,18 @@ def _selected_contracts(
     return contracts
 
 
+def _frontend_root(config: ProjectConfig, project_root: Path) -> Path:
+    """The real built frontend app root — ``<project_root>/apps/<slug>/``.
+
+    The deployed Vue/Svelte/Flutter app (package.json, Dockerfile target, where
+    ``npm run build`` runs) and every component fragment live under
+    ``apps/<frontend_slug>/`` (see ``generator``). All frontend codegen outputs
+    MUST land here so the app's imports resolve — NOT the legacy
+    ``project_root/<slug>`` tree, which is orphaned (nothing builds it).
+    """
+    return project_root / "apps" / config.frontend_slug
+
+
 def _frontend_api_dir(config: ProjectConfig, project_root: Path) -> Path:
     """The real built app's ``src/shared/api`` dir — ``apps/<slug>/``.
 
@@ -232,7 +244,7 @@ def _frontend_api_dir(config: ProjectConfig, project_root: Path) -> Path:
     generated ``.vue`` imports MUST co-locate there so ``vue-tsc`` resolves them —
     not the legacy ``project_root/<slug>`` codegen tree.
     """
-    return project_root / "apps" / config.frontend_slug / "src" / "shared" / "api"
+    return _frontend_root(config, project_root) / "src" / "shared" / "api"
 
 
 def _emit_contract_types(
@@ -445,7 +457,7 @@ def _emit_event_union_pydantic(
     layout = _frontend_layout(config)
     if layout is None or not layout.event_union_path:
         return
-    target = project_root / config.frontend_slug / layout.event_union_path
+    target = _frontend_root(config, project_root) / layout.event_union_path
     if layout.ui_protocol_emitter == "typescript":
         fe_body = event_union_codegen.emit_typescript(schemas)
     else:
@@ -519,7 +531,7 @@ def _emit_shared_enums(
         ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
         emitter_key = "typescript" if layout.shared_enums_emitter == "typescript" else "dart"
         path = (
-            project_root / config.frontend_slug / layout.shared_enums_dir / f"{enum_file.stem}{ext}"
+            _frontend_root(config, project_root) / layout.shared_enums_dir / f"{enum_file.stem}{ext}"
         )
         _write(path, targets[emitter_key], collector)
 
