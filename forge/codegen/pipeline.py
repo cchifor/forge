@@ -185,7 +185,11 @@ def _selected_contracts(
     meaning "a dir of ``<name>.contract.json`` files"; in production each name is
     resolved to its ``FeatureManifest.manifest_path`` parent.
     """
-    from forge.codegen.canvas_contract import load_data_contract  # noqa: PLC0415
+    from forge.codegen.canvas_contract import (  # noqa: PLC0415
+        load_data_contract,
+        validate_data_contract,
+    )
+    from forge.errors import FEATURE_CONTRACT_VIOLATION, PluginError  # noqa: PLC0415
 
     def _dir_for(name: str) -> Path | None:
         if components_root is not None:
@@ -204,7 +208,19 @@ def _selected_contracts(
             continue
         path = base / f"{name}.contract.json"
         if path.is_file():
-            contracts[name] = load_data_contract(path)
+            contract = load_data_contract(path)
+            # Guard the name↔file link and op subset that load alone skips —
+            # else a typo'd ``component`` emits ``<Other>.contract.ts`` interfaces
+            # the ``.vue``'s import can't resolve.
+            if contract.component != name:
+                raise PluginError(
+                    f"contract file {path.name!r} declares component "
+                    f"{contract.component!r}, expected {name!r}",
+                    code=FEATURE_CONTRACT_VIOLATION,
+                    context={"path": str(path)},
+                )
+            validate_data_contract(contract)
+            contracts[name] = contract
     return contracts
 
 
