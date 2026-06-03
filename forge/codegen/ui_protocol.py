@@ -226,7 +226,10 @@ def _ts_object_body(body: dict[str, Any]) -> str:
             lines.append(f"  /** {desc} */")
         lines.append(f"  {name}{optional_mark}: {ts_type};")
     if body.get("additionalProperties") is True:
-        lines.append("  [key: string]: unknown;")
+        # ``any`` (not ``unknown``) for open dynamic objects: consumers read
+        # arbitrary keys off these payloads (e.g. a canvas component reading
+        # ``content.code``); ``unknown`` would force a cast at every access.
+        lines.append("  [key: string]: any;")
     lines.append("}")
     return "\n".join(lines)
 
@@ -252,7 +255,9 @@ def _ts_type_for(prop: dict[str, Any]) -> str:
             # Inline anonymous type
             return _ts_object_body(prop)
         if prop.get("additionalProperties") is True:
-            return "Record<string, unknown>"
+            # ``any`` (not ``unknown``) — these are open dynamic payloads whose
+            # keys are read directly by consumers (e.g. canvas ``content.code``).
+            return "Record<string, any>"
         return "Record<string, never>"
     if ty is None:
         return "unknown"
