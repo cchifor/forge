@@ -50,6 +50,7 @@ from forge.config import (
     BACKEND_REGISTRY,
     BackendConfig,
     BackendLanguage,
+    FrontendConfig,
     FrontendFramework,
     ProjectConfig,
 )
@@ -504,6 +505,26 @@ def _update_locked(
         frontend_framework=frontend_framework,
     )
 
+    # Re-run schema-driven codegen so template/codegen changes reach existing
+    # projects on ``forge --update`` (historically codegen ran only at fresh
+    # ``generate`` time). This is what propagates e.g. the apps/<slug> frontend
+    # relocation, ui_protocol/event-union/enum/canvas regeneration. The updater's
+    # ``config`` carries no frontend (the resolver doesn't need one); attach a
+    # minimal one so the frontend emitters fire, then clean the pre-relocation
+    # orphaned ``frontend/`` tree.
+    if frontend_framework != FrontendFramework.NONE:
+        config.frontend = FrontendConfig(
+            framework=frontend_framework, project_name=config.project_name
+        )
+    from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
+
+    try:
+        run_codegen(config, project_root, collector=collector, resolved=plan)
+        _cleanup_orphaned_frontend_codegen(project_root, config, quiet=quiet)
+    except Exception as exc:  # noqa: BLE001 — codegen must not abort an update
+        if not quiet:
+            print(f"  [update] codegen pass emitted an error (skipped): {exc}")
+
     # ``fragments_applied`` lists every fragment that participated in
     # this run (backend pass + project-scope pass). In synth-bridge
     # mode we drop the non-frontend project-scope fragments from the
@@ -798,6 +819,56 @@ def _infer_backends(
                 break
     _ = manifest_frontend  # accepted for forward-compat; see docstring
     return out
+
+
+def _cleanup_orphaned_frontend_codegen(
+    project_root: Path, config: ProjectConfig, *, quiet: bool
+) -> None:
+    """Remove codegen outputs left in the pre-relocation orphaned ``frontend/`` tree.
+
+    Before the relocation fix, frontend codegen landed in
+    ``project_root/<frontend_slug>/`` — an orphaned tree nothing builds (the real
+    app is ``apps/<frontend_slug>/``). After re-running codegen (which now emits
+    into ``apps/<slug>/``), this prunes the stale copies so ``--verify`` and the
+    working tree stay clean. Surgical: only the known codegen output paths are
+    removed, then empty parent dirs are pruned bottom-up; any non-codegen file is
+    left untouched. A no-op for fresh projects (no orphaned ``frontend/``).
+    """
+    if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
+        return
+    from forge.frontends import get_frontend_layout  # noqa: PLC0415
+
+    layout = get_frontend_layout(config.frontend.framework)
+    if layout is None:
+        return
+    stale_root = project_root / config.frontend_slug
+    if not stale_root.is_dir():
+        return
+
+    removed = 0
+    for rel in (layout.ui_protocol_path, layout.canvas_manifest_path, layout.event_union_path):
+        if rel and (stale_root / rel).is_file():
+            (stale_root / rel).unlink()
+            removed += 1
+    enums_dir = stale_root / layout.shared_enums_dir if layout.shared_enums_dir else None
+    if enums_dir and enums_dir.is_dir():
+        for f in enums_dir.glob("*"):
+            if f.is_file():
+                f.unlink()
+                removed += 1
+
+    # Prune now-empty dirs bottom-up; rmdir only succeeds on empty dirs, so
+    # non-codegen content is left untouched.
+    import contextlib  # noqa: PLC0415
+
+    for d in sorted(stale_root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if d.is_dir():
+            with contextlib.suppress(OSError):
+                d.rmdir()
+    with contextlib.suppress(OSError):
+        stale_root.rmdir()
+    if removed and not quiet:
+        print(f"  [update] removed {removed} stale codegen file(s) from orphaned {stale_root.name}/")
 
 
 def _frontend_framework_from_manifest(
