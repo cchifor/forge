@@ -83,6 +83,44 @@ def test_noop_when_component_has_no_contract(tmp_path: Path) -> None:
     assert not (proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api" / "Plain.contract.ts").exists()
 
 
+def test_rejects_contract_whose_component_name_mismatches(tmp_path: Path) -> None:
+    import pytest
+
+    from forge.errors import ForgeError
+
+    cc = tmp_path / "cc3"
+    cc.mkdir()
+    # File loaded for "EntityList" but declares a different component → would
+    # emit FooListOutput while the .vue imports EntityListListOutput. Fail loud.
+    (cc / "EntityList.contract.json").write_text(
+        json.dumps({"component": "Foo", "operations": []})
+    )
+    cfg = _config()
+    proj = tmp_path / "proj"
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
+    with pytest.raises(ForgeError):
+        _emit_contract_types(cfg, proj, None, components_root=cc)
+
+
+def test_rejects_malformed_contract_op(tmp_path: Path) -> None:
+    import pytest
+
+    from forge.errors import ForgeError
+
+    cc = tmp_path / "cc4"
+    cc.mkdir()
+    (cc / "EntityList.contract.json").write_text(
+        json.dumps(
+            {"component": "EntityList", "operations": [{"name": "list", "kind": "bogus"}]}
+        )
+    )
+    cfg = _config()
+    proj = tmp_path / "proj"
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
+    with pytest.raises(ForgeError):
+        _emit_contract_types(cfg, proj, None, components_root=cc)
+
+
 def test_production_discovery_finds_seed_entitylist_contract(tmp_path: Path) -> None:
     # No components_root seam: discovery must resolve the EntityList seed's
     # feature-local contract via its loaded FeatureManifest.manifest_path.
