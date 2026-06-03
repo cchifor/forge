@@ -39,7 +39,10 @@ def test_registers_emitter_fragment_with_template_dir_from_manifest() -> None:
     # fragment_dir resolves to the feature's templates/<fragment>/all dir.
     assert frag.implementations  # non-empty impls
     impl = next(iter(frag.implementations.values()))
-    assert impl.fragment_dir.endswith("forge/features/stat_card/templates/component_StatCard/all")
+    # Normalise separators — fragment_dir is OS-native (backslashes on Windows).
+    assert impl.fragment_dir.replace("\\", "/").endswith(
+        "forge/features/stat_card/templates/component_StatCard/all"
+    )
     assert impl.scope == "project"
 
 
