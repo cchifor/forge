@@ -56,8 +56,10 @@ onMounted(() => {
         if (height && iframe) iframe.style.height = `${height}px`
       },
       onToolCall: async ({ name, arguments: args }) => {
+        // The host forwards the guest's tool call to the agent (no synchronous
+        // result here); return a valid empty CallToolResult.
         emit('action', { type: 'mcp_tool_call', data: { toolName: name, args: args || {} } })
-        return {}
+        return { content: [] }
       },
     },
     html: props.activity.content.html,

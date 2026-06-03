@@ -200,9 +200,13 @@
       "size": 9352,
       "sha256": "40ae4117024e959d"
     },
+    "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.roundtrip.test.ts": {
+      "size": 4099,
+      "sha256": "f65128f867d3c9fe"
+    },
     "apps/frontend/src/features/ai_chat/canvas-core/mcp_bridge.ts": {
-      "size": 14034,
-      "sha256": "8b6922dd3f303f35"
+      "size": 16674,
+      "sha256": "b4748ca72182aaf8"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/reducer.ts": {
       "size": 9766,
@@ -353,8 +357,8 @@
       "sha256": "c8c61f4290a202f2"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/McpExtEngine.vue": {
-      "size": 3248,
-      "sha256": "463d166d60e11bf5"
+      "size": 3403,
+      "sha256": "4d0cf3ebc801850a"
     },
     "apps/frontend/src/features/ai_chat/workspace/engines/index.ts": {
       "size": 118,
@@ -985,7 +989,7 @@
       "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 133570,
+      "size": 133805,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
