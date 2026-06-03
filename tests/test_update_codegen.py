@@ -74,3 +74,30 @@ def test_update_preserves_non_codegen_files_under_frontend(tmp_path: Path) -> No
 
     assert not stale.exists(), "codegen should be pruned"
     assert keep.is_file(), "non-codegen files must be left untouched"
+
+
+def test_update_drops_provenance_for_pruned_codegen(tmp_path: Path) -> None:
+    # A pre-relocation project tracked its orphaned frontend/ codegen in
+    # provenance. Pruning the file must also drop its provenance record — else a
+    # later `forge --verify` reports the deleted file as `missing`.
+    root = _vue_chat_project(tmp_path)
+    rel = "frontend/src/features/ai_chat/ui_protocol.gen.ts"
+    stale = root / rel
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text("// stale\n", encoding="utf-8")
+    toml = root / "forge.toml"
+    toml.write_text(
+        toml.read_text(encoding="utf-8")
+        + f'\n[forge.provenance."{rel}"]\n'
+        + 'emitted_at = "2026-01-01T00:00:00Z"\norigin = "base-template"\nsha256 = "deadbeef"\n',
+        encoding="utf-8",
+    )
+
+    update_project(root, quiet=True, no_lock=True)
+
+    assert not stale.exists()
+    # Exact provenance-section key — not a substring (the relocated
+    # apps/frontend/... record legitimately contains the frontend/... path).
+    assert f'[forge.provenance."{rel}"]' not in toml.read_text(encoding="utf-8"), (
+        "stale provenance record for the pruned orphaned file was not dropped"
+    )

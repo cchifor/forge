@@ -518,12 +518,21 @@ def _update_locked(
         )
     from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
 
+    # Codegen overwrites its own authoritative generated files (origin=
+    # 'base-template') — hand-edits to *.gen.ts / canvas.manifest.json are
+    # regenerated, the same as at fresh `generate` time. Codegen and cleanup are
+    # guarded separately so a cleanup/provenance issue isn't masked as a codegen
+    # error and vice versa.
     try:
         run_codegen(config, project_root, collector=collector, resolved=plan)
-        _cleanup_orphaned_frontend_codegen(project_root, config, quiet=quiet)
     except Exception as exc:  # noqa: BLE001 — codegen must not abort an update
         if not quiet:
             print(f"  [update] codegen pass emitted an error (skipped): {exc}")
+    try:
+        _cleanup_orphaned_frontend_codegen(project_root, config, collector, quiet=quiet)
+    except Exception as exc:  # noqa: BLE001 — cleanup must not abort an update
+        if not quiet:
+            print(f"  [update] orphaned-codegen cleanup error (skipped): {exc}")
 
     # ``fragments_applied`` lists every fragment that participated in
     # this run (backend pass + project-scope pass). In synth-bridge
@@ -822,17 +831,25 @@ def _infer_backends(
 
 
 def _cleanup_orphaned_frontend_codegen(
-    project_root: Path, config: ProjectConfig, *, quiet: bool
+    project_root: Path,
+    config: ProjectConfig,
+    collector: ProvenanceCollector | None,
+    *,
+    quiet: bool,
 ) -> None:
     """Remove codegen outputs left in the pre-relocation orphaned ``frontend/`` tree.
 
     Before the relocation fix, frontend codegen landed in
     ``project_root/<frontend_slug>/`` — an orphaned tree nothing builds (the real
     app is ``apps/<frontend_slug>/``). After re-running codegen (which now emits
-    into ``apps/<slug>/``), this prunes the stale copies so ``--verify`` and the
-    working tree stay clean. Surgical: only the known codegen output paths are
-    removed, then empty parent dirs are pruned bottom-up; any non-codegen file is
-    left untouched. A no-op for fresh projects (no orphaned ``frontend/``).
+    into ``apps/<slug>/``), this prunes the stale copies AND drops their
+    provenance records (otherwise the restamped manifest would point at deleted
+    files and ``forge --verify`` would report them ``missing``), so ``--verify``
+    and the working tree stay clean. Surgical: only Forge's own known codegen
+    outputs are removed (the three named paths + the enum files Forge generates,
+    computed from ``_shared/domain/enums/*.yaml`` — never arbitrary files in the
+    enums dir), then empty parent dirs are pruned bottom-up; any non-codegen file
+    is left untouched. A no-op for fresh projects (no orphaned ``frontend/``).
     """
     if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
         return
@@ -842,20 +859,32 @@ def _cleanup_orphaned_frontend_codegen(
     if layout is None:
         return
     stale_root = project_root / config.frontend_slug
-    if not stale_root.is_dir():
+    # Don't follow a symlinked frontend/ — unlinking through it could touch files
+    # outside the project tree.
+    if stale_root.is_symlink() or not stale_root.is_dir():
         return
+
+    def _remove(p: Path) -> int:
+        if not p.is_file():
+            return 0
+        p.unlink()
+        if collector is not None:
+            collector.drop_records_under(p.relative_to(project_root).as_posix())
+        return 1
 
     removed = 0
     for rel in (layout.ui_protocol_path, layout.canvas_manifest_path, layout.event_union_path):
-        if rel and (stale_root / rel).is_file():
-            (stale_root / rel).unlink()
-            removed += 1
-    enums_dir = stale_root / layout.shared_enums_dir if layout.shared_enums_dir else None
-    if enums_dir and enums_dir.is_dir():
-        for f in enums_dir.glob("*"):
-            if f.is_file():
-                f.unlink()
-                removed += 1
+        if rel:
+            removed += _remove(stale_root / rel)
+    # Only the enum files Forge itself emits — computed from the shared enum
+    # sources — never arbitrary user files that happen to live in the dir.
+    if layout.shared_enums_dir:
+        from forge.codegen.pipeline import _ENUMS_ROOT  # noqa: PLC0415
+
+        enums_dir = stale_root / layout.shared_enums_dir
+        ext = ".ts" if layout.shared_enums_emitter == "typescript" else ".dart"
+        for yaml_file in sorted(_ENUMS_ROOT.glob("*.yaml")):
+            removed += _remove(enums_dir / f"{yaml_file.stem}{ext}")
 
     # Prune now-empty dirs bottom-up; rmdir only succeeds on empty dirs, so
     # non-codegen content is left untouched.
