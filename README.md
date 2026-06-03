@@ -76,6 +76,29 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries
 
 ---
 
+## Layered components (Vue 3)
+
+Beyond the flat option → fragment model, forge composes Vue 3 UIs as a **three-layer component model** ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)). Each layer is a first-class node in a cross-layer dependency graph: it regenerates idempotently through the existing sync stack and reaches backend data only through a **data contract**.
+
+| Layer | What it is | Composes | Seeds shipped |
+|---|---|---|---|
+| **Layer 1 — basic components** | Self-contained UI units; each consumes at most one data contract (or none — a pure-UI component). | — | `EntityList` (data-bound list, `read` contract), `StatCard` (pure-UI KPI card) |
+| **Layer 2 — composed components** | Components built from Layer-1 children, aggregating their contracts. | `children` + `aggregates` | *(graph-supported — compose your own; no standalone seed yet)* |
+| **Layer 3 — templates** | Full-app blueprints — pages, routes, nav, and shell — composing Layer-1/2 children. | `children` | `Console` (left-nav + dashboard), `ChatFirst` (docked agent chat) |
+
+**Layering rule:** a component may depend only on the same or a lower layer — upward edges (1→2, 2→3) are rejected; same-layer 2→2 composition is allowed (cycle-checked). The resolver builds a transitive **reverse-dependents** index, so changing one component regenerates exactly its dependents and nothing else.
+
+**Data contract.** A `<Component>.contract.json` declares the component's data dependency as `operations` (`read` / `write` / `subscribe`) whose input/output schemas emit to TypeScript through the existing `ui_protocol` path — so a contract change is caught at build time by `vue-tsc`, never silently at runtime. The same contract serves both modes:
+
+- **Greenfield** — forge emits the backend slice from the contract.
+- **Brownfield** — bind to an existing backend's OpenAPI document via `frontend.openapi_spec_url`, mapping each contract operation to an `operationId` with a non-Turing-complete **transform DSL** (field renames via dotted source paths + a closed whitelist of scalar coercions — `int` / `float` / `str` / `bool`).
+
+Components compile to project-scoped, `target_frontends`-gated fragments, so their outputs flow through the **same** resolver → injector → codegen → provenance/merge path as everything else — not a parallel generator. Vue 3 is the first (and currently only) framework target; the seam is framework-agnostic.
+
+Manage them from the CLI — `forge --component-cmd {list,scaffold}` (with `--component-name` / `--component-layer`) and `forge --template-cmd list` — or select them when generating. These UI **component layers** are orthogonal to the generation **[layer discriminators](#layer-discriminators)** (`backend.mode` etc.) and to RFC-006 backend **parity tiers** ([`ADR-009`](docs/architecture-decisions/ADR-009-component-layer-vs-parity-tier.md)).
+
+---
+
 ## Options
 
 Everything configurable is an `Option` with a dotted path, a type (`bool` / `enum` / `int` / `str` / `list`), and a default. Set one at generation time with `--set PATH=VALUE` (repeatable) or in the `options:` block of your YAML config. See [Usage Examples](#usage-examples).
