@@ -54,9 +54,9 @@ def _config(tmp: Path, *, with_spec: bool) -> ProjectConfig:
 def test_emits_bindings_artifact_when_spec_set(tmp_path: Path) -> None:
     cfg = _config(tmp_path, with_spec=True)
     proj = tmp_path / "proj"
-    (proj / cfg.frontend_slug).mkdir(parents=True)
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
     _emit_contract_bindings(cfg, proj, None, components_root=_contract_component_root(tmp_path))
-    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api"
     out = api / "contract-bindings.toml"
     assert out.is_file()
     text = out.read_text()
@@ -70,16 +70,16 @@ def test_emits_bindings_artifact_when_spec_set(tmp_path: Path) -> None:
 def test_noop_when_no_spec(tmp_path: Path) -> None:
     cfg = _config(tmp_path, with_spec=False)
     proj = tmp_path / "proj"
-    (proj / cfg.frontend_slug).mkdir(parents=True)
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
     # No spec → greenfield → writes nothing, no crash.
     _emit_contract_bindings(cfg, proj, None, components_root=_contract_component_root(tmp_path))
-    assert not (proj / cfg.frontend_slug / "src" / "shared" / "api" / "contract-bindings.toml").exists()
+    assert not (proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api" / "contract-bindings.toml").exists()
 
 
 def test_hand_edited_invalid_binding_fails_loud(tmp_path: Path) -> None:
     cfg = _config(tmp_path, with_spec=True)
     proj = tmp_path / "proj"
-    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api"
     api.mkdir(parents=True)
     # A contract requiring an output field the binding doesn't satisfy.
     cc = tmp_path / "cc2"
@@ -113,7 +113,7 @@ def test_emits_ts_adapters_for_valid_bindings(tmp_path: Path) -> None:
         frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="App"),
         components=["EntityList"], options={"frontend.openapi_spec_url": str(spec)})
     proj = tmp_path / "proj"
-    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api"
     api.mkdir(parents=True)
     # A valid hand-edited bindings file with a response transform.
     (api / "contract-bindings.toml").write_text(
@@ -147,7 +147,7 @@ def test_capabilities_external_when_subscribe_op_bound(tmp_path: Path) -> None:
         frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="App"),
         components=["AgentChat"], options={"frontend.openapi_spec_url": str(spec)})
     proj = tmp_path / "proj"
-    api = proj / cfg.frontend_slug / "src" / "shared" / "api"
+    api = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api"
     api.mkdir(parents=True)
     (api / "contract-bindings.toml").write_text(
         '[contract_bindings.AgentChat.stream]\noperation_id = "streamAgent"\n'

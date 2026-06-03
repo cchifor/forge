@@ -57,9 +57,9 @@ def _config() -> ProjectConfig:
 def test_emits_contract_ts_for_selected_component(tmp_path: Path) -> None:
     cfg = _config()
     proj = tmp_path / "proj"
-    (proj / cfg.frontend_slug).mkdir(parents=True)
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
     _emit_contract_types(cfg, proj, None, components_root=_component_root(tmp_path))
-    out = proj / cfg.frontend_slug / "src" / "shared" / "api" / "EntityList.contract.ts"
+    out = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api" / "EntityList.contract.ts"
     assert out.is_file()
     body = out.read_text()
     # ui_protocol-emitted interfaces for the op input + output.
@@ -78,6 +78,30 @@ def test_noop_when_component_has_no_contract(tmp_path: Path) -> None:
         components=["Plain"],
     )
     proj = tmp_path / "proj"
-    (proj / cfg.frontend_slug).mkdir(parents=True)
+    (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
     _emit_contract_types(cfg, proj, None, components_root=cc)
-    assert not (proj / cfg.frontend_slug / "src" / "shared" / "api" / "Plain.contract.ts").exists()
+    assert not (proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api" / "Plain.contract.ts").exists()
+
+
+def test_production_discovery_finds_seed_entitylist_contract(tmp_path: Path) -> None:
+    # No components_root seam: discovery must resolve the EntityList seed's
+    # feature-local contract via its loaded FeatureManifest.manifest_path.
+    from forge import feature_loader
+
+    feature_loader.reset_for_tests()
+    feature_loader.load_builtin_features()
+    try:
+        cfg = ProjectConfig(
+            project_name="App",
+            backends=[BackendConfig(project_name="App")],
+            frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="App"),
+            components=["EntityList"],
+        )
+        proj = tmp_path / "proj"
+        (proj / "apps" / cfg.frontend_slug).mkdir(parents=True)
+        _emit_contract_types(cfg, proj, None)  # components_root=None ⇒ production path
+        out = proj / "apps" / cfg.frontend_slug / "src" / "shared" / "api" / "EntityList.contract.ts"
+        assert out.is_file()
+        assert "EntityListListOutput" in out.read_text()
+    finally:
+        feature_loader.reset_for_tests()

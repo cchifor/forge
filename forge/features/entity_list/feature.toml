@@ -1,0 +1,10 @@
+[feature]
+name = "EntityList"
+version = "1.0.0"
+summary = "A data-bound list — Layer-1 component with a read data contract."
+category = "component"
+stability = "experimental"
+layer = 1
+
+[feature.component]
+contract = "EntityList"
