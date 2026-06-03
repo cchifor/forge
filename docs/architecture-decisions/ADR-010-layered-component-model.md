@@ -40,12 +40,24 @@ build a parallel generator.**
    targeted Fragments** (`component_<Name>`) that flow through the *existing*
    resolver/applier/provenance path — no new emission engine.
 
-3. **The data contract extends the canvas system.** A sibling
+3. **The data contract extends the canvas system, but lives feature-local.** A
    `<Component>.contract.json` adds `operations` (`read`/`write`/`subscribe`,
    each with input/output schemas in the **ui_protocol JSON-Schema subset**).
-   Types are emitted via the existing `ui_protocol` emitters; `canvas.manifest.json`
-   gains a `contract` block (v2, only when present). Pure-UI components have no
-   contract — a legal, representable state.
+   Types are emitted via the existing `ui_protocol` emitters as a self-contained
+   `<Component>.contract.ts` the component's `.vue` imports (so a contract change
+   is caught at build time by `vue-tsc`, not silently at runtime). Pure-UI
+   components have no contract — a legal, representable state.
+
+   **Refinement (2026-06-03):** the plan placed the contract as a sibling in the
+   shared `templates/_shared/canvas-components/` dir. That is *not* where seed
+   contracts live, because `build_manifest` flips the whole `canvas.manifest.json`
+   to **v2** the moment any canvas component carries a contract, and
+   `_emit_canvas_manifests` writes *all* canvas components into *every* project —
+   so a single seed contract would flip every generated project's manifest and
+   churn the golden snapshots. Instead a component's contract is **feature-local**
+   (`forge/features/<feature>/<Component>.contract.json`), resolved per selected
+   component via its `FeatureManifest.manifest_path`. The manifest stays v1; a
+   contract only affects projects that select the component.
 
 4. **Regeneration threads through `sync`.** Component `.vue`/`.ts` files are
    whole-file Forge-owned artifacts emitted into `apps/<frontend_slug>/` via the
@@ -76,11 +88,30 @@ build a parallel generator.**
 
 - Components/templates are discoverable + authorable via `--component-cmd` /
   `--template-cmd` (list/scaffold) and selectable via a project's `components: []`.
-- Seed artifacts ship as features: `StatCard` (L1), `Console` + `ChatFirst` (L3).
+- Seed artifacts ship as features: `StatCard` (L1, pure-UI), `EntityList` (L1,
+  contract-bearing), `Console` + `ChatFirst` (L3).
+- Contract artifacts (`<Component>.contract.ts`, `contract-bindings.toml`,
+  `capabilities.ts`, `transform-adapters.ts`) emit into `apps/<frontend_slug>/
+  src/shared/api/` — the real built app, where the component `.vue` lives and
+  `vue-tsc`/`npm build` run — via `_frontend_api_dir`. (Note: the *other*
+  `run_codegen` frontend outputs — `canvas.manifest.json`, `ui_protocol.gen.ts`,
+  shared enums — still write to the legacy `project_root/<frontend_slug>/` tree;
+  reconciling that pre-existing split is tracked as a separate follow-up.)
+- Brownfield agent transport: a generated `capabilities.ts` carries
+  `agentTransport: "external" | "stub"` — `"external"` iff a `subscribe`-kind op
+  is bound (a default stub is written on the first/proposal run so a chat import
+  always resolves).
 - The flat option/fragment surface is untouched — the layered model is purely
   additive and guarded (empty `components` ⇒ byte-identical to the old flow).
+- Pre-validation gate (plan §H/§J): each seed template + contract-bearing
+  component is generated and `vue-tsc`-checked in CI (`e2e.yml` presets
+  `console-template`, `chatfirst-template`, `entitylist`); the brownfield lane
+  also fills a binding, re-runs codegen, and type-checks the emitted adapters.
+- Telemetry: the `--component-cmd` / `--template-cmd` verbs emit `component.ran`
+  / `template.ran` (bounded `action` vocabulary), documented in `telemetry.md`.
 - Known v1 boundaries: L3 route/nav auto-wiring (router uses Copier `// ---`
   anchors, not `FORGE:` sentinels); brownfield transform paths are flat/dotted
-  (no array-element remapping); brownfield generation-wiring (writing the mapping
-  artifact + TS adapter into a project and calling `assert_bindings_valid` from
-  the pipeline) and the docker CI profiles are tracked as follow-ups.
+  (no array-element remapping); the brownfield **runtime** docker CI profile (a
+  live mock-OpenAPI server smoke, beyond the static `vue-tsc` gate) and the
+  legacy `project_root/<slug>` vs `apps/<slug>` codegen-output split are tracked
+  as follow-ups.
