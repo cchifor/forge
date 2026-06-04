@@ -405,6 +405,11 @@ import 'package:dio/dio.dart';
 class AuthInterceptor extends Interceptor {
   AuthInterceptor(Object _);
 
+  /// No-op — kept for API parity with the auth build's interceptor so the
+  /// dio_client.dart factory can call `bindDio()` unconditionally. Without
+  /// auth there is no Dio reference to retain for token-refresh retries.
+  void bindDio(Dio dio) {}
+
   @override
   void onRequest(
     RequestOptions options,
