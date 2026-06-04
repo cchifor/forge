@@ -6,11 +6,12 @@ content, and panels — is selectable with `--layout` (CLI), `frontend.layout`
 (desktop / tablet / mobile) and is built by composing forge's reusable
 Layer-1/Layer-2 components (see [Layered components](../README.md#layered-components-vue-3)).
 
-> **Scope.** All six layouts ship for **Vue 3, Svelte 5, and Flutter**. Selecting
-> an unavailable `(framework, layout)` pair fails config validation with the list
-> of layouts available for that framework. (Note: `flutter build web` currently
-> hits a pre-existing flutter version-skew defect that also fails the unchanged
-> sidebar baseline — orthogonal to the layouts; Vue/Svelte build + serve cleanly.)
+> **Scope.** All six layouts ship for **Vue 3, Svelte 5, and Flutter**, and every
+> `(framework, layout)` builds in its generated container — Vue/Svelte via
+> `npm run build`, Flutter via `flutter build web` (the Flutter image runs
+> `dart run build_runner` for the freezed / riverpod / json codegen before
+> building). Selecting an unavailable `(framework, layout)` pair fails config
+> validation with the list of layouts available for that framework.
 
 ## The layouts
 
