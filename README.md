@@ -101,7 +101,7 @@ Manage them from the CLI — `forge --component-cmd {list,scaffold}` (with `--co
 
 ## Frontend layouts
 
-The generated frontend's **app-shell layout** is selectable with `--layout` (or `frontend.layout` in YAML). Each layout is a Layer-3 composition of the reusable Layer-2 regions above, fully responsive across desktop/tablet/mobile. Vue 3 ships all six in v1 (Svelte/Flutter ship `sidebar` today):
+The generated frontend's **app-shell layout** is selectable with `--layout` (or `frontend.layout` in YAML). Each layout is a Layer-3 composition of the reusable Layer-2 regions above, fully responsive across desktop/tablet/mobile, and available for **Vue 3, Svelte 5, and Flutter**:
 
 | Slug | Layout | Best for |
 |------|--------|----------|
