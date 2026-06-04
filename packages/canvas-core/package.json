@@ -5,10 +5,10 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/src/index.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
@@ -28,7 +28,7 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
-    "vite-plugin-dts": "^4.5.0",
+    "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.8",
     "jsdom": "^29.1.1",
     "@types/node": "^25.9.1"
