@@ -13,6 +13,12 @@ export default defineConfig({
     dts({
       include: ['src/**/*.ts'],
       outDir: 'dist',
+      // vite-plugin-dts 5 no longer infers the entry root, so without this
+      // it emits declarations under dist/src/ (e.g. dist/src/index.d.ts)
+      // instead of dist/, breaking the package's "types":
+      // "./dist/index.d.ts" entry — consumers then fail with TS7016
+      // "could not find a declaration file". Flatten to dist/ like v4 did.
+      entryRoot: 'src',
       staticImport: true,
       rollupTypes: false,
     }),
