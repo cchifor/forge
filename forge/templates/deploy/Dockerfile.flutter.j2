@@ -3,6 +3,12 @@ FROM ghcr.io/cirruslabs/flutter:stable AS builder
 WORKDIR /app
 
 COPY . .
+# Scaffold the web platform for the generated project. The template ships lib/
+# + pubspec.yaml but not web/, so `flutter build web` would otherwise fail with
+# "To configure this project for the web, run flutter create . --platforms web".
+# `flutter create .` is additive — it adds web/ (index.html, manifest, bootstrap)
+# without touching lib/, reusing the existing pubspec name.
+RUN flutter create . --platforms web
 RUN flutter pub get
 RUN flutter build web --release
 
