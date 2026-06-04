@@ -5,10 +5,7 @@ repository: https://github.com/forge-project/forge
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
-  # CardThemeData (lib/src/theme.dart) requires Flutter >= 3.27; ThemeData.cardTheme
-  # was typed as CardTheme? before that. Generated apps that vendor this package pin
-  # an even newer Flutter, so this is the floor for standalone analysis/consumption.
-  flutter: ">=3.27.0"
+  flutter: ">=3.24.0"
 
 dependencies:
   flutter:
