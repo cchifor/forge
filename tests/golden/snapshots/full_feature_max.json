@@ -29,7 +29,7 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1155,
+      "size": 1180,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -85,16 +85,16 @@
       "sha256": "d73104adb44ccb05"
     },
     "apps/frontend/scripts/answers.json": {
-      "size": 588,
-      "sha256": "2734e54b7a365728"
+      "size": 620,
+      "sha256": "038657c3e5ddc32b"
     },
     "apps/frontend/scripts/feature_templates.py": {
       "size": 27528,
       "sha256": "cff5eb4442cf6d95"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 20042,
-      "sha256": "11281f4bd366de67"
+      "size": 20354,
+      "sha256": "a8a8156973e9501d"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 622,
@@ -985,7 +985,7 @@
       "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 133860,
+      "size": 133879,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {

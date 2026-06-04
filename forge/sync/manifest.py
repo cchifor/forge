@@ -146,6 +146,11 @@ class ForgeFrontendData:
 
     framework: str = ""
     app_dir: str = ""
+    # UI app-shell layout (``--layout`` / FrontendConfig.layout). Persisted so
+    # ``forge update`` / harvest round-trips preserve the user's choice instead
+    # of silently resetting to the default. Empty ⇒ pre-layout manifest (treat
+    # as the default at the consume site).
+    layout: str = ""
 
 
 @dataclass
@@ -307,6 +312,7 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
         frontend = ForgeFrontendData(
             framework=explicit_framework,
             app_dir=str(_unwrap(frontend_tbl.get("app_dir", ""))),
+            layout=str(_unwrap(frontend_tbl.get("layout", ""))),
         )
     else:
         frontend = _infer_frontend_from_v3(path.parent, templates)
@@ -604,6 +610,8 @@ def write_forge_toml(
         fe_tbl.add("framework", frontend.framework)
         if frontend.app_dir:
             fe_tbl.add("app_dir", frontend.app_dir)
+        if frontend.layout:
+            fe_tbl.add("layout", frontend.layout)
         forge_tbl.add("frontend", fe_tbl)
 
     options_tbl = tomlkit.table()

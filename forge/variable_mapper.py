@@ -369,4 +369,9 @@ def frontend_context(config: ProjectConfig) -> dict[str, Any]:
     fn = mapping.get(config.frontend.framework)
     if fn is None:
         raise ValueError(f"No mapper for {config.frontend.framework}")
-    return fn(config)
+    ctx = fn(config)
+    # Expose the selected layout so variant templates / post-generate can branch
+    # on it (e.g. layout-aware chat stripping). Unused by the built-in sidebar
+    # templates, so it leaves their output unchanged.
+    ctx["frontend_layout"] = config.frontend.layout
+    return ctx

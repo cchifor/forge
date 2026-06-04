@@ -489,6 +489,7 @@ class TestCollectInputs:
                 "Vue 3",  # frontend framework
                 "npm",  # package manager
                 "blue",  # color scheme
+                "Sidebar App Shell",  # app-shell layout (Vue now offers >1)
             ]
         )
         confirms = iter(

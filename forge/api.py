@@ -89,7 +89,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from forge.capability_resolver import ResolvedPlan
-    from forge.config import BackendSpec, FrontendSpec, ProjectConfig
+    from forge.config import BackendSpec, FrontendFramework, FrontendSpec, ProjectConfig
     from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
     from forge.hooks import PhaseHook
@@ -112,7 +112,7 @@ if TYPE_CHECKING:
 #     :class:`forge.hooks.PhaseHook` protocol; lets plugins observe
 #     generator phases (telemetry, SBOM, post-generate scripts) without
 #     forking ``generator.py``.
-SDK_VERSION = "1.2"
+SDK_VERSION = "1.3"
 
 
 _SDK_VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
@@ -538,6 +538,55 @@ class ForgeAPI:
 
         register_frontend_framework(value)
         FRONTEND_SPECS[value] = spec
+
+    def add_frontend_layout(
+        self,
+        framework: str | FrontendFramework,
+        name: str,
+        template_dir: str,
+        display_label: str,
+        *,
+        base_template_dir: str = "",
+        supported: bool = True,
+    ) -> None:
+        """Register a selectable UI app-shell layout (``--layout``) for a frontend.
+
+        ``framework`` may be a built-in :class:`~forge.config.FrontendFramework`
+        (or its string value) or a plugin frontend previously registered via
+        :meth:`add_frontend`. ``template_dir`` is the layout's Copier template
+        — relative to ``forge/templates`` for templates shipped alongside the
+        built-ins, or an absolute path for plugin-shipped ones (the generator
+        joins it under the templates root; an absolute path wins the join).
+        When ``base_template_dir`` is set, the generator renders that shared
+        base first and overlays this template (two-stage render); empty means
+        a self-contained single render.
+
+        Additive since SDK 1.3.
+        """
+        from forge.config import (  # noqa: PLC0415
+            FrontendFramework,
+            resolve_frontend_framework,
+        )
+        from forge.layout_variants import (  # noqa: PLC0415
+            LayoutVariant,
+            register_layout_variant,
+        )
+
+        fw = (
+            framework
+            if isinstance(framework, FrontendFramework)
+            else resolve_frontend_framework(framework)
+        )
+        register_layout_variant(
+            LayoutVariant(
+                framework=fw,
+                name=name,
+                template_dir=template_dir,
+                display_label=display_label,
+                supported=supported,
+                base_template_dir=base_template_dir,
+            )
+        )
 
     # -- Command registration ------------------------------------------------
 
