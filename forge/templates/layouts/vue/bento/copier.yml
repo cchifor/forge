@@ -1,0 +1,140 @@
+# Copier template configuration for Vue 3 SPA
+_min_copier_version: "9.0.0"
+_subdirectory: template
+_exclude:
+  - copier.yml
+  - _tasks
+  - "*.pyc"
+  - __pycache__
+
+# ─── Questions ───
+
+project_name:
+  type: str
+  default: "My App"
+  help: "Human-readable project name"
+
+project_slug:
+  type: str
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+  help: "npm package name (kebab-case)"
+
+app_title:
+  type: str
+  default: "{{ project_name }}"
+  help: "Display title for the application"
+
+description:
+  type: str
+  default: "A Vue 3 SPA application"
+
+features:
+  type: str
+  default: "items"
+  help: "Comma-separated feature names (snake_case, e.g., 'items, orders, products')"
+
+author_name:
+  type: str
+  default: "Your Name"
+
+version:
+  type: str
+  default: "0.1.0"
+
+package_manager:
+  type: str
+  default: "npm"
+  choices:
+    - npm
+    - pnpm
+    - yarn
+
+include_auth:
+  type: bool
+  default: true
+  help: "Include Keycloak authentication"
+
+include_chat:
+  type: bool
+  default: true
+  help: "Include AI chat panel"
+
+include_openapi:
+  type: bool
+  default: true
+  help: "Include OpenAPI TypeScript codegen"
+
+include_sentry:
+  type: bool
+  default: false
+  help: "Include @sentry/vue for error tracking"
+
+consumed_services:
+  type: str
+  default: ""
+  help: "Comma-separated backend services to codegen OpenAPI types for (e.g. 'workflow,notification'). Each gets its own subfolder under src/shared/api/generated/<service>/ to avoid type collisions."
+
+api_base_url:
+  type: str
+  default: "http://localhost:5173"
+
+api_proxy_target:
+  type: str
+  default: "http://localhost:5000"
+
+env_api_base_url:
+  type: str
+  when: false
+  default: "http://localhost:5173"
+
+backend_features:
+  type: str
+  when: false
+  default: "{}"
+
+proxy_targets:
+  type: str
+  when: false
+  default: "[]"
+
+vite_proxy_config:
+  type: str
+  when: false
+  default: ""
+
+server_port:
+  type: int
+  default: 5173
+
+keycloak_url:
+  type: str
+  default: "http://localhost:8080"
+  when: "{{ include_auth }}"
+
+keycloak_realm:
+  type: str
+  default: "master"
+  when: "{{ include_auth }}"
+
+keycloak_client_id:
+  type: str
+  default: "{{ project_slug }}"
+  when: "{{ include_auth }}"
+
+default_color_scheme:
+  type: str
+  default: "blue"
+  choices:
+    - blue
+    - indigo
+    - teal
+    - green
+    - deepPurple
+    - red
+    - amber
+    - cyan
+
+# ─── Tasks (post-generation) ───
+
+_tasks:
+  - "{{ _copier_python }} scripts/post_generate.py"

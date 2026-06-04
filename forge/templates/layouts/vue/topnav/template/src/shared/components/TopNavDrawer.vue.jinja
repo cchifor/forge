@@ -1,0 +1,131 @@
+<script setup lang="ts">
+import { useRoute } from 'vue-router'
+import { Home, User, Settings, Sparkles, X } from 'lucide-vue-next'
+import { useUiStore } from '@/shared/stores/ui.store'
+
+const route = useRoute()
+const uiStore = useUiStore()
+
+const primaryNav = [
+  { title: 'Home', url: '/', icon: Home },
+  // --- feature nav items ---
+  // --- end feature nav items ---
+]
+
+const bottomNav = [
+  { title: 'Profile', url: '/profile', icon: User },
+  { title: 'Settings', url: '/settings', icon: Settings },
+]
+
+function isActive(url: string) {
+  if (url === '/') return route.path === '/'
+  return route.path.startsWith(url)
+}
+</script>
+
+<template>
+  <Teleport to="body">
+    <Transition name="nav-drawer">
+      <div
+        v-if="uiStore.mobileMenuOpen"
+        class="fixed inset-0 z-50 flex"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="uiStore.closeMobileMenu()"
+        />
+
+        <!-- Drawer panel -->
+        <aside
+          id="topnav-mobile-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          class="relative flex h-svh w-72 max-w-[85vw] flex-col border-r bg-sidebar-background shadow-xl"
+        >
+          <div class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg ai-gradient">
+              <Sparkles class="h-4 w-4 text-white" />
+            </div>
+            <span class="flex-1 truncate text-sm font-semibold text-sidebar-foreground">
+              {{ app_title }}
+            </span>
+            <button
+              class="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-sidebar-accent interactive-press"
+              type="button"
+              title="Close menu"
+              aria-label="Close navigation menu"
+              @click="uiStore.closeMobileMenu()"
+            >
+              <X class="h-5 w-5 text-muted-foreground" />
+            </button>
+          </div>
+
+          <nav class="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+            <RouterLink
+              v-for="item in primaryNav"
+              :key="item.url"
+              :to="item.url"
+              :aria-current="isActive(item.url) ? 'page' : undefined"
+              class="flex h-10 items-center gap-3 rounded-xl px-3 text-sm interactive-press"
+              :class="isActive(item.url)
+                ? 'bg-primary/10 font-semibold text-primary'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent'"
+              @click="uiStore.closeMobileMenu()"
+            >
+              <component :is="item.icon" class="h-5 w-5 shrink-0" />
+              <span class="truncate">{% raw %}{{ item.title }}{% endraw %}</span>
+            </RouterLink>
+
+            <div class="my-2 mx-3 h-px bg-sidebar-border" />
+
+            <RouterLink
+              v-for="item in bottomNav"
+              :key="item.url"
+              :to="item.url"
+              :aria-current="isActive(item.url) ? 'page' : undefined"
+              class="flex h-10 items-center gap-3 rounded-xl px-3 text-sm interactive-press"
+              :class="isActive(item.url)
+                ? 'bg-primary/10 font-semibold text-primary'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent'"
+              @click="uiStore.closeMobileMenu()"
+            >
+              <component :is="item.icon" class="h-5 w-5 shrink-0" />
+              <span class="truncate">{% raw %}{{ item.title }}{% endraw %}</span>
+            </RouterLink>
+          </nav>
+        </aside>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped>
+/* Drawer slide from left */
+.nav-drawer-enter-active,
+.nav-drawer-leave-active {
+  transition: opacity 200ms ease;
+}
+.nav-drawer-enter-active aside,
+.nav-drawer-leave-active aside {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-drawer-enter-from,
+.nav-drawer-leave-to {
+  opacity: 0;
+}
+.nav-drawer-enter-from aside,
+.nav-drawer-leave-to aside {
+  transform: translateX(-100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-drawer-enter-active,
+  .nav-drawer-leave-active,
+  .nav-drawer-enter-active aside,
+  .nav-drawer-leave-active aside {
+    transition-duration: 0ms;
+  }
+}
+</style>

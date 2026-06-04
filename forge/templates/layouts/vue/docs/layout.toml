@@ -1,0 +1,14 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `docs` is a thin overlay on top of the shared vue base template: the
+# generator renders `apps/vue-frontend-template` first, then overlays this
+# layout's MainLayout + DocTreeNav (left) + TocPanel (right) regions.
+# Everything else (router, auth, API client, AppHeader, AppSidebar, AiChat,
+# ui.store, useBreakpoint, all Layer-1 ui/) comes from the base.
+[layout]
+name = "docs"
+framework = "vue"
+display_label = "Documentation 3-Column"
+template_dir = "layouts/vue/docs"
+base = "apps/vue-frontend-template"
+supported = true

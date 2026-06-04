@@ -1,0 +1,14 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `threepane` is a thin overlay on top of the shared vue base template:
+# the generator renders `apps/vue-frontend-template` first, then overlays
+# this layout's MainLayout + RightPanel region. Everything else (router,
+# auth, API client, AppHeader, AppSidebar, AiChat, ui.store, useBreakpoint,
+# all Layer-1 ui/) comes from the base.
+[layout]
+name = "threepane"
+framework = "vue"
+display_label = "Three-Pane + Right Agent Panel"
+template_dir = "layouts/vue/threepane"
+base = "apps/vue-frontend-template"
+supported = true

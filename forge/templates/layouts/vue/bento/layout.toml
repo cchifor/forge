@@ -1,0 +1,14 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `bento` is a thin Copier overlay on top of the shared Vue base template.
+# The chassis is the base sidebar shell (AppHeader + AppSidebar + main +
+# tri-modal chat); the differentiator is a presentational BentoGrid region
+# that generated dashboard pages compose inside the standard <main> slot.
+# The base renders first, then these files overlay it (two-stage render).
+[layout]
+name = "bento"
+framework = "vue"
+display_label = "Bento Grid Dashboard"
+template_dir = "layouts/vue/bento"
+base = "apps/vue-frontend-template"
+supported = true
