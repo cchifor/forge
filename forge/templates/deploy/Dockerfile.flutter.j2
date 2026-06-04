@@ -10,6 +10,13 @@ COPY . .
 # without touching lib/, reusing the existing pubspec name.
 RUN flutter create . --platforms web
 RUN flutter pub get
+# Run code generation. The project uses freezed / riverpod_generator /
+# json_serializable / retrofit_generator, whose *.g.dart and *.freezed.dart
+# outputs are not committed (and host-side `forge` only runs build_runner when
+# the Flutter SDK is present). Without this step `flutter build web` fails with
+# "Error when reading '...g.dart': No such file or directory" for every codegen
+# source.
+RUN dart run build_runner build --delete-conflicting-outputs
 RUN flutter build web --release
 
 # -- Runtime stage --
