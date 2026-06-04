@@ -23,7 +23,7 @@ class ForgeTheme {
       useMaterial3: true,
       colorScheme: scheme,
       textTheme: _textTheme(scheme),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: scheme.outlineVariant),
