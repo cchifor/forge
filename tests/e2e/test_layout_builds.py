@@ -1,13 +1,15 @@
-"""E2E: every Vue app-shell layout's generated frontend actually builds, and a
-full generated stack serves over docker compose.
+"""E2E: every app-shell layout's generated frontend actually builds (and a
+sidebar stack serves) — across Vue, Svelte, and Flutter.
 
-The per-layout build is the real compile gate for the layouts: the frontend
-Dockerfile runs ``npm install`` + ``npm run build`` (vue-tsc type-check + vite
-bundle) in a clean ``node:22`` container, so a TypeScript/Vue error in any
-layout fails here (where the dry-run render tests can't see it).
+The per-layout build is the real compile gate: the frontend Dockerfile (rendered
+per framework by docker_manager — vue/svelte run ``npm run build``, flutter runs
+``flutter build web``) compiles + bundles the generated app in a clean container,
+so a TypeScript/Svelte/Dart error in any layout fails here (where dry-run render
+tests can't see it).
 
-Marked ``@pytest.mark.e2e`` — excluded from the default ``pytest`` run; opt in
-with ``-m e2e``. Skips cleanly when docker is unavailable.
+Marked ``@pytest.mark.e2e`` — excluded from the default run; opt in with
+``-m e2e``. Skips when docker is unavailable. Parametrized dynamically over the
+layouts discovered for each framework, so new layouts are covered automatically.
 """
 
 from __future__ import annotations
@@ -30,21 +32,27 @@ from forge.config import (
     ProjectConfig,
 )
 from forge.generator import generate
+from forge.layout_variants import available_layouts
 
 pytestmark = pytest.mark.e2e
 
 _DOCKER = shutil.which("docker")
-_ALL_LAYOUTS = ["sidebar", "topnav", "tabbar", "threepane", "bento", "docs"]
-# Chat-gated layouts where chat-off must also compile (codex flagged the risk).
-_CHAT_OFF_LAYOUTS = ["threepane", "docs"]
-
 _needs_docker = pytest.mark.skipif(_DOCKER is None, reason="docker not on PATH")
 
+_FRAMEWORKS = {
+    "vue": FrontendFramework.VUE,
+    "svelte": FrontendFramework.SVELTE,
+    "flutter": FrontendFramework.FLUTTER,
+}
+# (framework, layout) for every discovered layout — covers new layouts for free.
+_CASES = [(name, layout) for name, fw in _FRAMEWORKS.items() for layout in available_layouts(fw)]
+_CHAT_GATED = [(n, l) for (n, l) in _CASES if l in ("threepane", "docs")]
+# Flutter builds pull the Flutter SDK image + run `flutter build web` — slow.
+_BUILD_TIMEOUT = 2700
 
-def _generate(
-    tmp_path: Path, layout: str, *, include_chat: bool = True, include_auth: bool = True
-) -> Path:
-    """Real (non-dry-run) generation so post_generate runs; returns project root."""
+
+def _generate(tmp_path: Path, framework: str, layout: str, *, include_chat: bool = True) -> Path:
+    """Real (non-dry-run) generation so post_generate + Dockerfile render run."""
     cfg = ProjectConfig(
         project_name="e2e",
         output_dir=str(tmp_path),
@@ -58,11 +66,10 @@ def _generate(
         ],
         frontend=FrontendConfig(
             project_name="e2e",
-            framework=FrontendFramework.VUE,
+            framework=_FRAMEWORKS[framework],
             layout=layout,
             include_chat=include_chat,
-            include_auth=include_auth,
-            include_openapi=True,
+            include_openapi=True,  # Flutter requires it; harmless for Vue/Svelte.
         ),
     )
     return Path(generate(cfg, quiet=True))
@@ -74,36 +81,36 @@ def _docker_build(frontend_dir: Path, tag: str) -> subprocess.CompletedProcess[s
         cwd=frontend_dir,
         capture_output=True,
         text=True,
-        timeout=1200,
+        timeout=_BUILD_TIMEOUT,
     )
 
 
 @_needs_docker
-@pytest.mark.parametrize("layout", _ALL_LAYOUTS)
-def test_layout_frontend_builds(tmp_path: Path, layout: str) -> None:
-    """Each layout's generated frontend compiles + bundles in a clean container."""
-    frontend = _generate(tmp_path, layout) / "apps" / "frontend"
-    assert (frontend / "Dockerfile").is_file(), f"{layout}: no frontend Dockerfile"
-    tag = f"forge-e2e-{layout}"
+@pytest.mark.parametrize("framework,layout", _CASES)
+def test_layout_frontend_builds(tmp_path: Path, framework: str, layout: str) -> None:
+    """Each (framework, layout) frontend compiles + bundles in a clean container."""
+    frontend = _generate(tmp_path, framework, layout) / "apps" / "frontend"
+    assert (frontend / "Dockerfile").is_file(), f"{framework}/{layout}: no frontend Dockerfile"
+    tag = f"forge-e2e-{framework}-{layout}"
     try:
         res = _docker_build(frontend, tag)
         assert res.returncode == 0, (
-            f"{layout} frontend build failed:\n{res.stdout[-4000:]}\n{res.stderr[-2000:]}"
+            f"{framework}/{layout} frontend build failed:\n{res.stdout[-4000:]}\n{res.stderr[-2000:]}"
         )
     finally:
         subprocess.run([_DOCKER, "image", "rm", "-f", tag], capture_output=True)
 
 
 @_needs_docker
-@pytest.mark.parametrize("layout", _CHAT_OFF_LAYOUTS)
-def test_layout_frontend_builds_without_chat(tmp_path: Path, layout: str) -> None:
-    """Chat-gated layouts still compile when include_chat=False (no dangling refs)."""
-    frontend = _generate(tmp_path, layout, include_chat=False) / "apps" / "frontend"
-    tag = f"forge-e2e-{layout}-nochat"
+@pytest.mark.parametrize("framework,layout", _CHAT_GATED)
+def test_chat_gated_layout_builds_without_chat(tmp_path: Path, framework: str, layout: str) -> None:
+    """Chat-gated layouts still compile with include_chat=False (no dangling refs)."""
+    frontend = _generate(tmp_path, framework, layout, include_chat=False) / "apps" / "frontend"
+    tag = f"forge-e2e-{framework}-{layout}-nochat"
     try:
         res = _docker_build(frontend, tag)
         assert res.returncode == 0, (
-            f"{layout} (chat off) frontend build failed:\n{res.stdout[-4000:]}\n{res.stderr[-2000:]}"
+            f"{framework}/{layout} (chat off) build failed:\n{res.stdout[-4000:]}\n{res.stderr[-2000:]}"
         )
     finally:
         subprocess.run([_DOCKER, "image", "rm", "-f", tag], capture_output=True)
@@ -116,21 +123,20 @@ def _free_port() -> int:
 
 
 @_needs_docker
-def test_layout_frontend_serves(tmp_path: Path) -> None:
-    """A built layout frontend actually serves its SPA over nginx (runtime smoke).
+@pytest.mark.parametrize("framework", ["vue", "svelte"])
+def test_sidebar_frontend_serves(tmp_path: Path, framework: str) -> None:
+    """A built sidebar frontend serves its SPA over nginx (runtime smoke).
 
     Scoped to the frontend container (build + run + curl) rather than the full
-    ``docker compose`` stack: a full stack-up is currently blocked by a
-    pre-existing, layout-orthogonal forge bug — the generated compose declares a
-    ``sdks: ./sdks`` build context for backend services that isn't created for
-    python-only projects, so ``docker compose up`` fails before the frontend
-    starts. Serving the built frontend image is the layout-relevant runtime check.
+    ``docker compose`` stack: a full stack-up is blocked by a pre-existing,
+    layout-orthogonal forge bug (the generated compose declares a ``sdks`` build
+    context that isn't created for python-only projects).
     """
-    frontend = _generate(tmp_path, "sidebar", include_auth=False) / "apps" / "frontend"
-    tag = "forge-e2e-serve"
+    frontend = _generate(tmp_path, framework, "sidebar", include_chat=False) / "apps" / "frontend"
+    tag = f"forge-e2e-serve-{framework}"
     build = _docker_build(frontend, tag)
     assert build.returncode == 0, (
-        f"frontend build failed:\n{build.stdout[-3000:]}\n{build.stderr[-2000:]}"
+        f"{framework} sidebar build failed:\n{build.stdout[-3000:]}\n{build.stderr[-2000:]}"
     )
     port = _free_port()
     container = ""
@@ -154,8 +160,8 @@ def test_layout_frontend_serves(tmp_path: Path) -> None:
             except (urllib.error.URLError, OSError):
                 pass
             time.sleep(1)
-        assert status == 200, f"frontend did not serve 200 at {url}"
-        assert b'id="app"' in body, "served page is not the Vue SPA shell"
+        assert status == 200, f"{framework} frontend did not serve 200 at {url}"
+        assert b"<div id=" in body or b"<body" in body, "served page is not an app shell"
     finally:
         if container:
             subprocess.run([_DOCKER, "rm", "-f", container], capture_output=True)

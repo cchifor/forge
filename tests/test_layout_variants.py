@@ -38,16 +38,11 @@ def test_default_layout_constant_is_sidebar():
 def test_available_layouts_per_framework():
     # Vue ships the full set in v1; Svelte/Flutter ship sidebar only (Phase 5
     # adds the rest). Discovered from templates/layouts/<fw>/<name>/layout.toml.
-    assert lv.available_layouts(FrontendFramework.VUE) == (
-        "bento",
-        "docs",
-        "sidebar",
-        "tabbar",
-        "threepane",
-        "topnav",
-    )
-    assert lv.available_layouts(FrontendFramework.SVELTE) == ("sidebar",)
-    assert lv.available_layouts(FrontendFramework.FLUTTER) == ("sidebar",)
+    full_set = ("bento", "docs", "sidebar", "tabbar", "threepane", "topnav")
+    # All three frameworks now ship the full set (Vue v1 + Svelte/Flutter Phase 5).
+    assert lv.available_layouts(FrontendFramework.VUE) == full_set
+    assert lv.available_layouts(FrontendFramework.SVELTE) == full_set
+    assert lv.available_layouts(FrontendFramework.FLUTTER) == full_set
 
 
 def test_get_unknown_layout_returns_none():
