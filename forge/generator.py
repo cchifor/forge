@@ -35,7 +35,6 @@ from forge.config import (
     frontend_uses_subdirectory,
     validate_slug,
 )
-from forge.layout_variants import DEFAULT_LAYOUT, get_layout_variant
 from forge.docker_manager import (
     render_compose,
     render_frontend_dockerfile,
@@ -55,6 +54,7 @@ from forge.errors import (
     GeneratorError,
     TemplateError,
 )
+from forge.layout_variants import DEFAULT_LAYOUT, get_layout_variant
 from forge.logging import get_logger, phase_timer
 from forge.reports import (
     FileInventoryEntry,
