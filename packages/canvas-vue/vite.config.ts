@@ -13,6 +13,10 @@ export default defineConfig({
     dts({
       include: ['src/**/*.ts', 'src/**/*.vue'],
       outDir: 'dist',
+      // See canvas-core: vite-plugin-dts 5 drops entry-root inference and
+      // emits under dist/src/ without this, breaking the dist/index.d.ts +
+      // dist/components/*.d.ts paths declared in package.json.
+      entryRoot: 'src',
       staticImport: true,
       rollupTypes: false,
     }),
