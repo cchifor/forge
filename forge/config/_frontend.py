@@ -249,7 +249,10 @@ class FrontendConfig:
             FrontendFramework.SVELTE,
             FrontendFramework.FLUTTER,
         )
-        if self.framework in _builtin_fws and get_layout_variant(self.framework, self.layout) is None:
+        if (
+            self.framework in _builtin_fws
+            and get_layout_variant(self.framework, self.layout) is None
+        ):
             avail = available_layouts(self.framework)
             raise ValueError(
                 f"Layout '{self.layout}' is not available for {self.framework.value}. "
