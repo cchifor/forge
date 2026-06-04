@@ -597,6 +597,7 @@ class TestCollectInputs:
                 "Python (FastAPI)",
                 "3.13",
                 "Flutter",  # frontend
+                "Sidebar App Shell",  # app-shell layout (Flutter now offers >1)
             ]
         )
         confirms = iter(
