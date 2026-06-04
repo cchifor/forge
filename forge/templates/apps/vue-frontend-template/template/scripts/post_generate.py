@@ -83,6 +83,11 @@ PACKAGE_MANAGER = _answers["package_manager"]
 APP_TITLE = _answers["app_title"]
 PROJECT_NAME = _answers["project_name"]
 VERSION = _answers["version"]
+# UI app-shell layout. Only ``sidebar`` uses the static no-chat MainLayout
+# replacement below; every other layout ships its own chat-conditional
+# MainLayout (Jinja ``{% if include_chat %}``), so the replacement must not
+# clobber it.
+LAYOUT = _answers.get("frontend_layout", "sidebar")
 
 
 # ─── Load feature_templates.py ───
@@ -327,7 +332,7 @@ def patch_conditional_files() -> None:
             header.write_text("".join(lines), encoding="utf-8")
 
         layout = PROJECT_DIR / "src" / "shared" / "layouts" / "MainLayout.vue"
-        if layout.exists():
+        if LAYOUT == "sidebar" and layout.exists():
             layout.write_text(MAIN_LAYOUT_NO_CHAT, encoding="utf-8")
 
         # The vendored canvas-core lives under src/features/ai_chat/ (deleted

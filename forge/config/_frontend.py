@@ -171,6 +171,7 @@ class FrontendConfig:
     api_base_url: str = ""
     api_proxy_target: str = ""
     generate_e2e_tests: bool = True
+    layout: str = "sidebar"  # UI app-shell layout; see forge.layout_variants
 
     def effective_mode(self, options_mode: str = "generate") -> str:
         """Collapse two sources of frontend-mode truth into one value.
@@ -235,4 +236,22 @@ class FrontendConfig:
             raise ValueError(
                 f"Package manager '{self.package_manager}' is not valid "
                 f"for {self.framework.value}. Choose from: {', '.join(allowed)}"
+            )
+        # The chosen UI layout must be a registered variant for this framework.
+        # Local import avoids a config<->layout_variants import cycle (the
+        # latter imports FrontendFramework from this package).
+        from forge.layout_variants import available_layouts, get_layout_variant  # noqa: PLC0415
+
+        # Only the built-ins ship a layout registry today; plugin frontends keep
+        # their existing (layout-agnostic) path until they register variants.
+        _builtin_fws = (
+            FrontendFramework.VUE,
+            FrontendFramework.SVELTE,
+            FrontendFramework.FLUTTER,
+        )
+        if self.framework in _builtin_fws and get_layout_variant(self.framework, self.layout) is None:
+            avail = available_layouts(self.framework)
+            raise ValueError(
+                f"Layout '{self.layout}' is not available for {self.framework.value}. "
+                f"Choose from: {', '.join(avail) if avail else '(none registered)'}"
             )

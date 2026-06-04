@@ -1,0 +1,10 @@
+# See templates/layouts/vue/sidebar/layout.toml. Flutter's `sidebar` is today's
+# full Flutter template (single render, byte-identical baseline). Additional
+# Flutter layouts land in Phase 5.
+[layout]
+name = "sidebar"
+framework = "flutter"
+display_label = "Sidebar App Shell"
+template_dir = "apps/flutter-frontend-template"
+base = ""
+supported = true
