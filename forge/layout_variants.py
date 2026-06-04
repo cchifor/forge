@@ -97,11 +97,7 @@ def get_layout_variant(framework: FrameworkKey, name: str) -> LayoutVariant | No
 def available_layouts(framework: FrameworkKey) -> tuple[str, ...]:
     """Return the sorted, *supported* layout slugs for ``framework``."""
     return tuple(
-        sorted(
-            name
-            for (fw, name), v in LAYOUT_VARIANTS.items()
-            if fw == framework and v.supported
-        )
+        sorted(name for (fw, name), v in LAYOUT_VARIANTS.items() if fw == framework and v.supported)
     )
 
 
