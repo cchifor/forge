@@ -28,7 +28,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -145,6 +145,72 @@ class ProvenanceCollector:
             template_version=template_version,
             emitted_at=_utc_now_iso(),
         )
+
+    def record_injection_target(
+        self,
+        path: Path,
+        *,
+        fragment_name: str | None = None,
+        fragment_version: str | None = None,
+    ) -> None:
+        """Record provenance for a file a fragment *injected a block into*.
+
+        Unlike :meth:`record`, this never *downgrades* an existing
+        ``base-template`` or ``user`` file to ``fragment`` ownership. A
+        sentinel-bounded injection adds a block to a file the fragment
+        does not own outright — the block itself is tracked separately
+        via :meth:`record_merge_block`, and the uninstaller scrubs that
+        block on disable. If the injection applier stamped the whole file
+        ``origin="fragment"``, disabling the fragment would make the
+        uninstaller *delete* a base-template entrypoint (e.g. the Node
+        ``services/<svc>/src/app.ts`` rendered by the service template),
+        which then breaks every later fragment that injects into the same
+        file. See the D3 update-ordering bug.
+
+        Semantics:
+          * Existing ``base-template`` / ``user`` record → keep its
+            origin + template/fragment attribution, refresh only the SHA
+            (and ``emitted_at``), because the file content changed.
+          * No record yet, or an existing ``fragment`` record → record
+            ``origin="fragment"`` (the fragment genuinely created the
+            file via injection into a brand-new path, or another fragment
+            already owns it — either way the file is fragment-owned and
+            safe to uninstall).
+        """
+        try:
+            rel = path.relative_to(self.project_root)
+        except ValueError:
+            return
+        key = rel.as_posix()
+        if not path.is_file():
+            return
+        existing = self.records.get(key)
+        if existing is not None:
+            # A record already exists for this path. Whether it is owned by
+            # the base template, the user, or an earlier fragment, the
+            # *current* fragment is only injecting a sentinel block (tracked
+            # separately via record_merge_block) — it must NOT seize file
+            # ownership. Keep the first/original owner and attribution and
+            # only refresh the integrity SHA, since the injected block
+            # changed the file's bytes. (Last-injector-wins ownership would
+            # orphan the file when that first owner is later uninstalled.)
+            self.records[key] = replace(
+                existing,
+                sha256=sha256_of(path),
+                emitted_at=_utc_now_iso(),
+            )
+            return
+        # No prior record. Injection NEVER creates a file — the injector
+        # requires the target to already exist (see ts_ast/sentinels
+        # "Injection target not found"). A fragment that genuinely emits a
+        # file does so via its ``files/`` tree, which the file applier
+        # records *before* injection runs. So "no prior record" means the
+        # target is an untracked / base-template / user file the manifest
+        # simply hasn't stamped yet — claiming ``origin="fragment"`` here
+        # would let a later disable DELETE it. Record nothing: the injected
+        # block is tracked by record_merge_block, and the uninstaller
+        # discovers the fragment via the merge-block union to scrub it.
+        return
 
     def drop_records_under(self, rel_prefix: str) -> None:
         """Remove records whose key is ``rel_prefix`` or lives under it.

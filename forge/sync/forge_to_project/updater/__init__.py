@@ -79,7 +79,13 @@ from forge.sync.manifest import (
     read_forge_toml,
     write_forge_toml,
 )
-from forge.sync.provenance import FileState, ProvenanceCollector, ProvenanceRecord, classify
+from forge.sync.provenance import (
+    FileState,
+    MergeBlockRecord,
+    ProvenanceCollector,
+    ProvenanceRecord,
+    classify,
+)
 from forge.sync.sentinel_audit import audit_targets, raise_if_corrupt
 
 logger = logging.getLogger(__name__)
@@ -281,6 +287,39 @@ def _update_locked(
             sha256=str(entry.get("sha256", "")),
             fragment_name=entry.get("fragment_name") or None,
             fragment_version=entry.get("fragment_version") or None,
+            # Carry full attribution forward so re-stamped records keep their
+            # template/fragment identity and original emit time (not just the
+            # SHA). Skipped fragment/template files would otherwise lose this.
+            template_name=entry.get("template_name") or None,
+            template_version=entry.get("template_version") or None,
+            emitted_at=entry.get("emitted_at") or None,
+        )
+
+    # Seed merge-block baselines for fragments that REMAIN in the plan, so a
+    # block the re-apply pass legitimately skips (idempotent / no-change /
+    # mode=skip) keeps its row in the re-stamped manifest. Without this, the
+    # final manifest only carries blocks freshly (re)applied this run; a
+    # skipped block's row is dropped, and a LATER --update that disables the
+    # fragment can no longer discover (disabled_fragments merge-block union)
+    # or scrub it — the block leaks. Disabled fragments' rows are NOT seeded:
+    # the uninstaller scrubs their blocks this run, so carrying them forward
+    # would leave stale rows. The applier overwrites any row it re-applies.
+    from forge.sync.merge import MergeBlockCollector  # noqa: PLC0415
+
+    _enabled_fragments = {rf.fragment.name for rf in plan.ordered}
+    for key, entry in data.merge_blocks.items():
+        parsed = MergeBlockCollector.parse_key(key)
+        if parsed is None:
+            continue
+        if parsed[1] not in _enabled_fragments:  # parsed == (rel, feature_key, marker)
+            continue
+        lr = entry.get("line_range")
+        collector.merge_blocks[key] = MergeBlockRecord(
+            sha256=str(entry.get("sha256", "")),
+            fragment_name=entry.get("fragment_name") or None,
+            fragment_version=entry.get("fragment_version") or None,
+            snippet_sha256=entry.get("snippet_sha256") or None,
+            line_range=tuple(lr) if lr else None,
         )
 
     # File-level merge baselines — POSIX rel-path → SHA. Excludes
@@ -404,6 +443,9 @@ def _update_locked(
                         sha256=str(entry.get("sha256", rec.sha256)),
                         fragment_name=rec.fragment_name,
                         fragment_version=rec.fragment_version,
+                        template_name=rec.template_name,
+                        template_version=rec.template_version,
+                        emitted_at=rec.emitted_at,
                     )
 
     # Epic F — provenance-driven uninstall. Any fragment present in the
@@ -415,7 +457,7 @@ def _update_locked(
     uninstall_outcomes: list[UninstallOutcome] = []
     if not _no_uninstall_flag(manifest):
         current_plan_fragments = {rf.fragment.name for rf in plan.ordered}
-        disabled = disabled_fragments(data.provenance, current_plan_fragments)
+        disabled = disabled_fragments(data.provenance, current_plan_fragments, data.merge_blocks)
         if disabled and not quiet:
             names = ", ".join(sorted(disabled))
             print(f"  [update] uninstalling {len(disabled)} disabled fragment(s): {names}")

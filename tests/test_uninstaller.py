@@ -57,6 +57,45 @@ class TestDisabledFragments:
         }
         assert disabled_fragments(prev, set()) == set()
 
+    def test_discovers_inject_only_fragment_via_merge_blocks(self) -> None:
+        # An inject-only fragment owns no files: its injection target keeps
+        # ``origin="base-template"``, and it appears only in [forge.merge_blocks].
+        # Disabling it must still be discovered so its block gets scrubbed.
+        prev = {
+            "services/api/src/app.ts": {"origin": "base-template", "sha256": "abc"},
+        }
+        merge_blocks = {
+            "services/api/src/app.ts::rate_limit:MIDDLEWARE_IMPORTS": {
+                "fragment_name": "rate_limit",
+                "sha256": "def",
+            },
+        }
+        assert disabled_fragments(prev, set(), merge_blocks) == {"rate_limit"}
+
+    def test_merge_block_fragment_still_enabled_not_returned(self) -> None:
+        merge_blocks = {
+            "services/api/src/app.ts::rate_limit:MIDDLEWARE_IMPORTS": {
+                "fragment_name": "rate_limit",
+            },
+        }
+        assert disabled_fragments({}, {"rate_limit"}, merge_blocks) == set()
+
+    def test_unions_provenance_and_merge_block_owners(self) -> None:
+        prev = {
+            "src/owned.py": {"origin": "fragment", "fragment_name": "observability"},
+            "services/api/src/app.ts": {"origin": "base-template", "sha256": "abc"},
+        }
+        merge_blocks = {
+            "services/api/src/app.ts::rate_limit:MIDDLEWARE_IMPORTS": {
+                "fragment_name": "rate_limit",
+            },
+        }
+        # Both disabled → both discovered (one via provenance, one via blocks).
+        assert disabled_fragments(prev, set(), merge_blocks) == {
+            "observability",
+            "rate_limit",
+        }
+
 
 # ---------------------------------------------------------------------------
 # uninstall_fragment — happy paths
@@ -163,6 +202,45 @@ class TestUninstallFragmentFiles:
         uninstall_fragment(tmp_path, "my_frag", prov, coll)
 
         assert "src/frag.py" not in coll.records
+
+    def test_block_scrub_refreshes_target_sha_preserving_owner(self, tmp_path: Path) -> None:
+        # An inject-only fragment (rate_limit) injected a block into a
+        # base-template file. Disabling it scrubs the block; the target must
+        # (a) survive, (b) keep base-template ownership, and (c) have its
+        # recorded SHA refreshed to the post-scrub bytes — else the NEXT
+        # --update sees a phantom "user-modified" file (recorded SHA != disk).
+        from forge.sync.provenance import ProvenanceRecord
+
+        f = tmp_path / "src" / "app.ts"
+        _write(
+            f,
+            "import x\n"
+            "// FORGE:BEGIN rate_limit:MIDDLEWARE_IMPORTS\n"
+            "import rl\n"
+            "// FORGE:END rate_limit:MIDDLEWARE_IMPORTS\n"
+            "start()\n",
+        )
+        stale_sha = sha256_of(f)  # SHA *with* the block present
+        prov = {"src/app.ts": {"origin": "base-template", "sha256": stale_sha}}
+        coll = _collector(tmp_path)
+        coll.records["src/app.ts"] = ProvenanceRecord(origin="base-template", sha256=stale_sha)
+
+        out = uninstall_fragment(
+            tmp_path,
+            "rate_limit",
+            prov,
+            coll,
+            removed_blocks_in_files=[
+                ("src/app.ts", "rate_limit", "FORGE:MIDDLEWARE_IMPORTS")
+            ],
+        )
+
+        assert ("src/app.ts", "rate_limit:MIDDLEWARE_IMPORTS") in out.removed_blocks
+        assert f.exists()  # base-template file NOT deleted
+        rec = coll.records["src/app.ts"]
+        assert rec.origin == "base-template"  # ownership preserved
+        assert rec.sha256 == sha256_of(f)  # refreshed to post-scrub bytes
+        assert rec.sha256 != stale_sha
 
 
 # ---------------------------------------------------------------------------

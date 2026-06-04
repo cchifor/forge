@@ -109,8 +109,8 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api-node/prisma/schema.prisma": {
-      "size": 2176,
-      "sha256": "276af302763f73f5"
+      "size": 2518,
+      "sha256": "ec554aa25c6a8ecf"
     },
     "services/api-node/src/app/adapters/error-default.ts": {
       "size": 1764,
