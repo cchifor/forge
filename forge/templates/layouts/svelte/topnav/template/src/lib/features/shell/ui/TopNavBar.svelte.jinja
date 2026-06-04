@@ -1,0 +1,236 @@
+{% raw %}<script lang="ts">
+	import { page } from '$app/stores';
+	import {
+		Home,
+		FolderOpen,
+		Settings,
+		LogOut,
+		CreditCard,
+		UserCircle,
+		Menu,
+		Sun,
+		Moon,
+		Monitor{% endraw %}{% if include_chat %},
+		Sparkles{% endif %}{% raw %}
+	} from 'lucide-svelte';
+	import { Popover } from 'bits-ui';
+	import { getAuth } from '$lib/core/auth/auth.svelte';
+	import { getSettingsStore } from '$lib/features/settings';
+	import { getUiStore } from '$lib/features/shell';
+
+	let { compact = false }: { compact?: boolean } = $props();
+
+	const auth = getAuth();
+	const ui = getUiStore();
+	const settings = getSettingsStore();
+
+	let themeMenuOpen = $state(false);
+
+	const navItems = [
+		{ title: 'Home', url: '/', icon: Home },
+		// --- feature nav items ---
+	];
+
+	function isActive(url: string) {
+		if (url === '/') return $page.url.pathname === '/';
+		return $page.url.pathname.startsWith(url);
+	}
+
+	const userInitials = $derived(
+		auth.user
+			? ((auth.user.firstName?.[0] ?? '') + (auth.user.lastName?.[0] ?? '')).toUpperCase() ||
+				auth.user.username[0]?.toUpperCase() ||
+				'?'
+			: '?'
+	);
+
+	const ThemeIcon = $derived(
+		settings.theme === 'dark' ? Moon : settings.theme === 'light' ? Sun : Monitor
+	);
+</script>
+
+<header
+	class="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4"
+>
+	<!-- Hamburger (collapsed tiers only) -->
+	{#if compact}
+		<button
+			class="btn-press flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-accent hover:text-accent-foreground"
+			type="button"
+			title="Open menu"
+			aria-label="Open navigation menu"
+			aria-controls="topnav-mobile-drawer"
+			aria-expanded={ui.mobileMenuOpen}
+			onclick={() => ui.toggleMobileMenu()}
+		>
+			<Menu class="h-5 w-5 text-muted-foreground" />
+		</button>
+	{/if}
+
+	<!-- Logo -->
+	<a
+		href="/"
+		aria-label="{% endraw %}{{ app_title }}{% raw %} home"
+		class="btn-press flex shrink-0 items-center gap-2 rounded-lg px-1"
+	>
+		<span
+			class="flex h-8 w-8 items-center justify-center rounded-lg"
+			style="background: linear-gradient(135deg, hsl(var(--ai-gradient-from)), hsl(var(--ai-gradient-to)))"
+		>
+			<span class="text-sm font-bold text-white">S</span>
+		</span>
+		{#if !compact}
+			<span class="truncate text-sm font-semibold text-foreground">{% endraw %}{{ app_title }}{% raw %}</span>
+		{/if}
+	</a>
+
+	<!-- Inline primary nav (expanded tier only) -->
+	{#if !compact}
+		<nav class="ml-4 flex items-center gap-1">
+			{#each navItems as item}
+				<a
+					href={item.url}
+					aria-current={isActive(item.url) ? 'page' : undefined}
+					class="btn-press flex h-9 items-center gap-2 rounded-lg px-3 text-sm transition-colors
+						{isActive(item.url)
+							? 'bg-primary/10 font-semibold text-primary'
+							: 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+				>
+					<item.icon class="h-4 w-4" />
+					<span>{item.title}</span>
+				</a>
+			{/each}
+		</nav>
+	{/if}
+
+	<!-- Right cluster -->
+	<div class="ml-auto flex items-center gap-2">{% endraw %}{% if include_chat %}{% raw %}
+		<!-- AI Chat Button -->
+		<button
+			class="btn-press inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-ai-accent-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:shadow-ai-accent/20"
+			style="background: linear-gradient(to right, hsl(var(--ai-gradient-from)), hsl(var(--ai-gradient-to)))"
+			onclick={() => ui.toggleChat()}
+			aria-label="Open AI Chat"
+			aria-expanded={ui.chatOpen}
+			aria-controls="ai-chat-panel"
+		>
+			<Sparkles class="h-4 w-4 ai-sparkle" />
+			<span class="hidden sm:inline">Ask AI</span>
+		</button>{% endraw %}{% endif %}{% raw %}
+
+		<!-- Theme Switcher -->
+		<div class="relative">
+			<button
+				class="btn-press inline-flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+				title="Toggle theme"
+				onclick={() => (themeMenuOpen = !themeMenuOpen)}
+			>
+				<ThemeIcon class="h-4 w-4" />
+				<span class="sr-only">Toggle theme</span>
+			</button>
+
+			{#if themeMenuOpen}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="fixed inset-0 z-40"
+					onclick={() => (themeMenuOpen = false)}
+					onkeydown={(e) => e.key === 'Escape' && (themeMenuOpen = false)}
+				></div>
+				<div
+					class="absolute right-0 top-full z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+				>
+					<button
+						class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+						onclick={() => {
+							settings.setTheme('light');
+							themeMenuOpen = false;
+						}}
+					>
+						<Sun class="h-4 w-4" />
+						Light
+					</button>
+					<button
+						class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+						onclick={() => {
+							settings.setTheme('dark');
+							themeMenuOpen = false;
+						}}
+					>
+						<Moon class="h-4 w-4" />
+						Dark
+					</button>
+					<button
+						class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+						onclick={() => {
+							settings.setTheme('system');
+							themeMenuOpen = false;
+						}}
+					>
+						<Monitor class="h-4 w-4" />
+						System
+					</button>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Account menu -->
+		<Popover.Root>
+			<Popover.Trigger
+				class="btn-press flex items-center gap-2 rounded-lg p-1 transition-colors hover:bg-accent hover:text-accent-foreground"
+			>
+				<span
+					class="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium"
+				>
+					{userInitials}
+				</span>
+				{#if !compact}
+					<span class="hidden max-w-[10rem] truncate text-sm font-medium text-foreground md:inline">
+						{auth.user?.firstName}
+						{auth.user?.lastName}
+					</span>
+				{/if}
+			</Popover.Trigger>
+			<Popover.Content
+				side="bottom"
+				align="end"
+				sideOffset={8}
+				class="z-50 w-56 rounded-lg border bg-popover p-2 text-popover-foreground shadow-lg"
+			>
+				<div class="px-2 py-1.5 text-sm">
+					<p class="font-medium">{auth.user?.firstName} {auth.user?.lastName}</p>
+					<p class="text-xs text-muted-foreground">{auth.user?.email}</p>
+				</div>
+				<div class="my-1 h-px bg-border"></div>
+				<a
+					href="/settings"
+					class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+				>
+					<Settings class="h-4 w-4" />
+					Account Settings
+				</a>
+				<button
+					class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+					disabled
+				>
+					<CreditCard class="h-4 w-4" />
+					Billing
+				</button>
+				<a
+					href="/profile"
+					class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+				>
+					<UserCircle class="h-4 w-4" />
+					Preferences
+				</a>
+				<div class="my-1 h-px bg-border"></div>
+				<button
+					class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-accent"
+					onclick={() => auth.logout()}
+				>
+					<LogOut class="h-4 w-4" />
+					Log Out
+				</button>
+			</Popover.Content>
+		</Popover.Root>
+	</div>
+</header>{% endraw %}

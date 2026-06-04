@@ -1,0 +1,89 @@
+{% raw %}<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { getAuth } from '$lib/core';
+	import { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
+	import BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
+{% endraw %}{% if include_chat %}{% raw %}	import { AiChat } from '$lib/features/chat';
+	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';
+	import VerticalSplitHandle from '$lib/features/shell/ui/VerticalSplitHandle.svelte';
+{% endraw %}{% endif %}{% raw %}
+	let { children } = $props();
+	const auth = getAuth();
+	const ui = getUiStore();
+
+	$effect(() => {
+		if (!auth.isLoading && !auth.isAuthenticated) {
+			goto('/login');
+		}
+	});
+
+	function handleKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+			e.preventDefault();
+			ui.toggleChat();
+		}
+	}
+{% endraw %}{% if include_chat %}{% raw %}
+	// Splitter drag logic for expanded inline chat
+	function handleDragMove(clientX: number) {
+		const chatPx = window.innerWidth - clientX;
+		ui.setChatWidth(chatPx);
+	}
+{% endraw %}{% endif %}{% raw %}</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+{#if auth.isAuthenticated}
+	{#if ui.isMobile}
+		<!-- COMPACT: Header + Content + BottomNav -->
+		<div class="flex min-h-svh flex-col">
+			<AppHeader />
+			<main class="flex-1 overflow-y-auto p-4 pb-20">{@render children()}</main>
+			<BottomNav />
+		</div>
+{% endraw %}{% if include_chat %}{% raw %}		{#if ui.chatOpen}
+			<ChatBottomSheet bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<AiChat mode="sheet" />
+			</ChatBottomSheet>
+		{/if}
+{% endraw %}{% endif %}{% raw %}	{:else if ui.isMedium}
+		<!-- MEDIUM: Collapsed sidebar + Content -->
+		<div class="flex min-h-svh">
+			<AppSidebar forceCollapsed />
+			<div class="flex flex-1 flex-col min-w-0">
+				<AppHeader />
+				<main class="flex-1 overflow-y-auto p-4">{@render children()}</main>
+			</div>
+		</div>
+{% endraw %}{% if include_chat %}{% raw %}		{#if ui.chatOpen}
+			<ChatDrawer bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<AiChat mode="drawer" />
+			</ChatDrawer>
+		{/if}
+{% endraw %}{% endif %}{% raw %}	{:else}
+		<!-- EXPANDED: Full sidebar + Content + Inline chat -->
+		<div
+			class="group/sidebar-wrapper flex min-h-svh"
+			data-sidebar-state={ui.sidebarCollapsed ? 'collapsed' : 'expanded'}
+		>
+			<AppSidebar />
+			<div class="flex flex-1 flex-col min-w-0">
+				<AppHeader />
+				<div class="flex flex-1 min-h-0">
+					<main class="flex-1 overflow-y-auto p-4">{@render children()}</main>
+{% endraw %}{% if include_chat %}{% raw %}					{#if ui.chatOpen}
+						<VerticalSplitHandle ondragmove={handleDragMove} />
+						<div
+							style="width: {ui.chatWidth}px"
+							class="flex-shrink-0 border-l overflow-hidden"
+						>
+							<AiChat mode="inline" />
+						</div>
+					{/if}
+{% endraw %}{% endif %}{% raw %}				</div>
+			</div>
+		</div>
+	{/if}
+{/if}
+{% endraw %}

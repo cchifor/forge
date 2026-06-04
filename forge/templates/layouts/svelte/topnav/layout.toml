@@ -1,0 +1,15 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `topnav` is a thin Copier overlay on top of the shared Svelte base template.
+# It ships only its (app)/+layout.svelte shell plus the top-nav region
+# components (TopNavBar, TopNavDrawer, AppFooter); everything else (routes
+# infra, auth, API client, AppHeader, ChatDrawer, ChatBottomSheet,
+# VerticalSplitHandle, AiChat, ui store, breakpoints) comes from the base,
+# which forge renders first (two-stage render).
+[layout]
+name = "topnav"
+framework = "svelte"
+display_label = "Top-Nav Content Shell"
+template_dir = "layouts/svelte/topnav"
+base = "apps/svelte-frontend-template"
+supported = true
