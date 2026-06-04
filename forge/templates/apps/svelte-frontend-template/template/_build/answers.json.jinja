@@ -2,6 +2,7 @@
   "project_name": "{{ project_name }}",
   "project_slug": "{{ project_slug }}",
   "app_title": "{{ app_title | default(project_name) }}",
+  "frontend_layout": "{{ frontend_layout | default('sidebar') }}",
   "description": "{{ description | default('A Svelte 5 SPA application') }}",
   "features": "{{ features }}",
   "version": "{{ version | default('0.1.0') }}",

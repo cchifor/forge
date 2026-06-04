@@ -1,0 +1,161 @@
+{% raw %}<script lang="ts">
+	// +layout.svelte — the `docs` (Documentation 3-Column) app shell.
+	//
+	// Full-width AppHeader on top, then a 3-column reading row:
+	//   DocTreeNav (left tree) | article (center, prose max-w-3xl) | TocPanel (right)
+	//
+	//   - expanded (>=1024): all three columns; left tree collapsible via a local
+	//     `docTreeCollapsed` $state (no store change — purely a layout concern).
+	//   - medium (640-1023): tree + content; TocPanel hidden.
+	//   - compact (<640): tree becomes a left slide-in drawer (shared ui store
+	//     `mobileMenuOpen`, toggled from the docs toolbar); content full-width;
+	//     TocPanel hidden.
+	//
+	// Chat is an OVERLAY so the 3-col reading layout is preserved underneath:
+	// a right slide-in drawer on desktop/tablet, a bottom sheet on mobile.
+	import { goto } from '$app/navigation';
+	import { getAuth } from '$lib/core';
+	import { getUiStore } from '$lib/features/shell';
+	import { PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-svelte';
+	import AppHeader from '$lib/features/shell/ui/AppHeader.svelte';
+	import DocTreeNav from '$lib/features/shell/ui/DocTreeNav.svelte';
+	import TocPanel from '$lib/features/shell/ui/TocPanel.svelte';{% endraw %}{% if include_chat %}
+	{% raw %}import { AiChat } from '$lib/features/chat';
+	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';{% endraw %}{% endif %}{% raw %}
+
+	let { children } = $props();
+	const auth = getAuth();
+	const ui = getUiStore();
+
+	$effect(() => {
+		if (!auth.isLoading && !auth.isAuthenticated) {
+			goto('/login');
+		}
+	});
+
+	// Component-local desktop tree-collapse — purely a layout concern, kept out
+	// of the shared ui store (no persistence in v1).
+	let docTreeCollapsed = $state(false);
+	function toggleDocTree() {
+		docTreeCollapsed = !docTreeCollapsed;
+	}{% endraw %}{% if include_chat %}
+
+	{% raw %}function handleKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+			e.preventDefault();
+			ui.toggleChat();
+		}
+	}{% endraw %}{% endif %}{% raw %}
+</script>{% endraw %}{% if include_chat %}
+
+{% raw %}<svelte:window onkeydown={handleKeydown} />{% endraw %}{% endif %}{% raw %}
+
+{#if auth.isAuthenticated}
+	{#if ui.isMobile}
+		<!-- COMPACT (<640): docs toolbar w/ hamburger + full-width content; tree as drawer -->
+		<div class="flex h-svh flex-col overflow-hidden">
+			<AppHeader />
+
+			<!-- Docs toolbar: hamburger opens the DocTreeNav drawer (mobileMenuOpen) -->
+			<div class="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+				<button
+					type="button"
+					class="btn-press flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
+					title="Open documentation menu"
+					aria-label="Open documentation menu"
+					aria-expanded={ui.mobileMenuOpen}
+					aria-controls="doc-tree-drawer"
+					onclick={() => ui.toggleMobileMenu()}
+				>
+					<Menu class="h-5 w-5 text-muted-foreground" />
+				</button>
+				<span class="text-sm font-medium text-foreground">Docs</span>
+			</div>
+
+			<main class="min-w-0 flex-1 overflow-y-auto">
+				<article
+					data-docs-content
+					class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-4 py-6 dark:prose-invert"
+				>
+					{@render children()}
+				</article>
+			</main>
+		</div>
+
+		<!-- Left slide-in tree drawer (driven by mobileMenuOpen) -->
+		<DocTreeNav variant="drawer" />{% endraw %}{% if include_chat %}
+		{% raw %}{#if ui.chatOpen}
+			<ChatBottomSheet bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<AiChat mode="sheet" />
+			</ChatBottomSheet>
+		{/if}{% endraw %}{% endif %}{% raw %}
+	{:else if ui.isMedium}
+		<!-- MEDIUM (640-1023): tree + content; TOC hidden -->
+		<div class="flex h-svh flex-col overflow-hidden">
+			<AppHeader />
+			<div class="flex min-h-0 flex-1 overflow-hidden">
+				<DocTreeNav variant="inline" />
+				<main class="min-w-0 flex-1 overflow-y-auto">
+					<article
+						data-docs-content
+						class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-6 py-8 dark:prose-invert"
+					>
+						{@render children()}
+					</article>
+				</main>
+			</div>
+		</div>{% endraw %}{% if include_chat %}
+		{% raw %}{#if ui.chatOpen}
+			<ChatDrawer bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<AiChat mode="drawer" />
+			</ChatDrawer>
+		{/if}{% endraw %}{% endif %}{% raw %}
+	{:else}
+		<!-- EXPANDED (>=1024): DocTreeNav (collapsible) | article | TocPanel -->
+		<div class="flex h-svh flex-col overflow-hidden">
+			<AppHeader />
+			<div class="flex min-h-0 flex-1 overflow-hidden">
+				<DocTreeNav variant="inline" collapsed={docTreeCollapsed} />
+
+				<!-- Center content column: readable max width, must shrink (min-w-0). -->
+				<main class="flex min-w-0 flex-1 flex-col overflow-hidden">
+					<div class="flex h-10 shrink-0 items-center border-b px-3">
+						<button
+							type="button"
+							class="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+							title={docTreeCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+							aria-label={docTreeCollapsed
+								? 'Expand documentation navigation'
+								: 'Collapse documentation navigation'}
+							aria-expanded={!docTreeCollapsed}
+							aria-controls="doc-tree-nav"
+							onclick={toggleDocTree}
+						>
+							{#if docTreeCollapsed}
+								<PanelLeftOpen class="h-4 w-4" />
+							{:else}
+								<PanelLeftClose class="h-4 w-4" />
+							{/if}
+						</button>
+					</div>
+					<div class="min-w-0 flex-1 overflow-y-auto">
+						<article
+							data-docs-content
+							class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-6 py-8 dark:prose-invert"
+						>
+							{@render children()}
+						</article>
+					</div>
+				</main>
+
+				<TocPanel contentSelector="[data-docs-content]" />
+			</div>
+		</div>{% endraw %}{% if include_chat %}
+		{% raw %}{#if ui.chatOpen}
+			<ChatDrawer bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<AiChat mode="drawer" />
+			</ChatDrawer>
+		{/if}{% endraw %}{% endif %}{% raw %}
+	{/if}
+{/if}{% endraw %}

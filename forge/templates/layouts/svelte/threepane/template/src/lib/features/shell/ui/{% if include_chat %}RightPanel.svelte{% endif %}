@@ -1,0 +1,115 @@
+<script lang="ts">
+	import { MessageSquare, LayoutPanelLeft, PanelRightClose } from 'lucide-svelte';
+	import { AiChat, CanvasPane, getChatStore } from '$lib/features/chat';
+	import type { ChatMode } from '$lib/features/shell';
+
+	let {
+		mode = 'inline',
+		ontoggle
+	}: { mode?: ChatMode; ontoggle?: () => void } = $props();
+
+	const chat = getChatStore();
+
+	// The right panel can show either the conversation (chat) or the agent's
+	// artifacts (canvas). When the agent produces a canvas activity we auto-focus
+	// the Artifacts tab; the user can flip back to Chat at any time.
+	type RightTab = 'chat' | 'artifacts';
+	let activeTab = $state<RightTab>('chat');
+
+	const hasArtifacts = $derived(chat.canvasActivity !== null);
+
+	// Auto-focus artifacts when they arrive; fall back to chat when they clear.
+	let prevHasArtifacts = false;
+	$effect(() => {
+		const has = hasArtifacts;
+		if (has && !prevHasArtifacts) {
+			activeTab = 'artifacts';
+		} else if (!has && activeTab === 'artifacts') {
+			activeTab = 'chat';
+		}
+		prevHasArtifacts = has;
+	});
+
+	const tabs: { id: RightTab; label: string; icon: typeof MessageSquare }[] = [
+		{ id: 'chat', label: 'Chat', icon: MessageSquare },
+		{ id: 'artifacts', label: 'Artifacts', icon: LayoutPanelLeft }
+	];
+</script>
+
+<div class="flex h-full flex-col overflow-hidden border-l bg-background">
+	<!-- Panel chrome: Chat | Artifacts tab strip + collapse toggle. The tab strip
+	     is an ARIA tablist so screen readers announce tab semantics and the
+	     active selection; each tab points at its panel via aria-controls. -->
+	<div class="flex h-12 shrink-0 items-center gap-1 border-b px-2">
+		<nav class="flex flex-1 items-center gap-1" role="tablist" aria-label="Right panel views">
+			{#each tabs as tab (tab.id)}
+				<button
+					id="right-panel-tab-{tab.id}"
+					role="tab"
+					aria-selected={activeTab === tab.id}
+					aria-controls="right-panel-{tab.id}"
+					tabindex={activeTab === tab.id ? 0 : -1}
+					class="btn-press flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors
+						{activeTab === tab.id
+						? 'bg-primary/10 font-medium text-primary'
+						: 'text-muted-foreground hover:bg-muted'}"
+					disabled={tab.id === 'artifacts' && !hasArtifacts}
+					title={tab.id === 'artifacts' && !hasArtifacts
+						? 'Artifacts appear when the agent produces them'
+						: tab.label}
+					onclick={() => (activeTab = tab.id)}
+				>
+					<tab.icon class="h-4 w-4" />
+					<span>{tab.label}</span>
+				</button>
+			{/each}
+		</nav>
+		<!-- The panel is mounted only while it is open, so it is always in the
+		     "expanded" state here; the toggle collapses it back to hidden. -->
+		<button
+			class="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+			aria-label="Hide panel"
+			aria-expanded="true"
+			title="Hide panel (Esc)"
+			onclick={() => ontoggle?.()}
+		>
+			<PanelRightClose class="h-4 w-4" />
+		</button>
+	</div>
+
+	<!-- Body: conversation OR artifacts. AiChat stays mounted (hidden via class)
+	     so its scroll position and in-flight stream survive a tab switch; the
+	     artifacts pane mounts lazily since it has no transient state. -->
+	<div class="relative min-h-0 flex-1 overflow-hidden">
+		<div
+			id="right-panel-chat"
+			role="tabpanel"
+			aria-labelledby="right-panel-tab-chat"
+			aria-hidden={activeTab !== 'chat'}
+			class="absolute inset-0 {activeTab === 'chat' ? '' : 'hidden'}"
+		>
+			<AiChat {mode} />
+		</div>
+		{#if activeTab === 'artifacts'}
+			<div
+				id="right-panel-artifacts"
+				role="tabpanel"
+				aria-labelledby="right-panel-tab-artifacts"
+				class="absolute inset-0"
+			>
+				{#if hasArtifacts}
+					<CanvasPane />
+				{:else}
+					<div class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+						<div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+							<LayoutPanelLeft class="h-8 w-8 text-muted-foreground" />
+						</div>
+						<p class="max-w-xs text-sm text-muted-foreground">
+							Artifacts from the agent appear here.
+						</p>
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
+</div>
