@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show
+        SliverConstraints,
+        SliverGridDelegate,
+        SliverGridGeometry,
+        SliverGridLayout;
 
 import '../../theme/design_tokens.dart';
 
