@@ -52,9 +52,18 @@ class FragmentInjectionApplier:
                 # fragment_version is None today — Fragment has no version
                 # field. TODO: thread fragment_version through FragmentPlan
                 # once the fragment registry adopts semver per fragment.
-                ctx.provenance.record(
+                #
+                # Use ``record_injection_target`` (not ``record``) so we
+                # never downgrade a ``base-template``/``user`` file to
+                # ``fragment`` ownership just because a fragment injected
+                # a sentinel block into it. The block is tracked
+                # separately in ``merge_blocks`` and scrubbed on uninstall;
+                # stamping the whole file ``origin="fragment"`` would make
+                # the uninstaller DELETE a base-template entrypoint (e.g.
+                # Node ``src/app.ts``) when the fragment is disabled,
+                # breaking every later fragment that injects into it (D3).
+                ctx.provenance.record_injection_target(
                     target,
-                    origin="fragment",
                     fragment_name=plan.feature_key,
                     fragment_version=None,
                 )
