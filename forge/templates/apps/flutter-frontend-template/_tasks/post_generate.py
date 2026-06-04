@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--version", default="0.1.0")
     parser.add_argument("--api-base-url", default="http://localhost:5000/api/v1")
     parser.add_argument("--default-color-scheme", default="blue")
+    parser.add_argument("--frontend-layout", default="sidebar")
     # backend_features is a JSON object — passing it as a CLI arg breaks on
     # Windows cmd.exe because single quotes aren't honored. Copier renders
     # ``.forge_answers.json`` into the project directory instead; we read it
@@ -53,6 +54,9 @@ ORG_NAME = _args.org_name
 FEATURES = _args.features
 INCLUDE_AUTH = _args.include_auth.lower() == "true"
 INCLUDE_CHAT = _args.include_chat.lower() == "true"
+# UI app-shell layout. Only ``sidebar`` uses the static shell chat-strip below;
+# other layouts ship their own chat-conditional app_layout_shell.dart.
+LAYOUT = _args.frontend_layout
 INCLUDE_OPENAPI = _args.include_openapi.lower() == "true"
 DESCRIPTION = _args.description
 VERSION = _args.version
@@ -645,8 +649,11 @@ def remove_optional_files():
         # drop them (and their pubspec path: dep below) when chat is off.
         remove_path(PROJECT_DIR / "packages" / "forge_canvas")
         remove_path(PROJECT_DIR / "packages" / "forge_canvas_core")
-        _patch_app_layout_shell_no_chat(lib_src / "shared" / "layout" / "app_layout_shell.dart")
-        _patch_working_area_header_no_chat(lib_src / "shared" / "layout" / "working_area_header.dart")
+        # Sidebar-specific string surgery on the shell; other layouts ship their
+        # own chat-conditional app_layout_shell.dart and need no patching here.
+        if LAYOUT == "sidebar":
+            _patch_app_layout_shell_no_chat(lib_src / "shared" / "layout" / "app_layout_shell.dart")
+            _patch_working_area_header_no_chat(lib_src / "shared" / "layout" / "working_area_header.dart")
         removed.append("chat")
     if not INCLUDE_OPENAPI:
         remove_path(PROJECT_DIR / "lib" / "src" / "api")

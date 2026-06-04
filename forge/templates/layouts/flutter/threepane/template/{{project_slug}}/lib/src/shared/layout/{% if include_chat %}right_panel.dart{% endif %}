@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+
+import '../../features/chat/presentation/chat_panel.dart';
+import '../../theme/design_tokens.dart';
+
+/// Persistent right Agent Panel for the three-pane shell.
+///
+/// This is the chat surface for the `threepane` layout. It wraps the shared
+/// [ChatPanel] in a thin panel chrome (a title strip + a collapse/close
+/// affordance) so the right column reads as a docked agent pane rather than a
+/// raw chat widget. The whole file is filename-gated behind `include_chat`;
+/// when chat is off it is never rendered and the shell stays two-pane.
+class RightPanel extends StatelessWidget {
+  const RightPanel({
+    this.onClose,
+    this.isFullScreen = false,
+    super.key,
+  });
+
+  /// Invoked when the user dismisses the panel. At the expanded breakpoint this
+  /// clears the inline pane; inside a drawer it pops the route.
+  final VoidCallback? onClose;
+
+  /// True when hosted inside a drawer/bottom sheet (drops the left border the
+  /// inline pane uses to separate itself from the content column).
+  final bool isFullScreen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final border = isFullScreen
+        ? null
+        : Border(
+            left: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: border,
+      ),
+      child: Column(
+        children: [
+          _PanelHeader(onClose: onClose),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+          Expanded(child: ChatPanel(isFullScreen: isFullScreen)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({this.onClose});
+
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SizedBox(
+      height: DesignTokens.workingAreaHeaderHeight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: DesignTokens.p12),
+        child: Row(
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: DesignTokens.iconMD,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: DesignTokens.p8),
+            Expanded(
+              child: Text(
+                'Agent',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            if (onClose != null)
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: onClose,
+                tooltip: 'Hide agent panel',
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
