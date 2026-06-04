@@ -99,6 +99,27 @@ Manage them from the CLI — `forge --component-cmd {list,scaffold}` (with `--co
 
 ---
 
+## Frontend layouts
+
+The generated frontend's **app-shell layout** is selectable with `--layout` (or `frontend.layout` in YAML). Each layout is a Layer-3 composition of the reusable Layer-2 regions above, fully responsive across desktop/tablet/mobile. Vue 3 ships all six in v1 (Svelte/Flutter ship `sidebar` today):
+
+| Slug | Layout | Best for |
+|------|--------|----------|
+| `sidebar` *(default)* | left nav + top bar + main | enterprise SaaS / admin |
+| `topnav` | top menu + centered content + footer | marketing / content |
+| `tabbar` | bottom tab bar → rail → sidebar | touch-first / consumer apps |
+| `threepane` | left nav + center + right agent/inspector panel | AI & collaborative tools |
+| `bento` | header + asymmetric tile grid | dashboards / SaaS homepages |
+| `docs` | doc-tree + content + TOC | developer docs |
+
+```bash
+forge --project-name shop --backend-language python --features products --frontend vue --layout topnav --yes
+```
+
+Layouts are template variants composed over a shared base via a two-stage render; `sidebar` is the byte-identical baseline. Adding a layout is a drop-in (a `layout.toml` manifest + a thin overlay template) — see [`docs/frontend-layouts.md`](docs/frontend-layouts.md).
+
+---
+
 ## Options
 
 Everything configurable is an `Option` with a dotted path, a type (`bool` / `enum` / `int` / `str` / `list`), and a default. Set one at generation time with `--set PATH=VALUE` (repeatable) or in the `options:` block of your YAML config. See [Usage Examples](#usage-examples).
