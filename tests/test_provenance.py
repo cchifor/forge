@@ -179,6 +179,87 @@ class TestProvenanceCollector:
         assert c.records == {}
 
 
+class TestRecordInjectionTarget:
+    """D3 regression — a fragment injecting a block into a base-template
+    file must NOT take ownership of the whole file. Otherwise disabling
+    the fragment lets the uninstaller delete a base-template entrypoint
+    (e.g. Node ``src/app.ts``), breaking every later fragment that
+    injects into it during ``forge --update``.
+    """
+
+    def test_preserves_base_template_origin(self, tmp_path: Path) -> None:
+        app = tmp_path / "src" / "app.ts"
+        app.parent.mkdir(parents=True)
+        app.write_text("// base render\n")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(app, origin="base-template", template_name="node-service")
+        base_sha = c.records["src/app.ts"].sha256
+
+        # Fragment injects a block, changing the file's bytes.
+        app.write_text("// base render\n// FORGE block\n")
+        c.record_injection_target(app, fragment_name="rate_limit")
+
+        rec = c.records["src/app.ts"]
+        # Origin stays base-template; the file is NOT downgraded to fragment.
+        assert rec.origin == "base-template"
+        assert rec.fragment_name is None
+        assert rec.template_name == "node-service"
+        # SHA refreshed to the post-injection content so classify() reports
+        # 'unchanged' rather than 'user-modified' on the next update.
+        assert rec.sha256 != base_sha
+        assert rec.sha256 == sha256_of(app)
+
+    def test_preserves_user_origin(self, tmp_path: Path) -> None:
+        f = tmp_path / "main.py"
+        f.write_text("user code\n")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.records["main.py"] = ProvenanceRecord(origin="user", sha256="old")
+
+        f.write_text("user code\n# block\n")
+        c.record_injection_target(f, fragment_name="frag")
+
+        assert c.records["main.py"].origin == "user"
+
+    def test_no_record_when_no_prior_record(self, tmp_path: Path) -> None:
+        # Injection NEVER creates a file (the injector requires the target to
+        # already exist). So "no prior record" means an untracked / not-yet-
+        # stamped base/user file, NOT a fragment-created one. The applier must
+        # NOT claim ``origin="fragment"`` here — doing so would let a later
+        # disable DELETE an untracked file. The injected block is tracked
+        # separately via record_merge_block, so recording nothing is correct.
+        f = tmp_path / "new.ts"
+        f.write_text("// FORGE block\n")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record_injection_target(f, fragment_name="frag", fragment_version="1.0.0")
+
+        assert "new.ts" not in c.records
+
+    def test_keeps_first_fragment_owner_when_already_fragment(self, tmp_path: Path) -> None:
+        # A second fragment injecting into a file the FIRST fragment created
+        # leaves it owned by the first fragment (still safe to uninstall), and
+        # does NOT seize ownership — the second fragment's contribution is
+        # tracked by its own merge-block record. Last-injector-wins ownership
+        # would orphan the file when frag_a is later uninstalled.
+        f = tmp_path / "owned.ts"
+        f.write_text("// block A\n")
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record(f, origin="fragment", fragment_name="frag_a")
+        sha_before = c.records["owned.ts"].sha256
+
+        f.write_text("// block A\n// block B\n")
+        c.record_injection_target(f, fragment_name="frag_b")
+
+        rec = c.records["owned.ts"]
+        assert rec.origin == "fragment"
+        assert rec.fragment_name == "frag_a"  # first owner preserved
+        assert rec.sha256 != sha_before  # but SHA refreshed (bytes changed)
+
+    def test_skips_missing_file(self, tmp_path: Path) -> None:
+        c = ProvenanceCollector(project_root=tmp_path)
+        c.record_injection_target(tmp_path / "ghost.ts", fragment_name="frag")
+        assert c.records == {}
+
+
 class TestRecordMergeBlock:
     def test_records_minimum_baseline(self, tmp_path: Path) -> None:
         c = ProvenanceCollector(project_root=tmp_path)

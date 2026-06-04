@@ -146,6 +146,14 @@ def uninstall_fragment(
             result = _remove_sentinel_block(target, feature_key, marker)
             if result == "removed":
                 outcome.removed_blocks.append((rel, f"{feature_key}:{_naked_marker(marker)}"))
+                # Refresh the target's recorded SHA now that the block is gone,
+                # preserving its base/user ownership. Without this the manifest
+                # keeps the pre-scrub SHA, so the NEXT ``forge --update`` would
+                # see the clean file as "user-modified" (recorded SHA != disk).
+                # record_injection_target preserves the existing owner and
+                # re-hashes the file; it no-ops when the file is untracked.
+                if collector is not None:
+                    collector.record_injection_target(target, fragment_name=fragment_name)
             elif result == "conflicted":
                 outcome.conflicted_blocks.append((rel, f"{feature_key}:{_naked_marker(marker)}"))
             # "missing" (no block present) is silent — nothing to remove.
@@ -240,13 +248,23 @@ def _remove_sentinel_block(
 def disabled_fragments(
     previous_provenance: dict[str, dict[str, str]],
     current_plan_fragments: set[str],
+    previous_merge_blocks: dict[str, dict[str, str]] | None = None,
 ) -> set[str]:
     """Identify fragments that were present in the last run but aren't now.
 
     A fragment "was present" when at least one ``[forge.provenance]``
-    entry names it; "isn't now" when the resolved plan's ordered
-    fragments don't include it. The set difference is what the
-    uninstaller processes.
+    entry names it, **or** at least one ``[forge.merge_blocks]`` entry is
+    keyed to it; "isn't now" when the resolved plan's ordered fragments
+    don't include it. The set difference is what the uninstaller processes.
+
+    The ``previous_merge_blocks`` union is essential for *inject-only*
+    fragments — ones that own no ``files/`` and only inject sentinel
+    blocks into base-template files (e.g. node ``rate_limit`` → ``src/app.ts``).
+    Their injection targets keep ``origin="base-template"`` (see
+    :meth:`ProvenanceCollector.record_injection_target`), so they have no
+    ``origin="fragment"`` provenance entry. Without walking the merge
+    blocks, disabling such a fragment would never reach
+    :func:`uninstall_fragment` and its injected block would leak.
     """
     previously_present: set[str] = set()
     for entry in previous_provenance.values():
@@ -254,4 +272,13 @@ def disabled_fragments(
             name = entry.get("fragment_name")
             if name:
                 previously_present.add(name)
+    if previous_merge_blocks:
+        from forge.sync.merge import MergeBlockCollector  # noqa: PLC0415
+
+        for key in previous_merge_blocks:
+            parsed = MergeBlockCollector.parse_key(key)
+            if parsed is not None:
+                # parsed == (rel_path, feature_key, marker); feature_key is the
+                # owning fragment name (matches ``_disabled_fragment_blocks``).
+                previously_present.add(parsed[1])
     return previously_present - current_plan_fragments
