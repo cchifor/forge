@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chat_message.freezed.dart';
+part 'chat_message.g.dart';
 
 /// AG-UI message shape — mirrors `Message` from the JS `@ag-ui/core` package.
 ///
