@@ -28,7 +28,7 @@ dependencies = [
     # `[feature.component.children]` version specs. Previously transitively
     # present via copier; declared explicitly so the dependency surface is
     # honest (mirrors the pydantic note above).
-    "packaging>=24",
+    "packaging>=26.2",
 ]
 
 [dependency-groups]
