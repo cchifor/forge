@@ -1,0 +1,15 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `docs` is a thin Copier overlay on top of the shared Flutter base template.
+# forge renders the base first, then overlays this layout's files into the same
+# directory (two-stage render). It ships only its AppLayoutShell plus the
+# documentation region widgets (DocTreeNav left tree, TocPanel right
+# table-of-contents); everything else (routing, Riverpod state, retrofit API
+# client, nav destinations, theme, chat) comes from the base.
+[layout]
+name = "docs"
+framework = "flutter"
+display_label = "Documentation 3-Column"
+template_dir = "layouts/flutter/docs"
+base = "apps/flutter-frontend-template"
+supported = true

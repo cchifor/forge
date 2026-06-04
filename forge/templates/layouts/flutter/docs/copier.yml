@@ -1,5 +1,6 @@
 _min_copier_version: "9.0.0"
 _templates_suffix: ""
+_subdirectory: template
 
 _exclude:
   - _tasks
@@ -123,7 +124,7 @@ frontend_layout:
 
 _tasks:
   - >-
-    {{ _copier_python }} {{ _copier_conf.src_path }}/_tasks/post_generate.py
+    {{ _copier_python }} {{ _copier_conf.src_path }}/../../../apps/flutter-frontend-template/_tasks/post_generate.py
     --project-slug={{ project_slug }}
     --project-name="{{ project_name }}"
     --app-title="{{ app_title }}"

@@ -1,0 +1,16 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `tabbar` is a touch-first overlay layout: a bottom tab bar that promotes
+# upward to a slim icon nav rail and then an extended NavigationRail as the
+# viewport grows ("bottom bar -> rail -> extended rail"). It overlays the
+# shared Flutter base template (two-stage render): the base supplies router,
+# Riverpod state, API/retrofit client, WorkingAreaHeader, chat widgets and
+# all shared layout primitives; this overlay supplies only its
+# AppLayoutShell plus the new NavRail / BottomTabBar region components.
+[layout]
+name = "tabbar"
+framework = "flutter"
+display_label = "Tab Bar App Shell"
+template_dir = "layouts/flutter/tabbar"
+base = "apps/flutter-frontend-template"
+supported = true
