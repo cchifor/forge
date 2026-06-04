@@ -1,0 +1,16 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `tabbar` is a touch-first overlay layout: a bottom tab bar that promotes
+# upward to a slim icon nav rail and then a full collapsible sidebar as the
+# viewport grows ("bottom bar -> rail -> sidebar"). It overlays the shared
+# Vue base template (two-stage render): the base supplies router, auth, API
+# client, AppHeader, AppSidebar, AiChat and all Layer-1 ui/; this overlay
+# supplies only its MainLayout shell plus the new BottomTabBar / NavRail
+# region components.
+[layout]
+name = "tabbar"
+framework = "vue"
+display_label = "Tab Bar App Shell"
+template_dir = "layouts/vue/tabbar"
+base = "apps/vue-frontend-template"
+supported = true
