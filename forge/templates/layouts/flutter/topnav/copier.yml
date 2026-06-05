@@ -1,0 +1,140 @@
+_min_copier_version: "9.0.0"
+_templates_suffix: ""
+_subdirectory: template
+
+_exclude:
+  - _tasks
+  - _tasks/**
+  - copier.yml
+  - "*.pyc"
+  - __pycache__
+
+# ── Questions ──
+
+project_name:
+  type: str
+  help: "Human-readable project name"
+  default: "My App"
+
+project_slug:
+  type: str
+  help: "Package name (lowercase snake_case)"
+  default: "{{ project_name | lower | replace(' ', '_') | replace('-', '_') }}"
+  validator: "{% if not project_slug | regex_search('^[a-z][a-z0-9_]+$') %}Must be lowercase snake_case (letters, digits, underscores){% endif %}"
+
+app_title:
+  type: str
+  help: "Display title for the application"
+  default: "{{ project_name }}"
+
+org_name:
+  type: str
+  help: "Organization identifier"
+  default: "com.example"
+
+description:
+  type: str
+  help: "Project description"
+  default: "A Flutter application"
+
+features:
+  type: str
+  help: "Comma-separated feature names (plural, snake_case, e.g. items,orders)"
+  default: "items"
+
+version:
+  type: str
+  help: "Initial version"
+  default: "0.1.0"
+
+include_auth:
+  type: bool
+  help: "Include OAuth2/Keycloak authentication?"
+  default: true
+
+include_chat:
+  type: bool
+  help: "Include AI chat sidebar?"
+  default: true
+
+include_openapi:
+  type: bool
+  help: "Include OpenAPI client generation (swagger_parser)?"
+  default: true
+
+default_color_scheme:
+  type: str
+  help: "Initial FlexColorScheme name"
+  default: blue
+  choices:
+    - blue
+    - indigo
+    - teal
+    - green
+    - deepPurple
+    - red
+    - amber
+    - cyan
+
+backend_features:
+  type: str
+  when: false
+  default: "{}"
+
+api_base_url:
+  type: str
+  help: "Default API base URL"
+  default: "http://localhost:5000/api/v1"
+
+server_port:
+  type: str
+  help: "Backend server port"
+  default: "5000"
+
+keycloak_url:
+  type: str
+  help: "Keycloak server URL"
+  default: "http://localhost:8080"
+  when: "{{ include_auth }}"
+
+keycloak_realm:
+  type: str
+  help: "Keycloak realm"
+  default: "master"
+  when: "{{ include_auth }}"
+
+keycloak_client_id:
+  type: str
+  help: "Keycloak client ID"
+  default: "{{ project_slug | replace('_', '-') }}"
+  when: "{{ include_auth }}"
+
+author_name:
+  type: str
+  help: "Author name"
+  default: "Your Name"
+
+frontend_layout:
+  type: str
+  when: false
+  default: "sidebar"
+  help: "UI app-shell layout slug (set by forge from FrontendConfig.layout)"
+
+# ── Post-generation tasks ──
+
+_tasks:
+  - >-
+    {{ _copier_python }} {{ _copier_conf.src_path }}/../../../apps/flutter-frontend-template/_tasks/post_generate.py
+    --project-slug={{ project_slug }}
+    --project-name="{{ project_name }}"
+    --app-title="{{ app_title }}"
+    --org-name={{ org_name }}
+    --features="{{ features }}"
+    --include-auth={{ include_auth }}
+    --include-chat={{ include_chat }}
+    --include-openapi={{ include_openapi }}
+    --description="{{ description }}"
+    --version={{ version }}
+    --api-base-url={{ api_base_url }}
+    --default-color-scheme={{ default_color_scheme }}
+    --frontend-layout={{ frontend_layout }}

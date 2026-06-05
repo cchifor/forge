@@ -1,0 +1,12 @@
+<script setup lang="ts">
+const year = new Date().getFullYear()
+</script>
+
+<template>
+  <footer
+    class="flex h-12 shrink-0 items-center justify-between border-t bg-card px-4 text-xs text-muted-foreground"
+  >
+    <span>&copy; {% raw %}{{ year }}{% endraw %} {{ app_title }}</span>
+    <span class="hidden sm:inline">Built with forge</span>
+  </footer>
+</template>

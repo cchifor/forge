@@ -62,6 +62,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--org-name", metavar="ORG", help="Flutter org in reverse domain (e.g. com.example)"
     )
+    p.add_argument(
+        "--layout",
+        metavar="NAME",
+        help="Frontend app-shell layout (framework-scoped, e.g. sidebar). "
+        "Defaults to 'sidebar'. Run interactively to see the layouts available "
+        "for your chosen framework.",
+    )
 
     # Frontend toggles
     p.add_argument("--include-auth", action="store_true", default=None)
@@ -732,5 +739,6 @@ def _is_headless(args: argparse.Namespace) -> bool:
         or args.python_version is not None
         or args.features is not None
         or args.description is not None
+        or getattr(args, "layout", None) is not None
         or bool(getattr(args, "set_options", []))
     )

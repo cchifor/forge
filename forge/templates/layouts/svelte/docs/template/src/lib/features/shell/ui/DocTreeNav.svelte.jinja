@@ -1,0 +1,217 @@
+{% raw %}<script lang="ts">
+	// DocTreeNav — the left documentation tree for the `docs` layout.
+	//
+	// Owns the nav-tree data. The feature injector splices generated entity
+	// routes between the two marker comments below — reproduce them verbatim,
+	// exactly as the base AppSidebar's nav list does, so the generator can find
+	// and extend this list.
+	//
+	// Renders in two variants:
+	//   - 'inline' (default): the persistent ~260px left column on
+	//     desktop/tablet. `collapsed` shrinks it to an icon rail (desktop
+	//     tree-collapse, owned by the shell's local $state).
+	//   - 'drawer': a left slide-in for compact viewports, driven by the shared
+	//     ui store `mobileMenuOpen` flag (toggled from the docs toolbar).
+	import { page } from '$app/stores';
+	import { Home, Package, BookOpen, ChevronRight, X } from 'lucide-svelte';
+	import { getUiStore } from '$lib/features/shell';
+
+	type DocNode = {
+		title: string;
+		url?: string;
+		icon?: typeof Home;
+		children?: DocNode[];
+	};
+
+	let {
+		variant = 'inline',
+		collapsed = false
+	}: { variant?: 'inline' | 'drawer'; collapsed?: boolean } = $props();
+
+	const ui = getUiStore();
+
+	// Documentation nav tree. The "Guides" group holds the generated entity
+	// pages — the injector splices links between the markers below.
+	const navTree: DocNode[] = [
+		{ title: 'Home', url: '/', icon: Home },
+		{
+			title: 'Guides',
+			icon: BookOpen,
+			children: [
+				// --- feature nav items ---
+				// --- end feature nav items ---
+			]
+		},
+		{
+			title: 'Reference',
+			icon: Package,
+			children: [{ title: 'Overview', url: '/items' }]
+		}
+	];
+
+	function isActive(url?: string) {
+		if (!url) return false;
+		if (url === '/') return $page.url.pathname === '/';
+		return $page.url.pathname.startsWith(url);
+	}
+
+	// A group is "active" when any descendant route is active; such groups start
+	// expanded and stay expanded while the user navigates within them.
+	function groupHasActiveChild(node: DocNode): boolean {
+		return (node.children ?? []).some((c) => isActive(c.url) || groupHasActiveChild(c));
+	}
+
+	// Expansion state keyed by group title; re-seeded open for active groups on
+	// every navigation.
+	const expanded = $derived.by(() => {
+		const seed: Record<string, boolean> = {};
+		// reference pathname so this recomputes on route change
+		void $page.url.pathname;
+		for (const node of navTree) {
+			if (node.children && groupHasActiveChild(node)) seed[node.title] = true;
+		}
+		return seed;
+	});
+
+	let overrides = $state<Record<string, boolean>>({});
+
+	function isGroupOpen(node: DocNode) {
+		return overrides[node.title] ?? expanded[node.title] ?? false;
+	}
+	function toggleGroup(title: string) {
+		overrides[title] = !(overrides[title] ?? expanded[title] ?? false);
+	}
+</script>
+
+{#snippet treeNodes(closeOnNav: boolean, dense: boolean)}
+	{#each navTree as node (node.title)}
+		{#if node.url}
+			<!-- Leaf link -->
+			<a
+				href={node.url}
+				aria-current={isActive(node.url) ? 'page' : undefined}
+				class="btn-press group flex items-center gap-3 rounded-lg px-3 text-sm transition-colors
+					{dense ? 'h-10' : 'h-9'}
+					{isActive(node.url)
+					? 'bg-primary/10 font-semibold text-primary'
+					: 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+				title={node.title}
+				onclick={() => closeOnNav && ui.closeMobileMenu()}
+			>
+				{#if node.icon}
+					<node.icon class="h-4 w-4 shrink-0" />
+				{/if}
+				{#if !collapsed}
+					<span class="truncate">{node.title}</span>
+				{/if}
+			</a>
+		{:else}
+			<!-- Expandable group -->
+			<div class="mt-0.5">
+				<button
+					type="button"
+					class="btn-press flex w-full items-center gap-3 rounded-lg px-3 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+						{dense ? 'h-10' : 'h-9'}"
+					title={node.title}
+					aria-label={node.title}
+					aria-expanded={isGroupOpen(node)}
+					onclick={() => toggleGroup(node.title)}
+				>
+					{#if node.icon}
+						<node.icon class="h-4 w-4 shrink-0" />
+					{/if}
+					{#if !collapsed}
+						<span class="flex-1 truncate text-left font-medium">{node.title}</span>
+						<ChevronRight
+							class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200
+								{isGroupOpen(node) ? 'rotate-90' : ''}"
+						/>
+					{/if}
+				</button>
+				{#if !collapsed && isGroupOpen(node)}
+					<div class="ml-4 mt-0.5 border-l border-sidebar-border pl-2">
+						{#each node.children ?? [] as child (child.url ?? child.title)}
+							{#if child.url}
+								<a
+									href={child.url}
+									aria-current={isActive(child.url) ? 'page' : undefined}
+									class="btn-press flex items-center rounded-lg px-3 text-sm transition-colors
+										{dense ? 'h-9' : 'h-8'}
+										{isActive(child.url)
+										? 'bg-primary/10 font-semibold text-primary'
+										: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'}"
+									onclick={() => closeOnNav && ui.closeMobileMenu()}
+								>
+									<span class="truncate">{child.title}</span>
+								</a>
+							{:else}
+								<span
+									class="flex items-center rounded-lg px-3 text-sm text-muted-foreground
+										{dense ? 'h-9' : 'h-8'}"
+								>
+									<span class="truncate">{child.title}</span>
+								</span>
+							{/if}
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	{/each}
+{/snippet}
+
+{#if variant === 'inline'}
+	<!-- Inline variant: persistent left column -->
+	<aside
+		id="doc-tree-nav"
+		class="flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar-background transition-[width] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+		style="width: {collapsed ? '64px' : '260px'}"
+	>
+		<nav class="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="Documentation">
+			{@render treeNodes(false, false)}
+		</nav>
+	</aside>
+{:else if ui.mobileMenuOpen}
+	<!-- Drawer variant: compact left slide-in (mobileMenuOpen) -->
+	<div class="fixed inset-0 z-50 flex">
+		<!-- Backdrop -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="absolute inset-0 bg-black/50"
+			onclick={() => ui.closeMobileMenu()}
+			onkeydown={(e) => e.key === 'Escape' && ui.closeMobileMenu()}
+		></div>
+
+		<!-- Drawer panel -->
+		<aside
+			id="doc-tree-drawer"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Documentation menu"
+			class="relative flex h-svh w-72 max-w-[85vw] flex-col border-r bg-sidebar-background text-sidebar-foreground shadow-xl"
+		>
+			<div class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+				<span
+					class="flex h-8 w-8 items-center justify-center rounded-lg"
+					style="background: linear-gradient(135deg, hsl(var(--ai-gradient-from)), hsl(var(--ai-gradient-to)))"
+				>
+					<span class="text-sm font-bold text-white">S</span>
+				</span>
+				<span class="flex-1 truncate text-sm font-semibold">{% endraw %}{{ app_title }}{% raw %}</span>
+				<button
+					type="button"
+					class="btn-press flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+					title="Close menu"
+					aria-label="Close documentation menu"
+					onclick={() => ui.closeMobileMenu()}
+				>
+					<X class="h-5 w-5 text-muted-foreground" />
+				</button>
+			</div>
+
+			<nav class="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="Documentation">
+				{@render treeNodes(true, true)}
+			</nav>
+		</aside>
+	</div>
+{/if}{% endraw %}

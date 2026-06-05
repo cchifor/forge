@@ -3,6 +3,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // TS 6 (TS5011) requires rootDir to be explicit before it will lay out
+    // declaration output; without it `tsc --emitDeclarationOnly --outDir dist`
+    // errors and falls back to emitting under dist/src/. Pin it to src so
+    // declarations land flat at dist/index.d.ts (where package.json points).
+    "rootDir": "src",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
     "noImplicitAny": true,

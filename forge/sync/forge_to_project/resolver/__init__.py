@@ -267,6 +267,9 @@ def resolve_sidecars(project_root: Path, *, quiet: bool = False) -> ResolveRepor
             merge_blocks=merge_blocks,
             template_versions=manifest_data.template_versions,
             schema_version=manifest_data.schema_version,
+            # Preserve the [forge.frontend] table (framework + app_dir +
+            # layout) — re-deriving it would drop the user's --layout choice.
+            frontend=manifest_data.frontend if manifest_data.frontend.framework else None,
         )
 
     return ResolveReport(

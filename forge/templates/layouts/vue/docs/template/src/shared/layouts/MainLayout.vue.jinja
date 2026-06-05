@@ -1,0 +1,206 @@
+<script setup lang="ts">
+// MainLayout — the `docs` (Documentation 3-Column) app shell.
+//
+// Full-width AppHeader on top, then a 3-column reading row:
+//   DocTreeNav (left tree) | article (center, max-w-3xl prose) | TocPanel (right)
+//
+//   - expanded (>=840): all three columns; left tree collapsible via a local
+//     `docTreeCollapsed` ref (no store change).
+//   - medium (600-839): tree + content; TocPanel hidden.
+//   - compact (<600): tree becomes a left slide-in drawer (shared ui.store
+//     `mobileMenuOpen`, toggled from the docs toolbar); content full-width;
+//     TocPanel hidden.
+//
+// Chat is an OVERLAY so the 3-col reading layout is preserved underneath:
+// a right slide-in drawer on desktop/tablet, a bottom sheet on mobile.
+// onMounted/onUnmounted are imported only when chat is enabled: they are used
+// solely by the Escape-to-close listener below. tsconfig has noUnusedLocals,
+// so importing them unconditionally would fail type-check on chat-off builds.
+// If a future feature needs a lifecycle hook outside the chat block, move the
+// hook import out of this guard and ensure it is referenced in all variants.
+import { ref{% if include_chat %}, onMounted, onUnmounted{% endif %} } from 'vue'
+import { PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-vue-next'
+import AppHeader from '@/shared/components/AppHeader.vue'
+import DocTreeNav from '@/shared/components/DocTreeNav.vue'
+import TocPanel from '@/shared/components/TocPanel.vue'
+{% if include_chat %}import { AiChat } from '@/features/ai_chat'
+import { useAiChat } from '@/features/ai_chat'
+{% endif %}import { useBreakpoint } from '@/shared/composables/useBreakpoint'
+import { useUiStore } from '@/shared/stores/ui.store'
+
+const { isCompact, isMedium, isExpanded } = useBreakpoint()
+const uiStore = useUiStore()
+
+// Component-local desktop tree-collapse — purely a layout concern, kept out of
+// the shared ui.store per the docs spec (no persistence in v1).
+const docTreeCollapsed = ref(false)
+function toggleDocTree() {
+  docTreeCollapsed.value = !docTreeCollapsed.value
+}
+{% if include_chat %}
+const { chatOpen, closeChat } = useAiChat()
+
+function onEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && chatOpen.value) closeChat()
+}
+onMounted(() => document.addEventListener('keydown', onEscape))
+onUnmounted(() => document.removeEventListener('keydown', onEscape))
+{% endif %}</script>
+
+<template>
+  <!-- ═══ EXPANDED (≥840px) — DocTreeNav | article | TocPanel ═══ -->
+  <div v-if="isExpanded" class="flex h-svh flex-col overflow-hidden">
+    <AppHeader />
+    <div class="flex min-h-0 flex-1 overflow-hidden">
+      <DocTreeNav variant="inline" :collapsed="docTreeCollapsed" />
+
+      <!-- Center content column: readable max width, must shrink (min-w-0). -->
+      <main class="min-w-0 flex-1 overflow-y-auto">
+        <div class="flex h-10 items-center border-b px-3">
+          <button
+            class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted interactive-press"
+            :title="docTreeCollapsed ? 'Expand navigation' : 'Collapse navigation'"
+            :aria-label="docTreeCollapsed ? 'Expand documentation navigation' : 'Collapse documentation navigation'"
+            :aria-expanded="!docTreeCollapsed"
+            aria-controls="doc-tree-nav"
+            @click="toggleDocTree"
+          >
+            <PanelLeftOpen v-if="docTreeCollapsed" class="h-4 w-4" />
+            <PanelLeftClose v-else class="h-4 w-4" />
+          </button>
+        </div>
+        <article
+          data-docs-content
+          class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-6 py-8 dark:prose-invert"
+        >
+          <RouterView />
+        </article>
+      </main>
+
+      <TocPanel content-selector="[data-docs-content]" />
+    </div>
+
+{% if include_chat %}    <!-- Chat overlay: right slide-in drawer over the TOC -->
+    <Transition name="chat-drawer">
+      <div
+        v-if="chatOpen"
+        class="fixed right-0 top-0 z-40 h-svh w-[400px] max-w-[90vw] border-l bg-background shadow-xl"
+      >
+        <AiChat />
+      </div>
+    </Transition>
+{% endif %}  </div>
+
+  <!-- ═══ MEDIUM (600-839px) — tree + content; TOC hidden ═══ -->
+  <div v-else-if="isMedium" class="flex h-svh flex-col overflow-hidden">
+    <AppHeader />
+    <div class="flex min-h-0 flex-1 overflow-hidden">
+      <DocTreeNav variant="inline" />
+      <main class="min-w-0 flex-1 overflow-y-auto">
+        <article
+          data-docs-content
+          class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-6 py-8 dark:prose-invert"
+        >
+          <RouterView />
+        </article>
+      </main>
+    </div>
+
+{% if include_chat %}    <!-- Chat overlay: right slide-in drawer -->
+    <Transition name="chat-drawer">
+      <div
+        v-if="chatOpen"
+        class="fixed right-0 top-0 z-40 h-svh w-[400px] max-w-[90vw] border-l bg-background shadow-xl"
+      >
+        <AiChat />
+      </div>
+    </Transition>
+{% endif %}  </div>
+
+  <!-- ═══ COMPACT (<600px) — tree as drawer; content full-width; TOC hidden ═══ -->
+  <div v-else class="flex h-svh flex-col overflow-hidden">
+    <AppHeader :compact="true" />
+
+    <!-- Docs toolbar: hamburger opens the DocTreeNav drawer (mobileMenuOpen). -->
+    <div class="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+      <button
+        class="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-accent interactive-press"
+        title="Open documentation menu"
+        aria-label="Open documentation menu"
+        :aria-expanded="uiStore.mobileMenuOpen"
+        aria-controls="doc-tree-drawer"
+        @click="uiStore.toggleMobileMenu()"
+      >
+        <Menu class="h-5 w-5 text-muted-foreground" />
+      </button>
+      <span class="text-sm font-medium text-foreground">Docs</span>
+    </div>
+
+    <main class="min-w-0 flex-1 overflow-y-auto">
+      <article
+        data-docs-content
+        class="prose prose-neutral mx-auto min-w-0 max-w-3xl px-4 py-6 dark:prose-invert"
+      >
+        <RouterView />
+      </article>
+    </main>
+
+    <!-- Left slide-in tree drawer (teleported, driven by mobileMenuOpen) -->
+    <DocTreeNav variant="drawer" />
+
+{% if include_chat %}    <!-- Chat overlay: bottom-sheet modal -->
+    <Teleport to="body">
+      <Transition name="chat-modal">
+        <div v-if="chatOpen" class="fixed inset-0 z-50 flex flex-col justify-end">
+          <div class="absolute inset-0 bg-black/50" @click="closeChat" />
+          <div class="relative max-h-[90vh] min-h-[50vh] rounded-t-2xl border-t bg-background shadow-xl">
+            <div class="mx-auto my-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
+            <AiChat />
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+{% endif %}  </div>
+</template>
+{% if include_chat %}
+<style scoped>
+/* Drawer slide from right */
+.chat-drawer-enter-active,
+.chat-drawer-leave-active {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-drawer-enter-from,
+.chat-drawer-leave-to {
+  transform: translateX(100%);
+}
+
+/* Modal from bottom */
+.chat-modal-enter-active,
+.chat-modal-leave-active {
+  transition: opacity 200ms ease;
+}
+.chat-modal-enter-active > :last-child,
+.chat-modal-leave-active > :last-child {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-modal-enter-from,
+.chat-modal-leave-to {
+  opacity: 0;
+}
+.chat-modal-enter-from > :last-child,
+.chat-modal-leave-to > :last-child {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-drawer-enter-active,
+  .chat-drawer-leave-active,
+  .chat-modal-enter-active,
+  .chat-modal-leave-active,
+  .chat-modal-enter-active > :last-child,
+  .chat-modal-leave-active > :last-child {
+    transition-duration: 0ms;
+  }
+}
+</style>
+{% endif %}

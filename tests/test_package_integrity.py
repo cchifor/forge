@@ -23,6 +23,7 @@ the ``package-integrity`` job. Developers can run it locally with
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -305,19 +306,25 @@ class TestWhitelistSelfCheck:
                 continue
             if any(rel.endswith(suf) for suf in CONTAMINANT_SUFFIXES):
                 continue
+            # Copier renders file *names* through Jinja; a file whose name is
+            # wrapped in a ``{% if %}…{% endif %}`` block is emitted only when
+            # the condition holds (e.g. ``{% if include_chat %}RightPanel.vue
+            # {% endif %}``). Strip the statement blocks so the real extension
+            # (``.vue``) is checked, not the trailing ``.vue{% endif %}``.
+            eff_name = re.sub(r"\{%.*?%\}", "", path.name).strip()
             # Extensionless file?
-            if "." not in path.name:
-                if path.name not in self.EXTENSIONLESS_WHITELIST:
-                    unknown.append((rel, f"(no ext: {path.name})"))
+            if "." not in eff_name:
+                if eff_name not in self.EXTENSIONLESS_WHITELIST:
+                    unknown.append((rel, f"(no ext: {eff_name})"))
                 continue
             # Leading-dot files (.gitignore, .editorconfig) are matched
             # against the whitelist by full name since ``path.suffix``
             # returns the *last* dotted segment, not the leading dot name.
-            if path.name.startswith(".") and path.name.count(".") == 1:
-                if path.name not in self.EXTENSIONLESS_WHITELIST:
-                    unknown.append((rel, path.name))
+            if eff_name.startswith(".") and eff_name.count(".") == 1:
+                if eff_name not in self.EXTENSIONLESS_WHITELIST:
+                    unknown.append((rel, eff_name))
                 continue
-            ext = path.suffix
+            ext = Path(eff_name).suffix
             if ext not in self.KNOWN_TEMPLATE_EXTENSIONS:
                 unknown.append((rel, ext))
 

@@ -1,0 +1,16 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `threepane` is a thin Copier overlay on top of the shared Flutter base
+# template. The chassis is the base AppSidebar (left) + a content column;
+# the differentiator is a persistent right Agent Panel that hosts the AI chat
+# surface (resizable inline at expanded, drawer at medium, bottom sheet at
+# compact). With chat off the right pane is filename-gated away and the shell
+# degrades cleanly to a two-pane sidebar + content layout.
+# The base renders first, then these files overlay it (two-stage render).
+[layout]
+name = "threepane"
+framework = "flutter"
+display_label = "Three-Pane + Right Agent Panel"
+template_dir = "layouts/flutter/threepane"
+base = "apps/flutter-frontend-template"
+supported = true

@@ -1,0 +1,10 @@
+# See templates/layouts/vue/sidebar/layout.toml. Svelte's `sidebar` is today's
+# full Svelte template (single render, byte-identical baseline). Additional
+# Svelte layouts land in Phase 5.
+[layout]
+name = "sidebar"
+framework = "svelte"
+display_label = "Sidebar App Shell"
+template_dir = "apps/svelte-frontend-template"
+base = ""
+supported = true

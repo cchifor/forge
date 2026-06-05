@@ -1,0 +1,16 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `threepane` is a thin overlay on top of the shared svelte base template:
+# the generator renders `apps/svelte-frontend-template` first, then overlays
+# this layout's (app)/+layout.svelte + RightPanel region into the same dir
+# (two-stage render). Everything else (routes infra, auth, API client,
+# AppHeader, AppSidebar, BottomNav, ChatDrawer, ChatBottomSheet,
+# VerticalSplitHandle, AiChat, getUiStore, getBreakpointStore, DesignTokens)
+# comes from the base.
+[layout]
+name = "threepane"
+framework = "svelte"
+display_label = "Three-Pane + Right Agent Panel"
+template_dir = "layouts/svelte/threepane"
+base = "apps/svelte-frontend-template"
+supported = true

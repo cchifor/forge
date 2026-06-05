@@ -1,0 +1,15 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `topnav` is a thin Copier overlay on top of the shared Flutter base template.
+# forge renders the base first, then overlays this layout's files into the same
+# directory (two-stage render). It ships only its AppLayoutShell plus the
+# top-nav region widgets (TopNavBar, TopNavDrawer, AppFooter); everything else
+# (routing, Riverpod state, retrofit API client, nav destinations, theme,
+# chat) comes from the base.
+[layout]
+name = "topnav"
+framework = "flutter"
+display_label = "Top-Nav Content Shell"
+template_dir = "layouts/flutter/topnav"
+base = "apps/flutter-frontend-template"
+supported = true

@@ -212,6 +212,25 @@ def _collect_inputs() -> ProjectConfig | None:
         if framework == FrontendFramework.FLUTTER:
             org_name = _ask_text("Organization name (reverse domain):", default="com.example")
 
+        # App-shell layout — only prompt when the framework offers a choice
+        # (all three built-in frameworks ship the full set of layouts).
+        from forge.layout_variants import (  # noqa: PLC0415
+            DEFAULT_LAYOUT,
+            available_layouts,
+            get_layout_variant,
+        )
+
+        layout = DEFAULT_LAYOUT
+        _layouts = available_layouts(framework)
+        if len(_layouts) > 1:
+            _labels: dict[str, str] = {}
+            for _name in _layouts:
+                _variant = get_layout_variant(framework, _name)
+                if _variant is not None:
+                    _labels[_variant.display_label] = _name
+            _picked = _ask_select("App-shell layout:", choices=list(_labels))
+            layout = _labels[_picked]
+
         frontend = FrontendConfig(
             framework=framework,
             project_name=project_name,
@@ -224,6 +243,7 @@ def _collect_inputs() -> ProjectConfig | None:
             server_port=fe_port,
             default_color_scheme=color_scheme,
             org_name=org_name,
+            layout=layout,
         )
 
     include_keycloak = include_auth

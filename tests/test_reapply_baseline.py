@@ -27,7 +27,7 @@ from forge.sync.forge_to_project.reapply_baseline import (
     ReapplyBaselineReport,
     reapply_baseline,
 )
-from forge.sync.manifest import read_forge_toml, write_forge_toml
+from forge.sync.manifest import ForgeFrontendData, read_forge_toml, write_forge_toml
 from forge.sync.merge import MergeBlockCollector, sha256_of_file, sha256_of_text
 from forge.sync.provenance import sha256_of
 
@@ -54,6 +54,7 @@ def _scaffold_project_with_file(
     fragment_name: str = "demo_files_fragment",
     rel_in_backend: str = "config.yml",
     origin: str = "fragment",
+    frontend: ForgeFrontendData | None = None,
 ) -> dict:
     """Build a project tree with one tracked file under [forge.provenance].
 
@@ -91,6 +92,7 @@ def _scaffold_project_with_file(
         templates={"python": "services/python-service-template"},
         options={},
         provenance=provenance,
+        frontend=frontend,
     )
 
     # Apply the user edit AFTER recording the baseline so the manifest
@@ -322,6 +324,39 @@ class TestReapplyBaselineFiles:
         entry = next(e for e in report.entries if e.kind == "file")
         assert entry.action == "reset"
         assert entry.new_sha == new_sha
+
+    def test_reapply_preserves_frontend_layout(self, tmp_path: Path) -> None:
+        """Rewriting the manifest on reapply must not drop [forge.frontend].
+
+        Regression: reapply_baseline re-wrote forge.toml without threading
+        the existing frontend table, silently resetting a non-default
+        --layout choice to blank on any baseline reset.
+        """
+        fragment_name = "test_layout_preserved"
+        body = "fragment shipped content\n"
+        meta = _scaffold_project_with_file(
+            tmp_path,
+            fragment_content=body,
+            user_content="user edited this\n",
+            fragment_name=fragment_name,
+            rel_in_backend="config.yml",
+            frontend=ForgeFrontendData(
+                framework="vue", app_dir="apps/frontend", layout="topnav"
+            ),
+        )
+        fragment_dir = _make_fragment_dir_with_file(
+            tmp_path, fragment_name=fragment_name, rel_path="config.yml", content=body
+        )
+        _register_fragment(fragment_name, fragment_dir)
+        try:
+            report = reapply_baseline(project_root=tmp_path, quiet=True)
+        finally:
+            _unregister_fragment(fragment_name)
+
+        assert report.reset_count == 1  # a rewrite actually happened
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert data.frontend.framework == "vue"
+        assert data.frontend.layout == "topnav"
 
     def test_skip_user_authored_record(self, tmp_path: Path) -> None:
         """``origin="user"`` rows are never touched."""

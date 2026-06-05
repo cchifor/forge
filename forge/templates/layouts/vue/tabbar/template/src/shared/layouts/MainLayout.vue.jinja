@@ -1,0 +1,206 @@
+<script setup lang="ts">
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { Home, User, Settings } from 'lucide-vue-next'
+import AppSidebar from '@/shared/components/AppSidebar.vue'
+import AppHeader from '@/shared/components/AppHeader.vue'
+import NavRail from '@/shared/components/NavRail.vue'
+import BottomTabBar from '@/shared/components/BottomTabBar.vue'
+{% if include_chat %}import VerticalSplitter from '@/shared/components/VerticalSplitter.vue'
+import { AiChat } from '@/features/ai_chat'
+import { useAiChat } from '@/features/ai_chat'
+{% endif %}import { useBreakpoint } from '@/shared/composables/useBreakpoint'
+import { useUiStore } from '@/shared/stores/ui.store'
+
+{% if include_chat %}const { chatOpen, closeChat } = useAiChat()
+{% endif %}const { isCompact, isMedium, isExpanded, width: viewportWidth } = useBreakpoint()
+const uiStore = useUiStore()
+{% if include_chat %}const isDragging = ref(false)
+
+function onEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && chatOpen.value) closeChat()
+}
+onMounted(() => document.addEventListener('keydown', onEscape))
+onUnmounted(() => document.removeEventListener('keydown', onEscape))
+
+const sidebarWidth = computed(() => {
+  if (isCompact.value) return 0
+  if (isMedium.value) return 72
+  return uiStore.sidebarCollapsed ? 72 : 240
+})
+
+const availableWidth = computed(() => viewportWidth.value - sidebarWidth.value)
+
+const CHAT_MIN_WIDTH = 280
+const CONTENT_MIN_WIDTH = 300
+
+const chatPixelWidth = computed(() => {
+  if (!chatOpen.value) return 0
+  const avail = availableWidth.value
+  const raw = uiStore.chatWidthRatio * avail
+  // Reserve room for content, but never below the chat minimum and never
+  // wider than the available pane: on narrow viewports the content reserve
+  // shrinks first so chat width stays a valid clamp (min <= value <= avail).
+  const upperBound = Math.max(CHAT_MIN_WIDTH, Math.min(avail, avail - CONTENT_MIN_WIDTH))
+  return Math.min(upperBound, Math.max(CHAT_MIN_WIDTH, Math.min(raw, upperBound)))
+})
+
+function onDragStart() {
+  isDragging.value = true
+}
+
+function onDragUpdate(clientX: number) {
+  const chatWidth = viewportWidth.value - clientX
+  const ratio = chatWidth / availableWidth.value
+  uiStore.setChatWidthRatio(ratio)
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  uiStore.commitChatWidthRatio()
+}
+
+function onDoubleTap() {
+  uiStore.setChatWidthRatio(0.33)
+  uiStore.commitChatWidthRatio()
+}
+
+{% endif %}// Primary nav promotes across tiers: bottom tab bar (compact) →
+// icon rail (medium) → full sidebar (expanded). The markers below mirror
+// AppSidebar's primaryNav contract verbatim so the feature injector can
+// splice generated entity routes between them (injected entries carry their
+// own icon import).
+const primaryNav = [
+  { title: 'Home', url: '/', icon: Home },
+  // --- feature nav items ---
+  // --- end feature nav items ---
+]
+
+// Compact bottom tab bar = primary nav + account shortcuts (3–5 tabs).
+const bottomNavItems = [
+  ...primaryNav,
+  { title: 'Profile', url: '/profile', icon: User },
+  { title: 'Settings', url: '/settings', icon: Settings },
+]
+</script>
+
+<template>
+  <!-- ═══ EXPANDED (≥840px) — full collapsible sidebar ═══ -->
+  <div v-if="isExpanded" class="flex h-svh overflow-hidden">
+    <AppSidebar />
+    <div
+      class="flex flex-1 flex-col overflow-hidden"
+      {% if include_chat %}:class="{ 'pointer-events-none select-none': isDragging }"
+      {% endif %}>
+      <AppHeader />
+      <main class="flex-1 overflow-auto p-4">
+        <RouterView />
+      </main>
+    </div>
+    {% if include_chat %}<template v-if="chatOpen">
+      <VerticalSplitter
+        @drag-start="onDragStart"
+        @drag-update="onDragUpdate"
+        @drag-end="onDragEnd"
+        @double-tap="onDoubleTap"
+      />
+      <div
+        class="shrink-0 overflow-hidden"
+        :style="{ width: chatPixelWidth + 'px' }"
+        :class="{ 'pointer-events-none select-none': isDragging }"
+      >
+        <AiChat />
+      </div>
+    </template>
+    {% endif %}</div>
+
+  <!-- ═══ MEDIUM (600-839px) — slim icon nav rail ═══ -->
+  <div v-else-if="isMedium" class="flex h-svh overflow-hidden">
+    <NavRail :items="primaryNav" />
+    <div class="flex flex-1 flex-col overflow-hidden">
+      <AppHeader />
+      <main class="flex-1 overflow-auto p-4">
+        <RouterView />
+      </main>
+    </div>
+    {% if include_chat %}<Transition name="chat-drawer">
+      <div
+        v-if="chatOpen"
+        class="fixed right-0 top-0 z-40 h-svh w-[360px] border-l bg-background shadow-xl"
+      >
+        <AiChat />
+      </div>
+    </Transition>
+    {% endif %}</div>
+
+  <!-- ═══ COMPACT (<600px) — bottom tab bar ═══ -->
+  <div v-else class="flex h-svh flex-col overflow-hidden">
+    <AppHeader :compact="true" />
+    <main class="flex-1 overflow-auto p-4">
+      <RouterView />
+    </main>
+
+    <!-- Bottom tab bar (promotes upward to rail / sidebar at wider widths) -->
+    <BottomTabBar :items="bottomNavItems" />
+
+    {% if include_chat %}<!-- Chat as modal bottom sheet, layered above the tab bar -->
+    <Teleport to="body">
+      <Transition name="chat-modal">
+        <div
+          v-if="chatOpen"
+          class="fixed inset-0 z-50 flex flex-col justify-end"
+        >
+          <div
+            class="absolute inset-0 bg-black/50"
+            @click="closeChat"
+          />
+          <div class="relative max-h-[90vh] min-h-[50vh] rounded-t-2xl border-t bg-background shadow-xl">
+            <div class="mx-auto my-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
+            <AiChat />
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+    {% endif %}</div>
+</template>
+{% if include_chat %}
+<style scoped>
+/* Drawer slide from right */
+.chat-drawer-enter-active,
+.chat-drawer-leave-active {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-drawer-enter-from,
+.chat-drawer-leave-to {
+  transform: translateX(100%);
+}
+
+/* Modal from bottom */
+.chat-modal-enter-active,
+.chat-modal-leave-active {
+  transition: opacity 200ms ease;
+}
+.chat-modal-enter-active > :last-child,
+.chat-modal-leave-active > :last-child {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chat-modal-enter-from,
+.chat-modal-leave-to {
+  opacity: 0;
+}
+.chat-modal-enter-from > :last-child,
+.chat-modal-leave-to > :last-child {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-drawer-enter-active,
+  .chat-drawer-leave-active,
+  .chat-modal-enter-active,
+  .chat-modal-leave-active,
+  .chat-modal-enter-active > :last-child,
+  .chat-modal-leave-active > :last-child {
+    transition-duration: 0ms;
+  }
+}
+</style>
+{% endif %}

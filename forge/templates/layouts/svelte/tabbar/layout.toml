@@ -1,0 +1,17 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `tabbar` is a touch-first overlay layout: a bottom tab bar that promotes
+# upward to a slim icon nav rail and then a full collapsible sidebar as the
+# viewport grows ("bottom bar -> rail -> sidebar"). It overlays the shared
+# Svelte 5 base template (two-stage render): the base supplies routes infra,
+# auth, the API client, AppHeader, AppSidebar, BottomNav, the chat surfaces
+# (ChatDrawer / ChatBottomSheet / VerticalSplitHandle / AiChat) and all of the
+# shell state; this overlay supplies only its (app) shell plus the new NavRail
+# region component.
+[layout]
+name = "tabbar"
+framework = "svelte"
+display_label = "Tab Bar App Shell"
+template_dir = "layouts/svelte/tabbar"
+base = "apps/svelte-frontend-template"
+supported = true

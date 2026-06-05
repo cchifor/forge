@@ -68,8 +68,8 @@ void main() {
   });
 
   group('DesignTokens breakpoints', () {
-    test('compact is less than or equal to medium', () {
-      expect(DesignTokens.compactWidth, lessThanOrEqualTo(DesignTokens.mediumWidth));
+    test('compact boundary is below expanded boundary', () {
+      expect(DesignTokens.compactWidth, lessThan(DesignTokens.expandedWidth));
     });
   });
 

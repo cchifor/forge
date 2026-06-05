@@ -1,0 +1,148 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_exclude: []
+
+# ── Questions ──────────────────────────────────────────────────
+
+project_name:
+  type: str
+  help: Project display name
+  default: My App
+
+project_slug:
+  type: str
+  help: "Package name (kebab-case, e.g. my-app)"
+  default: "{{ project_name | lower | replace(' ', '-') | replace('_', '-') }}"
+  validator: >-
+    {% if not project_slug | regex_search('^[a-z][a-z0-9-]*$') %}Must be lowercase kebab-case (letters, digits, hyphens).{% endif %}
+    {% if project_slug | length < 2 %}Must be at least 2 characters.{% endif %}
+
+app_title:
+  type: str
+  help: Display title for the application
+  default: "{{ project_name }}"
+
+description:
+  type: str
+  help: Project description
+  default: A Svelte 5 SPA application
+
+features:
+  type: str
+  help: "Comma-separated feature names to generate (e.g. items,orders,products)"
+  default: items
+  validator: >-
+    {% set reserved = ['auth','home','profile','settings','chat','core','shared','shell','dashboard','tasks','app','test','lib','routes','api'] %}
+    {% for f in features.split(',') | map('trim') | select() | list %}
+    {% if not f | regex_search('^[a-z][a-z0-9_]*$') %}Feature '{{ f }}' must be snake_case. {% endif %}
+    {% if f in reserved %}Feature '{{ f }}' is a reserved name. {% endif %}
+    {% endfor %}
+    {% if features.split(',') | map('trim') | select() | list | length == 0 %}At least one feature is required.{% endif %}
+
+author_name:
+  type: str
+  help: Author name
+  default: Your Name
+
+version:
+  type: str
+  help: Initial version
+  default: "0.1.0"
+
+include_auth:
+  type: bool
+  help: Include Keycloak authentication?
+  default: true
+
+include_chat:
+  type: bool
+  help: Include AI chat panel?
+  default: true
+
+include_openapi:
+  type: bool
+  help: Include OpenAPI TypeScript codegen?
+  default: true
+
+default_color_scheme:
+  type: str
+  help: Initial color scheme
+  default: blue
+  choices:
+    - blue
+    - indigo
+    - teal
+    - green
+    - deepPurple
+    - red
+    - amber
+    - cyan
+
+package_manager:
+  type: str
+  help: Package manager
+  choices:
+    npm: npm
+    pnpm: pnpm
+    bun: bun
+  default: npm
+
+api_base_url:
+  type: str
+  help: Backend API base URL
+  default: "http://localhost:5000"
+
+api_proxy_target:
+  type: str
+  help: Vite dev-server proxy target
+  default: "http://localhost:5000"
+
+env_api_base_url:
+  type: str
+  when: false
+  default: "http://localhost:5173"
+
+backend_features:
+  type: str
+  when: false
+  default: "{}"
+
+proxy_targets:
+  type: str
+  when: false
+  default: "[]"
+
+vite_proxy_config:
+  type: str
+  when: false
+  default: ""
+
+server_port:
+  type: int
+  help: Dev server port
+  default: 5173
+  validator: "{% if server_port < 1024 or server_port > 65535 %}Port must be 1024-65535.{% endif %}"
+
+keycloak_url:
+  type: str
+  help: Keycloak server URL
+  default: "http://localhost:8080"
+  when: "{{ include_auth }}"
+
+keycloak_realm:
+  type: str
+  help: Keycloak realm
+  default: master
+  when: "{{ include_auth }}"
+
+keycloak_client_id:
+  type: str
+  help: Keycloak client ID
+  default: "{{ project_slug }}"
+  when: "{{ include_auth }}"
+
+# ── Tasks ──────────────────────────────────────────────────────
+
+_tasks:
+  - command: "{{ _copier_python }} _build/post_generate.py"
+    when: "{{ True }}"

@@ -1,7 +1,11 @@
 export type LayoutBreakpoint = 'compact' | 'medium' | 'expanded';
 
-const MEDIUM_QUERY = '(min-width: 640px)';
-const EXPANDED_QUERY = '(min-width: 1024px)';
+// App-shell breakpoint tiers, kept in sync with the Vue (useBreakpoint) and
+// Flutter (DesignTokens) sources: mobile < 600 · tablet 600–839 · desktop ≥ 840.
+// All reflow is driven by this store (no CSS @media), so these two constants
+// are the single source of truth for Svelte layouts.
+const MEDIUM_QUERY = '(min-width: 600px)';
+const EXPANDED_QUERY = '(min-width: 840px)';
 
 let breakpoint = $state<LayoutBreakpoint>('expanded');
 let screenWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1200);

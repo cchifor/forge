@@ -1,0 +1,13 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `sidebar` is the default/baseline layout: it IS today's full Vue frontend
+# template, rendered in a single pass (no overlay), so selecting it reproduces
+# pre-layouts output byte-for-byte. Other layouts set `base` to this template
+# and ship only a thin overlay (their MainLayout + layout-specific regions).
+[layout]
+name = "sidebar"
+framework = "vue"
+display_label = "Sidebar App Shell"
+template_dir = "apps/vue-frontend-template"
+base = ""
+supported = true

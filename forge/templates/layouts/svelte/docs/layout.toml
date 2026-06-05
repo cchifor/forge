@@ -1,0 +1,15 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `docs` is a thin Copier overlay on top of the shared Svelte base template.
+# It ships only its (app)/+layout.svelte shell plus the documentation region
+# components (DocTreeNav left tree, TocPanel right table-of-contents);
+# everything else (routes infra, auth, API client, AppHeader, ChatDrawer,
+# ChatBottomSheet, AiChat, ui store, breakpoints) comes from the base, which
+# forge renders first (two-stage render). No persistent AppSidebar/BottomNav.
+[layout]
+name = "docs"
+framework = "svelte"
+display_label = "Documentation 3-Column"
+template_dir = "layouts/svelte/docs"
+base = "apps/svelte-frontend-template"
+supported = true

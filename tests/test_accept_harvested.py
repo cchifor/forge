@@ -28,6 +28,7 @@ from forge.cli.commands.accept_harvested import _run_accept_harvested
 from forge.fragments import MARKER_PREFIX
 from forge.sync.manifest import (
     CURRENT_SCHEMA_VERSION,
+    ForgeFrontendData,
     read_forge_toml,
     write_forge_toml,
 )
@@ -58,6 +59,7 @@ def _scaffold_project_with_block(
     body: str = "# block body line 1\n# block body line 2\n",
     backend_name: str = "api",
     fragment_name: str = "demo_block_fragment",
+    frontend: ForgeFrontendData | None = None,
 ) -> dict:
     """Build a project tree with one tracked merge_block.
 
@@ -91,6 +93,7 @@ def _scaffold_project_with_block(
         templates={"python": "services/python-service-template"},
         options={},
         merge_blocks=merge_blocks,
+        frontend=frontend,
     )
     return {
         "backend_dir": backend_dir,
@@ -433,6 +436,54 @@ class TestAcceptHarvestedBlockHappyPath:
         assert entry.action == "restamped-baseline"
         assert entry.new_sha == new_sha
         assert entry.old_sha == meta["baseline_sha"]
+
+    def test_restamp_preserves_frontend_layout(self, tmp_path: Path) -> None:
+        """Accepting a harvest bundle must not drop the [forge.frontend] table.
+
+        Regression: the accept restamp re-wrote forge.toml without the
+        frontend table, silently resetting a non-default --layout choice.
+        """
+        fragment_name = "test_block_accept_layout"
+        meta = _scaffold_project_with_block(
+            tmp_path,
+            fragment_name=fragment_name,
+            frontend=ForgeFrontendData(
+                framework="flutter", app_dir="apps/frontend", layout="threepane"
+            ),
+        )
+        edited_body = "# block body line 1\n# user added a line\n# block body line 2\n"
+        original_segment = _block_text(fragment_name, "DEMO_MARKER", meta["block_body"])
+        new_segment = _block_text(fragment_name, "DEMO_MARKER", edited_body)
+        meta["main_py"].write_text(
+            meta["main_py"].read_text().replace(original_segment, new_segment)
+        )
+        fragment_dir = _make_fragment_dir_with_block(
+            tmp_path,
+            fragment_name=fragment_name,
+            target_relpath="src/app/main.py",
+            marker_bare="DEMO_MARKER",
+            snippet=edited_body,
+        )
+        _register_fragment(fragment_name, fragment_dir)
+        try:
+            bundle = tmp_path / "_bundle"
+            _write_bundle_manifest(
+                bundle,
+                _make_block_bundle(
+                    bundle_id="harvest-test-layout",
+                    project_root=tmp_path,
+                    meta=meta,
+                    edited_body=edited_body,
+                ),
+            )
+            report = accept_harvested(project_root=tmp_path, bundle_path=bundle, quiet=True)
+        finally:
+            _unregister_fragment(fragment_name)
+
+        assert report.restamped == 1  # a rewrite actually happened
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert data.frontend.framework == "flutter"
+        assert data.frontend.layout == "threepane"
 
 
 class TestAcceptHarvestedBlockSkipNotApplied:

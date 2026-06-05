@@ -1,0 +1,14 @@
+# UI app-shell layout manifest — discovered by forge.layout_variants.
+#
+# `topnav` is a thin Copier overlay on top of the shared Vue base template.
+# It ships only its MainLayout shell plus the top-nav region components
+# (TopNavBar, TopNavDrawer, AppFooter); everything else (router, auth, API
+# client, AiChat, ui.store, useBreakpoint, all Layer-1 ui/) comes from the
+# base, which forge renders first (two-stage render).
+[layout]
+name = "topnav"
+framework = "vue"
+display_label = "Top-Nav Content Shell"
+template_dir = "layouts/vue/topnav"
+base = "apps/vue-frontend-template"
+supported = true

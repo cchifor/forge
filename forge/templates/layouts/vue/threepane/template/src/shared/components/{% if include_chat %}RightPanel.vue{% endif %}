@@ -1,0 +1,115 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { MessageSquare, LayoutPanelLeft, PanelRightClose } from 'lucide-vue-next'
+import { AiChat, CanvasPane, useAiChat } from '@/features/ai_chat'
+
+const emit = defineEmits<{ toggle: [] }>()
+
+const { canvasActivity } = useAiChat()
+
+// The right panel can show either the conversation (chat) or the agent's
+// artifacts (canvas). When the agent produces a canvas activity we auto-
+// focus the Artifacts tab; the user can flip back to Chat at any time.
+type RightTab = 'chat' | 'artifacts'
+const activeTab = ref<RightTab>('chat')
+
+const hasArtifacts = computed(() => canvasActivity.value !== null)
+
+watch(hasArtifacts, (has) => {
+  if (has) activeTab.value = 'artifacts'
+  else if (activeTab.value === 'artifacts') activeTab.value = 'chat'
+})
+
+const tabs: { id: RightTab; label: string; icon: typeof MessageSquare }[] = [
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'artifacts', label: 'Artifacts', icon: LayoutPanelLeft },
+]
+</script>
+
+<template>
+  <div class="flex h-full flex-col overflow-hidden border-l bg-background">
+    <!-- Panel chrome: Chat | Artifacts tab strip + collapse toggle. The tab
+         strip is an ARIA tablist so screen readers announce tab semantics and
+         the active selection; each tab points at its panel via aria-controls. -->
+    <div class="flex h-12 shrink-0 items-center gap-1 border-b px-2">
+      <nav
+        class="flex flex-1 items-center gap-1"
+        role="tablist"
+        aria-label="Right panel views"
+      >
+        <button
+          v-for="tab in tabs"
+          :id="`right-panel-tab-${tab.id}`"
+          :key="tab.id"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          :aria-controls="`right-panel-${tab.id}`"
+          :tabindex="activeTab === tab.id ? 0 : -1"
+          class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm interactive-press"
+          :class="
+            activeTab === tab.id
+              ? 'bg-primary/10 font-medium text-primary'
+              : 'text-muted-foreground hover:bg-muted'
+          "
+          :disabled="tab.id === 'artifacts' && !hasArtifacts"
+          :title="
+            tab.id === 'artifacts' && !hasArtifacts
+              ? 'Artifacts appear when the agent produces them'
+              : tab.label
+          "
+          @click="activeTab = tab.id"
+        >
+          <component :is="tab.icon" class="h-4 w-4" />
+          <span>{{ tab.label }}</span>
+        </button>
+      </nav>
+      <!-- The panel is mounted only while it is open, so it is always in the
+           "expanded" state here; the toggle collapses it back to hidden. -->
+      <button
+        class="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted interactive-press"
+        aria-label="Hide panel"
+        :aria-expanded="true"
+        title="Hide panel (Esc)"
+        @click="emit('toggle')"
+      >
+        <PanelRightClose class="h-4 w-4" />
+      </button>
+    </div>
+
+    <!-- Body: conversation OR artifacts. AiChat stays mounted (v-show) so its
+         scroll position and in-flight stream survive a tab switch; the
+         artifacts pane mounts lazily (v-if) since it has no transient state. -->
+    <div class="relative flex-1 overflow-hidden">
+      <div
+        id="right-panel-chat"
+        role="tabpanel"
+        aria-labelledby="right-panel-tab-chat"
+        :aria-hidden="activeTab !== 'chat'"
+        v-show="activeTab === 'chat'"
+        class="absolute inset-0"
+      >
+        <AiChat />
+      </div>
+      <div
+        v-if="activeTab === 'artifacts'"
+        id="right-panel-artifacts"
+        role="tabpanel"
+        aria-labelledby="right-panel-tab-artifacts"
+        class="absolute inset-0"
+      >
+        <CanvasPane v-if="hasArtifacts" />
+        <div
+          v-else
+          class="flex h-full flex-col items-center justify-center gap-4 p-8 text-center"
+        >
+          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <LayoutPanelLeft class="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p class="max-w-xs text-sm text-muted-foreground">
+            Artifacts from the agent appear here.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
