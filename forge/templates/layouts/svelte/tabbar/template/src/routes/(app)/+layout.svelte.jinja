@@ -48,7 +48,7 @@
 
 {#if auth.isAuthenticated}
 	{#if ui.isMobile}
-		<!-- COMPACT (<640px): Header + Content + BottomNav -->
+		<!-- COMPACT (<600px): Header + Content + BottomNav -->
 		<div class="flex min-h-svh flex-col">
 			<AppHeader />
 			<main class="flex-1 overflow-y-auto p-4 pb-20">{@render children()}</main>
@@ -60,7 +60,7 @@
 			</ChatBottomSheet>
 		{/if}
 {% endraw %}{% endif %}{% raw %}	{:else if ui.isMedium}
-		<!-- MEDIUM (640-1023px): Slim icon nav rail + Content -->
+		<!-- MEDIUM (600-839px): Slim icon nav rail + Content -->
 		<div class="flex min-h-svh">
 			<NavRail items={primaryNav} />
 			<div class="flex flex-1 flex-col min-w-0">
@@ -74,7 +74,7 @@
 			</ChatDrawer>
 		{/if}
 {% endraw %}{% endif %}{% raw %}	{:else}
-		<!-- EXPANDED (>=1024px): Full collapsible sidebar + Content + Inline chat -->
+		<!-- EXPANDED (>=840px): Full collapsible sidebar + Content + Inline chat -->
 		<div
 			class="group/sidebar-wrapper flex min-h-svh"
 			data-sidebar-state={ui.sidebarCollapsed ? 'collapsed' : 'expanded'}

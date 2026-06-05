@@ -384,9 +384,9 @@ def generate_readme(features):
 Feature-First with Svelte 5 runes, TanStack Query, Ky HTTP client, Zod validation.
 
 ### Responsive Layout
-- **Expanded** (>1024px): Sidebar + working area + inline chat
-- **Medium** (640-1024px): Collapsed sidebar + drawer chat
-- **Compact** (<640px): Bottom navigation + modal chat
+- **Expanded** (>=840px): Sidebar + working area + inline chat
+- **Medium** (600-839px): Collapsed sidebar + drawer chat
+- **Compact** (<600px): Bottom navigation + modal chat
 %s
 """ + ("""
 ## Chat & agentic UI
