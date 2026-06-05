@@ -146,7 +146,7 @@ selects *which* issuer the stack is wired to:
   a production posture.
 - ``oidc_generic``: point the SDK at any external OIDC issuer (Keycloak
   direct, Auth0, Cognito, Okta) via OIDC discovery + JWKS — no Gatekeeper
-  container generated. (Provider fragments land in a later phase.)
+  container generated. Issuer is env-driven (``AUTH_PROVIDER_*``).
 - ``none``: ship the SDK + middleware but no token authority — bring your own
   issuer. Also the resolved value when ``auth.mode=none`` (nothing to wire).
 
@@ -163,7 +163,13 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
                 # Gatekeeper container — no Keycloak / Redis required. Refused
                 # on a production posture (see the capability resolver).
                 "in_memory": ("platform_auth_in_memory_provider",),
-                # oidc_generic provider fragments land in a later phase;
+                # ``oidc_generic`` points the issuer-agnostic SDK + middleware
+                # at any EXTERNAL OIDC issuer (Keycloak direct / Auth0 /
+                # Cognito / Okta) via OIDC discovery + JWKS — no Gatekeeper
+                # container, no Keycloak realm, no Redis. The issuer is
+                # env-driven (``AUTH_PROVIDER_*``); the fragment ships the
+                # config + claim-mapper + discovery helper + guard rebind.
+                "oidc_generic": ("platform_auth_oidc_provider",),
                 # "none" intentionally enables nothing.
             },
         )

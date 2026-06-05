@@ -458,3 +458,41 @@ def register_all(api: ForgeAPI) -> None:
             depends_on=("platform_auth_python_middleware",),
         )
     )
+
+    # ``auth.provider=oidc_generic`` — verify against ANY external OIDC issuer.
+    #
+    # Backend-scoped, Python-only (parity tier auto-derives to 3). Selected by
+    # the ``auth.provider`` sub-discriminator as an alternative to the
+    # Gatekeeper container: instead of generating a token authority, the
+    # service's issuer-agnostic ``AuthGuard`` is pointed at an *external* OIDC
+    # issuer (Keycloak direct / Auth0 / Cognito / Okta / Azure AD) via OIDC
+    # discovery + JWKS. The issuer is env-driven (``AUTH_PROVIDER_*``), so NO
+    # Gatekeeper container, Keycloak realm, or Redis is generated.
+    #
+    # It ships ONLY the additive pieces — the env-driven OIDC config + claim
+    # mapper, the discovery helper, and the installer that rebinds the
+    # auth-guard builder to the OIDC variant. Like the in_memory provider it
+    # deliberately does NOT re-ship the files
+    # ``platform_auth_python_middleware`` already owns
+    # (``platform_auth_setup.py``, ``service/security/auth.py``, …): the SDK +
+    # middleware stay issuer-agnostic, so the only thing that changes is which
+    # issuer's JWKS the guard trusts.
+    #
+    # Depends on the Python middleware fragment because it imports
+    # ``AuthGuardBundle`` from ``service.security.platform_auth_setup`` and
+    # rebinds the middleware-wired ``build_auth_guard``; that fragment already
+    # depends on ``platform_auth_sdk_python`` (the runtime ``platform_auth``
+    # import), so the full chain resolves. No infra capabilities at all — the
+    # issuer lives outside the generated stack.
+    api.add_fragment(
+        Fragment(
+            name="platform_auth_oidc_provider",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("platform_auth_oidc", "python"),
+                    # Backend-scoped (default) — files land per Python backend.
+                ),
+            },
+            depends_on=("platform_auth_python_middleware",),
+        )
+    )
