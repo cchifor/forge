@@ -170,6 +170,7 @@ def _build_frontend_from_cfg(
         generate_e2e_tests=r.get(
             "generate_e2e_tests", "frontend", "generate_e2e_tests", default=True
         ),
+        layout=r.get("layout", "frontend", "layout", default="sidebar"),
     )
     return frontend, include_auth
 

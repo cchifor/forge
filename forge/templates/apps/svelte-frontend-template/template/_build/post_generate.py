@@ -73,6 +73,9 @@ INCLUDE_AUTH = ANSWERS.get("include_auth", True)
 INCLUDE_CHAT = ANSWERS.get("include_chat", True)
 INCLUDE_OPENAPI = ANSWERS.get("include_openapi", True)
 PACKAGE_MANAGER = ANSWERS.get("package_manager", "npm")
+# UI app-shell layout. Only ``sidebar`` uses the static no-chat +layout.svelte
+# replacement below; other layouts ship their own chat-conditional shell.
+LAYOUT = ANSWERS.get("frontend_layout", "sidebar")
 API_BASE_URL = ANSWERS.get("api_base_url", "http://localhost:5000")
 API_PROXY_TARGET = ANSWERS.get("api_proxy_target", API_BASE_URL)
 SERVER_PORT = str(ANSWERS.get("server_port", 5173))
@@ -381,9 +384,9 @@ def generate_readme(features):
 Feature-First with Svelte 5 runes, TanStack Query, Ky HTTP client, Zod validation.
 
 ### Responsive Layout
-- **Expanded** (>1024px): Sidebar + working area + inline chat
-- **Medium** (640-1024px): Collapsed sidebar + drawer chat
-- **Compact** (<640px): Bottom navigation + modal chat
+- **Expanded** (>=840px): Sidebar + working area + inline chat
+- **Medium** (600-839px): Collapsed sidebar + drawer chat
+- **Compact** (<600px): Bottom navigation + modal chat
 %s
 """ + ("""
 ## Chat & agentic UI
@@ -507,8 +510,11 @@ def remove_optional_files():
         )
 
         # The chat-off (app)/+layout.svelte needs to match the auth setting.
-        layout_body = NO_CHAT_LAYOUT if INCLUDE_AUTH else NO_CHAT_LAYOUT_NO_AUTH
-        write_file(PROJECT_DIR / "src" / "routes" / "(app)" / "+layout.svelte", layout_body)
+        # Only the sidebar layout uses this static replacement; other layouts ship
+        # their own chat-conditional +layout.svelte (Jinja {% if include_chat %}).
+        if LAYOUT == "sidebar":
+            layout_body = NO_CHAT_LAYOUT if INCLUDE_AUTH else NO_CHAT_LAYOUT_NO_AUTH
+            write_file(PROJECT_DIR / "src" / "routes" / "(app)" / "+layout.svelte", layout_body)
 
         header_path = PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "AppHeader.svelte"
         if header_path.exists():

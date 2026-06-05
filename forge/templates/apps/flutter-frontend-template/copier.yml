@@ -113,6 +113,12 @@ author_name:
   help: "Author name"
   default: "Your Name"
 
+frontend_layout:
+  type: str
+  when: false
+  default: "sidebar"
+  help: "UI app-shell layout slug (set by forge from FrontendConfig.layout)"
+
 # ── Post-generation tasks ──
 
 _tasks:
@@ -130,3 +136,4 @@ _tasks:
     --version={{ version }}
     --api-base-url={{ api_base_url }}
     --default-color-scheme={{ default_color_scheme }}
+    --frontend-layout={{ frontend_layout }}

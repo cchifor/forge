@@ -54,6 +54,7 @@ from forge.errors import (
     GeneratorError,
     TemplateError,
 )
+from forge.layout_variants import DEFAULT_LAYOUT, get_layout_variant
 from forge.logging import get_logger, phase_timer
 from forge.reports import (
     FileInventoryEntry,
@@ -875,6 +876,7 @@ def _frontend_manifest_data(config: ProjectConfig):
     return ForgeFrontendData(
         framework=config.frontend.framework.value,
         app_dir=f"apps/{config.frontend_slug}",
+        layout=config.frontend.layout,
     )
 
 
@@ -885,6 +887,7 @@ def _run_copier(
     quiet: bool,
     *,
     dry_run: bool = False,
+    skip_tasks: bool = False,
 ) -> None:
     """Invoke Copier and translate its failures into GeneratorError.
 
@@ -920,7 +923,7 @@ def _run_copier(
             defaults=True,
             overwrite=True,
             quiet=quiet,
-            skip_tasks=dry_run,
+            skip_tasks=skip_tasks or dry_run,
         )
     except ForgeError:
         raise
@@ -1052,9 +1055,14 @@ def _generate_frontend(
     if config.frontend is None:
         raise GeneratorError("_generate_frontend called without a frontend configured")
     fw = config.frontend.framework
-    template_dir = TEMPLATE_DIRS.get(fw)
+    # Layout dispatch: a registered LayoutVariant selects the template dir for
+    # the chosen (framework, layout). Built-ins always have a variant; anything
+    # without one falls back to the legacy framework template (plugin frontends).
+    layout_name = config.frontend.layout or DEFAULT_LAYOUT
+    variant = get_layout_variant(fw, layout_name)
+    template_dir = variant.template_dir if variant is not None else TEMPLATE_DIRS.get(fw)
     if template_dir is None:
-        raise GeneratorError(f"No template for framework: {fw}")
+        raise GeneratorError(f"No template for framework {fw.value!r} (layout {layout_name!r})")
 
     ctx = variable_mapper.frontend_context(config)
 
@@ -1067,6 +1075,13 @@ def _generate_frontend(
     else:
         dst = project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
+    base_dir = variant.base_template_dir if variant is not None else ""
+    if base_dir:
+        # Two-stage render: shared base first (post-generate tasks deferred via
+        # skip_tasks), then the thin layout overlay — which runs the tasks once
+        # on the combined tree. Proven byte-identical to a single render in the
+        # Phase-0 PoC. Self-contained variants (base_dir == "") skip this.
+        _run_copier(TEMPLATES_DIR / base_dir, dst, ctx, quiet, skip_tasks=True, dry_run=dry_run)
     _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet, dry_run=dry_run)
     return project_root / "apps" / config.frontend_slug
 

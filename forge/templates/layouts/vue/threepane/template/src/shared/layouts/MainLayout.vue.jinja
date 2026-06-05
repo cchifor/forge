@@ -1,0 +1,268 @@
+<script setup lang="ts">
+{% if include_chat %}import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+{% endif %}import { useRoute } from 'vue-router'
+import { Home, Package, User, Settings } from 'lucide-vue-next'
+import AppSidebar from '@/shared/components/AppSidebar.vue'
+import AppHeader from '@/shared/components/AppHeader.vue'
+{% if include_chat %}import VerticalSplitter from '@/shared/components/VerticalSplitter.vue'
+import RightPanel from '@/shared/components/RightPanel.vue'
+import { useAiChat } from '@/features/ai_chat'
+{% endif %}import { useBreakpoint } from '@/shared/composables/useBreakpoint'
+{% if include_chat %}import { useUiStore } from '@/shared/stores/ui.store'
+{% endif %}
+const route = useRoute()
+{% if include_chat %}const { chatOpen, openChat, closeChat } = useAiChat()
+{% endif %}const { {% if include_chat %}isCompact, {% endif %}isMedium, isExpanded{% if include_chat %}, width: viewportWidth{% endif %} } = useBreakpoint()
+{% if include_chat %}const uiStore = useUiStore()
+const isDragging = ref(false)
+{% else %}// Chat disabled — graceful degradation of the third pane.
+// The right pane in this layout is the agent surface (chat + artifacts), which
+// is wholly owned by the `@/features/ai_chat` feature. With chat off that
+// feature (AiChat / CanvasPane / useAiChat) is not generated, so there is
+// nothing to render in a third column. Rather than ship an empty splitter or
+// a dangling RightPanel reference, we omit the pane entirely and let the
+// center content column expand to fill the width — the shell stays a clean,
+// fully functional two-pane layout. No right-pane state, refs, or splitter
+// are declared below.
+{% endif %}
+{% if include_chat %}// ── Right-pane open/close state flow ─────────────────────────────────────
+// Panel visibility is a layout concern, so it lives here (component-local)
+// rather than in the shared ui.store, but it is kept in lock-step with the
+// global `chatOpen` flag so the header's AiChatButton stays accurate. The
+// sync is bidirectional and flows through exactly one shared field
+// (`chatOpen` from useAiChat); `rightPanelOpen` is a one-way mirror of it:
+//
+//   AiChatButton ──toggleChat()──► chatOpen ──watch──► rightPanelOpen
+//   RightPanel close ─toggleRightPanel()/closeRightPanel()─► open/closeChat()
+//                                          │
+//                                          └─► chatOpen ──watch──► rightPanelOpen
+//
+// Every mutation of `rightPanelOpen` also writes `chatOpen` (see the toggle
+// helpers below), and the watch mirrors `chatOpen` back, so the two can only
+// disagree for the duration of a single synchronous tick. Defaults OPEN on
+// desktop the first time the shell mounts.
+const rightPanelOpen = ref(false)
+onMounted(() => {
+  rightPanelOpen.value = isExpanded.value || chatOpen.value
+})
+watch(chatOpen, (open) => {
+  rightPanelOpen.value = open
+})
+
+function toggleRightPanel() {
+  rightPanelOpen.value = !rightPanelOpen.value
+  if (rightPanelOpen.value) openChat()
+  else closeChat()
+}
+
+// Closing the overlay (tablet drawer / mobile sheet) also clears chatOpen so
+// the AiChatButton state stays in sync.
+function closeRightPanel() {
+  rightPanelOpen.value = false
+  if (chatOpen.value) closeChat()
+}
+
+function onEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && rightPanelOpen.value && !isExpanded.value) {
+    closeRightPanel()
+  }
+}
+onMounted(() => document.addEventListener('keydown', onEscape))
+onUnmounted(() => document.removeEventListener('keydown', onEscape))
+
+const sidebarWidth = computed(() => {
+  if (isCompact.value) return 0
+  if (isMedium.value) return 72
+  return uiStore.sidebarCollapsed ? 72 : 240
+})
+
+const availableWidth = computed(() => viewportWidth.value - sidebarWidth.value)
+
+// Reuse chatWidthRatio for the resizable right panel (no new store field).
+// Clamp width to [320px, availableWidth - 300px]: a 320px floor keeps the
+// chat/artifacts surface usable, and reserving 300px for the center column
+// matches the base layout's chat reserve (MainLayout.vue) so dragging behaves
+// identically across layouts on constrained expanded viewports.
+const rightPanelPixelWidth = computed(() => {
+  if (!rightPanelOpen.value) return 0
+  const raw = uiStore.chatWidthRatio * availableWidth.value
+  return Math.max(320, Math.min(raw, availableWidth.value - 300))
+})
+
+function onDragStart() {
+  isDragging.value = true
+}
+
+function onDragUpdate(clientX: number) {
+  const panelWidth = viewportWidth.value - clientX
+  const ratio = panelWidth / availableWidth.value
+  uiStore.setChatWidthRatio(ratio)
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  uiStore.commitChatWidthRatio()
+}
+
+function onDoubleTap() {
+  uiStore.setChatWidthRatio(0.33)
+  uiStore.commitChatWidthRatio()
+}
+{% endif %}
+// Bottom nav for compact
+const bottomNavItems = [
+  { title: 'Home', url: '/', icon: Home },
+  // --- feature nav items ---
+  // --- end feature nav items ---
+  { title: 'Profile', url: '/profile', icon: User },
+  { title: 'Settings', url: '/settings', icon: Settings },
+]
+
+function isNavActive(url: string) {
+  if (url === '/') return route.path === '/'
+  return route.path.startsWith(url)
+}
+</script>
+
+<template>
+  <!-- ═══ EXPANDED (≥840px) — 3 panes side by side ═══ -->
+  <div v-if="isExpanded" class="flex h-svh overflow-hidden">
+    <AppSidebar />
+    <div
+      class="flex min-w-0 flex-1 flex-col overflow-hidden"
+{% if include_chat %}      :class="{ 'pointer-events-none select-none': isDragging }"
+{% endif %}    >
+      <AppHeader />
+      <main class="flex-1 overflow-auto p-4">
+        <!-- Center content column: readable max width, must shrink (min-w-0). -->
+        <div class="mx-auto w-full min-w-0 max-w-3xl">
+          <RouterView />
+        </div>
+      </main>
+    </div>
+{% if include_chat %}    <template v-if="rightPanelOpen">
+      <VerticalSplitter
+        title="Drag to resize · double-click to reset width"
+        @drag-start="onDragStart"
+        @drag-update="onDragUpdate"
+        @drag-end="onDragEnd"
+        @double-tap="onDoubleTap"
+      />
+      <div
+        class="shrink-0 overflow-hidden"
+        :style="{ width: rightPanelPixelWidth + 'px' }"
+        :class="{ 'pointer-events-none select-none': isDragging }"
+      >
+        <RightPanel @toggle="toggleRightPanel" />
+      </div>
+    </template>
+{% endif %}  </div>
+
+  <!-- ═══ MEDIUM (600-839px) — sidebar collapsed, right pane as drawer ═══ -->
+  <div v-else-if="isMedium" class="flex h-svh overflow-hidden">
+    <AppSidebar :force-collapsed="true" />
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <AppHeader />
+      <main class="flex-1 overflow-auto p-4">
+        <div class="mx-auto w-full min-w-0 max-w-3xl">
+          <RouterView />
+        </div>
+      </main>
+    </div>
+{% if include_chat %}    <Transition name="panel-drawer">
+      <div
+        v-if="rightPanelOpen"
+        class="fixed right-0 top-0 z-40 h-svh w-[400px] max-w-[90vw] shadow-xl"
+      >
+        <RightPanel @toggle="closeRightPanel" />
+      </div>
+    </Transition>
+{% endif %}  </div>
+
+  <!-- ═══ COMPACT (<600px) — stacked + right pane as bottom sheet ═══ -->
+  <div v-else class="flex h-svh flex-col overflow-hidden">
+    <AppHeader :compact="true" />
+    <main class="flex-1 overflow-auto p-4">
+      <div class="mx-auto w-full min-w-0 max-w-3xl">
+        <RouterView />
+      </div>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="flex h-14 shrink-0 items-center border-t bg-card">
+      <RouterLink
+        v-for="item in bottomNavItems"
+        :key="item.url"
+        :to="item.url"
+        class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs interactive-press"
+        :class="isNavActive(item.url) ? 'text-primary' : 'text-muted-foreground'"
+      >
+        <component :is="item.icon" class="h-5 w-5" />
+        <span>{{ '{{' }} item.title {{ '}}' }}</span>
+      </RouterLink>
+    </nav>
+
+{% if include_chat %}    <!-- Right pane as bottom sheet -->
+    <Teleport to="body">
+      <Transition name="panel-modal">
+        <div
+          v-if="rightPanelOpen"
+          class="fixed inset-0 z-50 flex flex-col justify-end"
+        >
+          <div
+            class="absolute inset-0 bg-black/50"
+            @click="closeRightPanel"
+          />
+          <div class="relative flex max-h-[90vh] min-h-[60vh] flex-col overflow-hidden rounded-t-2xl border-t bg-background shadow-xl">
+            <div class="mx-auto my-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30" />
+            <div class="min-h-0 flex-1">
+              <RightPanel @toggle="closeRightPanel" />
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+{% endif %}  </div>
+</template>
+
+{% if include_chat %}<style scoped>
+/* Drawer slide from right (tablet) */
+.panel-drawer-enter-active,
+.panel-drawer-leave-active {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.panel-drawer-enter-from,
+.panel-drawer-leave-to {
+  transform: translateX(100%);
+}
+
+/* Modal from bottom (mobile) */
+.panel-modal-enter-active,
+.panel-modal-leave-active {
+  transition: opacity 200ms ease;
+}
+.panel-modal-enter-active > :last-child,
+.panel-modal-leave-active > :last-child {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.panel-modal-enter-from,
+.panel-modal-leave-to {
+  opacity: 0;
+}
+.panel-modal-enter-from > :last-child,
+.panel-modal-leave-to > :last-child {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-drawer-enter-active,
+  .panel-drawer-leave-active,
+  .panel-modal-enter-active,
+  .panel-modal-leave-active,
+  .panel-modal-enter-active > :last-child,
+  .panel-modal-leave-active > :last-child {
+    transition-duration: 0ms;
+  }
+}
+</style>
+{% endif %}

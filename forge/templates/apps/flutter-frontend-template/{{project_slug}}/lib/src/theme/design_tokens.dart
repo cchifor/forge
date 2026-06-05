@@ -1,7 +1,8 @@
 abstract final class DesignTokens {
   // ── Responsive breakpoints ──
+  // Two tier boundaries (kept in sync with the Vue/Svelte sources):
+  // mobile < compactWidth · tablet [compactWidth, expandedWidth) · desktop >=.
   static const double compactWidth = 600;
-  static const double mediumWidth = 840;
   static const double expandedWidth = 840;
 
   // ── Spacing scale (8px base) ──

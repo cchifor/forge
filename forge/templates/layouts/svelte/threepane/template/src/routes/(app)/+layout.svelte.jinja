@@ -1,0 +1,101 @@
+{% raw %}<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { getAuth } from '$lib/core';
+	import { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
+	import BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
+{% endraw %}{% if include_chat %}{% raw %}	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';
+	import VerticalSplitHandle from '$lib/features/shell/ui/VerticalSplitHandle.svelte';
+	import RightPanel from '$lib/features/shell/ui/RightPanel.svelte';
+{% endraw %}{% endif %}{% raw %}
+	let { children } = $props();
+	const auth = getAuth();
+	const ui = getUiStore();
+
+	$effect(() => {
+		if (!auth.isLoading && !auth.isAuthenticated) {
+			goto('/login');
+		}
+	});
+{% endraw %}{% if include_chat %}{% raw %}
+	function handleKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
+			e.preventDefault();
+			ui.toggleChat();
+			return;
+		}
+		// Esc dismisses the right pane only when it is an overlay (medium/compact).
+		if (e.key === 'Escape' && ui.chatOpen && !ui.isDesktop) {
+			ui.closeChat();
+		}
+	}
+
+	// Splitter drag logic for the resizable right (agent) pane on expanded.
+	function handleDragMove(clientX: number) {
+		const panelPx = window.innerWidth - clientX;
+		ui.setChatWidth(panelPx);
+	}
+{% endraw %}{% endif %}{% raw %}</script>
+
+{% endraw %}{% if include_chat %}{% raw %}<svelte:window onkeydown={handleKeydown} />
+{% endraw %}{% endif %}{% raw %}
+{#if auth.isAuthenticated}
+	{#if ui.isMobile}
+		<!-- ═══ COMPACT (<600px) — stacked + BottomNav; agent pane as bottom sheet ═══ -->
+		<div class="flex min-h-svh flex-col">
+			<AppHeader />
+			<main class="flex-1 overflow-y-auto p-4 pb-20">
+				<div class="mx-auto w-full min-w-0 max-w-3xl">{@render children()}</div>
+			</main>
+			<BottomNav />
+		</div>
+{% endraw %}{% if include_chat %}{% raw %}		{#if ui.chatOpen}
+			<ChatBottomSheet bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<RightPanel mode="sheet" ontoggle={() => ui.closeChat()} />
+			</ChatBottomSheet>
+		{/if}
+{% endraw %}{% endif %}{% raw %}	{:else if ui.isMedium}
+		<!-- ═══ MEDIUM (600–839px) — collapsed sidebar + content; agent pane as drawer ═══ -->
+		<div class="flex min-h-svh">
+			<AppSidebar forceCollapsed />
+			<div class="flex flex-1 flex-col min-w-0">
+				<AppHeader />
+				<main class="flex-1 overflow-y-auto p-4">
+					<div class="mx-auto w-full min-w-0 max-w-3xl">{@render children()}</div>
+				</main>
+			</div>
+		</div>
+{% endraw %}{% if include_chat %}{% raw %}		{#if ui.chatOpen}
+			<ChatDrawer bind:open={() => ui.chatOpen, (v) => { if (!v) ui.closeChat(); }}>
+				<RightPanel mode="drawer" ontoggle={() => ui.closeChat()} />
+			</ChatDrawer>
+		{/if}
+{% endraw %}{% endif %}{% raw %}	{:else}
+		<!-- ═══ EXPANDED (≥840px) — three panes: sidebar | center | resizable agent pane ═══ -->
+		<div
+			class="group/sidebar-wrapper flex h-svh overflow-hidden"
+			data-sidebar-state={ui.sidebarCollapsed ? 'collapsed' : 'expanded'}
+		>
+			<AppSidebar />
+			<div class="flex flex-1 flex-col min-w-0">
+				<AppHeader />
+				<div class="flex flex-1 min-h-0">
+					<!-- Center content column: readable max width, must shrink (min-w-0). -->
+					<main class="flex-1 overflow-y-auto p-4">
+						<div class="mx-auto w-full min-w-0 max-w-3xl">{@render children()}</div>
+					</main>
+{% endraw %}{% if include_chat %}{% raw %}					{#if ui.chatOpen}
+						<VerticalSplitHandle ondragmove={handleDragMove} onreset={() => ui.setChatWidth(384)} />
+						<div
+							style="width: {ui.chatWidth}px"
+							class="flex-shrink-0 overflow-hidden"
+						>
+							<RightPanel mode="inline" ontoggle={() => ui.closeChat()} />
+						</div>
+					{/if}
+{% endraw %}{% endif %}{% raw %}				</div>
+			</div>
+		</div>
+	{/if}
+{/if}
+{% endraw %}

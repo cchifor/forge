@@ -69,6 +69,12 @@ include_sentry:
   default: false
   help: "Include @sentry/vue for error tracking"
 
+frontend_layout:
+  type: str
+  when: false
+  default: "sidebar"
+  help: "UI app-shell layout slug (set by forge from FrontendConfig.layout)"
+
 consumed_services:
   type: str
   default: ""

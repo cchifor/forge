@@ -17,6 +17,21 @@ pre-release labels. SDK MAJOR aligns with the plugin compat boundary
 (plugins may need code changes); MINOR signals additive surface
 (plugins keep working, can opt into new APIs).
 
+## 1.3 (2026-06, with forge 1.x)
+
+Status: **provisional** — additive; existing plugins keep working unchanged.
+
+Added:
+
+- ``ForgeAPI.add_frontend_layout(framework, name, template_dir,
+  display_label, *, base_template_dir="", supported=True)`` — registers a
+  selectable UI app-shell layout (the ``--layout`` choice) for a built-in or
+  plugin frontend. A ``(framework, layout)`` ``LayoutVariant``
+  (``forge/layout_variants.py``) maps to a Copier template; the generator
+  dispatches on it. ``base_template_dir`` enables the two-stage shared-base +
+  thin-variant render (otherwise a self-contained single render). Distinct
+  from the codegen ``FrontendLayout`` in ``forge/frontends.py`` (emit paths).
+
 ## 1.2 (2026-05, with forge 1.2.0-alpha.x)
 
 Status: **provisional** — the new surfaces are additive but the

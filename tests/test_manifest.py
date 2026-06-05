@@ -81,6 +81,36 @@ class TestV4RoundTrip:
         assert data.frontend.framework == "vue"
         assert data.frontend.app_dir == "apps/frontend"
 
+    def test_frontend_round_trip_preserves_layout(self, tmp_path: Path) -> None:
+        # Regression: layout must survive forge.toml so `forge update` / harvest
+        # don't silently reset a non-default layout to "sidebar".
+        manifest = tmp_path / "forge.toml"
+        write_forge_toml(
+            manifest,
+            version="1.3.0",
+            project_name="acme",
+            templates={"python": "services/python-service-template"},
+            options={},
+            frontend=ForgeFrontendData(framework="vue", app_dir="apps/frontend", layout="topnav"),
+        )
+        assert 'layout = "topnav"' in manifest.read_text(encoding="utf-8")
+        assert read_forge_toml(manifest).frontend.layout == "topnav"
+
+    def test_frontend_layout_key_omitted_when_blank(self, tmp_path: Path) -> None:
+        manifest = tmp_path / "forge.toml"
+        write_forge_toml(
+            manifest,
+            version="1.3.0",
+            project_name="acme",
+            templates={"python": "services/python-service-template"},
+            options={},
+            frontend=ForgeFrontendData(framework="vue", app_dir="apps/frontend"),
+        )
+        text = manifest.read_text(encoding="utf-8")
+        assert "[forge.frontend]" in text
+        assert "layout = " not in text
+        assert read_forge_toml(manifest).frontend.layout == ""
+
     def test_writer_omits_table_when_framework_blank(self, tmp_path: Path) -> None:
         manifest = tmp_path / "forge.toml"
         write_forge_toml(

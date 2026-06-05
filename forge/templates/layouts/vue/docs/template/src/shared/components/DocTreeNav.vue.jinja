@@ -1,0 +1,279 @@
+<script setup lang="ts">
+// DocTreeNav — the left documentation tree for the `docs` layout.
+//
+// Owns the nav-tree data. The feature injector splices generated entity
+// routes between the two marker comments below — reproduce them verbatim,
+// exactly as the base AppSidebar's `primaryNav` does, so the generator can
+// find and extend this list.
+//
+// Renders in two variants:
+//   - 'inline' (default): the persistent ~260px left column on desktop/tablet.
+//     `collapsed` shrinks it to an icon rail (desktop tree-collapse).
+//   - 'drawer': a teleported left slide-in for mobile, driven by the shared
+//     ui.store `mobileMenuOpen` flag (toggled from the docs toolbar).
+import { ref, watch, withDefaults } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  Home,
+  Package,
+  BookOpen,
+  ChevronRight,
+  Sparkles,
+  X,
+} from 'lucide-vue-next'
+import { useUiStore } from '@/shared/stores/ui.store'
+
+type DocNode = {
+  title: string
+  url?: string
+  icon?: unknown
+  children?: DocNode[]
+}
+
+withDefaults(
+  defineProps<{ variant?: 'inline' | 'drawer'; collapsed?: boolean }>(),
+  { variant: 'inline', collapsed: false },
+)
+
+const route = useRoute()
+const uiStore = useUiStore()
+
+// Documentation nav tree. Top-level "Guides" group holds the generated entity
+// pages — the injector splices RouterLink children between the markers below.
+const navTree: DocNode[] = [
+  { title: 'Home', url: '/', icon: Home },
+  {
+    title: 'Guides',
+    icon: BookOpen,
+    children: [
+      // --- feature nav items ---
+      // --- end feature nav items ---
+    ],
+  },
+  {
+    title: 'Reference',
+    icon: Package,
+    children: [
+      { title: 'Overview', url: '/items' },
+    ],
+  },
+]
+
+function isActive(url?: string) {
+  if (!url) return false
+  if (url === '/') return route.path === '/'
+  return route.path.startsWith(url)
+}
+
+// A group is "active" when any descendant route is active; such groups start
+// expanded and stay expanded while the user navigates within them.
+function groupHasActiveChild(node: DocNode): boolean {
+  return (node.children ?? []).some(
+    (c) => isActive(c.url) || groupHasActiveChild(c),
+  )
+}
+
+// Expansion state, keyed by group title. Seed open for active groups.
+const expanded = ref<Record<string, boolean>>({})
+function seedExpanded() {
+  for (const node of navTree) {
+    if (node.children && groupHasActiveChild(node)) expanded.value[node.title] = true
+  }
+}
+seedExpanded()
+watch(() => route.path, seedExpanded)
+
+function toggleGroup(title: string) {
+  expanded.value[title] = !expanded.value[title]
+}
+function isExpanded(node: DocNode) {
+  return expanded.value[node.title] ?? false
+}
+</script>
+
+<template>
+  <!-- ─── Inline variant: persistent left column ─── -->
+  <aside
+    v-if="variant === 'inline'"
+    id="doc-tree-nav"
+    class="flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar-background transition-[width] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+    :style="{ width: collapsed ? '64px' : '260px' }"
+  >
+    <nav class="flex-1 overflow-y-auto p-2" aria-label="Documentation">
+      <template v-for="node in navTree" :key="node.title">
+        <!-- Leaf link -->
+        <RouterLink
+          v-if="node.url"
+          :to="node.url"
+          :aria-current="isActive(node.url) ? 'page' : undefined"
+          class="group flex h-9 items-center gap-3 rounded-lg px-3 text-sm interactive-press"
+          :class="isActive(node.url)
+            ? 'bg-primary/10 font-semibold text-primary'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent'"
+          :title="node.title"
+        >
+          <component :is="node.icon" class="h-4 w-4 shrink-0" />
+          <span v-if="!collapsed" class="truncate">{% raw %}{{ node.title }}{% endraw %}</span>
+        </RouterLink>
+
+        <!-- Expandable group -->
+        <div v-else class="mt-0.5">
+          <button
+            class="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-sidebar-foreground hover:bg-sidebar-accent interactive-press"
+            :title="node.title"
+            :aria-label="node.title"
+            :aria-expanded="isExpanded(node)"
+            @click="toggleGroup(node.title)"
+          >
+            <component :is="node.icon" class="h-4 w-4 shrink-0" />
+            <template v-if="!collapsed">
+              <span class="flex-1 truncate text-left font-medium">{% raw %}{{ node.title }}{% endraw %}</span>
+              <ChevronRight
+                class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                :class="{ 'rotate-90': isExpanded(node) }"
+              />
+            </template>
+          </button>
+          <div v-if="!collapsed && isExpanded(node)" class="ml-4 mt-0.5 border-l border-sidebar-border pl-2">
+            <template v-for="child in node.children" :key="child.url ?? child.title">
+              <RouterLink
+                v-if="child.url"
+                :to="child.url"
+                :aria-current="isActive(child.url) ? 'page' : undefined"
+                class="flex h-8 items-center rounded-lg px-3 text-sm interactive-press"
+                :class="isActive(child.url)
+                  ? 'bg-primary/10 font-semibold text-primary'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'"
+              >
+                <span class="truncate">{% raw %}{{ child.title }}{% endraw %}</span>
+              </RouterLink>
+              <span
+                v-else
+                class="flex h-8 items-center rounded-lg px-3 text-sm text-muted-foreground"
+              >
+                <span class="truncate">{% raw %}{{ child.title }}{% endraw %}</span>
+              </span>
+            </template>
+          </div>
+        </div>
+      </template>
+    </nav>
+  </aside>
+
+  <!-- ─── Drawer variant: mobile left slide-in (mobileMenuOpen) ─── -->
+  <Teleport v-else to="body">
+    <Transition name="tree-drawer">
+      <div v-if="uiStore.mobileMenuOpen" class="fixed inset-0 z-50 flex">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/50" @click="uiStore.closeMobileMenu()" />
+
+        <!-- Drawer panel -->
+        <aside
+          id="doc-tree-drawer"
+          class="relative flex h-svh w-72 max-w-[85vw] flex-col border-r bg-sidebar-background shadow-xl"
+        >
+          <div class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+            <div class="flex h-8 w-8 items-center justify-center rounded-lg ai-gradient">
+              <Sparkles class="h-4 w-4 text-white" />
+            </div>
+            <span class="flex-1 truncate text-sm font-semibold text-sidebar-foreground">
+              {{ app_title }}
+            </span>
+            <button
+              class="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-sidebar-accent interactive-press"
+              title="Close menu"
+              aria-label="Close documentation menu"
+              @click="uiStore.closeMobileMenu()"
+            >
+              <X class="h-5 w-5 text-muted-foreground" />
+            </button>
+          </div>
+
+          <nav class="flex-1 overflow-y-auto p-2" aria-label="Documentation">
+            <template v-for="node in navTree" :key="node.title">
+              <RouterLink
+                v-if="node.url"
+                :to="node.url"
+                :aria-current="isActive(node.url) ? 'page' : undefined"
+                class="flex h-10 items-center gap-3 rounded-lg px-3 text-sm interactive-press"
+                :class="isActive(node.url)
+                  ? 'bg-primary/10 font-semibold text-primary'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent'"
+                @click="uiStore.closeMobileMenu()"
+              >
+                <component :is="node.icon" class="h-5 w-5 shrink-0" />
+                <span class="truncate">{% raw %}{{ node.title }}{% endraw %}</span>
+              </RouterLink>
+
+              <div v-else class="mt-0.5">
+                <button
+                  class="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-sidebar-foreground hover:bg-sidebar-accent interactive-press"
+                  :aria-expanded="isExpanded(node)"
+                  @click="toggleGroup(node.title)"
+                >
+                  <component :is="node.icon" class="h-5 w-5 shrink-0" />
+                  <span class="flex-1 truncate text-left font-medium">{% raw %}{{ node.title }}{% endraw %}</span>
+                  <ChevronRight
+                    class="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200"
+                    :class="{ 'rotate-90': isExpanded(node) }"
+                  />
+                </button>
+                <div v-if="isExpanded(node)" class="ml-5 mt-0.5 border-l border-sidebar-border pl-2">
+                  <template v-for="child in node.children" :key="child.url ?? child.title">
+                    <RouterLink
+                      v-if="child.url"
+                      :to="child.url"
+                      :aria-current="isActive(child.url) ? 'page' : undefined"
+                      class="flex h-9 items-center rounded-lg px-3 text-sm interactive-press"
+                      :class="isActive(child.url)
+                        ? 'bg-primary/10 font-semibold text-primary'
+                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'"
+                      @click="uiStore.closeMobileMenu()"
+                    >
+                      <span class="truncate">{% raw %}{{ child.title }}{% endraw %}</span>
+                    </RouterLink>
+                    <span
+                      v-else
+                      class="flex h-9 items-center rounded-lg px-3 text-sm text-muted-foreground"
+                    >
+                      <span class="truncate">{% raw %}{{ child.title }}{% endraw %}</span>
+                    </span>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </nav>
+        </aside>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<style scoped>
+/* Drawer slide from left */
+.tree-drawer-enter-active,
+.tree-drawer-leave-active {
+  transition: opacity 200ms ease;
+}
+.tree-drawer-enter-active aside,
+.tree-drawer-leave-active aside {
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tree-drawer-enter-from,
+.tree-drawer-leave-to {
+  opacity: 0;
+}
+.tree-drawer-enter-from aside,
+.tree-drawer-leave-to aside {
+  transform: translateX(-100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-drawer-enter-active,
+  .tree-drawer-leave-active,
+  .tree-drawer-enter-active aside,
+  .tree-drawer-leave-active aside {
+    transition-duration: 0ms;
+  }
+}
+</style>
