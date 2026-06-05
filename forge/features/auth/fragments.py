@@ -424,3 +424,37 @@ def register_all(api: ForgeAPI) -> None:
             },
         )
     )
+
+    # ``auth.provider=in_memory`` — zero-dependency dev token issuer.
+    #
+    # Backend-scoped, Python-only (parity tier auto-derives to 3). Selected by
+    # the ``auth.provider`` sub-discriminator as an alternative to the
+    # Gatekeeper container: instead of an external token authority, the service
+    # mints + verifies ES256 dev tokens *in-process* (no Keycloak / Gatekeeper
+    # / Redis). It ships ONLY the additive pieces — the in-process issuer, the
+    # ``/dev/auth`` route, and the installer that redirects the auth-guard
+    # builder to the in-memory variant. It deliberately does NOT re-ship the
+    # files ``platform_auth_python_middleware`` already owns
+    # (``platform_auth_setup.py``, ``service/security/auth.py``, …): the SDK +
+    # middleware stay issuer-agnostic, so the only thing that changes is which
+    # JWKS the guard trusts.
+    #
+    # Depends on the Python middleware fragment because it imports
+    # ``AuthGuardBundle`` from ``service.security.platform_auth_setup`` and
+    # injects ``install_in_memory_auth`` into the middleware-wired factory; that
+    # fragment already depends on ``platform_auth_sdk_python`` (the runtime
+    # ``platform_auth`` import), so the full chain resolves. For local-dev
+    # convenience the issuer needs no infra capabilities at all — that is the
+    # whole point of the provider.
+    api.add_fragment(
+        Fragment(
+            name="platform_auth_in_memory_provider",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("platform_auth_in_memory", "python"),
+                    # Backend-scoped (default) — files land per Python backend.
+                ),
+            },
+            depends_on=("platform_auth_python_middleware",),
+        )
+    )

@@ -301,7 +301,20 @@ def _build_config(
     # the option (the resolver would dutifully record it that way).
     user_set_paths = set(options)
     auth_mode_before = options.get("auth.mode", "generate")
-    if not include_keycloak and auth_mode_before != "none":
+    # PROVIDER-AWARE: only the keycloak-dependent ``gatekeeper`` issuer forces
+    # this coercion. ``in_memory`` (in-process issuer) and ``oidc_generic``
+    # (external IdP) run keycloak-free, so they keep ``auth.mode=generate``.
+    # ``auth.provider`` defaults to ``gatekeeper`` when unset, preserving the
+    # pre-provider-split behaviour for every existing config. Kept in lock-step
+    # with ``capability_resolver._provider_needs_keycloak``.
+    from forge.capability_resolver import _provider_needs_keycloak  # noqa: PLC0415
+
+    auth_provider = options.get("auth.provider", "gatekeeper")
+    if (
+        not include_keycloak
+        and auth_mode_before != "none"
+        and _provider_needs_keycloak(auth_provider)
+    ):
         options["auth.mode"] = "none"
         # Surface the coercion to JSON callers via the mutations collector.
         # Agents driving forge headlessly need to know the auth.mode value

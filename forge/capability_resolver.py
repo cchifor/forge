@@ -356,6 +356,27 @@ def _check_value_backend_support(
         )
 
 
+# Auth providers whose token authority depends on the keycloak + redis
+# sidecars. Only these force the ``auth.mode``→``none`` coercion when
+# ``include_keycloak`` is off (see ``resolve``). ``in_memory`` mints tokens in
+# process and ``oidc_generic`` points at an external IdP, so neither needs the
+# local keycloak stack and both stay ``auth.mode=generate``.
+_KEYCLOAK_DEPENDENT_PROVIDERS: frozenset[str] = frozenset({"gatekeeper"})
+
+
+def _provider_needs_keycloak(provider: object) -> bool:
+    """True if ``auth.provider`` requires the local keycloak + redis stack.
+
+    A non-string / unset provider conservatively counts as keycloak-dependent
+    so the pre-provider-split coercion behaviour is preserved for any caller
+    that hasn't threaded an ``auth.provider`` value (the default is
+    ``gatekeeper``, which needs keycloak anyway).
+    """
+    if not isinstance(provider, str):
+        return True
+    return provider in _KEYCLOAK_DEPENDENT_PROVIDERS
+
+
 def _check_security_constraints(option_values: dict[str, object], fragment_set: set[str]) -> None:
     """Cross-option safety rules enforced at config time.
 
@@ -420,7 +441,20 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     # valid (no gatekeeper service with an undefined ``depends_on``); apply the
     # SAME coercion here so direct ProjectConfig/generate() construction (matrix
     # runner, headless fixtures, e2e) is covered too, not just the CLI path.
-    if not config.include_keycloak and option_values.get("auth.mode") == "generate":
+    #
+    # The coercion is PROVIDER-AWARE: only the ``gatekeeper`` issuer actually
+    # needs the keycloak + redis sidecars, so only it forces ``auth.mode``→
+    # ``none`` when keycloak is off. Keycloak-free issuers (``in_memory`` mints
+    # tokens in-process; ``oidc_generic`` points at an external IdP) must keep
+    # ``auth.mode=generate`` so they remain usable without standing up keycloak.
+    # ``auth.provider`` defaults to ``gatekeeper``, so the golden presets (which
+    # never set an explicit provider) still coerce exactly as before — verified
+    # byte-identical by the golden snapshots.
+    if (
+        not config.include_keycloak
+        and option_values.get("auth.mode") == "generate"
+        and _provider_needs_keycloak(option_values.get("auth.provider"))
+    ):
         option_values["auth.mode"] = "none"
     # ``auth.provider`` is a sub-discriminator of ``auth.mode=generate`` — it
     # selects the token issuer for the generated auth stack. When the stack
