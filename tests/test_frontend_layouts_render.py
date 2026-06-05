@@ -27,8 +27,14 @@ from forge.config import (
 from forge.generator import generate
 
 
-def _generate(tmp_path: Path, layout: str, *, include_chat: bool = True) -> Path:
-    """Generate a Vue project with ``layout`` and return its project root."""
+def _generate(
+    tmp_path: Path,
+    layout: str,
+    *,
+    framework: FrontendFramework = FrontendFramework.VUE,
+    include_chat: bool = True,
+) -> Path:
+    """Generate a project with ``layout`` (Vue by default) and return its root."""
     cfg = ProjectConfig(
         project_name="lt",
         output_dir=str(tmp_path),
@@ -42,7 +48,7 @@ def _generate(tmp_path: Path, layout: str, *, include_chat: bool = True) -> Path
         ],
         frontend=FrontendConfig(
             project_name="lt",
-            framework=FrontendFramework.VUE,
+            framework=framework,
             layout=layout,
             include_chat=include_chat,
             include_openapi=True,
@@ -96,3 +102,39 @@ def test_chat_off_degrades_cleanly(tmp_path: Path, layout: str) -> None:
     txt = ml.read_text(encoding="utf-8")
     assert "{%" not in txt, f"{layout}: unresolved Jinja tag in chat-off MainLayout"
     assert "<AiChat" not in txt, f"{layout}: chat-off MainLayout still mounts <AiChat>"
+
+
+# --- Svelte + Flutter: cross-framework two-stage render coverage --------------
+# The Vue tests above exercise the overlay in depth; these assert the same
+# two-stage render produces a coherent, fully-rendered shell for the other two
+# frameworks (the layer the docker-only e2e otherwise covers alone). The shell
+# file is located by name so a path change doesn't silently skip the assertion.
+_SHELL_FILE = {
+    FrontendFramework.SVELTE: "+layout.svelte",
+    FrontendFramework.FLUTTER: "app_layout_shell.dart",
+}
+_ALL_LAYOUTS = ("sidebar", "topnav", "tabbar", "threepane", "bento", "docs")
+
+
+@pytest.mark.parametrize("framework", sorted(_SHELL_FILE, key=lambda f: f.value))
+@pytest.mark.parametrize("layout", _ALL_LAYOUTS)
+def test_overlay_renders_shell_cross_framework(
+    tmp_path: Path, framework: FrontendFramework, layout: str
+) -> None:
+    """Every (framework, layout) two-stage render emits a fully-rendered shell.
+
+    Asserts the layout's shell file lands and carries no unresolved Jinja —
+    catching a broken overlay or a {% raw %}/suffix slip in Svelte/Flutter that
+    the Vue-only tests above cannot see.
+    """
+    root = _generate(tmp_path, layout, framework=framework)
+    frontend = root / "apps" / "frontend"
+    shells = list(frontend.rglob(_SHELL_FILE[framework]))
+    assert shells, (
+        f"{framework.value}/{layout}: shell {_SHELL_FILE[framework]} not rendered "
+        f"(overlay didn't apply?)"
+    )
+    for shell in shells:
+        assert "{%" not in shell.read_text(encoding="utf-8"), (
+            f"{framework.value}/{layout}: unresolved Jinja tag in {shell.name}"
+        )
