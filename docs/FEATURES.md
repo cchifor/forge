@@ -981,6 +981,37 @@ ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN
 **Enables fragments:**
 - on `true` → `airlock_client`
 
+### `auth.provider`
+
+**Type:** `enum` · **Default:** `gatekeeper` · **Stability:** `stable` · **Backends:** node, python, rust
+
+**Allowed values:** `gatekeeper`, `in_memory`, `oidc_generic`, `none`
+
+_Which identity provider / token issuer the generated auth stack trusts._
+
+Sub-discriminator of ``auth.mode=generate``. The per-language SDK + service
+middleware (shipped by ``auth.mode``) are issuer-agnostic — they verify a JWT
+against a JWKS endpoint and bind an ``IdentityContext``. ``auth.provider``
+selects *which* issuer the stack is wired to:
+
+- ``gatekeeper`` (default): forge generates the Strive-style Gatekeeper
+  container (token authority + BFF session manager, RFC 8693 token-exchange).
+  Batteries-included; this reproduces today's behaviour exactly.
+- ``in_memory``: a zero-dependency dev issuer that mints test JWTs in-process
+  (no Keycloak / Gatekeeper / Redis). For local dev + tests only; refused on
+  a production posture.
+- ``oidc_generic``: point the SDK at any external OIDC issuer (Keycloak
+  direct, Auth0, Cognito, Okta) via OIDC discovery + JWKS — no Gatekeeper
+  container generated. (Provider fragments land in a later phase.)
+- ``none``: ship the SDK + middleware but no token authority — bring your own
+  issuer. Also the resolved value when ``auth.mode=none`` (nothing to wire).
+
+Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
+``keycloak`` / ``auth0`` first-class providers are plugin-tier (deferred).
+
+**Enables fragments:**
+- on `gatekeeper` → `platform_auth_gatekeeper`, `platform_auth_gatekeeper_keygen`
+
 ### `deploy.target`
 
 **Type:** `enum` · **Default:** `none` · **Stability:** `beta` · **Backends:** node, python, rust

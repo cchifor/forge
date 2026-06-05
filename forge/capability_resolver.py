@@ -422,6 +422,14 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     # runner, headless fixtures, e2e) is covered too, not just the CLI path.
     if not config.include_keycloak and option_values.get("auth.mode") == "generate":
         option_values["auth.mode"] = "none"
+    # ``auth.provider`` is a sub-discriminator of ``auth.mode=generate`` — it
+    # selects the token issuer for the generated auth stack. When the stack
+    # isn't generated it must contribute no fragments, so coerce it to the
+    # no-op ``none`` value (mirrors the auth.mode coercion above). This keeps
+    # the provider's gatekeeper/oidc fragments from leaking into a no-auth
+    # project while still defaulting to ``gatekeeper`` when auth IS generated.
+    if option_values.get("auth.mode") != "generate" and "auth.provider" in option_values:
+        option_values["auth.provider"] = "none"
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
