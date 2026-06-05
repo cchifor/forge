@@ -1002,7 +1002,7 @@ selects *which* issuer the stack is wired to:
   a production posture.
 - ``oidc_generic``: point the SDK at any external OIDC issuer (Keycloak
   direct, Auth0, Cognito, Okta) via OIDC discovery + JWKS — no Gatekeeper
-  container generated. (Provider fragments land in a later phase.)
+  container generated. Issuer is env-driven (``AUTH_PROVIDER_*``).
 - ``none``: ship the SDK + middleware but no token authority — bring your own
   issuer. Also the resolved value when ``auth.mode=none`` (nothing to wire).
 
@@ -1011,6 +1011,98 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
 
 **Enables fragments:**
 - on `gatekeeper` → `platform_auth_gatekeeper`, `platform_auth_gatekeeper_keygen`
+- on `in_memory` → `platform_auth_in_memory_provider`
+- on `oidc_generic` → `platform_auth_oidc_provider`
+
+### `database.multitenancy`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `shared_rls`, `schema_per_tenant`, `db_per_tenant`
+
+_Tenant-isolation strategy for the generated persistence layer._
+
+Discriminator for how strongly tenants are isolated in the database.
+
+- ``none`` (default): inert — no enforcement fragment is added. The base
+  template stays tenant-*aware* (weld ``TenantMixin`` / ``customer_id``
+  columns + ``TenantScopedRepository`` application-layer scoping) but no
+  database-enforced isolation is layered on. Byte-identical to a project
+  that never set this option.
+- ``shared_rls``: Postgres Row-Level Security. One shared database + schema;
+  every ``customer_id``-bearing table gets ``ENABLE ROW LEVEL SECURITY`` +
+  a ``USING (customer_id = current_setting('app.current_tenant')::uuid)``
+  policy (idempotent migration). A request middleware resolves the tenant
+  (token claim / header / subdomain) and a session GUC hook binds
+  ``app.current_tenant`` per transaction, so the database itself rejects
+  cross-tenant reads/writes. Layers ON TOP of the existing TenantMixin —
+  it adds the RLS policy + GUC binding + resolver, it does NOT re-add the
+  ``customer_id`` column.
+- ``schema_per_tenant`` / ``db_per_tenant``: recognised values but NOT yet
+  implemented. forge accepts them in a forge.toml without rejecting the
+  whole config, but generation fails with an explicit "not yet implemented"
+  error rather than silently producing an un-isolated project. Use
+  ``shared_rls`` today.
+
+BACKENDS: python (shared_rls). The non-``none`` strategies are Python-only
+in 1.x — the RLS GUC hook + Alembic policy macros target the SQLAlchemy /
+Alembic stack the python-service-template ships.
+ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.
+
+**Enables fragments:**
+- on `shared_rls` → `multitenancy_rls_python`
+
+### `database.tenant_claim_path`
+
+**Type:** `str` · **Default:** `tenant_id` · **Stability:** `stable` · **Backends:** —
+
+_Dot-path to the tenant id within the verified token claims._
+
+Used when ``database.tenant_resolution=token_claim``. A dot-path traversed
+by the auth ``ClaimMapper`` (``organization.id`` reads
+``claims['organization']['id']``; a literal URL-shaped claim name like
+``https://example.com/tenant`` is matched as a whole key first). Defaults to
+``tenant_id`` to match the platform-auth SDK's default tenant claim.
+
+BACKENDS: python. Written into the generated ``TenantResolver`` config; no
+fragment is keyed off the value.
+
+### `database.tenant_header_name`
+
+**Type:** `str` · **Default:** `X-Tenant-ID` · **Stability:** `stable` · **Backends:** —
+
+_Request header carrying the tenant id (header resolution)._
+
+Used when ``database.tenant_resolution=header``. The HTTP header the
+``TenantResolver`` reads the tenant id from (case-insensitive). Defaults to
+``X-Tenant-ID``.
+
+BACKENDS: python. Written into the generated ``TenantResolver`` config; no
+fragment is keyed off the value.
+
+### `database.tenant_resolution`
+
+**Type:** `enum` · **Default:** `token_claim` · **Stability:** `stable` · **Backends:** —
+
+**Allowed values:** `token_claim`, `header`, `subdomain`
+
+_How the per-request tenant id is discovered for RLS binding._
+
+Drives the ``TenantResolver`` shipped by ``database.multitenancy=shared_rls``.
+Only meaningful when a non-``none`` strategy is selected (otherwise inert).
+
+- ``token_claim`` (default): read the tenant id from the verified JWT claims
+  via a dot-path (``database.tenant_claim_path``), reusing the auth
+  ``ClaimMapper`` seam the OIDC / in_memory providers ship. The middleware
+  reads ``request.state.identity`` (bound by the platform-auth middleware)
+  and extracts the configured claim.
+- ``header``: read the tenant id from a gateway-injected request header
+  (``database.tenant_header_name``). For deployments where an upstream
+  proxy / API gateway already resolved + validated the tenant.
+- ``subdomain``: parse the leftmost label of the request Host header
+  (``acme.example.com`` → ``acme``). For per-tenant subdomain routing.
+
+BACKENDS: python. Inert unless ``database.multitenancy != none``.
 
 ### `deploy.target`
 
