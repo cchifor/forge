@@ -30,11 +30,13 @@ the previous output exactly.
 
 ### Responsive contract
 
-Every layout implements three breakpoint tiers off one shared source
-(`useBreakpoint`): **mobile `<600px` · tablet `600–840px` · desktop `≥840px`**.
-Each layout owns its per-tier reflow, e.g. `tabbar` promotes its bottom tab bar
-to a nav rail then a full sidebar; `docs` hides its TOC on tablet and moves its
-tree into a drawer on mobile.
+Every layout implements three breakpoint tiers — **mobile `<600px` · tablet
+`600–840px` · desktop `≥840px`** — off a single per-framework source, and the
+thresholds match across frameworks: Vue `useBreakpoint`, Svelte
+`breakpoints.svelte.ts`, and Flutter `DesignTokens` (`compactWidth` /
+`expandedWidth`). Each layout owns its per-tier reflow, e.g. `tabbar` promotes
+its bottom tab bar to a nav rail then a full sidebar; `docs` hides its TOC on
+tablet and moves its tree into a drawer on mobile.
 
 ## Usage
 
