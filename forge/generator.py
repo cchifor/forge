@@ -25,6 +25,10 @@ from copier import run_copy
 from copier.errors import CopierError
 
 from forge import variable_mapper
+from forge.backend_app_templates import (
+    DEFAULT_BACKEND_TEMPLATE,
+    get_backend_application_template,
+)
 from forge.capability_resolver import ResolvedPlan, resolve
 from forge.config import (
     BACKEND_REGISTRY,
@@ -282,6 +286,18 @@ def _generate_backends(
 
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
+        # Application-template dispatch: a registered BackendApplicationTemplate
+        # selects the Copier template for the chosen (language, app_template).
+        # Built-ins always have a `crud-service` variant whose template_dir IS
+        # spec.template_dir (single self-contained render) — byte-identical to
+        # the pre-app-template path. Anything without a variant falls back to
+        # the baseline spec template (defensive; plugin backends).
+        variant_name = bc.app_template or DEFAULT_BACKEND_TEMPLATE
+        app_template = get_backend_application_template(bc.language, variant_name)
+        backend_template_dir = (
+            app_template.template_dir if app_template is not None else spec.template_dir
+        )
+        backend_base_dir = app_template.base_template_dir if app_template is not None else ""
         backend_dir = project_root / "services" / bc.name
         _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
         with phase_timer(
@@ -312,25 +328,28 @@ def _generate_backends(
             includes_error_envelope = any(rf.fragment.name == "error_port" for rf in plan.ordered)
             _generate_single_backend(
                 bc,
-                spec.template_dir,
+                backend_template_dir,
                 backend_dir,
                 quiet,
                 include_platform_auth=includes_platform_auth,
                 include_error_envelope=includes_error_envelope,
+                base_template_dir=backend_base_dir,
+                dry_run=dry_run,
             )
-        # We know which backend template produced this tree (spec.template_dir
-        # is e.g. "services/python-service-template"). Pass it as template_name
-        # so harvest / drift-verify can attribute each file to its emitting
-        # template. ``template_version`` is the resolved semver from
+        # We know which backend template produced this tree
+        # (``backend_template_dir`` is e.g. "services/python-service-template"
+        # for crud-service, or "services/python/worker" for a variant). Pass it
+        # as template_name so harvest / drift-verify can attribute each file to
+        # its emitting template. ``template_version`` is the resolved semver from
         # ``_forge_template.toml`` (or the BackendSpec default), so per-file
         # provenance entries record the version too — the updater compares
         # this against the live template at update time.
-        backend_template_version = _resolve_template_version_for(spec.template_dir, spec.version)
+        backend_template_version = _resolve_template_version_for(backend_template_dir, spec.version)
         _record_tree(
             backend_dir,
             collector,
             origin="base-template",
-            template_name=spec.template_dir,
+            template_name=backend_template_dir,
             template_version=backend_template_version,
         )
         # Phase B1 + Cluster D (matrix-nightly-fixes plan): strip the database
@@ -351,7 +370,7 @@ def _generate_backends(
             strip_python_database(
                 backend_dir,
                 collector=collector,
-                template_name=spec.template_dir,
+                template_name=backend_template_dir,
                 template_version=backend_template_version,
             )
         with phase_timer(
@@ -1036,15 +1055,30 @@ def _generate_single_backend(
     *,
     include_platform_auth: bool = False,
     include_error_envelope: bool = False,
+    base_template_dir: str = "",
+    dry_run: bool = False,
 ) -> Path:
-    """Generate a single backend using Copier."""
+    """Generate a single backend using Copier.
+
+    ``base_template_dir`` enables the two-stage render used by application-
+    template variants that are a thin delta on a shared base: the base is
+    rendered first with ``skip_tasks=True``, then the ``template_name`` delta
+    overlays it and runs the combined tree's tasks once. The default empty
+    ``base_template_dir`` is a self-contained single render — exactly how the
+    built-in ``crud-service`` variant ships (byte-identical to the pre-app-
+    template path).
+    """
     ctx = variable_mapper.backend_context(
         bc,
         include_platform_auth=include_platform_auth,
         include_error_envelope=include_error_envelope,
     )
     dst.mkdir(parents=True, exist_ok=True)
-    _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
+    if base_template_dir:
+        _run_copier(
+            TEMPLATES_DIR / base_template_dir, dst, ctx, quiet, skip_tasks=True, dry_run=dry_run
+        )
+    _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet, dry_run=dry_run)
     return dst
 
 

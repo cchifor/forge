@@ -1,0 +1,47 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_exclude:
+  - ".venv"
+  - "__pycache__"
+  - ".pytest_cache"
+  - ".mypy_cache"
+  - ".ruff_cache"
+  - "*.pyc"
+
+# ---------------------------------------------------------------------------
+# Questions (prompted during generation; the forge generator supplies these
+# from BackendConfig via variable_mapper.backend_context)
+# ---------------------------------------------------------------------------
+
+project_name:
+  type: str
+  help: "Worker service name in kebab-case (e.g. notification-worker)"
+  default: "my-worker"
+  validator: "{% if not project_name | regex_search('^[a-z][a-z0-9-]*$') %}Must be lowercase kebab-case (e.g. my-worker){% endif %}"
+
+project_description:
+  type: str
+  help: "One-line description of the worker service"
+  default: "A Python background worker"
+
+python_version:
+  type: str
+  help: "Python version"
+  default: "3.13"
+  choices:
+    - "3.13"
+    - "3.14"
+
+# ---------------------------------------------------------------------------
+# Derived variables (not prompted)
+# ---------------------------------------------------------------------------
+
+project_slug:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', '_') }}"
+
+project_title:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', ' ') | title }}"
