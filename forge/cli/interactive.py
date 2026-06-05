@@ -213,7 +213,7 @@ def _collect_inputs() -> ProjectConfig | None:
             org_name = _ask_text("Organization name (reverse domain):", default="com.example")
 
         # App-shell layout — only prompt when the framework offers a choice
-        # (v1 ships a single layout per framework; more land in later phases).
+        # (all three built-in frameworks ship the full set of layouts).
         from forge.layout_variants import (  # noqa: PLC0415
             DEFAULT_LAYOUT,
             available_layouts,

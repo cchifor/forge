@@ -27,7 +27,7 @@ def test_builtin_sidebar_registered_for_every_framework():
         variant = lv.get_layout_variant(fw, "sidebar")
         assert variant is not None, f"sidebar missing for {fw.value}"
         assert variant.template_dir.startswith("apps/")
-        assert variant.base_template_dir == ""  # self-contained single render in v1
+        assert variant.base_template_dir == ""  # self-contained single render (baseline)
 
 
 def test_default_layout_constant_is_sidebar():
@@ -36,10 +36,9 @@ def test_default_layout_constant_is_sidebar():
 
 
 def test_available_layouts_per_framework():
-    # Vue ships the full set in v1; Svelte/Flutter ship sidebar only (Phase 5
-    # adds the rest). Discovered from templates/layouts/<fw>/<name>/layout.toml.
+    # All three built-in frameworks ship the full set, discovered from
+    # templates/layouts/<fw>/<name>/layout.toml.
     full_set = ("bento", "docs", "sidebar", "tabbar", "threepane", "topnav")
-    # All three frameworks now ship the full set (Vue v1 + Svelte/Flutter Phase 5).
     assert lv.available_layouts(FrontendFramework.VUE) == full_set
     assert lv.available_layouts(FrontendFramework.SVELTE) == full_set
     assert lv.available_layouts(FrontendFramework.FLUTTER) == full_set

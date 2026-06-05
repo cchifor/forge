@@ -56,6 +56,7 @@ breaking change to this surface surfaces before release.
 | ``ForgeAPI.add_extractor``     | 1.2.0-alpha.1| provisional       |
 | ``ForgeAPI.add_injector``      | 1.2          | provisional       |
 | ``ForgeAPI.add_hook``          | 1.2          | provisional       |
+| ``ForgeAPI.add_frontend_layout``| 1.3         | provisional       |
 | ``PluginRegistration``         | 1.0.0a1      | stable            |
 +--------------------------------+--------------+-------------------+
 
