@@ -158,8 +158,13 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
                     "platform_auth_gatekeeper",
                     "platform_auth_gatekeeper_keygen",
                 ),
-                # in_memory / oidc_generic provider fragments land in later
-                # phases; "none" intentionally enables nothing.
+                # ``in_memory`` ships a zero-dependency, in-process dev token
+                # issuer (ES256 mint + JWKS + /dev/auth/token) instead of the
+                # Gatekeeper container — no Keycloak / Redis required. Refused
+                # on a production posture (see the capability resolver).
+                "in_memory": ("platform_auth_in_memory_provider",),
+                # oidc_generic provider fragments land in a later phase;
+                # "none" intentionally enables nothing.
             },
         )
     )

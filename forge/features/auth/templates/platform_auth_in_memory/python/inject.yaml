@@ -1,0 +1,26 @@
+# platform_auth_in_memory: wire the in-process dev issuer in place of the
+# Gatekeeper token authority. Two seams:
+#
+#   1. Mount the dev-only /dev/auth router (token minting + JWKS) on the v1
+#      API router, mirroring how every other endpoint fragment registers.
+#   2. Install the issuer + redirect AppLifecycle.bootstrap's build_auth_guard
+#      to the in-memory variant at FORGE:APP_POST_CONFIGURE — which runs in the
+#      application factory *before* AppLifecycle.bootstrap(app, settings), so
+#      the guard that lands on app.state verifies the issuer's own tokens.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import dev_auth as dev_auth_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(dev_auth_endpoint.router, prefix="/dev/auth", tags=["dev-auth"])'
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: before
+  snippet: |-
+    from app.security.in_memory_auth import install_in_memory_auth
+    install_in_memory_auth(app, settings)
