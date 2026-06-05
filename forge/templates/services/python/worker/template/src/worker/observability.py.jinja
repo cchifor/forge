@@ -1,0 +1,27 @@
+"""Observability bootstrap — structured logging + a tracer handle.
+
+Kept intentionally small: the same skeleton the baseline crud-service ships
+(a configured logger plus an OpenTelemetry tracer) without the HTTP
+instrumentation a request/response service needs.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from opentelemetry import trace
+from opentelemetry.trace import Tracer
+
+
+def configure_logging(level: str) -> logging.Logger:
+    """Configure root logging and return the worker's named logger."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
+    )
+    return logging.getLogger("{{ project_slug }}")
+
+
+def get_tracer() -> Tracer:
+    """Return the process tracer (no-op until an exporter is configured)."""
+    return trace.get_tracer("{{ project_slug }}")

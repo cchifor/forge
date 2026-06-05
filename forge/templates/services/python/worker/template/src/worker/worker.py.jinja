@@ -1,0 +1,63 @@
+"""The background worker loop.
+
+This is the worker analogue of the crud-service's HTTP entrypoint: instead of
+serving requests, it runs an async poll → handle → sleep loop until cancelled
+(or until ``WorkerSettings.max_iterations`` is reached). Replace
+:func:`handle_iteration` with your real unit of work — drain a queue, poll an
+upstream API, run a scheduled batch, etc.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from worker.config import WorkerSettings, load_settings
+from worker.observability import configure_logging, get_tracer
+
+
+async def handle_iteration(iteration: int, logger: logging.Logger) -> None:
+    """Perform one unit of work.
+
+    The default implementation just logs a heartbeat — replace it with the
+    real job (e.g. fetch-and-process a batch of messages). Kept ``async`` so
+    you can ``await`` I/O (HTTP, DB, queue) without blocking the loop.
+    """
+    logger.info("worker heartbeat (iteration=%d)", iteration)
+
+
+async def run(settings: WorkerSettings | None = None) -> int:
+    """Run the worker loop. Returns the number of iterations executed.
+
+    Honours ``settings.poll_interval_seconds`` between iterations and stops
+    after ``settings.max_iterations`` when that is non-zero (otherwise runs
+    until cancelled). Returning the count makes the loop trivially testable.
+    """
+    settings = settings or load_settings()
+    logger = configure_logging(settings.log_level)
+    tracer = get_tracer()
+    logger.info("starting %s worker", settings.service_name)
+
+    iteration = 0
+    try:
+        while settings.max_iterations == 0 or iteration < settings.max_iterations:
+            iteration += 1
+            with tracer.start_as_current_span("worker.iteration"):
+                await handle_iteration(iteration, logger)
+            if settings.max_iterations and iteration >= settings.max_iterations:
+                break
+            await asyncio.sleep(settings.poll_interval_seconds)
+    except asyncio.CancelledError:
+        logger.info("worker cancelled after %d iterations", iteration)
+        raise
+    logger.info("worker finished after %d iterations", iteration)
+    return iteration
+
+
+def main() -> None:
+    """Synchronous entrypoint: run the async loop under a fresh event loop."""
+    asyncio.run(run())
+
+
+if __name__ == "__main__":
+    main()

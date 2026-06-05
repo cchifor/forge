@@ -108,6 +108,7 @@ def _build_backends_from_cfg(
                     node_version=be_cfg.get("node_version", "22"),
                     rust_edition=be_cfg.get("rust_edition", "2024"),
                     server_port=be_cfg.get("server_port", 5000 + i),
+                    app_template=be_cfg.get("app_template", "crud-service"),
                     sdk_consumption=be_cfg.get("sdk_consumption"),
                 )
             )
