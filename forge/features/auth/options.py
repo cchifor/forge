@@ -112,19 +112,54 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
                     # ``app.rs`` adds the ``axum::middleware::from_fn``
                     # auth_middleware layer.
                     "platform_auth_rust_middleware",
-                    # Phase 2 Wave 2 (cut over) — Gatekeeper as token
-                    # authority + signing-key init service. Imperative
-                    # gatekeeper compose block in
-                    # ``forge/templates/deploy/docker-compose.yml.j2`` and
-                    # the legacy ``forge/templates/infra/gatekeeper/``
-                    # tree were removed. Declarative ``compose.yaml``
-                    # entries on these two fragments register the
-                    # gatekeeper + gatekeeper-keygen sidecars via
-                    # ``forge.services.fragment_compose``.
-                    "platform_auth_gatekeeper",
-                    "platform_auth_gatekeeper_keygen",
+                    # The token issuer (Gatekeeper / OIDC / in-memory) is no
+                    # longer part of this bundle — it is selected by the
+                    # ``auth.provider`` sub-discriminator below so the SDK +
+                    # middleware stay issuer-agnostic. ``auth.provider``
+                    # defaults to ``gatekeeper`` (the compat default), so the
+                    # resolved fragment set for ``auth.mode=generate`` is
+                    # unchanged from before this split.
                     "platform_auth_tenant_context",
                 ),
+            },
+        )
+    )
+
+    api.add_option(
+        Option(
+            path="auth.provider",
+            type=OptionType.ENUM,
+            default="gatekeeper",
+            options=("gatekeeper", "in_memory", "oidc_generic", "none"),
+            summary="Which identity provider / token issuer the generated auth stack trusts.",
+            description="""\
+Sub-discriminator of ``auth.mode=generate``. The per-language SDK + service
+middleware (shipped by ``auth.mode``) are issuer-agnostic — they verify a JWT
+against a JWKS endpoint and bind an ``IdentityContext``. ``auth.provider``
+selects *which* issuer the stack is wired to:
+
+- ``gatekeeper`` (default): forge generates the Strive-style Gatekeeper
+  container (token authority + BFF session manager, RFC 8693 token-exchange).
+  Batteries-included; this reproduces today's behaviour exactly.
+- ``in_memory``: a zero-dependency dev issuer that mints test JWTs in-process
+  (no Keycloak / Gatekeeper / Redis). For local dev + tests only; refused on
+  a production posture.
+- ``oidc_generic``: point the SDK at any external OIDC issuer (Keycloak
+  direct, Auth0, Cognito, Okta) via OIDC discovery + JWKS — no Gatekeeper
+  container generated. (Provider fragments land in a later phase.)
+- ``none``: ship the SDK + middleware but no token authority — bring your own
+  issuer. Also the resolved value when ``auth.mode=none`` (nothing to wire).
+
+Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
+``keycloak`` / ``auth0`` first-class providers are plugin-tier (deferred).""",
+            category=FeatureCategory.PLATFORM,
+            enables={
+                "gatekeeper": (
+                    "platform_auth_gatekeeper",
+                    "platform_auth_gatekeeper_keygen",
+                ),
+                # in_memory / oidc_generic provider fragments land in later
+                # phases; "none" intentionally enables nothing.
             },
         )
     )
