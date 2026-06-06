@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from forge_core.persistence import AsyncDatabase
-from weld.core.discovery import Discovery
+from forge_core.discovery import Discovery
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import PermissionDeniedError
-from weld.core.domain.account import Account
+from forge_core.domain.account import Account
 
 
 class TenantScopedRepository:
