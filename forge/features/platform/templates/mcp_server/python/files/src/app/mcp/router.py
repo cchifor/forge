@@ -24,7 +24,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from weld.fastapi.security.auth import get_current_user
+from forge_core.security.auth import get_current_user
 
 from app.mcp.audit import (
     AuditEntry,

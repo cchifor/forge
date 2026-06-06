@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from weld.fastapi.security.auth import get_current_user
+from forge_core.security.auth import get_current_user
 
 from app.agents import tool_registry
 

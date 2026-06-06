@@ -13,7 +13,7 @@ import uuid
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from weld.fastapi.security.auth import get_current_user
+from forge_core.security.auth import get_current_user
 
 from app.core.ioc import PublicUnitOfWork
 from app.data.models.webhook import Webhook as WebhookModel

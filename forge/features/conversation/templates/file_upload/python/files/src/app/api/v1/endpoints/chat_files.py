@@ -17,7 +17,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from weld.fastapi.security.auth import get_current_user
+from forge_core.security.auth import get_current_user
 
 from app.services.chat_file_service import get_storage, save_uploaded_file
 

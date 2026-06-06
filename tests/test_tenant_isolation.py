@@ -5,9 +5,10 @@ authenticated tenant (and, where relevant, the authenticated user). A missing
 scope is a cross-tenant / cross-user data leak. These guards assert the
 template source keeps the scope so it cannot silently regress.
 
-``weld.core.context.get_customer_id`` raises when no tenant is in context
-(fail-closed), so routing the RAG tool through it means an unauthenticated
-agent call refuses to search rather than returning every tenant's documents.
+``forge_core.domain.context.get_customer_id`` raises when no tenant is in
+context (fail-closed), so routing the RAG tool through it means an
+unauthenticated agent call refuses to search rather than returning every
+tenant's documents.
 """
 
 from __future__ import annotations
