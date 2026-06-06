@@ -1,7 +1,7 @@
 [feature]
 name = "events"
 version = "1.0.0"
-summary = "CloudEvents bus and transactional outbox via weld-events."
+summary = "CloudEvents bus and transactional outbox (vendored, self-contained)."
 category = "async_work"
 
 [feature.depends]
