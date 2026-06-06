@@ -202,7 +202,12 @@ def _generate_into(
         config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
     )
     _generate_frontend_phase(config, project_root, quiet=quiet, dry_run=dry_run)
-    _render_docker_stack(config, plan, project_root, quiet=quiet)
+    # Phase 4: compute the multi-service platform synthesis (S2S registry +
+    # inter-service URLs) AFTER all backends are realized, then feed it into the
+    # docker/realm/registry renderers. Returns None (no-op) unless
+    # auth.service_discovery is on — so single-service output stays byte-identical.
+    synthesis = _synthesize_platform(config, plan, project_root, quiet=quiet)
+    _render_docker_stack(config, plan, project_root, quiet=quiet, synthesis=synthesis)
     _generate_frontend_extras(config, project_root, quiet=quiet)
     _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
     # Renumber each Python backend's alembic migrations into a valid linear
@@ -457,10 +462,40 @@ def _generate_frontend_phase(
             _generate_frontend(config, project_root, quiet=quiet, dry_run=dry_run)
 
 
+def _synthesize_platform(
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    *,
+    quiet: bool,
+) -> object | None:
+    """Phase 4: multi-service platform synthesis (seam).
+
+    When ``auth.service_discovery`` is on (and the project has >1 backend),
+    this computes the cross-service S2S auth graph from each backend's
+    ``depends_on`` — per-service client id / secret / audiences + inter-service
+    URLs — and returns it for the docker/realm/registry renderers to consume.
+
+    P4.0 ships the inert seam only: it always returns ``None``, so generation
+    is byte-identical to before. The computation + emitted artifacts land in the
+    following Phase-4 sub-steps (P4.1 the data model, P4.2 the renderers).
+    """
+    return None
+
+
 def _render_docker_stack(
-    config: ProjectConfig, plan: ResolvedPlan, project_root: Path, *, quiet: bool
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    *,
+    quiet: bool,
+    synthesis: object | None = None,
 ) -> None:
-    """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets."""
+    """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets.
+
+    ``synthesis`` is the optional Phase-4 platform-synthesis result; when None
+    (the default / single-service case) the renderers behave exactly as before.
+    """
 
     def _log(msg: str) -> None:
         if not quiet:

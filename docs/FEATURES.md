@@ -1014,6 +1014,25 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
 - on `in_memory` → `platform_auth_in_memory_provider`
 - on `oidc_generic` → `platform_auth_oidc_provider`
 
+### `auth.service_discovery`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** —
+
+_Synthesize an S2S client registry + inter-service URLs across backends._
+
+Multi-service platform synthesis. When ON (and the project has >1 backend),
+forge computes a service-to-service auth graph from each backend's
+``depends_on`` and emits: a gatekeeper ``service_registry.yaml`` (per-service
+client id / secret / audiences / scopes), per-backend S2S credentials +
+``INTERNAL_SERVICE_URL_*`` env vars, and the matching realm clients — so the
+generated services can authenticate to each other out of the box.
+
+OFF (default): no synthesis runs; single-service and existing multi-backend
+output is byte-identical.
+
+BACKENDS: python (tier-1); node/rust S2S callers follow.
+REQUIRES: >1 backend; the gatekeeper auth provider for S2S credentials.
+
 ### `database.multitenancy`
 
 **Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
@@ -1148,6 +1167,22 @@ Forge ingests it to bind component data-contract operations to upstream
 slice from the contract). Note: a local file path only — remote URL fetching is
 out of scope (``load_openapi_spec`` reads from disk); download the spec and point
 this at the file.
+
+### `infrastructure.event_bus`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `beta` · **Backends:** —
+
+**Allowed values:** `none`, `postgres_notify`
+
+_Cross-service async event bus._
+
+Cross-service asynchronous eventing. ``none`` (default) ships no event bus —
+byte-identical to today. ``postgres_notify`` provisions a shared ``events``
+database + a Postgres LISTEN/NOTIFY transactional-outbox bus URL injected into
+every backend, so services can publish/subscribe domain events.
+
+BACKENDS: python (tier-1).
+REQUIRES: a database (postgres).
 
 ### `mcp_template.openapi_to_tools`
 

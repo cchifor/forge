@@ -66,6 +66,11 @@ class ProjectConfig:
     frontend: FrontendConfig | None = None
     include_keycloak: bool = False
     keycloak_port: int = 18080
+    # Phase 4 (platform synthesis): optional named platform preset
+    # (templates/platforms/<name>/platform.toml) — a bundle of option
+    # overrides + per-backend app_template/depends_on assignments applied
+    # before user options. None (default) = no preset → no effect.
+    platform_template: str | None = None
     # Typed configuration options. Path → value (dotted key like
     # "rag.backend" or "middleware.rate_limit"). Only paths that are
     # explicitly set appear here; defaults are applied by the resolver

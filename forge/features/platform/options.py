@@ -123,3 +123,53 @@ BACKENDS: python, node, rust (same content, project-scoped)""",
             enables={True: ("agents_md",)},
         )
     )
+
+    # ── Phase 4: multi-service platform synthesis ──────────────────────────
+    # Inert knobs until the synthesis pass consumes them (later Phase 4
+    # sub-steps). Defaults keep single-service + existing multi-backend output
+    # byte-identical; both are no-ops at their default value.
+    api.add_option(
+        Option(
+            path="auth.service_discovery",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Synthesize an S2S client registry + inter-service URLs across backends.",
+            description="""\
+Multi-service platform synthesis. When ON (and the project has >1 backend),
+forge computes a service-to-service auth graph from each backend's
+``depends_on`` and emits: a gatekeeper ``service_registry.yaml`` (per-service
+client id / secret / audiences / scopes), per-backend S2S credentials +
+``INTERNAL_SERVICE_URL_*`` env vars, and the matching realm clients — so the
+generated services can authenticate to each other out of the box.
+
+OFF (default): no synthesis runs; single-service and existing multi-backend
+output is byte-identical.
+
+BACKENDS: python (tier-1); node/rust S2S callers follow.
+REQUIRES: >1 backend; the gatekeeper auth provider for S2S credentials.""",
+            category=FeatureCategory.PLATFORM,
+            stability="beta",
+            requires_backend=True,
+        )
+    )
+
+    api.add_option(
+        Option(
+            path="infrastructure.event_bus",
+            type=OptionType.ENUM,
+            default="none",
+            options=("none", "postgres_notify"),
+            summary="Cross-service async event bus.",
+            description="""\
+Cross-service asynchronous eventing. ``none`` (default) ships no event bus —
+byte-identical to today. ``postgres_notify`` provisions a shared ``events``
+database + a Postgres LISTEN/NOTIFY transactional-outbox bus URL injected into
+every backend, so services can publish/subscribe domain events.
+
+BACKENDS: python (tier-1).
+REQUIRES: a database (postgres).""",
+            category=FeatureCategory.PLATFORM,
+            stability="beta",
+            requires_database=True,
+        )
+    )

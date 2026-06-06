@@ -202,11 +202,26 @@ class BackendConfig:
     # there's no sibling ``sdks/`` tree to mount; production users in
     # the platform monorepo leave it at the default.
     sdk_consumption: str | None = None
+    # Phase 4 (platform synthesis): names of OTHER backends in this project that
+    # this backend makes service-to-service calls to. Drives the synthesized S2S
+    # client registry + inter-service URL injection when auth.service_discovery
+    # is on. Empty (default) = no declared inter-service edges → synthesis is a
+    # no-op for this backend, so output stays byte-identical. Graph-membership
+    # validation (each name must be a real backend) lives in ProjectConfig.
+    depends_on: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         validate_port(self.server_port, f"Backend '{self.name}' port")
         if not re.match(r"^[a-z][a-z0-9_-]*$", self.name):
             raise ValueError(f"Backend name '{self.name}' must be lowercase kebab/snake case.")
+        for dep in self.depends_on:
+            if not re.match(r"^[a-z][a-z0-9_-]*$", dep):
+                raise ValueError(
+                    f"Backend '{self.name}' depends_on entry '{dep}' must be a "
+                    "lowercase kebab/snake service name."
+                )
+            if dep == self.name:
+                raise ValueError(f"Backend '{self.name}' cannot depend on itself.")
         if self.features:
             validate_features(self.features)
         # The chosen application template must be a registered variant for
