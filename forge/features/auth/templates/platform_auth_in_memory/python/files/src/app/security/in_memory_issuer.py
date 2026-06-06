@@ -43,7 +43,7 @@ from platform_auth import (
     TenantTrust,
 )
 
-from weld.core.domain.config import AuthConfig
+from forge_core.domain.config import AuthConfig
 from service.security.platform_auth_setup import AuthGuardBundle
 
 # Conventional URLs / identifiers for the in-process issuer. The issuer URL

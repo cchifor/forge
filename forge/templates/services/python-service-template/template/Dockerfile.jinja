@@ -1,8 +1,11 @@
 # Multi-stage build: a wheel-building "builder" stage that resolves the
-# service's deps + builds the weld-* SDKs from the `sdks` build context,
-# and a thin runtime stage that copies only the .venv and source.
+# service's deps + builds the vendored forge-core SDK (and, when auth is
+# generated, the project-root platform-auth SDK), and a thin runtime stage
+# that copies only the .venv and source.
 #
-# Required at build time (with sdk_consumption=monorepo):
+# When the platform-auth SDK is referenced (auth.mode=generate), the project-
+# root ``sdks/`` tree must be available at build time as the ``sdks`` build
+# context:
 #   docker build \
 #     --build-context sdks=../../sdks \
 #     -t {{ project_slug }} .
@@ -26,32 +29,23 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /uvx /bin/
 COPY sdks/forge-core /tmp/sdks/forge-core
 RUN cd /tmp/sdks/forge-core && uv build --wheel --out-dir /wheels
 
-{%- if sdk_consumption == "monorepo" %}
-# Build the weld-* SDKs as wheels so the runtime image resolves from
-# /wheels instead of needing the source path baked in.
-{%- for sdk in weld_base_sdks.split(',') %}
-COPY --from=sdks weld-{{ sdk|trim }} /tmp/sdks/weld-{{ sdk|trim }}
-{%- endfor %}
-RUN {% for sdk in weld_base_sdks.split(',') %}cd /tmp/sdks/weld-{{ sdk|trim }} && uv build --wheel --out-dir /wheels{% if not loop.last %} \
-    && {% endif %}{% endfor %}
 {%- if include_platform_auth | default(false) %}
-# platform-auth is a separate runtime SDK (not in the weld-* namespace);
-# the platform_auth_python_middleware fragment adds it as a path-dep to
-# pyproject.toml. Mirror the weld-* pattern: COPY the source then build
-# a wheel so uv sync resolves it from /wheels after [tool.uv.sources]
-# is stripped.
+# platform-auth is a separate runtime SDK shipped at the project-root
+# ``sdks/`` tree by the platform_auth_sdk_python fragment; the
+# platform_auth_python_middleware fragment adds it as a path-dep to
+# pyproject.toml. COPY the source then build a wheel so uv sync resolves
+# it from /wheels after [tool.uv.sources] is stripped.
 COPY --from=sdks platform-auth /tmp/sdks/platform-auth
 RUN cd /tmp/sdks/platform-auth && uv build --wheel --out-dir /wheels
-{%- endif %}
 {%- endif %}
 
 WORKDIR /project
 
 # Strip [tool.uv.sources] from the project pyproject so uv resolves the
-# vendored path-deps (forge-core, and weld-*/platform-auth under
-# sdk_consumption=monorepo) from /wheels rather than the source paths that
-# only exist in the build context. forge-core is always a path-dep, so this
-# strip + /wheels resolution always runs for Python services.
+# vendored path-deps (forge-core always, and platform-auth when auth is
+# generated) from /wheels rather than the source paths that only exist in
+# the build context. forge-core is always a path-dep, so this strip +
+# /wheels resolution always runs for Python services.
 COPY pyproject.toml uv.lock* ./
 RUN awk 'BEGIN { skip = 0 } \
     /^\[tool\.uv\.sources\]/ { skip = 1; next } \

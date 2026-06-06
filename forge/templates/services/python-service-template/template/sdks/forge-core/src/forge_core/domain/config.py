@@ -52,6 +52,30 @@ class AuthConfig(BaseModel):
         default="service-api",
         description="Expected ``aud`` claim on incoming bearer tokens.",
     )
+    jwks_uri: str | None = Field(
+        default=None,
+        description=(
+            "Explicit JWKS endpoint to fetch the issuer's signing keys from. "
+            "When ``None`` the security layer derives the conventional "
+            "``<server_url>/realms/<realm>/protocol/openid-connect/certs`` URL "
+            "(overridable by the security layer's own default)."
+        ),
+    )
+    tenant_id_claim: str = Field(
+        default="https://forge/tenant_id",
+        description=(
+            "Name of the JWT claim carrying the caller's tenant id. A generic, "
+            "configurable claim path — point it at whatever claim your issuer "
+            "mints (``tenant_id``, ``org_id``, a namespaced URL claim, …)."
+        ),
+    )
+    tenant_slug_claim: str = Field(
+        default="https://forge/tenant_slug",
+        description=(
+            "Name of the optional JWT claim carrying a human-readable tenant "
+            "slug. Informational only — consumers prefer ``tenant_id_claim``."
+        ),
+    )
 
     @property
     def _realm_base(self) -> str:
@@ -68,3 +92,17 @@ class AuthConfig(BaseModel):
     def token_url(self) -> str:
         """The OIDC authorization-code flow token endpoint."""
         return f"{self._realm_base}/protocol/openid-connect/token"
+
+    @property
+    def default_jwks_uri(self) -> str:
+        """The conventional JWKS endpoint derived from ``server_url``/``realm``.
+
+        Returns :attr:`jwks_uri` verbatim when it is set; otherwise derives the
+        standard Keycloak-style ``.../protocol/openid-connect/certs`` URL. The
+        security layer reads this so a service only configures ``server_url`` +
+        ``realm`` in the common case, yet can override the JWKS endpoint for an
+        off-spec issuer.
+        """
+        if self.jwks_uri is not None:
+            return self.jwks_uri.rstrip("/")
+        return f"{self._realm_base}/protocol/openid-connect/certs"

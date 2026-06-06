@@ -12,7 +12,7 @@ from forge_core.domain import context
 from forge_core.domain.account import Account
 from forge_core.domain.user import User
 from forge_core.persistence import AsyncUnitOfWork
-from weld.fastapi.security.auth import authenticate_request
+from forge_core.security.auth import authenticate_request
 
 AuthUnitOfWork = NewType("AuthUnitOfWork", AsyncUnitOfWork)
 PublicUnitOfWork = NewType("PublicUnitOfWork", AsyncUnitOfWork)

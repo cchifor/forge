@@ -38,8 +38,8 @@ from platform_auth import (
     JWKSCache,
     StaticMayActPolicy,
 )
-from weld.core.domain.config import AuthConfig
-from weld.fastapi.security.platform_auth_setup import AuthGuardBundle
+from forge_core.domain.config import AuthConfig
+from service.security.platform_auth_setup import AuthGuardBundle
 
 logger = logging.getLogger(__name__)
 

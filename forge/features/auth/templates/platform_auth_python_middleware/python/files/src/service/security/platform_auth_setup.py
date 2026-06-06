@@ -17,7 +17,7 @@ from platform_auth import (
     StaticMayActPolicy,
 )
 
-from weld.core.domain.config import AuthConfig
+from forge_core.domain.config import AuthConfig
 
 
 def issuer_url(config: AuthConfig) -> str:
