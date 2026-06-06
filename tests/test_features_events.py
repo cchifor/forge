@@ -50,10 +50,32 @@ def test_events_outbox_fragment_depends_on_core() -> None:
     assert frag.parity_tier == 3
 
 
-def test_events_core_declares_weld_events_dep() -> None:
-    frag = FRAGMENT_REGISTRY["events_core"]
-    impl = frag.implementations[BackendLanguage.PYTHON]
-    assert "weld-events" in impl.dependencies
+def test_events_fragments_have_no_weld_dep() -> None:
+    """P5 Stage 2a — the bus + outbox are vendored; no private SDK dep.
+
+    The vendored source uses only pydantic + sqlalchemy from the base
+    template, so the fragments declare zero extra dependencies.
+    """
+    for name in ("events_core", "events_outbox"):
+        impl = FRAGMENT_REGISTRY[name].implementations[BackendLanguage.PYTHON]
+        assert not any("weld" in dep for dep in impl.dependencies), (
+            f"{name} still declares a weld dependency: {impl.dependencies}"
+        )
+
+
+def test_events_fragments_ship_no_weld_imports() -> None:
+    """The vendored events source imports stdlib + pydantic + sqlalchemy
+    only — never ``weld``."""
+    for name in ("events_core", "events_outbox"):
+        files_root = Path(
+            FRAGMENT_REGISTRY[name].implementations[BackendLanguage.PYTHON].fragment_dir
+        ) / "files"
+        for py in files_root.rglob("*.py"):
+            for line in py.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                assert not stripped.startswith(("import weld", "from weld")), (
+                    f"weld import in vendored events source: {py}: {stripped}"
+                )
 
 
 def test_events_core_files_present() -> None:

@@ -2,14 +2,13 @@
 
 GET /api/v1/stream — ``text/event-stream`` of CloudEvents. Browser
 clients connect with an ``EventSource``; ``Last-Event-ID`` triggers
-replay from the streamer's history.
+replay from a configured replay provider (none by default).
 """
 
 from __future__ import annotations
 
-from app.streaming import default_stream_config
+from app.streaming import CloudEventStreamer, SubscriberCtx, default_stream_config
 from fastapi import APIRouter, Depends, Request
-from weld.streaming import CloudEventStreamer, SubscriberCtx
 
 router = APIRouter(tags=["stream"])
 

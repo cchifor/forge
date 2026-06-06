@@ -31,11 +31,30 @@ def test_streaming_sse_depends_on_events_core() -> None:
     assert frag.depends_on == ("events_core",)
 
 
-def test_streaming_sse_declares_weld_streaming_and_sse_starlette() -> None:
+def test_streaming_sse_declares_sse_starlette_and_no_weld() -> None:
+    """P5 Stage 2b — the streamer is vendored; sse-starlette is the only
+    third-party dep, and there is no private SDK dependency."""
     frag = FRAGMENT_REGISTRY["streaming_sse"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    assert "weld-streaming" in impl.dependencies
     assert any(d.startswith("sse-starlette") for d in impl.dependencies)
+    assert not any("weld" in dep for dep in impl.dependencies), (
+        f"streaming_sse still declares a weld dependency: {impl.dependencies}"
+    )
+
+
+def test_streaming_sse_ships_no_weld_imports() -> None:
+    """The vendored streaming source imports stdlib + sse-starlette +
+    starlette (+ app.events) only — never ``weld``."""
+    files_root = (
+        Path(FRAGMENT_REGISTRY["streaming_sse"].implementations[BackendLanguage.PYTHON].fragment_dir)
+        / "files"
+    )
+    for py in files_root.rglob("*.py"):
+        for line in py.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in vendored streaming source: {py}: {stripped}"
+            )
 
 
 def test_streaming_sse_files_present() -> None:

@@ -1,12 +1,18 @@
-"""CloudEvents fragments — bus + transactional outbox via weld-events.
+"""CloudEvents fragments — bus + transactional outbox (vendored, weld-free).
 
-``events_core`` ships the bus factory and DI wiring so handlers can
-publish ``CloudEvent`` instances directly. ``events_outbox`` layers on
-the durable producer side (outbox table + relay loop) so events survive
-listener downtime.
+``events_core`` ships a self-contained CloudEvents envelope, the
+:class:`EventBus` protocol (with Postgres ``LISTEN/NOTIFY`` + in-memory
+transports), the bus factory, and DI wiring so handlers can publish
+``CloudEvent`` instances directly. ``events_outbox`` layers on the
+durable producer side (outbox table + relay loop) so events survive
+subscriber downtime.
 
-Both fragments are Python-only — weld-events has no Node/Rust
-equivalent, and CloudEvent fanout in those ecosystems would be
+The mechanism is vendored into each generated project (``src/app/events/``)
+and imports only the stdlib + pydantic + sqlalchemy — no private SDKs.
+Optional CloudEvent extensions (tenant / actor) are nullable, so a
+single-tenant service stays lean.
+
+Both fragments are Python-only — CloudEvent fanout in Node/Rust would be
 implemented via a different library entirely.
 """
 
@@ -33,7 +39,8 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("events_core", "python"),
-                    dependencies=("weld-events",),
+                    # No extra deps: the vendored bus needs only pydantic
+                    # + sqlalchemy, both base-template dependencies.
                     env_vars=(
                         ("EVENTS_BUS", "postgres_notify"),
                         ("EVENTS_CHANNEL", "domain_events"),
@@ -52,7 +59,8 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("events_outbox", "python"),
-                    dependencies=("weld-events",),
+                    # No extra deps: the vendored outbox store + relay use
+                    # only sqlalchemy, a base-template dependency.
                     env_vars=(("EVENTS_OUTBOX_POLL_INTERVAL_S", "1.0"),),
                 ),
             },

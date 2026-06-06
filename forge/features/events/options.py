@@ -17,19 +17,19 @@ def register_all(api: ForgeAPI) -> None:
             type=OptionType.ENUM,
             default="none",
             options=("none", "postgres_notify", "memory"),
-            summary="CloudEvents bus — domain-event fanout between services (weld-events).",
+            summary="CloudEvents bus — domain-event fanout between services (vendored).",
             description="""\
-Selects the :class:`weld.events.EventBus` transport. ``postgres_notify``
-uses Postgres ``LISTEN/NOTIFY`` (the default platform transport — one
-``domain_events`` channel per database, no extra infra). ``memory`` is
-for tests and local dev (subscribers in the same process). ``none``
-disables the feature.
+Selects the ``app.events.EventBus`` transport (vendored, self-contained).
+``postgres_notify`` uses Postgres ``LISTEN/NOTIFY`` (the default
+transport — one ``domain_events`` channel per database, no extra infra).
+``memory`` is for tests and local dev (subscribers in the same process).
+``none`` disables the feature.
 
 Pairs with the transactional outbox (``events.outbox``) so producers
-never lose events on listener downtime.
+never lose events on subscriber downtime.
 
 BACKENDS: python
-DEPENDENCY: weld-events""",
+DEPENDENCY: none (vendored; uses pydantic + sqlalchemy from the base)""",
             category=FeatureCategory.ASYNC_WORK,
             # Initiative #7 — only the values that resolve to fragments are
             # checked. ``postgres_notify`` and ``memory`` both need a DB
@@ -51,11 +51,10 @@ DEPENDENCY: weld-events""",
             summary="Transactional outbox table — never-lost CloudEvents on the producer side.",
             description="""\
 Adds the ``outbox`` table (via Alembic migration) and an
-:class:`weld.events.OutboxRelay` background worker that polls the
-table and publishes pending rows through the configured ``EventBus``.
-Producers append rows to ``outbox`` in the same transaction as their
-domain writes — no dual-write race, no lost events on listener
-downtime.
+``app.events.OutboxRelay`` background worker that polls the table and
+publishes pending rows through the configured ``EventBus``. Producers
+append rows to ``outbox`` in the same transaction as their domain
+writes — no dual-write race, no lost events on subscriber downtime.
 
 Default is off because turning the outbox on without ``events.bus``
 configured would pull in the bus + relay scaffolding for a service
