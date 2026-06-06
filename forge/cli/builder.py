@@ -110,6 +110,7 @@ def _build_backends_from_cfg(
                     server_port=be_cfg.get("server_port", 5000 + i),
                     app_template=be_cfg.get("app_template", "crud-service"),
                     sdk_consumption=be_cfg.get("sdk_consumption"),
+                    depends_on=_normalize_features(be_cfg.get("depends_on"), default=[]),
                 )
             )
         return backends
@@ -233,6 +234,58 @@ def _coerce_set_value(path: str, raw: str) -> Any:
     return raw
 
 
+def _deep_merge_under(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge ``base`` *under* ``override`` — ``override`` wins on every key.
+
+    Used to apply a platform preset (``base``) as the lowest-priority layer
+    beneath the user's cfg (``override``). The merge is shallow except for the
+    nested ``options`` dict, which is deep-merged key-by-key (preset options sit
+    under user options). List-valued keys (notably ``backends``) are *not*
+    merged element-wise: if the user supplied the key at all, their whole value
+    wins (user-wins-whole-list); otherwise the preset's value is used. Scalar
+    and dict (non-``options``) keys follow the same user-wins rule.
+    """
+    merged: dict[str, Any] = dict(base)
+    for key, ov in override.items():
+        if key == "options" and isinstance(ov, dict) and isinstance(base.get("options"), dict):
+            opts: dict[str, Any] = dict(base["options"])
+            opts.update(ov)
+            merged["options"] = opts
+        else:
+            merged[key] = ov
+    return merged
+
+
+def _apply_platform_preset(
+    args: argparse.Namespace, cfg: dict[str, Any]
+) -> tuple[dict[str, Any], str | None]:
+    """Seed a platform preset under ``cfg`` and return ``(cfg, platform_name)``.
+
+    The preset is the lowest-priority configuration layer: its
+    :meth:`PlatformTemplate.as_config_dict` is deep-merged *under* ``cfg`` so
+    every user CLI flag and config-file value wins. ``platform_name`` resolves
+    CLI ``--platform`` first, then a persisted ``platform_template`` in the cfg
+    file. Returns ``cfg`` unchanged (and ``None``) when no platform is selected,
+    keeping the no-platform path byte-identical.
+    """
+    platform_name = getattr(args, "platform", None) or cfg.get("platform_template")
+    if not platform_name:
+        return cfg, None
+
+    from forge.platform_templates import (  # noqa: PLC0415
+        available_platform_templates,
+        get_platform_template,
+    )
+
+    preset = get_platform_template(str(platform_name))
+    if preset is None:
+        avail = ", ".join(available_platform_templates()) or "(none registered)"
+        raise ValueError(
+            f"Unknown platform preset {platform_name!r}. Available platforms: {avail}."
+        )
+    return _deep_merge_under(preset.as_config_dict(), cfg), preset.name
+
+
 def _build_options(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, Any]:
     """Merge YAML ``options:`` block with ``--set`` repeats."""
     options: dict[str, Any] = {}
@@ -265,6 +318,13 @@ def _build_config(
     the JSON envelope. ``None`` (the default) preserves the pre-#5
     behaviour where rewrites were silent.
     """
+    # Platform preset (Phase 4) — apply BEFORE anything else so it sits as the
+    # lowest-priority layer: the preset's config dict is deep-merged UNDER the
+    # user cfg, so every user CLI flag and config-file value still wins. With no
+    # ``--platform`` (and no persisted ``platform_template``) this is a no-op and
+    # ``cfg`` is unchanged — keeping the default path byte-identical.
+    cfg, platform_name = _apply_platform_preset(args, cfg)
+
     r = _Resolver(args, cfg)
     project_name = r.get("project_name", "project_name", default="My Platform")
     description = r.get("description", "description", default="A full-stack application")
@@ -382,6 +442,7 @@ def _build_config(
         frontend=frontend,
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
+        platform_template=platform_name,
         options=options,
         option_origins=option_origins,
         components=components,

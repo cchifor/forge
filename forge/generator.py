@@ -933,6 +933,7 @@ def _write_forge_toml(
         merge_blocks=merge_blocks,
         template_versions=template_versions,
         frontend=frontend_data,
+        platform_template=config.platform_template,
     )
 
 

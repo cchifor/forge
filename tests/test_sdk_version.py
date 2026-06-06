@@ -46,13 +46,15 @@ def test_sdk_version_parses() -> None:
         (">=1.1", True),
         (">=1.2", True),
         (">=1.4", True),
+        (">=1.5", True),
         (">=2.0", False),
         ("<2.0", True),
         ("<1.0", False),
-        # SDK bumped to 1.4 (add_backend_application_template). The equality
-        # case follows the live version so a future bump that forgets to
-        # update this test fails loudly.
-        ("==1.4", True),
+        # SDK bumped to 1.5 (add_platform_template). The equality case follows
+        # the live version so a future bump that forgets to update this test
+        # fails loudly.
+        ("==1.5", True),
+        ("==1.4", False),
         ("==1.3", False),
         ("==1.2", False),
         ("==2.0", False),
