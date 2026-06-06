@@ -11,6 +11,11 @@ The vendored surfaces so far:
   (:class:`~forge_core.domain.Account`, :class:`~forge_core.domain.User`,
   :class:`~forge_core.domain.AuthConfig`, and the per-request identity
   ``context`` ``ContextVar`` set).
+* :mod:`forge_core.security` — the always-shipped, weld-free FastAPI auth glue
+  (``oauth2_scheme``, ``authenticate_request``, ``build_auth_guard``, a generic
+  JWKS/JWT :class:`~forge_core.security.AuthGuard`, dev-mode passthrough).
+* :mod:`forge_core.observability` — generic telemetry primitives (the
+  per-request correlation-id ``ContextVar`` set).
 * :mod:`forge_core.discovery` — a generic Eureka service-discovery wrapper
   (optional ``py-eureka-client`` dependency, imported lazily).
 

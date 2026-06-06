@@ -1,22 +1,26 @@
-"""Per-request authentication for HTTP endpoints.
+"""Per-request authentication for HTTP endpoints (weld-free, always shipped).
 
-The platform-wide identity model lives in :mod:`platform_auth`. This module
-adapts that model to this service's request lifecycle:
+This module adapts the generic :class:`forge_core.security.AuthGuard` to a
+FastAPI request lifecycle:
 
-* :func:`initialize_auth` plants the configured :class:`platform_auth.AuthGuard`
-  on the FastAPI app at startup.
+* :func:`initialize_auth` plants the configured :class:`AuthGuardBundle` on the
+  FastAPI app at startup and points the OpenAPI OAuth2 flow at the issuer URLs.
 * :func:`authenticate_request` extracts the bearer token, asks the guard to
-  verify it, and translates the resulting :class:`platform_auth.IdentityContext`
-  into the service-local :class:`service.domain.user.User`. The User type is
-  preserved because endpoints, repositories, and the audit middleware
-  consume it directly.
-* The legacy ``X-Gatekeeper-*`` plain-header trust path is gone — the
-  bearer token is the only source of identity.
+  verify it, and translates the resulting :class:`IdentityContext` into the
+  service-local :class:`forge_core.domain.User` that endpoints, repositories,
+  and middleware consume directly.
 
-Dev mode (``auth.enabled=False``) skips verification and synthesizes a
-fixed local User so a developer can run the service without an IdP. To
-exercise the real verification path locally, set ``auth.enabled=True`` and
+Dev mode (``auth.enabled=False``) skips verification and synthesizes a fixed
+local user / identity so a developer can run the service without an IdP — this
+is the *passthrough* the base relies on when auth is disabled (including every
+``auth.mode=none`` project, where this module is the only auth layer present).
+To exercise the real verification path locally, set ``auth.enabled=True`` and
 point JWKS at a local test issuer.
+
+At ``auth.mode=generate`` the platform-auth SDK + middleware fragment enrich
+this stack and the FORGE:APP_POST_CONFIGURE rebind swaps the issuer wiring; the
+request-lifecycle shape (``oauth2_scheme`` + ``authenticate_request`` + the
+``auth`` module surface this file provides) stays the contract the base imports.
 """
 
 from __future__ import annotations
@@ -28,11 +32,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.datastructures import Headers
 from fastapi.openapi.models import OAuth2 as OAuth2Model
 from fastapi.security import OAuth2AuthorizationCodeBearer
-from platform_auth import AuthError, IdentityContext
 
 from forge_core.domain import context
 from forge_core.domain.user import User
-from service.security.platform_auth_setup import AuthGuardBundle
+from forge_core.security.exceptions import AuthError
+from forge_core.security.identity import IdentityContext
+from forge_core.security.platform_auth_setup import AuthGuardBundle
 
 _logger = logging.getLogger(__name__)
 
@@ -56,6 +61,20 @@ _DEV_USER = User(
     org_id=None,
     token={},
 )
+
+# Tenant id the dev-mode synthesized identity carries, so endpoints that read
+# tenant from ``request.state.identity`` behave identically in dev and prod.
+_DEV_TENANT_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def _dev_identity() -> IdentityContext:
+    """Synthesize an :class:`IdentityContext` matching the dev User."""
+    return IdentityContext(
+        tenant_id=_DEV_TENANT_ID,
+        subject=_DEV_USER.id,
+        roles=frozenset(_DEV_USER.roles),
+        scopes=frozenset(),
+    )
 
 
 def initialize_auth(
@@ -131,8 +150,8 @@ async def authenticate_request(request: Request) -> User | None:
 
     Returns ``None`` when no token is present (and dev mode is off); raises
     HTTP 401 when a token is present but invalid. Sets ``request.state.user``
-    on success so downstream middleware (audit, observability) can pick it
-    up without re-running verification.
+    (and ``.identity``) on success so downstream middleware can pick it up
+    without re-running verification.
     """
     bundle = get_auth_bundle_from_state(request)
     dev_mode = is_dev_mode(request)
@@ -142,6 +161,7 @@ async def authenticate_request(request: Request) -> User | None:
     if not token:
         if dev_mode:
             request.state.user = _DEV_USER
+            request.state.identity = _dev_identity()
             return _DEV_USER
         return None
 
@@ -149,7 +169,9 @@ async def authenticate_request(request: Request) -> User | None:
         identity = await bundle.guard.verify(token)
     except AuthError as exc:
         _logger.warning(
-            "auth_rejected",
+            "auth_rejected reason=%s detail=%s",
+            exc.reason,
+            exc.detail,
             extra={"reason": exc.reason, "detail": exc.detail},
         )
         raise HTTPException(
@@ -197,3 +219,19 @@ async def get_optional_user(
 
 AuthenticatedUser = Annotated[User, Depends(get_current_user)]
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
+__all__ = [
+    "AuthenticatedUser",
+    "OptionalUser",
+    "authenticate_request",
+    "extract_token",
+    "get_auth_bundle_from_state",
+    "get_current_user",
+    "get_optional_user",
+    "initialize_auth",
+    "is_dev_mode",
+    "oauth2_scheme",
+    "set_auth_context",
+    "user_from_identity",
+]

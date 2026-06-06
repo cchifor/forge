@@ -43,23 +43,28 @@ def _body(resp) -> dict:
 
 
 class TestRFC007Envelope:
+    # The HTTP / validation / global handlers emit the flat
+    # ``forge_core.errors.Error`` shape — ``{message, type, detail:{code,
+    # correlation_id, context}}`` — per the "Error envelope contract" note in
+    # ``app.core.errors``. Only the domain (``ApplicationError``) handler still
+    # ships the nested ``{"error": {...}}`` envelope for cross-stack parity, so
+    # those tests below keep reading ``body["error"][...]``.
     def test_http_exception_maps_404_to_not_found_code(self):
         req = _mock_request()
         exc = StarletteHTTPException(status_code=404, detail="Missing")
         resp = http_exception_handler(req, exc)
         assert resp.status_code == 404
         body = _body(resp)
-        assert body["error"]["code"] == "NOT_FOUND"
-        assert body["error"]["message"] == "Missing"
-        assert body["error"]["type"] == "HTTPException"
-        assert body["error"]["correlation_id"] == "corr-test-1"
-        assert body["error"]["context"] == {}
+        assert body["detail"]["code"] == "NOT_FOUND"
+        assert body["message"] == "Missing"
+        assert body["type"] == "HTTPException"
+        assert body["detail"]["correlation_id"] == "corr-test-1"
 
     def test_http_exception_401_maps_to_auth_required(self):
         req = _mock_request()
         exc = StarletteHTTPException(status_code=401, detail="no token")
         resp = http_exception_handler(req, exc)
-        assert _body(resp)["error"]["code"] == "AUTH_REQUIRED"
+        assert _body(resp)["detail"]["code"] == "AUTH_REQUIRED"
 
     def test_validation_exception_emits_422(self):
         req = _mock_request()
@@ -72,16 +77,16 @@ class TestRFC007Envelope:
         resp = validation_exception_handler(req, exc)
         assert resp.status_code == 422
         body = _body(resp)
-        assert body["error"]["code"] == "VALIDATION_FAILED"
-        assert body["error"]["context"]["errors"][0]["msg"] == "field required"
+        assert body["detail"]["code"] == "VALIDATION_FAILED"
+        assert body["detail"]["errors"][0]["msg"] == "field required"
 
     def test_global_exception_hides_internals(self):
         req = _mock_request()
         resp = global_exception_handler(req, RuntimeError("secret stack trace"))
         assert resp.status_code == 500
         body = _body(resp)
-        assert body["error"]["code"] == "INTERNAL_ERROR"
-        assert "secret" not in body["error"]["message"]
+        assert body["detail"]["code"] == "INTERNAL_ERROR"
+        assert "secret" not in body["message"]
 
     def test_domain_not_found(self):
         req = _mock_request()

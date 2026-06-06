@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
 from forge_core.discovery import Discovery
-from weld.fastapi.security import auth
-from weld.fastapi.security.platform_auth_setup import build_auth_guard
+from forge_core.security import auth
+from forge_core.security.platform_auth_setup import build_auth_guard
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +34,12 @@ class AppLifecycle:
         container = make_async_container(*providers, context={Settings: config})
         setup_dishka(container, app)
 
-        # 3. Setup Authentication — platform-auth model.
-        # Verifies bearer tokens against the configured Gatekeeper's JWKS
+        # 3. Setup Authentication.
+        # Verifies bearer tokens against the configured OIDC issuer's JWKS
         # endpoint. ``auth.enabled=False`` activates dev-mode (synthesized
         # local user, no token verification) — local development only.
+        # ``build_auth_guard`` is a module-level symbol an auth provider can
+        # rebind (FORGE:APP_POST_CONFIGURE) to swap the issuer wiring.
         bundle = build_auth_guard(config.security.auth)
         if not config.security.auth.enabled:
             logger.warning(

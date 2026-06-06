@@ -1,11 +1,17 @@
 [project]
 name = "forge-core"
 version = "0.1.0"
-description = "Vendored framework-agnostic primitives (errors, persistence, domain, discovery) for forge services"
+description = "Vendored framework-agnostic primitives (errors, persistence, domain, discovery, security) for forge services"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.11.0",
     "sqlalchemy[asyncio]>=2.0.0",
+    # security — generic FastAPI auth glue (oauth2_scheme + AuthGuard + JWKS
+    # verify). FastAPI for the request-lifecycle types, httpx for the JWKS
+    # fetch, PyJWT for token decode + JWK parsing.
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "PyJWT>=2.10.0",
 ]
 
 [dependency-groups]
@@ -15,6 +21,9 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.15.0",
     "aiosqlite>=0.20.0",
+    # cryptography — mint ES256 / RS256 keypairs + sign test JWTs for the
+    # forge_core.security verifier suite (JWKS happy-path / expired / bad-aud).
+    "cryptography>=42.0.0",
 ]
 
 [build-system]
