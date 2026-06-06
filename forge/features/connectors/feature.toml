@@ -1,7 +1,7 @@
 [feature]
 name = "connectors"
 version = "1.0.0"
-summary = "Pluggable read/write adapters via weld-connectors."
+summary = "Pluggable read/write adapters (vendored, self-contained)."
 category = "knowledge"
 
 [feature.depends]
