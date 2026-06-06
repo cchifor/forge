@@ -1729,8 +1729,8 @@
       "sha256": "3e799c04904069d8"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
-      "size": 2699,
-      "sha256": "f6220cc951413ee6"
+      "size": 2697,
+      "sha256": "92eb9dddad263db8"
     },
     "services/api/src/app/api/v1/endpoints/health.py": {
       "size": 1505,
@@ -1757,12 +1757,12 @@
       "sha256": "cce2fd26c7f8e38f"
     },
     "services/api/src/app/api/v1/endpoints/tools.py": {
-      "size": 1619,
-      "sha256": "25f42343a8d4d7ef"
+      "size": 1617,
+      "sha256": "d7f2579c26481714"
     },
     "services/api/src/app/api/v1/endpoints/webhooks.py": {
-      "size": 3416,
-      "sha256": "9afdf1ccd4d976b0"
+      "size": 3414,
+      "sha256": "45db4941bda6e69a"
     },
     "services/api/src/app/cli/__init__.py": {
       "size": 752,
@@ -1877,24 +1877,24 @@
       "sha256": "f5597f6c68472bed"
     },
     "services/api/src/app/data/models/chat_file.py": {
-      "size": 1792,
-      "sha256": "3e74bfdbab23b2b5"
+      "size": 1782,
+      "sha256": "369abc9fb121cb5a"
     },
     "services/api/src/app/data/models/conversation.py": {
-      "size": 3899,
-      "sha256": "021dd5d70c398f10"
+      "size": 3889,
+      "sha256": "eee5188c8daefc73"
     },
     "services/api/src/app/data/models/item.py": {
       "size": 1036,
       "sha256": "3183917dc2c32d13"
     },
     "services/api/src/app/data/models/rag_document.py": {
-      "size": 1706,
-      "sha256": "71c10b14e863b0d0"
+      "size": 1696,
+      "sha256": "3cf776096d7b9748"
     },
     "services/api/src/app/data/models/webhook.py": {
-      "size": 1454,
-      "sha256": "7d28d7c2b14c9120"
+      "size": 1444,
+      "sha256": "0381b6f72f8cb593"
     },
     "services/api/src/app/data/repositories/__init__.py": {
       "size": 0,
@@ -2025,8 +2025,8 @@
       "sha256": "97ba9d1a27a2c50a"
     },
     "services/api/src/app/rag/rag_search_tool.py": {
-      "size": 4955,
-      "sha256": "c7aac25c27f4b62f"
+      "size": 4963,
+      "sha256": "d155a094fbd79746"
     },
     "services/api/src/app/rag/reranker.py": {
       "size": 3912,
@@ -2121,8 +2121,8 @@
       "sha256": "9f6b4525a92bdece"
     },
     "services/api/tests/unit/test_conversation_repository_fragment.py": {
-      "size": 1954,
-      "sha256": "0b04634848546e06"
+      "size": 1955,
+      "sha256": "4615b237b30f70b1"
     },
     "services/api/tests/unit/test_domain_models.py": {
       "size": 5807,

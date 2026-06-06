@@ -22,7 +22,8 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("airlock_client", "python"),
-                    dependencies=("weld-airlock",),
+                    # No extra deps: the vendored async client needs only
+                    # httpx + pydantic, both base-template dependencies.
                     env_vars=(
                         ("AIRLOCK_BASE_URL", "http://airlock:5100"),
                         ("AIRLOCK_TOKEN", ""),

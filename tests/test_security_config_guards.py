@@ -1,7 +1,7 @@
 """Verify that MCP audit and domain config templates ship secure defaults.
 
 Some checks verify template content (grep). The behavioural checks below
-actually load the template ``domain.py`` (with a stubbed ``weld``) and
+actually load the template ``domain.py`` (with a stubbed ``forge_core``) and
 exercise ``SecurityConfig`` so a secret that *looks* overridden but is
 really a shipped placeholder is caught — a content grep cannot do that.
 """

@@ -19,7 +19,7 @@ from app.rag import chroma_backend
 from app.rag.chunker import chunk_text
 from app.rag.embeddings import embed, embed_one
 from app.rag.pdf_parser import extract_text_from_bytes
-from weld.core.domain.user import User
+from forge_core.domain.user import User
 from service.security.auth import oauth2_scheme
 
 router = APIRouter(dependencies=[Depends(oauth2_scheme)])

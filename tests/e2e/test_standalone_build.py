@@ -57,9 +57,7 @@ def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def _python_files(root: Path) -> list[Path]:
     return [
-        p
-        for p in root.rglob("*.py")
-        if "__pycache__" not in p.parts and ".venv" not in p.parts
+        p for p in root.rglob("*.py") if "__pycache__" not in p.parts and ".venv" not in p.parts
     ]
 
 
@@ -126,6 +124,65 @@ def _auth_config(tmp_path: Path) -> ProjectConfig:
     )
 
 
+def _max_config(tmp_path: Path) -> ProjectConfig:
+    """Mirror the ``full_feature_max`` golden preset's heavy backend.
+
+    Every weld-importing feature fragment converted across P5 Stage-2 is in
+    play here: conversation.persistence, agent.streaming/tools, rag.reranker
+    (transitively rag_pipeline -> conversation_persistence, the
+    get_customer_id + tenant-mixin rewires), chat.attachments (file_upload),
+    platform.webhooks/admin (webhook model + endpoints), plus the gatekeeper
+    auth stack (get_current_user → forge_core.security.auth). If any fragment
+    still referenced ``weld``, ``uv sync`` would fail to resolve and/or the
+    weld grep below would trip. The Vue frontend the preset ships is omitted
+    — the weld-free proof is backend-scoped and the build only exercises the
+    Python service.
+
+    NOTE: the golden preset additionally sets ``agent.llm`` + ``llm.provider``;
+    those are deliberately OMITTED here. The ``llm_openai`` fragment injects
+    ``api_key=_settings.openai_api_key`` into ``container.py`` without
+    declaring the matching ``Settings`` field — a pre-existing generated-
+    project bug (the same combo ``known-issues.md`` flagged as crashing) that
+    the golden snapshot's ``dry_run`` masks because it never imports the
+    container. It carries no ``weld`` import and is orthogonal to the P5
+    weld-free surface, so including it would only fail this build on an
+    unrelated defect.
+    """
+    return ProjectConfig(
+        project_name="Standalone Max",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="svc",
+                project_name="Standalone Max",
+                language=BackendLanguage.PYTHON,
+                features=["items", "orders"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        include_keycloak=True,
+        options={
+            "auth.mode": "generate",
+            "auth.provider": "gatekeeper",
+            "observability.tracing": True,
+            "observability.health": True,
+            "middleware.rate_limit": True,
+            "middleware.security_headers": True,
+            "middleware.pii_redaction": True,
+            "conversation.persistence": True,
+            "agent.streaming": True,
+            "agent.tools": True,
+            "rag.reranker": True,
+            "chat.attachments": True,
+            "platform.webhooks": True,
+            "platform.admin": True,
+            "platform.cli_extensions": True,
+            "platform.agents_md": True,
+        },
+    )
+
+
 def _build_and_test(backend_dir: Path) -> None:
     """uv sync (no weld available) + run the generated project's pytest."""
     sync = _run(["uv", "sync"], cwd=backend_dir)
@@ -165,5 +222,26 @@ def test_auth_generate_project_builds_weld_free(
     backend_dir = project_root / "services" / "svc"
     assert backend_dir.is_dir()
     # The platform-auth SDK ships at the project root; it must be present.
+    assert (project_root / "sdks" / "platform-auth").is_dir()
+    _build_and_test(backend_dir)
+
+
+def test_full_feature_max_project_builds_weld_free(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """The P5 weld-free capstone: a *fully loaded* project (the
+    ``full_feature_max`` feature union — every converted Stage-2 fragment plus
+    the gatekeeper auth stack) resolves, parses, and passes its own pytest with
+    NO ``weld-*`` package installable. Proves the last weld imports are gone
+    across the heavy feature set, not just the minimal/auth baselines."""
+    project_root = generate(_max_config(tmp_path), quiet=True)
+
+    weld_hits = _grep_weld(project_root)
+    assert not weld_hits, "weld references in a full_feature_max project:\n" + "\n".join(weld_hits)
+    _assert_ast_parses(project_root)
+
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    # Both always-shipped/auth SDKs vendor in at the project root.
     assert (project_root / "sdks" / "platform-auth").is_dir()
     _build_and_test(backend_dir)

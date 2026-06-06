@@ -144,16 +144,15 @@ def test_mcp_router_requires_authentication() -> None:
     """Regression guard for the unauthenticated-MCP vuln. Every /mcp route must
     be gated: the server exposes tool invocation (subprocess exec), approval-
     token minting, and an audit log of user identities. Verified behaviourally
-    (auth on + no token -> 401) via the real weld SDK; this locks the gate into
-    the template so it cannot silently regress. NOTE: oauth2_scheme is
-    auto_error=False and does NOT gate — get_current_user (raises 401) is the
-    enforcing dependency."""
+    (auth on + no token -> 401); this locks the gate into the template so it
+    cannot silently regress. NOTE: oauth2_scheme is auto_error=False and does
+    NOT gate — get_current_user (raises 401) is the enforcing dependency."""
     router = (
         Path(__file__).resolve().parent.parent
         / "forge/features/platform/templates/mcp_server/python/files/src/app/mcp/router.py"
     )
     src = router.read_text(encoding="utf-8")
-    assert "from weld.fastapi.security.auth import get_current_user" in src
+    assert "from forge_core.security.auth import get_current_user" in src
     assert "dependencies=[Depends(get_current_user)]" in src
 
 
