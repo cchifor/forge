@@ -69,13 +69,17 @@ def test_worker_variant_registered_for_python_only():
 
 
 def test_available_backend_templates_per_language():
-    assert bat.available_backend_templates(BackendLanguage.PYTHON) == ("crud-service", "worker")
+    assert bat.available_backend_templates(BackendLanguage.PYTHON) == (
+        "api-gateway",
+        "crud-service",
+        "worker",
+    )
     assert bat.available_backend_templates(BackendLanguage.NODE) == ("crud-service",)
     assert bat.available_backend_templates(BackendLanguage.RUST) == ("crud-service",)
 
 
 def test_all_backend_template_names():
-    assert bat.all_backend_template_names() == ("crud-service", "worker")
+    assert bat.all_backend_template_names() == ("api-gateway", "crud-service", "worker")
 
 
 def test_get_unknown_variant_returns_none():
