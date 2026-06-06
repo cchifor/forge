@@ -256,6 +256,7 @@ class ProjectConfig:
         self._validate_options()
         self._validate_components_shape()
         self._validate_layer_modes()
+        self._validate_service_discovery()
         self._resolve_once()
 
     def _validate_components_shape(self) -> None:
@@ -536,6 +537,89 @@ class ProjectConfig:
                 raise ValueError(
                     f"Options {a} and {b} are mutually exclusive. Disable one of them."
                 )
+
+    def _validate_service_discovery(self) -> None:
+        """Phase 4 — graph + activation rules for multi-service synthesis.
+
+        When ``auth.service_discovery`` is on (the option, resolved through any
+        alias and defaulted):
+
+        * the project must have more than one backend — S2S synthesis is
+          meaningless for a single service;
+        * every name in any backend's ``depends_on`` must be a real backend in
+          this project (a self-edge is already rejected at the
+          ``BackendConfig`` level).
+
+        A dependency *cycle* (``A -> B -> A``) is legal at runtime — two
+        services calling each other happens — but is often a design smell, so
+        it warns rather than fails.
+        """
+        if not self._service_discovery_active():
+            return
+        if len(self.backends) <= 1:
+            raise ValueError(
+                "auth.service_discovery requires more than one backend "
+                f"(found {len(self.backends)}). Multi-service synthesis builds "
+                "an S2S graph across backends; a single service has no one to "
+                "talk to. Either add another backend or disable "
+                "auth.service_discovery."
+            )
+        known = {bc.name for bc in self.backends}
+        for bc in self.backends:
+            for dep in bc.depends_on:
+                if dep not in known:
+                    raise ValueError(
+                        f"Backend '{bc.name}' depends_on '{dep}', which is not a "
+                        f"backend in this project. Known backends: "
+                        f"{sorted(known)}. Fix the depends_on entry or add the "
+                        "missing backend."
+                    )
+        self._warn_on_dependency_cycle(known)
+
+    def _service_discovery_active(self) -> bool:
+        """Whether ``auth.service_discovery`` resolves to a truthy value."""
+        return bool(self._effective_option_values().get("auth.service_discovery"))
+
+    def _warn_on_dependency_cycle(self, known: set[str]) -> None:
+        """Emit a warning (never raise) if the depends_on graph has a cycle."""
+        graph: dict[str, list[str]] = {
+            bc.name: [d for d in bc.depends_on if d in known] for bc in self.backends
+        }
+        # Iterative DFS with WHITE/GREY/BLACK colouring; a back-edge to a GREY
+        # node is a cycle. Deterministic node order for stable diagnostics.
+        WHITE, GREY, BLACK = 0, 1, 2
+        color: dict[str, int] = {name: WHITE for name in graph}
+
+        def _has_cycle_from(start: str) -> bool:
+            stack: list[tuple[str, int]] = [(start, 0)]
+            while stack:
+                node, idx = stack[-1]
+                if idx == 0:
+                    color[node] = GREY
+                neighbors = graph.get(node, [])
+                if idx < len(neighbors):
+                    stack[-1] = (node, idx + 1)
+                    nxt = neighbors[idx]
+                    if color.get(nxt) == GREY:
+                        return True
+                    if color.get(nxt) == WHITE:
+                        stack.append((nxt, 0))
+                else:
+                    color[node] = BLACK
+                    stack.pop()
+            return False
+
+        for name in sorted(graph):
+            if color[name] == WHITE and _has_cycle_from(name):
+                from forge.logging import get_logger  # noqa: PLC0415
+
+                get_logger("config").warning(
+                    "auth.service_discovery: the backend depends_on graph "
+                    "contains a cycle. This is legal at runtime (mutually "
+                    "calling services) but is often a design smell; review the "
+                    "depends_on edges."
+                )
+                return
 
     def _validate_database_mode(self) -> None:
         """Reject ``database.mode=none`` when DB-dependent options are on.

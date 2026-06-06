@@ -68,6 +68,7 @@ from forge.reports import (
 )
 from forge.sync.forge_to_project import apply_features, apply_project_features
 from forge.sync.provenance import ProvenanceCollector
+from forge.synthesis import PlatformSynthesis, compute_platform_synthesis
 
 _logger = get_logger("generator")
 
@@ -468,19 +469,21 @@ def _synthesize_platform(
     project_root: Path,
     *,
     quiet: bool,
-) -> object | None:
-    """Phase 4: multi-service platform synthesis (seam).
+) -> PlatformSynthesis | None:
+    """Phase 4: multi-service platform synthesis.
 
     When ``auth.service_discovery`` is on (and the project has >1 backend),
     this computes the cross-service S2S auth graph from each backend's
     ``depends_on`` — per-service client id / secret / audiences + inter-service
     URLs — and returns it for the docker/realm/registry renderers to consume.
 
-    P4.0 ships the inert seam only: it always returns ``None``, so generation
-    is byte-identical to before. The computation + emitted artifacts land in the
-    following Phase-4 sub-steps (P4.1 the data model, P4.2 the renderers).
+    P4.1 ships the pure computation: it returns a real
+    :class:`~forge.synthesis.PlatformSynthesis` when multi-service synthesis is
+    active, else ``None``. The renderers do not consume it yet (that is P4.2),
+    so generation output stays byte-identical even with ``service_discovery``
+    on — verified by the golden gate.
     """
-    return None
+    return compute_platform_synthesis(config, plan)
 
 
 def _render_docker_stack(
@@ -489,7 +492,7 @@ def _render_docker_stack(
     project_root: Path,
     *,
     quiet: bool,
-    synthesis: object | None = None,
+    synthesis: PlatformSynthesis | None = None,
 ) -> None:
     """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets.
 
