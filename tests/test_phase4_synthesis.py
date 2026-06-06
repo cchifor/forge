@@ -120,6 +120,10 @@ def _multi_backend_config(
         opts["auth.service_discovery"] = True
     return ProjectConfig(
         project_name="Shop",
+        # service_discovery resolves to a real gatekeeper only when keycloak is
+        # on (the resolver coerces auth.provider->none otherwise), so a coherent
+        # synthesis fixture must enable it.
+        include_keycloak=True,
         backends=[
             BackendConfig(
                 name="gateway",
@@ -287,6 +291,7 @@ def test_validate_rejects_service_discovery_with_single_backend() -> None:
 def test_validate_rejects_depends_on_unknown_backend() -> None:
     cfg = ProjectConfig(
         project_name="Shop",
+        include_keycloak=True,
         backends=[
             BackendConfig(
                 name="gateway",
@@ -313,6 +318,7 @@ def test_validate_warns_on_cycle_but_does_not_raise(caplog) -> None:
 
     cfg = ProjectConfig(
         project_name="Shop",
+        include_keycloak=True,
         backends=[
             BackendConfig(
                 name="a",
@@ -334,6 +340,96 @@ def test_validate_warns_on_cycle_but_does_not_raise(caplog) -> None:
     with caplog.at_level(logging.WARNING, logger="forge.config"):
         cfg.validate()  # must not raise
     assert any("cycle" in rec.message for rec in caplog.records)
+
+
+def test_validate_rejects_service_discovery_without_keycloak() -> None:
+    """Gap-1 guard: service_discovery without the gatekeeper stack fails fast.
+
+    With keycloak off, the resolver coerces auth.provider->none, so synthesis
+    would emit an orphan registry + GATEKEEPER_* env into a project with no
+    gatekeeper. Validation must reject it up front.
+    """
+    cfg = ProjectConfig(
+        project_name="Shop",
+        include_keycloak=False,
+        backends=[
+            BackendConfig(
+                name="gateway",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5010,
+                depends_on=["orders"],
+            ),
+            BackendConfig(
+                name="orders",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5020,
+            ),
+        ],
+        options={"auth.service_discovery": True},
+    )
+    with pytest.raises(ValueError, match="include_keycloak=True"):
+        cfg.validate()
+
+
+def test_validate_rejects_event_bus_postgres_notify_without_database() -> None:
+    """Gap-2 guard: postgres_notify event bus requires a database."""
+    cfg = ProjectConfig(
+        project_name="Shop",
+        include_keycloak=True,
+        backends=[
+            BackendConfig(
+                name="gateway",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5010,
+                depends_on=["orders"],
+            ),
+            BackendConfig(
+                name="orders",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5020,
+            ),
+        ],
+        options={
+            "auth.service_discovery": True,
+            "infrastructure.event_bus": "postgres_notify",
+            "database.mode": "none",
+        },
+    )
+    with pytest.raises(ValueError, match="event_bus=postgres_notify requires a database"):
+        cfg.validate()
+
+
+def test_compute_self_disables_without_resolved_gatekeeper() -> None:
+    """Gap-1 runtime defence: compute returns None when the resolved provider
+    is not gatekeeper, even if service_discovery + >1 backend hold (e.g. a
+    headless caller that bypassed validate with keycloak off)."""
+    cfg = ProjectConfig(
+        project_name="Shop",
+        include_keycloak=False,  # -> resolver coerces auth.provider to none
+        backends=[
+            BackendConfig(
+                name="gateway",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5010,
+                depends_on=["orders"],
+            ),
+            BackendConfig(
+                name="orders",
+                project_name="Shop",
+                language=BackendLanguage.PYTHON,
+                server_port=5020,
+            ),
+        ],
+        options={"auth.service_discovery": True},
+    )
+    plan = resolve(cfg)
+    assert plan.option_values.get("auth.provider") != "gatekeeper"
+    assert compute_platform_synthesis(cfg, plan) is None
 
 
 def test_validate_passes_for_acyclic_multi_service() -> None:
