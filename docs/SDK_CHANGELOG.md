@@ -17,6 +17,26 @@ pre-release labels. SDK MAJOR aligns with the plugin compat boundary
 (plugins may need code changes); MINOR signals additive surface
 (plugins keep working, can opt into new APIs).
 
+## 1.5 (2026-06, with forge 1.x)
+
+Status: **provisional** — additive; existing plugins keep working unchanged.
+
+Added:
+
+- ``ForgeAPI.add_platform_template(name, display_label, description, *,
+  include_keycloak=False, options=None, backends=(), frontend=None,
+  database_mode=None)`` — registers a selectable ``--platform`` preset (the
+  ``ProjectConfig.platform_template`` choice). The platform-scale analogue of
+  ``add_frontend_layout`` / ``add_backend_application_template``: a
+  ``PlatformTemplate`` (``forge/platform_templates.py``) bundles option
+  overrides + per-backend ``app_template``/``depends_on`` assignments + an
+  optional frontend. The CLI builder deep-merges the preset's config dict *under*
+  the user's config (lowest-priority layer), so user CLI flags and config-file
+  values always win — selecting no platform is a no-op, keeping default output
+  byte-identical. Built-in presets (``monolithic``, ``microservices``,
+  ``headless-api``) are discovered from
+  ``forge/templates/platforms/<name>/platform.toml``.
+
 ## 1.4 (2026-06, with forge 1.x)
 
 Status: **provisional** — additive; existing plugins keep working unchanged.

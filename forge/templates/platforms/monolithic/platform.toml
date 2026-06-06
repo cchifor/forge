@@ -1,0 +1,25 @@
+# Platform preset — discovered by forge.platform_templates.
+#
+# `monolithic` is a friendly alias for today's single-service default: one
+# Python CRUD backend + a Vue sidebar frontend, no service discovery, no
+# gatekeeper sidecar. It exists to prove the preset layer is byte-neutral —
+# applying it (then letting the resolver default everything else) reproduces
+# the same shape as plain `forge` with no `--platform`.
+[platform]
+name = "monolithic"
+display_label = "Monolithic application"
+description = "A single CRUD backend behind a Vue frontend — the classic single-service shape."
+include_keycloak = false
+
+[platform.options]
+"auth.service_discovery" = false
+
+[[platform.backends]]
+name = "backend"
+language = "python"
+app_template = "crud-service"
+server_port = 5000
+
+[platform.frontend]
+framework = "vue"
+layout = "sidebar"

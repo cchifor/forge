@@ -169,6 +169,11 @@ class ForgeTomlData:
     version: str
     project_name: str
     schema_version: int = CURRENT_SCHEMA_VERSION
+    # Phase 4: the ``--platform`` preset the project was generated with (e.g.
+    # "microservices"), or None when no preset was selected. Persisted under
+    # ``[forge].platform_template`` and only when set, so no-platform projects
+    # stay byte-identical.
+    platform_template: str | None = None
     templates: dict[str, str] = field(default_factory=dict)
     # Per-language base-template semver at the time the project was
     # generated. Empty in v1 manifests. Populated in v2 from the
@@ -248,6 +253,8 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
 
     version = str(forge.get("version", "0.0.0+unknown"))
     project_name = str(forge.get("project_name", ""))
+    raw_platform = forge.get("platform_template")
+    platform_template = str(raw_platform) if raw_platform else None
 
     templates_tbl = forge.get("templates") or {}
     templates: dict[str, str] = {k: str(v) for k, v in dict(templates_tbl).items()}
@@ -321,6 +328,7 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
         version=version,
         project_name=project_name,
         schema_version=schema_version,
+        platform_template=platform_template,
         templates=templates,
         template_versions=template_versions,
         options=options,
@@ -536,6 +544,7 @@ def write_forge_toml(
     merge_blocks: dict[str, dict[str, Any]] | None = None,
     template_versions: dict[str, str] | None = None,
     frontend: ForgeFrontendData | None = None,
+    platform_template: str | None = None,
     schema_version: int = CURRENT_SCHEMA_VERSION,
 ) -> None:
     """Emit ``forge.toml`` with all v4 sub-tables.
@@ -585,6 +594,10 @@ def write_forge_toml(
     forge_tbl.add("schema_version", schema_version)
     forge_tbl.add("version", version)
     forge_tbl.add("project_name", project_name)
+    # Phase 4 ``--platform`` preset — emitted only when set, so no-platform
+    # projects keep a byte-identical [forge] table.
+    if platform_template:
+        forge_tbl.add("platform_template", platform_template)
 
     tpl_tbl = tomlkit.table()
     for key in sorted(templates):

@@ -128,7 +128,15 @@ if TYPE_CHECKING:
 #     analogue of ``add_frontend_layout`` — a ``(language, variant)``
 #     ``BackendApplicationTemplate`` (:mod:`forge.backend_app_templates`)
 #     maps to a Copier service template; the generator dispatches on it.
-SDK_VERSION = "1.4"
+#
+# 1.5 — additive: one new ForgeAPI method —
+#   * ``ForgeAPI.add_platform_template`` registers a selectable ``--platform``
+#     preset — a bundle of option overrides + per-backend
+#     app_template/depends_on + an optional frontend, applied as the lowest-
+#     priority config layer (:mod:`forge.platform_templates`). The platform-
+#     scale analogue of ``add_frontend_layout`` /
+#     ``add_backend_application_template``.
+SDK_VERSION = "1.5"
 
 
 _SDK_VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
@@ -560,6 +568,62 @@ class ForgeAPI:
                     "plugin": self._registration.name,
                     "kind": "backend_application_template",
                     "value": f"{_lang_value(lang)}/{variant}",
+                },
+            ) from exc
+
+    def add_platform_template(
+        self,
+        name: str,
+        display_label: str,
+        description: str,
+        *,
+        include_keycloak: bool = False,
+        options: dict[str, Any] | None = None,
+        backends: tuple[dict[str, Any], ...] | list[dict[str, Any]] = (),
+        frontend: dict[str, Any] | None = None,
+        database_mode: str | None = None,
+    ) -> None:
+        """Register a selectable ``--platform`` preset.
+
+        The platform-scale analogue of :meth:`add_frontend_layout` and
+        :meth:`add_backend_application_template`. A preset is a *config layer*:
+        ``options`` (dotted-path overrides), ``backends`` (per-backend
+        ``name``/``language``/``app_template``/``server_port``/``depends_on``
+        dicts), and an optional ``frontend`` block (``None`` ⇒ headless) are
+        deep-merged *under* the user's config by the CLI builder, so user flags
+        and config-file values always win. ``include_keycloak`` seeds the
+        top-level switch (S2S service discovery requires it). ``database_mode``
+        optionally overrides ``database.mode``.
+
+        Additive since SDK 1.5.
+        """
+        from forge.platform_templates import (  # noqa: PLC0415
+            PlatformTemplate,
+            register_platform_template,
+        )
+
+        try:
+            register_platform_template(
+                PlatformTemplate(
+                    name=name,
+                    display_label=display_label,
+                    description=description,
+                    include_keycloak=include_keycloak,
+                    options=dict(options or {}),
+                    backends=tuple(dict(be) for be in backends),
+                    frontend=dict(frontend) if frontend is not None else None,
+                    database_mode=database_mode,
+                )
+            )
+        except ValueError as exc:
+            raise PluginError(
+                f"Plugin '{self._registration.name}' tried to register platform "
+                f"template '{name}', but registration failed: {exc}.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "platform_template",
+                    "value": name,
                 },
             ) from exc
 
