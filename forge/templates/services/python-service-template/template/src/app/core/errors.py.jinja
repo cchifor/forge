@@ -5,7 +5,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from weld.fastapi.api.errors import Error
+from forge_core.errors import Error
 
 logger = logging.getLogger("app.errors")
 
@@ -14,7 +14,7 @@ logger = logging.getLogger("app.errors")
 #
 # CHANGELOG / DEPRECATION NOTICE:
 #   This service serialises errors through ONE documented response model —
-#   ``weld.fastapi.api.errors.Error{message, type, detail}`` — which is the
+#   ``forge_core.errors.Error{message, type, detail}`` — which is the
 #   only model advertised in the OpenAPI ``responses`` (see ``main.py``) for
 #   every error status code (400/401/403/404/409/422/500). The HTTP,
 #   validation and global handlers build that model directly via the shared
@@ -371,7 +371,7 @@ def _envelope(
     status_code: int,
 ) -> JSONResponse:
     # Pre-port path kept for the non-domain handlers (HTTP / validation /
-    # global). weld.fastapi.api.errors.Error has shape (message, type,
+    # global). forge_core.errors.Error has shape (message, type,
     # detail). The platform-wide RFC-007 code + correlation id ride in
     # ``detail`` so tooling that grew up around the older ErrorEnvelope
     # shape can still extract them — they're just one level deeper now.
