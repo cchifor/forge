@@ -5,16 +5,18 @@ Routes
 GET  /gateway/downstreams        -- List the configured downstream services
                                     (name -> internal URL) discovered from the
                                     ``INTERNAL_SERVICE_URL_<NAME>`` environment.
-GET  /gateway/api/{service}/{path:path}   -- Proxy a GET to a downstream.
-POST /gateway/api/{service}/{path:path}   -- Proxy a POST to a downstream.
+{GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD} /gateway/api/{service}/{path:path}
+                                 -- Proxy the request (verb preserved) to a
+                                    downstream. A single catch-all route
+                                    forwards every supported method generically.
 
 The gateway looks each request's ``{service}`` up in the downstream registry,
 mints (or reuses) a service-to-service bearer token via the S2S client, and
 forwards the request with httpx. It is intentionally dependency-light: it does
 NOT require auth to be enabled (the S2S client degrades to no Authorization
 header when credentials are absent), so a generated gateway builds and runs in
-any configuration. Unknown services return 404; downstream transport failures
-return 502 with a clear message.
+any configuration. Unknown services return 404; an S2S token-mint failure or a
+downstream transport failure returns 502 with a clear message.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.gateway.downstreams import downstream_map, resolve_downstream
-from app.gateway.s2s_client import S2SClient
+from app.gateway.s2s_client import S2SClient, S2SMintError
 
 router = APIRouter()
 
@@ -88,9 +90,19 @@ async def _proxy(request: Request, service: str, path: str) -> Response:
     headers = _forwardable_request_headers(request)
     # Mint/reuse an S2S bearer token addressed to the downstream. Returns an
     # empty dict when S2S credentials are not configured, so the gateway still
-    # proxies (un-authenticated) in a credential-free environment.
-    headers.update(await _s2s_client.auth_header(audience=service))
+    # proxies (un-authenticated) in a credential-free environment. A mint
+    # failure (gatekeeper outage / malformed token response) is an upstream
+    # dependency failure → map it to 502, not an opaque 500.
+    try:
+        headers.update(await _s2s_client.auth_header(audience=service))
+    except S2SMintError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"S2S token mint for {service!r} failed: {exc}",
+        ) from exc
 
+    # NOTE: a fresh AsyncClient per request (no connection pooling) is an
+    # intentional dependency-light v1 trade-off; pool later if it matters.
     body = await request.body()
     try:
         async with httpx.AsyncClient(timeout=_DOWNSTREAM_TIMEOUT) as client:
@@ -107,21 +119,26 @@ async def _proxy(request: Request, service: str, path: str) -> Response:
             detail=f"Downstream request to {service!r} failed: {exc}",
         ) from exc
 
+    # NOTE: the response body is buffered fully in memory (no streaming) — an
+    # intentional v1 simplification; stream for large payloads if needed.
+    # The copied ``content-type`` header already carries the media type, so we
+    # rely on it rather than passing a redundant ``media_type=`` argument.
     return Response(
         content=downstream.content,
         status_code=downstream.status_code,
         headers=_forwardable_response_headers(downstream),
-        media_type=downstream.headers.get("content-type"),
     )
 
 
-@router.get("/api/{service}/{path:path}")
-async def proxy_get(request: Request, service: str, path: str = "") -> Response:
-    """Proxy a GET request to ``{service}`` at ``{path}``."""
-    return await _proxy(request, service, path)
+@router.api_route(
+    "/api/{service}/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+async def proxy(request: Request, service: str, path: str = "") -> Response:
+    """Proxy the request (verb preserved) to ``{service}`` at ``{path}``.
 
-
-@router.post("/api/{service}/{path:path}")
-async def proxy_post(request: Request, service: str, path: str = "") -> Response:
-    """Proxy a POST request to ``{service}`` at ``{path}``."""
+    A single catch-all route handles every supported method; ``_proxy``
+    forwards ``request.method`` generically, so PATCH/DELETE/PUT against a
+    crud-service downstream reach it unchanged.
+    """
     return await _proxy(request, service, path)
