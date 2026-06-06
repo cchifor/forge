@@ -566,10 +566,32 @@ class ProjectConfig:
             )
         # Multi-service synthesis emits gatekeeper+keycloak-specific artifacts
         # (the S2S service registry + svc-* realm clients), so it requires the
-        # gatekeeper auth provider. ``auth.provider`` defaults to ``gatekeeper``
-        # but a project may pin ``in_memory`` / ``oidc_generic`` / ``none``,
-        # none of which ship a gatekeeper/realm to register against.
-        provider = self._effective_option_values().get("auth.provider")
+        # gatekeeper stack to actually be generated. The resolver coerces
+        # ``auth.provider``->``none`` (via ``auth.mode``->``none``) whenever
+        # ``include_keycloak`` is off, so a raw ``auth.provider`` read alone is
+        # not enough — check the gating inputs (``include_keycloak`` +
+        # ``auth.mode``) so a config that *resolves* to no-gatekeeper fails
+        # fast here instead of silently self-disabling synthesis at generate
+        # time (compute_platform_synthesis gates on the resolved value too).
+        effective = self._effective_option_values()
+        if not self.include_keycloak:
+            raise ValueError(
+                "auth.service_discovery requires include_keycloak=True. "
+                "Multi-service synthesis emits a gatekeeper service registry "
+                "and per-service Keycloak realm clients; with keycloak off the "
+                "resolver drops the gatekeeper stack, so there is nothing to "
+                "register against. Enable keycloak, or disable "
+                "auth.service_discovery."
+            )
+        if effective.get("auth.mode") != "generate":
+            raise ValueError(
+                "auth.service_discovery requires auth.mode=generate "
+                f"(found auth.mode={effective.get('auth.mode')!r}); only the "
+                "generated auth stack ships the gatekeeper the S2S registry "
+                "registers against. Set auth.mode=generate, or disable "
+                "auth.service_discovery."
+            )
+        provider = effective.get("auth.provider")
         if provider != "gatekeeper":
             raise ValueError(
                 "auth.service_discovery requires auth.provider=gatekeeper "
@@ -579,6 +601,20 @@ class ProjectConfig:
                 "ship no gatekeeper or realm to register against. Set "
                 "auth.provider=gatekeeper (the default), or disable "
                 "auth.service_discovery."
+            )
+        # ``infrastructure.event_bus=postgres_notify`` injects a shared-``events``
+        # Postgres bus URL into every backend, so it needs a database. The
+        # option carries ``requires_database=True`` but no ``enables`` map, so
+        # the generic DB-conflict walker treats it as inactive and never fires —
+        # guard it explicitly here (it is only consumed under synthesis).
+        if effective.get("infrastructure.event_bus") == "postgres_notify" and (
+            self.database_mode == "none"
+        ):
+            raise ValueError(
+                "infrastructure.event_bus=postgres_notify requires a database "
+                "(database.mode != none); the event bus provisions and connects "
+                "to a shared 'events' Postgres database. Set a database mode, or "
+                "set infrastructure.event_bus=none."
             )
         known = {bc.name for bc in self.backends}
         for bc in self.backends:

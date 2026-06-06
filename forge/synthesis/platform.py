@@ -189,6 +189,15 @@ def compute_platform_synthesis(
         return None
     if len(config.backends) <= 1:
         return None
+    # Gate on the RESOLVED (coerced) provider, not the raw option: the resolver
+    # coerces ``auth.provider``->``none`` whenever the gatekeeper stack isn't
+    # generated (``include_keycloak=False`` / ``auth.mode!=generate``). Without
+    # this guard, synthesis would emit an orphan ``service_registry.yaml`` +
+    # ``GATEKEEPER_*`` env into a project that ships no gatekeeper/realm. Self-
+    # disable instead — defence-in-depth that holds even when ProjectConfig
+    # .validate is bypassed (headless / matrix callers).
+    if plan.option_values.get("auth.provider") != "gatekeeper":
+        return None
 
     known_names = {bc.name for bc in config.backends}
 
