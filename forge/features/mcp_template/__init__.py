@@ -1,4 +1,4 @@
-"""MCP server template via weld-mcp-template."""
+"""MCP server template (vendored, self-contained)."""
 
 from __future__ import annotations
 

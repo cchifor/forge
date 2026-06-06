@@ -64,10 +64,13 @@ def test_mcp_template_does_not_collide_with_platform_mcp() -> None:
     )
 
 
-def test_mcp_template_server_fragment_declares_weld_mcp_template() -> None:
+def test_mcp_template_server_fragment_declares_mcp_only() -> None:
+    """P5 Stage 2d — the MCP template is vendored; only ``mcp`` is a real dep."""
     frag = FRAGMENT_REGISTRY["mcp_template_server"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    assert "weld-mcp-template" in impl.dependencies
+    assert not any("weld" in d for d in impl.dependencies), (
+        f"mcp_template_server still declares a weld dependency: {impl.dependencies}"
+    )
     assert any(d.startswith("mcp>=") for d in impl.dependencies)
     assert frag.parity_tier == 3
 
@@ -76,20 +79,42 @@ def test_mcp_template_openapi_tools_depends_on_server() -> None:
     frag = FRAGMENT_REGISTRY["mcp_template_openapi_tools"]
     assert frag.depends_on == ("mcp_template_server",)
     impl = frag.implementations[BackendLanguage.PYTHON]
-    # The [openapi] extra pulls in PyYAML + openapi schema parser.
-    assert any("weld-mcp-template[openapi]" in d for d in impl.dependencies)
+    # The vendored openapi generator uses PyYAML (a base dep); no weld dep.
+    assert not any("weld" in d for d in impl.dependencies), (
+        f"mcp_template_openapi_tools still declares a weld dependency: {impl.dependencies}"
+    )
+
+
+def test_mcp_template_fragments_ship_no_weld_imports() -> None:
+    """The vendored MCP template source never imports ``weld``."""
+    for name in ("mcp_template_server", "mcp_template_openapi_tools"):
+        files_root = (
+            Path(FRAGMENT_REGISTRY[name].implementations[BackendLanguage.PYTHON].fragment_dir)
+            / "files"
+        )
+        for src in list(files_root.rglob("*.py")) + list(files_root.rglob("*.py.jinja")):
+            for line in src.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                assert not stripped.startswith(("import weld", "from weld")), (
+                    f"weld import in vendored mcp source: {src}: {stripped}"
+                )
 
 
 def test_mcp_template_server_files_present() -> None:
     frag = FRAGMENT_REGISTRY["mcp_template_server"]
     impl = frag.implementations[BackendLanguage.PYTHON]
     files_root = Path(impl.fragment_dir) / "files"
-    assert (files_root / "src" / "app" / "mcp" / "__init__.py").is_file()
-    assert (files_root / "src" / "app" / "mcp" / "server.py").is_file()
-    plugins = files_root / "src" / "app" / "mcp" / "plugins"
+    mcp_root = files_root / "src" / "app" / "mcp"
+    assert (mcp_root / "__init__.py").is_file()
+    assert (mcp_root / "server.py").is_file()
+    plugins = mcp_root / "plugins"
     assert (plugins / "__init__.py").is_file()
     # ping.py.jinja — the plugin slug interpolates ``{{ project_slug }}``.
     assert (plugins / "ping.py.jinja").is_file()
+    # Vendored, weld-free template package.
+    template = mcp_root / "_template"
+    for name in ("__init__.py", "plugin.py", "server.py", "errors.py", "openapi.py", "telemetry.py"):
+        assert (template / name).is_file()
 
 
 def test_mcp_template_server_inject_mounts_on_main_app() -> None:

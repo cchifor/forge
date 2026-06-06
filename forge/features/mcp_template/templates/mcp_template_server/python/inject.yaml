@@ -5,4 +5,5 @@
   position: before
   snippet: |
     from app.mcp import build_mcp_app
+    from app.mcp._template import PluginContextResolver
     app.mount("/mcp", build_mcp_app(context_resolver=container.get(PluginContextResolver)))

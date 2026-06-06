@@ -1,4 +1,4 @@
-"""Pluggable read/write adapters via weld-connectors."""
+"""Pluggable read/write adapters (vendored, self-contained)."""
 
 from __future__ import annotations
 

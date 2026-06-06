@@ -1,7 +1,7 @@
 [feature]
 name = "mcp_template"
 version = "1.0.0"
-summary = "MCP server template via weld-mcp-template."
+summary = "MCP server template (vendored, self-contained)."
 category = "platform"
 stability = "beta"
 

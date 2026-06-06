@@ -1,5 +1,13 @@
 """MCP-template fragments — first-party MCP integration server scaffolding.
 
+The MCP-server template (build_server, the plugin contract, ToolDef, and
+the OpenAPI → tools generator) is vendored into the generated project
+under ``src/app/mcp/_template/`` and imports only the official ``mcp``
+library + starlette + httpx (and optional opentelemetry / prometheus /
+PyYAML) — no private SDKs. ``tenant_id`` is optional, the
+``transport=="internal"`` manifest enforcement is dropped, and the dead
+OAuth / credentials-vault modules are not vendored.
+
 Fragment names use the ``mcp_template_`` prefix to avoid colliding with
 the existing ``mcp_server`` / ``mcp_ui`` fragments under
 ``forge.features.platform`` (which scaffold the consumer side: a tool
@@ -28,7 +36,9 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("mcp_template_server", "python"),
-                    dependencies=("weld-mcp-template", "mcp>=1.0.0"),
+                    # Vendored template — only the official mcp library is
+                    # a real extra; starlette + httpx ship in the base.
+                    dependencies=("mcp>=1.0.0",),
                 ),
             },
         )
@@ -41,7 +51,8 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("mcp_template_openapi_tools", "python"),
-                    dependencies=("weld-mcp-template[openapi]",),
+                    # The vendored openapi generator uses PyYAML (a base
+                    # dependency) — no extra dep needed.
                 ),
             },
         )
