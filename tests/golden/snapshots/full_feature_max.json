@@ -985,7 +985,7 @@
       "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 133879,
+      "size": 138880,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1501,16 +1501,44 @@
       "sha256": "d3f981a71ffc3b59"
     },
     "services/api/sdks/forge-core/pyproject.toml": {
-      "size": 1027,
-      "sha256": "e996bd1606dc36e7"
+      "size": 1137,
+      "sha256": "07af26a706dfbfb8"
     },
     "services/api/sdks/forge-core/src/forge_core/__init__.py": {
-      "size": 1016,
-      "sha256": "85793681dfdd7259"
+      "size": 1238,
+      "sha256": "fa8e6d47aa75d824"
     },
     "services/api/sdks/forge-core/src/forge_core/errors.py": {
       "size": 4732,
       "sha256": "3dd662ba623e334f"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/__init__.py": {
+      "size": 2053,
+      "sha256": "062b0f67b21c93bb"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/account.py": {
+      "size": 1422,
+      "sha256": "c658dd9b8415799e"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/config.py": {
+      "size": 2581,
+      "sha256": "cf342799fdab8e40"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/database.py": {
+      "size": 3253,
+      "sha256": "79f95915e394a46b"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/mixins.py": {
+      "size": 2437,
+      "sha256": "379f67c70b4ddb5b"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/repository.py": {
+      "size": 13313,
+      "sha256": "3b7efc87011f7cfb"
+    },
+    "services/api/sdks/forge-core/src/forge_core/persistence/unit_of_work.py": {
+      "size": 10085,
+      "sha256": "a1223328de82ca12"
     },
     "services/api/sdks/forge-core/tests/__init__.py": {
       "size": 0,
@@ -1523,6 +1551,14 @@
     "services/api/sdks/forge-core/tests/unit/test_errors.py": {
       "size": 4360,
       "sha256": "9796a6e4750f1eca"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_persistence.py": {
+      "size": 13275,
+      "sha256": "108df15f5d4698de"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_persistence_internals.py": {
+      "size": 16165,
+      "sha256": "48fb5a7a68b0f3ad"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,
@@ -1713,20 +1749,20 @@
       "sha256": "e1e94703a680e8c6"
     },
     "services/api/src/app/core/ioc/infra.py": {
-      "size": 1833,
-      "sha256": "e1dcb39b60db2c91"
+      "size": 1827,
+      "sha256": "82085870cc5b44ef"
     },
     "services/api/src/app/core/ioc/security.py": {
-      "size": 1726,
-      "sha256": "8ed2580db0dd0b4c"
+      "size": 1719,
+      "sha256": "3abe37ac7bc64f65"
     },
     "services/api/src/app/core/ioc/services.py": {
       "size": 616,
       "sha256": "ec360ce5bde7f803"
     },
     "services/api/src/app/core/lifecycle.py": {
-      "size": 6165,
-      "sha256": "7bfb9ee27ed29929"
+      "size": 6159,
+      "sha256": "90a72dbc946af1ae"
     },
     "services/api/src/app/core/logfire_setup.py": {
       "size": 2046,
@@ -1745,8 +1781,8 @@
       "sha256": "0fb981f34efe923e"
     },
     "services/api/src/app/data/models/audit.py": {
-      "size": 1507,
-      "sha256": "69b496791d4220e4"
+      "size": 1490,
+      "sha256": "a21f28aa905916f4"
     },
     "services/api/src/app/data/models/base.py": {
       "size": 216,
@@ -1761,8 +1797,8 @@
       "sha256": "021dd5d70c398f10"
     },
     "services/api/src/app/data/models/item.py": {
-      "size": 1053,
-      "sha256": "f8ec8993095f4bdf"
+      "size": 1036,
+      "sha256": "3183917dc2c32d13"
     },
     "services/api/src/app/data/models/rag_document.py": {
       "size": 1706,
@@ -1785,8 +1821,8 @@
       "sha256": "a1dab5395668cbc7"
     },
     "services/api/src/app/data/repositories/item_repository.py": {
-      "size": 2579,
-      "sha256": "212519aac0159ceb"
+      "size": 2565,
+      "sha256": "e4e55103fd92db4e"
     },
     "services/api/src/app/domain/__init__.py": {
       "size": 0,
@@ -1925,12 +1961,12 @@
       "sha256": "f0259dbc65cfda8d"
     },
     "services/api/src/app/services/health_service.py": {
-      "size": 1116,
-      "sha256": "ae687df52da17718"
+      "size": 1109,
+      "sha256": "ff38f8453a1a6ea2"
     },
     "services/api/src/app/services/item_service.py": {
-      "size": 2540,
-      "sha256": "281734053841f8de"
+      "size": 2533,
+      "sha256": "382614b2222f4045"
     },
     "services/api/src/app/services/webhook_service.py": {
       "size": 3929,

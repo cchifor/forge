@@ -11,8 +11,8 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
+from forge_core.persistence import AsyncDatabase
 from weld.core.discovery import Discovery
-from weld.core.persistence.db.aio import AsyncDatabase
 
 logger = logging.getLogger(__name__)
 

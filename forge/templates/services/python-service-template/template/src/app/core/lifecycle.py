@@ -98,7 +98,7 @@ class AppLifecycle:
             logger.info("Service discovery disabled, skipping registration.")
 
         # Auto-create tables for SQLite dev databases
-        from weld.core.persistence.db.aio import AsyncDatabase
+        from forge_core.persistence import AsyncDatabase
 
         db = await container.get(AsyncDatabase)
         if "sqlite" in config.db.url:
