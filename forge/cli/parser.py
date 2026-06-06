@@ -43,7 +43,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Platform preset: seed a coherent multi-service shape "
             "(e.g. microservices, headless-api, monolithic) as the lowest "
-            "config layer. User flags and config-file values override it. "
+            "config layer. Options and scalars are overridden per-key by user "
+            "flags / config-file values; the preset's backends list and "
+            "frontend block, however, define the project's shape (a preset that "
+            "ships backends ignores the single --backend-* flags). "
             "Discovered from forge/templates/platforms/."
         ),
     )

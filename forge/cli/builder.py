@@ -238,19 +238,22 @@ def _deep_merge_under(base: dict[str, Any], override: dict[str, Any]) -> dict[st
     """Merge ``base`` *under* ``override`` — ``override`` wins on every key.
 
     Used to apply a platform preset (``base``) as the lowest-priority layer
-    beneath the user's cfg (``override``). The merge is shallow except for the
-    nested ``options`` dict, which is deep-merged key-by-key (preset options sit
-    under user options). List-valued keys (notably ``backends``) are *not*
-    merged element-wise: if the user supplied the key at all, their whole value
-    wins (user-wins-whole-list); otherwise the preset's value is used. Scalar
-    and dict (non-``options``) keys follow the same user-wins rule.
+    beneath the user's cfg (``override``). The nested ``options`` and
+    ``frontend`` dicts are deep-merged key-by-key (preset values sit under user
+    values), so a partial user ``frontend: {include_chat: true}`` keeps the
+    preset's ``framework``/``layout`` instead of clobbering the whole block.
+    List-valued keys (notably ``backends``) are *not* merged element-wise: if
+    the user supplied the key at all, their whole value wins
+    (user-wins-whole-list); otherwise the preset's value is used. Other scalar
+    and dict keys follow the same user-wins-whole-value rule.
     """
+    _deep_merge_keys = ("options", "frontend")
     merged: dict[str, Any] = dict(base)
     for key, ov in override.items():
-        if key == "options" and isinstance(ov, dict) and isinstance(base.get("options"), dict):
-            opts: dict[str, Any] = dict(base["options"])
-            opts.update(ov)
-            merged["options"] = opts
+        if key in _deep_merge_keys and isinstance(ov, dict) and isinstance(base.get(key), dict):
+            sub: dict[str, Any] = dict(base[key])
+            sub.update(ov)
+            merged[key] = sub
         else:
             merged[key] = ov
     return merged
