@@ -102,6 +102,9 @@ services:
 {% else %}
       APP__SECURITY__AUTH__ENABLED: "false"
 {% endif %}
+{% for k, v in be.synthesis_env.items() %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.{{ be.name }}.rule=Host(`app.localhost`) && PathPrefix(`/api/{{ be.name }}`)"

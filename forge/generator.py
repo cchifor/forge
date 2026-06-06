@@ -45,6 +45,7 @@ from forge.docker_manager import (
     render_init_db,
     render_keycloak_realm,
     render_nginx_conf,
+    render_service_registry,
     render_workspace_cargo_toml,
     render_workspace_package_json,
 )
@@ -211,6 +212,18 @@ def _generate_into(
     _render_docker_stack(config, plan, project_root, quiet=quiet, synthesis=synthesis)
     _generate_frontend_extras(config, project_root, quiet=quiet)
     _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
+    # Phase 4: render the synthesized gatekeeper S2S service registry. This runs
+    # AFTER _apply_project_scope because the gatekeeper fragment (project-scoped)
+    # ships its baseline service_registry.yaml there and refuses to overwrite an
+    # existing file — so the synthesized registry must REPLACE the baseline only
+    # once it is on disk. No-op when synthesis is None (single-service / feature
+    # off), so non-synthesized output is byte-identical. Re-record provenance so
+    # the manifest carries the synthesized content's hash (base-template origin:
+    # forge-generated infra, like docker-compose.yml / keycloak-realm.json).
+    if synthesis is not None:
+        registry_path = render_service_registry(config, synthesis, project_root)
+        if registry_path is not None:
+            collector.record(registry_path, origin="base-template")
     # Renumber each Python backend's alembic migrations into a valid linear
     # chain BEFORE provenance is stamped (so forge.toml records the rewritten
     # content): fragments ship colliding/gapped revision numbers that alembic
@@ -534,7 +547,7 @@ def _render_docker_stack(
         render_workspace_package_json(config, project_root, plan=plan)
         render_workspace_cargo_toml(config, project_root, plan=plan)
         with phase_timer(_logger, "generate.compose.render"):
-            render_compose(config, project_root, plan=plan)
+            render_compose(config, project_root, plan=plan, synthesis=synthesis)
         # init-db creates a database per backend plus keycloak's own db.
         # Skip when there are 0–1 backends and no keycloak — the primary
         # backend's POSTGRES_DB env var already handles the single-db case.
@@ -543,12 +556,17 @@ def _render_docker_stack(
         need_multi_backend_init = len(config.backends) > 1 and config.database_mode != "none"
         if need_multi_backend_init or config.include_keycloak:
             _log("  Rendering init-db.sh ...")
-            render_init_db(config, project_root)
+            render_init_db(config, project_root, synthesis=synthesis)
         # Copy auth infrastructure if Keycloak is enabled
         if config.include_keycloak:
             # Render Keycloak realm JSON
             _log("  Rendering keycloak-realm.json ...")
-            render_keycloak_realm(config, project_root)
+            render_keycloak_realm(config, project_root, synthesis=synthesis)
+            # NB: the gatekeeper S2S service_registry.yaml is NOT rendered here.
+            # The gatekeeper fragment (project-scoped) ships its baseline during
+            # _apply_project_scope, which runs AFTER this phase, and refuses to
+            # overwrite an existing file. So the synthesized registry is rendered
+            # later, in _generate_into, once the baseline is on disk.
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
             gatekeeper_src = TEMPLATES_DIR / "infra" / "gatekeeper"

@@ -21,6 +21,7 @@ from forge.services.registry import get_services_for_capabilities
 
 if TYPE_CHECKING:
     from forge.capability_resolver import ResolvedPlan
+    from forge.synthesis import PlatformSynthesis
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -46,12 +47,22 @@ def render_compose(
     config: ProjectConfig,
     project_root: Path,
     plan: ResolvedPlan | None = None,
+    synthesis: PlatformSynthesis | None = None,
 ) -> Path:
     """Render docker-compose.yml into the project root.
 
     When ``plan`` is supplied, its capabilities are resolved against
     ``forge.services.SERVICE_REGISTRY`` and the matched templates are
     emitted as additional top-level services in the compose file.
+
+    When ``synthesis`` is supplied (Phase 4 multi-service synthesis is
+    active), each backend's per-service S2S / inter-service env block
+    (``GATEKEEPER_CLIENT_ID``/``_SECRET``/``_TOKEN_ENDPOINT``,
+    ``INTERNAL_SERVICE_URL_*``, optional ``APP__EVENTS__BUS_URL``) is
+    injected into that service's ``environment:`` block. When ``None``
+    (the default / single-service case) every backend's ``synthesis_env``
+    is an empty dict and the template emits zero extra bytes — preserving
+    the golden byte-identity contract.
     """
     env = _jinja_env()
     template = env.get_template("deploy/docker-compose.yml.j2")
@@ -84,6 +95,10 @@ def render_compose(
                 "language": bc.language.value,
                 "port": bc.server_port,
                 "db_name": bc.name.replace("-", "_"),
+                # Phase 4: per-service S2S / inter-service env block. Empty
+                # dict when synthesis is inactive → the template's loop emits
+                # nothing (golden-stable).
+                "synthesis_env": synthesis.env_for(bc.name) if synthesis else {},
             }
         )
 
@@ -269,13 +284,23 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
     return dockerfile_path
 
 
-def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
+def render_keycloak_realm(
+    config: ProjectConfig,
+    project_root: Path,
+    synthesis: PlatformSynthesis | None = None,
+) -> Path:
     """Render keycloak-realm.json into the project root.
 
     The rendered JSON is parsed before being written so a Jinja typo or quoting bug
     fails generation immediately rather than producing a realm Keycloak will reject
     at boot. A few essential keys are checked too — these catch the common
     template-edit mistake of dropping a top-level field.
+
+    When ``synthesis`` is supplied (Phase 4 multi-service synthesis active),
+    one confidential ``svc-<name>`` realm client per service is appended to the
+    realm's ``clients[]`` array so each backend can mint S2S tokens via the
+    client-credentials grant. When ``None`` the appended list is empty and the
+    realm JSON is byte-identical to the single-service output.
     """
     import json
 
@@ -283,6 +308,13 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
     template = env.get_template("infra/keycloak-realm.json.j2")
 
     fc = config.frontend
+    # Phase 4 service clients — one per synthesized ServiceClient. The template
+    # guards on an empty list so single-service output is unchanged.
+    service_clients = (
+        [{"client_id": client.client_id, "secret": client.secret} for client in synthesis.clients]
+        if synthesis
+        else []
+    )
     context = {
         "project_name": config.project_name,
         "keycloak_realm": (
@@ -293,6 +325,7 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
         "keycloak_client_id": (
             fc.keycloak_client_id if fc and fc.keycloak_client_id else config.project_slug
         ),
+        "service_clients": service_clients,
     }
 
     output = template.render(context)
@@ -316,8 +349,18 @@ def render_keycloak_realm(config: ProjectConfig, project_root: Path) -> Path:
     return realm_path
 
 
-def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
-    """Render init-db.sh that creates databases for all backends + keycloak."""
+def render_init_db(
+    config: ProjectConfig,
+    project_root: Path,
+    synthesis: PlatformSynthesis | None = None,
+) -> Path:
+    """Render init-db.sh that creates databases for all backends + keycloak.
+
+    When ``synthesis`` selects the ``postgres_notify`` event bus, the shared
+    event-bus database (``events``) is provisioned alongside the per-backend
+    and keycloak databases. When ``None`` (or any non-postgres bus) the set of
+    databases is unchanged — byte-identical to the pre-synthesis output.
+    """
     env = _jinja_env()
     template = env.get_template("deploy/init-db.sh.j2")
 
@@ -336,12 +379,111 @@ def render_init_db(config: ProjectConfig, project_root: Path) -> Path:
             extra_dbs.add(db_name)
     if config.include_keycloak:
         extra_dbs.add("keycloak")
+    # Phase 4: the postgres LISTEN/NOTIFY event bus needs its own shared db.
+    if synthesis and synthesis.event_bus == "postgres_notify" and synthesis.event_bus_db:
+        extra_dbs.add(synthesis.event_bus_db)
 
     output = template.render({"extra_databases": sorted(extra_dbs)})
     init_path = project_root / "init-db.sh"
     # Write with LF line endings (CRLF breaks shebang in Linux containers)
     init_path.write_bytes(output.replace("\r\n", "\n").encode("utf-8"))
     return init_path
+
+
+def render_service_registry(
+    config: ProjectConfig,
+    synthesis: PlatformSynthesis | None,
+    project_root: Path,
+) -> Path | None:
+    """Render the gatekeeper S2S service registry, or no-op when inactive.
+
+    Phase 4 (P4.2). When ``synthesis`` is ``None`` (single-service / feature
+    off) this is a no-op and returns ``None`` — the baseline
+    ``service_registry.yaml`` shipped by the ``platform_auth_gatekeeper``
+    fragment is left untouched, preserving the golden byte-identity contract.
+
+    When synthesis is active this REPLACES
+    ``<project_root>/infra/gatekeeper/secrets/service_registry.yaml`` (the
+    fragment's baseline ships Strive-specific ``svc-*`` entries that are bogus
+    for a forge project) with a registry conforming to the vendored
+    ``ServiceRegistry`` schema: one entry per :class:`ServiceClient` carrying
+
+    * ``client_id`` — the OIDC client id (``svc-<name>``);
+    * ``secret_hash`` — an argon2id digest of the deterministic dev plaintext
+      (the plaintext itself lives only in the caller's compose
+      ``GATEKEEPER_CLIENT_SECRET`` env var, never in the registry);
+    * ``k8s_subject`` — ``system:serviceaccount:<project_slug>:<name>``;
+    * ``audiences`` — ``<callee_client_id>: {scopes: [sorted...]}`` from the
+      client's depends_on-derived audience grants;
+    * ``may_act_for_audiences`` — empty (no RFC-8693 token-exchange wiring in
+      forge-synthesized graphs yet).
+
+    Ordering is deterministic (clients in config order, audiences sorted) so a
+    re-render is stable except for the argon2 salt — which is random by design.
+    The schema stores only the hash, so the random salt is harmless: the
+    caller's plaintext verifies against it regardless (the in-process
+    hash↔plaintext coherence test proves this).
+    """
+    if synthesis is None:
+        return None
+
+    # Lazy import — argon2 cost is paid only when synthesis is active.
+    import yaml  # noqa: PLC0415
+    from argon2 import PasswordHasher  # noqa: PLC0415
+
+    hasher = PasswordHasher()
+
+    services: list[dict[str, object]] = []
+    for client in synthesis.clients:
+        audiences: dict[str, dict[str, list[str]]] = {}
+        for callee_client_id in sorted(client.audiences):
+            audiences[callee_client_id] = {"scopes": sorted(client.audiences[callee_client_id])}
+        services.append(
+            {
+                "client_id": client.client_id,
+                "secret_hash": hasher.hash(client.secret),
+                "k8s_subject": (f"system:serviceaccount:{config.project_slug}:{client.name}"),
+                "audiences": audiences,
+                "may_act_for_audiences": [],
+            }
+        )
+
+    # Loud DEV-ONLY header. The per-service plaintext is documented here for
+    # local onboarding only (it also lives in each caller's compose
+    # GATEKEEPER_CLIENT_SECRET) — the registry body below stores only the
+    # argon2id hash. Mirror the baseline fragment file's documented-secrets
+    # style so the contract is recognisable.
+    secret_lines = "\n".join(
+        f"#   {client.client_id:<16} → {client.secret}" for client in synthesis.clients
+    )
+    header = (
+        "# DEV-ONLY synthesized S2S secrets — rotate before any non-local deployment.\n"
+        "#\n"
+        "# Service-to-service client registry for the gatekeeper /auth/token endpoint.\n"
+        "# Generated by forge multi-service platform synthesis\n"
+        "# (auth.service_discovery=true). Each entry is one calling service;\n"
+        "# ``secret_hash`` is an argon2id hash of the dev pre-shared secret. The\n"
+        "# calling service stores the PLAINTEXT in its own GATEKEEPER_CLIENT_SECRET\n"
+        "# env var (see docker-compose.yml); the registry never stores plaintext.\n"
+        "#\n"
+        "# DEV SECRETS DOCUMENTED HERE FOR ONBOARDING:\n"
+        f"{secret_lines}\n"
+        "#\n"
+        "# These are NEVER acceptable in production. Production deployments use the\n"
+        "# k8s ProjectedSAToken verifier (k8s_subject below) or rotate the hashes.\n"
+    )
+    body = yaml.safe_dump(
+        {"services": services},
+        sort_keys=False,
+        default_flow_style=False,
+        allow_unicode=True,
+    )
+    output = f"{header}\n{body}"
+
+    registry_path = project_root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(output, encoding="utf-8")
+    return registry_path
 
 
 def render_nginx_conf(config: ProjectConfig, frontend_dir: Path) -> Path:
