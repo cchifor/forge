@@ -22,6 +22,9 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
 {%- if sdk_consumption == "monorepo" %}
+      # The project-root ``sdks`` tree (weld-*/platform-auth) is exposed as a
+      # build context so the Dockerfile's ``COPY --from=sdks`` resolves.
+      # forge-core ships inside this backend, so it needs no extra context.
       additional_contexts:
         sdks: ./sdks
 {%- endif %}
@@ -39,6 +42,9 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
 {%- if sdk_consumption == "monorepo" %}
+      # The project-root ``sdks`` tree (weld-*/platform-auth) is exposed as a
+      # build context so the Dockerfile's ``COPY --from=sdks`` resolves.
+      # forge-core ships inside this backend, so it needs no extra context.
       additional_contexts:
         sdks: ./sdks
 {%- endif %}

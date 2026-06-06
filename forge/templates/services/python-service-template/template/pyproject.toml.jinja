@@ -36,6 +36,16 @@ dependencies = [
     "email-validator>=2.2.0",
     "python-multipart>=0.0.20",
     "cachetools>=5.5.0",
+    # ---------------------------------------------------------------------
+    # forge-core — vendored, framework-agnostic primitives (error
+    # hierarchy + RFC-7807 wire model; persistence/domain/discovery land
+    # in later blocks). Always shipped for Python services, inside this
+    # backend at ``sdks/forge-core``; [tool.uv.sources] below points uv
+    # at the backend-relative path-dep. The Dockerfile builds it to a
+    # wheel and strips [tool.uv.sources] so the runtime image resolves
+    # from /wheels.
+    # ---------------------------------------------------------------------
+    "forge-core",
 {%- if (sdk_consumption | default("none")) != "none" %}
     # ---------------------------------------------------------------------
     # weld-* SDKs (1.2.0+) — replace the in-tree src/service shim. See
@@ -57,9 +67,12 @@ dependencies = [
 {%- endif %}
 ]
 
-{%- if (sdk_consumption | default("none")) == "monorepo" %}
-
 [tool.uv.sources]
+# forge-core ships inside this backend (base template) at ``sdks/forge-core``,
+# so its path-dep is backend-relative — unlike the weld-*/platform-auth SDKs
+# which live at the project-root ``sdks/`` tree (``../../sdks/...``).
+forge-core = { path = "sdks/forge-core" }
+{%- if (sdk_consumption | default("none")) == "monorepo" %}
 {%- for sdk in (weld_base_sdks | default("")).split(',') if sdk|trim %}
 weld-{{ sdk|trim }} = { path = "../../sdks/weld-{{ sdk|trim }}" }
 {%- endfor %}

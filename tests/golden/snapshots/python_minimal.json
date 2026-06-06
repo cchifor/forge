@@ -49,8 +49,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/Dockerfile": {
-      "size": 3395,
-      "sha256": "a54a86f23c8aa9a8"
+      "size": 4024,
+      "sha256": "77161bda29adefe5"
     },
     "services/api/README.md": {
       "size": 33686,
@@ -89,8 +89,8 @@
       "sha256": "c0859dec5b712b9b"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 2462,
-      "sha256": "c0ebc686500089e5"
+      "size": 2916,
+      "sha256": "49e156d953318b48"
     },
     "services/api/docker-compose.yaml": {
       "size": 871,
@@ -101,8 +101,32 @@
       "sha256": "941241dd501b2eb9"
     },
     "services/api/pyproject.toml": {
-      "size": 4820,
-      "sha256": "1f5837c8e9e40e01"
+      "size": 5706,
+      "sha256": "82bdfb7982d704c5"
+    },
+    "services/api/sdks/forge-core/pyproject.toml": {
+      "size": 1027,
+      "sha256": "e996bd1606dc36e7"
+    },
+    "services/api/sdks/forge-core/src/forge_core/__init__.py": {
+      "size": 1016,
+      "sha256": "85793681dfdd7259"
+    },
+    "services/api/sdks/forge-core/src/forge_core/errors.py": {
+      "size": 4732,
+      "sha256": "3dd662ba623e334f"
+    },
+    "services/api/sdks/forge-core/tests/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api/sdks/forge-core/tests/unit/__init__.py": {
+      "size": 0,
+      "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_errors.py": {
+      "size": 4360,
+      "sha256": "9796a6e4750f1eca"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,
@@ -193,8 +217,8 @@
       "sha256": "fc4828a16e0ccc77"
     },
     "services/api/src/app/core/errors.py": {
-      "size": 17824,
-      "sha256": "ed087e9e2e048760"
+      "size": 17806,
+      "sha256": "b4d012a62bb5272b"
     },
     "services/api/src/app/core/ioc/__init__.py": {
       "size": 437,
@@ -289,8 +313,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api/src/app/main.py": {
-      "size": 5569,
-      "sha256": "6613ca1d5883bde5"
+      "size": 5563,
+      "sha256": "db191340e742e483"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
