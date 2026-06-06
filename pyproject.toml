@@ -29,6 +29,13 @@ dependencies = [
     # present via copier; declared explicitly so the dependency surface is
     # honest (mirrors the pydantic note above).
     "packaging>=26.2",
+    # Phase 4 (P4.2) — multi-service platform synthesis hashes the
+    # deterministic dev S2S secrets into argon2id digests for the
+    # gatekeeper service registry. Lazily imported inside
+    # ``render_service_registry`` so the cost is paid only when
+    # ``auth.service_discovery`` is on; declared here so the import is
+    # honest and resolvable.
+    "argon2-cffi>=23.1.0",
 ]
 
 [dependency-groups]

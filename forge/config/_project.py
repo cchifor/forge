@@ -564,6 +564,22 @@ class ProjectConfig:
                 "talk to. Either add another backend or disable "
                 "auth.service_discovery."
             )
+        # Multi-service synthesis emits gatekeeper+keycloak-specific artifacts
+        # (the S2S service registry + svc-* realm clients), so it requires the
+        # gatekeeper auth provider. ``auth.provider`` defaults to ``gatekeeper``
+        # but a project may pin ``in_memory`` / ``oidc_generic`` / ``none``,
+        # none of which ship a gatekeeper/realm to register against.
+        provider = self._effective_option_values().get("auth.provider")
+        if provider != "gatekeeper":
+            raise ValueError(
+                "auth.service_discovery requires auth.provider=gatekeeper "
+                f"(found auth.provider={provider!r}). Multi-service synthesis "
+                "emits a gatekeeper service registry and per-service Keycloak "
+                "realm clients; the in_memory / oidc_generic / none providers "
+                "ship no gatekeeper or realm to register against. Set "
+                "auth.provider=gatekeeper (the default), or disable "
+                "auth.service_discovery."
+            )
         known = {bc.name for bc in self.backends}
         for bc in self.backends:
             for dep in bc.depends_on:
