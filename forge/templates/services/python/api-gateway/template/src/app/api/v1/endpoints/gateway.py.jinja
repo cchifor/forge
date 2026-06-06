@@ -1,0 +1,127 @@
+"""API-gateway proxy endpoints.
+
+Routes
+------
+GET  /gateway/downstreams        -- List the configured downstream services
+                                    (name -> internal URL) discovered from the
+                                    ``INTERNAL_SERVICE_URL_<NAME>`` environment.
+GET  /gateway/api/{service}/{path:path}   -- Proxy a GET to a downstream.
+POST /gateway/api/{service}/{path:path}   -- Proxy a POST to a downstream.
+
+The gateway looks each request's ``{service}`` up in the downstream registry,
+mints (or reuses) a service-to-service bearer token via the S2S client, and
+forwards the request with httpx. It is intentionally dependency-light: it does
+NOT require auth to be enabled (the S2S client degrades to no Authorization
+header when credentials are absent), so a generated gateway builds and runs in
+any configuration. Unknown services return 404; downstream transport failures
+return 502 with a clear message.
+"""
+
+from __future__ import annotations
+
+import httpx
+from fastapi import APIRouter, HTTPException, Request, Response, status
+
+from app.gateway.downstreams import downstream_map, resolve_downstream
+from app.gateway.s2s_client import S2SClient
+
+router = APIRouter()
+
+#: Process-wide S2S token client (caches the minted token across requests).
+_s2s_client = S2SClient()
+
+#: Hop-by-hop / connection-scoped headers that must not be forwarded verbatim
+#: to (or back from) the downstream — httpx and the ASGI server manage these.
+_HOP_BY_HOP = frozenset(
+    {
+        "host",
+        "content-length",
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+    }
+)
+
+#: Bound the downstream call so a slow/hung service can't pin a gateway worker.
+_DOWNSTREAM_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+
+@router.get("/downstreams")
+async def list_downstreams() -> dict[str, dict[str, str]]:
+    """Return the configured downstream service map (name -> internal URL)."""
+    return {"downstreams": downstream_map()}
+
+
+def _forwardable_request_headers(request: Request) -> dict[str, str]:
+    """Copy the inbound headers minus hop-by-hop ones, ready to forward."""
+    return {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in _HOP_BY_HOP
+    }
+
+
+def _forwardable_response_headers(resp: httpx.Response) -> dict[str, str]:
+    """Copy downstream response headers minus hop-by-hop ones."""
+    return {
+        key: value
+        for key, value in resp.headers.items()
+        if key.lower() not in _HOP_BY_HOP
+    }
+
+
+async def _proxy(request: Request, service: str, path: str) -> Response:
+    """Resolve ``service``, forward the request, and relay the response."""
+    base_url = resolve_downstream(service)
+    if base_url is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown downstream service: {service!r}",
+        )
+
+    target = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    headers = _forwardable_request_headers(request)
+    # Mint/reuse an S2S bearer token addressed to the downstream. Returns an
+    # empty dict when S2S credentials are not configured, so the gateway still
+    # proxies (un-authenticated) in a credential-free environment.
+    headers.update(await _s2s_client.auth_header(audience=service))
+
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=_DOWNSTREAM_TIMEOUT) as client:
+            downstream = await client.request(
+                request.method,
+                target,
+                headers=headers,
+                params=request.query_params,
+                content=body,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Downstream request to {service!r} failed: {exc}",
+        ) from exc
+
+    return Response(
+        content=downstream.content,
+        status_code=downstream.status_code,
+        headers=_forwardable_response_headers(downstream),
+        media_type=downstream.headers.get("content-type"),
+    )
+
+
+@router.get("/api/{service}/{path:path}")
+async def proxy_get(request: Request, service: str, path: str = "") -> Response:
+    """Proxy a GET request to ``{service}`` at ``{path}``."""
+    return await _proxy(request, service, path)
+
+
+@router.post("/api/{service}/{path:path}")
+async def proxy_post(request: Request, service: str, path: str = "") -> Response:
+    """Proxy a POST request to ``{service}`` at ``{path}``."""
+    return await _proxy(request, service, path)
