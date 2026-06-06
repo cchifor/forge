@@ -8,9 +8,9 @@ from dishka import Provider, Scope, provide
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from weld.core import context
-from weld.core.domain.account import Account
-from weld.core.domain.user import User
+from forge_core.domain import context
+from forge_core.domain.account import Account
+from forge_core.domain.user import User
 from forge_core.persistence import AsyncUnitOfWork
 from weld.fastapi.security.auth import authenticate_request
 

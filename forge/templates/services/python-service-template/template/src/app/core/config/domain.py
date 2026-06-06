@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from weld.core.domain.config import AuthConfig
+from forge_core.domain.config import AuthConfig
 
 
 class Contact(BaseModel):

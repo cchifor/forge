@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
-from weld.core.discovery import Discovery
+from forge_core.discovery import Discovery
 from weld.fastapi.security import auth
 from weld.fastapi.security.platform_auth_setup import build_auth_guard
 

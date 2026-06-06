@@ -1,7 +1,7 @@
 [project]
 name = "forge-core"
 version = "0.1.0"
-description = "Vendored framework-agnostic primitives (errors, persistence, domain) for forge services"
+description = "Vendored framework-agnostic primitives (errors, persistence, domain, discovery) for forge services"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.11.0",
