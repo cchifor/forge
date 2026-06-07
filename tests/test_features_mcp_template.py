@@ -216,8 +216,22 @@ def test_mcp_template_server_generates_and_mounts(tmp_path: Path) -> None:
     )
     backend = Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
     main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
-    assert "from app.mcp import build_mcp_app" in main_py
+    assert "build_mcp_app" in main_py
     assert 'app.mount("/mcp"' in main_py
+    # The mount uses the vendored default resolver — no module-level
+    # ``container`` reference (which doesn't exist at module scope).
+    assert "build_default_context_resolver()" in main_py
+    assert "container.get(PluginContextResolver)" not in main_py
+    # The templated plugin file rendered to a real .py (suffix stripped) and
+    # the .py.jinja did not land in the project tree.
+    assert (backend / "src/app/mcp/plugins/ping.py").is_file()
+    assert not (backend / "src/app/mcp/plugins/ping.py.jinja").exists()
+    ping = (backend / "src/app/mcp/plugins/ping.py").read_text(encoding="utf-8")
+    assert "{{" not in ping and "{%" not in ping
+    # project_slug == the backend service name (``api``), matching what the
+    # base template rendered ``{{ project_slug }}`` to.
+    assert 'slug = "api.ping"' in ping
+    assert 'description="Health-check the Api service."' in ping
     for py in backend.rglob("*.py"):
         if "__pycache__" in py.parts:
             continue

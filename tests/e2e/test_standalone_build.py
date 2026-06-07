@@ -191,15 +191,11 @@ def _airlock_config(tmp_path: Path) -> ProjectConfig:
     fragments could finally generate: ``IOC_INFRA_IMPORTS`` +
     ``IOC_INFRA_PROVIDERS`` (the ``AsyncAirlockClient`` DI provider) and
     ``CONFIG_DOMAIN_FIELDS`` + ``CONFIG_DOMAIN_ROOT`` (the ``AirlockSettings``
-    nested config). It is the only one of the five whose provider snippet
-    imports every type it annotates, so it is the case that builds AND imports
-    cleanly end-to-end. The sibling fragments hit pre-existing, anchor-
-    orthogonal defects on a full import (events/streaming providers annotate
-    ``EventBus`` / ``AsyncEngine`` without importing them — dishka's
-    ``UndefinedTypeAnalysisError``; connectors/events_outbox/mcp ship
-    ``*.py.jinja`` files the fragment render path never strips to ``*.py``).
-    Those are tracked separately; this gate proves the anchors themselves are
-    placed correctly by driving the full uv-sync + import for the clean case.
+    nested config). The sibling features now have their own build+import
+    gates below (events / streaming / connectors / mcp) after the BUG 1
+    (``*.py.jinja`` render+strip), BUG 2 (Dishka annotated-type imports), and
+    BUG 3 (mcp default context resolver) fixes; this case remains the minimal
+    single-provider proof.
     """
     return ProjectConfig(
         project_name="Standalone Airlock",
@@ -215,6 +211,64 @@ def _airlock_config(tmp_path: Path) -> ProjectConfig:
         ],
         frontend=None,
         options={"airlock.client": True},
+    )
+
+
+def _feature_config(tmp_path: Path, name: str, options: dict[str, object]) -> ProjectConfig:
+    """A minimal Python backend with one feature's options enabled.
+
+    Mirrors :func:`_airlock_config` but parametrised on the option set so the
+    events / streaming / connectors / mcp build-gates share one builder.
+    """
+    return ProjectConfig(
+        project_name=f"Standalone {name}",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="svc",
+                project_name=f"Standalone {name}",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options=options,
+    )
+
+
+def _build_and_import(backend_dir: Path, project_root: Path | None = None) -> None:
+    """uv sync (weld-free) + import ``app.main`` under ENV=development.
+
+    The dev env sidesteps the production secret-key guard (an unrelated
+    base-template posture check) so the import exercises the fragment
+    wiring, not the prod-hardening validator. Asserts uv-sync and the
+    import both succeed, surfacing the child stderr on failure.
+    """
+    import os
+
+    if project_root is not None:
+        weld_hits = _grep_weld(project_root)
+        assert not weld_hits, "weld references in a feature project:\n" + "\n".join(weld_hits)
+        _assert_ast_parses(project_root)
+
+    sync = _run(["uv", "sync"], cwd=backend_dir)
+    assert sync.returncode == 0, f"uv sync failed (weld-free):\n{sync.stderr}"
+
+    env = {**os.environ, "ENV": "development"}
+    imp = subprocess.run(
+        ["uv", "run", "python", "-c", "import app.main"],
+        cwd=str(backend_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=TEST_TIMEOUT_S,
+        check=False,
+        env=env,
+    )
+    assert imp.returncode == 0, (
+        f"feature-wired app failed to import:\nSTDOUT:\n{imp.stdout}\nSTDERR:\n{imp.stderr}"
     )
 
 
@@ -303,6 +357,104 @@ def test_airlock_feature_project_builds_and_imports(
     assert "def airlock_client(" in infra
     domain = (backend_dir / "src/app/core/config/domain.py").read_text(encoding="utf-8")
     assert "airlock: AirlockSettings = AirlockSettings()" in domain
+
+
+# --------------------------------------------------------------------------- #
+# Per-feature build gates (events / streaming / connectors / mcp). Each feature
+# historically only GENERATED (the anchor fix in c55b4ae); these gates prove it
+# now builds AND imports weld-free. The residual bugs they exercise:
+#   * BUG 1 — ``*.py.jinja`` fragment files are now rendered + suffix-stripped
+#     by the file applier (connectors ``_service.py``, events ``0002_outbox.py``,
+#     mcp ``ping.py``).
+#   * BUG 2 — events/streaming Dishka providers now import every annotated type
+#     (EventBus / OutboxStore / OutboxRelay / CloudEventStreamer / ConnectorRegistry
+#     / AsyncDatabase) so the container resolves without UndefinedTypeAnalysisError.
+#   * BUG 3 — the mcp mount resolves a vendored default context resolver instead
+#     of a non-existent module-level ``container``.
+# --------------------------------------------------------------------------- #
+
+
+def test_events_bus_and_outbox_project_builds_and_imports(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """events.bus + events.outbox: vendored CloudEvents bus + transactional
+    outbox. Proves the bus/outbox/relay providers resolve in dishka (BUG 2),
+    the outbox alembic migration (``0002_outbox.py.jinja``) rendered to a
+    plain ``.py`` (BUG 1), and ``outbox_poll_interval_s`` landed inside
+    EventsSettings so ``settings.events.outbox_poll_interval_s`` resolves."""
+    project_root = generate(
+        _feature_config(tmp_path, "Events", {"events.bus": "memory", "events.outbox": True}),
+        quiet=True,
+    )
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    # The outbox migration rendered to a plain .py (suffix stripped).
+    assert (backend_dir / "alembic/versions/0002_outbox.py").is_file()
+    assert not (backend_dir / "alembic/versions/0002_outbox.py.jinja").exists()
+    _build_and_import(backend_dir, project_root)
+
+
+def test_streaming_sse_project_builds_and_imports(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """streaming.sse (+ events.bus, its dep): the SSE CloudEventStreamer
+    provider resolves in dishka and the /stream router mounts. Guards BUG 2
+    for streaming (CloudEventStreamer + EventBus annotations imported)."""
+    project_root = generate(
+        _feature_config(tmp_path, "Streaming", {"events.bus": "memory", "streaming.sse": True}),
+        quiet=True,
+    )
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    _build_and_import(backend_dir, project_root)
+
+
+def test_connectors_project_builds_and_imports(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """connectors.enabled (+ a builtin backend): the vendored ConnectorRegistry
+    provider resolves. Guards BUG 1 (``_service.py.jinja`` renders to
+    ``_service.py``, which ``app.connectors.__init__`` imports) AND BUG 2
+    (the provider's ``ConnectorRegistry`` annotation is imported)."""
+    project_root = generate(
+        _feature_config(
+            tmp_path,
+            "Connectors",
+            {"connectors.enabled": True, "connectors.backends": ["http", "fs"]},
+        ),
+        quiet=True,
+    )
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    # The service-scoped registry builder rendered to a plain .py.
+    service = backend_dir / "src/app/connectors/_service.py"
+    assert service.is_file()
+    assert not (backend_dir / "src/app/connectors/_service.py.jinja").exists()
+    body = service.read_text(encoding="utf-8")
+    # connectors.backends -> connectors_backends flowed through the render.
+    assert "enable_http=True" in body
+    assert "enable_fs=True" in body
+    _build_and_import(backend_dir, project_root)
+
+
+def test_mcp_template_project_builds_and_imports(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """mcp_template.server: the first-party MCP host mounts on /mcp via the
+    vendored default context resolver. Guards BUG 1 (``ping.py.jinja`` renders
+    to ``ping.py`` with the service slug) AND BUG 3 (the mount no longer
+    references a non-existent module-level ``container``)."""
+    project_root = generate(
+        _feature_config(tmp_path, "Mcp", {"mcp_template.server": True}),
+        quiet=True,
+    )
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    ping = backend_dir / "src/app/mcp/plugins/ping.py"
+    assert ping.is_file()
+    assert not (backend_dir / "src/app/mcp/plugins/ping.py.jinja").exists()
+    assert 'slug = "svc.ping"' in ping.read_text(encoding="utf-8")
+    _build_and_import(backend_dir, project_root)
 
 
 def test_full_feature_max_project_builds_weld_free(

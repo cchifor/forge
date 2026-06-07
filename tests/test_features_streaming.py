@@ -118,7 +118,11 @@ def test_streaming_sse_inject_yaml_mounts_router() -> None:
 def test_streaming_sse_generates_and_wires_streamer(tmp_path: Path) -> None:
     backend = _render(tmp_path, {"events.bus": "memory", "streaming.sse": True})
     infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
-    assert "from app.streaming import build_streamer" in infra
+    # The provider annotates its return type ``CloudEventStreamer`` and its
+    # ``bus: EventBus`` dep, so the IMPORTS snippet must import both (else
+    # dishka's container build raises UndefinedTypeAnalysisError).
+    assert "from app.streaming import CloudEventStreamer, build_streamer" in infra
+    assert "from app.events import EventBus" in infra
     assert "def streamer(" in infra
     api = (backend / "src/app/api/v1/api.py").read_text(encoding="utf-8")
     assert "stream_endpoint.router" in api

@@ -132,6 +132,8 @@ def test_connectors_registry_scaffolds_app_connectors_tree() -> None:
 def test_connectors_registry_generates_and_wires_provider(tmp_path: Path) -> None:
     backend = _render(tmp_path, {"connectors.enabled": True})
     infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
-    assert "from app.connectors import build_connector_registry" in infra
+    # The provider annotates its return type ``ConnectorRegistry``, so the
+    # IMPORTS snippet must import it too (dishka analyses the annotation).
+    assert "from app.connectors import ConnectorRegistry, build_connector_registry" in infra
     assert "def connector_registry(" in infra
     _assert_weld_free_and_parses(backend)

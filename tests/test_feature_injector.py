@@ -346,6 +346,63 @@ class TestCopyFiles:
         assert (dst / "a.py").read_text(encoding="utf-8") == "new\n"
         assert outcomes[0].action == "applied"
 
+    def test_jinja_file_renders_and_strips_suffix(self, tmp_path) -> None:
+        # A ``.py.jinja`` source is Jinja-rendered with the supplied context
+        # and written to the SUFFIX-STRIPPED destination (``foo.py``), so the
+        # generated project imports ``foo`` not ``foo.py.jinja``.
+        src = tmp_path / "src"
+        (src / "pkg").mkdir(parents=True)
+        (src / "pkg" / "plugin.py.jinja").write_text(
+            'slug = "{{ project_slug }}.ping"\n', encoding="utf-8"
+        )
+        dst = tmp_path / "dst"
+        dst.mkdir()
+        outcomes = copy_files(src, dst, render_context={"project_slug": "svc"})
+        rendered = dst / "pkg" / "plugin.py"
+        assert rendered.read_text(encoding="utf-8") == 'slug = "svc.ping"\n'
+        # The unrendered ``.py.jinja`` name does NOT land in the tree.
+        assert not (dst / "pkg" / "plugin.py.jinja").exists()
+        # The outcome target is the stripped path.
+        assert outcomes[0].target == rendered
+
+    def test_pure_copy_file_is_byte_identical_with_render_context(self, tmp_path) -> None:
+        # A non-``.jinja`` file is byte-copied verbatim even when a render
+        # context is present — render support must not touch pure-copy files.
+        src = tmp_path / "src"
+        src.mkdir()
+        body = "x = 1\n# {{ not_rendered }}\n"
+        (src / "a.py").write_bytes(body.encode("utf-8"))
+        dst = tmp_path / "dst"
+        dst.mkdir()
+        copy_files(src, dst, render_context={"project_slug": "svc"})
+        assert (dst / "a.py").read_bytes() == body.encode("utf-8")
+
+    def test_jinja_file_copied_verbatim_without_render_context(self, tmp_path) -> None:
+        # Back-compat: callers that don't pass a render context (the harvester,
+        # plan-update preview, unit tests) copy ``.jinja`` files verbatim,
+        # preserving the suffix — the pre-render-support behaviour.
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "t.py.jinja").write_text("{{ x }}\n", encoding="utf-8")
+        dst = tmp_path / "dst"
+        dst.mkdir()
+        copy_files(src, dst)
+        assert (dst / "t.py.jinja").read_text(encoding="utf-8") == "{{ x }}\n"
+        assert not (dst / "t.py").exists()
+
+    def test_jinja_undefined_variable_raises(self, tmp_path) -> None:
+        # StrictUndefined: an unresolved ``{{ var }}`` fails loudly at
+        # generation rather than silently emitting an empty string.
+        from forge.errors import FragmentError
+
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "t.py.jinja").write_text("v = {{ missing }}\n", encoding="utf-8")
+        dst = tmp_path / "dst"
+        dst.mkdir()
+        with pytest.raises(FragmentError, match="undefined variable"):
+            copy_files(src, dst, render_context={"project_slug": "svc"})
+
 
 # -- apply_features orchestration --------------------------------------------
 
