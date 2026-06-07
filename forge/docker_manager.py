@@ -86,6 +86,22 @@ def render_compose(
         config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
     )
 
+    # Whether a project-root ``sdks/`` tree actually ships — only the
+    # platform-auth SDK fragments create it. forge-core is backend-local
+    # (services/<svc>/sdks/forge-core, main build context), so a no-auth
+    # project has no project-root ``sdks/``. Declaring the ``sdks`` build
+    # context when the dir is absent makes ``docker compose build`` fail
+    # ("failed to get build context sdks") — so gate the context on this.
+    active_fragments = {rf.fragment.name for rf in plan.ordered} if plan is not None else set()
+    has_project_sdks = bool(
+        active_fragments
+        & {
+            "platform_auth_sdk_python",
+            "platform_auth_sdk_node",
+            "platform_auth_sdk_rust",
+        }
+    )
+
     # Build per-backend context list for the template loop
     backends_ctx = []
     for bc in config.backends:
@@ -115,6 +131,7 @@ def render_compose(
     context = {
         "project_slug": config.project_slug,
         "backends": backends_ctx,
+        "has_project_sdks": has_project_sdks,
         "backend_language": primary.language.value if primary else "python",
         "backend_slug": config.backend_slug,
         "backend_port": primary.server_port if primary else 5000,
