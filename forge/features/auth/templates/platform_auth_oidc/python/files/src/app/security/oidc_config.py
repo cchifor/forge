@@ -25,16 +25,28 @@ stdlib and the verified-claims dicts handed to :class:`ClaimMapper`.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 # Algorithms this provider is willing to verify. Asymmetric algs are the
 # common OIDC case (the IdP signs with a private key, we hold only the public
 # JWKS); ``HS256`` is supported for the symmetric-secret deployments some
 # IdPs still offer, but the operator must point ``AUTH_PROVIDER_JWKS_URI`` /
 # the shared secret accordingly. ``none`` is never accepted.
+#
+# !! SECURITY — HS256 is the classic JWT *algorithm-confusion* footgun. HS256
+# is a symmetric MAC keyed on a *shared secret*; RS256/ES256 are asymmetric and
+# verify against the IdP's *public* JWKS. If you accept HS256 *while* feeding
+# this provider a JWKS endpoint, an attacker can forge a token by HMAC-signing
+# it with the public key (which is public) as the HS256 secret, and it will
+# verify. ONLY enable HS256 when the issuer signs with a symmetric shared
+# secret that this service holds privately — NEVER alongside a JWKS endpoint.
+# ``parse_algorithms`` logs a loud warning whenever HS256 is configured.
 SUPPORTED_ALGORITHMS: frozenset[str] = frozenset({"RS256", "ES256", "HS256"})
 
 DEFAULT_ALGORITHMS: tuple[str, ...] = ("RS256",)
@@ -52,6 +64,11 @@ def parse_algorithms(raw: str | None) -> tuple[str, ...]:
     upper-cased and checked against :data:`SUPPORTED_ALGORITHMS`; ``none``
     (in any case) is rejected outright, and an unknown algorithm raises so a
     typo surfaces at boot rather than as a silent verify failure.
+
+    If ``HS256`` is among the configured algorithms a loud ``logging.warning``
+    is emitted: HS256 is a symmetric MAC and is the classic JWT
+    algorithm-confusion footgun — it is safe only with a privately-held shared
+    secret and must never be combined with a JWKS endpoint.
     """
     if raw is None or not raw.strip():
         return DEFAULT_ALGORITHMS
@@ -69,6 +86,16 @@ def parse_algorithms(raw: str | None) -> tuple[str, ...]:
             algs.append(alg)
     if not algs:
         return DEFAULT_ALGORITHMS
+    if "HS256" in algs:
+        # Alg-confusion footgun: HS256 (symmetric MAC) must only be used with a
+        # private shared secret, NEVER with a JWKS endpoint (the public key
+        # would double as the HMAC secret, letting anyone forge tokens).
+        _log.warning(
+            "HS256 is enabled in AUTH_PROVIDER_ALGORITHMS. HS256 is a symmetric "
+            "algorithm and is safe ONLY with a privately-held shared secret; "
+            "never combine it with a JWKS endpoint (AUTH_PROVIDER_JWKS_URI) or "
+            "discovery, which exposes you to a JWT algorithm-confusion attack."
+        )
     return tuple(algs)
 
 

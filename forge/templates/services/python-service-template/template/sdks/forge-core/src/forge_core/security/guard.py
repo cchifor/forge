@@ -80,6 +80,7 @@ class AuthGuard:
         audience: str,
         jwks: JWKSCache,
         trust_map: IssuerTrustMap | None = None,
+        strict_trust: bool = False,
         algorithms: tuple[str, ...] = DEFAULT_ALGORITHMS,
         clock_skew_seconds: int = DEFAULT_CLOCK_SKEW_SECONDS,
         tenant_id_claim: str = DEFAULT_TENANT_ID_CLAIM,
@@ -100,6 +101,7 @@ class AuthGuard:
         self._audience = audience
         self._jwks = jwks
         self._trust_map = trust_map
+        self._strict_trust = strict_trust
         self._algorithms = tuple(algorithms)
         self._clock_skew = clock_skew_seconds
         self._tenant_id_claim = tenant_id_claim
@@ -219,9 +221,20 @@ class AuthGuard:
     async def _enforce_trust(self, tenant_id: str, iss: str) -> None:
         assert self._trust_map is not None  # narrowed by caller
         record = await self._trust_map.get(tenant_id)
-        # An empty/permissive trust map (no record) accepts any tenant — the
-        # single-issuer default. Records are only enforced when present.
+        # A missing record means the tenant is unknown to the trust map.
+        #
+        # * Default (``strict_trust=False``): accept it — the permissive
+        #   single-issuer default. Tenant suspension + per-tenant issuer
+        #   binding only apply to tenants explicitly registered in the map.
+        # * Fail-closed (``strict_trust=True``): reject it. Every tenant must
+        #   be registered (multi-issuer deployments opt into this so an
+        #   unregistered tenant cannot slip through with any registered key).
         if record is None:
+            if self._strict_trust:
+                raise IssuerNotTrusted(
+                    f"tenant {tenant_id} is not registered in the trust map "
+                    "(strict_trust is enabled)"
+                )
             return
         if record.expected_issuer != iss:
             raise IssuerNotTrusted(
