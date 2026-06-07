@@ -5,7 +5,7 @@
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_IMPORTS
   position: before
-  snippet: "from app.connectors import build_connector_registry"
+  snippet: "from app.connectors import ConnectorRegistry, build_connector_registry"
 
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_PROVIDERS
