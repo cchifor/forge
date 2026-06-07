@@ -29,7 +29,7 @@
       "sha256": "ea0db143ad4fe554"
     },
     "forge.toml": {
-      "size": 45007,
+      "size": 44731,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -103,10 +103,6 @@
     "services/api/pyproject.toml": {
       "size": 4795,
       "sha256": "9e509ebee58f221a"
-    },
-    "services/api/sdks/forge-core/.coverage": {
-      "size": 114681,
-      "sha256": "766537a042fee241"
     },
     "services/api/sdks/forge-core/pyproject.toml": {
       "size": 1613,
@@ -317,8 +313,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 5501,
-      "sha256": "00e6174e8e0795d5"
+      "size": 6014,
+      "sha256": "1d6db5bf1bdfe5fb"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -349,8 +345,8 @@
       "sha256": "e1e94703a680e8c6"
     },
     "services/api/src/app/core/ioc/infra.py": {
-      "size": 1828,
-      "sha256": "715bb70bbaaa1f84"
+      "size": 1888,
+      "sha256": "ba1da5b926b63cb9"
     },
     "services/api/src/app/core/ioc/security.py": {
       "size": 1727,
@@ -437,8 +433,8 @@
       "sha256": "ea3e9cb23e04dc3d"
     },
     "services/api/src/app/main.py": {
-      "size": 5563,
-      "sha256": "db191340e742e483"
+      "size": 5582,
+      "sha256": "e7a79cfa7edff2a5"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,

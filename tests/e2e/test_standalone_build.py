@@ -183,6 +183,41 @@ def _max_config(tmp_path: Path) -> ProjectConfig:
     )
 
 
+def _airlock_config(tmp_path: Path) -> ProjectConfig:
+    """A weld-free integration feature (Airlock client) on the minimal base.
+
+    Airlock exercises four of the six FORGE anchors that were missing from
+    the base Python template until the events/streaming/connectors/airlock/mcp
+    fragments could finally generate: ``IOC_INFRA_IMPORTS`` +
+    ``IOC_INFRA_PROVIDERS`` (the ``AsyncAirlockClient`` DI provider) and
+    ``CONFIG_DOMAIN_FIELDS`` + ``CONFIG_DOMAIN_ROOT`` (the ``AirlockSettings``
+    nested config). It is the only one of the five whose provider snippet
+    imports every type it annotates, so it is the case that builds AND imports
+    cleanly end-to-end. The sibling fragments hit pre-existing, anchor-
+    orthogonal defects on a full import (events/streaming providers annotate
+    ``EventBus`` / ``AsyncEngine`` without importing them — dishka's
+    ``UndefinedTypeAnalysisError``; connectors/events_outbox/mcp ship
+    ``*.py.jinja`` files the fragment render path never strips to ``*.py``).
+    Those are tracked separately; this gate proves the anchors themselves are
+    placed correctly by driving the full uv-sync + import for the clean case.
+    """
+    return ProjectConfig(
+        project_name="Standalone Airlock",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="svc",
+                project_name="Standalone Airlock",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options={"airlock.client": True},
+    )
+
+
 def _build_and_test(backend_dir: Path) -> None:
     """uv sync (no weld available) + run the generated project's pytest."""
     sync = _run(["uv", "sync"], cwd=backend_dir)
@@ -224,6 +259,50 @@ def test_auth_generate_project_builds_weld_free(
     # The platform-auth SDK ships at the project root; it must be present.
     assert (project_root / "sdks" / "platform-auth").is_dir()
     _build_and_test(backend_dir)
+
+
+def test_airlock_feature_project_builds_and_imports(
+    tmp_path: Path, require_uv: None, require_git: None
+) -> None:
+    """A feature fragment that injects into the previously-anchorless base
+    template generates, resolves weld-free, AST-parses, and *imports* — proving
+    the IOC_INFRA_* and CONFIG_DOMAIN_* anchors are placed where the injected
+    DI provider + nested config are valid. Import runs under ``ENV=development``
+    so the production secret-key guard (an unrelated base-template posture
+    check) does not mask the wiring result."""
+    import os
+
+    project_root = generate(_airlock_config(tmp_path), quiet=True)
+
+    weld_hits = _grep_weld(project_root)
+    assert not weld_hits, "weld references in an airlock project:\n" + "\n".join(weld_hits)
+    _assert_ast_parses(project_root)
+
+    backend_dir = project_root / "services" / "svc"
+    assert backend_dir.is_dir()
+    sync = _run(["uv", "sync"], cwd=backend_dir)
+    assert sync.returncode == 0, f"uv sync failed (weld-free):\n{sync.stderr}"
+
+    env = {**os.environ, "ENV": "development"}
+    imp = subprocess.run(
+        ["uv", "run", "python", "-c", "import app.main"],
+        cwd=str(backend_dir),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=TEST_TIMEOUT_S,
+        check=False,
+        env=env,
+    )
+    assert imp.returncode == 0, (
+        f"airlock-wired app failed to import:\nSTDOUT:\n{imp.stdout}\nSTDERR:\n{imp.stderr}"
+    )
+    # The provider + nested config landed at valid AST positions.
+    infra = (backend_dir / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "def airlock_client(" in infra
+    domain = (backend_dir / "src/app/core/config/domain.py").read_text(encoding="utf-8")
+    assert "airlock: AirlockSettings = AirlockSettings()" in domain
 
 
 def test_full_feature_max_project_builds_weld_free(

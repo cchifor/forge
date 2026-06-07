@@ -7,11 +7,51 @@ template trees contain the files the generated service expects.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
-from forge.config import BackendLanguage
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
+
+
+def _render(tmp_path: Path, options: dict) -> Path:
+    """Dry-run generate a single Python backend with ``options`` enabled.
+
+    Returns the backend dir. Raises ``InjectionError`` if any fragment
+    targets a FORGE anchor missing from the base template — the exact
+    regression these feature tests guard.
+    """
+    cfg = ProjectConfig(
+        project_name="evt",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="evt",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options=options,
+    )
+    return Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+
+
+def _assert_weld_free_and_parses(backend: Path) -> None:
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))
 
 
 def test_events_bus_option_registered() -> None:
@@ -119,3 +159,37 @@ def test_events_outbox_inject_yaml_wires_lifespan_hooks() -> None:
     text = inject.read_text(encoding="utf-8")
     assert "FORGE:LIFESPAN_STARTUP" in text
     assert "FORGE:LIFESPAN_SHUTDOWN" in text
+
+
+# --------------------------------------------------------------------------- #
+# Render: events_core / events_outbox generate against the base anchors.
+# These guard the pre-existing defect where events targeted FORGE anchors
+# (IOC_INFRA_IMPORTS/PROVIDERS, CONFIG_DOMAIN_FIELDS/ROOT, CONFIG_EVENTS_FIELDS)
+# that were never added to the base template, so generation always raised
+# InjectionError.
+# --------------------------------------------------------------------------- #
+
+
+def test_events_core_generates_and_wires_infra(tmp_path: Path) -> None:
+    backend = _render(tmp_path, {"events.bus": "memory"})
+    infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "from app.events import build_event_bus" in infra
+    assert "async def event_bus(" in infra
+    domain = (backend / "src/app/core/config/domain.py").read_text(encoding="utf-8")
+    assert "class EventsSettings(BaseModel):" in domain
+    assert "events: EventsSettings = EventsSettings()" in domain
+    _assert_weld_free_and_parses(backend)
+
+
+def test_events_outbox_generates_and_extends_events_config(tmp_path: Path) -> None:
+    backend = _render(tmp_path, {"events.bus": "memory", "events.outbox": True})
+    infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "from app.events.outbox import build_outbox_relay, build_outbox_store" in infra
+    assert "def outbox_store(" in infra
+    assert "def outbox_relay(" in infra
+    domain = (backend / "src/app/core/config/domain.py").read_text(encoding="utf-8")
+    assert "outbox_poll_interval_s: float = 1.0" in domain
+    lifecycle = (backend / "src/app/core/lifecycle.py").read_text(encoding="utf-8")
+    assert "await container.get(OutboxRelay).start()" in lifecycle
+    assert "await container.get(OutboxRelay).stop()" in lifecycle
+    _assert_weld_free_and_parses(backend)

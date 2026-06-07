@@ -14,6 +14,8 @@ from app.core.config import Settings
 from forge_core.persistence import AsyncDatabase
 from forge_core.discovery import Discovery
 
+# FORGE:IOC_INFRA_IMPORTS
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,3 +59,5 @@ class InfraProvider(Provider):
             yield session
         finally:
             await asyncio.shield(session.close())
+
+    # FORGE:IOC_INFRA_PROVIDERS

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
 
 
@@ -187,3 +189,42 @@ def test_mcp_audit_entry_matches_on_disk_shape() -> None:
     src = _MCP_ROUTER.read_text(encoding="utf-8")
     assert "ts: float" in src
     assert "user_id: str | None = None" in src
+
+
+# --------------------------------------------------------------------------- #
+# Render: mcp_template_server generates against the base FORGE:APP_MOUNTS anchor
+# (regression guard — the anchor was never added to the base main.py, so the
+# fragment's sub-app mount always raised InjectionError).
+# --------------------------------------------------------------------------- #
+
+
+def test_mcp_template_server_generates_and_mounts(tmp_path: Path) -> None:
+    cfg = ProjectConfig(
+        project_name="mcpt",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="mcpt",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options={"mcp_template.server": True},
+    )
+    backend = Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+    main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
+    assert "from app.mcp import build_mcp_app" in main_py
+    assert 'app.mount("/mcp"' in main_py
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))

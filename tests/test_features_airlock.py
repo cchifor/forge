@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
-from forge.config import BackendLanguage
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
 
 
@@ -75,3 +77,44 @@ def test_airlock_client_inject_wires_shutdown_hook() -> None:
     text = inject.read_text(encoding="utf-8")
     assert "FORGE:LIFESPAN_SHUTDOWN" in text
     assert "aclose" in text
+
+
+# --------------------------------------------------------------------------- #
+# Render: airlock_client generates against the base anchors (regression guard
+# for the never-added IOC_INFRA_* / CONFIG_DOMAIN_* anchors).
+# --------------------------------------------------------------------------- #
+
+
+def test_airlock_client_generates_and_wires_provider(tmp_path: Path) -> None:
+    cfg = ProjectConfig(
+        project_name="alk",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="alk",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options={"airlock.client": True},
+    )
+    backend = Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+    infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "from app.airlock import AsyncAirlockClient" in infra
+    assert "def airlock_client(" in infra
+    domain = (backend / "src/app/core/config/domain.py").read_text(encoding="utf-8")
+    assert "class AirlockSettings(BaseModel):" in domain
+    assert "airlock: AirlockSettings = AirlockSettings()" in domain
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))
