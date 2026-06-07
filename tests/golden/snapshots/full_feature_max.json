@@ -985,7 +985,7 @@
       "sha256": "56e2d3e21b3d3266"
     },
     "forge.toml": {
-      "size": 145454,
+      "size": 145178,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1500,10 +1500,6 @@
       "size": 4112,
       "sha256": "9e59000de350ad5c"
     },
-    "services/api/sdks/forge-core/.coverage": {
-      "size": 114681,
-      "sha256": "766537a042fee241"
-    },
     "services/api/sdks/forge-core/pyproject.toml": {
       "size": 1613,
       "sha256": "01420ff3fa4323e0"
@@ -1801,8 +1797,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 5501,
-      "sha256": "00e6174e8e0795d5"
+      "size": 6014,
+      "sha256": "1d6db5bf1bdfe5fb"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -1837,8 +1833,8 @@
       "sha256": "e1e94703a680e8c6"
     },
     "services/api/src/app/core/ioc/infra.py": {
-      "size": 1828,
-      "sha256": "715bb70bbaaa1f84"
+      "size": 1888,
+      "sha256": "ba1da5b926b63cb9"
     },
     "services/api/src/app/core/ioc/security.py": {
       "size": 1727,
@@ -1961,8 +1957,8 @@
       "sha256": "ad7ab51e8814c9e4"
     },
     "services/api/src/app/main.py": {
-      "size": 6178,
-      "sha256": "43481d9dacc88040"
+      "size": 6197,
+      "sha256": "fcfa982ff6d3d356"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,

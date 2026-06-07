@@ -2,11 +2,45 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
-from forge.config import BackendLanguage
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
+
+
+def _render(tmp_path: Path, options: dict) -> Path:
+    cfg = ProjectConfig(
+        project_name="conn",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="conn",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options=options,
+    )
+    return Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+
+
+def _assert_weld_free_and_parses(backend: Path) -> None:
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))
 
 
 def test_connectors_enabled_option_registered() -> None:
@@ -87,3 +121,17 @@ def test_connectors_registry_scaffolds_app_connectors_tree() -> None:
     # _service.py.jinja holds the render-time backend selection (the body
     # has `{%- for %}` blocks that resolve only at render time).
     assert (app_connectors / "_service.py.jinja").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# Render: connectors_registry generates against the base anchors (regression
+# guard for the never-added IOC_INFRA_IMPORTS / IOC_INFRA_PROVIDERS anchors).
+# --------------------------------------------------------------------------- #
+
+
+def test_connectors_registry_generates_and_wires_provider(tmp_path: Path) -> None:
+    backend = _render(tmp_path, {"connectors.enabled": True})
+    infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "from app.connectors import build_connector_registry" in infra
+    assert "def connector_registry(" in infra
+    _assert_weld_free_and_parses(backend)

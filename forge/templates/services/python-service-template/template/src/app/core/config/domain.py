@@ -159,3 +159,14 @@ class AuditConfig(BaseModel):
         "/favicon.ico",
     }
     excluded_methods: set[str] = {"OPTIONS", "HEAD"}
+
+
+# Feature fragments (events / streaming / airlock) inject their nested
+# config models above this marker, then the matching nested-config field
+# below it. Keeping the class-definition anchor above the field anchor
+# guarantees a fragment's ``class XSettings(BaseModel)`` is defined before
+# the ``x: XSettings = XSettings()`` field that references it.
+# FORGE:CONFIG_DOMAIN_FIELDS
+# FORGE:CONFIG_DOMAIN_ROOT
+# events_outbox extends the events config with relay-tuning fields here.
+# FORGE:CONFIG_EVENTS_FIELDS

@@ -2,11 +2,45 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
-from forge.config import BackendLanguage
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
+
+
+def _render(tmp_path: Path, options: dict) -> Path:
+    cfg = ProjectConfig(
+        project_name="strm",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="strm",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options=options,
+    )
+    return Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+
+
+def _assert_weld_free_and_parses(backend: Path) -> None:
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))
 
 
 def test_streaming_sse_option_registered() -> None:
@@ -73,3 +107,22 @@ def test_streaming_sse_inject_yaml_mounts_router() -> None:
     text = inject.read_text(encoding="utf-8")
     assert "FORGE:API_ROUTER_REGISTRATION" in text
     assert "stream_endpoint.router" in text
+
+
+# --------------------------------------------------------------------------- #
+# Render: streaming_sse generates against the base anchors (regression guard
+# for the never-added IOC_INFRA_* / CONFIG_DOMAIN_* anchors).
+# --------------------------------------------------------------------------- #
+
+
+def test_streaming_sse_generates_and_wires_streamer(tmp_path: Path) -> None:
+    backend = _render(tmp_path, {"events.bus": "memory", "streaming.sse": True})
+    infra = (backend / "src/app/core/ioc/infra.py").read_text(encoding="utf-8")
+    assert "from app.streaming import build_streamer" in infra
+    assert "def streamer(" in infra
+    api = (backend / "src/app/api/v1/api.py").read_text(encoding="utf-8")
+    assert "stream_endpoint.router" in api
+    domain = (backend / "src/app/core/config/domain.py").read_text(encoding="utf-8")
+    assert "class StreamingSettings(BaseModel):" in domain
+    assert "streaming: StreamingSettings = StreamingSettings()" in domain
+    _assert_weld_free_and_parses(backend)
