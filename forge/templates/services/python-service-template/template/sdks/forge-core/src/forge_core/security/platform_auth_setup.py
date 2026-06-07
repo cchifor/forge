@@ -63,6 +63,7 @@ def build_auth_guard(
         audience=config.audience,
         jwks=jwks,
         trust_map=trust,
+        strict_trust=config.strict_tenant_trust,
         tenant_id_claim=config.tenant_id_claim,
         tenant_slug_claim=config.tenant_slug_claim,
     )

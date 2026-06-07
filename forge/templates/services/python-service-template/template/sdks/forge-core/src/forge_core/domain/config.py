@@ -76,6 +76,17 @@ class AuthConfig(BaseModel):
             "slug. Informational only — consumers prefer ``tenant_id_claim``."
         ),
     )
+    strict_tenant_trust: bool = Field(
+        default=False,
+        description=(
+            "Fail-closed tenant-trust enforcement. When ``False`` (the "
+            "permissive single-issuer default) a tenant absent from the issuer "
+            "trust map is accepted. When ``True`` every tenant must be "
+            "registered in the trust map or its token is rejected — opt into "
+            "this for multi-issuer deployments so an unregistered tenant cannot "
+            "authenticate with any registered issuer's key."
+        ),
+    )
 
     @property
     def _realm_base(self) -> str:

@@ -207,6 +207,20 @@ class TestBuildAuthGuard:
         )
         assert jwks_uri(cfg) == "https://idp/keys"
 
+    def test_strict_tenant_trust_defaults_off(self) -> None:
+        cfg = AuthConfig(server_url="http://localhost:8080", client_id="svc")
+        assert cfg.strict_tenant_trust is False
+        bundle = build_auth_guard(cfg)
+        assert bundle.guard._strict_trust is False  # type: ignore[attr-defined]
+
+    def test_strict_tenant_trust_threads_into_guard(self) -> None:
+        cfg = AuthConfig(
+            server_url="http://localhost:8080", client_id="svc", strict_tenant_trust=True
+        )
+        assert cfg.strict_tenant_trust is True
+        bundle = build_auth_guard(cfg)
+        assert bundle.guard._strict_trust is True  # type: ignore[attr-defined]
+
 
 # --------------------------------------------------------------------------- #
 # AuthGuard — JWT/JWKS verification
@@ -313,6 +327,50 @@ class TestAuthGuardTrustMap:
         kp = _Keypair()
         identity = await _guard(kp, trust_map=InMemoryIssuerTrustMap()).verify(kp.mint())
         assert identity.tenant_id == TENANT_ID
+
+
+class TestAuthGuardStrictTrust:
+    """``strict_trust`` opt-in: fail-closed for tenants absent from the map."""
+
+    async def test_default_permissive_accepts_unknown_tenant(self) -> None:
+        # strict_trust defaults False → an unregistered tenant is accepted.
+        kp = _Keypair()
+        guard = _guard(kp, trust_map=InMemoryIssuerTrustMap())
+        identity = await guard.verify(kp.mint())
+        assert identity.tenant_id == TENANT_ID
+
+    async def test_strict_rejects_unknown_tenant(self) -> None:
+        # strict_trust True + no record for the tenant → fail closed.
+        kp = _Keypair()
+        guard = _guard(kp, trust_map=InMemoryIssuerTrustMap(), strict_trust=True)
+        with pytest.raises(IssuerNotTrusted):
+            await guard.verify(kp.mint())
+
+    async def test_strict_accepts_registered_matching_tenant(self) -> None:
+        # A registered tenant with a matching issuer still passes under strict.
+        kp = _Keypair()
+        trust = InMemoryIssuerTrustMap()
+        trust.set(TENANT_ID, TenantTrust(expected_issuer=ISSUER))
+        guard = _guard(kp, trust_map=trust, strict_trust=True)
+        identity = await guard.verify(kp.mint())
+        assert identity.tenant_id == TENANT_ID
+
+    async def test_suspended_tenant_rejected_in_permissive_mode(self) -> None:
+        # A registered+suspended tenant is rejected regardless of strict_trust.
+        kp = _Keypair()
+        trust = InMemoryIssuerTrustMap()
+        trust.set(TENANT_ID, TenantTrust(expected_issuer=ISSUER, suspended=True))
+        guard = _guard(kp, trust_map=trust, strict_trust=False)
+        with pytest.raises(TenantSuspended):
+            await guard.verify(kp.mint())
+
+    async def test_suspended_tenant_rejected_in_strict_mode(self) -> None:
+        kp = _Keypair()
+        trust = InMemoryIssuerTrustMap()
+        trust.set(TENANT_ID, TenantTrust(expected_issuer=ISSUER, suspended=True))
+        guard = _guard(kp, trust_map=trust, strict_trust=True)
+        with pytest.raises(TenantSuspended):
+            await guard.verify(kp.mint())
 
 
 # --------------------------------------------------------------------------- #
