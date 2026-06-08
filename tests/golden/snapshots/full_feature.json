@@ -512,6 +512,10 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useCapabilities.ts": {
+      "size": 2320,
+      "sha256": "d9848c50a1d5986c"
+    },
     "apps/frontend/src/shared/composables/useContainerSize.ts": {
       "size": 2574,
       "sha256": "49accc9614fd9de4"
@@ -535,6 +539,10 @@
     "apps/frontend/src/shared/composables/useSavedViews.ts": {
       "size": 1630,
       "sha256": "415a5a1d58b41e87"
+    },
+    "apps/frontend/src/shared/composables/useSidebarShortcut.ts": {
+      "size": 2113,
+      "sha256": "ccd8513dcd113c96"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -1013,7 +1021,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 111273,
+      "size": 111706,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
