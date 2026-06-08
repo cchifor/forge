@@ -213,15 +213,22 @@ class TestRenderNginxConf:
 class TestKeycloakRealmTenantClaim:
     """Regression guard for the generated realm's tenant_id wiring.
 
-    Three coupled defects previously caused the gatekeeper ``/callback`` to
-    silently drop ``tenant_id`` (breaking ``tenant_resolution=token_claim`` RLS):
-    a wrong claim namespace, a missing user-profile declaration, and a missing
-    service-account role. See gatekeeper ``config.py`` (``tenant_id_claim``) +
-    ``routes.py`` (``set_user_attribute``).
+    The gatekeeper ``/callback`` persists ``tenant_id`` on self-registered
+    users via the Keycloak Admin API. For that to work end-to-end the realm
+    must (1) declare ``tenant_id`` in the declarative user-profile with an
+    ``ADMIN_EDIT`` unmanaged policy (else Keycloak silently drops the write),
+    (2) grant the gatekeeper service account ``manage-users``/``view-users``
+    (else the Admin call 403s), and (3) emit the tenant claim under the same
+    namespace forge-core + the gatekeeper read (``https://forge/tenant_id``).
+    See gatekeeper ``config.py`` (``tenant_id_claim``) + ``routes.py``
+    (``set_user_attribute``).
     """
 
-    # The contract the generated gatekeeper reads (config.py: tenant_id_claim).
-    EXPECTED_CLAIM = "https://platform/tenant_id"
+    # The forge ecosystem default: forge-core DEFAULT_TENANT_ID_CLAIM, the
+    # Node/Rust SDKs, the in_memory issuer, and the gatekeeper compose env
+    # (TENANT_ID_CLAIM) all read this namespace, so the realm mapper must
+    # emit the same one or the gatekeeper can't read the user token's tenant.
+    EXPECTED_CLAIM = "https://forge/tenant_id"
 
     def _realm(self, tmp_path):
         import json
@@ -243,7 +250,8 @@ class TestKeycloakRealmTenantClaim:
         # Both the SPA and gatekeeper clients carry the tenant_id mapper.
         assert claim_names, "no tenant_id protocol mapper found"
         assert all(c == self.EXPECTED_CLAIM for c in claim_names), claim_names
-        assert "https://forge/tenant_id" not in json.dumps(realm)
+        # Realm must use a single, consistent namespace (no stray platform/).
+        assert "https://platform/tenant_id" not in json.dumps(realm)
 
     def test_userprofile_declares_tenant_id(self, tmp_path):
         import json
