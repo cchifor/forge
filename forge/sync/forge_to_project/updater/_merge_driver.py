@@ -93,7 +93,8 @@ def apply_features(
         # option would otherwise blanket every same-language backend can exclude
         # specific app_template variants (e.g. the RLS fragment skips the
         # tenant-management-service control plane, which owns its own migration
-        # chain). ``bc.app_template`` is None for the baseline crud-service.
+        # chain). ``bc.app_template`` is the variant slug ("crud-service" for the
+        # baseline; possibly None for ad-hoc configs) — the ``or ""`` guards None.
         if (bc.app_template or "") in rf.fragment.excluded_app_templates:
             if not quiet:
                 print(
