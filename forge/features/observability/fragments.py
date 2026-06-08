@@ -193,6 +193,21 @@ def register_all(api: ForgeAPI) -> None:
         )
     )
 
+    # Structured JSON log formatter (files-only, python-only). A logging
+    # formatter referenced by dotted path from the service's logging config —
+    # not imported in main.py — so no inject.yaml is needed. Off-by-default via
+    # ``observability.json_logging``. stdlib + forge_core only (no deps).
+    api.add_fragment(
+        Fragment(
+            name="json_logging",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("json_logging", "python"),
+                ),
+            },
+        )
+    )
+
     api.add_fragment(
         Fragment(
             name="observability_metrics_middleware",

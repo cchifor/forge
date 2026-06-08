@@ -104,3 +104,28 @@ ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.""
             enables={True: ("observability_otel", "observability_metrics_middleware")},
         )
     )
+
+    api.add_option(
+        Option(
+            path="observability.json_logging",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Structured single-line JSON log formatter (correlation + extras enriched).",
+            description="""\
+Emits ``app/core/json_logging.py`` — a ``JsonFormatter`` that renders every
+log record as a single JSON object enriched with the request correlation id
+and any structured ``extra=`` fields (customer_id, user_id, tenant_slug,
+method, path, status, duration_ms, error, …) plus full exception payloads, so
+Loki / ELK / CloudWatch ingest without regex parsing.
+
+It is a logging formatter referenced by dotted path from your logging config
+(``"()": app.core.json_logging.JsonFormatter``), so enabling it ships the
+module but does not change default (human-readable) dev log output until you
+wire it in.
+
+BACKENDS: python
+DEPENDENCY: none (stdlib + forge_core correlation).""",
+            category=FeatureCategory.OBSERVABILITY,
+            enables={True: ("json_logging",)},
+        )
+    )
