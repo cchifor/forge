@@ -21,9 +21,15 @@ WORKDIR /workspace
 # Workspace root manifests — declare workspaces + lockfile topology.
 COPY --from=project_root package.json package-lock.json* ./
 
-# In-tree SDK source. Each SDK's `prepare` script runs during the
-# workspace install below to produce its dist/ artifacts.
+{%- if include_platform_auth | default(false) %}
+# In-tree SDK source — only present when a project-root ``sdks/`` tree ships
+# (auth). Each SDK's `prepare` runs during the workspace install below to
+# produce its dist/ artifacts. The compose ``sdks`` build context is gated on
+# the same condition (has_project_sdks); an unconditional COPY here would make
+# BuildKit resolve ``sdks`` as an image ref ("sdks:latest") for a no-auth node
+# project and fail.
 COPY --from=sdks . ./sdks/
+{%- endif %}
 
 # This service's manifest, ahead of source, so the dep layer caches
 # independently from src/ edits.
@@ -66,7 +72,9 @@ WORKDIR /workspace/services/{{ project_slug }}
 
 COPY --from=builder /workspace/package.json /workspace/package-lock.json* /workspace/
 COPY --from=builder /workspace/node_modules /workspace/node_modules/
+{%- if include_platform_auth | default(false) %}
 COPY --from=builder /workspace/sdks /workspace/sdks/
+{%- endif %}
 COPY --from=builder /workspace/services/{{ project_slug }}/node_modules ./node_modules/
 COPY --from=builder /workspace/services/{{ project_slug }}/dist ./dist/
 COPY --from=builder /workspace/services/{{ project_slug }}/prisma ./prisma/
