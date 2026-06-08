@@ -484,6 +484,14 @@
       "size": 1221,
       "sha256": "7372f68352277f3a"
     },
+    "apps/frontend/src/shared/composables/formatListSubtitle.test.ts": {
+      "size": 925,
+      "sha256": "d2e2b187f10a31e3"
+    },
+    "apps/frontend/src/shared/composables/formatListSubtitle.ts": {
+      "size": 1335,
+      "sha256": "58176f0d3a65b647"
+    },
     "apps/frontend/src/shared/composables/useApiClient.ts": {
       "size": 160,
       "sha256": "262f478a4556736f"
@@ -504,6 +512,10 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useContainerSize.ts": {
+      "size": 2574,
+      "sha256": "49accc9614fd9de4"
+    },
     "apps/frontend/src/shared/composables/useEventStream.test.ts": {
       "size": 2405,
       "sha256": "04a4b78a01d686e3"
@@ -511,6 +523,18 @@
     "apps/frontend/src/shared/composables/useEventStream.ts": {
       "size": 4098,
       "sha256": "b6c7c9642ed9bbe1"
+    },
+    "apps/frontend/src/shared/composables/useRowSelection.test.ts": {
+      "size": 1080,
+      "sha256": "5f643077c22d8d6b"
+    },
+    "apps/frontend/src/shared/composables/useRowSelection.ts": {
+      "size": 2184,
+      "sha256": "0e754b3617c785d1"
+    },
+    "apps/frontend/src/shared/composables/useSavedViews.ts": {
+      "size": 1630,
+      "sha256": "415a5a1d58b41e87"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -989,7 +1013,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 109968,
+      "size": 111273,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
