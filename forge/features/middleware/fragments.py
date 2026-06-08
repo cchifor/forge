@@ -96,6 +96,30 @@ def register_all(api: ForgeAPI) -> None:
 
     api.add_fragment(
         Fragment(
+            name="api_version",
+            order=70,  # below security_headers (80); only decorates response headers
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("api_version", "python"),
+                ),
+            },
+            middlewares=(
+                MiddlewareSpec(
+                    name="api_version",
+                    backend=BackendLanguage.PYTHON,
+                    order=70,
+                    import_snippet="from app.middleware.api_version import ApiVersionMiddleware",
+                    register_snippet=(
+                        "# API version + RFC 8594 deprecation/sunset headers on every response\n"
+                        'app.add_middleware(ApiVersionMiddleware, current_version="v1")'
+                    ),
+                ),
+            ),
+        )
+    )
+
+    api.add_fragment(
+        Fragment(
             name="pii_redaction",
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(

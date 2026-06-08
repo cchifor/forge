@@ -102,6 +102,27 @@ ENDPOINTS: none — applies to logger output globally.""",
 
     api.add_option(
         Option(
+            path="middleware.api_version",
+            type=OptionType.BOOL,
+            default=False,
+            summary="RFC 8594 API-Version / Deprecation / Sunset / Link response headers.",
+            description="""\
+Adds an ``ApiVersionMiddleware`` that stamps every response with an
+``API-Version`` header and, when configured, RFC 8594 ``Deprecation`` /
+``Sunset`` / ``Link`` (rel=sunset) headers — so clients can detect a
+version's lifecycle without out-of-band docs. Defaults to ``v1`` with no
+deprecation; edit the ``add_middleware(ApiVersionMiddleware, ...)`` call to
+announce a sunset.
+
+BACKENDS: python
+ENDPOINTS: none — middleware decorates every response.""",
+            category=FeatureCategory.OBSERVABILITY,
+            enables={True: ("api_version",)},
+        )
+    )
+
+    api.add_option(
+        Option(
             path="middleware.response_cache",
             type=OptionType.BOOL,
             default=False,
