@@ -266,6 +266,18 @@ def get_settings() -> GatekeeperSettings:
                     _env,
                 )
                 _sys.exit(1)
+            if (
+                not _instance.gatekeeper_skip_realm_invariant
+                and _instance.kc_admin_password == "admin"
+            ):
+                _logger.critical(
+                    "Refusing to start in env=%s: KC_ADMIN_PASSWORD still holds the "
+                    "shipped dev default ('admin') while the realm-invariant probe "
+                    "is enabled. Set KC_ADMIN_PASSWORD from a secret, or disable the "
+                    "probe with GATEKEEPER_SKIP_REALM_INVARIANT=true.",
+                    _env,
+                )
+                _sys.exit(1)
             if _instance.svc_auth_backend == "preshared":
                 _logger.critical(
                     "Refusing to start in env=%s: SVC_AUTH_BACKEND=preshared is "

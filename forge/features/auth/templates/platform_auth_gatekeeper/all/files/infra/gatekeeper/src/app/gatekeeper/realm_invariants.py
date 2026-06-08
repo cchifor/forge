@@ -20,6 +20,7 @@ schema *sync* is intentionally elsewhere.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -48,6 +49,8 @@ async def verify_user_profile_active(
     required_policy: str = "ADMIN_EDIT",
     http_client: httpx.AsyncClient | None = None,
     timeout: float = 10.0,
+    max_attempts: int = 5,
+    retry_delay: float = 2.0,
 ) -> None:
     """Read the live User-Profile schema; raise if the invariant fails.
 
@@ -71,7 +74,8 @@ async def verify_user_profile_active(
 
     owns_client = http_client is None
     client = http_client or httpx.AsyncClient(timeout=timeout)
-    try:
+
+    async def _probe_once() -> None:
         token_resp = await client.post(
             token_url,
             data={
@@ -100,42 +104,66 @@ async def verify_user_profile_active(
                 f"http={profile_resp.status_code} body={profile_resp.text[:200]!r}."
             )
         profile = profile_resp.json()
+
+        live_attrs = _live_attribute_names(profile)
+        missing = required_attributes - live_attrs
+        if missing:
+            raise RealmInvariantError(
+                f"realm invariant probe: User-Profile schema on realm {realm!r} "
+                f"is missing required attribute(s) {sorted(missing)!r}. The "
+                "gatekeeper's set_user_attribute would silently drop these on "
+                "self-registration. Most likely the keycloak-realm-sync sidecar "
+                "did not run, or pgdata holds a stale schema. Add the attribute "
+                "under components['org.keycloak.userprofile.UserProfileProvider'][0]"
+                ".config['kc.user.profile.config'] in infra/keycloak-realm.json, "
+                "or apply directly to a running realm via "
+                "PUT /admin/realms/{realm}/users/profile (which is exactly what "
+                "the keycloak-realm-sync sidecar does)."
+            )
+
+        live_policy = profile.get("unmanagedAttributePolicy")
+        if live_policy != required_policy:
+            raise RealmInvariantError(
+                f"realm invariant probe: unmanagedAttributePolicy on realm "
+                f"{realm!r} is {live_policy!r}; expected {required_policy!r}. "
+                "With DISABLED, KC silently drops any attribute not declared in "
+                "the schema — the original 502 'Tenant assignment failed' "
+                "failure mode. Run keycloak-realm-sync (or apply realm.json "
+                "via PUT /admin/realms/{realm}/users/profile) to reconcile."
+            )
+        logger.info(
+            "realm invariant ok: realm=%s attrs=%d policy=%s",
+            realm,
+            len(profile.get("attributes") or []),
+            live_policy,
+        )
+
+    try:
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await _probe_once()
+                return
+            except (RealmInvariantError, httpx.HTTPError) as exc:
+                # During boot the realm may still be importing — Keycloak reports
+                # "healthy" on a TCP check before its User-Profile schema and
+                # admin endpoints are ready — so the token grant, the profile
+                # GET, or the attribute/policy can all be *transiently* absent.
+                # Retry with backoff so a slow IdP doesn't crash-loop the
+                # gatekeeper; a genuine, persistent drift still fails once the
+                # attempt budget is exhausted.
+                if attempt >= max_attempts:
+                    raise
+                logger.warning(
+                    "realm invariant probe attempt %d/%d failed (%s); retrying in %.1fs",
+                    attempt,
+                    max_attempts,
+                    exc,
+                    retry_delay,
+                )
+                await asyncio.sleep(retry_delay)
     finally:
         if owns_client:
             await client.aclose()
-
-    live_attrs = _live_attribute_names(profile)
-    missing = required_attributes - live_attrs
-    if missing:
-        raise RealmInvariantError(
-            f"realm invariant probe: User-Profile schema on realm {realm!r} "
-            f"is missing required attribute(s) {sorted(missing)!r}. The "
-            "gatekeeper's set_user_attribute would silently drop these on "
-            "self-registration. Most likely the keycloak-realm-sync sidecar "
-            "did not run, or pgdata holds a stale schema. Add the attribute "
-            "under components['org.keycloak.userprofile.UserProfileProvider'][0]"
-            ".config['kc.user.profile.config'] in infra/keycloak-realm.json, "
-            "or apply directly to a running realm via "
-            "PUT /admin/realms/{realm}/users/profile (which is exactly what "
-            "the keycloak-realm-sync sidecar does)."
-        )
-
-    live_policy = profile.get("unmanagedAttributePolicy")
-    if live_policy != required_policy:
-        raise RealmInvariantError(
-            f"realm invariant probe: unmanagedAttributePolicy on realm "
-            f"{realm!r} is {live_policy!r}; expected {required_policy!r}. "
-            "With DISABLED, KC silently drops any attribute not declared in "
-            "the schema — the original 502 'Tenant assignment failed' "
-            "failure mode. Run keycloak-realm-sync (or apply realm.json "
-            "via PUT /admin/realms/{realm}/users/profile) to reconcile."
-        )
-    logger.info(
-        "realm invariant ok: realm=%s attrs=%d policy=%s",
-        realm,
-        len(profile.get("attributes") or []),
-        live_policy,
-    )
 
 
 def _live_attribute_names(profile: dict[str, Any]) -> set[str]:

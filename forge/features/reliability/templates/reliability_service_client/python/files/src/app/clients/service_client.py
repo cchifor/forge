@@ -381,13 +381,16 @@ class ServiceClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         url = f"{self._base_url}{path}"
+        # Pop caller headers ONCE, outside the retry closure: popping inside
+        # would drop them on every attempt after the first (losing idempotency
+        # keys / custom auth on exactly the retry path).
+        caller_headers = dict(kwargs.pop("headers", {}) or {})
 
         if not self._cb.allow_request():
             raise CircuitOpenError(self._service_name, self._cb.retry_after)
 
         async def _do_request() -> Any:
-            headers = dict(kwargs.pop("headers", {}) or {})
-            headers.update(self._propagation_headers())
+            headers = {**caller_headers, **self._propagation_headers()}
 
             if self._auth:
                 token = await self._auth.get_token(self.client)
