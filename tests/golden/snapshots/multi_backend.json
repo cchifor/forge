@@ -29,7 +29,7 @@
       "sha256": "9e4897c15ffa7503"
     },
     "forge.toml": {
-      "size": 62820,
+      "size": 64093,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -348,6 +348,18 @@
       "size": 1949,
       "sha256": "a7c18e6f20003f79"
     },
+    "services/api-py/sdks/forge-core/src/forge_core/api/__init__.py": {
+      "size": 917,
+      "sha256": "8ac90195a1df3f51"
+    },
+    "services/api-py/sdks/forge-core/src/forge_core/api/filtering.py": {
+      "size": 2248,
+      "sha256": "8b50efca6c6c506d"
+    },
+    "services/api-py/sdks/forge-core/src/forge_core/api/pagination.py": {
+      "size": 3206,
+      "sha256": "533210dd695884dd"
+    },
     "services/api-py/sdks/forge-core/src/forge_core/discovery.py": {
       "size": 3804,
       "sha256": "51e8e7dcaad2316d"
@@ -455,6 +467,10 @@
     "services/api-py/sdks/forge-core/tests/unit/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api-py/sdks/forge-core/tests/unit/test_api.py": {
+      "size": 2434,
+      "sha256": "ddc88d9222018357"
     },
     "services/api-py/sdks/forge-core/tests/unit/test_discovery.py": {
       "size": 4322,
