@@ -87,8 +87,12 @@ async def sync(
 
     owns = http_client is None
     client = http_client or httpx.AsyncClient(timeout=30.0)
-    try:
-        token = await _retry(lambda: _admin_token(client, base, admin_user, admin_password))
+
+    async def _apply_once() -> dict[str, Any]:
+        # Token + PUT + GET are retried together: Keycloak reports "healthy"
+        # before the admin endpoints accept traffic, so the PUT/GET (not just
+        # the token grant) can transiently fail right after boot.
+        token = await _admin_token(client, base, admin_user, admin_password)
         put = await client.put(
             f"{base}/admin/realms/{realm}/users/profile",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
@@ -102,7 +106,10 @@ async def sync(
         )
         if got.status_code != 200:
             raise RealmSyncError(f"GET users/profile failed: http={got.status_code}")
-        live = got.json()
+        return got.json()
+
+    try:
+        live = await _retry(_apply_once)
     finally:
         if owns:
             await client.aclose()
@@ -139,13 +146,32 @@ async def _retry(fn: Any) -> Any:
     raise RealmSyncError(f"exhausted {_MAX_ATTEMPTS} attempts: {last}")
 
 
+_DEV_ENVS = frozenset({"development", "dev", "test", "testing", "local", "ci"})
+
+
+def _server_root(keycloak_base_url: str) -> str:
+    """The admin API is rooted at the server, not under ``/realms``. Normalize
+    ``http://kc:8080/realms`` AND ``http://kc:8080/realms/app`` (and a bare
+    server URL) down to ``http://kc:8080`` by cutting at the first ``/realms``."""
+    return keycloak_base_url.split("/realms", 1)[0].rstrip("/")
+
+
 def main() -> int:
-    base = os.environ.get("KEYCLOAK_BASE_URL", "http://keycloak:8080/realms").rstrip("/")
-    base = base.removesuffix("/realms")  # the admin API is rooted at the server, not /realms
+    base = _server_root(os.environ.get("KEYCLOAK_BASE_URL", "http://keycloak:8080/realms"))
     realm = os.environ.get("KEYCLOAK_ADMIN_REALM", "app")
     user = os.environ.get("KC_ADMIN_USER", "admin")
     pw = os.environ.get("KC_ADMIN_PASSWORD", "admin")
     realm_json_path = Path(os.environ.get("REALM_JSON_PATH", "/realm/keycloak-realm.json"))
+
+    # Fail closed: never use the shipped dev admin password in a prod posture.
+    env = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "production")).strip().lower()
+    if env not in _DEV_ENVS and pw == "admin":
+        logger.error(
+            "Refusing to run realm-sync in env=%s with the default KC_ADMIN_PASSWORD "
+            "('admin'). Provide KC_ADMIN_PASSWORD from a secret.",
+            env,
+        )
+        return 1
     try:
         realm_json = json.loads(realm_json_path.read_text(encoding="utf-8"))
         profile = extract_user_profile_config(realm_json)

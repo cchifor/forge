@@ -40,11 +40,15 @@ export function useRowSelection<T extends { id: string }>(
     },
   )
 
-  const selectedIds = computed<string[]>(() =>
-    Object.entries(selection.value)
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-  )
+  // Intersect with the *current* rows so the "only reflect rows the user can
+  // still see" invariant holds immediately — even before the prune watcher
+  // runs, and even if toggle()/setSelection() added an id not in `rows`.
+  const selectedIds = computed<string[]>(() => {
+    const present = new Set(rows.value.map((r) => r.id))
+    return Object.entries(selection.value)
+      .filter(([k, v]) => v && present.has(k))
+      .map(([k]) => k)
+  })
 
   const selectedCount = computed<number>(() => selectedIds.value.length)
 

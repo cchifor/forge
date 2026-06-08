@@ -512,9 +512,13 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useCapabilities.test.ts": {
+      "size": 1442,
+      "sha256": "ab963dc86a8937f7"
+    },
     "apps/frontend/src/shared/composables/useCapabilities.ts": {
-      "size": 2320,
-      "sha256": "d9848c50a1d5986c"
+      "size": 2443,
+      "sha256": "d4c9b196c188a45d"
     },
     "apps/frontend/src/shared/composables/useContainerSize.ts": {
       "size": 2574,
@@ -533,8 +537,12 @@
       "sha256": "5f643077c22d8d6b"
     },
     "apps/frontend/src/shared/composables/useRowSelection.ts": {
-      "size": 2184,
-      "sha256": "0e754b3617c785d1"
+      "size": 2499,
+      "sha256": "6b7ed7b730c0c2b1"
+    },
+    "apps/frontend/src/shared/composables/useSavedViews.test.ts": {
+      "size": 1067,
+      "sha256": "2bbb26a16b92f917"
     },
     "apps/frontend/src/shared/composables/useSavedViews.ts": {
       "size": 1630,
@@ -1021,7 +1029,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 111706,
+      "size": 112144,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -1225,8 +1233,8 @@
       "sha256": "49a80fb935f54d02"
     },
     "services/api/sdks/forge-core/src/forge_core/security/s2s.py": {
-      "size": 6002,
-      "sha256": "551886baabf86d31"
+      "size": 6287,
+      "sha256": "68eebecf556f6bba"
     },
     "services/api/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,

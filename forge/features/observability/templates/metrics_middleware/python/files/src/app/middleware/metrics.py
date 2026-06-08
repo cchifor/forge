@@ -47,26 +47,25 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         if not _HAS_OTEL or request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
-        attrs: dict[str, object] = {
+        # The in-flight gauge is keyed WITHOUT status (status isn't known at
+        # request start), so the +1 and -1 must use the *same* status-free
+        # attrs or they never cancel. Count/duration carry the status.
+        base_attrs: dict[str, object] = {
             "http.method": request.method,
             "http.route": request.url.path,
         }
-        _active_requests.add(1, attrs)
+        _active_requests.add(1, base_attrs)
         start = time.perf_counter()
+        # Default to 500 so an unhandled exception (which still produces a 5xx
+        # the caller sees) is recorded on the error path rather than vanishing.
+        status_code = 500
         try:
             response = await call_next(request)
-        except Exception:
-            # Record the failed request on the error path too: an unhandled
-            # exception still produces a 5xx the caller sees, so it must show
-            # up in the rate/error series rather than vanishing.
-            attrs["http.status_code"] = 500
-            _request_count.add(1, attrs)
-            raise
-        else:
-            attrs["http.status_code"] = response.status_code
-            _request_count.add(1, attrs)
+            status_code = response.status_code
             return response
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
-            _request_duration.record(duration_ms, attrs)
-            _active_requests.add(-1, attrs)
+            req_attrs = {**base_attrs, "http.status_code": status_code}
+            _request_count.add(1, req_attrs)
+            _request_duration.record(duration_ms, req_attrs)
+            _active_requests.add(-1, base_attrs)
