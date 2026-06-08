@@ -151,7 +151,9 @@ def test_service_registry_exists_and_validates_against_vendored_model(tmp_path: 
 
 def test_service_registry_loud_dev_header(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path)
-    text = (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text()
+    text = (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text(
+        encoding="utf-8"
+    )
     assert text.startswith(
         "# DEV-ONLY synthesized S2S secrets — rotate before any non-local deployment."
     )
@@ -213,7 +215,9 @@ def test_hash_plaintext_coherence(tmp_path: Path) -> None:
     plaintext = _gateway_compose_secret(compose)
 
     raw = yaml.safe_load(
-        (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text()
+        (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text(
+            encoding="utf-8"
+        )
     )
     secret_hash = next(s["secret_hash"] for s in raw["services"] if s["client_id"] == "svc-gateway")
 
