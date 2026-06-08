@@ -278,6 +278,25 @@ hand-written section below.
 
 _Visibility into the running system — tracing, metrics, health._
 
+### `middleware.api_version`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_RFC 8594 API-Version / Deprecation / Sunset / Link response headers._
+
+Adds an ``ApiVersionMiddleware`` that stamps every response with an
+``API-Version`` header and, when configured, RFC 8594 ``Deprecation`` /
+``Sunset`` / ``Link`` (rel=sunset) headers — so clients can detect a
+version's lifecycle without out-of-band docs. Defaults to ``v1`` with no
+deprecation; edit the ``add_middleware(ApiVersionMiddleware, ...)`` call to
+announce a sunset.
+
+BACKENDS: python
+ENDPOINTS: none — middleware decorates every response.
+
+**Enables fragments:**
+- on `true` → `api_version`
+
 ### `middleware.correlation_id`
 
 **Type:** `enum` · **Default:** `always-on` · **Stability:** `stable` · **Backends:** python
@@ -345,6 +364,29 @@ REQUIRES: REDIS_URL, KEYCLOAK_HEALTH_URL.
 
 **Enables fragments:**
 - on `true` → `enhanced_health`
+
+### `observability.json_logging`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Structured single-line JSON log formatter (correlation + extras enriched)._
+
+Emits ``app/core/json_logging.py`` — a ``JsonFormatter`` that renders every
+log record as a single JSON object enriched with the request correlation id
+and any structured ``extra=`` fields (customer_id, user_id, tenant_slug,
+method, path, status, duration_ms, error, …) plus full exception payloads, so
+Loki / ELK / CloudWatch ingest without regex parsing.
+
+It is a logging formatter referenced by dotted path from your logging config
+(``"()": app.core.json_logging.JsonFormatter``), so enabling it ships the
+module but does not change default (human-readable) dev log output until you
+wire it in.
+
+BACKENDS: python
+DEPENDENCY: none (stdlib + forge_core correlation).
+
+**Enables fragments:**
+- on `true` → `json_logging`
 
 ### `observability.otel`
 
@@ -545,6 +587,28 @@ SQLALCHEMY_POOL_PRE_PING, SQLALCHEMY_POOL_RECYCLE.
 
 **Enables fragments:**
 - on `true` → `reliability_connection_pool`
+
+### `reliability.service_client`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
+
+_Resilient async S2S HTTP base client (retry + circuit breaker + OAuth2)._
+
+Emits ``app/clients/service_client.py`` — a ``ServiceClient`` base class for
+service-to-service calls that composes httpx + exponential-backoff retry + an
+in-process circuit breaker + optional OAuth2 client-credentials auth, and
+propagates the request correlation id + caller identity (customer/user/tenant)
+on every outbound call. Subclass it with a ``base_url`` + ``service_name``.
+
+Self-contained (bundles its own lightweight breaker, no extra dependency) and
+distinct from ``reliability.circuit_breaker`` (a purgatory registry for
+wrapping arbitrary calls).
+
+BACKENDS: python
+DEPENDENCY: none (httpx already present).
+
+**Enables fragments:**
+- on `true` → `reliability_service_client`
 
 ## Async Work
 
