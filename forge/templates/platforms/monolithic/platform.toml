@@ -1,0 +1,26 @@
+# Platform preset — discovered by forge.platform_templates.
+#
+# `monolithic` is a friendly, explicit single-service shape: one Python CRUD
+# backend + a Vue sidebar frontend, no service discovery, no gatekeeper
+# sidecar. (It is NOT byte-identical to bare `forge` with no `--platform`,
+# which defaults to a backend-only project; this preset explicitly opts into a
+# Vue frontend.) The true byte-neutrality guarantee is that *not* selecting a
+# platform is a no-op — verified by the 6/6 golden snapshots.
+[platform]
+name = "monolithic"
+display_label = "Monolithic application"
+description = "A single CRUD backend behind a Vue frontend — the classic single-service shape."
+include_keycloak = false
+
+[platform.options]
+"auth.service_discovery" = false
+
+[[platform.backends]]
+name = "backend"
+language = "python"
+app_template = "crud-service"
+server_port = 5000
+
+[platform.frontend]
+framework = "vue"
+layout = "sidebar"

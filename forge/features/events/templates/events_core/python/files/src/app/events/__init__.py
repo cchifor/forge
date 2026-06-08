@@ -1,16 +1,33 @@
-"""Service-local CloudEvents wiring.
+"""Service-local CloudEvents wiring (vendored, weld-free).
 
-Re-exports the bus factory and the publish helper so handlers can do::
+Re-exports the CloudEvents envelope, the :class:`EventBus` protocol and
+its transports, plus the bus factory and publish helper so handlers can::
 
-    from app.events import event_bus, publish
+    from app.events import CloudEvent, build_event_bus, publish
 
-without reaching into the weld-events Protocol directly. Swap the
-transport in :mod:`app.events.bus` if/when this service moves off
-Postgres ``LISTEN/NOTIFY``.
+Swap the transport in :mod:`app.events.bus` if/when this service moves
+off Postgres ``LISTEN/NOTIFY`` — the rest of the app depends only on the
+:class:`EventBus` protocol.
 """
 
 from __future__ import annotations
 
-from app.events.bus import build_event_bus, publish
+from app.events.bus import (
+    BackpressureError,
+    EventBus,
+    InMemoryEventBus,
+    PostgresNotifyBus,
+    build_event_bus,
+    publish,
+)
+from app.events.envelope import CloudEvent
 
-__all__ = ["build_event_bus", "publish"]
+__all__ = [
+    "BackpressureError",
+    "CloudEvent",
+    "EventBus",
+    "InMemoryEventBus",
+    "PostgresNotifyBus",
+    "build_event_bus",
+    "publish",
+]

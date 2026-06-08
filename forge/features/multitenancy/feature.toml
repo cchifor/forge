@@ -1,0 +1,18 @@
+[feature]
+name = "multitenancy"
+version = "1.0.0"
+summary = "Tenant-isolation discriminator (database.multitenancy) — shared_rls Postgres RLS, plus tenant resolution strategy knobs."
+category = "platform"
+
+[feature.depends]
+
+[feature.provides]
+options = [
+    "database.multitenancy",
+    "database.tenant_resolution",
+    "database.tenant_claim_path",
+    "database.tenant_header_name",
+]
+fragments = [
+    "multitenancy_rls_python",
+]

@@ -592,19 +592,19 @@ REQUIRES: TASKIQ_BROKER_URL → Redis.
 
 **Allowed values:** `none`, `postgres_notify`, `memory`
 
-_CloudEvents bus — domain-event fanout between services (weld-events)._
+_CloudEvents bus — domain-event fanout between services (vendored)._
 
-Selects the :class:`weld.events.EventBus` transport. ``postgres_notify``
-uses Postgres ``LISTEN/NOTIFY`` (the default platform transport — one
-``domain_events`` channel per database, no extra infra). ``memory`` is
-for tests and local dev (subscribers in the same process). ``none``
-disables the feature.
+Selects the ``app.events.EventBus`` transport (vendored, self-contained).
+``postgres_notify`` uses Postgres ``LISTEN/NOTIFY`` (the default
+transport — one ``domain_events`` channel per database, no extra infra).
+``memory`` is for tests and local dev (subscribers in the same process).
+``none`` disables the feature.
 
 Pairs with the transactional outbox (``events.outbox``) so producers
-never lose events on listener downtime.
+never lose events on subscriber downtime.
 
 BACKENDS: python
-DEPENDENCY: weld-events
+DEPENDENCY: none (vendored; uses pydantic + sqlalchemy from the base)
 
 **Enables fragments:**
 - on `postgres_notify` → `events_core`
@@ -617,11 +617,10 @@ DEPENDENCY: weld-events
 _Transactional outbox table — never-lost CloudEvents on the producer side._
 
 Adds the ``outbox`` table (via Alembic migration) and an
-:class:`weld.events.OutboxRelay` background worker that polls the
-table and publishes pending rows through the configured ``EventBus``.
-Producers append rows to ``outbox`` in the same transaction as their
-domain writes — no dual-write race, no lost events on listener
-downtime.
+``app.events.OutboxRelay`` background worker that polls the table and
+publishes pending rows through the configured ``EventBus``. Producers
+append rows to ``outbox`` in the same transaction as their domain
+writes — no dual-write race, no lost events on subscriber downtime.
 
 Default is off because turning the outbox on without ``events.bus``
 configured would pull in the bus + relay scaffolding for a service
@@ -672,16 +671,16 @@ ENV: REDIS_URL / AWS_REGION / TASKIQ_BROKER_URL
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
 
-_SSE endpoint that fans CloudEvents to browser subscribers (weld-streaming)._
+_SSE endpoint that fans CloudEvents to browser subscribers (vendored)._
 
-Adds ``/api/v1/stream`` backed by :class:`weld.streaming.CloudEventStreamer`.
-Browsers connect with an ``EventSource``; the streamer manages
-subscription, filter, replay (``Last-Event-ID`` handshake) and
-heartbeats. Requires ``events.bus ≠ none`` because the streamer pulls
-events off the configured :class:`weld.events.EventBus`.
+Adds ``/api/v1/stream`` backed by ``app.streaming.CloudEventStreamer``
+(vendored, self-contained). Browsers connect with an ``EventSource``;
+the streamer manages subscription, filter, replay (``Last-Event-ID``
+handshake) and heartbeats. Requires ``events.bus ≠ none`` because the
+streamer pulls events off the configured ``app.events.EventBus``.
 
 BACKENDS: python
-DEPENDENCY: weld-streaming, sse-starlette
+DEPENDENCY: sse-starlette (vendored streamer; bus is vendored too)
 ENV: STREAMING_HEARTBEAT_S, STREAMING_QUEUE_MAX
 
 **Enables fragments:**
@@ -853,29 +852,30 @@ _Vector storage and retrieval — the RAG stack with pluggable backends._
 
 **Type:** `list` · **Default:** `[]` · **Stability:** `stable` · **Backends:** —
 
-_Built-in connector backends to enable — subset of {http,fs,sql,s3,mcp}._
+_Built-in connector backends to enable — subset of {http,fs,sql,s3}._
 
-Each listed backend pulls ``weld-connectors[<backend>]`` into the
-service's pyproject and registers a factory in the
-:class:`ConnectorRegistry`. Empty list keeps the registry callable but
-empty — handlers then register their own adapters at startup.
+Each listed backend is pre-registered in the service's
+:class:`ConnectorRegistry`. ``s3`` additionally needs ``boto3`` and
+``sql`` against Postgres needs ``asyncpg`` (both optional, import-guarded).
+Empty list keeps the registry callable but empty — handlers then register
+their own adapters at startup.
 
 BACKENDS: python
-ALLOWED: http, fs, sql, s3, mcp
+ALLOWED: http, fs, sql, s3
 
 ### `connectors.enabled`
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
 
-_Pluggable read/write data-plane adapters (weld-connectors)._
+_Pluggable read/write data-plane adapters (vendored)._
 
-Adds a service-local :class:`weld.connectors.ConnectorRegistry` wired
-into Dishka DI so handlers can look up adapters by name and type.
-Builtins are selectable via ``connectors.backends`` — each enabled
-backend pulls the matching extra.
+Adds a service-local ``app.connectors.ConnectorRegistry`` (vendored,
+self-contained) wired into Dishka DI so handlers can look up adapters by
+name and type. Builtins are selectable via ``connectors.backends``.
 
 BACKENDS: python
-DEPENDENCY: weld-connectors (+ per-backend extras)
+DEPENDENCY: none (vendored; uses pydantic + httpx + sqlalchemy from the
+base; boto3 / asyncpg optional for the s3 / postgres backends)
 
 **Enables fragments:**
 - on `true` → `connectors_registry`
@@ -967,19 +967,161 @@ _Operator-facing tooling: admin UI, outbound webhooks, CLI extensions, AI-agent 
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
 
-_Async client for the Airlock sandbox orchestrator (weld-airlock)._
+_Async client for the Airlock sandbox orchestrator._
 
-Adds the :class:`weld.airlock.AsyncAirlockClient` to DI plus a startup
-hook that closes the underlying httpx session on shutdown. Use for
-services that need to spin up ephemeral sandboxes (MCP integrations,
-agent-driven workflows, browser automation).
+Adds a vendored, weld-free :class:`app.airlock.AsyncAirlockClient` to DI
+plus a startup hook that closes the underlying httpx session on
+shutdown. Use for services that need to spin up ephemeral sandboxes (MCP
+integrations, agent-driven workflows, browser automation).
 
 BACKENDS: python
-DEPENDENCY: weld-airlock
+DEPENDENCY: httpx, pydantic (vendored client — no private SDK)
 ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN
 
 **Enables fragments:**
 - on `true` → `airlock_client`
+
+### `auth.provider`
+
+**Type:** `enum` · **Default:** `gatekeeper` · **Stability:** `stable` · **Backends:** node, python, rust
+
+**Allowed values:** `gatekeeper`, `in_memory`, `oidc_generic`, `none`
+
+_Which identity provider / token issuer the generated auth stack trusts._
+
+Sub-discriminator of ``auth.mode=generate``. The per-language SDK + service
+middleware (shipped by ``auth.mode``) are issuer-agnostic — they verify a JWT
+against a JWKS endpoint and bind an ``IdentityContext``. ``auth.provider``
+selects *which* issuer the stack is wired to:
+
+- ``gatekeeper`` (default): forge generates the Strive-style Gatekeeper
+  container (token authority + BFF session manager, RFC 8693 token-exchange).
+  Batteries-included; this reproduces today's behaviour exactly.
+- ``in_memory``: a zero-dependency dev issuer that mints test JWTs in-process
+  (no Keycloak / Gatekeeper / Redis). For local dev + tests only; refused on
+  a production posture.
+- ``oidc_generic``: point the SDK at any external OIDC issuer (Keycloak
+  direct, Auth0, Cognito, Okta) via OIDC discovery + JWKS — no Gatekeeper
+  container generated. Issuer is env-driven (``AUTH_PROVIDER_*``).
+- ``none``: ship the SDK + middleware but no token authority — bring your own
+  issuer. Also the resolved value when ``auth.mode=none`` (nothing to wire).
+
+Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
+``keycloak`` / ``auth0`` first-class providers are plugin-tier (deferred).
+
+**Enables fragments:**
+- on `gatekeeper` → `platform_auth_gatekeeper`, `platform_auth_gatekeeper_keygen`
+- on `in_memory` → `platform_auth_in_memory_provider`
+- on `oidc_generic` → `platform_auth_oidc_provider`
+
+### `auth.service_discovery`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** —
+
+_Synthesize an S2S client registry + inter-service URLs across backends._
+
+Multi-service platform synthesis. When ON (and the project has >1 backend),
+forge computes a service-to-service auth graph from each backend's
+``depends_on`` and emits: a gatekeeper ``service_registry.yaml`` (per-service
+client id / secret / audiences / scopes), per-backend S2S credentials +
+``INTERNAL_SERVICE_URL_*`` env vars, and the matching realm clients — so the
+generated services can authenticate to each other out of the box.
+
+OFF (default): no synthesis runs; single-service and existing multi-backend
+output is byte-identical.
+
+BACKENDS: python (tier-1); node/rust S2S callers follow.
+REQUIRES: >1 backend; the gatekeeper auth provider for S2S credentials.
+
+### `database.multitenancy`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `stable` · **Backends:** python
+
+**Allowed values:** `none`, `shared_rls`, `schema_per_tenant`, `db_per_tenant`
+
+_Tenant-isolation strategy for the generated persistence layer._
+
+Discriminator for how strongly tenants are isolated in the database.
+
+- ``none`` (default): inert — no enforcement fragment is added. The base
+  template stays tenant-*aware* (weld ``TenantMixin`` / ``customer_id``
+  columns + ``TenantScopedRepository`` application-layer scoping) but no
+  database-enforced isolation is layered on. Byte-identical to a project
+  that never set this option.
+- ``shared_rls``: Postgres Row-Level Security. One shared database + schema;
+  every ``customer_id``-bearing table gets ``ENABLE ROW LEVEL SECURITY`` +
+  a ``USING (customer_id = current_setting('app.current_tenant')::uuid)``
+  policy (idempotent migration). A request middleware resolves the tenant
+  (token claim / header / subdomain) and a session GUC hook binds
+  ``app.current_tenant`` per transaction, so the database itself rejects
+  cross-tenant reads/writes. Layers ON TOP of the existing TenantMixin —
+  it adds the RLS policy + GUC binding + resolver, it does NOT re-add the
+  ``customer_id`` column.
+- ``schema_per_tenant`` / ``db_per_tenant``: recognised values but NOT yet
+  implemented. forge accepts them in a forge.toml without rejecting the
+  whole config, but generation fails with an explicit "not yet implemented"
+  error rather than silently producing an un-isolated project. Use
+  ``shared_rls`` today.
+
+BACKENDS: python (shared_rls). The non-``none`` strategies are Python-only
+in 1.x — the RLS GUC hook + Alembic policy macros target the SQLAlchemy /
+Alembic stack the python-service-template ships.
+ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.
+
+**Enables fragments:**
+- on `shared_rls` → `multitenancy_rls_python`
+
+### `database.tenant_claim_path`
+
+**Type:** `str` · **Default:** `tenant_id` · **Stability:** `stable` · **Backends:** —
+
+_Dot-path to the tenant id within the verified token claims._
+
+Used when ``database.tenant_resolution=token_claim``. A dot-path traversed
+by the auth ``ClaimMapper`` (``organization.id`` reads
+``claims['organization']['id']``; a literal URL-shaped claim name like
+``https://example.com/tenant`` is matched as a whole key first). Defaults to
+``tenant_id`` to match the platform-auth SDK's default tenant claim.
+
+BACKENDS: python. Written into the generated ``TenantResolver`` config; no
+fragment is keyed off the value.
+
+### `database.tenant_header_name`
+
+**Type:** `str` · **Default:** `X-Tenant-ID` · **Stability:** `stable` · **Backends:** —
+
+_Request header carrying the tenant id (header resolution)._
+
+Used when ``database.tenant_resolution=header``. The HTTP header the
+``TenantResolver`` reads the tenant id from (case-insensitive). Defaults to
+``X-Tenant-ID``.
+
+BACKENDS: python. Written into the generated ``TenantResolver`` config; no
+fragment is keyed off the value.
+
+### `database.tenant_resolution`
+
+**Type:** `enum` · **Default:** `token_claim` · **Stability:** `stable` · **Backends:** —
+
+**Allowed values:** `token_claim`, `header`, `subdomain`
+
+_How the per-request tenant id is discovered for RLS binding._
+
+Drives the ``TenantResolver`` shipped by ``database.multitenancy=shared_rls``.
+Only meaningful when a non-``none`` strategy is selected (otherwise inert).
+
+- ``token_claim`` (default): read the tenant id from the verified JWT claims
+  via a dot-path (``database.tenant_claim_path``), reusing the auth
+  ``ClaimMapper`` seam the OIDC / in_memory providers ship. The middleware
+  reads ``request.state.identity`` (bound by the platform-auth middleware)
+  and extracts the configured claim.
+- ``header``: read the tenant id from a gateway-injected request header
+  (``database.tenant_header_name``). For deployments where an upstream
+  proxy / API gateway already resolved + validated the tenant.
+- ``subdomain``: parse the leftmost label of the request Host header
+  (``acme.example.com`` → ``acme``). For per-tenant subdomain routing.
+
+BACKENDS: python. Inert unless ``database.multitenancy != none``.
 
 ### `deploy.target`
 
@@ -1026,17 +1168,33 @@ slice from the contract). Note: a local file path only — remote URL fetching i
 out of scope (``load_openapi_spec`` reads from disk); download the spec and point
 this at the file.
 
+### `infrastructure.event_bus`
+
+**Type:** `enum` · **Default:** `none` · **Stability:** `beta` · **Backends:** —
+
+**Allowed values:** `none`, `postgres_notify`
+
+_Cross-service async event bus._
+
+Cross-service asynchronous eventing. ``none`` (default) ships no event bus —
+byte-identical to today. ``postgres_notify`` provisions a shared ``events``
+database + a Postgres LISTEN/NOTIFY transactional-outbox bus URL injected into
+every backend, so services can publish/subscribe domain events.
+
+BACKENDS: python (tier-1).
+REQUIRES: a database (postgres).
+
 ### `mcp_template.openapi_to_tools`
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `experimental` · **Backends:** python
 
 _Generate MCP tool definitions from the service's OpenAPI spec._
 
-Adds a build step (``mise run mcp:codegen``) that runs
-:func:`weld.mcp_template.openapi_to_tools` against the service's own
-OpenAPI spec, producing a ``tools.generated.py`` consumed by the
-default plugin. Useful when the service already exposes a REST surface
-that should be 1:1 visible to MCP clients.
+Adds a build step (``mise run mcp:codegen``) that runs the vendored
+``app.mcp._template.openapi.openapi_to_tools`` against the service's own
+OpenAPI spec, producing a generated tool list consumed by the default
+plugin. Useful when the service already exposes a REST surface that
+should be 1:1 visible to MCP clients.
 
 REQUIRES: ``mcp_template.server`` = true
 BACKENDS: python
@@ -1048,15 +1206,15 @@ BACKENDS: python
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `beta` · **Backends:** python
 
-_Host a first-party MCP server inside this service (weld-mcp-template)._
+_Host a first-party MCP server inside this service (vendored)._
 
-Scaffolds ``src/app/mcp/`` with a sample :class:`IntegrationPlugin`,
-``build_server()`` factory, and an ASGI mount on ``/mcp``. Use for
-services that expose first-party SaaS integrations to MCP clients
-(the platform gateway connects to this endpoint).
+Scaffolds ``src/app/mcp/`` with a sample :class:`IntegrationPlugin`, a
+``build_server()`` factory, and an ASGI mount on ``/mcp``. The MCP
+template is vendored under ``src/app/mcp/_template/`` (self-contained).
+Use for services that expose first-party integrations to MCP clients.
 
 BACKENDS: python
-DEPENDENCY: weld-mcp-template, mcp
+DEPENDENCY: mcp (vendored template; starlette + httpx from the base)
 
 **Enables fragments:**
 - on `true` → `mcp_template_server`

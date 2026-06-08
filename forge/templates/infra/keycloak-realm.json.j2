@@ -128,6 +128,22 @@
         }
       ]
     }
+{% for sc in service_clients %}
+    ,{
+      "clientId": "{{ sc.client_id }}",
+      "name": "{{ sc.client_id }} S2S client",
+      "description": "Confidential service client for inter-service (S2S) token minting",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "{{ sc.secret }}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    }
+{% endfor %}
   ],
   "users": [
     {

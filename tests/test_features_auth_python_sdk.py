@@ -40,9 +40,11 @@ def test_auth_mode_option_registered() -> None:
     opt = OPTION_REGISTRY["auth.mode"]
     assert opt.default == "generate"
     assert opt.options == ("generate", "none")
-    # Wave 2 cutover complete: auth.mode=generate enables all 12
-    # auth-namespace fragments (3 SDKs + 3 frontend session-timeout +
-    # 3 backend middleware + 2 gatekeeper + 1 tenant-context).
+    # Provider-discriminator split: auth.mode=generate now enables the 10
+    # issuer-agnostic auth fragments (3 SDKs + 3 frontend session-timeout +
+    # 3 backend middleware + 1 tenant-context). The 2 gatekeeper fragments
+    # moved to auth.provider=gatekeeper (the default), so the resolved set is
+    # unchanged for a default auth.mode=generate project (golden-verified).
     enabled = opt.enables["generate"]
     assert "platform_auth_sdk_python" in enabled
     assert "platform_auth_sdk_node" in enabled
@@ -53,13 +55,19 @@ def test_auth_mode_option_registered() -> None:
     assert "platform_auth_python_middleware" in enabled
     assert "platform_auth_node_middleware" in enabled
     assert "platform_auth_rust_middleware" in enabled
-    assert "platform_auth_gatekeeper" in enabled
-    assert "platform_auth_gatekeeper_keygen" in enabled
     assert "platform_auth_tenant_context" in enabled
-    assert len(enabled) == 12, (
-        f"auth.mode=generate should enable all 12 auth fragments after "
-        f"Wave 2 cutover; got {len(enabled)}: {enabled}"
+    # Gatekeeper is the issuer — now selected by auth.provider, NOT auth.mode.
+    assert "platform_auth_gatekeeper" not in enabled
+    assert "platform_auth_gatekeeper_keygen" not in enabled
+    assert len(enabled) == 10, (
+        f"auth.mode=generate should enable the 10 issuer-agnostic auth "
+        f"fragments after the provider split; got {len(enabled)}: {enabled}"
     )
+    provider = OPTION_REGISTRY["auth.provider"]
+    assert provider.default == "gatekeeper"
+    gk = provider.enables["gatekeeper"]
+    assert "platform_auth_gatekeeper" in gk
+    assert "platform_auth_gatekeeper_keygen" in gk
 
 
 def test_platform_auth_sdk_python_fragment_registered() -> None:

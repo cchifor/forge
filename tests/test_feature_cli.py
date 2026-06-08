@@ -109,7 +109,7 @@ class TestFeaturesList:
         assert "auth" in out
 
     def test_features_list_json(self, _loaded, capsys) -> None:
-        """``forge --features-cmd list --json`` produces valid JSON with 23 entries."""
+        """``forge --features-cmd list --json`` produces valid JSON with 24 entries."""
         with pytest.raises(SystemExit) as exc:
             _dispatch_features("list", json_output=True)
         assert exc.value.code == 0
@@ -117,7 +117,7 @@ class TestFeaturesList:
         raw = capsys.readouterr().out.strip()
         data = json.loads(raw)
         assert isinstance(data, list)
-        assert len(data) == 23
+        assert len(data) == 24
 
         # Each entry must have the expected keys
         for entry in data:

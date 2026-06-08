@@ -5,7 +5,15 @@
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_IMPORTS
   position: before
-  snippet: "from app.events.outbox import build_outbox_relay, build_outbox_store"
+  snippet: |
+    from app.events import EventBus
+    from app.events.outbox import (
+        OutboxRelay,
+        OutboxStore,
+        build_outbox_relay,
+        build_outbox_store,
+    )
+    from forge_core.persistence import AsyncDatabase
 
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_PROVIDERS
@@ -16,20 +24,26 @@
         return build_outbox_store(session)
 
     @provide(scope=Scope.APP)
-    def outbox_relay(self, engine: AsyncEngine, bus: EventBus, settings: Settings) -> OutboxRelay:
-        return build_outbox_relay(engine, bus, settings.events.outbox_poll_interval_s)
+    def outbox_relay(self, db: AsyncDatabase, bus: EventBus, settings: Settings) -> OutboxRelay:
+        return build_outbox_relay(db.engine, bus, settings.events.outbox_poll_interval_s)
 
 - target: src/app/core/lifecycle.py
   marker: FORGE:LIFESPAN_STARTUP
   position: before
-  snippet: "await container.get(OutboxRelay).start()"
+  snippet: |
+    from app.events.outbox import OutboxRelay
+
+    await container.get(OutboxRelay).start()
 
 - target: src/app/core/lifecycle.py
   marker: FORGE:LIFESPAN_SHUTDOWN
   position: before
-  snippet: "await container.get(OutboxRelay).stop()"
+  snippet: |
+    from app.events.outbox import OutboxRelay
+
+    await container.get(OutboxRelay).stop()
 
 - target: src/app/core/config/domain.py
-  marker: FORGE:CONFIG_EVENTS_FIELDS
+  marker: FORGE:EVENTS_SETTINGS_FIELDS
   position: before
   snippet: "outbox_poll_interval_s: float = 1.0"

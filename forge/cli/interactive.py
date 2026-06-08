@@ -116,7 +116,11 @@ def _prompt_backend(
         description=description,
         features=features,
         server_port=port,
-        **{spec.version_field: version},
+        # Dynamic kwarg: ``spec.version_field`` is a runtime str (python_version /
+        # node_version / rust_edition), all ``str`` fields — ty can't resolve the
+        # dynamic key so it checks ``str`` against the widest field; suppress as
+        # with ``language=`` above.
+        **{spec.version_field: version},  # ty:ignore[invalid-argument-type]
     )
 
 

@@ -8,6 +8,7 @@ produce clean `SKIPPED [reason]` lines and the rest of the matrix still runs.
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import pytest
 
@@ -42,6 +43,22 @@ def has_git() -> bool:
     return _have("git")
 
 
+@pytest.fixture(scope="session")
+def has_docker() -> bool:
+    """True when the Docker CLI is on PATH AND the daemon is reachable."""
+    if not _have("docker"):
+        return False
+    try:
+        proc = subprocess.run(
+            ["docker", "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True,
+            timeout=15,
+        )
+        return proc.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 @pytest.fixture
 def require_uv(has_uv: bool) -> None:
     if not has_uv:
@@ -70,3 +87,9 @@ def require_flutter(has_flutter: bool) -> None:
 def require_git(has_git: bool) -> None:
     if not has_git:
         pytest.skip("requires `git` on PATH")
+
+
+@pytest.fixture
+def require_docker(has_docker: bool) -> None:
+    if not has_docker:
+        pytest.skip("requires Docker (CLI + reachable daemon)")

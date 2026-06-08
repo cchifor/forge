@@ -14,7 +14,7 @@ import pytest
 
 from app.core.errors import PermissionDeniedError
 from app.data.repositories.conversation_repository import ConversationRepository
-from weld.core.domain.account import Account
+from forge_core.domain.account import Account
 
 
 def test_refuses_null_account() -> None:

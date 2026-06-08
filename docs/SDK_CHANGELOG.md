@@ -17,6 +17,47 @@ pre-release labels. SDK MAJOR aligns with the plugin compat boundary
 (plugins may need code changes); MINOR signals additive surface
 (plugins keep working, can opt into new APIs).
 
+## 1.5 (2026-06, with forge 1.x)
+
+Status: **provisional** — additive; existing plugins keep working unchanged.
+
+Added:
+
+- ``ForgeAPI.add_platform_template(name, display_label, description, *,
+  include_keycloak=False, options=None, backends=(), frontend=None,
+  database_mode=None)`` — registers a selectable ``--platform`` preset (the
+  ``ProjectConfig.platform_template`` choice). The platform-scale analogue of
+  ``add_frontend_layout`` / ``add_backend_application_template``: a
+  ``PlatformTemplate`` (``forge/platform_templates.py``) bundles option
+  overrides + per-backend ``app_template``/``depends_on`` assignments + an
+  optional frontend. The CLI builder deep-merges the preset's config dict *under*
+  the user's config (lowest-priority layer), so user CLI flags and config-file
+  values always win — selecting no platform is a no-op, keeping default output
+  byte-identical. Built-in presets (``monolithic``, ``microservices``,
+  ``headless-api``) are discovered from
+  ``forge/templates/platforms/<name>/platform.toml``.
+
+## 1.4 (2026-06, with forge 1.x)
+
+Status: **provisional** — additive; existing plugins keep working unchanged.
+
+Added:
+
+- ``ForgeAPI.add_backend_application_template(language, variant,
+  template_dir, display_label, *, base_template_dir="", supported=True)`` —
+  registers a selectable backend application template (the
+  ``BackendConfig.app_template`` choice) for a built-in or plugin backend
+  language. The backend analogue of ``add_frontend_layout``: a
+  ``(language, variant)`` ``BackendApplicationTemplate``
+  (``forge/backend_app_templates.py``) maps to a Copier *service* template;
+  the generator dispatches on it. The default ``crud-service`` variant is the
+  language's existing baseline template, rendered self-contained (single
+  render), so default output is byte-identical. ``base_template_dir`` enables a
+  two-stage shared-base + thin-delta render for variants that are a genuine
+  delta; for whole services the self-contained shape (empty ``base``) is
+  preferred. Distinct from ``BackendSpec`` in ``forge/config/_backend.py``
+  (language → baseline template + toolchain + prompts).
+
 ## 1.3 (2026-06, with forge 1.x)
 
 Status: **provisional** — additive; existing plugins keep working unchanged.

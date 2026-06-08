@@ -16,15 +16,15 @@ def register_all(api: ForgeAPI) -> None:
             path="airlock.client",
             type=OptionType.BOOL,
             default=False,
-            summary="Async client for the Airlock sandbox orchestrator (weld-airlock).",
+            summary="Async client for the Airlock sandbox orchestrator.",
             description="""\
-Adds the :class:`weld.airlock.AsyncAirlockClient` to DI plus a startup
-hook that closes the underlying httpx session on shutdown. Use for
-services that need to spin up ephemeral sandboxes (MCP integrations,
-agent-driven workflows, browser automation).
+Adds a vendored, weld-free :class:`app.airlock.AsyncAirlockClient` to DI
+plus a startup hook that closes the underlying httpx session on
+shutdown. Use for services that need to spin up ephemeral sandboxes (MCP
+integrations, agent-driven workflows, browser automation).
 
 BACKENDS: python
-DEPENDENCY: weld-airlock
+DEPENDENCY: httpx, pydantic (vendored client — no private SDK)
 ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN""",
             category=FeatureCategory.PLATFORM,
             # Initiative #7 — airlock client persists sandbox bookkeeping

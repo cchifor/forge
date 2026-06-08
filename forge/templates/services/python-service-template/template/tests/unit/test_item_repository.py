@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
 from app.data.models import Base
 from app.data.repositories.item_repository import ItemRepository
 from app.domain.item import ItemCreate, ItemStatus
-from weld.core.domain.account import Account
+from forge_core.domain.account import Account
 
 
 # ── Fixtures ────────────────────────────────────────────────────

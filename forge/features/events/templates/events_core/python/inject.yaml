@@ -5,15 +5,17 @@
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_IMPORTS
   position: before
-  snippet: "from app.events import build_event_bus"
+  snippet: |
+    from app.events import EventBus, build_event_bus
+    from forge_core.persistence import AsyncDatabase
 
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_PROVIDERS
   position: before
   snippet: |
     @provide(scope=Scope.APP)
-    async def event_bus(self, settings: Settings, engine: AsyncEngine) -> EventBus:
-        return await build_event_bus(settings, engine)
+    async def event_bus(self, settings: Settings, db: AsyncDatabase) -> EventBus:
+        return await build_event_bus(settings, db.engine)
 
 - target: src/app/core/config/domain.py
   marker: FORGE:CONFIG_DOMAIN_FIELDS
@@ -22,6 +24,7 @@
     class EventsSettings(BaseModel):
         bus: Literal["none", "postgres_notify", "memory"] = "postgres_notify"
         channel: str = "domain_events"
+        # FORGE:EVENTS_SETTINGS_FIELDS
 
 - target: src/app/core/config/domain.py
   marker: FORGE:CONFIG_DOMAIN_ROOT

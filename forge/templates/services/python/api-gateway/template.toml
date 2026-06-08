@@ -1,0 +1,21 @@
+# Backend application-template manifest — discovered by
+# forge.backend_app_templates.
+#
+# `api-gateway` is a two-stage variant: it renders the shared
+# `services/python-service-template` base first (the full crud-service
+# FastAPI app), then overlays a thin gateway delta on top. The delta adds an
+# `app/gateway/` package (downstream service registry + S2S token client) and
+# an `/api/v1/gateway` router that proxies requests to internal services.
+#
+# This is the FIRST shipped two-stage *backend* variant — `base` is set, so
+# the generator renders the base with skip_tasks=True, then this overlay
+# (same ctx) overwrites colliding paths. The single base file the overlay
+# owns is `src/app/api/v1/api.py.jinja`, kept in sync with the base plus the
+# gateway router registration.
+[template]
+variant = "api-gateway"
+language = "python"
+template_dir = "services/python/api-gateway"
+base = "services/python-service-template"
+display_label = "Python — API gateway"
+supported = true

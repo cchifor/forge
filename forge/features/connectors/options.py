@@ -16,15 +16,15 @@ def register_all(api: ForgeAPI) -> None:
             path="connectors.enabled",
             type=OptionType.BOOL,
             default=False,
-            summary="Pluggable read/write data-plane adapters (weld-connectors).",
+            summary="Pluggable read/write data-plane adapters (vendored).",
             description="""\
-Adds a service-local :class:`weld.connectors.ConnectorRegistry` wired
-into Dishka DI so handlers can look up adapters by name and type.
-Builtins are selectable via ``connectors.backends`` — each enabled
-backend pulls the matching extra.
+Adds a service-local ``app.connectors.ConnectorRegistry`` (vendored,
+self-contained) wired into Dishka DI so handlers can look up adapters by
+name and type. Builtins are selectable via ``connectors.backends``.
 
 BACKENDS: python
-DEPENDENCY: weld-connectors (+ per-backend extras)""",
+DEPENDENCY: none (vendored; uses pydantic + httpx + sqlalchemy from the
+base; boto3 / asyncpg optional for the s3 / postgres backends)""",
             category=FeatureCategory.KNOWLEDGE,
             enables={True: ("connectors_registry",)},
         )
@@ -35,15 +35,16 @@ DEPENDENCY: weld-connectors (+ per-backend extras)""",
             path="connectors.backends",
             type=OptionType.LIST,
             default=[],
-            summary="Built-in connector backends to enable — subset of {http,fs,sql,s3,mcp}.",
+            summary="Built-in connector backends to enable — subset of {http,fs,sql,s3}.",
             description="""\
-Each listed backend pulls ``weld-connectors[<backend>]`` into the
-service's pyproject and registers a factory in the
-:class:`ConnectorRegistry`. Empty list keeps the registry callable but
-empty — handlers then register their own adapters at startup.
+Each listed backend is pre-registered in the service's
+:class:`ConnectorRegistry`. ``s3`` additionally needs ``boto3`` and
+``sql`` against Postgres needs ``asyncpg`` (both optional, import-guarded).
+Empty list keeps the registry callable but empty — handlers then register
+their own adapters at startup.
 
 BACKENDS: python
-ALLOWED: http, fs, sql, s3, mcp""",
+ALLOWED: http, fs, sql, s3""",
             category=FeatureCategory.KNOWLEDGE,
         )
     )
