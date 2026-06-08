@@ -75,13 +75,13 @@ class GatekeeperSettings(BaseSettings):
     # Auto-assignment of tenant_id for self-registered users.
     # The Keycloak built-in registration form does not collect tenant_id, so
     # newly-registered users would otherwise produce tokens missing the
-    # `https://platform/tenant_id` claim that downstream services require.
+    # `https://forge/tenant_id` claim that downstream services require.
     # On `/callback`, the gatekeeper detects a missing claim, sets the
     # `tenant_id` attribute on the user via the Admin API (using the
     # gatekeeper client's service account), and refreshes the token so the
     # claim is present before any cookie is written.
     default_tenant_id: str = "00000000-0000-0000-0000-000000000001"
-    tenant_id_claim: str = "https://platform/tenant_id"
+    tenant_id_claim: str = "https://forge/tenant_id"
     keycloak_admin_realm: str = "app"
 
     # ── Boot-time realm invariant probe ───────────────────────────────

@@ -73,8 +73,8 @@ from platform_auth.trust import IssuerTrustMap
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_TENANT_ID_CLAIM = "https://platform/tenant_id"
-DEFAULT_TENANT_SLUG_CLAIM = "https://platform/tenant_slug"
+DEFAULT_TENANT_ID_CLAIM = "https://forge/tenant_id"
+DEFAULT_TENANT_SLUG_CLAIM = "https://forge/tenant_slug"
 DEFAULT_ROLES_CLAIM = "roles"
 DEFAULT_SCOPE_CLAIM = "scope"
 

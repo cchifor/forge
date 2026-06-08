@@ -114,7 +114,7 @@ def _synthetic_keycloak_payload(
         "jti": f"{auth_method_label}:{user_id}",
         "email": email,
         "realm_access": {"roles": list(roles)},
-        "https://platform/tenant_id": tenant_id,
+        "https://forge/tenant_id": tenant_id,
     }
 
 
@@ -839,7 +839,7 @@ async def callback(
     # 4b. Auto-assign tenant_id for self-registered users.
     # Keycloak's built-in registration form does not collect the
     # ``tenant_id`` user attribute, so the access token it just minted
-    # lacks the ``https://platform/tenant_id`` claim that backend
+    # lacks the ``https://forge/tenant_id`` claim that backend
     # services require — without this hook the user would land in a
     # 401 → silentRefresh → 401 → /auth/login → SSO-redirect loop.
     # When the claim is missing, set the default attribute via the
