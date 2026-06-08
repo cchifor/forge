@@ -508,6 +508,14 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useEventStream.test.ts": {
+      "size": 2405,
+      "sha256": "04a4b78a01d686e3"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.ts": {
+      "size": 3740,
+      "sha256": "1e6a47cdaa361545"
+    },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
       "sha256": "754919cf7282ac23"
@@ -985,7 +993,7 @@
       "sha256": "5ca31f35cefe2c61"
     },
     "forge.toml": {
-      "size": 146840,
+      "size": 147273,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {

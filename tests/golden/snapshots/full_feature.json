@@ -504,6 +504,14 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useEventStream.test.ts": {
+      "size": 2405,
+      "sha256": "04a4b78a01d686e3"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.ts": {
+      "size": 3740,
+      "sha256": "1e6a47cdaa361545"
+    },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
       "sha256": "754919cf7282ac23"
@@ -981,7 +989,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 108949,
+      "size": 109382,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
