@@ -1,0 +1,118 @@
+version: 1
+
+app:
+  title: "{{ project_title }}"
+  description: "{{ project_description }}"
+  version: "0.1.0"
+  contact:
+    name: ""
+    email: ""
+  license_info:
+    name: "MIT"
+
+server:
+  host: "0.0.0.0"
+  port: {{ server_port }}
+  log_level: "critical"
+  reload: false
+  max_workers: 1
+  cors:
+    enabled: false
+    allow_origins: ["*"]
+    allow_credentials: true
+    allow_methods: ["*"]
+    allow_headers: ["*"]
+    max_age: 3600
+
+security:
+  algorithm: "HS256"
+  secret_key: "CHANGEME-use-a-real-secret-in-production"
+  access_token_expire_minutes: 30
+  refresh_token_expire_minutes: 60
+  auth:
+    server_url: "http://localhost:8080"
+    realm: "master"
+    client_id: "{{ project_name }}"
+    client_secret: "changeme"
+    enabled: false
+    audience: "service-api"
+
+discovery:
+  enabled: false
+  app_name: "{{ project_name }}"
+  service_url: "http://localhost:8761/eureka"
+  service_port: {{ server_port }}
+  service_user: ""
+  service_password: ""
+  instance_ip: ""
+  instance_host: ""
+  instance_port: {{ server_port }}
+
+db:
+  url: "sqlite+aiosqlite:///development.db"
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+  application_name: "{{ project_name }}"
+
+# Tenant Management Service control-plane config. The provisioning saga
+# drives Keycloak (realms/clients/users) and writes per-tenant OIDC routing
+# to Redis as ``tenant-route:{hostname}`` keys the gatekeeper consumes.
+tms:
+  keycloak_admin_url: "http://keycloak:8080"
+  keycloak_admin_user: "admin"
+  keycloak_admin_password: "admin"
+  redis_url: "redis://redis:6379"
+  default_gatekeeper_client_id: "gatekeeper"
+  keycloak_ssl_required: "none"
+
+logging:
+  version: 1
+  formatters:
+    simple:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    verbose:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: INFO
+      formatter: simple
+      stream: ext://sys.stdout
+  loggers:
+    api.access:
+      level: INFO
+      handlers: [console]
+      propagate: false
+    app:
+      level: DEBUG
+      handlers: [console]
+      propagate: false
+    sqlalchemy.engine:
+      level: WARNING
+      handlers: [console]
+      propagate: false
+  root:
+    level: INFO
+    handlers: [console]
+
+audit:
+  enabled: true
+  log_request_body: false
+  max_body_size: 51200
+  excluded_paths:
+    # Health probes are mounted at /api/v1/health/{live,ready}; the skip match
+    # is prefix-aware so "/api/v1/health" covers both. "/health" stays as a bare
+    # alias. This list REPLACES the model default at config-load time, so the
+    # real mounted prefix MUST be listed here or probes get audited + logged.
+    - "/health"
+    - "/api/v1/health"
+    - "/metrics"
+    - "/docs"
+    - "/openapi.json"
+    - "/favicon.ico"
+  excluded_methods:
+    - "OPTIONS"
+    - "HEAD"

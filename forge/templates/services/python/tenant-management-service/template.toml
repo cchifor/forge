@@ -1,0 +1,22 @@
+# Backend application-template manifest — discovered by
+# forge.backend_app_templates.
+#
+# `tenant-management-service` is a two-stage variant: it renders the shared
+# `services/python-service-template` base first (the full crud-service
+# FastAPI app), then overlays the Tenant Management Service (TMS) delta on
+# top. The delta ports the platform TMS control-plane: realm + tenant domain
+# models, a provisioning saga (Keycloak realm/client/user + Redis routing
+# config the gatekeeper consumes), and a transactional-outbox event relay.
+#
+# `base` is set, so the generator renders the base with skip_tasks=True, then
+# this overlay (same ctx) overwrites colliding paths. The base files the
+# overlay owns are `src/app/api/v1/api.py.jinja`, the four `core/` config +
+# ioc + lifecycle modules, `pyproject.toml.jinja`, and the `config/*.yaml`
+# peers — each kept in sync with the base plus the TMS wiring.
+[template]
+variant = "tenant-management-service"
+language = "python"
+template_dir = "services/python/tenant-management-service"
+base = "services/python-service-template"
+display_label = "Python — Tenant Management Service"
+supported = true
