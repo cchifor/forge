@@ -1,0 +1,55 @@
+# Platform preset — discovered by forge.platform_templates.
+#
+# `multitenant-saas` stands up a turnkey multi-tenant SaaS topology:
+#
+#   * a Tenant Management Service (the `tenant-management-service` backend
+#     variant) — the control plane that provisions Keycloak realms + the Redis
+#     tenant-route entries the gatekeeper reads;
+#   * a tenant-scoped application service (`app`, a CRUD backend) with Postgres
+#     Row-Level Security (`database.multitenancy=shared_rls`), reading the
+#     tenant id from the verified JWT claim (`tenant_resolution=token_claim`);
+#   * the Gatekeeper edge auth stack — `auth.provider=gatekeeper` +
+#     `include_keycloak` generate the gatekeeper container, the Keycloak realm
+#     (with the corrected `tenant_id` claim mapper + userProfile block), and the
+#     one-shot keycloak-realm-sync sidecar (auto-bundled with the gatekeeper
+#     provider) that reconciles the User-Profile on every boot;
+#   * a Vue sidebar frontend.
+#
+# The chain: Keycloak realm mints a `tenant_id` claim → gatekeeper verifies +
+# injects it → the app's RLS binds `app.current_tenant` from that claim → TMS
+# provisions tenants by writing the realm + the Redis routes the gatekeeper
+# resolves. RLS is scoped to the `app` backend only (it carries the
+# `multitenancy` feature); TMS isolates by *realm*, not Postgres schema, so it
+# deliberately omits it.
+#
+# Applied as the lowest-priority config layer (like every preset), so it never
+# perturbs the golden snapshots — no golden uses `--platform`.
+[platform]
+name = "multitenant-saas"
+display_label = "Multi-tenant SaaS platform"
+description = "A tenant-management control plane + an RLS-isolated app service behind the Gatekeeper, with Keycloak realm provisioning."
+include_keycloak = true
+
+[platform.options]
+"auth.provider" = "gatekeeper"
+"database.multitenancy" = "shared_rls"
+"database.tenant_resolution" = "token_claim"
+
+[[platform.backends]]
+name = "tms"
+language = "python"
+app_template = "tenant-management-service"
+server_port = 5010
+
+[[platform.backends]]
+name = "app"
+language = "python"
+app_template = "crud-service"
+server_port = 5020
+# RLS rides on the tenant-scoped workload only — `multitenancy` adds the
+# GUC binder + RLS migration; `items` keeps the example entity.
+features = ["items", "multitenancy"]
+
+[platform.frontend]
+framework = "vue"
+layout = "sidebar"
