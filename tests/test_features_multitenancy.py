@@ -330,6 +330,50 @@ def test_render_lands_rls_files_and_injections(tmp_path: Path) -> None:
     assert "register_rls_listener(db.engine)" in lifecycle
 
 
+def test_shared_rls_excludes_tenant_management_service_backend(tmp_path: Path) -> None:
+    """``shared_rls`` is project-global, but the RLS fragment lists the
+    ``tenant-management-service`` variant in ``excluded_app_templates``: in a
+    project mixing that control plane with a crud workload, RLS lands on the
+    crud backend only. (The control plane isolates by realm + owns its own
+    ``0002`` migration; an RLS ``0002`` would be a second Alembic head.)"""
+    cfg = ProjectConfig(
+        project_name="mtx",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="tms",
+                project_name="mtx",
+                language=BackendLanguage.PYTHON,
+                app_template="tenant-management-service",
+                features=["items"],
+            ),
+            BackendConfig(
+                name="app",
+                project_name="mtx",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+            ),
+        ],
+        frontend=None,
+        options={"database.multitenancy": "shared_rls"},
+    )
+    root = Path(generate(cfg, quiet=True, dry_run=True))
+
+    # The crud workload gets the full RLS treatment.
+    app = root / "services" / "app"
+    assert (app / "src/app/core/tenancy/rls.py").is_file()
+    assert (app / "src/app/middleware/tenant_rls.py").is_file()
+    assert (app / "alembic/versions/0002_enable_rls.py").is_file()
+
+    # The TMS control plane is excluded: no RLS tree, no RLS migration, and its
+    # own 0002 survives as the single head off 0001.
+    tms = root / "services" / "tms"
+    assert not (tms / "src/app/core/tenancy").exists()
+    assert not (tms / "src/app/middleware/tenant_rls.py").exists()
+    assert not (tms / "alembic/versions/0002_enable_rls.py").exists()
+    assert (tms / "alembic/versions/0002_tms_tables.py").is_file()
+
+
 def test_render_default_none_no_tenancy_files(tmp_path: Path) -> None:
     """The inert default ships no tenancy tree (mirrors the golden gate)."""
     cfg = ProjectConfig(
