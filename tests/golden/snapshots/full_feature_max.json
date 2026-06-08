@@ -985,7 +985,7 @@
       "sha256": "5ca31f35cefe2c61"
     },
     "forge.toml": {
-      "size": 145178,
+      "size": 145431,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1113,8 +1113,8 @@
       "sha256": "c286523002cca398"
     },
     "infra/gatekeeper/src/app/core/lifecycle.py": {
-      "size": 8118,
-      "sha256": "e834286c9f50172e"
+      "size": 9589,
+      "sha256": "a98d40091689a57e"
     },
     "infra/gatekeeper/src/app/gatekeeper/__init__.py": {
       "size": 697,
@@ -1133,8 +1133,8 @@
       "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 15261,
-      "sha256": "b408789d90301e17"
+      "size": 16145,
+      "sha256": "ae487515f72f9fa5"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6936,
@@ -1183,6 +1183,10 @@
     "infra/gatekeeper/src/app/gatekeeper/ratelimit.py": {
       "size": 2766,
       "sha256": "27019929bb1db31d"
+    },
+    "infra/gatekeeper/src/app/gatekeeper/realm_invariants.py": {
+      "size": 6064,
+      "sha256": "1525356179e7f1df"
     },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
       "size": 24989,
@@ -1285,8 +1289,8 @@
       "sha256": "b0d710cd06b5c9d2"
     },
     "infra/keycloak-realm.json": {
-      "size": 6104,
-      "sha256": "d0b5538b82328dea"
+      "size": 6098,
+      "sha256": "73cf666d9f036dd9"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
