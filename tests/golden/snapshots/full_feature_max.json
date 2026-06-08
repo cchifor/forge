@@ -78,7 +78,7 @@
     },
     "apps/frontend/package.json": {
       "size": 2089,
-      "sha256": "bd5cbdba426b8de1"
+      "sha256": "7e1a4420d9f3ff20"
     },
     "apps/frontend/public/canvas.manifest.json": {
       "size": 7130,
@@ -513,8 +513,8 @@
       "sha256": "04a4b78a01d686e3"
     },
     "apps/frontend/src/shared/composables/useEventStream.ts": {
-      "size": 3740,
-      "sha256": "1e6a47cdaa361545"
+      "size": 4098,
+      "sha256": "b6c7c9642ed9bbe1"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -1141,8 +1141,8 @@
       "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 16139,
-      "sha256": "353eaa2589831a17"
+      "size": 16729,
+      "sha256": "c43971df83f0fc00"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6933,
@@ -1193,8 +1193,8 @@
       "sha256": "27019929bb1db31d"
     },
     "infra/gatekeeper/src/app/gatekeeper/realm_invariants.py": {
-      "size": 6064,
-      "sha256": "1525356179e7f1df"
+      "size": 7394,
+      "sha256": "f5c09ac3509671f0"
     },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
       "size": 24989,

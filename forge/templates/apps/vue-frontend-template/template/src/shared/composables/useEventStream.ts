@@ -50,6 +50,11 @@ export function useEventStream(opts: UseEventStreamOptions): UseEventStreamResul
   let consecutiveFailures = 0
   let intentionalDisconnect = false
 
+  // Seeds the *initial* Last-Event-ID (resume from a caller-supplied position)
+  // alongside any custom auth/tenant headers. On automatic reconnects,
+  // fetch-event-source re-applies the most recent event id it observed, so
+  // mid-stream resume is the library's job — `lastEventId` here is kept current
+  // mainly so the caller can read/persist it.
   const buildHeaders = (): Record<string, string> | undefined => {
     const headers: Record<string, string> = { ...(opts.headers ?? {}) }
     if (lastEventId.value) {
