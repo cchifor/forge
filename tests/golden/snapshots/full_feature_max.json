@@ -989,11 +989,11 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 10060,
-      "sha256": "5ca31f35cefe2c61"
+      "size": 10800,
+      "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 147859,
+      "size": 148095,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1035,6 +1035,10 @@
     "infra/gatekeeper/scripts/keygen.py": {
       "size": 2372,
       "sha256": "2a5586db95c1d4c0"
+    },
+    "infra/gatekeeper/scripts/realm_sync.py": {
+      "size": 6872,
+      "sha256": "71f4745047787004"
     },
     "infra/gatekeeper/scripts/validate_internal.py": {
       "size": 7193,
