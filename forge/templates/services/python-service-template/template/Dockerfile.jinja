@@ -47,7 +47,7 @@ COPY pyproject.toml uv.lock* ./
 # standalone in Docker (no project-root tree in this context), so retarget it
 # to the backend-local copy COPYed above. This RETARGETS one path — it does
 # NOT strip the source override, so the dependency-confusion guard stays.
-RUN sed -i 's#\.\./\.\./sdks/platform-auth#sdks/platform-auth#' pyproject.toml
+RUN sed -i '/platform-auth = {/ s#\.\./\.\./sdks/platform-auth#sdks/platform-auth#' pyproject.toml
 {%- endif %}
 RUN uv sync --no-dev --no-editable
 

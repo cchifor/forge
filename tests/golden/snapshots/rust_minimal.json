@@ -53,8 +53,8 @@
       "sha256": "d44b683e20b96de5"
     },
     "services/api/Dockerfile": {
-      "size": 3975,
-      "sha256": "f2ec3f88c4dcddb8"
+      "size": 3841,
+      "sha256": "47fc92ec2c6efc90"
     },
     "services/api/README.md": {
       "size": 1281,
