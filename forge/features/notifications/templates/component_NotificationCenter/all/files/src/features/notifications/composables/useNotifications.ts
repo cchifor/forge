@@ -65,8 +65,13 @@ export async function startNotifications(
       store.ingest(item, { silent: true })
     }
     if (list.items.length > 0) {
-      const maxSeq = list.items.reduce((acc, item) => (item.seq > acc ? item.seq : acc), 0)
-      store.setLastEventId(String(maxSeq))
+      // Seed the SSE resume cursor with the *transport* id of the newest known
+      // row (``event_id``), so the stream's initial connect asks the server to
+      // replay only what we missed. (``seq`` is a client sort ordinal, not a
+      // transport cursor — see store.ts.) Requires the backend to honour
+      // Last-Event-ID; harmless otherwise.
+      const newest = list.items.reduce((acc, item) => (item.seq > acc.seq ? item : acc))
+      if (newest.event_id) store.setLastEventId(newest.event_id)
     }
     if (typeof unread.count === 'number') {
       store.unreadCount = unread.count

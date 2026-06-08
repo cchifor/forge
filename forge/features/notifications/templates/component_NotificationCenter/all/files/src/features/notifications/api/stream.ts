@@ -76,6 +76,10 @@ export function openNotificationStream(
   const { connection, disconnect } = useEventStream({
     url: STREAM_URL,
     autoDisconnectOnUnmount: false,
+    // Resume from the last transport id we persisted (set by the bootstrap from
+    // the newest known row, then kept current below). ``useEventStream`` also
+    // re-applies the most recent id on automatic reconnects.
+    initialLastEventId: store.lastEventId || undefined,
     onMessage(msg) {
       if (!msg.data) return
       let raw: unknown
@@ -87,6 +91,9 @@ export function openNotificationStream(
       seq += 1
       const n = toNotification(raw, seq, msg.id || `evt-${seq}`)
       store.ingest(n)
+      // Advance the resume cursor with the real transport id so a later re-open
+      // (singleton re-init) picks up where the live stream left off.
+      if (msg.id) store.setLastEventId(msg.id)
       invalidateForNotification(queryClient, n)
     },
   })

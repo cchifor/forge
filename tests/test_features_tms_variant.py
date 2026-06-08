@@ -130,6 +130,26 @@ def test_api_py_registers_realm_and_tenant_routers(tmp_path: Path):
     assert "# FORGE:API_ROUTER_REGISTRATION" in api_py
 
 
+def test_realm_delete_with_active_tenants_maps_to_409(tmp_path: Path):
+    """The realm-delete guard (``ApplicationError``: realm has active tenants)
+    is caught locally and mapped to 409, not left to the base 500 handler."""
+    svc = _render_tms(tmp_path)
+    realms = (svc / "src/app/api/v1/endpoints/realms.py").read_text(encoding="utf-8")
+    assert "from app.core.errors import" in realms and "ApplicationError" in realms
+    # The delete handler catches the domain guard and returns a conflict.
+    delete_fn = realms[realms.index("async def delete_realm") :]
+    assert "except ApplicationError" in delete_fn
+    assert "HTTP_409_CONFLICT" in delete_fn
+
+
+def test_hardening_doc_ships_with_variant(tmp_path: Path):
+    """The variant ships a HARDENING.md so generated-project authors see the
+    inherited saga/concurrency/security caveats before going to production."""
+    svc = _render_tms(tmp_path)
+    hardening = (svc / "HARDENING.md").read_text(encoding="utf-8")
+    assert "production hardening" in hardening.lower()
+
+
 def test_base_0001_migration_survives_overlay(tmp_path: Path):
     """The overlay adds 0002 without clobbering the base 0001 revision."""
     svc = _render_tms(tmp_path)
