@@ -1,0 +1,7 @@
+[feature]
+name = "AsyncStateBlock"
+version = "1.0.0"
+summary = "Loading/error/empty/success orchestrator + empty-state — Layer-1 pure-UI components."
+category = "component"
+stability = "experimental"
+layer = 1
