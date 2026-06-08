@@ -39,6 +39,10 @@ class AppLifecycle:
         from app.gatekeeper.http_client import close_http_client, init_http_client
         from app.gatekeeper.internal_token_cache import InternalTokenCache
         from app.gatekeeper.key_store import KeyRingError, load_key_ring
+        from app.gatekeeper.realm_invariants import (
+            RealmInvariantError,
+            verify_user_profile_active,
+        )
         from app.gatekeeper.redis import ResilientRedis, close_redis, init_redis
         from app.gatekeeper.delegation_grant import DelegationGrantStore
         from app.gatekeeper.server_session import ServerSessionStore
@@ -52,6 +56,31 @@ class AppLifecycle:
 
         logger.info("Server starting up…")
         await init_http_client()
+
+        # ── Realm invariant probe ─────────────────────────────────────
+        # Refuse to boot if the running Keycloak's User-Profile schema
+        # doesn't declare the attributes we depend on. See
+        # app/gatekeeper/realm_invariants.py for the rationale — this
+        # is the boot-time equivalent of gatekeeper's /callback
+        # read-after-write guard, and converts a "Tenant assignment
+        # failed" 502 into a loud deploy-time crash. Skippable via
+        # GATEKEEPER_SKIP_REALM_INVARIANT for offline unit tests.
+        gk_cfg_for_probe = get_gk_settings()
+        if not gk_cfg_for_probe.gatekeeper_skip_realm_invariant:
+            probe_server_url = gk_cfg_for_probe.keycloak_base_url.rstrip("/").removesuffix(
+                "/realms"
+            )
+            try:
+                await verify_user_profile_active(
+                    server_url=probe_server_url,
+                    realm=gk_cfg_for_probe.keycloak_admin_realm,
+                    admin_user=gk_cfg_for_probe.kc_admin_user,
+                    admin_password=gk_cfg_for_probe.kc_admin_password,
+                )
+            except RealmInvariantError as exc:
+                logger.error("realm invariant probe FAILED: %s", exc)
+                raise
+
         client = await init_redis()
         if isinstance(client, ResilientRedis):
             logger.info("Active storage backend: %s", client.backend_name)

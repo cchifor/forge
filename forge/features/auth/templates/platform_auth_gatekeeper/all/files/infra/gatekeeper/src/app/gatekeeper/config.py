@@ -84,6 +84,20 @@ class GatekeeperSettings(BaseSettings):
     tenant_id_claim: str = "https://platform/tenant_id"
     keycloak_admin_realm: str = "app"
 
+    # ── Boot-time realm invariant probe ───────────────────────────────
+    # On startup the gatekeeper verifies (read-only) that the running
+    # Keycloak's User-Profile schema declares the attributes /callback
+    # depends on (``tenant_id``). Without it a schema drift would surface
+    # only as a 502 on the first self-registration. ``KC_ADMIN_USER`` /
+    # ``KC_ADMIN_PASSWORD`` grant the master-realm token used for the
+    # read-only ``GET /admin/realms/{realm}/users/profile`` probe (in
+    # prod these MUST come from a secret, not literal env). Set
+    # ``GATEKEEPER_SKIP_REALM_INVARIANT=true`` to skip the probe (offline
+    # unit tests / environments without an admin account).
+    kc_admin_user: str = "admin"
+    kc_admin_password: str = "admin"
+    gatekeeper_skip_realm_invariant: bool = False
+
     # ── Authorization ─────────────────────────────────────────────────
     # Realm role (from the Keycloak access token's ``realm_access.roles``)
     # that a user must hold to manage API keys via ``/api/v1/api-keys``
