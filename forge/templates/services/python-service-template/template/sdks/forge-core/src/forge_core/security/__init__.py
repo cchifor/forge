@@ -63,6 +63,7 @@ from forge_core.security.platform_auth_setup import (
     issuer_url,
     jwks_uri,
 )
+from forge_core.security.s2s import require_service
 from forge_core.security.scopes import scope_satisfies
 from forge_core.security.trust import (
     InMemoryIssuerTrustMap,
@@ -97,6 +98,7 @@ __all__ = [
     "is_dev_mode",
     "issuer_url",
     "jwks_uri",
+    "require_service",
     "oauth2_scheme",
     "scope_satisfies",
     "set_auth_context",
