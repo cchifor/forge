@@ -30,6 +30,27 @@ def _build_parser() -> argparse.ArgumentParser:
     """
     p = argparse.ArgumentParser(prog="forge", description="Project Generator")
 
+    # Platform preset — the lowest-priority config layer (below user flags +
+    # config-file values, exactly like a default). Seeds option overrides +
+    # per-backend app_template/depends_on + an optional frontend. Choices are
+    # discovered from forge/templates/platforms/<name>/platform.toml.
+    from forge.platform_templates import available_platform_templates  # noqa: PLC0415
+
+    p.add_argument(
+        "--platform",
+        metavar="NAME",
+        choices=list(available_platform_templates()) or None,
+        help=(
+            "Platform preset: seed a coherent multi-service shape "
+            "(e.g. microservices, headless-api, monolithic) as the lowest "
+            "config layer. Options and scalars are overridden per-key by user "
+            "flags / config-file values; the preset's backends list and "
+            "frontend block, however, define the project's shape (a preset that "
+            "ships backends ignores the single --backend-* flags). "
+            "Discovered from forge/templates/platforms/."
+        ),
+    )
+
     # Config file (YAML or JSON, use - for stdin)
     p.add_argument(
         "--config", "-c", type=str, metavar="FILE", help="YAML/JSON config file (use - for stdin)"

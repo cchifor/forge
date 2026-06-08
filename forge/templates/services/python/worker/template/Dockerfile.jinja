@@ -1,0 +1,18 @@
+# {{ project_title }} — background worker image.
+FROM python:{{ python_version }}-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Install uv for fast, reproducible installs.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY pyproject.toml ./
+COPY src ./src
+
+RUN uv pip install --system --no-cache .
+
+# No HTTP port — this is a worker. It runs the loop until stopped.
+CMD ["python", "-m", "worker"]

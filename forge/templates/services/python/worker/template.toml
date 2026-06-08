@@ -1,0 +1,16 @@
+# Backend application-template manifest — discovered by
+# forge.backend_app_templates.
+#
+# `worker` is a self-contained background-worker service shape: the same
+# config + structured-logging + observability skeleton as the baseline
+# crud-service, but with NO HTTP CRUD routes. Its entrypoint runs a simple
+# async worker loop (poll → handle → sleep) instead of a uvicorn server.
+# Self-contained (no `base`) — a single Copier render, the preferred shape
+# for a whole service.
+[template]
+variant = "worker"
+language = "python"
+display_label = "Python — Background Worker"
+template_dir = "services/python/worker"
+base = ""
+supported = true

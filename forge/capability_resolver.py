@@ -311,6 +311,70 @@ _PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
 _INACTIVE_VALUES: frozenset[object] = frozenset({None, "", "none", False})
 
 
+def _check_option_allowed_backends(
+    config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
+) -> None:
+    """Enforce each Option's ``allowed_backends`` metadata at resolve time.
+
+    ``Option.allowed_backends`` declares the built-in backend languages an
+    option's ACTIVE values support (``None`` = any). The metadata has long
+    existed on the Option dataclass and is checked by
+    ``ProjectConfig.validate()`` (``_check_option_allowed_backends``), but the
+    resolver — the path the matrix runner / headless ``generate()`` /
+    in-memory callers take without going through ``ProjectConfig.validate``'s
+    full layer-target walker — did not enforce it. Wire it here so a
+    non-``none`` ``database.multitenancy`` strategy on a Node/Rust project is
+    rejected with a clear ``OptionsError`` rather than silently dropping the
+    Python-only fragment.
+
+    Only enforced for:
+
+    - options the user EXPLICITLY set (origin ``"user"``) — a persisted
+      default must never hard-error;
+    - ACTIVE values (``Option.is_active_value`` — an ENUM value whose
+      ``enables`` is non-empty / a ``True`` BOOL). ``none``-style values map
+      to no fragments and are valid on every backend, so the default never
+      trips the check.
+
+    A project with zero backends (``backend.mode=none``) is skipped — there is
+    nothing to constrain, and ``requires_backend`` handles that case.
+    """
+    if not project_backends:
+        return
+    origins = config.option_origins or {}
+    present = set(project_backends)
+    effective = _apply_option_defaults(config.options)
+    # Canonical paths the user explicitly supplied (alias-resolved).
+    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    for path, opt in OPTION_REGISTRY.items():
+        if opt.allowed_backends is None:
+            continue
+        # Only constrain paths the user actually selected — never a default.
+        if path not in user_set_paths:
+            continue
+        if origins.get(path, "user") != "user":
+            continue
+        value = effective.get(path, opt.default)
+        if not opt.is_active_value(value):
+            continue
+        if not present.isdisjoint(opt.allowed_backends):
+            continue
+        allowed = ", ".join(sorted(b.value for b in opt.allowed_backends))
+        have = ", ".join(b.value for b in project_backends) or "(none)"
+        raise OptionsError(
+            f"Option '{path}={value!r}' only supports backend language(s) "
+            f"{allowed}, but this project's backends are {have}. "
+            f"Choose a value supported on your backend, or add a {allowed} backend.",
+            code=OPTIONS_INVALID_VALUE,
+            context={
+                "option": path,
+                "value": value,
+                "allowed_backends": sorted(b.value for b in opt.allowed_backends),
+                "project_backends": [b.value for b in project_backends],
+            },
+        )
+
+
 def _check_value_backend_support(
     config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
 ) -> None:
@@ -354,6 +418,64 @@ def _check_value_backend_support(
                 "project_backends": [b.value for b in project_backends],
             },
         )
+
+
+# Auth providers whose token authority depends on the keycloak + redis
+# sidecars. Only these force the ``auth.mode``→``none`` coercion when
+# ``include_keycloak`` is off (see ``resolve``). ``in_memory`` mints tokens in
+# process and ``oidc_generic`` points at an external IdP, so neither needs the
+# local keycloak stack and both stay ``auth.mode=generate``.
+_KEYCLOAK_DEPENDENT_PROVIDERS: frozenset[str] = frozenset({"gatekeeper"})
+
+
+def _provider_needs_keycloak(provider: object) -> bool:
+    """True if ``auth.provider`` requires the local keycloak + redis stack.
+
+    A non-string / unset provider conservatively counts as keycloak-dependent
+    so the pre-provider-split coercion behaviour is preserved for any caller
+    that hasn't threaded an ``auth.provider`` value (the default is
+    ``gatekeeper``, which needs keycloak anyway).
+    """
+    if not isinstance(provider, str):
+        return True
+    return provider in _KEYCLOAK_DEPENDENT_PROVIDERS
+
+
+# ``database.multitenancy`` strategies that are recognised values but ship no
+# realisation yet. The option ACCEPTS them (so a forge.toml pinning one isn't
+# rejected outright by value-validation), but the resolver turns a USER
+# selection of either into an explicit "not yet implemented" error rather than
+# silently generating an un-isolated project (the value maps to no fragments,
+# which would otherwise be an invisible no-op).
+_MULTITENANCY_DEFERRED: frozenset[str] = frozenset({"schema_per_tenant", "db_per_tenant"})
+
+
+def _check_multitenancy_deferred(config: ProjectConfig) -> None:
+    """Raise a clear error when a user selects a deferred multitenancy strategy.
+
+    ``schema_per_tenant`` / ``db_per_tenant`` are KNOWN (validation accepts
+    them) but NOT implemented in 1.x. Only a user-origin selection errors — a
+    persisted default never would (the default is ``none``). The message points
+    at the implemented alternative so the failure is actionable, not a dead end.
+    """
+    path = "database.multitenancy"
+    value = config.options.get(path)
+    if value not in _MULTITENANCY_DEFERRED:
+        return
+    origins = config.option_origins or {}
+    if origins.get(path, "user") != "user":
+        return
+    raise OptionsError(
+        f"database.multitenancy={value!r} is a recognised but NOT-yet-"
+        f"implemented tenant-isolation strategy. forge accepts the value in a "
+        f"forge.toml (so a future version can realise it without a config "
+        f"migration), but generation cannot proceed: it would produce a "
+        f"project with no tenant isolation. Use database.multitenancy="
+        f"'shared_rls' (Postgres Row-Level Security, Python) today, or "
+        f"'none' for application-layer scoping only.",
+        code=OPTIONS_INVALID_VALUE,
+        context={"option": path, "value": value, "implemented": ["none", "shared_rls"]},
+    )
 
 
 def _check_security_constraints(option_values: dict[str, object], fragment_set: set[str]) -> None:
@@ -412,6 +534,8 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     """
     project_backends = tuple(bc.language for bc in config.backends)
     _check_value_backend_support(config, project_backends)
+    _check_option_allowed_backends(config, project_backends)
+    _check_multitenancy_deferred(config)
 
     option_values = _apply_option_defaults(config.options)
     # The platform-auth gatekeeper stack depends on the keycloak + redis
@@ -420,8 +544,29 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     # valid (no gatekeeper service with an undefined ``depends_on``); apply the
     # SAME coercion here so direct ProjectConfig/generate() construction (matrix
     # runner, headless fixtures, e2e) is covered too, not just the CLI path.
-    if not config.include_keycloak and option_values.get("auth.mode") == "generate":
+    #
+    # The coercion is PROVIDER-AWARE: only the ``gatekeeper`` issuer actually
+    # needs the keycloak + redis sidecars, so only it forces ``auth.mode``→
+    # ``none`` when keycloak is off. Keycloak-free issuers (``in_memory`` mints
+    # tokens in-process; ``oidc_generic`` points at an external IdP) must keep
+    # ``auth.mode=generate`` so they remain usable without standing up keycloak.
+    # ``auth.provider`` defaults to ``gatekeeper``, so the golden presets (which
+    # never set an explicit provider) still coerce exactly as before — verified
+    # byte-identical by the golden snapshots.
+    if (
+        not config.include_keycloak
+        and option_values.get("auth.mode") == "generate"
+        and _provider_needs_keycloak(option_values.get("auth.provider"))
+    ):
         option_values["auth.mode"] = "none"
+    # ``auth.provider`` is a sub-discriminator of ``auth.mode=generate`` — it
+    # selects the token issuer for the generated auth stack. When the stack
+    # isn't generated it must contribute no fragments, so coerce it to the
+    # no-op ``none`` value (mirrors the auth.mode coercion above). This keeps
+    # the provider's gatekeeper/oidc fragments from leaking into a no-auth
+    # project while still defaulting to ``gatekeeper`` when auth IS generated.
+    if option_values.get("auth.mode") != "generate" and "auth.provider" in option_values:
+        option_values["auth.provider"] = "none"
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)

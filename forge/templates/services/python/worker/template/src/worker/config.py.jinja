@@ -1,0 +1,41 @@
+"""Worker configuration — environment-driven settings.
+
+Settings load from the process environment (and an optional ``.env`` file)
+via pydantic-settings, mirroring the baseline service's config layer but
+trimmed to what a background worker needs: no HTTP port, no database URL by
+default — just the loop cadence and the service identity.
+"""
+
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class WorkerSettings(BaseSettings):
+    """Runtime settings for the {{ project_title }} worker.
+
+    Every field is overridable via an environment variable of the same name
+    (case-insensitive), e.g. ``WORKER_POLL_INTERVAL_SECONDS=10``.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="WORKER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    #: Human-readable service name, used in log lines and telemetry.
+    service_name: str = "{{ project_slug }}"
+    #: Logging level (``DEBUG`` / ``INFO`` / ``WARNING`` / ``ERROR``).
+    log_level: str = "INFO"
+    #: Seconds to sleep between worker iterations.
+    poll_interval_seconds: float = 5.0
+    #: When > 0, stop the loop after this many iterations (useful for tests
+    #: and one-shot batch runs). ``0`` means run forever.
+    max_iterations: int = 0
+
+
+def load_settings() -> WorkerSettings:
+    """Build a :class:`WorkerSettings` from the current environment."""
+    return WorkerSettings()

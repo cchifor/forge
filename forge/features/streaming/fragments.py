@@ -1,4 +1,13 @@
-"""Streaming fragments — SSE fanout of CloudEvents to browser subscribers."""
+"""Streaming fragments — SSE fanout of CloudEvents (vendored, weld-free).
+
+``streaming_sse`` ships a self-contained ``CloudEventStreamer`` that
+composes ``sse-starlette`` (heartbeat / framing / disconnect) with bus
+subscription, ``Last-Event-ID`` replay, an optional filter, a lifetime
+cap, and graceful backpressure handling. The mechanism is vendored into
+each generated project (``src/app/streaming/``) and imports only the
+stdlib + sse-starlette + starlette (+ the duck-typed ``app.events`` bus)
+— no private SDKs, and tenant context on ``SubscriberCtx`` is optional.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +33,10 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("streaming_sse", "python"),
-                    dependencies=("weld-streaming", "sse-starlette>=2.1.0"),
+                    # weld-streaming dropped — the streamer is vendored.
+                    # sse-starlette is the only third-party dep (SSE wire
+                    # framing + heartbeat).
+                    dependencies=("sse-starlette>=2.1.0",),
                     env_vars=(
                         ("STREAMING_HEARTBEAT_S", "15"),
                         ("STREAMING_QUEUE_MAX", "1024"),

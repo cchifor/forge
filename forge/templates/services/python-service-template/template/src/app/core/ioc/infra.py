@@ -11,8 +11,10 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from weld.core.discovery import Discovery
-from weld.core.persistence.db.aio import AsyncDatabase
+from forge_core.persistence import AsyncDatabase
+from forge_core.discovery import Discovery
+
+# FORGE:IOC_INFRA_IMPORTS
 
 logger = logging.getLogger(__name__)
 
@@ -57,3 +59,5 @@ class InfraProvider(Provider):
             yield session
         finally:
             await asyncio.shield(session.close())
+
+    # FORGE:IOC_INFRA_PROVIDERS

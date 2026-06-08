@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data.models.item import ItemModel
 from app.domain.item import Item, ItemCreate, ItemStatus, ItemUpdate
-from weld.core.domain.account import Account
-from weld.core.persistence.repository.aio import AsyncBaseRepository
+from forge_core.domain.account import Account
+from forge_core.persistence import AsyncBaseRepository
 
 
 class ItemRepository(AsyncBaseRepository[ItemModel, Item, ItemCreate, ItemUpdate]):

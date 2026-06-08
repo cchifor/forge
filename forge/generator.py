@@ -25,6 +25,10 @@ from copier import run_copy
 from copier.errors import CopierError
 
 from forge import variable_mapper
+from forge.backend_app_templates import (
+    DEFAULT_BACKEND_TEMPLATE,
+    get_backend_application_template,
+)
 from forge.capability_resolver import ResolvedPlan, resolve
 from forge.config import (
     BACKEND_REGISTRY,
@@ -41,6 +45,7 @@ from forge.docker_manager import (
     render_init_db,
     render_keycloak_realm,
     render_nginx_conf,
+    render_service_registry,
     render_workspace_cargo_toml,
     render_workspace_package_json,
 )
@@ -64,6 +69,7 @@ from forge.reports import (
 )
 from forge.sync.forge_to_project import apply_features, apply_project_features
 from forge.sync.provenance import ProvenanceCollector
+from forge.synthesis import PlatformSynthesis, compute_platform_synthesis
 
 _logger = get_logger("generator")
 
@@ -198,9 +204,26 @@ def _generate_into(
         config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
     )
     _generate_frontend_phase(config, project_root, quiet=quiet, dry_run=dry_run)
-    _render_docker_stack(config, plan, project_root, quiet=quiet)
+    # Phase 4: compute the multi-service platform synthesis (S2S registry +
+    # inter-service URLs) AFTER all backends are realized, then feed it into the
+    # docker/realm/registry renderers. Returns None (no-op) unless
+    # auth.service_discovery is on — so single-service output stays byte-identical.
+    synthesis = _synthesize_platform(config, plan, project_root, quiet=quiet)
+    _render_docker_stack(config, plan, project_root, quiet=quiet, synthesis=synthesis)
     _generate_frontend_extras(config, project_root, quiet=quiet)
     _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
+    # Phase 4: render the synthesized gatekeeper S2S service registry. This runs
+    # AFTER _apply_project_scope because the gatekeeper fragment (project-scoped)
+    # ships its baseline service_registry.yaml there and refuses to overwrite an
+    # existing file — so the synthesized registry must REPLACE the baseline only
+    # once it is on disk. No-op when synthesis is None (single-service / feature
+    # off), so non-synthesized output is byte-identical. Re-record provenance so
+    # the manifest carries the synthesized content's hash (base-template origin:
+    # forge-generated infra, like docker-compose.yml / keycloak-realm.json).
+    if synthesis is not None:
+        registry_path = render_service_registry(config, synthesis, project_root)
+        if registry_path is not None:
+            collector.record(registry_path, origin="base-template")
     # Renumber each Python backend's alembic migrations into a valid linear
     # chain BEFORE provenance is stamped (so forge.toml records the rewritten
     # content): fragments ship colliding/gapped revision numbers that alembic
@@ -282,6 +305,18 @@ def _generate_backends(
 
     for bc in config.backends:
         spec = BACKEND_REGISTRY[bc.language]
+        # Application-template dispatch: a registered BackendApplicationTemplate
+        # selects the Copier template for the chosen (language, app_template).
+        # Built-ins always have a `crud-service` variant whose template_dir IS
+        # spec.template_dir (single self-contained render) — byte-identical to
+        # the pre-app-template path. Anything without a variant falls back to
+        # the baseline spec template (defensive; plugin backends).
+        variant_name = bc.app_template or DEFAULT_BACKEND_TEMPLATE
+        app_template = get_backend_application_template(bc.language, variant_name)
+        backend_template_dir = (
+            app_template.template_dir if app_template is not None else spec.template_dir
+        )
+        backend_base_dir = app_template.base_template_dir if app_template is not None else ""
         backend_dir = project_root / "services" / bc.name
         _log(f"  Generating {spec.display_label} backend '{bc.name}' ...")
         with phase_timer(
@@ -312,25 +347,28 @@ def _generate_backends(
             includes_error_envelope = any(rf.fragment.name == "error_port" for rf in plan.ordered)
             _generate_single_backend(
                 bc,
-                spec.template_dir,
+                backend_template_dir,
                 backend_dir,
                 quiet,
                 include_platform_auth=includes_platform_auth,
                 include_error_envelope=includes_error_envelope,
+                base_template_dir=backend_base_dir,
+                dry_run=dry_run,
             )
-        # We know which backend template produced this tree (spec.template_dir
-        # is e.g. "services/python-service-template"). Pass it as template_name
-        # so harvest / drift-verify can attribute each file to its emitting
-        # template. ``template_version`` is the resolved semver from
+        # We know which backend template produced this tree
+        # (``backend_template_dir`` is e.g. "services/python-service-template"
+        # for crud-service, or "services/python/worker" for a variant). Pass it
+        # as template_name so harvest / drift-verify can attribute each file to
+        # its emitting template. ``template_version`` is the resolved semver from
         # ``_forge_template.toml`` (or the BackendSpec default), so per-file
         # provenance entries record the version too — the updater compares
         # this against the live template at update time.
-        backend_template_version = _resolve_template_version_for(spec.template_dir, spec.version)
+        backend_template_version = _resolve_template_version_for(backend_template_dir, spec.version)
         _record_tree(
             backend_dir,
             collector,
             origin="base-template",
-            template_name=spec.template_dir,
+            template_name=backend_template_dir,
             template_version=backend_template_version,
         )
         # Phase B1 + Cluster D (matrix-nightly-fixes plan): strip the database
@@ -351,7 +389,7 @@ def _generate_backends(
             strip_python_database(
                 backend_dir,
                 collector=collector,
-                template_name=spec.template_dir,
+                template_name=backend_template_dir,
                 template_version=backend_template_version,
             )
         with phase_timer(
@@ -438,10 +476,42 @@ def _generate_frontend_phase(
             _generate_frontend(config, project_root, quiet=quiet, dry_run=dry_run)
 
 
+def _synthesize_platform(
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    *,
+    quiet: bool,
+) -> PlatformSynthesis | None:
+    """Phase 4: multi-service platform synthesis.
+
+    When ``auth.service_discovery`` is on (and the project has >1 backend),
+    this computes the cross-service S2S auth graph from each backend's
+    ``depends_on`` — per-service client id / secret / audiences + inter-service
+    URLs — and returns it for the docker/realm/registry renderers to consume.
+
+    P4.1 ships the pure computation: it returns a real
+    :class:`~forge.synthesis.PlatformSynthesis` when multi-service synthesis is
+    active, else ``None``. The renderers do not consume it yet (that is P4.2),
+    so generation output stays byte-identical even with ``service_discovery``
+    on — verified by the golden gate.
+    """
+    return compute_platform_synthesis(config, plan)
+
+
 def _render_docker_stack(
-    config: ProjectConfig, plan: ResolvedPlan, project_root: Path, *, quiet: bool
+    config: ProjectConfig,
+    plan: ResolvedPlan,
+    project_root: Path,
+    *,
+    quiet: bool,
+    synthesis: PlatformSynthesis | None = None,
 ) -> None:
-    """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets."""
+    """Phase 3: render docker-compose, init-db, keycloak/gatekeeper assets.
+
+    ``synthesis`` is the optional Phase-4 platform-synthesis result; when None
+    (the default / single-service case) the renderers behave exactly as before.
+    """
 
     def _log(msg: str) -> None:
         if not quiet:
@@ -477,7 +547,7 @@ def _render_docker_stack(
         render_workspace_package_json(config, project_root, plan=plan)
         render_workspace_cargo_toml(config, project_root, plan=plan)
         with phase_timer(_logger, "generate.compose.render"):
-            render_compose(config, project_root, plan=plan)
+            render_compose(config, project_root, plan=plan, synthesis=synthesis)
         # init-db creates a database per backend plus keycloak's own db.
         # Skip when there are 0–1 backends and no keycloak — the primary
         # backend's POSTGRES_DB env var already handles the single-db case.
@@ -486,12 +556,17 @@ def _render_docker_stack(
         need_multi_backend_init = len(config.backends) > 1 and config.database_mode != "none"
         if need_multi_backend_init or config.include_keycloak:
             _log("  Rendering init-db.sh ...")
-            render_init_db(config, project_root)
+            render_init_db(config, project_root, synthesis=synthesis)
         # Copy auth infrastructure if Keycloak is enabled
         if config.include_keycloak:
             # Render Keycloak realm JSON
             _log("  Rendering keycloak-realm.json ...")
-            render_keycloak_realm(config, project_root)
+            render_keycloak_realm(config, project_root, synthesis=synthesis)
+            # NB: the gatekeeper S2S service_registry.yaml is NOT rendered here.
+            # The gatekeeper fragment (project-scoped) ships its baseline during
+            # _apply_project_scope, which runs AFTER this phase, and refuses to
+            # overwrite an existing file. So the synthesized registry is rendered
+            # later, in _generate_into, once the baseline is on disk.
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
             gatekeeper_src = TEMPLATES_DIR / "infra" / "gatekeeper"
@@ -858,6 +933,7 @@ def _write_forge_toml(
         merge_blocks=merge_blocks,
         template_versions=template_versions,
         frontend=frontend_data,
+        platform_template=config.platform_template,
     )
 
 
@@ -1036,15 +1112,30 @@ def _generate_single_backend(
     *,
     include_platform_auth: bool = False,
     include_error_envelope: bool = False,
+    base_template_dir: str = "",
+    dry_run: bool = False,
 ) -> Path:
-    """Generate a single backend using Copier."""
+    """Generate a single backend using Copier.
+
+    ``base_template_dir`` enables the two-stage render used by application-
+    template variants that are a thin delta on a shared base: the base is
+    rendered first with ``skip_tasks=True``, then the ``template_name`` delta
+    overlays it and runs the combined tree's tasks once. The default empty
+    ``base_template_dir`` is a self-contained single render — exactly how the
+    built-in ``crud-service`` variant ships (byte-identical to the pre-app-
+    template path).
+    """
     ctx = variable_mapper.backend_context(
         bc,
         include_platform_auth=include_platform_auth,
         include_error_envelope=include_error_envelope,
     )
     dst.mkdir(parents=True, exist_ok=True)
-    _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet)
+    if base_template_dir:
+        _run_copier(
+            TEMPLATES_DIR / base_template_dir, dst, ctx, quiet, skip_tasks=True, dry_run=dry_run
+        )
+    _run_copier(TEMPLATES_DIR / template_name, dst, ctx, quiet, dry_run=dry_run)
     return dst
 
 

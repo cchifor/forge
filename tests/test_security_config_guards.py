@@ -1,7 +1,7 @@
 """Verify that MCP audit and domain config templates ship secure defaults.
 
 Some checks verify template content (grep). The behavioural checks below
-actually load the template ``domain.py`` (with a stubbed ``weld``) and
+actually load the template ``domain.py`` (with a stubbed ``forge_core``) and
 exercise ``SecurityConfig`` so a secret that *looks* overridden but is
 really a shipped placeholder is caught — a content grep cannot do that.
 """
@@ -90,11 +90,13 @@ class TestDomainSecretKeyGuard:
 
 
 def _load_domain_module() -> types.ModuleType:
-    """Load the template ``domain.py`` with a stubbed ``weld`` dependency.
+    """Load the template ``domain.py`` with a stubbed ``forge_core`` dependency.
 
-    The template imports ``from weld.core.domain.config import AuthConfig``;
-    ``weld`` is only present in generated projects, so we inject a minimal
-    pydantic stub mirroring ``tests/matrix/fixtures/sdks/weld-core``.
+    The template imports ``from forge_core.domain.config import AuthConfig``;
+    the vendored ``forge_core`` package only exists in a generated project's
+    ``sdks/forge-core/`` tree, so we inject a minimal pydantic stub mirroring
+    the generic ``AuthConfig`` (P5 block 1c/1e) — the domain validator only
+    reads ``enabled`` and ``client_secret``.
     """
     from pydantic import BaseModel, ConfigDict
 
@@ -104,11 +106,11 @@ def _load_domain_module() -> types.ModuleType:
         enabled: bool = False
         client_secret: str = ""
 
-    pkg_config = types.ModuleType("weld.core.domain.config")
+    pkg_config = types.ModuleType("forge_core.domain.config")
     pkg_config.AuthConfig = _AuthConfig
-    for name in ("weld", "weld.core", "weld.core.domain"):
+    for name in ("forge_core", "forge_core.domain"):
         sys.modules.setdefault(name, types.ModuleType(name))
-    sys.modules["weld.core.domain.config"] = pkg_config
+    sys.modules["forge_core.domain.config"] = pkg_config
 
     spec = importlib.util.spec_from_file_location("_forge_template_domain", _DOMAIN_CONFIG_PATH)
     assert spec and spec.loader

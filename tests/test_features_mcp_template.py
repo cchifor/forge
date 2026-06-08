@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import OptionsError
 from forge.fragments import FRAGMENT_REGISTRY
+from forge.generator import generate
 from forge.options import OPTION_REGISTRY
 
 
@@ -64,10 +66,13 @@ def test_mcp_template_does_not_collide_with_platform_mcp() -> None:
     )
 
 
-def test_mcp_template_server_fragment_declares_weld_mcp_template() -> None:
+def test_mcp_template_server_fragment_declares_mcp_only() -> None:
+    """P5 Stage 2d — the MCP template is vendored; only ``mcp`` is a real dep."""
     frag = FRAGMENT_REGISTRY["mcp_template_server"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    assert "weld-mcp-template" in impl.dependencies
+    assert not any("weld" in d for d in impl.dependencies), (
+        f"mcp_template_server still declares a weld dependency: {impl.dependencies}"
+    )
     assert any(d.startswith("mcp>=") for d in impl.dependencies)
     assert frag.parity_tier == 3
 
@@ -76,20 +81,42 @@ def test_mcp_template_openapi_tools_depends_on_server() -> None:
     frag = FRAGMENT_REGISTRY["mcp_template_openapi_tools"]
     assert frag.depends_on == ("mcp_template_server",)
     impl = frag.implementations[BackendLanguage.PYTHON]
-    # The [openapi] extra pulls in PyYAML + openapi schema parser.
-    assert any("weld-mcp-template[openapi]" in d for d in impl.dependencies)
+    # The vendored openapi generator uses PyYAML (a base dep); no weld dep.
+    assert not any("weld" in d for d in impl.dependencies), (
+        f"mcp_template_openapi_tools still declares a weld dependency: {impl.dependencies}"
+    )
+
+
+def test_mcp_template_fragments_ship_no_weld_imports() -> None:
+    """The vendored MCP template source never imports ``weld``."""
+    for name in ("mcp_template_server", "mcp_template_openapi_tools"):
+        files_root = (
+            Path(FRAGMENT_REGISTRY[name].implementations[BackendLanguage.PYTHON].fragment_dir)
+            / "files"
+        )
+        for src in list(files_root.rglob("*.py")) + list(files_root.rglob("*.py.jinja")):
+            for line in src.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                assert not stripped.startswith(("import weld", "from weld")), (
+                    f"weld import in vendored mcp source: {src}: {stripped}"
+                )
 
 
 def test_mcp_template_server_files_present() -> None:
     frag = FRAGMENT_REGISTRY["mcp_template_server"]
     impl = frag.implementations[BackendLanguage.PYTHON]
     files_root = Path(impl.fragment_dir) / "files"
-    assert (files_root / "src" / "app" / "mcp" / "__init__.py").is_file()
-    assert (files_root / "src" / "app" / "mcp" / "server.py").is_file()
-    plugins = files_root / "src" / "app" / "mcp" / "plugins"
+    mcp_root = files_root / "src" / "app" / "mcp"
+    assert (mcp_root / "__init__.py").is_file()
+    assert (mcp_root / "server.py").is_file()
+    plugins = mcp_root / "plugins"
     assert (plugins / "__init__.py").is_file()
     # ping.py.jinja — the plugin slug interpolates ``{{ project_slug }}``.
     assert (plugins / "ping.py.jinja").is_file()
+    # Vendored, weld-free template package.
+    template = mcp_root / "_template"
+    for name in ("__init__.py", "plugin.py", "server.py", "errors.py", "openapi.py", "telemetry.py"):
+        assert (template / name).is_file()
 
 
 def test_mcp_template_server_inject_mounts_on_main_app() -> None:
@@ -119,16 +146,15 @@ def test_mcp_router_requires_authentication() -> None:
     """Regression guard for the unauthenticated-MCP vuln. Every /mcp route must
     be gated: the server exposes tool invocation (subprocess exec), approval-
     token minting, and an audit log of user identities. Verified behaviourally
-    (auth on + no token -> 401) via the real weld SDK; this locks the gate into
-    the template so it cannot silently regress. NOTE: oauth2_scheme is
-    auto_error=False and does NOT gate — get_current_user (raises 401) is the
-    enforcing dependency."""
+    (auth on + no token -> 401); this locks the gate into the template so it
+    cannot silently regress. NOTE: oauth2_scheme is auto_error=False and does
+    NOT gate — get_current_user (raises 401) is the enforcing dependency."""
     router = (
         Path(__file__).resolve().parent.parent
         / "forge/features/platform/templates/mcp_server/python/files/src/app/mcp/router.py"
     )
     src = router.read_text(encoding="utf-8")
-    assert "from weld.fastapi.security.auth import get_current_user" in src
+    assert "from forge_core.security.auth import get_current_user" in src
     assert "dependencies=[Depends(get_current_user)]" in src
 
 
@@ -163,3 +189,56 @@ def test_mcp_audit_entry_matches_on_disk_shape() -> None:
     src = _MCP_ROUTER.read_text(encoding="utf-8")
     assert "ts: float" in src
     assert "user_id: str | None = None" in src
+
+
+# --------------------------------------------------------------------------- #
+# Render: mcp_template_server generates against the base FORGE:APP_MOUNTS anchor
+# (regression guard — the anchor was never added to the base main.py, so the
+# fragment's sub-app mount always raised InjectionError).
+# --------------------------------------------------------------------------- #
+
+
+def test_mcp_template_server_generates_and_mounts(tmp_path: Path) -> None:
+    cfg = ProjectConfig(
+        project_name="mcpt",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="mcpt",
+                language=BackendLanguage.PYTHON,
+                features=["items"],
+                sdk_consumption="none",
+            )
+        ],
+        frontend=None,
+        options={"mcp_template.server": True},
+    )
+    backend = Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"
+    main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
+    assert "build_mcp_app" in main_py
+    assert 'app.mount("/mcp"' in main_py
+    # The mount uses the vendored default resolver — no module-level
+    # ``container`` reference (which doesn't exist at module scope).
+    assert "build_default_context_resolver()" in main_py
+    assert "container.get(PluginContextResolver)" not in main_py
+    # The templated plugin file rendered to a real .py (suffix stripped) and
+    # the .py.jinja did not land in the project tree.
+    assert (backend / "src/app/mcp/plugins/ping.py").is_file()
+    assert not (backend / "src/app/mcp/plugins/ping.py.jinja").exists()
+    ping = (backend / "src/app/mcp/plugins/ping.py").read_text(encoding="utf-8")
+    assert "{{" not in ping and "{%" not in ping
+    # project_slug == the backend service name (``api``), matching what the
+    # base template rendered ``{{ project_slug }}`` to.
+    assert 'slug = "api.ping"' in ping
+    assert 'description="Health-check the Api service."' in ping
+    for py in backend.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        source = py.read_text(encoding="utf-8")
+        for line in source.splitlines():
+            stripped = line.strip()
+            assert not stripped.startswith(("import weld", "from weld")), (
+                f"weld import in rendered project: {py}: {stripped}"
+            )
+        ast.parse(source, filename=str(py))

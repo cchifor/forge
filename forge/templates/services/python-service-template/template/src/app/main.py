@@ -19,7 +19,7 @@ from app.core.lifecycle import AppLifecycle
 from app.middleware.audit import AuditMiddleware
 from app.middleware.body_limit import ContentSizeLimitMiddleware
 from app.middleware.logging import RequestLoggingMiddleware
-from weld.fastapi.api.errors import Error
+from forge_core.errors import Error
 # FORGE:MIDDLEWARE_IMPORTS
 
 logger = logging.getLogger(__name__)
@@ -95,3 +95,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+# FORGE:APP_MOUNTS

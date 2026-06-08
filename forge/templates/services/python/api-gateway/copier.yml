@@ -1,0 +1,17 @@
+# Overlay Copier config for the `api-gateway` two-stage variant.
+#
+# This config renders ONLY the thin gateway delta (the base is rendered
+# first by the generator). No questions are declared: the forge generator
+# supplies every ctx var from BackendConfig via variable_mapper.backend_context,
+# and the overlay's .jinja files reuse the same keys the base already consumed.
+# The _exclude list mirrors the base so stray cache/byte-compiled artefacts in
+# the overlay tree never render.
+_subdirectory: template
+_templates_suffix: .jinja
+_exclude:
+  - ".venv"
+  - "__pycache__"
+  - ".pytest_cache"
+  - ".mypy_cache"
+  - ".ruff_cache"
+  - "*.pyc"

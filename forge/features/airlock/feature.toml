@@ -1,7 +1,7 @@
 [feature]
 name = "airlock"
 version = "1.0.0"
-summary = "Client for the Airlock sandbox orchestrator (weld-airlock)."
+summary = "Vendored async client for the Airlock sandbox orchestrator."
 category = "platform"
 
 [feature.depends]

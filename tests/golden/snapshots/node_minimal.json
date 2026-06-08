@@ -21,11 +21,11 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 5049,
-      "sha256": "78b99cba5fda6340"
+      "size": 5228,
+      "sha256": "690cdb8621539bb2"
     },
     "forge.toml": {
-      "size": 22013,
+      "size": 22625,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -49,8 +49,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api/Dockerfile": {
-      "size": 3533,
-      "sha256": "35da490c0f4c582b"
+      "size": 3328,
+      "sha256": "367c1c8e367282b9"
     },
     "services/api/README.md": {
       "size": 1402,

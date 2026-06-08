@@ -189,6 +189,12 @@ class BackendConfig:
     node_version: str = "22"
     rust_edition: str = "2024"
     server_port: int = 5000
+    # Application-template variant — the backend analogue of
+    # FrontendConfig.layout. Selects the Copier service shape via
+    # forge.backend_app_templates; `crud-service` (default) IS today's
+    # baseline per-language template, so leaving it untouched reproduces
+    # pre-app-template output byte-for-byte (the golden gate).
+    app_template: str = "crud-service"
     # Python-only Copier prompt — `monorepo` (default), `standalone`,
     # or `none`. Threaded into ``variable_mapper.backend_context`` only
     # when non-None, so the copier.yml default (`monorepo`) still wins
@@ -196,10 +202,40 @@ class BackendConfig:
     # there's no sibling ``sdks/`` tree to mount; production users in
     # the platform monorepo leave it at the default.
     sdk_consumption: str | None = None
+    # Phase 4 (platform synthesis): names of OTHER backends in this project that
+    # this backend makes service-to-service calls to. Drives the synthesized S2S
+    # client registry + inter-service URL injection when auth.service_discovery
+    # is on. Empty (default) = no declared inter-service edges → synthesis is a
+    # no-op for this backend, so output stays byte-identical. Graph-membership
+    # validation (each name must be a real backend) lives in ProjectConfig.
+    depends_on: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         validate_port(self.server_port, f"Backend '{self.name}' port")
         if not re.match(r"^[a-z][a-z0-9_-]*$", self.name):
             raise ValueError(f"Backend name '{self.name}' must be lowercase kebab/snake case.")
+        for dep in self.depends_on:
+            if not re.match(r"^[a-z][a-z0-9_-]*$", dep):
+                raise ValueError(
+                    f"Backend '{self.name}' depends_on entry '{dep}' must be a "
+                    "lowercase kebab/snake service name."
+                )
+            if dep == self.name:
+                raise ValueError(f"Backend '{self.name}' cannot depend on itself.")
         if self.features:
             validate_features(self.features)
+        # The chosen application template must be a registered variant for
+        # this language. Local import avoids a config<->backend_app_templates
+        # import cycle (the latter imports BackendLanguage from this package).
+        from forge.backend_app_templates import (  # noqa: PLC0415
+            available_backend_templates,
+            get_backend_application_template,
+        )
+
+        if get_backend_application_template(self.language, self.app_template) is None:
+            avail = available_backend_templates(self.language)
+            raise ValueError(
+                f"Application template '{self.app_template}' is not available for "
+                f"{self.language.value}. "
+                f"Choose from: {', '.join(avail) if avail else '(none registered)'}"
+            )

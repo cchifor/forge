@@ -1,4 +1,4 @@
-"""SSE fanout of CloudEvents to browser subscribers via weld-streaming."""
+"""SSE fanout of CloudEvents to browser subscribers (vendored, self-contained)."""
 
 from __future__ import annotations
 

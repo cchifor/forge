@@ -16,16 +16,16 @@ def register_all(api: ForgeAPI) -> None:
             path="streaming.sse",
             type=OptionType.BOOL,
             default=False,
-            summary="SSE endpoint that fans CloudEvents to browser subscribers (weld-streaming).",
+            summary="SSE endpoint that fans CloudEvents to browser subscribers (vendored).",
             description="""\
-Adds ``/api/v1/stream`` backed by :class:`weld.streaming.CloudEventStreamer`.
-Browsers connect with an ``EventSource``; the streamer manages
-subscription, filter, replay (``Last-Event-ID`` handshake) and
-heartbeats. Requires ``events.bus ≠ none`` because the streamer pulls
-events off the configured :class:`weld.events.EventBus`.
+Adds ``/api/v1/stream`` backed by ``app.streaming.CloudEventStreamer``
+(vendored, self-contained). Browsers connect with an ``EventSource``;
+the streamer manages subscription, filter, replay (``Last-Event-ID``
+handshake) and heartbeats. Requires ``events.bus ≠ none`` because the
+streamer pulls events off the configured ``app.events.EventBus``.
 
 BACKENDS: python
-DEPENDENCY: weld-streaming, sse-starlette
+DEPENDENCY: sse-starlette (vendored streamer; bus is vendored too)
 ENV: STREAMING_HEARTBEAT_S, STREAMING_QUEUE_MAX""",
             category=FeatureCategory.ASYNC_WORK,
             stability="beta",

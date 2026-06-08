@@ -733,6 +733,11 @@ def _multi_backend_project(options: dict[str, object] | None = None) -> ProjectC
     # platform-auth fanout stays effective and the MCP guard is satisfied.
     needs_auth = (
         options.get("auth.mode") == "generate"
+        # auth.provider is a sub-discriminator of auth.mode=generate; selecting
+        # a real provider implies the auth stack is generated (and thus needs
+        # keycloak so the resolver doesn't coerce auth.mode→none, which would
+        # in turn gate the provider off).
+        or options.get("auth.provider") in ("gatekeeper", "in_memory", "oidc_generic")
         or options.get("platform.mcp") is True
         or options.get("agent.mode") == "tool_calling"
     )

@@ -57,6 +57,7 @@ breaking change to this surface surfaces before release.
 | ``ForgeAPI.add_injector``      | 1.2          | provisional       |
 | ``ForgeAPI.add_hook``          | 1.2          | provisional       |
 | ``ForgeAPI.add_frontend_layout``| 1.3         | provisional       |
+| ``ForgeAPI.add_backend_application_template`` | 1.4 | provisional    |
 | ``PluginRegistration``         | 1.0.0a1      | stable            |
 +--------------------------------+--------------+-------------------+
 
@@ -90,7 +91,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from forge.capability_resolver import ResolvedPlan
-    from forge.config import BackendSpec, FrontendFramework, FrontendSpec, ProjectConfig
+    from forge.config import (
+        BackendLanguage,
+        BackendSpec,
+        FrontendFramework,
+        FrontendSpec,
+        ProjectConfig,
+    )
     from forge.extractors.pipeline import ExtractorKind, ExtractorProtocol
     from forge.fragments import Fragment
     from forge.hooks import PhaseHook
@@ -113,7 +120,23 @@ if TYPE_CHECKING:
 #     :class:`forge.hooks.PhaseHook` protocol; lets plugins observe
 #     generator phases (telemetry, SBOM, post-generate scripts) without
 #     forking ``generator.py``.
-SDK_VERSION = "1.3"
+#
+# 1.4 — additive: one new ForgeAPI method —
+#   * ``ForgeAPI.add_backend_application_template`` registers a selectable
+#     backend application-template variant (the ``BackendConfig.app_template``
+#     choice) for a built-in or plugin backend language. It is the backend
+#     analogue of ``add_frontend_layout`` — a ``(language, variant)``
+#     ``BackendApplicationTemplate`` (:mod:`forge.backend_app_templates`)
+#     maps to a Copier service template; the generator dispatches on it.
+#
+# 1.5 — additive: one new ForgeAPI method —
+#   * ``ForgeAPI.add_platform_template`` registers a selectable ``--platform``
+#     preset — a bundle of option overrides + per-backend
+#     app_template/depends_on + an optional frontend, applied as the lowest-
+#     priority config layer (:mod:`forge.platform_templates`). The platform-
+#     scale analogue of ``add_frontend_layout`` /
+#     ``add_backend_application_template``.
+SDK_VERSION = "1.5"
 
 
 _SDK_VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
@@ -486,6 +509,123 @@ class ForgeAPI:
             sentinel = register_backend_language(language_value)
             BACKEND_REGISTRY[sentinel] = spec
         self._registration.backends_added += 1
+
+    def add_backend_application_template(
+        self,
+        language: str | BackendLanguage,
+        variant: str,
+        template_dir: str,
+        display_label: str,
+        *,
+        base_template_dir: str = "",
+        supported: bool = True,
+    ) -> None:
+        """Register a selectable backend application template (``app_template``).
+
+        The backend analogue of :meth:`add_frontend_layout`. ``language`` may be
+        a built-in :class:`~forge.config.BackendLanguage` (or its string value)
+        or a plugin backend previously registered via :meth:`add_backend`.
+        ``template_dir`` is the variant's Copier service template — relative to
+        ``forge/templates`` for templates shipped alongside the built-ins, or an
+        absolute path for plugin-shipped ones (the generator joins it under the
+        templates root; an absolute path wins the join). When
+        ``base_template_dir`` is set, the generator renders that shared base
+        first and overlays this template (two-stage render); empty means a
+        self-contained single render — the preferred shape for whole services.
+
+        Additive since SDK 1.4.
+        """
+        from forge.backend_app_templates import (  # noqa: PLC0415
+            BackendApplicationTemplate,
+            _lang_value,
+            register_backend_application_template,
+        )
+        from forge.config import BackendLanguage, resolve_backend_language  # noqa: PLC0415
+
+        lang = (
+            language
+            if isinstance(language, BackendLanguage)
+            else resolve_backend_language(language)
+        )
+        try:
+            register_backend_application_template(
+                BackendApplicationTemplate(
+                    language=lang,
+                    variant=variant,
+                    template_dir=template_dir,
+                    display_label=display_label,
+                    supported=supported,
+                    base_template_dir=base_template_dir,
+                )
+            )
+        except ValueError as exc:
+            raise PluginError(
+                f"Plugin '{self._registration.name}' tried to register backend "
+                f"application template '{variant}' for '{_lang_value(lang)}', but "
+                f"registration failed: {exc}.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "backend_application_template",
+                    "value": f"{_lang_value(lang)}/{variant}",
+                },
+            ) from exc
+
+    def add_platform_template(
+        self,
+        name: str,
+        display_label: str,
+        description: str,
+        *,
+        include_keycloak: bool = False,
+        options: dict[str, Any] | None = None,
+        backends: tuple[dict[str, Any], ...] | list[dict[str, Any]] = (),
+        frontend: dict[str, Any] | None = None,
+        database_mode: str | None = None,
+    ) -> None:
+        """Register a selectable ``--platform`` preset.
+
+        The platform-scale analogue of :meth:`add_frontend_layout` and
+        :meth:`add_backend_application_template`. A preset is a *config layer*:
+        ``options`` (dotted-path overrides), ``backends`` (per-backend
+        ``name``/``language``/``app_template``/``server_port``/``depends_on``
+        dicts), and an optional ``frontend`` block (``None`` ⇒ headless) are
+        deep-merged *under* the user's config by the CLI builder, so user flags
+        and config-file values always win. ``include_keycloak`` seeds the
+        top-level switch (S2S service discovery requires it). ``database_mode``
+        optionally overrides ``database.mode``.
+
+        Additive since SDK 1.5.
+        """
+        from forge.platform_templates import (  # noqa: PLC0415
+            PlatformTemplate,
+            register_platform_template,
+        )
+
+        try:
+            register_platform_template(
+                PlatformTemplate(
+                    name=name,
+                    display_label=display_label,
+                    description=description,
+                    include_keycloak=include_keycloak,
+                    options=dict(options or {}),
+                    backends=tuple(dict(be) for be in backends),
+                    frontend=dict(frontend) if frontend is not None else None,
+                    database_mode=database_mode,
+                )
+            )
+        except ValueError as exc:
+            raise PluginError(
+                f"Plugin '{self._registration.name}' tried to register platform "
+                f"template '{name}', but registration failed: {exc}.",
+                code=PLUGIN_COLLISION,
+                context={
+                    "plugin": self._registration.name,
+                    "kind": "platform_template",
+                    "value": name,
+                },
+            ) from exc
 
     # -- Frontend registration (1.0.0a4+) -----------------------------------
 

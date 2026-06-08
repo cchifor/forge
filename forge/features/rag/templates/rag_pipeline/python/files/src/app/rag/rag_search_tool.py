@@ -64,7 +64,7 @@ async def _rag_search(query: str, top_k: int = 5) -> dict:
     than searching across *every* tenant's documents (cross-tenant leak)."""
     import uuid
 
-    from weld.core.context import get_customer_id
+    from forge_core.domain.context import get_customer_id
 
     from app.rag.retriever import RagRetriever
 

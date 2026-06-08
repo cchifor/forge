@@ -66,6 +66,11 @@ class ProjectConfig:
     frontend: FrontendConfig | None = None
     include_keycloak: bool = False
     keycloak_port: int = 18080
+    # Phase 4 (platform synthesis): optional named platform preset
+    # (templates/platforms/<name>/platform.toml) — a bundle of option
+    # overrides + per-backend app_template/depends_on assignments applied
+    # before user options. None (default) = no preset → no effect.
+    platform_template: str | None = None
     # Typed configuration options. Path → value (dotted key like
     # "rag.backend" or "middleware.rate_limit"). Only paths that are
     # explicitly set appear here; defaults are applied by the resolver
@@ -251,6 +256,7 @@ class ProjectConfig:
         self._validate_options()
         self._validate_components_shape()
         self._validate_layer_modes()
+        self._validate_service_discovery()
         self._resolve_once()
 
     def _validate_components_shape(self) -> None:
@@ -531,6 +537,141 @@ class ProjectConfig:
                 raise ValueError(
                     f"Options {a} and {b} are mutually exclusive. Disable one of them."
                 )
+
+    def _validate_service_discovery(self) -> None:
+        """Phase 4 — graph + activation rules for multi-service synthesis.
+
+        When ``auth.service_discovery`` is on (the option, resolved through any
+        alias and defaulted):
+
+        * the project must have more than one backend — S2S synthesis is
+          meaningless for a single service;
+        * every name in any backend's ``depends_on`` must be a real backend in
+          this project (a self-edge is already rejected at the
+          ``BackendConfig`` level).
+
+        A dependency *cycle* (``A -> B -> A``) is legal at runtime — two
+        services calling each other happens — but is often a design smell, so
+        it warns rather than fails.
+        """
+        if not self._service_discovery_active():
+            return
+        if len(self.backends) <= 1:
+            raise ValueError(
+                "auth.service_discovery requires more than one backend "
+                f"(found {len(self.backends)}). Multi-service synthesis builds "
+                "an S2S graph across backends; a single service has no one to "
+                "talk to. Either add another backend or disable "
+                "auth.service_discovery."
+            )
+        # Multi-service synthesis emits gatekeeper+keycloak-specific artifacts
+        # (the S2S service registry + svc-* realm clients), so it requires the
+        # gatekeeper stack to actually be generated. The resolver coerces
+        # ``auth.provider``->``none`` (via ``auth.mode``->``none``) whenever
+        # ``include_keycloak`` is off, so a raw ``auth.provider`` read alone is
+        # not enough — check the gating inputs (``include_keycloak`` +
+        # ``auth.mode``) so a config that *resolves* to no-gatekeeper fails
+        # fast here instead of silently self-disabling synthesis at generate
+        # time (compute_platform_synthesis gates on the resolved value too).
+        effective = self._effective_option_values()
+        if not self.include_keycloak:
+            raise ValueError(
+                "auth.service_discovery requires include_keycloak=True. "
+                "Multi-service synthesis emits a gatekeeper service registry "
+                "and per-service Keycloak realm clients; with keycloak off the "
+                "resolver drops the gatekeeper stack, so there is nothing to "
+                "register against. Enable keycloak, or disable "
+                "auth.service_discovery."
+            )
+        if effective.get("auth.mode") != "generate":
+            raise ValueError(
+                "auth.service_discovery requires auth.mode=generate "
+                f"(found auth.mode={effective.get('auth.mode')!r}); only the "
+                "generated auth stack ships the gatekeeper the S2S registry "
+                "registers against. Set auth.mode=generate, or disable "
+                "auth.service_discovery."
+            )
+        provider = effective.get("auth.provider")
+        if provider != "gatekeeper":
+            raise ValueError(
+                "auth.service_discovery requires auth.provider=gatekeeper "
+                f"(found auth.provider={provider!r}). Multi-service synthesis "
+                "emits a gatekeeper service registry and per-service Keycloak "
+                "realm clients; the in_memory / oidc_generic / none providers "
+                "ship no gatekeeper or realm to register against. Set "
+                "auth.provider=gatekeeper (the default), or disable "
+                "auth.service_discovery."
+            )
+        # ``infrastructure.event_bus=postgres_notify`` injects a shared-``events``
+        # Postgres bus URL into every backend, so it needs a database. The
+        # option carries ``requires_database=True`` but no ``enables`` map, so
+        # the generic DB-conflict walker treats it as inactive and never fires —
+        # guard it explicitly here (it is only consumed under synthesis).
+        if effective.get("infrastructure.event_bus") == "postgres_notify" and (
+            self.database_mode == "none"
+        ):
+            raise ValueError(
+                "infrastructure.event_bus=postgres_notify requires a database "
+                "(database.mode != none); the event bus provisions and connects "
+                "to a shared 'events' Postgres database. Set a database mode, or "
+                "set infrastructure.event_bus=none."
+            )
+        known = {bc.name for bc in self.backends}
+        for bc in self.backends:
+            for dep in bc.depends_on:
+                if dep not in known:
+                    raise ValueError(
+                        f"Backend '{bc.name}' depends_on '{dep}', which is not a "
+                        f"backend in this project. Known backends: "
+                        f"{sorted(known)}. Fix the depends_on entry or add the "
+                        "missing backend."
+                    )
+        self._warn_on_dependency_cycle(known)
+
+    def _service_discovery_active(self) -> bool:
+        """Whether ``auth.service_discovery`` resolves to a truthy value."""
+        return bool(self._effective_option_values().get("auth.service_discovery"))
+
+    def _warn_on_dependency_cycle(self, known: set[str]) -> None:
+        """Emit a warning (never raise) if the depends_on graph has a cycle."""
+        graph: dict[str, list[str]] = {
+            bc.name: [d for d in bc.depends_on if d in known] for bc in self.backends
+        }
+        # Iterative DFS with WHITE/GREY/BLACK colouring; a back-edge to a GREY
+        # node is a cycle. Deterministic node order for stable diagnostics.
+        WHITE, GREY, BLACK = 0, 1, 2
+        color: dict[str, int] = {name: WHITE for name in graph}
+
+        def _has_cycle_from(start: str) -> bool:
+            stack: list[tuple[str, int]] = [(start, 0)]
+            while stack:
+                node, idx = stack[-1]
+                if idx == 0:
+                    color[node] = GREY
+                neighbors = graph.get(node, [])
+                if idx < len(neighbors):
+                    stack[-1] = (node, idx + 1)
+                    nxt = neighbors[idx]
+                    if color.get(nxt) == GREY:
+                        return True
+                    if color.get(nxt) == WHITE:
+                        stack.append((nxt, 0))
+                else:
+                    color[node] = BLACK
+                    stack.pop()
+            return False
+
+        for name in sorted(graph):
+            if color[name] == WHITE and _has_cycle_from(name):
+                from forge.logging import get_logger  # noqa: PLC0415
+
+                get_logger("config").warning(
+                    "auth.service_discovery: the backend depends_on graph "
+                    "contains a cycle. This is legal at runtime (mutually "
+                    "calling services) but is often a design smell; review the "
+                    "depends_on edges."
+                )
+                return
 
     def _validate_database_mode(self) -> None:
         """Reject ``database.mode=none`` when DB-dependent options are on.

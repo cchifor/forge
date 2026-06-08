@@ -304,32 +304,34 @@ def test_gatekeeper_pyproject_targets_supported_pythons() -> None:
     )
 
 
-def test_gatekeeper_fragments_wired_to_auth_mode() -> None:
-    """Phase 2 Wave 2 cutover landed — both gatekeeper fragments are
-    in ``auth.mode=generate``'s enables tuple.
+def test_gatekeeper_fragments_wired_to_auth_provider() -> None:
+    """Both gatekeeper fragments are wired to ``auth.provider=gatekeeper``.
 
-    Cutover: removed the imperative gatekeeper service block from
-    ``forge/templates/deploy/docker-compose.yml.j2`` and the entire
-    legacy ``forge/templates/infra/gatekeeper/`` source tree. The
-    gatekeeper + gatekeeper-keygen sidecars now ship via the
-    declarative ``compose.yaml`` entries on these two fragments
-    (registered through ``forge.services.fragment_compose``).
+    The provider-discriminator split moved the token-issuer fragments out of
+    ``auth.mode=generate``'s bundle (which now ships only the issuer-agnostic
+    SDK + middleware) into ``auth.provider``'s enables map. ``auth.provider``
+    defaults to ``gatekeeper``, so a project with ``auth.mode=generate`` (and
+    no explicit provider) still gets the gatekeeper sidecars — verified to be
+    byte-identical by the golden snapshots.
 
-    Pinning the wiring here so a future regression that drops either
-    fragment from ``auth.mode``'s enables map gets caught.
+    Pinning the wiring here so a regression that drops either fragment from
+    ``auth.provider=gatekeeper``'s enables map gets caught.
     """
     from forge.options import OPTION_REGISTRY
 
-    auth_mode = OPTION_REGISTRY["auth.mode"]
-    enabled = auth_mode.enables.get("generate", ())
+    auth_provider = OPTION_REGISTRY["auth.provider"]
+    assert auth_provider.default == "gatekeeper", (
+        "auth.provider must default to gatekeeper during the compat window so "
+        "auth.mode=generate reproduces today's behaviour."
+    )
+    enabled = auth_provider.enables.get("gatekeeper", ())
     assert "platform_auth_gatekeeper" in enabled, (
-        "platform_auth_gatekeeper fragment must be in auth.mode=generate's "
-        "enables tuple after the Phase 2 Wave 2 cutover — without it, a "
-        "generated project gets no gatekeeper sidecar."
+        "platform_auth_gatekeeper fragment must be in auth.provider=gatekeeper's "
+        "enables tuple — without it, a generated project gets no gatekeeper sidecar."
     )
     assert "platform_auth_gatekeeper_keygen" in enabled, (
         "platform_auth_gatekeeper_keygen fragment must be in "
-        "auth.mode=generate's enables tuple — gatekeeper depends on it "
+        "auth.provider=gatekeeper's enables tuple — gatekeeper depends on it "
         "(gatekeeper-keygen runs first to produce the ECDSA signing keys)."
     )
 

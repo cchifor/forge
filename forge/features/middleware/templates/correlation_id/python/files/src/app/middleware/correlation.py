@@ -20,7 +20,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.middleware.logging import _ensure_correlation_id
-from weld.observability.correlation import set_correlation_id
+from forge_core.observability.correlation import set_correlation_id
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):

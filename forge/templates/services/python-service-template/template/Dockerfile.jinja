@@ -1,8 +1,11 @@
 # Multi-stage build: a wheel-building "builder" stage that resolves the
-# service's deps + builds the weld-* SDKs from the `sdks` build context,
-# and a thin runtime stage that copies only the .venv and source.
+# service's deps + builds the vendored forge-core SDK (and, when auth is
+# generated, the project-root platform-auth SDK), and a thin runtime stage
+# that copies only the .venv and source.
 #
-# Required at build time (with sdk_consumption=monorepo):
+# When the platform-auth SDK is referenced (auth.mode=generate), the project-
+# root ``sdks/`` tree must be available at build time as the ``sdks`` build
+# context:
 #   docker build \
 #     --build-context sdks=../../sdks \
 #     -t {{ project_slug }} .
@@ -18,47 +21,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.16 /uv /uvx /bin/
 
-{%- if sdk_consumption == "monorepo" %}
-# Build the weld-* SDKs as wheels so the runtime image resolves from
-# /wheels instead of needing the source path baked in.
-{%- for sdk in weld_base_sdks.split(',') %}
-COPY --from=sdks weld-{{ sdk|trim }} /tmp/sdks/weld-{{ sdk|trim }}
-{%- endfor %}
-RUN {% for sdk in weld_base_sdks.split(',') %}cd /tmp/sdks/weld-{{ sdk|trim }} && uv build --wheel --out-dir /wheels{% if not loop.last %} \
-    && {% endif %}{% endfor %}
-{%- if include_platform_auth | default(false) %}
-# platform-auth is a separate runtime SDK (not in the weld-* namespace);
-# the platform_auth_python_middleware fragment adds it as a path-dep to
-# pyproject.toml. Mirror the weld-* pattern: COPY the source then build
-# a wheel so uv sync resolves it from /wheels after [tool.uv.sources]
-# is stripped.
-COPY --from=sdks platform-auth /tmp/sdks/platform-auth
-RUN cd /tmp/sdks/platform-auth && uv build --wheel --out-dir /wheels
-{%- endif %}
-{%- endif %}
-
 WORKDIR /project
 
-{%- if sdk_consumption == "monorepo" %}
-# Strip [tool.uv.sources] from the project pyproject so uv resolves
-# weld-* from /wheels rather than the source path that only exists in
-# the build context.
-COPY pyproject.toml uv.lock* ./
-RUN awk 'BEGIN { skip = 0 } \
-    /^\[tool\.uv\.sources\]/ { skip = 1; next } \
-    /^\[/ { skip = 0 } \
-    skip == 0 { print }' pyproject.toml > pyproject.toml.stripped \
-    && mv pyproject.toml.stripped pyproject.toml
-# Re-resolve (no --frozen): [tool.uv.sources] was just stripped above so the
-# committed uv.lock (which records weld-* as path deps) no longer matches the
-# pyproject being synced. The lock ships as a resolution hint; see WS-8.2.
-RUN uv sync --no-dev --no-editable --find-links=/wheels
-{%- else %}
-COPY pyproject.toml uv.lock* ./
-# Re-resolve (no --frozen): the rendered pyproject is feature-conditional, so a
-# single committed lock can't stay consistent across feature combos. See WS-8.2.
-RUN uv sync --no-dev --no-editable
+# Vendored path-dep SDKs are resolved via [tool.uv.sources] in pyproject.toml.
+# KEEP those sources (do NOT strip them) and place each SDK tree where its
+# declared path points, so uv installs them from the LOCAL source. This is
+# load-bearing for SECURITY: the vendored dist names (notably ``forge-core``)
+# collide with unrelated packages on PyPI (a real ``forge-core`` exists, and
+# even shares our version) — uv's source override is the ONLY thing that
+# prevents a dependency-confusion install. Stripping the sources + relying on
+# ``--find-links`` does NOT exclude PyPI and silently pulls the wrong package.
+# ``--no-editable`` builds each SDK into the venv (copied wholesale to the
+# runtime stage; the source ``sdks/`` tree itself is not carried forward).
+#   - forge-core ships inside this backend at ``sdks/forge-core`` (main context).
+#   - platform-auth ships at the project-root ``sdks/`` tree (the ``sdks``
+#     build context) when auth.mode=generate.
+COPY sdks/forge-core /project/sdks/forge-core
+{%- if include_platform_auth | default(false) %}
+COPY --from=sdks platform-auth /project/sdks/platform-auth
 {%- endif %}
+COPY pyproject.toml uv.lock* ./
+{%- if include_platform_auth | default(false) %}
+# platform-auth's [tool.uv.sources] path is project-root-relative
+# (``../../sdks/platform-auth``) for the dev monorepo. Each service builds
+# standalone in Docker (no project-root tree in this context), so retarget it
+# to the backend-local copy COPYed above. This RETARGETS one path — it does
+# NOT strip the source override, so the dependency-confusion guard stays.
+RUN sed -i '/platform-auth = {/ s#\.\./\.\./sdks/platform-auth#sdks/platform-auth#' pyproject.toml
+{%- endif %}
+RUN uv sync --no-dev --no-editable
 
 # Copy source
 COPY src/ src/

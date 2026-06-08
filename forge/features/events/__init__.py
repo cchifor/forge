@@ -1,4 +1,4 @@
-"""CloudEvents bus and transactional outbox via weld-events."""
+"""CloudEvents bus and transactional outbox (vendored, self-contained)."""
 
 from __future__ import annotations
 

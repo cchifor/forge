@@ -4,7 +4,9 @@
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_IMPORTS
   position: before
-  snippet: "from app.streaming import build_streamer"
+  snippet: |
+    from app.events import EventBus
+    from app.streaming import CloudEventStreamer, build_streamer
 
 - target: src/app/core/ioc/infra.py
   marker: FORGE:IOC_INFRA_PROVIDERS

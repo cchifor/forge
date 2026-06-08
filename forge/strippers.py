@@ -114,9 +114,9 @@ from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.core.ioc import ALL_PROVIDERS
-from weld.core.discovery import Discovery
-from weld.fastapi.security import auth
-from weld.fastapi.security.platform_auth_setup import build_auth_guard
+from forge_core.discovery import Discovery
+from forge_core.security import auth
+from forge_core.security.platform_auth_setup import build_auth_guard
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,7 @@ from dishka import Provider, Scope, from_context, provide
 from fastapi import Request
 
 from app.core.config import Settings
-from weld.core.discovery import Discovery
+from forge_core.discovery import Discovery
 
 logger = logging.getLogger(__name__)
 
@@ -269,9 +269,9 @@ from __future__ import annotations
 from dishka import Provider, Scope, provide
 from fastapi import HTTPException, Request
 
-from weld.core import context
-from weld.core.domain.user import User
-from weld.fastapi.security.auth import authenticate_request
+from forge_core.domain import context
+from forge_core.domain.user import User
+from forge_core.security.auth import authenticate_request
 
 
 class SecurityProvider(Provider):

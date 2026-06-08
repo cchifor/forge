@@ -23,11 +23,14 @@ services:
       # (workspace package.json + lockfile) via ``COPY --from=project_root``.
       # ``additional_contexts`` binds those build-context names to the
       # on-disk ``./sdks/`` directory and the project root (sibling /
-      # parent of the compose file). Unused contexts are harmless
-      # overhead — BuildKit ignores them for Dockerfiles that don't
-      # reference the name.
+      # parent of the compose file). The ``sdks`` context is only declared
+      # when a project-root ``sdks/`` tree actually ships (the platform-auth
+      # SDK fragments) — BuildKit FAILS the build on a declared-but-missing
+      # context dir, and forge-core comes from the main context, not here.
       additional_contexts:
+{% if has_project_sdks %}
         sdks: ./sdks
+{% endif %}
         project_root: .
     environment:
 {% if be.language == "python" %}
@@ -53,9 +56,12 @@ services:
     build:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
-      # See the {{ be.name }}-migrate build above — same rationale.
+      # See the {{ be.name }}-migrate build above — same rationale (the
+      # ``sdks`` context is only declared when a project-root sdks/ ships).
       additional_contexts:
+{% if has_project_sdks %}
         sdks: ./sdks
+{% endif %}
         project_root: .
     # Direct host:container port so the matrix-nightly lane-C smoke
     # contract — and any local ``curl http://localhost:{{ be.port }}`` —
@@ -102,6 +108,9 @@ services:
 {% else %}
       APP__SECURITY__AUTH__ENABLED: "false"
 {% endif %}
+{% for k, v in be.synthesis_env.items() %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.{{ be.name }}.rule=Host(`app.localhost`) && PathPrefix(`/api/{{ be.name }}`)"

@@ -51,27 +51,19 @@ python_version:
 sdk_consumption:
   type: str
   help: |
-    How should the generated service consume weld-* SDKs?
-    `monorepo` (default): path deps to ../../sdks/weld-* — drop into
-    platform/services/ so the SDKs resolve from the platform's own
-    sdks/ tree. `standalone`: pin PyPI versions (requires weld-* to be
-    published; reserved). `none`: skip weld-* deps entirely — only
-    coherent if you've also re-introduced an in-tree shim (the base
-    template no longer ships one).
-    The 1.2.0-alpha.1 cutover removed src/service/, so generated
-    services REQUIRE weld-* to be installable. In CI environments
-    without the platform sibling tree, ``uv sync`` will fail until
-    weld-* ships to PyPI — track GH-ISSUE-TBD.
+    Whether a project-root ``sdks/`` tree is exposed as a docker build
+    context. `monorepo` (default): the platform-monorepo target — declares
+    ``additional_contexts: { sdks: ./sdks }`` so the Dockerfile's
+    ``COPY --from=sdks`` (platform-auth, when auth is generated) resolves.
+    `standalone` / `none`: no sibling ``sdks/`` build context.
+    The always-shipped forge-core SDK lives *inside* each backend
+    (``sdks/forge-core``) and needs no extra build context, so a default
+    project builds standalone regardless of this setting.
   default: "monorepo"
   choices:
-    - "monorepo"   # path deps to ../../sdks/weld-* — drop into platform/services/
-    - "standalone" # pinned PyPI versions — requires weld-* to be published
-    - "none"       # don't declare weld-* deps (legacy 1.1.x — only coherent with a re-vendored src/service/)
-
-weld_base_sdks:
-  type: str
-  help: "Comma-separated weld-* SDKs to declare in pyproject (used when sdk_consumption != none)"
-  default: "auth,core,fastapi,observability,http-client,events"
+    - "monorepo"   # platform-monorepo target: expose ../../sdks as a docker build context
+    - "standalone" # standalone target — no sibling sdks/ build context
+    - "none"       # no sibling sdks/ build context
 
 include_platform_auth:
   type: bool

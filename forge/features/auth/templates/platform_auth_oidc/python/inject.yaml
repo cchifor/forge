@@ -1,0 +1,14 @@
+# platform_auth_oidc: wire an external OIDC issuer in place of the Gatekeeper
+# token authority. Single seam: install the issuer config + redirect
+# AppLifecycle.bootstrap's build_auth_guard to the OIDC variant at
+# FORGE:APP_POST_CONFIGURE — which runs in the application factory *before*
+# AppLifecycle.bootstrap(app, settings), so the guard that lands on app.state
+# verifies the external issuer's tokens (discovery-resolved JWKS, configured
+# algorithms + audience + tenant claim). No Gatekeeper container, no dev route.
+
+- target: src/app/main.py
+  marker: FORGE:APP_POST_CONFIGURE
+  position: before
+  snippet: |-
+    from app.security.oidc_auth import install_oidc_auth
+    install_oidc_auth(app, settings)

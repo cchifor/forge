@@ -108,7 +108,9 @@ def _build_backends_from_cfg(
                     node_version=be_cfg.get("node_version", "22"),
                     rust_edition=be_cfg.get("rust_edition", "2024"),
                     server_port=be_cfg.get("server_port", 5000 + i),
+                    app_template=be_cfg.get("app_template", "crud-service"),
                     sdk_consumption=be_cfg.get("sdk_consumption"),
+                    depends_on=_normalize_features(be_cfg.get("depends_on"), default=[]),
                 )
             )
         return backends
@@ -232,6 +234,61 @@ def _coerce_set_value(path: str, raw: str) -> Any:
     return raw
 
 
+def _deep_merge_under(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Merge ``base`` *under* ``override`` — ``override`` wins on every key.
+
+    Used to apply a platform preset (``base``) as the lowest-priority layer
+    beneath the user's cfg (``override``). The nested ``options`` and
+    ``frontend`` dicts are deep-merged key-by-key (preset values sit under user
+    values), so a partial user ``frontend: {include_chat: true}`` keeps the
+    preset's ``framework``/``layout`` instead of clobbering the whole block.
+    List-valued keys (notably ``backends``) are *not* merged element-wise: if
+    the user supplied the key at all, their whole value wins
+    (user-wins-whole-list); otherwise the preset's value is used. Other scalar
+    and dict keys follow the same user-wins-whole-value rule.
+    """
+    _deep_merge_keys = ("options", "frontend")
+    merged: dict[str, Any] = dict(base)
+    for key, ov in override.items():
+        if key in _deep_merge_keys and isinstance(ov, dict) and isinstance(base.get(key), dict):
+            sub: dict[str, Any] = dict(base[key])
+            sub.update(ov)
+            merged[key] = sub
+        else:
+            merged[key] = ov
+    return merged
+
+
+def _apply_platform_preset(
+    args: argparse.Namespace, cfg: dict[str, Any]
+) -> tuple[dict[str, Any], str | None]:
+    """Seed a platform preset under ``cfg`` and return ``(cfg, platform_name)``.
+
+    The preset is the lowest-priority configuration layer: its
+    :meth:`PlatformTemplate.as_config_dict` is deep-merged *under* ``cfg`` so
+    every user CLI flag and config-file value wins. ``platform_name`` resolves
+    CLI ``--platform`` first, then a persisted ``platform_template`` in the cfg
+    file. Returns ``cfg`` unchanged (and ``None``) when no platform is selected,
+    keeping the no-platform path byte-identical.
+    """
+    platform_name = getattr(args, "platform", None) or cfg.get("platform_template")
+    if not platform_name:
+        return cfg, None
+
+    from forge.platform_templates import (  # noqa: PLC0415
+        available_platform_templates,
+        get_platform_template,
+    )
+
+    preset = get_platform_template(str(platform_name))
+    if preset is None:
+        avail = ", ".join(available_platform_templates()) or "(none registered)"
+        raise ValueError(
+            f"Unknown platform preset {platform_name!r}. Available platforms: {avail}."
+        )
+    return _deep_merge_under(preset.as_config_dict(), cfg), preset.name
+
+
 def _build_options(args: argparse.Namespace, cfg: dict[str, Any]) -> dict[str, Any]:
     """Merge YAML ``options:`` block with ``--set`` repeats."""
     options: dict[str, Any] = {}
@@ -264,6 +321,13 @@ def _build_config(
     the JSON envelope. ``None`` (the default) preserves the pre-#5
     behaviour where rewrites were silent.
     """
+    # Platform preset (Phase 4) — apply BEFORE anything else so it sits as the
+    # lowest-priority layer: the preset's config dict is deep-merged UNDER the
+    # user cfg, so every user CLI flag and config-file value still wins. With no
+    # ``--platform`` (and no persisted ``platform_template``) this is a no-op and
+    # ``cfg`` is unchanged — keeping the default path byte-identical.
+    cfg, platform_name = _apply_platform_preset(args, cfg)
+
     r = _Resolver(args, cfg)
     project_name = r.get("project_name", "project_name", default="My Platform")
     description = r.get("description", "description", default="A full-stack application")
@@ -301,7 +365,20 @@ def _build_config(
     # the option (the resolver would dutifully record it that way).
     user_set_paths = set(options)
     auth_mode_before = options.get("auth.mode", "generate")
-    if not include_keycloak and auth_mode_before != "none":
+    # PROVIDER-AWARE: only the keycloak-dependent ``gatekeeper`` issuer forces
+    # this coercion. ``in_memory`` (in-process issuer) and ``oidc_generic``
+    # (external IdP) run keycloak-free, so they keep ``auth.mode=generate``.
+    # ``auth.provider`` defaults to ``gatekeeper`` when unset, preserving the
+    # pre-provider-split behaviour for every existing config. Kept in lock-step
+    # with ``capability_resolver._provider_needs_keycloak``.
+    from forge.capability_resolver import _provider_needs_keycloak  # noqa: PLC0415
+
+    auth_provider = options.get("auth.provider", "gatekeeper")
+    if (
+        not include_keycloak
+        and auth_mode_before != "none"
+        and _provider_needs_keycloak(auth_provider)
+    ):
         options["auth.mode"] = "none"
         # Surface the coercion to JSON callers via the mutations collector.
         # Agents driving forge headlessly need to know the auth.mode value
@@ -368,6 +445,7 @@ def _build_config(
         frontend=frontend,
         include_keycloak=include_keycloak,
         keycloak_port=keycloak_port,
+        platform_template=platform_name,
         options=options,
         option_origins=option_origins,
         components=components,
