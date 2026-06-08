@@ -114,6 +114,28 @@ def test_gatekeeper_keygen_script_shipped() -> None:
     assert keygen.is_file(), f"scripts/keygen.py missing — gatekeeper-keygen will fail: {keygen}"
 
 
+def test_keycloak_realm_sync_sidecar_wired() -> None:
+    """The keycloak-realm-sync one-shot reconciles the User-Profile schema on
+    every boot (Keycloak only imports once), so the gatekeeper's realm-invariant
+    probe finds it present instead of crash-looping on stale pgdata."""
+    from forge.options._registry import OPTION_REGISTRY
+
+    script = _gatekeeper_root() / "scripts" / "realm_sync.py"
+    assert script.is_file(), "scripts/realm_sync.py missing — realm-sync sidecar will fail"
+    src = script.read_text(encoding="utf-8")
+    assert "users/profile" in src and "extract_user_profile_config" in src
+    # Fragment registered + pulled in whenever the gatekeeper provider is chosen.
+    assert "platform_auth_gatekeeper_realm_sync" in FRAGMENT_REGISTRY
+    enables = OPTION_REGISTRY["auth.provider"].enables["gatekeeper"]
+    assert "platform_auth_gatekeeper_realm_sync" in enables
+    # Gatekeeper waits for the sync to complete before booting.
+    gk_compose = (
+        Path(FRAGMENT_REGISTRY["platform_auth_gatekeeper"].implementations[BackendLanguage.PYTHON].fragment_dir).parent
+        / "compose.yaml"
+    ).read_text(encoding="utf-8")
+    assert "keycloak-realm-sync" in gk_compose
+
+
 def test_apikeys_endpoints_derive_tenant_from_verified_session() -> None:
     """The ``/api/v1/api-keys`` endpoints must derive the tenant from the
     verified server-side session (cookie -> Redis), NOT a client-supplied

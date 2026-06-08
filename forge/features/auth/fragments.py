@@ -98,7 +98,10 @@ def register_all(api: ForgeAPI) -> None:
             # ``service_completed_successfully`` wiring resolves before
             # gatekeeper main starts. Both fragments must end up in the
             # plan together when auth.mode=generate (Phase 10 wires this).
-            depends_on=("platform_auth_gatekeeper_keygen",),
+            depends_on=(
+                "platform_auth_gatekeeper_keygen",
+                "platform_auth_gatekeeper_realm_sync",
+            ),
         )
     )
 
@@ -411,6 +414,27 @@ def register_all(api: ForgeAPI) -> None:
             # the service into ``plan.capabilities`` so docker_manager
             # renders it alongside the main gatekeeper service.
             capabilities=("gatekeeper-keygen",),
+        )
+    )
+
+    # keycloak-realm-sync one-shot sidecar. Reconciles the running realm's
+    # User-Profile schema from infra/keycloak-realm.json on every boot (Keycloak
+    # only imports once), so the gatekeeper's realm-invariant probe finds the
+    # schema present instead of crash-looping on stale pgdata. Reuses the
+    # gatekeeper image (realm_sync.py ships in the gatekeeper fragment tree).
+    _GATEKEEPER_REALM_SYNC_IMPL = FragmentImplSpec(
+        fragment_dir=_impl("platform_auth_gatekeeper_realm_sync", "all"),
+        scope="project",
+    )
+    api.add_fragment(
+        Fragment(
+            name="platform_auth_gatekeeper_realm_sync",
+            implementations={
+                BackendLanguage.PYTHON: _GATEKEEPER_REALM_SYNC_IMPL,
+                BackendLanguage.NODE: _GATEKEEPER_REALM_SYNC_IMPL,
+                BackendLanguage.RUST: _GATEKEEPER_REALM_SYNC_IMPL,
+            },
+            capabilities=("gatekeeper-realm-sync",),
         )
     )
 
