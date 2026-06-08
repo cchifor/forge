@@ -15,7 +15,7 @@ Claim set:
   revocation latency = Keycloak access-token TTL + at most one TTL.
 * Audit/forensics: ``keycloak_jti`` and ``keycloak_iss`` link every
   internal token back to the Keycloak session that produced it.
-* Identity: ``https://platform/tenant_id``, ``https://platform/tenant_slug``,
+* Identity: ``https://forge/tenant_id``, ``https://forge/tenant_slug``,
   ``https://platform/email``, ``roles`` (Keycloak default roles filtered),
   ``scope``, ``auth_method`` (``cookie`` for human / ``api_key`` for machine).
 """
@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 
 NBF_SKEW_SECONDS = 5
 
-TENANT_ID_CLAIM = "https://platform/tenant_id"
-TENANT_SLUG_CLAIM = "https://platform/tenant_slug"
+TENANT_ID_CLAIM = "https://forge/tenant_id"
+TENANT_SLUG_CLAIM = "https://forge/tenant_slug"
 EMAIL_CLAIM = "https://platform/email"
 
 # Keycloak emits a few realm-default roles that aren't useful to backends.

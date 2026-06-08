@@ -174,7 +174,7 @@ class ClaimMapper:
 
     A dot-path traverses nested mappings: ``"organization.id"`` reads
     ``claims["organization"]["id"]``. A literal dotted claim key (the common
-    case for namespaced OIDC claims like ``https://platform/tenant_id``) is
+    case for namespaced OIDC claims like ``https://forge/tenant_id``) is
     matched first as a whole key before falling back to dotted traversal, so
     URL-shaped claim names work without escaping.
 

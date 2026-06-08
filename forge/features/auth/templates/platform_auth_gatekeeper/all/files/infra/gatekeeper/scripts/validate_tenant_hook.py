@@ -13,7 +13,7 @@ Walks the full happy path against the running dev stack:
      `tms-web` client (login form POST → 302 to /callback?code=...).
   4. Hits the gatekeeper's /callback with the code and asserts:
        - 302 response with cookies set
-       - the `tenant_session` cookie's JWT carries `https://platform/tenant_id`
+       - the `tenant_session` cookie's JWT carries `https://forge/tenant_id`
        - Keycloak now shows `tenant_id=<DEFAULT>` on the user
   5. Cleans up the test user.
 
@@ -36,7 +36,7 @@ APP_REALM = "app"
 GATEKEEPER_CLIENT_ID = "gatekeeper"
 TMS_WEB_CLIENT_ID = "tms-web"
 DEFAULT_TENANT = "00000000-0000-0000-0000-000000000001"
-TENANT_CLAIM = "https://platform/tenant_id"
+TENANT_CLAIM = "https://forge/tenant_id"
 
 TEST_USERNAME = "tenant-hook-validate@local"
 TEST_PASSWORD = "ValidatePass123!"
