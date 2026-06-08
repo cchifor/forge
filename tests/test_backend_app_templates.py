@@ -72,6 +72,7 @@ def test_available_backend_templates_per_language():
     assert bat.available_backend_templates(BackendLanguage.PYTHON) == (
         "api-gateway",
         "crud-service",
+        "tenant-management-service",
         "worker",
     )
     assert bat.available_backend_templates(BackendLanguage.NODE) == ("crud-service",)
@@ -79,7 +80,12 @@ def test_available_backend_templates_per_language():
 
 
 def test_all_backend_template_names():
-    assert bat.all_backend_template_names() == ("api-gateway", "crud-service", "worker")
+    assert bat.all_backend_template_names() == (
+        "api-gateway",
+        "crud-service",
+        "tenant-management-service",
+        "worker",
+    )
 
 
 def test_get_unknown_variant_returns_none():

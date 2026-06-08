@@ -1,0 +1,21 @@
+db:
+  url: "sqlite+aiosqlite:///:memory:"
+  echo: false
+
+security:
+  auth:
+    enabled: false
+
+discovery:
+  enabled: false
+
+audit:
+  enabled: false
+
+tms:
+  keycloak_admin_url: "http://localhost:8080"
+  keycloak_admin_user: "admin"
+  keycloak_admin_password: "admin"
+  redis_url: "redis://localhost:6379"
+  default_gatekeeper_client_id: "gatekeeper"
+  keycloak_ssl_required: "none"
