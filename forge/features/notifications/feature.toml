@@ -1,0 +1,7 @@
+[feature]
+name = "NotificationCenter"
+version = "1.0.0"
+summary = "Live SSE-driven notification bell + center + toast host (Pinia) — Layer-2 Vue component. Opt-in; wire the bell/ToastHost/bootstrap per the feature README."
+category = "component"
+stability = "experimental"
+layer = 2
