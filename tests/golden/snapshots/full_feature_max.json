@@ -1285,8 +1285,8 @@
       "sha256": "b0d710cd06b5c9d2"
     },
     "infra/keycloak-realm.json": {
-      "size": 4481,
-      "sha256": "4f61e09c806d312a"
+      "size": 6104,
+      "sha256": "d0b5538b82328dea"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
