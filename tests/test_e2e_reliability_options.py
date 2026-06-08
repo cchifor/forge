@@ -125,3 +125,49 @@ class TestFullGeneration:
         assert any(
             "main.py" in p for p in base_entries
         ), "main.py missing from base-template provenance"
+
+
+class TestServiceClientFragment:
+    def _generate(self, tmp_path: Path, enabled: bool) -> Path:
+        config = ProjectConfig(
+            project_name="svc_client_e2e",
+            output_dir=str(tmp_path),
+            backends=[
+                BackendConfig(
+                    name="api",
+                    project_name="svc_client_e2e",
+                    language=BackendLanguage.PYTHON,
+                    features=["items"],
+                )
+            ],
+            frontend=None,
+            options={"reliability.service_client": enabled},
+        )
+        return generate(config, quiet=True, dry_run=True)
+
+    def test_service_client_emitted_when_enabled(self, tmp_path: Path) -> None:
+        project_root = self._generate(tmp_path, enabled=True)
+        mod = (
+            project_root
+            / "services"
+            / "api"
+            / "src"
+            / "app"
+            / "clients"
+            / "service_client.py"
+        )
+        assert mod.is_file(), "service_client.py not emitted"
+        src = mod.read_text(encoding="utf-8")
+        # Ported to forge-core — must not reference the platform weld SDK.
+        assert "from forge_core.observability.correlation import" in src
+        assert "from forge_core.domain.context import" in src
+        assert "weld" not in src
+        assert "class ServiceClient" in src
+        assert "class CircuitBreaker" in src
+
+    def test_service_client_absent_by_default(self, tmp_path: Path) -> None:
+        project_root = self._generate(tmp_path, enabled=False)
+        mod = (
+            project_root / "services" / "api" / "src" / "app" / "clients" / "service_client.py"
+        )
+        assert not mod.exists(), "service_client.py must be off-by-default"
