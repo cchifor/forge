@@ -321,9 +321,6 @@ class TestMultitenantSaasIntegration:
         by_name = {b.name: b for b in config.backends}
         assert by_name["tms"].app_template == "tenant-management-service"
         assert by_name["app"].app_template == "crud-service"
-        # RLS rides on the app workload only; TMS isolates by realm, not schema.
-        assert "multitenancy" in by_name["app"].features
-        assert "multitenancy" not in by_name["tms"].features
 
     def test_dry_run_stands_up_full_topology(self) -> None:
         config = _build_config(
@@ -335,8 +332,17 @@ class TestMultitenantSaasIntegration:
         # TMS control plane (the variant overlay + its hardening doc).
         assert (root / "services/tms/src/app/services/tenant_service.py").is_file()
         assert (root / "services/tms/HARDENING.md").is_file()
-        # App workload carries the RLS enablement migration.
+        # App workload carries the RLS enablement migration...
         assert (root / "services/app/alembic/versions/0002_enable_rls.py").is_file()
+        # ...but the TMS control plane does NOT — its variant is excluded from the
+        # RLS fragment, so it keeps a single linear migration chain (0001 ->
+        # 0002_tms_tables) and boots. (Regression guard for the project-global
+        # shared_rls vs. per-backend scoping fix.)
+        assert not (root / "services/tms/alembic/versions/0002_enable_rls.py").exists()
+        assert (root / "services/tms/alembic/versions/0002_tms_tables.py").is_file()
+        # The RLS fragment's tenancy code likewise stays off the control plane.
+        assert not (root / "services/tms/src/app/middleware/tenant_rls.py").exists()
+        assert (root / "services/app/src/app/middleware/tenant_rls.py").is_file()
         # Gatekeeper edge auth + the corrected Keycloak realm + the realm-sync
         # sidecar (auto-bundled with the gatekeeper provider).
         assert (root / "infra/keycloak-realm.json").is_file()

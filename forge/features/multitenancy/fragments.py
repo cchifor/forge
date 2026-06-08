@@ -66,5 +66,12 @@ def register_all(api: ForgeAPI) -> None:
             # postgres-pgvector is overkill; plain postgres is provisioned by
             # database.mode=generate already. RLS needs no extra sidecar.
             capabilities=(),
+            # ``shared_rls`` is a project-global option, so the RLS fragment
+            # would otherwise land on EVERY Python backend. The
+            # ``tenant-management-service`` control-plane variant must be exempt:
+            # it isolates tenants by Keycloak realm (not Postgres RLS) and ships
+            # its own ``0002_tms_tables`` migration off ``0001`` — adding the RLS
+            # ``0002`` would create a second Alembic head and break its boot.
+            excluded_app_templates=("tenant-management-service",),
         )
     )
