@@ -51,7 +51,9 @@ export function useCapabilities(): Capabilities {
     isAdmin,
     isMember,
     canEdit: isMember,
-    canDelete: isMember,
+    // Destructive actions are admin-only, matching the role model above
+    // (members get read + non-destructive write).
+    canDelete: isAdmin,
     canManage: isMember,
     canEditTenantSettings: isAdmin,
     canViewAdminPanel: isAdmin,

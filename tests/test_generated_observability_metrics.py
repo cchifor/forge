@@ -73,12 +73,16 @@ def test_metrics_middleware_hardening() -> None:
     src = _metrics_source()
     # Operational endpoints are excluded.
     assert "SKIP_PATHS" in src and "/health" in src and "/metrics" in src
-    # In-flight gauge (up-down counter) is incremented/decremented.
+    # In-flight gauge (up-down counter) is incremented/decremented with the
+    # SAME status-free attrs (else the +1/-1 never cancel) — count/duration
+    # carry the status separately.
     assert "create_up_down_counter" in src and "active_requests" in src
-    # The error path still records the request (5xx from an unhandled exc),
-    # and duration / active-request decrement run in a finally.
-    assert "except Exception" in src
-    assert 'attrs["http.status_code"] = 500' in src
+    assert "base_attrs" in src and "req_attrs" in src
+    assert "_active_requests.add(1, base_attrs)" in src
+    assert "_active_requests.add(-1, base_attrs)" in src
+    # An unhandled exception still records the request (status defaults to 500),
+    # and count / duration / active-request decrement all run in a finally.
+    assert "status_code = 500" in src
     assert "finally:" in src
 
 

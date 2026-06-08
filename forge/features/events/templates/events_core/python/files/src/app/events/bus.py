@@ -363,13 +363,33 @@ class PostgresNotifyBus:
                 raise
             except Exception as exc:
                 log.warning(
-                    "EventBus heartbeat failed on %s (%s) — resetting listen connection",
+                    "EventBus heartbeat failed on %s (%s) — resuming subscribers and "
+                    "resetting listen connection",
                     self.channel,
                     exc,
                 )
-                async with self._conn_lock:
-                    await self._close_connection_locked()
-                    await self._ensure_listener_locked()
+                await self._broadcast_resume_and_reset()
+
+    async def _broadcast_resume_and_reset(self) -> None:
+        """Recover from a dropped LISTEN socket.
+
+        Events published while the socket was down were missed — the bounded
+        per-subscriber queues can't be trusted to have caught them. Poison the
+        current subscribers so each SSE stream ends cleanly; the client's
+        EventSource reconnects and the stream's replay phase (Last-Event-ID)
+        backfills the gap. Then reset + re-establish the listener so new events
+        flow again.
+        """
+        for sub in tuple(self._subscribers):
+            sub.closed = True
+            try:
+                sub.queue.put_nowait(None)
+            except asyncio.QueueFull:  # pragma: no cover - full queue + resume race
+                pass
+        self._subscribers.clear()
+        async with self._conn_lock:
+            await self._close_connection_locked()
+            await self._ensure_listener_locked()
 
 
 def _drop_for_backpressure(sub: _Subscriber) -> None:

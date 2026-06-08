@@ -76,6 +76,10 @@ def require_service(
 
     Returns the verified :class:`IdentityContext` on success.
     """
+    if isinstance(allowed_callers, str):
+        # A bare string would frozenset() into a set of characters and reject
+        # every caller — almost certainly a typo for a 1-tuple.
+        raise ValueError("allowed_callers must be a collection of client_ids, not a single string")
     allowed_set = frozenset(allowed_callers)
     if not allowed_set:
         # An empty allow-list would let any verified caller through — almost
