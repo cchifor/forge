@@ -60,6 +60,28 @@ def test_otel_metric_exporter_passes_endpoint_bare_for_grpc() -> None:
     )
 
 
+def _metrics_source() -> str:
+    frag = FRAGMENT_REGISTRY["observability_metrics_middleware"]
+    impl = frag.implementations[BackendLanguage.PYTHON]
+    path = Path(impl.fragment_dir) / "files" / "src" / "app" / "middleware" / "metrics.py"
+    return path.read_text(encoding="utf-8")
+
+
+def test_metrics_middleware_hardening() -> None:
+    """RED metrics must survive errors, skip operational paths, and track
+    in-flight requests (ported behaviours from platform's weld-observability)."""
+    src = _metrics_source()
+    # Operational endpoints are excluded.
+    assert "SKIP_PATHS" in src and "/health" in src and "/metrics" in src
+    # In-flight gauge (up-down counter) is incremented/decremented.
+    assert "create_up_down_counter" in src and "active_requests" in src
+    # The error path still records the request (5xx from an unhandled exc),
+    # and duration / active-request decrement run in a finally.
+    assert "except Exception" in src
+    assert 'attrs["http.status_code"] = 500' in src
+    assert "finally:" in src
+
+
 def test_metrics_middleware_requires_otel_fragment() -> None:
     """The MeterProvider lives in observability_otel's configure_otel. The
     metrics middleware only records into the meter, so selecting it without
