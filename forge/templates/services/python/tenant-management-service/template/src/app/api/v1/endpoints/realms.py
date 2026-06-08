@@ -8,7 +8,7 @@ from uuid import UUID
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.errors import AlreadyExistsError, NotFoundError
+from app.core.errors import AlreadyExistsError, ApplicationError, NotFoundError
 from app.domain.realm import PaginatedRealmResponse, Realm, RealmCreate, RealmType, RealmUpdate
 from app.services.realm_service import RealmService
 from forge_core.security.auth import oauth2_scheme
@@ -98,3 +98,6 @@ async def delete_realm(
         await service.delete(realm_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ApplicationError as exc:
+        # Realm still has active tenants — a conflict, not a server error.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

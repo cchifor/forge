@@ -73,7 +73,13 @@ export const useNotificationStore = defineStore('notifications', () => {
   const toasts = ref<Toast[]>([])
   // ``Set`` preserves insertion order, so eviction-of-oldest is just a
   // ``delete(values().next().value)`` when we cross the cap.
+  // ``recentEventIds`` dedupes *ingest* (items/unread/cursor) so the same
+  // server row never double-counts. ``toastedEventIds`` dedupes the *toast*
+  // pop independently, so an optimistic HTTP-response toast
+  // (:func:`ingestToastOnly`) suppresses only the re-pop on SSE redelivery —
+  // the SSE ingest still ticks items + unreadCount for that row.
   const recentEventIds = new Set<string>()
+  const toastedEventIds = new Set<string>()
 
   // Sorted view for the notification center: most recent first.
   const sortedItems = computed(() =>
@@ -171,12 +177,16 @@ export const useNotificationStore = defineStore('notifications', () => {
     return fallback
   }
 
-  function rememberEventId(eventId: string): void {
-    recentEventIds.add(eventId)
-    if (recentEventIds.size > RECENT_EVENT_IDS_MAX) {
-      const oldest = recentEventIds.values().next().value
-      if (oldest !== undefined) recentEventIds.delete(oldest)
+  function rememberIn(set: Set<string>, eventId: string): void {
+    set.add(eventId)
+    if (set.size > RECENT_EVENT_IDS_MAX) {
+      const oldest = set.values().next().value
+      if (oldest !== undefined) set.delete(oldest)
     }
+  }
+
+  function rememberEventId(eventId: string): void {
+    rememberIn(recentEventIds, eventId)
   }
 
   /**
@@ -201,14 +211,17 @@ export const useNotificationStore = defineStore('notifications', () => {
 
     if (n.read_at === null) {
       unreadCount.value += 1
-      if (!opts?.silent) {
+      // Suppress the toast only if this exact event was already toasted
+      // optimistically (HTTP-response path). The items/unread tick above
+      // still happens — the toast dedupe is independent of the ingest dedupe.
+      if (!opts?.silent && !toastedEventIds.has(n.event_id)) {
+        rememberIn(toastedEventIds, n.event_id)
         ingestToastForNotification(n)
       }
     }
-
-    if (n.seq > Number(lastEventId.value || 0)) {
-      lastEventId.value = String(n.seq)
-    }
+    // NB: the SSE resume cursor (``lastEventId``) is the transport
+    // ``Last-Event-ID`` (``msg.id``), tracked by the stream consumer — not the
+    // client-assigned ``seq`` ordinal, which exists only to sort the center.
   }
 
   /**
@@ -244,14 +257,15 @@ export const useNotificationStore = defineStore('notifications', () => {
    * Ingest a server-rendered notification carried in an HTTP response. The
    * toast surface updates immediately; the bell badge, unread count, and
    * ``lastEventId`` cursor are left to the SSE delivery so they only tick once
-   * per server-side row. The ``event_id`` is recorded so the SSE-delivered
-   * duplicate is deduped on arrival.
+   * per server-side row. The ``event_id`` is recorded in the *toast* dedupe set
+   * (not the ingest set) so the SSE-delivered duplicate skips only the re-pop —
+   * the SSE ``ingest`` still updates items + unreadCount for that row.
    */
   function ingestToastOnly(n: Notification): void {
-    if (recentEventIds.has(n.event_id)) {
+    if (toastedEventIds.has(n.event_id)) {
       return
     }
-    rememberEventId(n.event_id)
+    rememberIn(toastedEventIds, n.event_id)
     ingestToastForNotification(n)
   }
 
@@ -447,6 +461,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     unreadCount.value = 0
     toasts.value = []
     recentEventIds.clear()
+    toastedEventIds.clear()
     lastEventId.value = ''
   }
 

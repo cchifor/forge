@@ -70,4 +70,28 @@ describe('notification store', () => {
     expect(s.items.length).toBe(0)
     expect(s.unreadCount).toBe(0)
   })
+
+  it('optimistic toast does not suppress the SSE items/unread tick (only the re-pop)', () => {
+    const s = useNotificationStore()
+    // HTTP-response optimistic toast pops immediately for a single-shot event…
+    s.ingestToastOnly(notif({ event_id: 'e1', event_type: 'com.example.item.deleted' }))
+    expect(s.toasts).toHaveLength(1)
+    expect(s.items.length).toBe(0) // toast-only: no item yet
+    expect(s.unreadCount).toBe(0)
+    // …then the SSE redelivers the same event_id: items + unread MUST tick,
+    // but the toast MUST NOT pop a second time.
+    s.ingest(notif({ event_id: 'e1', event_type: 'com.example.item.deleted' }))
+    expect(s.items.length).toBe(1)
+    expect(s.unreadCount).toBe(1)
+    expect(s.toasts).toHaveLength(1)
+  })
+
+  it('ingest does not clobber the transport resume cursor with seq', () => {
+    const s = useNotificationStore()
+    // The cursor is the transport Last-Event-ID (set by the stream consumer),
+    // not the client-assigned seq ordinal.
+    s.setLastEventId('evt-abc')
+    s.ingest(notif({ event_id: 'e9', seq: 42 }))
+    expect(s.lastEventId).toBe('evt-abc')
+  })
 })
