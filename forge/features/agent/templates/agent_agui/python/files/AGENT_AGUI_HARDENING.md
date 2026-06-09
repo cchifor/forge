@@ -40,8 +40,12 @@ agent). An `include_chat` project WITHOUT `agent.llm` renders a chat UI with
 
 - **Rate / cost / body-size limits** — the endpoint spends LLM budget and runs
   server-side tools per request. It is auth-gated (`Depends(get_current_user)`,
-  same posture as `/api/v1/tools`) but has no per-tenant rate limit, token/cost
-  ceiling, or request-body size cap yet. Add these before public exposure.
+  same posture as `/api/v1/tools`) but has no per-tenant rate limit or token/cost
+  ceiling yet — add these before public exposure. A request-body size cap IS
+  enforced globally by the base template's `ContentSizeLimitMiddleware`
+  (`audit.max_body_size`, default 50 KiB); note the AG-UI client replays the full
+  message history on every turn, so you will likely need to RAISE that limit for
+  multi-turn chats.
 - **Client-disconnect cancellation** — the run should stop when the client
   disconnects. The base Starlette `StreamingResponse` covers basic teardown;
   add explicit disconnect polling and/or a `ModelSettings.timeout` if your

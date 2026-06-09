@@ -25,7 +25,10 @@ deferred production concerns.
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from forge_core.security.auth import get_current_user
 
 # The endpoint spends LLM budget and invokes server-side tools, so it carries
@@ -50,5 +53,25 @@ async def run_agent_agui(request: Request):
 
     from app.agents.llm_runner import build_agent
 
-    agent = build_agent()
+    try:
+        agent = build_agent()
+    except Exception as exc:  # noqa: BLE001 — surface as an in-chat error, not a 500
+        # Agent construction can fail BEFORE the stream opens (e.g. the default
+        # provider with no API key — ``_resolve_model`` raises). Returning a 500
+        # here would surface to the user as a bare network error. Instead emit a
+        # minimal, well-formed AG-UI SSE stream (RUN_STARTED → RUN_ERROR) so the
+        # chat UI renders the failure in place. Frames are the single-channel
+        # ``data: {json}\n\n`` shape canvas-core parses (type inside the JSON).
+        return _error_stream(str(exc) or exc.__class__.__name__)
+
     return await AGUIAdapter.dispatch_request(request, agent=agent)
+
+
+def _error_stream(message: str) -> StreamingResponse:
+    """A two-frame AG-UI SSE stream reporting an agent-setup failure."""
+
+    async def _gen():
+        yield f"data: {json.dumps({'type': 'RUN_STARTED'})}\n\n"
+        yield f"data: {json.dumps({'type': 'RUN_ERROR', 'message': message})}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")

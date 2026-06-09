@@ -189,3 +189,73 @@ def test_render_ws_endpoint_still_present(tmp_path: Path) -> None:
     api_py = (backend / "src/app/api/v1/api.py").read_text(encoding="utf-8")
     # WS still mounted at /ws.
     assert 'prefix="/ws"' in api_py
+
+
+# --- AG-UI wire-compatibility drift guard ----------------------------------
+
+# Real SSE frames captured from ``ag_ui.encoder.EventEncoder`` under the pinned
+# pydantic-ai 1.74 / ag-ui-protocol 0.1.14 (the versions the agent fragment
+# installs). The generated frontend's ``canvas-core`` parser must keep parsing
+# exactly these. Re-capture from a real EventEncoder if you bump the dep.
+_REAL_AGUI_FRAMES = [
+    'data: {"type":"RUN_STARTED","threadId":"t1","runId":"r1"}\n\n',
+    'data: {"type":"TEXT_MESSAGE_START","messageId":"m1","role":"assistant"}\n\n',
+    'data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"m1","delta":"Hi"}\n\n',
+    'data: {"type":"TEXT_MESSAGE_END","messageId":"m1"}\n\n',
+    'data: {"type":"TOOL_CALL_START","toolCallId":"c1","toolCallName":"show_form","parentMessageId":"m1"}\n\n',
+    'data: {"type":"TOOL_CALL_ARGS","toolCallId":"c1","delta":"{\\"x\\":1}"}\n\n',
+    'data: {"type":"TOOL_CALL_END","toolCallId":"c1"}\n\n',
+    'data: {"type":"RUN_FINISHED","threadId":"t1","runId":"r1"}\n\n',
+    'data: {"type":"RUN_ERROR","message":"boom"}\n\n',
+]
+
+# camelCase fields the canvas-core reducer reads per event type — the backend
+# (via EventEncoder by_alias) must emit these exact keys.
+_REQUIRED_FIELDS = {
+    "TEXT_MESSAGE_START": ["messageId"],
+    "TEXT_MESSAGE_CONTENT": ["messageId", "delta"],
+    "TEXT_MESSAGE_END": ["messageId"],
+    "TOOL_CALL_START": ["toolCallId", "toolCallName"],
+    "TOOL_CALL_ARGS": ["toolCallId", "delta"],
+    "TOOL_CALL_END": ["toolCallId"],
+    "RUN_ERROR": ["message"],
+}
+
+_CANVAS_CORE_EVENTS = (
+    "forge/templates/apps/vue-frontend-template/template/src/features/ai_chat/"
+    "canvas-core/events.ts"
+)
+
+
+def _known_types() -> set[str]:
+    """The SCREAMING_CASE event types canvas-core's parseEvent recognizes."""
+    import re
+
+    text = Path(_CANVAS_CORE_EVENTS).read_text(encoding="utf-8")
+    block = text[text.index("KNOWN_TYPES") :]
+    block = block[: block.index("])")]
+    return set(re.findall(r"'([A-Z_]+)'", block))
+
+
+def test_agui_wire_matches_canvas_core_parser() -> None:
+    """Frames a real pydantic-ai 1.74 EventEncoder emits are parseable by the
+    generated frontend's canvas-core: ``data: {json}\\n\\n`` single-channel
+    framing, SCREAMING_CASE ``type`` in KNOWN_TYPES, camelCase fields present.
+    Guards the AG-UI backend/frontend contract against drift on either side."""
+    import json
+
+    known = _known_types()
+    # Sanity: the canvas-core set covers the core run/text/tool events.
+    for t in ("RUN_STARTED", "TEXT_MESSAGE_CONTENT", "TOOL_CALL_START", "RUN_FINISHED", "RUN_ERROR"):
+        assert t in known, f"canvas-core KNOWN_TYPES dropped {t}"
+
+    for frame in _REAL_AGUI_FRAMES:
+        assert frame.startswith("data: ") and frame.endswith("\n\n"), frame
+        # Single-channel: exactly one data line, no `event:` line.
+        body = frame[len("data: ") :].rstrip("\n")
+        assert "\n" not in body, "AG-UI frames are single-line data"
+        payload = json.loads(body)
+        etype = payload["type"]
+        assert etype in known, f"EventEncoder emits {etype!r} but canvas-core won't parse it"
+        for field in _REQUIRED_FIELDS.get(etype, []):
+            assert field in payload, f"{etype} frame missing camelCase field {field!r}"

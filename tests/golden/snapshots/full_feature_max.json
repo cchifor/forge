@@ -29,12 +29,12 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1261,
+      "size": 1240,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
-      "size": 103,
-      "sha256": "2a8262eeb56a16ac"
+      "size": 82,
+      "sha256": "3bb1abcd1c14c736"
     },
     "apps/frontend/.env.development": {
       "size": 63,
@@ -135,6 +135,10 @@
     "apps/frontend/src/core/ui-protocol/types.ts": {
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
+    },
+    "apps/frontend/src/features/ai_chat/README.md": {
+      "size": 1262,
+      "sha256": "7f40becdb9fb7dca"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
       "size": 2878,
@@ -1033,7 +1037,7 @@
       "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 151285,
+      "size": 151489,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1485,8 +1489,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/AGENT_AGUI_HARDENING.md": {
-      "size": 2916,
-      "sha256": "5e38997eb5be7f8c"
+      "size": 3177,
+      "sha256": "4610c8bd632bce0b"
     },
     "services/api/Dockerfile": {
       "size": 3581,
@@ -1809,8 +1813,8 @@
       "sha256": "3e799c04904069d8"
     },
     "services/api/src/app/api/v1/endpoints/agui.py": {
-      "size": 2518,
-      "sha256": "5fa973e7221f18a6"
+      "size": 3601,
+      "sha256": "7baae5feeb2c9072"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
       "size": 2697,

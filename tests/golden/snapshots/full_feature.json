@@ -25,12 +25,12 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1262,
+      "size": 1241,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
-      "size": 103,
-      "sha256": "2a8262eeb56a16ac"
+      "size": 82,
+      "sha256": "3bb1abcd1c14c736"
     },
     "apps/frontend/.env.development": {
       "size": 63,
@@ -131,6 +131,10 @@
     "apps/frontend/src/core/ui-protocol/types.ts": {
       "size": 457,
       "sha256": "8519e4e3e7f838c3"
+    },
+    "apps/frontend/src/features/ai_chat/README.md": {
+      "size": 1262,
+      "sha256": "7f40becdb9fb7dca"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasError.vue": {
       "size": 2878,
@@ -1029,7 +1033,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 112144,
+      "size": 112348,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
