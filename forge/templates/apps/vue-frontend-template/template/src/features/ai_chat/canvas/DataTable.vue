@@ -10,10 +10,11 @@ const props = defineProps<{
   state?: AgentState
 }>()
 
-defineEmits<{
-  action: [action: { type: string; data: Record<string, any> }]
+const emit = defineEmits<{
+  action: [action: { type: string; toolCallId?: string; data: Record<string, any> }]
 }>()
 
+const toolCallId = computed(() => props.activity.content._toolCallId as string | undefined)
 const schema = computed(() => props.activity.content.props || props.activity.content)
 const columns = computed(() => schema.value.columns || [])
 const allRows = computed(() => schema.value.rows || [])
@@ -69,6 +70,17 @@ function toggleSelect(id: number | string) {
   if (s.has(id)) s.delete(id)
   else s.add(id)
   selectedIds.value = s
+}
+
+function submitSelection() {
+  const ids = Array.from(selectedIds.value)
+  const idSet = selectedIds.value
+  const rows = allRows.value.filter((row: any) => idSet.has(row.id))
+  emit('action', {
+    type: 'table_submit',
+    toolCallId: toolCallId.value,
+    data: { selectedIds: ids, selectedRows: rows },
+  })
 }
 
 function formatCell(value: any, col: any): string {
@@ -169,6 +181,7 @@ const badgeColors: Record<string, string> = {
         <Button variant="outline" size="sm" :disabled="currentPage <= 1" class="h-7 text-xs" @click="currentPage--">Prev</Button>
         <span>{{ currentPage }} / {{ totalPages }}</span>
         <Button variant="outline" size="sm" :disabled="currentPage >= totalPages" class="h-7 text-xs" @click="currentPage++">Next</Button>
+        <Button v-if="schema.selectable" size="sm" class="ml-2 h-7 text-xs" @click="submitSelection">Done</Button>
       </div>
     </div>
   </div>

@@ -5,12 +5,14 @@ import { Button } from '@/shared/ui/button'
 import CanvasError from './CanvasError.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useAiChat } from '../composables/useAiChat'
+import { useAgentClient } from '../composables/useAgentClient'
 import { resolveCanvasComponent } from './registry'
 import { AgUiEngine, McpExtEngine } from '../workspace/engines'
 import type { WorkspaceAction } from '../types'
 
 const { canvasActivity, clearCanvas } = useCanvas()
 const { sendMessage, respondToPrompt } = useAiChat()
+const { respondToFrontendTool } = useAgentClient()
 
 const resolved = computed(() => {
   if (!canvasActivity.value) return null
@@ -18,6 +20,29 @@ const resolved = computed(() => {
 })
 
 function handleAction(action: WorkspaceAction) {
+  // Frontend-tool round-trip: the canvas renderers (form / table / approval)
+  // emit `{ type, toolCallId, data }`. When a toolCallId is present we resolve
+  // the deferred AG-UI tool call and let the agent resume, instead of routing
+  // the action through the legacy HITL / sendMessage paths. `toolCallId` is not
+  // on the shared WorkspaceAction type (the renderers add it), so read it off
+  // the action defensively.
+  const toolCallId = (action as { toolCallId?: string }).toolCallId
+  if (toolCallId) {
+    const data = (action as { data?: unknown }).data
+    switch (action.type) {
+      case 'form_submit':
+      case 'table_submit':
+      case 'approval_decision':
+        respondToFrontendTool(toolCallId, JSON.stringify(data))
+        return
+      case 'form_cancel':
+        respondToFrontendTool(toolCallId, JSON.stringify({ cancelled: true }))
+        return
+      default:
+        // Unknown tool-tagged action — fall through to the legacy handling.
+        break
+    }
+  }
   if (action.type === 'hitl_response') {
     respondToPrompt(action.data.answer)
   } else if (action.type === 'form_submit') {
