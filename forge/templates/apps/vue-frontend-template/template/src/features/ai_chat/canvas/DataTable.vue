@@ -10,11 +10,20 @@ const props = defineProps<{
   state?: AgentState
 }>()
 
-defineEmits<{
-  action: [action: { type: string; data: Record<string, any> }]
+const emit = defineEmits<{
+  action: [action: { type: string; toolCallId?: string; data: Record<string, any> }]
 }>()
 
-const schema = computed(() => props.activity.content.props || props.activity.content)
+interface FrontendToolContent {
+  props?: Record<string, any>
+  _toolCallId?: string
+}
+
+const content = props.activity.content as FrontendToolContent
+const toolCallId = computed(() => content._toolCallId)
+const schema = computed<Record<string, any>>(
+  () => (content.props ?? props.activity.content) as Record<string, any>,
+)
 const columns = computed(() => schema.value.columns || [])
 const allRows = computed(() => schema.value.rows || [])
 const pageSize = computed(() => schema.value.pageSize || 25)
@@ -24,6 +33,15 @@ const sortDir = ref<'asc' | 'desc'>(schema.value.defaultSort?.direction || 'asc'
 const filterText = ref('')
 const currentPage = ref(1)
 const selectedIds = ref<Set<number | string>>(new Set())
+
+// Rows are not required to carry an ``id``; derive a stable identity from
+// the row's index in the source array so selection keys/sets never collide
+// and display-only tables still render correctly.
+function rowId(row: any): number | string {
+  const idx = allRows.value.indexOf(row)
+  if (idx >= 0) return allRows.value[idx].id ?? String(idx)
+  return row.id ?? ''
+}
 
 const filteredRows = computed(() => {
   if (!filterText.value) return allRows.value
@@ -69,6 +87,22 @@ function toggleSelect(id: number | string) {
   if (s.has(id)) s.delete(id)
   else s.add(id)
   selectedIds.value = s
+}
+
+function submitSelection() {
+  // Display-only tables (selectable falsy) still need a way to resolve the
+  // deferred tool call, so always emit ``table_submit`` on Done — with empty
+  // selection arrays when the table isn't selectable.
+  const idSet = selectedIds.value
+  const ids = schema.value.selectable ? Array.from(idSet) : []
+  const rows = schema.value.selectable
+    ? allRows.value.filter((row: any) => idSet.has(rowId(row)))
+    : []
+  emit('action', {
+    type: 'table_submit',
+    toolCallId: toolCallId.value,
+    data: { selectedIds: ids, selectedRows: rows },
+  })
 }
 
 function formatCell(value: any, col: any): string {
@@ -131,16 +165,16 @@ const badgeColors: Record<string, string> = {
         <tbody>
           <tr
             v-for="row in pagedRows"
-            :key="row.id"
+            :key="rowId(row)"
             class="border-t transition-colors hover:bg-muted/50"
-            :class="selectedIds.has(row.id) ? 'bg-primary/5' : ''"
+            :class="selectedIds.has(rowId(row)) ? 'bg-primary/5' : ''"
           >
             <td v-if="schema.selectable" class="px-3 py-2">
               <input
                 type="checkbox"
-                :checked="selectedIds.has(row.id)"
+                :checked="selectedIds.has(rowId(row))"
                 class="h-4 w-4 rounded border-input"
-                @change="toggleSelect(row.id)"
+                @change="toggleSelect(rowId(row))"
               />
             </td>
             <td v-for="col in columns" :key="col.key" class="px-3 py-2">
@@ -169,6 +203,7 @@ const badgeColors: Record<string, string> = {
         <Button variant="outline" size="sm" :disabled="currentPage <= 1" class="h-7 text-xs" @click="currentPage--">Prev</Button>
         <span>{{ currentPage }} / {{ totalPages }}</span>
         <Button variant="outline" size="sm" :disabled="currentPage >= totalPages" class="h-7 text-xs" @click="currentPage++">Next</Button>
+        <Button size="sm" class="ml-2 h-7 text-xs" @click="submitSelection">Done</Button>
       </div>
     </div>
   </div>

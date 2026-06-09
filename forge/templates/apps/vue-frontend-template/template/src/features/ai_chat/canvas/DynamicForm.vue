@@ -12,10 +12,19 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  action: [action: { type: string; data: Record<string, any> }]
+  action: [action: { type: string; toolCallId?: string; data: Record<string, any> }]
 }>()
 
-const schema = computed(() => props.activity.content.props || props.activity.content)
+interface FrontendToolContent {
+  props?: Record<string, any>
+  _toolCallId?: string
+}
+
+const content = props.activity.content as FrontendToolContent
+const toolCallId = computed(() => content._toolCallId)
+const schema = computed<Record<string, any>>(
+  () => (content.props ?? props.activity.content) as Record<string, any>,
+)
 const fields = computed(() => schema.value.fields || [])
 const values = ref<Record<string, any>>({})
 
@@ -35,11 +44,11 @@ function toggleCheckbox(fieldName: string, option: string) {
 }
 
 function submit() {
-  emit('action', { type: 'form_submit', data: { values: { ...values.value } } })
+  emit('action', { type: 'form_submit', toolCallId: toolCallId.value, data: { values: { ...values.value } } })
 }
 
 function cancel() {
-  emit('action', { type: 'form_cancel', data: {} })
+  emit('action', { type: 'form_cancel', toolCallId: toolCallId.value, data: {} })
 }
 </script>
 
