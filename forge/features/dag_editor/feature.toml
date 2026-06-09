@@ -1,0 +1,7 @@
+[feature]
+name = "DagEditor"
+version = "1.0.0"
+summary = "A generic DAG editor/viewer — a Vue Flow canvas with dagre auto-layout. Layer-1 component."
+category = "component"
+stability = "experimental"
+layer = 1
