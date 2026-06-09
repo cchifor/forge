@@ -21,7 +21,7 @@
  * order, and (b) dispatching native drag events through the row container
  * emits ``reorder`` with the reordered id list.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { h, nextTick } from 'vue'
 
@@ -317,7 +317,22 @@ describe('ColumnManagerMenu — reorder (native HTML5 drag-and-drop)', () => {
     wrapper.unmount()
   })
 
-  it('emits reorder with the reordered id list when a row is dragged onto another', async () => {
+  // A DragEvent stand-in: jsdom has no DataTransfer, so attach a stub so the
+  // component's ``setData`` / ``effectAllowed`` seeding (the Firefox fix) runs
+  // and can be asserted.
+  function dragEvent(type: string): Event & { dataTransfer: DataTransferStub } {
+    const ev = new Event(type, { bubbles: true })
+    const dataTransfer: DataTransferStub = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+      getData: () => '',
+    }
+    Object.defineProperty(ev, 'dataTransfer', { value: dataTransfer })
+    return ev as Event & { dataTransfer: DataTransferStub }
+  }
+
+  it('emits reorder + seeds dataTransfer when dragged FROM THE HANDLE onto another row', async () => {
     const wrapper = mount(ColumnManagerMenu, {
       props: {
         columns,
@@ -337,13 +352,19 @@ describe('ColumnManagerMenu — reorder (native HTML5 drag-and-drop)', () => {
     ) as NodeListOf<HTMLElement>
     expect(rows.length).toBe(3)
 
-    // Drag row 0 (name) and drop it onto row 2 (city). jsdom doesn't run a
-    // real DnD session, so dispatch the native events the component listens
-    // for directly: dragstart on the source, drop on the target.
-    rows[0].dispatchEvent(new Event('dragstart', { bubbles: true }))
-    rows[2].dispatchEvent(new Event('drop', { bubbles: true }))
+    // Drag must START on the grip handle (drag-handle), not the row chrome.
+    // jsdom doesn't run a real DnD session, so dispatch the native events the
+    // component listens for directly: dragstart on the handle, drop on target.
+    const handle0 = rows[0].querySelector('.drag-handle') as HTMLElement
+    const startEv = dragEvent('dragstart')
+    handle0.dispatchEvent(startEv)
+    rows[2].dispatchEvent(dragEvent('drop'))
     await flushPromises()
     await nextTick()
+
+    // The Firefox fix: a move effect + payload were seeded on dragstart.
+    expect(startEv.dataTransfer.effectAllowed).toBe('move')
+    expect(startEv.dataTransfer.setData).toHaveBeenCalledWith('text/plain', '0')
 
     const reorderEvents = wrapper.emitted('reorder') ?? []
     expect(reorderEvents.length).toBe(1)
@@ -351,7 +372,44 @@ describe('ColumnManagerMenu — reorder (native HTML5 drag-and-drop)', () => {
     expect(reorderEvents[0]).toEqual([['age', 'city', 'name']])
     wrapper.unmount()
   })
+
+  it('does NOT reorder when a drag starts off the handle (e.g. on the row body)', async () => {
+    const wrapper = mount(ColumnManagerMenu, {
+      props: {
+        columns,
+        intent: emptyIntent(),
+        order: ['name', 'age', 'city'],
+        pinning: emptyPinning(),
+        hasOverrides: false,
+        hasHiddenColumns: false,
+        defaultOpen: true,
+      },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    await nextTick()
+    const rows = document.body.querySelectorAll(
+      '[draggable="true"]',
+    ) as NodeListOf<HTMLElement>
+
+    // Dragstart whose target is the row itself (not the handle) is cancelled,
+    // so a subsequent drop is a no-op — no reorder is emitted.
+    rows[0].dispatchEvent(dragEvent('dragstart'))
+    rows[2].dispatchEvent(dragEvent('drop'))
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.emitted('reorder')).toBeUndefined()
+    wrapper.unmount()
+  })
 })
+
+interface DataTransferStub {
+  effectAllowed: string
+  dropEffect: string
+  setData: ReturnType<typeof vi.fn>
+  getData: () => string
+}
 
 // Quiet the unused-import lint by referencing h.
 void h

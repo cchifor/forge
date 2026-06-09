@@ -8,12 +8,13 @@ import {
 } from 'vue'
 import { useStorage } from '@vueuse/core'
 import type { VisibilityState } from '@tanstack/vue-table'
-import {
-  useBreakpoint,
-  type TailwindBreakpoint,
-} from '@/shared/composables/useBreakpoint'
 import type { DataTableColumnDef } from './types'
-import { BP_WIDTH, twBelow } from './breakpoints'
+import {
+  BP_WIDTH,
+  twBelow,
+  useTwBreakpoint,
+  type TailwindBreakpoint,
+} from './breakpoints'
 
 export interface ColumnVisibility {
   /** Persisted intent map. ``true`` = explicitly shown, ``false`` = explicitly hidden, absent = default. */
@@ -63,7 +64,7 @@ export function useColumnVisibility<T>(
   augmentedColumns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
   options?: { containerWidth?: Ref<number> },
 ): ColumnVisibility {
-  const { tw } = useBreakpoint()
+  const { tw } = useTwBreakpoint()
   const containerWidth = options?.containerWidth ?? ref(0)
 
   const userVisibility = useStorage<Record<string, boolean>>(
