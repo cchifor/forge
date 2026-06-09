@@ -154,6 +154,14 @@
     cursor: pointer;
   }
 
+  /* The text-size axis scales the ROOT font-size so `rem`-based Tailwind
+     utilities (text-sm, spacing, …) scale with it — `rem` resolves against
+     `html`, not `body`, so the variable MUST be consumed here. Default 100%
+     preserves the user's browser font-size. */
+  html {
+    font-size: var(--font-size, 100%);
+  }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));

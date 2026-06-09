@@ -2,12 +2,28 @@ import { getSchemeByName } from '$lib/shared/lib/color-schemes';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type DarkVariant = 'standard' | 'oled';
+export type TextSize = 'sm' | 'md' | 'lg';
+
+// `rootSize` is applied to the ROOT font-size as a PERCENTAGE of the browser
+// default so `rem`-based Tailwind utilities scale (rem resolves against the
+// root, not body). `100%` is the no-op default.
+export const TEXT_SIZES: Record<TextSize, { label: string; rootSize: string }> = {
+	sm: { label: 'Small', rootSize: '93.75%' },
+	md: { label: 'Medium', rootSize: '100%' },
+	lg: { label: 'Large', rootSize: '112.5%' }
+};
+
+/** Coerce a persisted/raw value to a valid TextSize, defaulting to `md`. */
+export function parseTextSize(value: string | null): TextSize {
+	return value === 'sm' || value === 'md' || value === 'lg' ? value : 'md';
+}
 
 let theme = $state<ThemeMode>((localStorage.getItem('theme') as ThemeMode) || 'system');
 let colorScheme = $state(localStorage.getItem('color-scheme') || 'blue');
 let darkVariant = $state<DarkVariant>(
 	(localStorage.getItem('dark-variant') as DarkVariant) || 'standard'
 );
+let textSize = $state<TextSize>(parseTextSize(localStorage.getItem('text-size')));
 
 const resolvedTheme = $derived<'light' | 'dark'>(
 	theme === 'system'
@@ -32,6 +48,12 @@ function setColorScheme(name: string) {
 function setDarkVariant(variant: DarkVariant) {
 	darkVariant = variant;
 	localStorage.setItem('dark-variant', variant);
+	applyTheme();
+}
+
+function setTextSize(size: TextSize) {
+	textSize = size;
+	localStorage.setItem('text-size', size);
 	applyTheme();
 }
 
@@ -60,6 +82,10 @@ function applyTheme() {
 		document.documentElement.style.removeProperty('--primary');
 		document.documentElement.style.removeProperty('--primary-foreground');
 	}
+
+	// Apply text size preference
+	document.documentElement.dataset.textSize = textSize;
+	document.documentElement.style.setProperty('--font-size', TEXT_SIZES[textSize].rootSize);
 }
 
 export function getSettingsStore() {
@@ -76,9 +102,13 @@ export function getSettingsStore() {
 		get darkVariant() {
 			return darkVariant;
 		},
+		get textSize() {
+			return textSize;
+		},
 		setTheme,
 		setColorScheme,
 		setDarkVariant,
+		setTextSize,
 		applyTheme
 	};
 }

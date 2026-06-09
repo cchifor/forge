@@ -4,12 +4,14 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/storage/key_value_storage.dart';
+import '../features/settings/domain/settings_model.dart';
 
 part 'theme_provider.g.dart';
 
 const _themeModeKey = 'theme_mode';
 const _flexSchemeKey = 'flex_scheme';
 const _darkModeVariantKey = 'dark_mode_variant';
+const _textSizeKey = 'text_size';
 
 enum DarkModeVariant { standard, oled }
 
@@ -68,5 +70,25 @@ class DarkModeVariantNotifier extends _$DarkModeVariantNotifier {
   Future<void> setVariant(DarkModeVariant variant) async {
     state = variant;
     await _prefs.setString(_darkModeVariantKey, variant.name);
+  }
+}
+
+@Riverpod(keepAlive: true)
+class TextSizeNotifier extends _$TextSizeNotifier {
+  SharedPreferences get _prefs => ref.read(keyValueStorageProvider);
+
+  @override
+  TextSize build() {
+    final stored = _prefs.getString(_textSizeKey);
+    return TextSize.values.firstWhere(
+      (s) => s.wire == stored,
+      orElse: () => TextSize.medium,
+    );
+  }
+
+  Future<void> setTextSize(TextSize size) async {
+    state = size;
+    // Persist the cross-framework `sm|md|lg` token, not the Dart enum name.
+    await _prefs.setString(_textSizeKey, size.wire);
   }
 }
