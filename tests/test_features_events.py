@@ -83,6 +83,21 @@ def test_events_core_fragment_registered() -> None:
     assert "postgres" in frag.capabilities
 
 
+def test_events_bus_has_heartbeat_supervisor() -> None:
+    """The PostgresNotifyBus must self-heal a dropped LISTEN socket via a
+    periodic SELECT 1 probe that resets + re-establishes the listener."""
+    impl = FRAGMENT_REGISTRY["events_core"].implementations[BackendLanguage.PYTHON]
+    bus = (
+        Path(impl.fragment_dir) / "files" / "src" / "app" / "events" / "bus.py"
+    ).read_text(encoding="utf-8")
+    assert "_run_supervisor" in bus and "_ensure_supervisor" in bus
+    assert 'fetchval("SELECT 1")' in bus, "heartbeat must probe the listen connection"
+    # On heartbeat failure it resets and re-listens (self-heal).
+    assert "_close_connection_locked" in bus and "_ensure_listener_locked" in bus
+    # Supervisor is cancelled on close.
+    assert "self._supervisor.cancel()" in bus
+
+
 def test_events_outbox_fragment_depends_on_core() -> None:
     assert "events_outbox" in FRAGMENT_REGISTRY
     frag = FRAGMENT_REGISTRY["events_outbox"]

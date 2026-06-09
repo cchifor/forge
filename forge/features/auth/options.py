@@ -157,6 +157,7 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
                 "gatekeeper": (
                     "platform_auth_gatekeeper",
                     "platform_auth_gatekeeper_keygen",
+                    "platform_auth_gatekeeper_realm_sync",
                 ),
                 # ``in_memory`` ships a zero-dependency, in-process dev token
                 # issuer (ES256 mint + JWKS + /dev/auth/token) instead of the
