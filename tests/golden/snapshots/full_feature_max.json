@@ -153,20 +153,24 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 2814,
-      "sha256": "b8be2c62ce65a61a"
+      "size": 3924,
+      "sha256": "e0c6597c3a2ed560"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
       "sha256": "ed465afed298b456"
     },
+    "apps/frontend/src/features/ai_chat/canvas/ConfirmTool.vue": {
+      "size": 1636,
+      "sha256": "b7031bab50d23a53"
+    },
     "apps/frontend/src/features/ai_chat/canvas/DataTable.vue": {
-      "size": 6628,
-      "sha256": "b8c233583361c12e"
+      "size": 7184,
+      "sha256": "057ba52ab38fb2fa"
     },
     "apps/frontend/src/features/ai_chat/canvas/DynamicForm.vue": {
-      "size": 4806,
-      "sha256": "d0c0d2aa00a451b3"
+      "size": 4979,
+      "sha256": "d0a17d9080425753"
     },
     "apps/frontend/src/features/ai_chat/canvas/Report.vue": {
       "size": 4653,
@@ -177,8 +181,8 @@
       "sha256": "2ef430f09aecf93c"
     },
     "apps/frontend/src/features/ai_chat/canvas/registry.ts": {
-      "size": 1301,
-      "sha256": "fc7fa326dfbebdf0"
+      "size": 1433,
+      "sha256": "7a709bf3b9e7a722"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/README.md": {
       "size": 558,
@@ -216,13 +220,17 @@
       "size": 4073,
       "sha256": "d1cd3399acbe2aeb"
     },
+    "apps/frontend/src/features/ai_chat/composables/useAgentClient.frontendTools.test.ts": {
+      "size": 7245,
+      "sha256": "b3601474f211bcc8"
+    },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.test.ts": {
       "size": 16059,
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 6286,
-      "sha256": "7d9fcf5275ebcd6d"
+      "size": 14116,
+      "sha256": "09578d31f7f2d479"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
@@ -259,6 +267,14 @@
     "apps/frontend/src/features/ai_chat/index.ts": {
       "size": 786,
       "sha256": "6e4b72b152c36197"
+    },
+    "apps/frontend/src/features/ai_chat/tools/frontendTools.test.ts": {
+      "size": 3651,
+      "sha256": "4cee36f500567bc4"
+    },
+    "apps/frontend/src/features/ai_chat/tools/frontendTools.ts": {
+      "size": 5508,
+      "sha256": "aa0e75d1620345b5"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
       "size": 2192,
@@ -1037,7 +1053,7 @@
       "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 151489,
+      "size": 152388,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {

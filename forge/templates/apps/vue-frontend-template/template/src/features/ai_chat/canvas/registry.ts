@@ -40,3 +40,7 @@ registerCanvasComponent('code_viewer', {
   component: defineAsyncComponent(() => import('./CodeViewer.vue')),
   label: 'Code',
 })
+registerCanvasComponent('approval', {
+  component: defineAsyncComponent(() => import('./ConfirmTool.vue')),
+  label: 'Approval',
+})

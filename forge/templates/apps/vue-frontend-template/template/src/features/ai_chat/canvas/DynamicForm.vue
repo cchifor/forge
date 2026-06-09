@@ -12,9 +12,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  action: [action: { type: string; data: Record<string, any> }]
+  action: [action: { type: string; toolCallId?: string; data: Record<string, any> }]
 }>()
 
+const toolCallId = computed(() => props.activity.content._toolCallId as string | undefined)
 const schema = computed(() => props.activity.content.props || props.activity.content)
 const fields = computed(() => schema.value.fields || [])
 const values = ref<Record<string, any>>({})
@@ -35,11 +36,11 @@ function toggleCheckbox(fieldName: string, option: string) {
 }
 
 function submit() {
-  emit('action', { type: 'form_submit', data: { values: { ...values.value } } })
+  emit('action', { type: 'form_submit', toolCallId: toolCallId.value, data: { values: { ...values.value } } })
 }
 
 function cancel() {
-  emit('action', { type: 'form_cancel', data: {} })
+  emit('action', { type: 'form_cancel', toolCallId: toolCallId.value, data: {} })
 }
 </script>
 
