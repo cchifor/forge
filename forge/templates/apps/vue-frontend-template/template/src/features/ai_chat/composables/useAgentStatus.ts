@@ -2,9 +2,13 @@
  * Explicit client-side state machine for the agent session.
  *
  * Collapses the agent's UI state into one reactive `status` with guarded
- * transitions, so a button (send, approve, answer) reads ONE source to decide
- * whether to no-op — and a double-submit during a run or an approval can't slip
- * through.
+ * transitions, so a button (send, answer) reads ONE source to decide whether to
+ * no-op — and a double-submit while the agent is `running` can't slip through.
+ *
+ * NOTE: `awaitingApproval` is reserved for an explicit approval channel; forge's
+ * generated chat surfaces approvals as a `show_approval` deferred FRONTEND TOOL
+ * (which rides the running → idle → running path, not this state). It's kept in
+ * the machine so a project that adds a HITL approval event has a home for it.
  *
  *   idle             → running (start work) | error
  *   running          → idle (run completed) | awaitingApproval | awaitingPrompt | error
