@@ -59,7 +59,7 @@ dev = [
     # the *rendered* modules in-process and exercises them with a mocked
     # transport, so httpx must be resolvable in the test env. It is NOT a
     # forge runtime dependency (forge generates code; it does not run httpx).
-    "httpx>=0.28,<1",
+    "httpx>=0.28.1,<1",
 ]
 
 [project.scripts]
