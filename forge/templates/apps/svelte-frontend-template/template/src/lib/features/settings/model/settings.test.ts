@@ -117,9 +117,10 @@ describe('getSettingsStore', () => {
 
 	it('setTextSize applies the --font-size CSS variable', () => {
 		store.setTextSize('sm');
+		// Percentage of the browser default, applied to the root so rem utilities scale.
 		expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
 			'--font-size',
-			'0.9375rem'
+			'93.75%'
 		);
 	});
 
