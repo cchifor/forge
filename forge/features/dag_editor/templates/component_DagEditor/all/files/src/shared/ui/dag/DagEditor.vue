@@ -77,12 +77,13 @@ function onNodeClick(e: NodeMouseEvent): void {
 flow.onNodesInitialized(() => {
   if (props.fitOnChange) flow.fitView()
 })
-watch(
-  () => flowNodes.value.map((n) => n.id).join(','),
-  () => {
-    if (props.fitOnChange) nextTick(() => flow.fitView())
-  },
-)
+// Refit on ANY layout-affecting change — nodes, edges, OR direction. Watching
+// the laid-out result (a fresh object each recompute) covers all three; keying
+// only on node ids would miss edge edits and TB↔LR flips, leaving nodes
+// off-viewport.
+watch(laidOut, () => {
+  if (props.fitOnChange) nextTick(() => flow.fitView())
+})
 </script>
 
 <template>

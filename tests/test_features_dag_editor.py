@@ -9,6 +9,7 @@ project without it (and the goldens) stay byte-identical.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from forge.components._registry import COMPONENT_REGISTRY
@@ -68,6 +69,7 @@ def test_absent_by_default(tmp_path: Path) -> None:
     assert not list(root.rglob(f"{_DAG}/DagEditor.vue"))
     # ...and the heavy deps are NOT added to package.json when unused.
     pkg = _package_json(root)
+    json.loads(pkg)  # the gated-off conditional must leave valid JSON
     assert "@vue-flow/core" not in pkg
     assert '"dagre"' not in pkg
 
@@ -85,6 +87,7 @@ def test_emitted_when_selected(tmp_path: Path) -> None:
         _one(root, rel)
     # The deps are gated IN only when the component is selected.
     pkg = _package_json(root)
+    json.loads(pkg)  # the gated-on conditional must still be valid JSON
     for dep in ("@vue-flow/core", "@vue-flow/background", "@vue-flow/controls", "@vue-flow/minimap"):
         assert dep in pkg, f"package.json missing {dep}"
     assert '"dagre"' in pkg
