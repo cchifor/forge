@@ -17,6 +17,14 @@ from forge_core.security.auth import authenticate_request
 AuthUnitOfWork = NewType("AuthUnitOfWork", AsyncUnitOfWork)
 PublicUnitOfWork = NewType("PublicUnitOfWork", AsyncUnitOfWork)
 
+# Optional per-session binder for DB-layer tenant isolation that needs more than
+# the default RLS GUC — e.g. schema-per-tenant routes ``search_path`` from the
+# authenticated account. ``None`` in the base (inert); a multitenancy fragment
+# installs one below the marker. The binder is invoked on every UoW
+# ``__aenter__`` with the account (possibly ``None``) and must fail closed.
+_SESSION_BINDER = None
+# FORGE:UOW_SESSION_BINDER
+
 
 class SecurityProvider(Provider):
     """User authentication and tenant-scoped unit-of-work."""
@@ -36,10 +44,15 @@ class SecurityProvider(Provider):
         self, session_factory: async_sessionmaker[AsyncSession], user: User
     ) -> AuthUnitOfWork:
         account = Account(customer_id=user.customer_id, user_id=user.id)
-        uow = AsyncUnitOfWork(session_factory=session_factory, account=account)
+        uow = AsyncUnitOfWork(
+            session_factory=session_factory, account=account, session_binder=_SESSION_BINDER
+        )
         return AuthUnitOfWork(uow)
 
     @provide(scope=Scope.REQUEST)
     def get_public_uow(self, session_factory: async_sessionmaker[AsyncSession]) -> PublicUnitOfWork:
-        uow = AsyncUnitOfWork(session_factory=session_factory, account=None)
+        # No account → the binder (if any) fails closed (e.g. empty search_path).
+        uow = AsyncUnitOfWork(
+            session_factory=session_factory, account=None, session_binder=_SESSION_BINDER
+        )
         return PublicUnitOfWork(uow)
