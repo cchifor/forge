@@ -67,16 +67,22 @@ _agent_singleton: Any | None = None
 _config_singleton: _RunnerConfig | None = None
 
 
-def _build_agent():
+def build_agent(cfg: _RunnerConfig | None = None):
     """Construct the pydantic-ai Agent. Tools are registered from the
     process-wide ``ToolRegistry``.
 
-    Lazy — the Agent is built on first request so a project that never hits
-    /ws/agent doesn't pay for pydantic-ai import cost at startup.
+    Public + reusable: the WebSocket runner (below) builds the agent lazily
+    on first request, and the AG-UI SSE endpoint
+    (``app.api.v1.endpoints.agui``) builds it per request via this same
+    helper so both transports share one agent-construction path (model
+    resolution + system prompt + ``tool_registry`` bridging).
+
+    Lazy import of pydantic-ai — a project that never hits an agent endpoint
+    doesn't pay the import cost at startup.
     """
     from pydantic_ai import Agent  # type: ignore
 
-    cfg = _config_singleton or _RunnerConfig()
+    cfg = cfg or _config_singleton or _RunnerConfig()
     model = _resolve_model(cfg)
 
     agent = Agent(model, system_prompt=cfg.system_prompt)
@@ -92,6 +98,15 @@ def _build_agent():
             _register_tool(agent, tool)
 
     return agent
+
+
+def _build_agent():
+    """Backwards-compatible alias for :func:`build_agent`.
+
+    Retained so the WS runner's existing call sites keep working; new
+    callers (the AG-UI SSE endpoint) use the public ``build_agent``.
+    """
+    return build_agent()
 
 
 def _resolve_model(cfg: _RunnerConfig):
