@@ -63,6 +63,31 @@ def _agent_backend_name(config: ProjectConfig) -> str:
     return primary.name if primary else "backend"
 
 
+def _agent_base_url(config: ProjectConfig) -> str:
+    """``VITE_AGENT_BASE_URL`` — where the chat POSTs the AG-UI RunAgentInput.
+
+    Path is ``/api/{python-backend}/v1/agent`` (the per-backend segment the Vite
+    proxy rewrites + forwards, matching the generated feature clients). The base:
+
+    * **local / same-origin** → RELATIVE (no origin), so it resolves against the
+      runtime origin and works in dev (Vite proxy) AND prod (same-origin) without
+      baking a dev URL into the build.
+    * **external-API mode** → ABSOLUTE, prefixed with the external origin (the
+      same one ``VITE_API_BASE_URL`` carries), since the browser must reach the
+      external backend directly — a relative URL would hit the frontend origin.
+    """
+    path = f"/api/{_agent_backend_name(config)}/v1/agent"
+    typed = _typed(config)
+    if _external_api_mode(typed):
+        _, _, env_api_base_url = _frontend_api_urls(
+            config,
+            _agent_backend_name(config),
+            config.backend.server_port if config.backend else 5000,
+        )
+        return f"{env_api_base_url}{path}"
+    return path
+
+
 def backend_context(
     bc: BackendConfig,
     *,
@@ -283,7 +308,7 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         # URL into the production build — mirroring VITE_API_BASE_URL (empty in
         # base .env). The backend is the first PYTHON backend (the agent endpoint
         # is python-only; the first backend may be Node/Rust). Overridable.
-        "agent_base_url": f"/api/{_agent_backend_name(config)}/v1/agent",
+        "agent_base_url": _agent_base_url(config),
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
