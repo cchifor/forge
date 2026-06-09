@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/design_tokens.dart';
 import '../../../theme/theme_provider.dart';
 import 'widgets/color_scheme_picker.dart';
+import 'widgets/text_size_selector.dart';
 import 'widgets/theme_mode_selector.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -85,6 +86,27 @@ class SettingsPage extends ConsumerWidget {
                   Text('Color Scheme', style: theme.textTheme.titleSmall),
                   const SizedBox(height: DesignTokens.p12),
                   const ColorSchemePicker(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: DesignTokens.p16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(DesignTokens.p16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Text Size', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: DesignTokens.p4),
+                  Text(
+                    'Scale the base font size used throughout the app',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: DesignTokens.p12),
+                  const Center(child: TextSizeSelector()),
                 ],
               ),
             ),

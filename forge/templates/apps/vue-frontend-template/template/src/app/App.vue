@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { Toaster } from 'vue-sonner'
+import ConfirmHost from '@/shared/components/ConfirmHost.vue'
 import { useAiChat } from '@/features/ai_chat'
 
 const { toggleChat } = useAiChat()
@@ -18,6 +19,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 
 <template>
   <RouterView />
+  <ConfirmHost />
   <Toaster
     position="bottom-right"
     :expand="true"

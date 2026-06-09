@@ -1,0 +1,116 @@
+import {
+  computed,
+  getCurrentInstance,
+  onActivated,
+  onDeactivated,
+  onUnmounted,
+  shallowRef,
+  toValue,
+  type Component,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+} from 'vue'
+
+export interface PageHeaderAction {
+  /** Stable key for `v-for` rendering. */
+  key: string
+  label: string
+  icon?: Component
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
+  disabled?: boolean
+  onClick: () => void
+}
+
+export interface PageHeaderConfig {
+  /** Leading icon rendered before the title. */
+  icon?: Component
+  /** Primary heading. When set, AppHeader renders this instead of breadcrumbs. */
+  title?: string
+  /** Secondary line beneath the title. */
+  subtitle?: string
+  /** Route location for a back button (passed straight to `<RouterLink :to>`). */
+  backTo?: string
+  /** Trailing action buttons, rendered before the AI chat button. */
+  actions?: PageHeaderAction[]
+}
+
+interface HeaderEntry {
+  id: number
+  resolve: () => PageHeaderConfig
+}
+
+let nextId = 0
+
+// Module-scoped registry. A stack of entries (one per mounted/active page that
+// registered a header) — the last-registered, still-active entry wins so that
+// nested or successively-navigated pages override cleanly. `shallowRef` is
+// enough: we always replace the array rather than mutate it in place.
+const stack = shallowRef<HeaderEntry[]>([])
+
+/**
+ * Read-only view of the currently active page header, consumed by AppHeader.
+ * `null` when no page has registered one — AppHeader then falls back to its
+ * default breadcrumb behavior.
+ */
+export const activePageHeader: ComputedRef<PageHeaderConfig | null> = computed(() => {
+  const top = stack.value[stack.value.length - 1]
+  return top ? top.resolve() : null
+})
+
+function push(entry: HeaderEntry) {
+  if (stack.value.some((e) => e.id === entry.id)) return
+  stack.value = [...stack.value, entry]
+}
+
+function remove(id: number) {
+  if (!stack.value.some((e) => e.id === id)) return
+  stack.value = stack.value.filter((e) => e.id !== id)
+}
+
+/**
+ * Register page-header content for the current component. Accepts a static
+ * config, a ref/getter, or a reactive object — anything `toValue`-able — so
+ * the header stays in sync with page state.
+ *
+ * ```ts
+ * usePageHeader(() => ({
+ *   title: item.value?.name ?? 'Loading…',
+ *   subtitle: item.value?.status,
+ *   backTo: '/items',
+ *   actions: [{ key: 'edit', label: 'Edit', onClick: openEditor }],
+ * }))
+ * ```
+ *
+ * Lifecycle is handled automatically: the header is registered on mount /
+ * `onActivated` and cleared on `onUnmounted` / `onDeactivated`, so a page kept
+ * alive in the background never leaks its header over the foreground page.
+ */
+export function usePageHeader(config: MaybeRefOrGetter<PageHeaderConfig>): void {
+  const entry: HeaderEntry = {
+    id: nextId++,
+    resolve: () => toValue(config),
+  }
+
+  push(entry)
+
+  // Re-push on activation so a keep-alive page reclaims the top of the stack
+  // when the user navigates back to it, and drop it again when backgrounded.
+  if (getCurrentInstance()) {
+    onActivated(() => push(entry))
+    onDeactivated(() => remove(entry.id))
+    onUnmounted(() => remove(entry.id))
+  }
+}
+
+/**
+ * Internal helper for AppHeader / tests: a reactive boolean signalling whether
+ * a page header is currently registered.
+ */
+export function useHasPageHeader(): ComputedRef<boolean> {
+  return computed(() => activePageHeader.value !== null)
+}
+
+/** Test-only: forcibly clear the registry between cases. */
+export function __resetPageHeader(): void {
+  stack.value = []
+}

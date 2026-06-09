@@ -19,7 +19,8 @@ vi.stubGlobal('document', {
 		style: {
 			setProperty: vi.fn(),
 			removeProperty: vi.fn()
-		}
+		},
+		dataset: {} as Record<string, string>
 	}
 });
 
@@ -49,9 +50,11 @@ describe('getSettingsStore', () => {
 		expect(store).toHaveProperty('theme');
 		expect(store).toHaveProperty('colorScheme');
 		expect(store).toHaveProperty('darkVariant');
+		expect(store).toHaveProperty('textSize');
 		expect(typeof store.setTheme).toBe('function');
 		expect(typeof store.setColorScheme).toBe('function');
 		expect(typeof store.setDarkVariant).toBe('function');
+		expect(typeof store.setTextSize).toBe('function');
 		expect(typeof store.applyTheme).toBe('function');
 	});
 
@@ -90,6 +93,28 @@ describe('getSettingsStore', () => {
 	it('setDarkVariant updates the darkVariant value', () => {
 		store.setDarkVariant('oled');
 		expect(store.darkVariant).toBe('oled');
+	});
+
+	it('defaults textSize to "md" when localStorage is empty', () => {
+		expect(store.textSize).toBe('md');
+	});
+
+	it('setTextSize updates the textSize value', () => {
+		store.setTextSize('lg');
+		expect(store.textSize).toBe('lg');
+	});
+
+	it('setTextSize persists to localStorage', () => {
+		store.setTextSize('sm');
+		expect(storage.get('text-size')).toBe('sm');
+	});
+
+	it('setTextSize applies the --font-size CSS variable', () => {
+		store.setTextSize('sm');
+		expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+			'--font-size',
+			'0.9375rem'
+		);
 	});
 
 	it('applyTheme toggles the dark class on document.documentElement', () => {

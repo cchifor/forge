@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type DarkModeVariant = 'standard' | 'oled'
+export type TextSize = 'sm' | 'md' | 'lg'
 export type ColorSchemeId =
   | 'blue' | 'indigo' | 'hippieBlue' | 'aquaBlue' | 'tealM3'
   | 'greenM3' | 'money' | 'gold' | 'mango' | 'amber'
@@ -13,6 +14,17 @@ export interface ColorSchemeEntry {
   label: string
   primaryHex: string
   hsl: [number, number, number]
+}
+
+export interface TextSizeEntry {
+  label: string
+  rem: string
+}
+
+export const TEXT_SIZES: Record<TextSize, TextSizeEntry> = {
+  sm: { label: 'Small',  rem: '0.9375rem' },
+  md: { label: 'Medium', rem: '1rem' },
+  lg: { label: 'Large',  rem: '1.125rem' },
 }
 
 export const COLOR_SCHEMES: Record<ColorSchemeId, ColorSchemeEntry> = {
@@ -48,6 +60,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const colorScheme = ref<ColorSchemeId>(
     (localStorage.getItem('color-scheme') as ColorSchemeId) || 'blue',
   )
+  const textSize = ref<TextSize>(
+    (localStorage.getItem('text-size') as TextSize) || 'md',
+  )
 
   const resolvedTheme = computed<'light' | 'dark'>(() => {
     if (theme.value === 'system') {
@@ -76,6 +91,12 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme()
   }
 
+  function setTextSize(size: TextSize) {
+    textSize.value = size
+    localStorage.setItem('text-size', size)
+    applyTheme()
+  }
+
   function applyTheme() {
     const html = document.documentElement
     const isDark = resolvedTheme.value === 'dark'
@@ -88,16 +109,23 @@ export const useSettingsStore = defineStore('settings', () => {
     html.style.setProperty('--primary-h', String(scheme.hsl[0]))
     html.style.setProperty('--primary-s', scheme.hsl[1] + '%')
     html.style.setProperty('--primary-l', scheme.hsl[2] + '%')
+
+    // Apply text size from selected preference
+    const size = TEXT_SIZES[textSize.value] || TEXT_SIZES.md
+    html.dataset.textSize = textSize.value
+    html.style.setProperty('--font-size', size.rem)
   }
 
   return {
     theme,
     darkModeVariant,
     colorScheme,
+    textSize,
     resolvedTheme,
     setTheme,
     setDarkModeVariant,
     setColorScheme,
+    setTextSize,
     applyTheme,
   }
 })

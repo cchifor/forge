@@ -1,0 +1,7 @@
+[feature]
+name = "StatusDot"
+version = "1.0.0"
+summary = "A small colored status indicator dot with optional pulse + label — Layer-1 pure-UI component."
+category = "component"
+stability = "experimental"
+layer = 1
