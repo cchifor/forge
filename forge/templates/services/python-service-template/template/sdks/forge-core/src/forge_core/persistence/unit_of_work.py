@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from types import TracebackType
 from typing import Any, TypeVar, cast, overload
@@ -96,11 +96,19 @@ class AsyncUnitOfWork:
         account: AccountProtocol | None = None,
         *,
         tenant_guc: str = DEFAULT_TENANT_GUC,
+        session_binder: Callable[[AsyncSession, AccountProtocol | None], Awaitable[None]]
+        | None = None,
         outbox_sink: Callable[[AsyncSession, Sequence[Any]], Any] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._account = account
         self._tenant_guc = tenant_guc
+        # Optional pluggable session binder. When supplied it OWNS the per-
+        # transaction session binding (invoked with the account — possibly
+        # ``None`` — on every ``__aenter__``), e.g. schema-per-tenant binds
+        # ``search_path`` and MUST fail closed for an absent account. When
+        # ``None`` the default RLS GUC binding applies.
+        self._session_binder = session_binder
         # Optional pluggable sink flushed (in-transaction) at commit. Decoupled
         # from any event implementation: a project that emits domain events
         # supplies a sink; the base persistence layer ships none.
@@ -121,13 +129,21 @@ class AsyncUnitOfWork:
         return self
 
     async def _apply_session_gucs(self, session: AsyncSession) -> None:
-        """Hook: bind session-level Postgres GUCs for RLS.
+        """Hook: bind session-level isolation state for the transaction.
 
-        Default behaviour scopes the session by the account's ``customer_id``
-        via the configured tenant GUC. A project with a different RLS schema
-        subclasses the UoW and overrides this method only. No-op when there's
-        no account / no tenant id, and on non-Postgres dialects.
+        - If a ``session_binder`` was supplied it OWNS the binding and is always
+          invoked (with the account, possibly ``None``) — e.g. schema-per-tenant
+          routes ``search_path`` and must fail closed for an absent account.
+        - Otherwise the default RLS behaviour scopes the session by the
+          account's ``customer_id`` via the configured tenant GUC. No-op when
+          there's no account / no tenant id, and on non-Postgres dialects.
+
+        A project with a wholly different scheme may still subclass the UoW and
+        override this method.
         """
+        if self._session_binder is not None:
+            await self._session_binder(session, self._account)
+            return
         if self._account is not None and self._account.customer_id is not None:
             await set_tenant_context(
                 session, self._account.customer_id, tenant_guc=self._tenant_guc

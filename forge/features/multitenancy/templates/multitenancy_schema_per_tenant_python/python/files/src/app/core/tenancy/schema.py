@@ -7,19 +7,28 @@ filtering rows by an RLS policy (the ``shared_rls`` strategy). The connection's
 schema — so unqualified table references resolve to that tenant's tables and a
 query can physically only touch one tenant's data.
 
-The seam mirrors ``app.core.tenancy.rls`` exactly so the two strategies are
-drop-in alternatives:
+Two composed binding seams (both fail closed):
 
-1. The request middleware (:mod:`app.middleware.tenant_schema`) resolves the
-   tenant and sets :data:`current_tenant_var`.
-2. :func:`register_search_path_listener` (called once at startup against the
-   engine) installs a ``"begin"`` listener that, on every transaction begin,
-   reads :data:`current_tenant_var` and issues::
+1. **:func:`register_search_path_listener` — the always-on default.** An engine
+   ``"begin"`` listener (installed at startup against the MAIN APP ENGINE,
+   ``db.engine``) binds ``SET LOCAL search_path`` on every transaction from
+   :data:`current_tenant_var` (header/subdomain, set by the middleware) or, when
+   unset, ``''`` (fail closed). It fires for every session opened from the shared
+   session factory — including raw/non-UoW sessions on that engine. ``SET LOCAL``
+   scopes the change to the transaction, so a pooled connection never carries one
+   tenant's ``search_path`` into the next request. (Out-of-band code that creates
+   its OWN engine — RAG worker/search, CLI, admin — is NOT covered; it must
+   register the listener on its engine or use :class:`TenantSchemaHook`.)
+2. **:func:`bind_tenant_search_path` — the post-auth account override.**
+   Installed on the request Unit-of-Work (``FORGE:UOW_SESSION_BINDER`` in
+   ``app.core.ioc.security``), it runs inside the handler transaction after auth
+   and, ONLY when an authenticated account is present, OVERWRITES the listener's
+   binding with the account's tenant schema. This is the ``token_claim`` path
+   (the listener resolves pre-auth and can't see a token claim). With no account
+   it is a no-op, leaving the listener's binding intact.
 
-       SET LOCAL search_path TO "tenant_<id>", public
-
-   ``SET LOCAL`` scopes the change to the current transaction, so a pooled
-   connection never carries one tenant's ``search_path`` into the next request.
+Out-of-band code (workers/tasks opening their own session) uses the imperative
+:class:`TenantSchemaHook` (``await hook.bind(session, tenant)``).
 
 Schema-name safety: :func:`schema_name_for` builds the schema name from a
 configured prefix + the tenant id and ACCEPTS ONLY ``[A-Za-z0-9_-]`` tenant
@@ -244,8 +253,55 @@ class TenantSchemaHook:
         await session.execute(text("SELECT set_config('search_path', 'public', true)"))
 
 
+async def bind_tenant_search_path(session: Any, account: Any | None) -> None:
+    """UoW ``session_binder``: route ``search_path`` from the AUTHENTICATED account.
+
+    Installed on ``AsyncUnitOfWork`` (via the IoC ``FORGE:UOW_SESSION_BINDER``
+    seam) so it fires INSIDE the request handler, after auth has resolved — the
+    platform-faithful, post-auth binding point. The tenant is
+    ``account.customer_id`` (the token-claim tenant), so this is the path that
+    makes ``schema_per_tenant`` + ``token_claim`` work.
+
+    It binds ONLY when an authenticated account is present, OVERWRITING the
+    engine ``begin`` listener's earlier binding for this transaction. With NO
+    account (e.g. a ``PublicUnitOfWork``) it is a NO-OP — it does not touch the
+    session, leaving the listener's binding in force (the edge-resolved
+    header/subdomain tenant, or ``''`` fail-closed). That keeps a public request
+    fail-closed under ``token_claim`` and preserves header/subdomain resolution.
+    The authenticated account is authoritative: if an edge ContextVar disagrees
+    with it (a header claiming another tenant), the account wins and the header
+    is ignored (logged). No-op off Postgres.
+    """
+    tenant = getattr(account, "customer_id", None) if account is not None else None
+    if tenant is None:
+        # No authenticated tenant — leave the begin-listener's binding (the
+        # edge-resolved ContextVar tenant, or '' fail-closed).
+        return
+
+    bind = getattr(session, "bind", None)
+    dialect = getattr(getattr(bind, "dialect", None), "name", "")
+    if dialect != "postgresql":
+        return
+
+    edge = current_tenant_var.get()
+    if edge is not None and str(edge) != str(tenant):
+        logger.warning(
+            "tenant_schema_edge_tenant_ignored",
+            extra={"edge": str(edge), "authenticated": str(tenant)},
+        )
+
+    from sqlalchemy import text  # noqa: PLC0415
+
+    schema = schema_name_for(tenant, get_tenancy_settings().schema_prefix)
+    await session.execute(
+        text("SELECT set_config('search_path', :sp, true)"),
+        {"sp": f"{_quote_ident(schema)}, public"},
+    )
+
+
 __all__ = [
     "TenantSchemaHook",
+    "bind_tenant_search_path",
     "current_tenant_var",
     "provision_tenant_schema",
     "register_search_path_listener",

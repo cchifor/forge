@@ -68,13 +68,15 @@ Discriminator for how strongly tenants are isolated in the database.
   cross-tenant reads/writes. Layers ON TOP of the existing TenantMixin —
   it adds the RLS policy + GUC binding + resolver, it does NOT re-add the
   ``customer_id`` column.
-- ``schema_per_tenant``: per-tenant Postgres schema. Each tenant's tables
-  live in their own ``tenant_<id>`` schema; a request middleware resolves the
-  tenant (token claim / header / subdomain) and a session ``begin`` hook binds
-  ``SET LOCAL search_path`` to that schema, so unqualified queries physically
-  touch only one tenant's data. Ships ``provision_tenant_schema`` to clone the
-  table set into a new tenant schema. Unlike ``shared_rls`` (fail-closed), an
-  unbound request keeps the default ``search_path`` — pair with auth.
+- ``schema_per_tenant``: per-tenant Postgres schema. Each tenant's tables live
+  in their own ``tenant_<id>`` schema; ``SET LOCAL search_path`` routes each
+  transaction so unqualified queries physically touch only one tenant's data.
+  Bound by two composed seams: an engine ``begin`` listener (fail-closed default
+  for every session — binds the edge-resolved header/subdomain tenant or ``''``)
+  plus a post-auth UoW binder that, for ``token_claim``, overrides with the
+  authenticated account's schema. **Fail-closed** (unbound ⇒ ``search_path=''``,
+  not ``public``). Ships ``provision_tenant_schema`` to clone the table set into
+  a new tenant schema.
 - ``db_per_tenant``: recognised value but NOT yet implemented (separate
   databases / connection pools per tenant). forge accepts it in a forge.toml
   without rejecting the whole config, but generation fails with an explicit

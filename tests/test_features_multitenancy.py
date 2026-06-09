@@ -45,6 +45,12 @@ FRAGMENT_NAME = "multitenancy_rls_python"
 SCHEMA_FRAGMENT_NAME = "multitenancy_schema_per_tenant_python"
 OPTION_PATH = "database.multitenancy"
 
+# The base python-service-template (carries forge_core + the IoC binder seam).
+_BASE_TEMPLATE = (
+    Path(__file__).resolve().parent.parent
+    / "forge/templates/services/python-service-template/template"
+)
+
 # Files the shared_rls fragment ADDS.
 EXPECTED_FILES = (
     "src/app/core/tenancy/__init__.py",
@@ -542,8 +548,49 @@ def test_render_lands_schema_files_and_injections(tmp_path: Path) -> None:
     assert "app.add_middleware(TenantSchemaMiddleware)" in main_py
     assert 'resolution="subdomain"' in main_py
 
+    # Two composed seams: the engine begin-listener (always-on, fail-closed
+    # default for ALL sessions) AND the post-auth UoW binder installed at the IoC
+    # seam (overrides with the authenticated account's schema — the token_claim
+    # path).
     lifecycle = (backend / "src/app/core/lifecycle.py").read_text(encoding="utf-8")
     assert "register_search_path_listener(db.engine)" in lifecycle
+    ioc = (backend / "src/app/core/ioc/security.py").read_text(encoding="utf-8")
+    assert "bind_tenant_search_path" in ioc
+    assert "_SESSION_BINDER = _schema_session_binder" in ioc
+    assert "session_binder=_SESSION_BINDER" in ioc
+
+
+def test_schema_binder_is_account_authoritative_post_auth() -> None:
+    """The UoW search_path binder is the post-auth seam that makes token_claim
+    work: it binds from the authenticated ``account.customer_id``, and is a no-op
+    (``return``) when there is no account — leaving the begin-listener's binding
+    (edge ContextVar tenant, or '' fail-closed) in force, never failing open."""
+    schema = (_schema_fragment_root() / "src/app/core/tenancy/schema.py").read_text(
+        encoding="utf-8"
+    )
+    assert "async def bind_tenant_search_path(session: Any, account: Any | None)" in schema
+    assert 'getattr(account, "customer_id"' in schema
+    # No account ⇒ no-op (return) so the listener's binding stands.
+    assert "if tenant is None:" in schema and "return" in schema
+    # The fail-closed '' binding lives in the begin-listener, not the binder.
+    listener_block = schema[schema.index("register_search_path_listener") :]
+    assert "SET LOCAL search_path TO ''" in listener_block
+
+
+def test_base_uow_exposes_session_binder_seam() -> None:
+    """forge_core's UoW takes an optional session_binder, and the base IoC ships
+    an inert `_SESSION_BINDER = None` seam threaded into both UoWs (so a non-
+    schema project is unaffected; the fragment installs the real binder)."""
+    bt = Path(_BASE_TEMPLATE)
+    uow = (bt / "sdks/forge-core/src/forge_core/persistence/unit_of_work.py").read_text(
+        encoding="utf-8"
+    )
+    assert "session_binder:" in uow
+    assert "await self._session_binder(session, self._account)" in uow
+    ioc = (bt / "src/app/core/ioc/security.py").read_text(encoding="utf-8")
+    assert "_SESSION_BINDER = None" in ioc
+    assert "FORGE:UOW_SESSION_BINDER" in ioc
+    assert ioc.count("session_binder=_SESSION_BINDER") == 2  # auth + public UoW
 
 
 # --------------------------------------------------------------------------- #
