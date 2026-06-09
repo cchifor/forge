@@ -67,7 +67,14 @@ def register_all(api: ForgeAPI) -> None:
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("agent", "python"),
-                    dependencies=("pydantic-ai>=0.0.14",),
+                    # ``pydantic-ai-slim[ag-ui]`` gives ``pydantic_ai.ui.ag_ui``
+                    # (the AG-UI SSE adapter the ``agent_agui`` fragment uses);
+                    # the provider extras pull the model classes the WS
+                    # ``llm_runner`` imports. One pyproject = one pydantic-ai —
+                    # this string MUST stay identical to ``agent_agui``'s.
+                    dependencies=(
+                        "pydantic-ai-slim[ag-ui,anthropic,openai,google,openrouter]>=1.74,<2",
+                    ),
                     env_vars=(
                         ("LLM_PROVIDER", "anthropic"),
                         ("LLM_MODEL", ""),
@@ -76,6 +83,27 @@ def register_all(api: ForgeAPI) -> None:
                         ("GOOGLE_API_KEY", ""),
                         ("OPENROUTER_API_KEY", ""),
                         ("AGENT_SYSTEM_PROMPT", ""),
+                    ),
+                ),
+            },
+        )
+    )
+
+    # ``agent_agui`` — the canonical AG-UI SSE transport (``POST
+    # /api/v1/agent``) the generated frontend talks to. Reuses ``agents/`` +
+    # ``tool_registry`` + the pydantic-ai ``build_agent`` from ``agent``;
+    # python-only. Enabled by ``agent.llm`` (it needs the pydantic-ai agent).
+    # The dependency string is intentionally identical to ``agent``'s — one
+    # pyproject pins exactly one pydantic-ai.
+    api.add_fragment(
+        Fragment(
+            name="agent_agui",
+            depends_on=("agent_streaming", "agent"),
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("agent_agui", "python"),
+                    dependencies=(
+                        "pydantic-ai-slim[ag-ui,anthropic,openai,google,openrouter]>=1.74,<2",
                     ),
                 ),
             },

@@ -19,6 +19,7 @@ fragments = [
     "agent_streaming",
     "agent_tools",
     "agent",
+    "agent_agui",
     "llm_port",
     "llm_openai",
     "llm_anthropic",

@@ -25,12 +25,12 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1181,
+      "size": 1262,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
-      "size": 86,
-      "sha256": "9cac0a8ff0f50df2"
+      "size": 103,
+      "sha256": "2a8262eeb56a16ac"
     },
     "apps/frontend/.env.development": {
       "size": 63,

@@ -77,7 +77,13 @@ Auto-picks the provider from LLM_PROVIDER (anthropic / openai / google
 / openrouter). Every tool registered in the ToolRegistry is bridged
 into pydantic-ai automatically.
 
+Also serves the canonical AG-UI SSE agent endpoint at POST
+/api/v1/agent (the transport the generated frontend speaks), backed by
+pydantic-ai's AGUIAdapter and the same agent + tool registry. The
+legacy /api/v1/ws/agent WebSocket stays as a raw transport.
+
 BACKENDS: python
+ENDPOINTS: /api/v1/agent (POST, AG-UI SSE)
 REQUIRES: one of ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY /
 OPENROUTER_API_KEY; agent.streaming = true; agent.tools = true.""",
             category=FeatureCategory.CONVERSATIONAL_AI,
@@ -85,7 +91,7 @@ OPENROUTER_API_KEY; agent.streaming = true; agent.tools = true.""",
             # Initiative #7 — depends transitively on agent.streaming +
             # conversation.persistence, both of which write to the DB.
             requires_database=True,
-            enables={True: ("agent",)},
+            enables={True: ("agent", "agent_agui")},
         )
     )
 
