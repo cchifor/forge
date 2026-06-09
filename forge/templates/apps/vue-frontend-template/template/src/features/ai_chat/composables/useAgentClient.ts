@@ -15,6 +15,7 @@ import type {
   WorkspaceActivity,
 } from '../types'
 import { useAuth } from '@/shared/composables/useAuth'
+import { useAgentStatus } from './useAgentStatus'
 import {
   FRONTEND_TOOLS,
   FRONTEND_TOOL_NAMES,
@@ -56,6 +57,11 @@ interface ProtocolToolMessage {
 const snapshot = shallowRef<ChatStateSnapshot>(resetSnapshot())
 const isRunning = ref(false)
 const error = ref<Error | null>(null)
+// Cooperative cancellation: each run captures the current generation; a stale
+// run's events early-return once a newer run starts or `cancel()` bumps it.
+// (The in-flight fetch may still complete in the background; its events are
+// simply ignored, so it can't corrupt the snapshot after cancel/restart.)
+let runGeneration = 0
 let currentThreadId = crypto.randomUUID()
 
 // Side-channel AG-UI protocol messages for the frontend-tool round-trip
@@ -188,6 +194,9 @@ let lastRunOptions: RunOptions | undefined = undefined
 let hasRun = false
 
 export function useAgentClient() {
+  // Explicit run-lifecycle FSM (idle/running/awaiting*/error) — one reactive
+  // `status` consumers gate buttons on, with a built-in double-submit guard.
+  const agentStatus = useAgentStatus()
   // Derived reactive views into the snapshot — consumers access `.value`.
   const messages = computed(() => snapshot.value.messages)
   const state = computed(() => snapshot.value.agentState.raw)
@@ -198,6 +207,13 @@ export function useAgentClient() {
   const activeToolCalls = computed(() => snapshot.value.activeToolCalls)
 
   async function runAgent(options?: RunOptions) {
+    // Double-submit guard: ignore a new run request while one is already
+    // computing. Resumes from awaiting* (respondToPrompt / respondToFrontendTool)
+    // are NOT blocked — their status is awaitingPrompt/idle, not running.
+    if (agentStatus.isBusy()) return
+    agentStatus.transition('running')
+    // Capture this run's generation; events from a superseded run are dropped.
+    const myGeneration = ++runGeneration
     lastRunOptions = options
     hasRun = true
     const { getToken } = useAuth()
@@ -270,6 +286,8 @@ export function useAgentClient() {
       url,
       parser: (frame) => parseEvent(frame),
       onEvent: (event) => {
+        // Drop events from a superseded/cancelled run (cooperative cancel).
+        if (myGeneration !== runGeneration) return
         // Reduce first so the snapshot reflects standard AG-UI state, then
         // layer the frontend-tool round-trip on top (the reducer is portable
         // canvas-core code and intentionally has no notion of frontend tools).
@@ -277,6 +295,9 @@ export function useAgentClient() {
         handleFrontendToolEvent(event)
         isRunning.value = snapshot.value.isRunning
         error.value = snapshot.value.error ? new Error(snapshot.value.error) : null
+        // The agent blocked on the user (a prompt with options) → reflect it in
+        // the FSM so the UI shows "waiting for you", not "running".
+        if (snapshot.value.pendingPrompt) agentStatus.transition('awaitingPrompt')
       },
       headers,
     })
@@ -285,10 +306,29 @@ export function useAgentClient() {
       await client.runAgent(payload)
       // Server closed cleanly; if reducer didn't emit RUN_FINISHED, force stop.
       isRunning.value = false
+      // Settle the FSM — but only if this run is still the current one (a
+      // newer run / cancel already moved the machine on).
+      if (myGeneration === runGeneration) {
+        if (snapshot.value.error) agentStatus.transition('error')
+        else if (!snapshot.value.pendingPrompt) agentStatus.transition('idle')
+        // (pendingPrompt → stay 'awaitingPrompt', set during the stream.)
+      }
     } catch (e) {
       error.value = e instanceof Error ? e : new Error(String(e))
       isRunning.value = false
+      if (myGeneration === runGeneration) agentStatus.transition('error')
     }
+  }
+
+  /**
+   * Cancel the in-flight run cooperatively: bump the generation so its events
+   * are ignored from here on, drop the running/awaiting state back to idle.
+   * The underlying fetch may still finish in the background, harmlessly.
+   */
+  function cancel() {
+    runGeneration += 1
+    isRunning.value = false
+    agentStatus.reset()
   }
 
   function addUserMessage(content: string) {
@@ -348,7 +388,9 @@ export function useAgentClient() {
     const trimmed = snapshot.value.messages.slice(0, idx)
     currentThreadId = crypto.randomUUID()
     snapshot.value = { ...resetSnapshot(), messages: trimmed }
+    runGeneration += 1
     resetFrontendToolState()
+    agentStatus.reset()
     addUserMessage(newContent)
     runAgent(options)
   }
@@ -360,7 +402,9 @@ export function useAgentClient() {
     error.value = null
     lastRunOptions = undefined
     hasRun = false
+    runGeneration += 1
     resetFrontendToolState()
+    agentStatus.reset()
   }
 
   function regenerate(messageId: string) {
@@ -412,6 +456,10 @@ export function useAgentClient() {
     workspaceActivity: readonly(workspaceActivity),
     activeToolCalls: readonly(activeToolCalls),
     isRunning: readonly(isRunning),
+    // The run-lifecycle FSM (idle/running/awaitingPrompt/awaitingApproval/error)
+    // — gate send/answer/approve buttons on this single source of truth.
+    status: agentStatus.status,
+    cancel,
     error: readonly(error),
     runAgent,
     regenerate,
