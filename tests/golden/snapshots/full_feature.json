@@ -225,8 +225,8 @@
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 19565,
-      "sha256": "7e630cb1b6927c46"
+      "size": 21204,
+      "sha256": "8d40889f1cc23381"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentStatus.test.ts": {
       "size": 1929,
@@ -241,8 +241,8 @@
       "sha256": "fe89a988e3337f90"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.ts": {
-      "size": 3545,
-      "sha256": "7086383ca5613fb6"
+      "size": 3779,
+      "sha256": "6e94b4a69edfd07d"
     },
     "apps/frontend/src/features/ai_chat/composables/useCanvas.ts": {
       "size": 620,

@@ -212,6 +212,21 @@ export function useAgentClient() {
   const canvasActivity = computed(() => snapshot.value.canvasActivity)
   const workspaceActivity = computed(() => snapshot.value.workspaceActivity)
   const activeToolCalls = computed(() => snapshot.value.activeToolCalls)
+  // The agent is blocked on the user when a HITL prompt is open OR a deferred
+  // frontend tool is awaiting a result (canvas carries an unresolved
+  // `_toolCallId`). A free-form new run must NOT start in either case — it would
+  // orphan the prompt or send history with an unmatched open tool call. The user
+  // resolves (answer / submit) or cancel()s first.
+  const awaitingUser = computed(
+    () =>
+      !!snapshot.value.pendingPrompt ||
+      !!(snapshot.value.canvasActivity?.content as { _toolCallId?: string } | undefined)
+        ?._toolCallId,
+  )
+  // Single gate for the free-form run entry points (sendMessage / regenerate /
+  // retry): not already running AND not awaiting the user. The RESUME paths
+  // (respondToPrompt / respondToFrontendTool) deliberately bypass it.
+  const canStartRun = () => !isRunning.value && !awaitingUser.value
 
   async function runAgent(options?: RunOptions) {
     // Double-submit guard: ignore a new run request while one is already
@@ -339,6 +354,15 @@ export function useAgentClient() {
     pendingFrontendToolArgs.clear()
     frontendToolNames.clear()
     pendingDisplayOnlyTools.clear()
+    // Drop UN-resolved deferred-tool records so a future run can't replay an
+    // assistant `toolCalls` with no matching `role:'tool'` result (an unmatched
+    // open call corrupts the backend's order-sensitive resume). Keep resolved
+    // assistant/tool pairs and any standalone tool results — those are complete.
+    protocolToolMessages = protocolToolMessages.filter(
+      (m) =>
+        m.role !== 'assistant' ||
+        (m.toolCalls ?? []).every((tc) => resolvedFrontendTools.has(tc.id)),
+    )
     snapshot.value = { ...snapshot.value, canvasActivity: null, pendingPrompt: null }
     agentStatus.reset()
   }
@@ -427,7 +451,7 @@ export function useAgentClient() {
   }
 
   function regenerate(messageId: string) {
-    if (!hasRun || isRunning.value) return
+    if (!hasRun || !canStartRun()) return
     const idx = messages.value.findIndex((m) => m.id === messageId)
     if (idx === -1) return
     // `messages` is a read-only computed view into the snapshot — truncate the
@@ -442,7 +466,7 @@ export function useAgentClient() {
   }
 
   function retryLastRun() {
-    if (!hasRun || isRunning.value) return
+    if (!hasRun || !canStartRun()) return
     error.value = null
     runAgent(lastRunOptions)
   }
@@ -480,6 +504,11 @@ export function useAgentClient() {
     // The run-lifecycle FSM (idle/running/awaitingPrompt/awaitingApproval/error)
     // — gate send/answer/approve buttons on this single source of truth.
     status: agentStatus.status,
+    // Single "may a new run start?" gate — false while running OR while blocked
+    // on the user (HITL prompt / open deferred frontend tool). Callers must
+    // check this (not just `isRunning`) before appending + starting a run.
+    canStartRun,
+    awaitingUser,
     cancel,
     error: readonly(error),
     runAgent,
