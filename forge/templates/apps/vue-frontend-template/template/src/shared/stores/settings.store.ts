@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type DarkModeVariant = 'standard' | 'oled'
+export type TextSize = 'sm' | 'md' | 'lg'
 export type ColorSchemeId =
   | 'blue' | 'indigo' | 'hippieBlue' | 'aquaBlue' | 'tealM3'
   | 'greenM3' | 'money' | 'gold' | 'mango' | 'amber'
@@ -13,6 +14,30 @@ export interface ColorSchemeEntry {
   label: string
   primaryHex: string
   hsl: [number, number, number]
+}
+
+export interface TextSizeEntry {
+  label: string
+  /**
+   * Applied to the ROOT element's font-size as a PERCENTAGE of the browser
+   * default. It must scale `rem`-based Tailwind utilities (text-sm, spacing,
+   * …), which resolve against the root — not `body` — so it is set on `html`
+   * and uses `%` (a `rem` value would be self-referential on the root). `100%`
+   * is the no-op default and preserves/scales the user's browser font size
+   * rather than overriding it with an absolute px value.
+   */
+  rootSize: string
+}
+
+export const TEXT_SIZES: Record<TextSize, TextSizeEntry> = {
+  sm: { label: 'Small',  rootSize: '93.75%' },
+  md: { label: 'Medium', rootSize: '100%' },
+  lg: { label: 'Large',  rootSize: '112.5%' },
+}
+
+/** Coerce a persisted/raw value to a valid TextSize, defaulting to `md`. */
+export function parseTextSize(value: string | null): TextSize {
+  return value === 'sm' || value === 'md' || value === 'lg' ? value : 'md'
 }
 
 export const COLOR_SCHEMES: Record<ColorSchemeId, ColorSchemeEntry> = {
@@ -48,6 +73,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const colorScheme = ref<ColorSchemeId>(
     (localStorage.getItem('color-scheme') as ColorSchemeId) || 'blue',
   )
+  const textSize = ref<TextSize>(parseTextSize(localStorage.getItem('text-size')))
 
   const resolvedTheme = computed<'light' | 'dark'>(() => {
     if (theme.value === 'system') {
@@ -76,6 +102,12 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme()
   }
 
+  function setTextSize(size: TextSize) {
+    textSize.value = size
+    localStorage.setItem('text-size', size)
+    applyTheme()
+  }
+
   function applyTheme() {
     const html = document.documentElement
     const isDark = resolvedTheme.value === 'dark'
@@ -88,16 +120,23 @@ export const useSettingsStore = defineStore('settings', () => {
     html.style.setProperty('--primary-h', String(scheme.hsl[0]))
     html.style.setProperty('--primary-s', scheme.hsl[1] + '%')
     html.style.setProperty('--primary-l', scheme.hsl[2] + '%')
+
+    // Apply text size from selected preference
+    const size = TEXT_SIZES[textSize.value] || TEXT_SIZES.md
+    html.dataset.textSize = textSize.value
+    html.style.setProperty('--font-size', size.rootSize)
   }
 
   return {
     theme,
     darkModeVariant,
     colorScheme,
+    textSize,
     resolvedTheme,
     setTheme,
     setDarkModeVariant,
     setColorScheme,
+    setTextSize,
     applyTheme,
   }
 })

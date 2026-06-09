@@ -20,6 +20,7 @@ describe('useSettingsStore', () => {
     setActivePinia(createPinia())
     localStorageMock.clear()
     document.documentElement.classList.remove('dark')
+    delete document.documentElement.dataset.textSize
   })
 
   it('defaults to system theme', () => {
@@ -51,5 +52,37 @@ describe('useSettingsStore', () => {
     localStorageMock.setItem('theme', 'dark')
     const store = useSettingsStore()
     expect(store.theme).toBe('dark')
+  })
+
+  it('defaults to medium text size', () => {
+    const store = useSettingsStore()
+    expect(store.textSize).toBe('md')
+  })
+
+  it('persists text size to localStorage', () => {
+    const store = useSettingsStore()
+    store.setTextSize('lg')
+    expect(localStorageMock.getItem('text-size')).toBe('lg')
+    expect(store.textSize).toBe('lg')
+  })
+
+  it('applies text size as a data attribute and root CSS variable', () => {
+    const store = useSettingsStore()
+    store.setTextSize('sm')
+    expect(document.documentElement.dataset.textSize).toBe('sm')
+    // Percentage of the browser default, applied to the root so rem utilities scale.
+    expect(document.documentElement.style.getPropertyValue('--font-size')).toBe('93.75%')
+  })
+
+  it('reads initial text size from localStorage', () => {
+    localStorageMock.setItem('text-size', 'lg')
+    const store = useSettingsStore()
+    expect(store.textSize).toBe('lg')
+  })
+
+  it('falls back to md for an invalid persisted text size', () => {
+    localStorageMock.setItem('text-size', 'bogus')
+    const store = useSettingsStore()
+    expect(store.textSize).toBe('md')
   })
 })

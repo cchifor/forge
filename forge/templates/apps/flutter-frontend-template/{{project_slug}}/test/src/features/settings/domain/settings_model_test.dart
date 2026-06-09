@@ -11,11 +11,25 @@ void main() {
       expect(state.flexScheme, FlexScheme.blue);
     });
 
+    test('defaults to medium text size', () {
+      const state = SettingsState();
+      expect(state.textSize, TextSize.medium);
+      expect(state.textSize.scale, 1.0);
+    });
+
     test('copyWith changes themeMode', () {
       const state = SettingsState();
       final updated = state.copyWith(themeMode: ThemeMode.dark);
       expect(updated.themeMode, ThemeMode.dark);
       expect(updated.flexScheme, FlexScheme.blue);
+    });
+
+    test('copyWith changes textSize', () {
+      const state = SettingsState();
+      final updated = state.copyWith(textSize: TextSize.large);
+      expect(updated.textSize, TextSize.large);
+      expect(updated.textSize.scale, 1.125);
+      expect(updated.themeMode, ThemeMode.system);
     });
 
     test('copyWith changes flexScheme', () {

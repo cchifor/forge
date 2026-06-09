@@ -19,7 +19,8 @@ vi.stubGlobal('document', {
 		style: {
 			setProperty: vi.fn(),
 			removeProperty: vi.fn()
-		}
+		},
+		dataset: {} as Record<string, string>
 	}
 });
 
@@ -33,15 +34,21 @@ vi.stubGlobal('window', {
 	})
 });
 
-const { getSettingsStore } = await import('$lib/features/settings/model/settings.svelte');
+// Type-only import; the runtime instance is (re)imported per test below.
+import type { getSettingsStore as GetSettingsStore } from '$lib/features/settings/model/settings.svelte';
 
 describe('getSettingsStore', () => {
-	let store: ReturnType<typeof getSettingsStore>;
+	let store: ReturnType<typeof GetSettingsStore>;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		storage.clear();
 		vi.clearAllMocks();
-		store = getSettingsStore();
+		// The store's $state lives at module scope; reset the module registry so
+		// each test re-evaluates it fresh (reading the just-cleared storage) —
+		// otherwise a textSize/theme set in one test leaks into the next.
+		vi.resetModules();
+		const mod = await import('$lib/features/settings/model/settings.svelte');
+		store = mod.getSettingsStore();
 	});
 
 	it('returns a store object with expected properties', () => {
@@ -49,9 +56,11 @@ describe('getSettingsStore', () => {
 		expect(store).toHaveProperty('theme');
 		expect(store).toHaveProperty('colorScheme');
 		expect(store).toHaveProperty('darkVariant');
+		expect(store).toHaveProperty('textSize');
 		expect(typeof store.setTheme).toBe('function');
 		expect(typeof store.setColorScheme).toBe('function');
 		expect(typeof store.setDarkVariant).toBe('function');
+		expect(typeof store.setTextSize).toBe('function');
 		expect(typeof store.applyTheme).toBe('function');
 	});
 
@@ -90,6 +99,29 @@ describe('getSettingsStore', () => {
 	it('setDarkVariant updates the darkVariant value', () => {
 		store.setDarkVariant('oled');
 		expect(store.darkVariant).toBe('oled');
+	});
+
+	it('defaults textSize to "md" when localStorage is empty', () => {
+		expect(store.textSize).toBe('md');
+	});
+
+	it('setTextSize updates the textSize value', () => {
+		store.setTextSize('lg');
+		expect(store.textSize).toBe('lg');
+	});
+
+	it('setTextSize persists to localStorage', () => {
+		store.setTextSize('sm');
+		expect(storage.get('text-size')).toBe('sm');
+	});
+
+	it('setTextSize applies the --font-size CSS variable', () => {
+		store.setTextSize('sm');
+		// Percentage of the browser default, applied to the root so rem utilities scale.
+		expect(document.documentElement.style.setProperty).toHaveBeenCalledWith(
+			'--font-size',
+			'93.75%'
+		);
 	});
 
 	it('applyTheme toggles the dark class on document.documentElement', () => {

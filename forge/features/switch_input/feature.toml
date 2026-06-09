@@ -1,0 +1,7 @@
+[feature]
+name = "Switch"
+version = "1.0.0"
+summary = "A toggle switch wrapping radix-vue SwitchRoot/SwitchThumb — Layer-1 pure-UI component."
+category = "component"
+stability = "experimental"
+layer = 1
