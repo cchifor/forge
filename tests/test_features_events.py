@@ -92,7 +92,9 @@ def test_events_bus_has_heartbeat_supervisor() -> None:
     ).read_text(encoding="utf-8")
     assert "_run_supervisor" in bus and "_ensure_supervisor" in bus
     assert 'fetchval("SELECT 1")' in bus, "heartbeat must probe the listen connection"
-    # On heartbeat failure it resets and re-listens (self-heal).
+    # On heartbeat failure it resumes subscribers (forces SSE reconnect/replay
+    # so the gap is backfilled) and resets + re-listens (self-heal).
+    assert "_broadcast_resume_and_reset" in bus
     assert "_close_connection_locked" in bus and "_ensure_listener_locked" in bus
     # Supervisor is cancelled on close.
     assert "self._supervisor.cancel()" in bus

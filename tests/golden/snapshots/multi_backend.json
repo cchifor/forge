@@ -453,8 +453,8 @@
       "sha256": "49a80fb935f54d02"
     },
     "services/api-py/sdks/forge-core/src/forge_core/security/s2s.py": {
-      "size": 6002,
-      "sha256": "551886baabf86d31"
+      "size": 6287,
+      "sha256": "68eebecf556f6bba"
     },
     "services/api-py/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,

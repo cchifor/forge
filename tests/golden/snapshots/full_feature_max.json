@@ -488,6 +488,14 @@
       "size": 1221,
       "sha256": "7372f68352277f3a"
     },
+    "apps/frontend/src/shared/composables/formatListSubtitle.test.ts": {
+      "size": 925,
+      "sha256": "d2e2b187f10a31e3"
+    },
+    "apps/frontend/src/shared/composables/formatListSubtitle.ts": {
+      "size": 1335,
+      "sha256": "58176f0d3a65b647"
+    },
     "apps/frontend/src/shared/composables/useApiClient.ts": {
       "size": 160,
       "sha256": "262f478a4556736f"
@@ -508,6 +516,18 @@
       "size": 653,
       "sha256": "00ddfe913aea89e6"
     },
+    "apps/frontend/src/shared/composables/useCapabilities.test.ts": {
+      "size": 1442,
+      "sha256": "ab963dc86a8937f7"
+    },
+    "apps/frontend/src/shared/composables/useCapabilities.ts": {
+      "size": 2443,
+      "sha256": "d4c9b196c188a45d"
+    },
+    "apps/frontend/src/shared/composables/useContainerSize.ts": {
+      "size": 2574,
+      "sha256": "49accc9614fd9de4"
+    },
     "apps/frontend/src/shared/composables/useEventStream.test.ts": {
       "size": 2405,
       "sha256": "04a4b78a01d686e3"
@@ -515,6 +535,26 @@
     "apps/frontend/src/shared/composables/useEventStream.ts": {
       "size": 4098,
       "sha256": "b6c7c9642ed9bbe1"
+    },
+    "apps/frontend/src/shared/composables/useRowSelection.test.ts": {
+      "size": 1080,
+      "sha256": "5f643077c22d8d6b"
+    },
+    "apps/frontend/src/shared/composables/useRowSelection.ts": {
+      "size": 2499,
+      "sha256": "6b7ed7b730c0c2b1"
+    },
+    "apps/frontend/src/shared/composables/useSavedViews.test.ts": {
+      "size": 1067,
+      "sha256": "2bbb26a16b92f917"
+    },
+    "apps/frontend/src/shared/composables/useSavedViews.ts": {
+      "size": 1630,
+      "sha256": "415a5a1d58b41e87"
+    },
+    "apps/frontend/src/shared/composables/useSidebarShortcut.ts": {
+      "size": 2113,
+      "sha256": "ccd8513dcd113c96"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -993,7 +1033,7 @@
       "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 148095,
+      "size": 150271,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1037,8 +1077,8 @@
       "sha256": "2a5586db95c1d4c0"
     },
     "infra/gatekeeper/scripts/realm_sync.py": {
-      "size": 6872,
-      "sha256": "71f4745047787004"
+      "size": 7950,
+      "sha256": "08313bfbc5dadf0b"
     },
     "infra/gatekeeper/scripts/validate_internal.py": {
       "size": 7193,
@@ -1629,8 +1669,8 @@
       "sha256": "49a80fb935f54d02"
     },
     "services/api/sdks/forge-core/src/forge_core/security/s2s.py": {
-      "size": 6002,
-      "sha256": "551886baabf86d31"
+      "size": 6287,
+      "sha256": "68eebecf556f6bba"
     },
     "services/api/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,
