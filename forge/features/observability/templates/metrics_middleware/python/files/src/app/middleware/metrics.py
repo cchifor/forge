@@ -50,7 +50,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         # The in-flight gauge is keyed WITHOUT status (status isn't known at
         # request start), so the +1 and -1 must use the *same* status-free
         # attrs or they never cancel. Count/duration carry the status.
-        base_attrs: dict[str, object] = {
+        # Typed as ``str | int`` (not ``object``) so the dicts satisfy OTel's
+        # ``Attributes`` = ``Mapping[str, str | bool | int | float | Sequence]``
+        # param type — ty (>=0.0.46) rejects ``dict[str, object]`` there.
+        base_attrs: dict[str, str | int] = {
             "http.method": request.method,
             "http.route": request.url.path,
         }
@@ -65,7 +68,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
-            req_attrs = {**base_attrs, "http.status_code": status_code}
+            req_attrs: dict[str, str | int] = {**base_attrs, "http.status_code": status_code}
             _request_count.add(1, req_attrs)
             _request_duration.record(duration_ms, req_attrs)
             _active_requests.add(-1, base_attrs)
