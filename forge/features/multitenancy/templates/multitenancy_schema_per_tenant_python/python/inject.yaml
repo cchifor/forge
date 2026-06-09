@@ -30,9 +30,10 @@
 
 # Configure the resolver with the project's CHOSEN strategy + claim/header,
 # attaching the settings to app.state. ``render: true`` substitutes the
-# resolved option values so the generated code's defaults match the forge.toml
-# selection (env vars still override at runtime). Runs at APP_POST_CONFIGURE,
-# before the lifespan/middleware fire.
+# resolved forge.toml option values; this app.state copy is AUTHORITATIVE for
+# the request path (it is not re-read from the environment per request — only
+# out-of-band code via get_tenancy_settings() reads env). Runs at
+# APP_POST_CONFIGURE, before the lifespan/middleware fire.
 - target: src/app/main.py
   marker: FORGE:APP_POST_CONFIGURE
   position: before

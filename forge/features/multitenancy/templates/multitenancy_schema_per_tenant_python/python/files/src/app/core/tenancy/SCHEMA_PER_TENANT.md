@@ -39,12 +39,23 @@ ORM tables inside it via `schema_translate_map`.
 
 ## Operational notes / hardening
 
-- **Fail mode differs from `shared_rls`.** RLS fails *closed* (an unbound GUC
-  yields zero rows). Schema routing has no such default: when no tenant is bound
-  the `search_path` stays at `public`. **Pair this strategy with auth** so an
-  unidentified request is rejected (401) before it opens a transaction, and keep
-  tenant rows out of `public` — treat `public` as the canonical/template schema
-  that `provision_tenant_schema` clones per tenant.
+- **Fail-closed on a missing tenant.** When no tenant is bound, the engine
+  listener sets `search_path` to the **empty string**, so unqualified app tables
+  (`items`) don't resolve and the query errors instead of silently reading
+  `public`/shared data — the same fail-closed posture as `shared_rls` (zero
+  rows). Non-tenant operations that don't touch app tables (a health `SELECT 1`)
+  are unaffected.
+- **`token_claim` does not resolve at middleware time in this template.** The
+  tenant middleware runs before `call_next`, but `request.state.identity` is
+  bound by a per-route auth **dependency** (the generated template does not
+  register an auth *middleware*). So with `database.tenant_resolution=token_claim`
+  (the default) the middleware sees no identity, resolves `None`, and every
+  request fails closed (empty `search_path`) — i.e. the app can't reach tenant
+  data. **For schema_per_tenant, use `database.tenant_resolution=header` or
+  `subdomain`** (both read the request directly at middleware time), have your
+  gateway inject the tenant header, or register an auth middleware that binds
+  `request.state.identity` *before* `TenantSchemaMiddleware`. (`shared_rls`
+  shares this timing constraint, but degrades to zero-rows rather than errors.)
 - **Tenant-id safety.** `schema_name_for` accepts only `[A-Za-z0-9_-]` ids
   (UUIDs and slugs) and rejects anything else rather than sanitizing — a lossy
   substitution could collide two tenants onto one schema. For the same reason

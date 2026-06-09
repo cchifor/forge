@@ -476,6 +476,18 @@ def test_schema_router_quotes_and_validates() -> None:
     assert 'dialect.name != "postgresql"' in schema
 
 
+def test_schema_router_fails_closed_on_missing_tenant() -> None:
+    """No tenant bound ⇒ empty search_path (unqualified app tables invisible),
+    NOT a fall-through to public. This is the security-critical posture: schema
+    routing must not fail OPEN the way an unguarded search_path would."""
+    schema = (_schema_fragment_root() / "src/app/core/tenancy/schema.py").read_text(
+        encoding="utf-8"
+    )
+    # The fail-closed bind: empty search_path when the tenant ContextVar is None.
+    assert "SET LOCAL search_path TO ''" in schema
+    assert "FAIL CLOSED" in schema
+
+
 def test_schema_resolver_code_matches_rls() -> None:
     """Both strategies ship the SAME resolver CODE — they only differ in the
     binding mechanism (and the module docstring, which is strategy-specific:

@@ -19,11 +19,11 @@ the strategy configured in :class:`~app.core.tenancy.config.TenancySettings`:
 
 A missing tenant resolves to ``None`` — the caller decides whether that is a
 hard 401/403 or an anonymous/public request. The schema router treats ``None``
-as "bind nothing", leaving the connection's default ``search_path`` (``public``)
-— so, UNLIKE ``shared_rls`` (which fails closed via a NULL GUC → zero rows),
-this strategy does NOT fail closed on a missing tenant. Pair it with auth
-(reject unidentified requests) and keep ``public`` free of tenant rows. See
-``schema.py`` / ``SCHEMA_PER_TENANT.md``.
+as fail-closed: it binds an EMPTY ``search_path`` so unqualified app tables are
+invisible (mirroring ``shared_rls``'s zero-rows). NOTE: ``token_claim`` reads
+``request.state.identity``, bound by a per-route auth dependency, so it is not
+populated at middleware time in this template — prefer ``header``/``subdomain``
+for schema_per_tenant. See ``schema.py`` / ``SCHEMA_PER_TENANT.md``.
 """
 
 from __future__ import annotations

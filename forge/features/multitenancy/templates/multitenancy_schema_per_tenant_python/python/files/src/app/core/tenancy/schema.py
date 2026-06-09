@@ -32,13 +32,18 @@ NO-OP on non-Postgres dialects: :func:`register_search_path_listener` only
 attaches the listener for ``postgresql`` engines, so the template's
 SQLite-backed unit tests run unchanged.
 
-FAIL MODE differs from ``shared_rls``: RLS fails *closed* (an unbound GUC →
-``current_setting(...) IS NULL`` → zero rows). Schema routing has no such
-default — when no tenant is bound the ``search_path`` is left at its default
-(``public``). Pair this strategy with auth so an unidentified request is
-rejected (401) before it ever opens a transaction, and keep tenant rows out of
-``public`` (it is the canonical/template schema, cloned per tenant by
-:func:`provision_tenant_schema`). See ``SCHEMA_PER_TENANT.md``.
+FAIL CLOSED: when no tenant is bound, the listener sets ``search_path`` to the
+EMPTY string, so unqualified app tables don't resolve and the query errors
+rather than silently reading ``public``/shared data — the same fail-closed
+posture as ``shared_rls`` (NULL GUC → zero rows). A still-open caveat:
+``token_claim`` resolution reads ``request.state.identity``, which in this
+template is bound by a per-route auth DEPENDENCY (not an outer middleware), so
+it is NOT populated when this middleware runs — ``token_claim`` resolves to
+``None`` (→ fail-closed empty search_path). For schema_per_tenant, resolve via
+``header`` or ``subdomain`` (both read the request directly at middleware time),
+or register an auth middleware that binds identity before this one. ``public``
+must hold no tenant rows (it is the canonical/template schema cloned per tenant
+by :func:`provision_tenant_schema`). See ``SCHEMA_PER_TENANT.md``.
 """
 
 from __future__ import annotations
@@ -131,12 +136,19 @@ def register_search_path_listener(engine: Any, settings: TenancySettings | None 
         # than silently querying the wrong/shared schema.
         tenant = current_tenant_var.get()
         if tenant is None:
+            # FAIL CLOSED. No tenant bound ⇒ expose NO tenant schema: an empty
+            # search_path leaves only the implicitly-searched pg_catalog, so an
+            # unqualified app table (``items``) does not resolve and the query
+            # errors instead of silently reading shared/``public`` data. This
+            # mirrors shared_rls's zero-rows fail-closed posture. Non-tenant ops
+            # that don't touch app tables (health ``SELECT 1``) are unaffected.
+            conn.exec_driver_sql("SET LOCAL search_path TO ''")
             return
         schema = schema_name_for(tenant, prefix)
-        # ``, public`` keeps shared types/extensions resolvable, but it also
-        # means an UN-provisioned tenant (whose schema lacks a table) falls
-        # THROUGH to public.<table>. Provisioning MUST run before a tenant is
-        # served, and ``public`` must hold no tenant rows. See SCHEMA_PER_TENANT.md.
+        # ``, public`` keeps shared types/extensions resolvable. An UN-provisioned
+        # tenant (whose schema lacks a table) would still fall THROUGH to
+        # public.<table>, so provisioning MUST run before a tenant is served and
+        # ``public`` must hold no tenant rows. See SCHEMA_PER_TENANT.md.
         conn.exec_driver_sql(f"SET LOCAL search_path TO {_quote_ident(schema)}, public")
 
     return True
