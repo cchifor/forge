@@ -34,15 +34,21 @@ vi.stubGlobal('window', {
 	})
 });
 
-const { getSettingsStore } = await import('$lib/features/settings/model/settings.svelte');
+// Type-only import; the runtime instance is (re)imported per test below.
+import type { getSettingsStore as GetSettingsStore } from '$lib/features/settings/model/settings.svelte';
 
 describe('getSettingsStore', () => {
-	let store: ReturnType<typeof getSettingsStore>;
+	let store: ReturnType<typeof GetSettingsStore>;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		storage.clear();
 		vi.clearAllMocks();
-		store = getSettingsStore();
+		// The store's $state lives at module scope; reset the module registry so
+		// each test re-evaluates it fresh (reading the just-cleared storage) —
+		// otherwise a textSize/theme set in one test leaks into the next.
+		vi.resetModules();
+		const mod = await import('$lib/features/settings/model/settings.svelte');
+		store = mod.getSettingsStore();
 	});
 
 	it('returns a store object with expected properties', () => {
