@@ -48,6 +48,21 @@ def _primary_feature(bc: BackendConfig) -> str:
     return bc.features[0] if bc.features else "items"
 
 
+def _agent_backend_name(config: ProjectConfig) -> str:
+    """Name of the backend that hosts the AG-UI agent endpoint.
+
+    The ``agent``/``agent_agui`` fragments are python-only, so the agent SSE
+    endpoint renders into the first PYTHON backend — which may not be
+    ``config.backend`` (the first backend of any language) in a mixed
+    multi-backend project. Falls back to the primary backend name.
+    """
+    for bc in config.backends:
+        if bc.language.value == "python":
+            return bc.name
+    primary = config.backend
+    return primary.name if primary else "backend"
+
+
 def backend_context(
     bc: BackendConfig,
     *,
@@ -258,17 +273,17 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "api_base_url": api_base_url,
         "api_proxy_target": api_proxy_target,
         "env_api_base_url": env_api_base_url,
-        # VITE_AGENT_BASE_URL is the FULL url the frontend POSTs RunAgentInput
-        # to (the AG-UI SSE endpoint served by the agent_agui fragment, mounted
-        # at /api/v1/agent ON THE BACKEND). The browser must reach it the same
-        # way every other API call does: through the per-backend path segment
-        # `/api/{backend}/...` that the Vite dev proxy rewrites to `/api/...`
-        # and forwards to the backend (and that the generated feature clients
-        # use). So the URL carries the backend name: `{base}/api/{backend}/v1/agent`.
-        # ``env_api_base_url`` is the Vite dev-server origin locally (proxy
-        # rewrites + forwards) or the external API origin in external mode.
-        # Overridable via the env file.
-        "agent_base_url": f"{env_api_base_url}/api/{backend_name}/v1/agent",
+        # VITE_AGENT_BASE_URL — the url the frontend POSTs RunAgentInput to (the
+        # AG-UI SSE endpoint, mounted at /api/v1/agent on the backend). It must
+        # reach the backend the same way every other API call does: through the
+        # per-backend `/api/{backend}/...` segment the Vite dev proxy rewrites to
+        # `/api/...` and forwards (and that the generated feature clients use).
+        # RELATIVE (no origin): resolves against the runtime origin, so it works
+        # in dev (Vite proxy) AND prod (same-origin) without baking a localhost
+        # URL into the production build — mirroring VITE_API_BASE_URL (empty in
+        # base .env). The backend is the first PYTHON backend (the agent endpoint
+        # is python-only; the first backend may be Node/Rust). Overridable.
+        "agent_base_url": f"/api/{_agent_backend_name(config)}/v1/agent",
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,
