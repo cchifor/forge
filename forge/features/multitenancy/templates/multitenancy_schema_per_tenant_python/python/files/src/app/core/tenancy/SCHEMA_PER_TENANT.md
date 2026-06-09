@@ -11,32 +11,31 @@ set; requests are routed to the caller's schema by binding the connection's
 |-------|------|
 | `app/core/tenancy/config.py` | env-driven `TenancySettings` (resolution strategy, claim/header, schema prefix) |
 | `app/core/tenancy/resolver.py` | resolves the per-request tenant id (token claim / header / subdomain) — identical to the `shared_rls` resolver |
-| `app/core/tenancy/schema.py` | `schema_name_for` (validate + name), `bind_tenant_search_path` (the UoW session binder — request-path mechanism), `provision_tenant_schema`, `TenantSchemaHook` (workers) |
+| `app/core/tenancy/schema.py` | `schema_name_for` (validate + name), `register_search_path_listener` (always-on fail-closed default), `bind_tenant_search_path` (post-auth account override), `provision_tenant_schema`, `TenantSchemaHook` (workers) |
 | `app/middleware/tenant_schema.py` | resolves the tenant (header/subdomain) and sets `current_tenant_var` at the request edge |
 
-**Request path (the binder).** The per-transaction `search_path` is bound by
-`bind_tenant_search_path`, installed on the request Unit-of-Work via the
-`FORGE:UOW_SESSION_BINDER` seam in `app/core/ioc/security.py`. It runs inside
-the handler's transaction (`AsyncUnitOfWork.__aenter__`), i.e. **after auth has
-resolved**, and chooses the tenant in this order:
+The `search_path` is bound by **two composed seams**, both transaction-scoped
+(`SET LOCAL`, so a pooled connection never leaks one tenant's path to the next):
 
-1. the edge-resolved `current_tenant_var` (set by the middleware for
-   `header` / `subdomain` resolution), else
-2. the authenticated **account** tenant — this is the `token_claim` path: the
-   tenant is `account.customer_id`, the identity verified by auth. **This is why
-   `schema_per_tenant` + `token_claim` works** (the old engine `begin` listener
-   ran before auth, so it could never see a token-claim tenant).
+1. **The engine `begin` listener (`register_search_path_listener`)** — the
+   always-on default. On *every* transaction (including raw/non-UoW sessions —
+   workers, direct `session_factory` use) it binds from the edge-resolved
+   `current_tenant_var` (set by the middleware for `header`/`subdomain`), or
+   `search_path = ''` when unset (**fail closed** — nothing falls open to
+   `public`).
+2. **The UoW binder (`bind_tenant_search_path`)** — installed on the request
+   Unit-of-Work via the `FORGE:UOW_SESSION_BINDER` seam in
+   `app/core/ioc/security.py`. It runs inside the handler transaction **after
+   auth resolves** and, *only when an authenticated account is present*,
+   OVERWRITES the listener's binding with `SET LOCAL search_path TO
+   "tenant_<account.customer_id>", public`. **This is the `token_claim` path**
+   (the pre-auth listener can't see a token claim). With no account it is a
+   no-op, leaving the listener's binding (a `PublicUnitOfWork` under `token_claim`
+   therefore fails closed). The authenticated account is authoritative: an edge
+   header claiming a different tenant is ignored (logged).
 
-It then issues, transaction-scoped:
-
-```sql
-SET LOCAL search_path TO "tenant_<id>", public
-```
-
-`SET LOCAL` is transaction-scoped, so a pooled connection never carries one
-tenant's `search_path` into the next request. With **no** tenant (e.g. a
-`PublicUnitOfWork`), it binds `search_path = ''` (fail closed). Workers / code
-outside the request UoW use the imperative `TenantSchemaHook` instead.
+Workers / code outside the request UoW use the imperative `TenantSchemaHook`
+(`await hook.bind(session, tenant)`) for an explicit, tenant-scoped session.
 
 ## Provisioning a tenant
 
@@ -60,17 +59,26 @@ ORM tables inside it via `schema_translate_map`.
   `public`/shared data — the same fail-closed posture as `shared_rls` (zero
   rows). Non-tenant operations that don't touch app tables (a health `SELECT 1`)
   are unaffected.
-- **`token_claim` does not resolve at middleware time in this template.** The
-  tenant middleware runs before `call_next`, but `request.state.identity` is
-  bound by a per-route auth **dependency** (the generated template does not
-  register an auth *middleware*). So with `database.tenant_resolution=token_claim`
-  (the default) the middleware sees no identity, resolves `None`, and every
-  request fails closed (empty `search_path`) — i.e. the app can't reach tenant
-  data. **For schema_per_tenant, use `database.tenant_resolution=header` or
-  `subdomain`** (both read the request directly at middleware time), have your
-  gateway inject the tenant header, or register an auth middleware that binds
-  `request.state.identity` *before* `TenantSchemaMiddleware`. (`shared_rls`
-  shares this timing constraint, but degrades to zero-rows rather than errors.)
+- **`token_claim` binds via the UoW (post-auth), not the middleware.** The
+  tenant middleware runs before `call_next`, so it can't see the token claim
+  (`request.state.identity` is bound later by the per-route auth dependency).
+  Instead the request UoW's binder reads the authenticated `account.customer_id`
+  inside the handler transaction and overrides the listener's binding — so
+  `token_claim` works for any endpoint whose handler uses an `AuthUnitOfWork`
+  (the standard CRUD path). `header`/`subdomain` continue to resolve at the edge
+  via the middleware/listener.
+- **Endpoints using `PublicUnitOfWork` against tenant tables.** A public
+  (unauthenticated) endpoint has no account, so the binder is a no-op and the
+  request fails closed (empty `search_path`) under `token_claim`. If such an
+  endpoint must touch tenant tables (e.g. an inbound webhook), it has to resolve
+  the tenant itself — use an `AuthUnitOfWork`/tenant-scoped session or call
+  `TenantSchemaHook.bind(session, tenant)` explicitly. It will not be
+  auto-scoped.
+- **Multiple commits in one UoW block.** `SET LOCAL` is transaction-scoped, so
+  after an explicit `uow.commit()` the next query begins a new transaction and
+  the binder (which runs once, at `__aenter__`) does NOT re-apply — the listener
+  re-binds the fail-closed/edge default. Open a fresh UoW per logical
+  transaction, or re-bind, if you commit-then-query within one block.
 - **Tenant-id safety.** `schema_name_for` accepts only `[A-Za-z0-9_-]` ids
   (UUIDs and slugs) and rejects anything else rather than sanitizing — a lossy
   substitution could collide two tenants onto one schema. For the same reason

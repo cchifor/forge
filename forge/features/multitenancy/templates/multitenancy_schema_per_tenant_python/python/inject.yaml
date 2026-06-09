@@ -1,17 +1,22 @@
-# multitenancy_schema_per_tenant_python: wire schema-per-tenant isolation.
+# multitenancy_schema_per_tenant_python: wire schema-per-tenant isolation via
+# TWO composed seams (both fail closed):
 #
-# The per-transaction search_path is bound by the UoW ``session_binder``
-# (app.core.tenancy.schema.bind_tenant_search_path), installed at the
-# ``FORGE:UOW_SESSION_BINDER`` seam in ioc/security.py. The binder fires inside
-# the request handler (post-auth), so it works for ``token_claim`` (tenant from
-# the authenticated account) AND for ``header``/``subdomain`` (tenant from the
-# edge-resolved ContextVar the middleware sets). It fails closed (empty
-# search_path) when no tenant is bound. This replaces the old engine
-# "begin" listener as the request-path binder (the imperative ``TenantSchemaHook``
-# remains the explicit out-of-band / worker API).
+#   1. Engine "begin" listener (register_search_path_listener, at
+#      LIFESPAN_STARTUP). On EVERY transaction begin it binds search_path from
+#      the edge-resolved ContextVar (header/subdomain) or, when unset, '' (fail
+#      closed). This covers ALL sessions — including raw/non-UoW sessions
+#      (workers, direct session_factory use) — so nothing fails open to public.
 #
-# The middleware still runs the resolver and sets the ContextVar so the
-# header/subdomain strategies resolve at the request edge.
+#   2. UoW session binder (bind_tenant_search_path, installed at the
+#      FORGE:UOW_SESSION_BINDER seam in ioc/security.py). It runs inside the
+#      request handler (post-auth) and, ONLY when an authenticated account is
+#      present, OVERWRITES the listener's binding with the account's tenant
+#      schema. This is the token_claim path (the listener can't see a token
+#      claim because it resolves pre-auth). With no account the binder is a
+#      no-op, leaving the listener's header/subdomain-or-fail-closed binding.
+#
+# The middleware runs the resolver and sets the ContextVar for header/subdomain.
+# The imperative TenantSchemaHook remains the explicit API for out-of-band code.
 #
 # There is NO migration: schema-per-tenant materializes each tenant's tables in
 # its own schema at provision time (app.core.tenancy.schema.provision_tenant_schema),
@@ -44,9 +49,21 @@
         header_name="{{ options['database.tenant_header_name'] }}",
     )
 
-# Install the per-session search_path binder on the request UoWs. The binder
-# owns the request-path search_path (post-auth, inside the handler txn) — this
-# is what makes schema_per_tenant + token_claim work.
+# Engine "begin" listener: the always-on, fail-closed default binding for EVERY
+# session (incl. raw/non-UoW). Reads the request ContextVar (header/subdomain)
+# or binds '' when unset.
+- target: src/app/core/lifecycle.py
+  marker: FORGE:LIFESPAN_STARTUP
+  position: before
+  snippet: |-
+    from app.core.tenancy.schema import register_search_path_listener
+
+    register_search_path_listener(db.engine)
+
+# UoW session binder: post-auth, overwrites the listener's binding with the
+# AUTHENTICATED account's tenant schema (the token_claim path). No-op when there
+# is no account, so it never clobbers the listener's header/subdomain or
+# fail-closed binding.
 - target: src/app/core/ioc/security.py
   marker: FORGE:UOW_SESSION_BINDER
   position: before

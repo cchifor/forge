@@ -211,33 +211,31 @@ async def test_binder_from_account_token_claim() -> None:
 
 
 @pytest.mark.asyncio
-async def test_binder_prefers_edge_resolved_contextvar() -> None:
-    """Header/subdomain (edge-resolved ContextVar) wins over the account."""
+async def test_binder_account_authoritative_over_edge() -> None:
+    """The authenticated account wins over an edge-resolved ContextVar (a header
+    claiming another tenant cannot override the verified identity)."""
     token = current_tenant_var.set("beta")
     try:
         session = _FakeSession("postgresql")
         await bind_tenant_search_path(session, _Account("acme"))
-        assert session.executed[0][1] == {"sp": '"tenant_beta", public'}
+        assert session.executed[0][1] == {"sp": '"tenant_acme", public'}
     finally:
         current_tenant_var.reset(token)
 
 
 @pytest.mark.asyncio
-async def test_binder_fails_closed_without_tenant() -> None:
-    """No ContextVar + no account (e.g. PublicUnitOfWork) ⇒ empty search_path,
-    so unqualified app tables don't resolve (fail closed, not public)."""
-    token = current_tenant_var.set(None)
-    try:
-        session = _FakeSession("postgresql")
-        await bind_tenant_search_path(session, None)
-        assert len(session.executed) == 1
-        # An empty search_path value (the schema name isn't interpolated here).
-        assert "'search_path', '', true" in str(session.executed[0][0]) or session.executed[0][1] in (
-            None,
-            {},
-        )
-    finally:
-        current_tenant_var.reset(token)
+async def test_binder_noop_without_account() -> None:
+    """No account (e.g. PublicUnitOfWork) ⇒ the binder does NOT touch the
+    session — it leaves the engine begin-listener's binding (the edge ContextVar
+    tenant, or '' fail-closed) in force."""
+    for ctx in (None, "beta"):
+        token = current_tenant_var.set(ctx)
+        try:
+            session = _FakeSession("postgresql")
+            await bind_tenant_search_path(session, None)
+            assert session.executed == []
+        finally:
+            current_tenant_var.reset(token)
 
 
 @pytest.mark.asyncio
