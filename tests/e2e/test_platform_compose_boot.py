@@ -199,3 +199,23 @@ def test_microservices_platform_s2s_round_trip(tmp_path: Path, require_docker: N
         assert "S2S_OK" in _exec_py(root, "gateway", _S2S_SCRIPT)
     finally:
         _teardown(root)
+
+
+def test_multitenant_saas_platform_boots_and_serves(tmp_path: Path, require_docker: None) -> None:
+    """`--platform multitenant-saas`: the full multi-tenant topology — Keycloak +
+    gatekeeper + the TMS control plane + the RLS-isolated app service — boots and
+    both backend tiers serve their health surface in-network.
+
+    (No S2S round-trip here: this preset puts the gatekeeper at the edge rather
+    than synthesizing an api-gateway, so the `_S2S_SCRIPT` env contract that the
+    microservices/headless presets rely on isn't present.)
+    """
+    root = _forge_generate("multitenant-saas", "mtsaasboot", tmp_path)
+    try:
+        _boot(root)
+        _wait_healthy(root, ["keycloak", "gatekeeper", "tms", "app"])
+        # The TMS control plane and the tenant-scoped app both serve.
+        assert "HEALTH_OK" in _exec_py(root, "tms", _HEALTH_SCRIPT.format(port=5010))
+        assert "HEALTH_OK" in _exec_py(root, "app", _HEALTH_SCRIPT.format(port=5020))
+    finally:
+        _teardown(root)

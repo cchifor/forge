@@ -306,6 +306,67 @@ class TestMonolithicIntegration:
         assert [p.name for p in sorted(services.iterdir()) if p.is_dir()] == ["backend"]
 
 
+class TestMultitenantSaasIntegration:
+    def test_build_and_validate(self) -> None:
+        config = _build_config(_args(platform="multitenant-saas"), {})
+        config.validate()  # must not raise
+
+        assert config.platform_template == "multitenant-saas"
+        assert config.include_keycloak is True
+        # The multitenant wiring: gatekeeper edge auth + shared-RLS by JWT claim.
+        assert config.options["auth.provider"] == "gatekeeper"
+        assert config.options["database.multitenancy"] == "shared_rls"
+        assert config.options["database.tenant_resolution"] == "token_claim"
+
+        by_name = {b.name: b for b in config.backends}
+        assert by_name["tms"].app_template == "tenant-management-service"
+        assert by_name["app"].app_template == "crud-service"
+
+    def test_dry_run_stands_up_full_topology(self) -> None:
+        config = _build_config(
+            _args(platform="multitenant-saas"), {"project_name": "Acme SaaS"}
+        )
+        config.validate()
+        root = generate(config, quiet=True, dry_run=True)
+
+        # TMS control plane (the variant overlay + its hardening doc).
+        assert (root / "services/tms/src/app/services/tenant_service.py").is_file()
+        assert (root / "services/tms/HARDENING.md").is_file()
+        # App workload carries the RLS enablement migration...
+        assert (root / "services/app/alembic/versions/0002_enable_rls.py").is_file()
+        # ...but the TMS control plane does NOT — its variant is excluded from the
+        # RLS fragment, so it keeps a single linear migration chain (0001 ->
+        # 0002_tms_tables) and boots. (Regression guard for the project-global
+        # shared_rls vs. per-backend scoping fix.)
+        assert not (root / "services/tms/alembic/versions/0002_enable_rls.py").exists()
+        assert (root / "services/tms/alembic/versions/0002_tms_tables.py").is_file()
+        # The RLS fragment's tenancy code likewise stays off the control plane.
+        assert not (root / "services/tms/src/app/middleware/tenant_rls.py").exists()
+        assert (root / "services/app/src/app/middleware/tenant_rls.py").is_file()
+        # Gatekeeper edge auth + the corrected Keycloak realm + the realm-sync
+        # sidecar (auto-bundled with the gatekeeper provider).
+        assert (root / "infra/keycloak-realm.json").is_file()
+        assert (root / "infra/gatekeeper/scripts/realm_sync.py").is_file()
+        # The realm mints the tenant claim the app's RLS reads.
+        realm = (root / "infra/keycloak-realm.json").read_text(encoding="utf-8")
+        assert "tenant_id" in realm
+        # Vue frontend present (not headless).
+        assert (root / "apps/frontend/package.json").is_file()
+        # Compose wires every tier of the topology.
+        compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+        for svc in ("keycloak", "redis", "gatekeeper", "tms", "app"):
+            assert f"{svc}:" in compose, f"compose missing service: {svc}"
+
+    def test_persisted_in_forge_toml(self) -> None:
+        config = _build_config(
+            _args(platform="multitenant-saas"), {"project_name": "Acme SaaS"}
+        )
+        config.validate()
+        root = generate(config, quiet=True, dry_run=True)
+        forge_toml = (root / "forge.toml").read_text(encoding="utf-8")
+        assert 'platform_template = "multitenant-saas"' in forge_toml
+
+
 # --------------------------------------------------------------------------- #
 # (c) PRECEDENCE — preset is the lowest config layer; user cfg overrides it
 # --------------------------------------------------------------------------- #
@@ -374,5 +435,5 @@ class TestPlatformErrors:
 def test_golden_preset_dir_layout() -> None:
     """Each shipped preset ships a platform.toml under templates/platforms/."""
     root = Path(__file__).resolve().parent.parent / "forge" / "templates" / "platforms"
-    for name in ("monolithic", "microservices", "headless-api"):
+    for name in ("monolithic", "microservices", "headless-api", "multitenant-saas"):
         assert (root / name / "platform.toml").is_file()
