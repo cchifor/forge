@@ -133,7 +133,7 @@ def extract_entities(spec: dict[str, Any]) -> list[dict[str, Any]]:
         if schema.get("type") != "object":
             continue
         props = schema.get("properties") or {}
-        required = set(schema.get("required") or ())
+        required: set[str] = {str(x) for x in (schema.get("required") or ())}
         fields: list[dict[str, Any]] = []
         for prop_name, prop_schema in props.items():
             if not isinstance(prop_schema, dict):
