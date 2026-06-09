@@ -2,10 +2,15 @@
 # TWO composed seams (both fail closed):
 #
 #   1. Engine "begin" listener (register_search_path_listener, at
-#      LIFESPAN_STARTUP). On EVERY transaction begin it binds search_path from
-#      the edge-resolved ContextVar (header/subdomain) or, when unset, '' (fail
-#      closed). This covers ALL sessions — including raw/non-UoW sessions
-#      (workers, direct session_factory use) — so nothing fails open to public.
+#      LIFESPAN_STARTUP). On every transaction of the MAIN APP ENGINE
+#      (``db.engine``) it binds search_path from the edge-resolved ContextVar
+#      (header/subdomain) or, when unset, '' (fail closed). This covers all
+#      sessions opened from the shared session factory, including raw/non-UoW
+#      sessions on that engine. NOTE: a few features create their OWN standalone
+#      engine (RAG worker/search, CLI, admin panel) — those are NOT covered;
+#      such out-of-band code must register the listener on its engine or use
+#      TenantSchemaHook (see SCHEMA_PER_TENANT.md). This matches the prior
+#      behaviour (the listener was always attached to db.engine only).
 #
 #   2. UoW session binder (bind_tenant_search_path, installed at the
 #      FORGE:UOW_SESSION_BINDER seam in ioc/security.py). It runs inside the

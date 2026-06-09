@@ -18,12 +18,12 @@ the strategy configured in :class:`~app.core.tenancy.config.TenancySettings`:
   ``acme``).
 
 A missing tenant resolves to ``None`` — the caller decides whether that is a
-hard 401/403 or an anonymous/public request. The schema router treats ``None``
-as fail-closed: it binds an EMPTY ``search_path`` so unqualified app tables are
-invisible (mirroring ``shared_rls``'s zero-rows). NOTE: ``token_claim`` reads
-``request.state.identity``, bound by a per-route auth dependency, so it is not
-populated at middleware time in this template — prefer ``header``/``subdomain``
-for schema_per_tenant. See ``schema.py`` / ``SCHEMA_PER_TENANT.md``.
+hard 401/403 or an anonymous/public request. This resolver drives the
+``header``/``subdomain`` request-edge strategies (set on ``current_tenant_var``
+for the engine listener). ``token_claim`` is bound separately, post-auth, from
+the authenticated account by the UoW binder (``schema.py:bind_tenant_search_path``)
+— it does NOT flow through this resolver at request time. See ``schema.py`` /
+``SCHEMA_PER_TENANT.md``.
 """
 
 from __future__ import annotations

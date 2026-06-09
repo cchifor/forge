@@ -16,10 +16,12 @@ scoped to that transaction, via the engine listener. The ContextVar is reset in
 a ``finally`` so a worker reusing the same task/thread never inherits a stale
 tenant.
 
-Ordering: it must run AFTER the platform-auth middleware (which binds
-``request.state.identity``) so ``token_claim`` resolution can read the verified
-claims. ``database.multitenancy=schema_per_tenant`` registers it after the auth
-middleware at the ``FORGE:MIDDLEWARE_REGISTRATION`` marker.
+This middleware drives the ``header``/``subdomain`` strategies, which resolve
+from the request itself at the edge (no auth needed). ``token_claim`` does NOT
+flow through here: an authenticated request's tenant is bound post-auth by the
+UoW binder (``app.core.tenancy.schema.bind_tenant_search_path``) from the
+verified account — which is why ``token_claim`` works even though this
+middleware runs before the per-route auth dependency populates the identity.
 """
 
 from __future__ import annotations
