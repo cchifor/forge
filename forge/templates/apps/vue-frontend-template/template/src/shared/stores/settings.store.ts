@@ -18,13 +18,26 @@ export interface ColorSchemeEntry {
 
 export interface TextSizeEntry {
   label: string
-  rem: string
+  /**
+   * Applied to the ROOT element's font-size as a PERCENTAGE of the browser
+   * default. It must scale `rem`-based Tailwind utilities (text-sm, spacing,
+   * …), which resolve against the root — not `body` — so it is set on `html`
+   * and uses `%` (a `rem` value would be self-referential on the root). `100%`
+   * is the no-op default and preserves/scales the user's browser font size
+   * rather than overriding it with an absolute px value.
+   */
+  rootSize: string
 }
 
 export const TEXT_SIZES: Record<TextSize, TextSizeEntry> = {
-  sm: { label: 'Small',  rem: '0.9375rem' },
-  md: { label: 'Medium', rem: '1rem' },
-  lg: { label: 'Large',  rem: '1.125rem' },
+  sm: { label: 'Small',  rootSize: '93.75%' },
+  md: { label: 'Medium', rootSize: '100%' },
+  lg: { label: 'Large',  rootSize: '112.5%' },
+}
+
+/** Coerce a persisted/raw value to a valid TextSize, defaulting to `md`. */
+export function parseTextSize(value: string | null): TextSize {
+  return value === 'sm' || value === 'md' || value === 'lg' ? value : 'md'
 }
 
 export const COLOR_SCHEMES: Record<ColorSchemeId, ColorSchemeEntry> = {
@@ -60,9 +73,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const colorScheme = ref<ColorSchemeId>(
     (localStorage.getItem('color-scheme') as ColorSchemeId) || 'blue',
   )
-  const textSize = ref<TextSize>(
-    (localStorage.getItem('text-size') as TextSize) || 'md',
-  )
+  const textSize = ref<TextSize>(parseTextSize(localStorage.getItem('text-size')))
 
   const resolvedTheme = computed<'light' | 'dark'>(() => {
     if (theme.value === 'system') {
@@ -113,7 +124,7 @@ export const useSettingsStore = defineStore('settings', () => {
     // Apply text size from selected preference
     const size = TEXT_SIZES[textSize.value] || TEXT_SIZES.md
     html.dataset.textSize = textSize.value
-    html.style.setProperty('--font-size', size.rem)
+    html.style.setProperty('--font-size', size.rootSize)
   }
 
   return {

@@ -81,13 +81,14 @@ class TextSizeNotifier extends _$TextSizeNotifier {
   TextSize build() {
     final stored = _prefs.getString(_textSizeKey);
     return TextSize.values.firstWhere(
-      (s) => s.name == stored,
+      (s) => s.wire == stored,
       orElse: () => TextSize.medium,
     );
   }
 
   Future<void> setTextSize(TextSize size) async {
     state = size;
-    await _prefs.setString(_textSizeKey, size.name);
+    // Persist the cross-framework `sm|md|lg` token, not the Dart enum name.
+    await _prefs.setString(_textSizeKey, size.wire);
   }
 }

@@ -154,10 +154,16 @@
     border-color: hsl(var(--border));
   }
 
+  /* The text-size axis scales the ROOT font-size so `rem`-based Tailwind
+     utilities scale with it (rem resolves against `html`, not `body`).
+     Default 100% preserves the user's browser font-size. */
+  html {
+    font-size: var(--font-size, 100%);
+  }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-size: var(--font-size, 1rem);
   }
 }
 

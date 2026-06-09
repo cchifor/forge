@@ -6,14 +6,18 @@ part 'settings_model.freezed.dart';
 
 /// Accessibility text-size preference applied as a global text scale.
 enum TextSize {
-  small(0.9375),
-  medium(1.0),
-  large(1.125);
+  small(0.9375, 'sm'),
+  medium(1.0, 'md'),
+  large(1.125, 'lg');
 
-  const TextSize(this.scale);
+  const TextSize(this.scale, this.wire);
 
   /// Multiplier applied to the app's base font size via [MediaQuery].
   final double scale;
+
+  /// Stable persisted/cross-framework token (`sm` | `md` | `lg`) — matches the
+  /// web stores' `text-size` values rather than the Dart enum name.
+  final String wire;
 }
 
 @freezed

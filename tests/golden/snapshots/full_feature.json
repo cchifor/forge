@@ -125,8 +125,8 @@
       "sha256": "0fe8a31dae1278f2"
     },
     "apps/frontend/src/app/styles/main.css": {
-      "size": 5850,
-      "sha256": "f88a014b305ca09f"
+      "size": 6143,
+      "sha256": "eebba5b9c35a8a7d"
     },
     "apps/frontend/src/core/ui-protocol/types.ts": {
       "size": 457,
@@ -681,12 +681,12 @@
       "sha256": "20b2cae43f6c2728"
     },
     "apps/frontend/src/shared/stores/settings.store.test.ts": {
-      "size": 2610,
-      "sha256": "e73fc9607dd447c0"
+      "size": 2898,
+      "sha256": "8e721ebc48c6cb96"
     },
     "apps/frontend/src/shared/stores/settings.store.ts": {
-      "size": 4987,
-      "sha256": "3340ea6c283fb092"
+      "size": 5674,
+      "sha256": "ca5fdeb279efca9d"
     },
     "apps/frontend/src/shared/stores/ui.store.test.ts": {
       "size": 3441,
