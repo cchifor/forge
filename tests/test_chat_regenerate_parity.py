@@ -242,8 +242,17 @@ class TestRunInFlightGuard:
     def test_vue_regenerate_guards_on_isRunning(self) -> None:
         body = _VUE_AGENT_CLIENT.read_text()
         regen_block = _extract_block(body, "function regenerate(messageId: string)")
-        assert "isRunning.value" in regen_block and "return" in regen_block, (
-            "Vue regenerate() must short-circuit when isRunning.value is true"
+        # The agentic-hardening tranche (#180) tightened this guard from
+        # `isRunning.value` to `canStartRun()`, which short-circuits when a run
+        # is in flight OR while awaiting the user (a HITL prompt / open deferred
+        # frontend tool) — a strict superset of the run-in-flight guard
+        # (canStartRun === !isRunning.value && !awaitingUser.value). Accept
+        # either shape so the no-op-while-busy intent is asserted without
+        # pinning the exact implementation.
+        assert (
+            "canStartRun()" in regen_block or "isRunning.value" in regen_block
+        ) and "return" in regen_block, (
+            "Vue regenerate() must short-circuit while a run is in flight"
         )
 
     def test_svelte_regenerate_guards_on_isRunning(self) -> None:
