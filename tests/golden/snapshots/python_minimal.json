@@ -185,8 +185,8 @@
       "sha256": "3b7efc87011f7cfb"
     },
     "services/api/sdks/forge-core/src/forge_core/persistence/unit_of_work.py": {
-      "size": 11006,
-      "sha256": "9d620c7045e53068"
+      "size": 11037,
+      "sha256": "3ac04acb9960986d"
     },
     "services/api/sdks/forge-core/src/forge_core/security/__init__.py": {
       "size": 3321,

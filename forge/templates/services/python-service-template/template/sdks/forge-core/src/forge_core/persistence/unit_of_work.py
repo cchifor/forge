@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from types import TracebackType
 from typing import Any, TypeVar, cast, overload
@@ -96,7 +96,8 @@ class AsyncUnitOfWork:
         account: AccountProtocol | None = None,
         *,
         tenant_guc: str = DEFAULT_TENANT_GUC,
-        session_binder: Callable[[AsyncSession, AccountProtocol | None], Any] | None = None,
+        session_binder: Callable[[AsyncSession, AccountProtocol | None], Awaitable[None]]
+        | None = None,
         outbox_sink: Callable[[AsyncSession, Sequence[Any]], Any] | None = None,
     ) -> None:
         self._session_factory = session_factory

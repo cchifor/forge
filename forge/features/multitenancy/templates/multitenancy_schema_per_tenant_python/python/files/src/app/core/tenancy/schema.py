@@ -7,23 +7,26 @@ filtering rows by an RLS policy (the ``shared_rls`` strategy). The connection's
 schema — so unqualified table references resolve to that tenant's tables and a
 query can physically only touch one tenant's data.
 
-Binding seams:
+Two composed binding seams (both fail closed):
 
-1. **Request path — :func:`bind_tenant_search_path` (the UoW session binder).**
+1. **:func:`register_search_path_listener` — the always-on default.** An engine
+   ``"begin"`` listener (installed at startup) binds ``SET LOCAL search_path`` on
+   EVERY transaction from :data:`current_tenant_var` (header/subdomain, set by
+   the middleware) or, when unset, ``''`` (fail closed). Because it fires for
+   every session — including raw/non-UoW sessions (workers, direct
+   ``session_factory`` use) — nothing falls open to ``public``. ``SET LOCAL``
+   scopes the change to the transaction, so a pooled connection never carries
+   one tenant's ``search_path`` into the next request.
+2. **:func:`bind_tenant_search_path` — the post-auth account override.**
    Installed on the request Unit-of-Work (``FORGE:UOW_SESSION_BINDER`` in
-   ``app.core.ioc.security``), it runs inside the handler transaction (post-auth)
-   and binds ``SET LOCAL search_path`` from the edge-resolved
-   :data:`current_tenant_var` (header/subdomain, set by the middleware) or, when
-   unset, the authenticated account tenant (``token_claim``). Fails closed
-   (``search_path = ''``) when no tenant is bound. ``SET LOCAL`` scopes the
-   change to the transaction, so a pooled connection never carries one tenant's
-   ``search_path`` into the next request.
-2. **Out-of-band — :class:`TenantSchemaHook`** for workers/tasks that open their
-   own session (no request UoW); they call ``await hook.bind(session, tenant)``.
+   ``app.core.ioc.security``), it runs inside the handler transaction after auth
+   and, ONLY when an authenticated account is present, OVERWRITES the listener's
+   binding with the account's tenant schema. This is the ``token_claim`` path
+   (the listener resolves pre-auth and can't see a token claim). With no account
+   it is a no-op, leaving the listener's binding intact.
 
-(:func:`register_search_path_listener` remains available as an engine ``begin``
-listener for projects that want it, but the request path uses the UoW binder so
-the tenant — including a ``token_claim`` tenant — is known at bind time.)
+Out-of-band code (workers/tasks opening their own session) uses the imperative
+:class:`TenantSchemaHook` (``await hook.bind(session, tenant)``).
 
 Schema-name safety: :func:`schema_name_for` builds the schema name from a
 configured prefix + the tenant id and ACCEPTS ONLY ``[A-Za-z0-9_-]`` tenant
@@ -249,36 +252,44 @@ class TenantSchemaHook:
 
 
 async def bind_tenant_search_path(session: Any, account: Any | None) -> None:
-    """UoW ``session_binder``: route ``search_path`` from the authenticated account.
+    """UoW ``session_binder``: route ``search_path`` from the AUTHENTICATED account.
 
     Installed on ``AsyncUnitOfWork`` (via the IoC ``FORGE:UOW_SESSION_BINDER``
-    seam) so the per-transaction binding fires INSIDE the request handler, after
-    auth has resolved — the platform-faithful, post-auth binding point. The
-    tenant is the authenticated ``account.customer_id`` (the token-claim tenant),
-    so this is the path that makes ``schema_per_tenant`` + ``token_claim`` work.
+    seam) so it fires INSIDE the request handler, after auth has resolved — the
+    platform-faithful, post-auth binding point. The tenant is
+    ``account.customer_id`` (the token-claim tenant), so this is the path that
+    makes ``schema_per_tenant`` + ``token_claim`` work.
 
-    FAIL CLOSED: with no account / no tenant (e.g. a ``PublicUnitOfWork``), bind
-    ``search_path = ''`` so unqualified app tables don't resolve — never leave the
-    default ``public`` active for an unauthenticated request. No-op off Postgres.
+    It binds ONLY when an authenticated account is present, OVERWRITING the
+    engine ``begin`` listener's earlier binding for this transaction. With NO
+    account (e.g. a ``PublicUnitOfWork``) it is a NO-OP — it does not touch the
+    session, leaving the listener's binding in force (the edge-resolved
+    header/subdomain tenant, or ``''`` fail-closed). That keeps a public request
+    fail-closed under ``token_claim`` and preserves header/subdomain resolution.
+    The authenticated account is authoritative: if an edge ContextVar disagrees
+    with it (a header claiming another tenant), the account wins and the header
+    is ignored (logged). No-op off Postgres.
     """
+    tenant = getattr(account, "customer_id", None) if account is not None else None
+    if tenant is None:
+        # No authenticated tenant — leave the begin-listener's binding (the
+        # edge-resolved ContextVar tenant, or '' fail-closed).
+        return
+
     bind = getattr(session, "bind", None)
     dialect = getattr(getattr(bind, "dialect", None), "name", "")
     if dialect != "postgresql":
         return
 
+    edge = current_tenant_var.get()
+    if edge is not None and str(edge) != str(tenant):
+        logger.warning(
+            "tenant_schema_edge_tenant_ignored",
+            extra={"edge": str(edge), "authenticated": str(tenant)},
+        )
+
     from sqlalchemy import text  # noqa: PLC0415
 
-    # Single coherent request-path source. Prefer the edge-resolved tenant
-    # (header / subdomain, set on the ContextVar by the middleware before the
-    # handler runs); fall back to the authenticated account's tenant
-    # (``token_claim`` — available post-auth, which is when this binder fires).
-    tenant = current_tenant_var.get()
-    if tenant is None and account is not None:
-        tenant = getattr(account, "customer_id", None)
-    if tenant is None:
-        # Fail closed — no tenant context ⇒ no app schema on the path.
-        await session.execute(text("SELECT set_config('search_path', '', true)"))
-        return
     schema = schema_name_for(tenant, get_tenancy_settings().schema_prefix)
     await session.execute(
         text("SELECT set_config('search_path', :sp, true)"),
