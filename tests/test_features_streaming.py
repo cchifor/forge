@@ -58,6 +58,26 @@ def test_streaming_sse_fragment_registered() -> None:
     assert frag.parity_tier == 3
 
 
+def test_streaming_sse_has_otel_observability() -> None:
+    """The streamer must emit OTel metrics/traces (not Prometheus): a
+    stream.connect span + active-connection gauge + emitted/dropped counters."""
+    files_root = (
+        Path(FRAGMENT_REGISTRY["streaming_sse"].implementations[BackendLanguage.PYTHON].fragment_dir)
+        / "files"
+        / "src"
+        / "app"
+        / "streaming"
+    )
+    obs = (files_root / "observability.py").read_text(encoding="utf-8")
+    assert "create_up_down_counter" in obs and "sse.connections.active" in obs
+    assert "stream.connect" in obs and "get_tracer" in obs
+    # OTel, not Prometheus.
+    assert "prometheus_client" not in obs
+    streamer = (files_root / "streamer.py").read_text(encoding="utf-8")
+    assert "connect_span" in streamer and "record_event_emitted" in streamer
+    assert "record_subscriber_dropped" in streamer
+
+
 def test_streaming_sse_depends_on_events_core() -> None:
     """The streamer subscribes to the EventBus, so events_core must be
     present in any plan that includes streaming_sse."""

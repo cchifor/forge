@@ -30,6 +30,8 @@ service:
       condition: service_healthy
     gatekeeper-keygen:
       condition: service_completed_successfully
+    keycloak-realm-sync:
+      condition: service_completed_successfully
   networks:
     - app-network
   restart: unless-stopped

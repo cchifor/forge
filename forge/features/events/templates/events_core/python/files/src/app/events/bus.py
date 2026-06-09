@@ -197,6 +197,7 @@ class PostgresNotifyBus:
         self._subscribers: set[_Subscriber] = set()
         self._listening = False
         self._closed = False
+        self._supervisor: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Eagerly open the listen connection so the first subscriber
@@ -243,6 +244,13 @@ class PostgresNotifyBus:
 
     async def close(self) -> None:
         self._closed = True
+        if self._supervisor is not None:
+            self._supervisor.cancel()
+            try:
+                await self._supervisor
+            except (asyncio.CancelledError, Exception):  # pragma: no cover - teardown
+                pass
+            self._supervisor = None
         for sub in self._subscribers:
             sub.closed = True
             try:
@@ -277,6 +285,7 @@ class PostgresNotifyBus:
             try:
                 await self._asyncpg_conn.add_listener(self.channel, self._on_notify)
                 self._listening = True
+                self._ensure_supervisor()
                 return
             except Exception as exc:
                 log.warning(
@@ -324,6 +333,43 @@ class PostgresNotifyBus:
             except asyncio.QueueFull:
                 log.warning("EventBus subscriber backpressure on %s — dropping", self.channel)
                 _drop_for_backpressure(sub)
+
+    # ── Heartbeat supervisor ────────────────────────────────────────────
+    # asyncpg's LISTEN socket can drop silently (idle TCP reaped by a
+    # middlebox, a Postgres failover); the bus would then go quiet with no
+    # error. A periodic ``SELECT 1`` on the listen connection detects that and
+    # re-establishes the listener so the bus self-heals instead of dying.
+
+    def _ensure_supervisor(self) -> None:
+        if self._supervisor is not None and not self._supervisor.done():
+            return
+        self._supervisor = asyncio.create_task(self._run_supervisor())
+
+    async def _run_supervisor(self) -> None:
+        while not self._closed:
+            try:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+            except asyncio.CancelledError:
+                raise
+            if self._closed:
+                return
+            conn = self._asyncpg_conn
+            if conn is None or not self._listening:
+                continue
+            try:
+                # Cheapest liveness probe; round-trips the listen socket.
+                await conn.fetchval("SELECT 1")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning(
+                    "EventBus heartbeat failed on %s (%s) — resetting listen connection",
+                    self.channel,
+                    exc,
+                )
+                async with self._conn_lock:
+                    await self._close_connection_locked()
+                    await self._ensure_listener_locked()
 
 
 def _drop_for_backpressure(sub: _Subscriber) -> None:

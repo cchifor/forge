@@ -1,0 +1,38 @@
+# Declarative compose service for the keycloak-realm-sync one-shot sidecar.
+#
+# Keycloak's --import-realm only imports on first boot against an empty DB, so
+# later edits to infra/keycloak-realm.json (notably the User-Profile schema /
+# tenant_id attribute) never reach a Keycloak whose pgdata holds the old realm.
+# This one-shot reads the User-Profile JSON out of the mounted realm file and
+# PUTs it to the running realm via the Admin API, then exits. Gatekeeper waits
+# for ``service_completed_successfully`` before booting, so its boot-time
+# realm-invariant probe finds the schema already reconciled instead of
+# crash-looping on stale pgdata. Reuses the gatekeeper image (no extra build).
+
+capability: gatekeeper-realm-sync
+
+service:
+  name: keycloak-realm-sync
+  image: forge-gatekeeper:local  # same image as gatekeeper; overrides command
+  command: ["python", "scripts/realm_sync.py"]
+  depends_on:
+    keycloak:
+      condition: service_healthy
+  networks:
+    - app-network
+  restart: "no"  # one-shot; not service-managed restart
+
+  volumes:
+    - "./infra/keycloak-realm.json:/realm/keycloak-realm.json:ro"
+
+  environment:
+    KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
+    KEYCLOAK_ADMIN_REALM: "app"
+    KC_ADMIN_USER: "admin"
+    KC_ADMIN_PASSWORD: "admin"
+    REALM_JSON_PATH: "/realm/keycloak-realm.json"
+
+  extra:
+    build:
+      context: ./infra/gatekeeper
+      dockerfile: Dockerfile

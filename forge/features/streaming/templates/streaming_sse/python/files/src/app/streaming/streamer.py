@@ -26,6 +26,11 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from app.events.bus import BackpressureError
+from app.streaming.observability import (
+    connect_span,
+    record_event_emitted,
+    record_subscriber_dropped,
+)
 from app.streaming.types import (
     CloudEventLike,
     EventBusLike,
@@ -86,29 +91,36 @@ class CloudEventStreamer:
         cannot spin. Heartbeats are emitted by sse-starlette in the
         wrapping response, not here.
         """
+        stream_name = getattr(config, "stream_name", "events")
+
         # ── Replay phase ──────────────────────────────────────────────
         if config.replay_provider is not None:
             async for frame in config.replay_provider(ctx.last_event_id, ctx):
                 yield frame
 
         # ── Live phase, lifetime-capped ───────────────────────────────
-        try:
-            async with asyncio.timeout(config.max_stream_seconds):
-                async for event in self._bus.subscribe(raise_on_backpressure_drop=True):
-                    frame = await self._project(event, ctx, config)
-                    if frame is not None:
-                        yield frame
-        except TimeoutError:
-            # Lifetime cap reached — graceful end. Reverse proxies /
-            # replica rebalancing pick up from here.
-            return
-        except BackpressureError:
-            # The bus force-closed this subscriber because its bounded
-            # queue overflowed (a slow consumer). End the SSE response
-            # gracefully — sse-starlette closes it, the FE's EventSource
-            # auto-reconnects, and the replay phase fills the gap if a
-            # replay provider is configured.
-            return
+        # connect_span brackets the connection: a stream.connect OTel span +
+        # the active-connections gauge (inc on enter, dec on exit).
+        with connect_span(stream_name):
+            try:
+                async with asyncio.timeout(config.max_stream_seconds):
+                    async for event in self._bus.subscribe(raise_on_backpressure_drop=True):
+                        frame = await self._project(event, ctx, config)
+                        if frame is not None:
+                            record_event_emitted(stream_name, frame.event or "")
+                            yield frame
+            except TimeoutError:
+                # Lifetime cap reached — graceful end. Reverse proxies /
+                # replica rebalancing pick up from here.
+                return
+            except BackpressureError:
+                # The bus force-closed this subscriber because its bounded
+                # queue overflowed (a slow consumer). End the SSE response
+                # gracefully — sse-starlette closes it, the FE's EventSource
+                # auto-reconnects, and the replay phase fills the gap if a
+                # replay provider is configured.
+                record_subscriber_dropped(stream_name)
+                return
 
     async def _project(
         self,

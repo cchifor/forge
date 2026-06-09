@@ -989,7 +989,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 109382,
+      "size": 109968,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -1165,8 +1165,8 @@
       "sha256": "a1223328de82ca12"
     },
     "services/api/sdks/forge-core/src/forge_core/security/__init__.py": {
-      "size": 3246,
-      "sha256": "a3f7109c6d59c915"
+      "size": 3321,
+      "sha256": "47bea3047154b489"
     },
     "services/api/sdks/forge-core/src/forge_core/security/auth.py": {
       "size": 7984,
@@ -1191,6 +1191,10 @@
     "services/api/sdks/forge-core/src/forge_core/security/platform_auth_setup.py": {
       "size": 2547,
       "sha256": "49a80fb935f54d02"
+    },
+    "services/api/sdks/forge-core/src/forge_core/security/s2s.py": {
+      "size": 6002,
+      "sha256": "551886baabf86d31"
     },
     "services/api/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,
@@ -1235,6 +1239,10 @@
     "services/api/sdks/forge-core/tests/unit/test_persistence_internals.py": {
       "size": 16165,
       "sha256": "48fb5a7a68b0f3ad"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_s2s.py": {
+      "size": 2953,
+      "sha256": "5b01c1e0d70302b2"
     },
     "services/api/sdks/forge-core/tests/unit/test_security.py": {
       "size": 23962,
