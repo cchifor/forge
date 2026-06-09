@@ -177,8 +177,8 @@
       "sha256": "2ef430f09aecf93c"
     },
     "apps/frontend/src/features/ai_chat/canvas/registry.ts": {
-      "size": 1433,
-      "sha256": "7a709bf3b9e7a722"
+      "size": 1455,
+      "sha256": "2aa1cb5d1f58737a"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/README.md": {
       "size": 558,
@@ -225,16 +225,24 @@
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 15558,
-      "sha256": "38916825c6a02a67"
+      "size": 21204,
+      "sha256": "8d40889f1cc23381"
+    },
+    "apps/frontend/src/features/ai_chat/composables/useAgentStatus.test.ts": {
+      "size": 1929,
+      "sha256": "82cb71703a1be7d9"
+    },
+    "apps/frontend/src/features/ai_chat/composables/useAgentStatus.ts": {
+      "size": 2813,
+      "sha256": "59e2cae1ae553d9a"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
       "sha256": "fe89a988e3337f90"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.ts": {
-      "size": 3267,
-      "sha256": "d1db1d2c391d65ae"
+      "size": 3779,
+      "sha256": "6e94b4a69edfd07d"
     },
     "apps/frontend/src/features/ai_chat/composables/useCanvas.ts": {
       "size": 620,
@@ -263,6 +271,14 @@
     "apps/frontend/src/features/ai_chat/index.ts": {
       "size": 786,
       "sha256": "6e4b72b152c36197"
+    },
+    "apps/frontend/src/features/ai_chat/registry/ComponentRegistry.test.ts": {
+      "size": 2032,
+      "sha256": "f4b078964de5f28e"
+    },
+    "apps/frontend/src/features/ai_chat/registry/ComponentRegistry.ts": {
+      "size": 763,
+      "sha256": "75bf4374ab458727"
     },
     "apps/frontend/src/features/ai_chat/tools/frontendTools.test.ts": {
       "size": 3651,
@@ -381,8 +397,8 @@
       "sha256": "a179f7937e3952db"
     },
     "apps/frontend/src/features/ai_chat/workspace/registry.ts": {
-      "size": 1263,
-      "sha256": "46b1af86b07391ec"
+      "size": 1291,
+      "sha256": "291f3ad6c92fa763"
     },
     "apps/frontend/src/features/auth/index.ts": {
       "size": 164,
@@ -1049,7 +1065,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 113247,
+      "size": 114153,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {

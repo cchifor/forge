@@ -1,18 +1,16 @@
-import { defineAsyncComponent, type Component } from 'vue'
+import { defineAsyncComponent } from 'vue'
+import { ComponentRegistry, type ComponentEntry } from '../registry/ComponentRegistry'
 
-export interface WorkspaceComponentEntry {
-  component: Component
-  label: string
-}
+export type WorkspaceComponentEntry = ComponentEntry
 
-const registry = new Map<string, WorkspaceComponentEntry>()
+const workspaceRegistry = new ComponentRegistry()
 
 export function registerWorkspaceComponent(activityType: string, entry: WorkspaceComponentEntry) {
-  registry.set(activityType, entry)
+  workspaceRegistry.register(activityType, entry)
 }
 
 export function resolveWorkspaceComponent(activityType: string): WorkspaceComponentEntry {
-  return registry.get(activityType) || registry.get('fallback')!
+  return workspaceRegistry.resolve(activityType)
 }
 
 // Built-in registrations

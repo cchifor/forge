@@ -1,18 +1,16 @@
-import { defineAsyncComponent, type Component } from 'vue'
+import { defineAsyncComponent } from 'vue'
+import { ComponentRegistry, type ComponentEntry } from '../registry/ComponentRegistry'
 
-export interface CanvasComponentEntry {
-  component: Component
-  label: string
-}
+export type CanvasComponentEntry = ComponentEntry
 
-const registry = new Map<string, CanvasComponentEntry>()
+const canvasRegistry = new ComponentRegistry()
 
 export function registerCanvasComponent(activityType: string, entry: CanvasComponentEntry) {
-  registry.set(activityType, entry)
+  canvasRegistry.register(activityType, entry)
 }
 
 export function resolveCanvasComponent(activityType: string): CanvasComponentEntry {
-  return registry.get(activityType) || registry.get('fallback')!
+  return canvasRegistry.resolve(activityType)
 }
 
 // Built-in registrations
