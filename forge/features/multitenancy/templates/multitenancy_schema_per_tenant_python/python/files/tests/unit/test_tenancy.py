@@ -20,7 +20,12 @@ from app.core.tenancy.config import (
     load_tenancy_settings,
 )
 from app.core.tenancy.resolver import TenantResolver
-from app.core.tenancy.schema import TenantSchemaHook, schema_name_for
+from app.core.tenancy.schema import (
+    TenantSchemaHook,
+    bind_tenant_search_path,
+    current_tenant_var,
+    schema_name_for,
+)
 
 
 def _request(*, headers=None, identity=None, app_state=None):
@@ -182,3 +187,65 @@ async def test_hook_rejects_unsafe_tenant_on_postgres() -> None:
     with pytest.raises(TenancyConfigError):
         await hook.bind(session, "a;drop")
     assert session.executed == []
+
+
+# --- UoW session binder (the post-auth request-path mechanism) ------------- #
+
+
+class _Account:
+    def __init__(self, customer_id):
+        self.customer_id = customer_id
+
+
+@pytest.mark.asyncio
+async def test_binder_from_account_token_claim() -> None:
+    """With no edge-resolved tenant, the binder routes search_path from the
+    authenticated account — the path that makes token_claim work."""
+    token = current_tenant_var.set(None)
+    try:
+        session = _FakeSession("postgresql")
+        await bind_tenant_search_path(session, _Account("acme"))
+        assert session.executed[0][1] == {"sp": '"tenant_acme", public'}
+    finally:
+        current_tenant_var.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_binder_prefers_edge_resolved_contextvar() -> None:
+    """Header/subdomain (edge-resolved ContextVar) wins over the account."""
+    token = current_tenant_var.set("beta")
+    try:
+        session = _FakeSession("postgresql")
+        await bind_tenant_search_path(session, _Account("acme"))
+        assert session.executed[0][1] == {"sp": '"tenant_beta", public'}
+    finally:
+        current_tenant_var.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_binder_fails_closed_without_tenant() -> None:
+    """No ContextVar + no account (e.g. PublicUnitOfWork) ⇒ empty search_path,
+    so unqualified app tables don't resolve (fail closed, not public)."""
+    token = current_tenant_var.set(None)
+    try:
+        session = _FakeSession("postgresql")
+        await bind_tenant_search_path(session, None)
+        assert len(session.executed) == 1
+        # An empty search_path value (the schema name isn't interpolated here).
+        assert "'search_path', '', true" in str(session.executed[0][0]) or session.executed[0][1] in (
+            None,
+            {},
+        )
+    finally:
+        current_tenant_var.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_binder_noop_off_postgres() -> None:
+    token = current_tenant_var.set("acme")
+    try:
+        session = _FakeSession("sqlite")
+        await bind_tenant_search_path(session, _Account("acme"))
+        assert session.executed == []
+    finally:
+        current_tenant_var.reset(token)

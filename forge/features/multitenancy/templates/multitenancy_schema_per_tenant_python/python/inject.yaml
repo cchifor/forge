@@ -1,18 +1,17 @@
 # multitenancy_schema_per_tenant_python: wire schema-per-tenant isolation.
-# Mirrors the shared_rls fragment's seams, swapping the RLS GUC for search_path
-# routing:
 #
-#   1. Register TenantSchemaMiddleware on the app at the MIDDLEWARE markers in
-#      main.py. Starlette applies add_middleware in REVERSE order (last added
-#      = outermost), so registering tenant-schema at the MIDDLEWARE_REGISTRATION
-#      marker (which the auth middleware also targets, auth injected later =
-#      added later = outermost) keeps auth OUTSIDE tenant-schema: the identity is
-#      bound before the resolver reads request.state.identity.
+# The per-transaction search_path is bound by the UoW ``session_binder``
+# (app.core.tenancy.schema.bind_tenant_search_path), installed at the
+# ``FORGE:UOW_SESSION_BINDER`` seam in ioc/security.py. The binder fires inside
+# the request handler (post-auth), so it works for ``token_claim`` (tenant from
+# the authenticated account) AND for ``header``/``subdomain`` (tenant from the
+# edge-resolved ContextVar the middleware sets). It fails closed (empty
+# search_path) when no tenant is bound. This replaces the old engine
+# "begin" listener as the request-path binder (the imperative ``TenantSchemaHook``
+# remains the explicit out-of-band / worker API).
 #
-#   2. Install the engine "begin" listener at startup (LIFESPAN_STARTUP), after
-#      the session factory is published. It reads the request's tenant ContextVar
-#      and issues SET LOCAL search_path TO "tenant_<id>", public on each
-#      transaction begin. No-op on non-postgres engines.
+# The middleware still runs the resolver and sets the ContextVar so the
+# header/subdomain strategies resolve at the request edge.
 #
 # There is NO migration: schema-per-tenant materializes each tenant's tables in
 # its own schema at provision time (app.core.tenancy.schema.provision_tenant_schema),
@@ -30,10 +29,8 @@
 
 # Configure the resolver with the project's CHOSEN strategy + claim/header,
 # attaching the settings to app.state. ``render: true`` substitutes the
-# resolved forge.toml option values; this app.state copy is AUTHORITATIVE for
-# the request path (it is not re-read from the environment per request — only
-# out-of-band code via get_tenancy_settings() reads env). Runs at
-# APP_POST_CONFIGURE, before the lifespan/middleware fire.
+# resolved forge.toml option values. Runs at APP_POST_CONFIGURE, before the
+# lifespan/middleware fire.
 - target: src/app/main.py
   marker: FORGE:APP_POST_CONFIGURE
   position: before
@@ -47,10 +44,13 @@
         header_name="{{ options['database.tenant_header_name'] }}",
     )
 
-- target: src/app/core/lifecycle.py
-  marker: FORGE:LIFESPAN_STARTUP
+# Install the per-session search_path binder on the request UoWs. The binder
+# owns the request-path search_path (post-auth, inside the handler txn) — this
+# is what makes schema_per_tenant + token_claim work.
+- target: src/app/core/ioc/security.py
+  marker: FORGE:UOW_SESSION_BINDER
   position: before
   snippet: |-
-    from app.core.tenancy.schema import register_search_path_listener
+    from app.core.tenancy.schema import bind_tenant_search_path as _schema_session_binder
 
-    register_search_path_listener(db.engine)
+    _SESSION_BINDER = _schema_session_binder

@@ -11,17 +11,32 @@ set; requests are routed to the caller's schema by binding the connection's
 |-------|------|
 | `app/core/tenancy/config.py` | env-driven `TenancySettings` (resolution strategy, claim/header, schema prefix) |
 | `app/core/tenancy/resolver.py` | resolves the per-request tenant id (token claim / header / subdomain) — identical to the `shared_rls` resolver |
-| `app/core/tenancy/schema.py` | `schema_name_for` (validate + name), `register_search_path_listener` (per-tx `SET LOCAL search_path`), `provision_tenant_schema`, `TenantSchemaHook` (workers) |
-| `app/middleware/tenant_schema.py` | resolves the tenant and sets the `current_tenant_var` ContextVar the listener reads |
+| `app/core/tenancy/schema.py` | `schema_name_for` (validate + name), `bind_tenant_search_path` (the UoW session binder — request-path mechanism), `provision_tenant_schema`, `TenantSchemaHook` (workers) |
+| `app/middleware/tenant_schema.py` | resolves the tenant (header/subdomain) and sets `current_tenant_var` at the request edge |
 
-On every transaction `begin`, the engine listener runs:
+**Request path (the binder).** The per-transaction `search_path` is bound by
+`bind_tenant_search_path`, installed on the request Unit-of-Work via the
+`FORGE:UOW_SESSION_BINDER` seam in `app/core/ioc/security.py`. It runs inside
+the handler's transaction (`AsyncUnitOfWork.__aenter__`), i.e. **after auth has
+resolved**, and chooses the tenant in this order:
+
+1. the edge-resolved `current_tenant_var` (set by the middleware for
+   `header` / `subdomain` resolution), else
+2. the authenticated **account** tenant — this is the `token_claim` path: the
+   tenant is `account.customer_id`, the identity verified by auth. **This is why
+   `schema_per_tenant` + `token_claim` works** (the old engine `begin` listener
+   ran before auth, so it could never see a token-claim tenant).
+
+It then issues, transaction-scoped:
 
 ```sql
 SET LOCAL search_path TO "tenant_<id>", public
 ```
 
 `SET LOCAL` is transaction-scoped, so a pooled connection never carries one
-tenant's `search_path` into the next request.
+tenant's `search_path` into the next request. With **no** tenant (e.g. a
+`PublicUnitOfWork`), it binds `search_path = ''` (fail closed). Workers / code
+outside the request UoW use the imperative `TenantSchemaHook` instead.
 
 ## Provisioning a tenant
 
