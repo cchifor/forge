@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/vue-table'
 import type { InjectionKey } from 'vue'
-import type { TailwindBreakpoint } from '@/shared/composables/useBreakpoint'
+import type { TailwindBreakpoint } from './breakpoints'
 
 /** Three rendering tiers DataTable picks based on its container width. */
 export type DataTableLayout = 'list' | 'compact' | 'wide'

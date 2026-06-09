@@ -19,7 +19,7 @@ import {
   type SortingState,
 } from '@tanstack/vue-table'
 import { Checkbox } from './checkbox'
-import { useBreakpoint } from '@/shared/composables/useBreakpoint'
+import { useTwBreakpoint } from './breakpoints'
 import type { DataTableColumnDef } from './types'
 import {
   useColumnManager,
@@ -118,7 +118,7 @@ export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
   // Capture the breakpoint reactive once at setup so the
   // onColumnVisibilityChange handler can read it without re-instantiating
   // the composable on every TanStack-driven update.
-  const { tw } = useBreakpoint()
+  const { tw } = useTwBreakpoint()
 
   const rowsGetter = () => toValue(inputs.rows)
 

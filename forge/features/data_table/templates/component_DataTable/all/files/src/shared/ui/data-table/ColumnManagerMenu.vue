@@ -97,6 +97,28 @@ const items = computed<ColumnManagerColumn[]>({
 // when no drag is in progress; drives the ghost/opacity style.
 const dragIndex = ref<number | null>(null)
 
+// Start a reorder drag ONLY from the grip handle — so dragging on the
+// checkbox, label, or pin button never initiates a row move. Seeding
+// ``dataTransfer`` (with a move effect) is required for native DnD to start at
+// all in Firefox; without it the drag silently never begins.
+function onDragStart(i: number, e: DragEvent): void {
+  const target = e.target as HTMLElement | null
+  if (!target?.closest('.drag-handle')) {
+    e.preventDefault()
+    return
+  }
+  dragIndex.value = i
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+}
+
+function onDragOver(e: DragEvent): void {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+}
+
 function onDrop(target: number): void {
   const from = dragIndex.value
   dragIndex.value = null
@@ -170,8 +192,8 @@ const triggerLabel = computed(() =>
           class="group flex items-center gap-1.5 rounded-sm px-1 py-1 hover:bg-muted/60"
           :class="{ 'dt-manager-dragging': dragIndex === i }"
           draggable="true"
-          @dragstart="dragIndex = i"
-          @dragover.prevent
+          @dragstart="onDragStart(i, $event)"
+          @dragover="onDragOver"
           @drop.prevent="onDrop(i)"
           @dragend="dragIndex = null"
         >
