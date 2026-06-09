@@ -124,7 +124,7 @@ class DelegationGrantStore:
             "delegation_grant_issued grant=%s sub=%s tenant=%s ttl=%ds",
             grant_id,
             identity.get("sub"),
-            identity.get("https://platform/tenant_id") or identity.get("tenant_id"),
+            identity.get("https://forge/tenant_id") or identity.get("tenant_id"),
             ttl_seconds,
         )
         return grant_id, envelope["expires_at"]

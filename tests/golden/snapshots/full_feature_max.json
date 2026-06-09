@@ -78,7 +78,7 @@
     },
     "apps/frontend/package.json": {
       "size": 2089,
-      "sha256": "bd5cbdba426b8de1"
+      "sha256": "7e1a4420d9f3ff20"
     },
     "apps/frontend/public/canvas.manifest.json": {
       "size": 7130,
@@ -507,6 +507,14 @@
     "apps/frontend/src/shared/composables/useBreakpoint.ts": {
       "size": 653,
       "sha256": "00ddfe913aea89e6"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.test.ts": {
+      "size": 2405,
+      "sha256": "04a4b78a01d686e3"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.ts": {
+      "size": 4098,
+      "sha256": "b6c7c9642ed9bbe1"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -985,7 +993,7 @@
       "sha256": "5ca31f35cefe2c61"
     },
     "forge.toml": {
-      "size": 145178,
+      "size": 147273,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1029,12 +1037,12 @@
       "sha256": "2a5586db95c1d4c0"
     },
     "infra/gatekeeper/scripts/validate_internal.py": {
-      "size": 7196,
-      "sha256": "3dd39703278871b7"
+      "size": 7193,
+      "sha256": "75807986350c099a"
     },
     "infra/gatekeeper/scripts/validate_tenant_hook.py": {
-      "size": 15202,
-      "sha256": "f8b434c00b837a9c"
+      "size": 15196,
+      "sha256": "fb00c2d9990b2cb0"
     },
     "infra/gatekeeper/secrets/service_registry.yaml": {
       "size": 2862,
@@ -1113,8 +1121,8 @@
       "sha256": "c286523002cca398"
     },
     "infra/gatekeeper/src/app/core/lifecycle.py": {
-      "size": 8118,
-      "sha256": "e834286c9f50172e"
+      "size": 9589,
+      "sha256": "a98d40091689a57e"
     },
     "infra/gatekeeper/src/app/gatekeeper/__init__.py": {
       "size": 697,
@@ -1133,12 +1141,12 @@
       "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 15261,
-      "sha256": "b408789d90301e17"
+      "size": 16729,
+      "sha256": "c43971df83f0fc00"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
-      "size": 6936,
-      "sha256": "e633845c8e719bca"
+      "size": 6933,
+      "sha256": "78b5c404bb798c8c"
     },
     "infra/gatekeeper/src/app/gatekeeper/helpers.py": {
       "size": 11176,
@@ -1149,8 +1157,8 @@
       "sha256": "f5df6111bae0c0c4"
     },
     "infra/gatekeeper/src/app/gatekeeper/internal_token.py": {
-      "size": 6382,
-      "sha256": "5e7682e23dbfc2f6"
+      "size": 6370,
+      "sha256": "881fa215637bf95f"
     },
     "infra/gatekeeper/src/app/gatekeeper/internal_token_cache.py": {
       "size": 10468,
@@ -1165,8 +1173,8 @@
       "sha256": "5d560ac4905cd9b7"
     },
     "infra/gatekeeper/src/app/gatekeeper/keycloak_admin.py": {
-      "size": 3880,
-      "sha256": "10c76a115a0f2b2c"
+      "size": 3877,
+      "sha256": "ed1916c3f4369498"
     },
     "infra/gatekeeper/src/app/gatekeeper/metrics.py": {
       "size": 4897,
@@ -1184,13 +1192,17 @@
       "size": 2766,
       "sha256": "27019929bb1db31d"
     },
+    "infra/gatekeeper/src/app/gatekeeper/realm_invariants.py": {
+      "size": 7394,
+      "sha256": "f5c09ac3509671f0"
+    },
     "infra/gatekeeper/src/app/gatekeeper/redis.py": {
       "size": 24989,
       "sha256": "bebbec570db9b36e"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 38427,
-      "sha256": "6bad66f463667f8b"
+      "size": 38421,
+      "sha256": "32712a01d310c5aa"
     },
     "infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
@@ -1285,8 +1297,8 @@
       "sha256": "b0d710cd06b5c9d2"
     },
     "infra/keycloak-realm.json": {
-      "size": 4481,
-      "sha256": "4f61e09c806d312a"
+      "size": 6098,
+      "sha256": "73cf666d9f036dd9"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
@@ -1313,8 +1325,8 @@
       "sha256": "f89b9b770112c796"
     },
     "sdks/platform-auth/src/platform_auth/auth_guard.py": {
-      "size": 20927,
-      "sha256": "aa2ff755bbac82fa"
+      "size": 20921,
+      "sha256": "e347b2106ee2bd46"
     },
     "sdks/platform-auth/src/platform_auth/exceptions.py": {
       "size": 3572,
@@ -1401,8 +1413,8 @@
       "sha256": "d578dd0735e223fb"
     },
     "sdks/platform-auth/tests/unit/test_s2s_client_tenant.py": {
-      "size": 7477,
-      "sha256": "69924b50bac28b87"
+      "size": 7474,
+      "sha256": "319dbe1d8be035e2"
     },
     "sdks/platform-auth/tests/unit/test_scopes.py": {
       "size": 6527,
@@ -1507,6 +1519,18 @@
     "services/api/sdks/forge-core/src/forge_core/__init__.py": {
       "size": 1949,
       "sha256": "a7c18e6f20003f79"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/__init__.py": {
+      "size": 917,
+      "sha256": "8ac90195a1df3f51"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/filtering.py": {
+      "size": 2248,
+      "sha256": "8b50efca6c6c506d"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/pagination.py": {
+      "size": 3206,
+      "sha256": "533210dd695884dd"
     },
     "services/api/sdks/forge-core/src/forge_core/discovery.py": {
       "size": 3804,
@@ -1615,6 +1639,10 @@
     "services/api/sdks/forge-core/tests/unit/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_api.py": {
+      "size": 2434,
+      "sha256": "ddc88d9222018357"
     },
     "services/api/sdks/forge-core/tests/unit/test_discovery.py": {
       "size": 4322,

@@ -74,7 +74,7 @@
     },
     "apps/frontend/package.json": {
       "size": 2089,
-      "sha256": "bd5cbdba426b8de1"
+      "sha256": "7e1a4420d9f3ff20"
     },
     "apps/frontend/public/canvas.manifest.json": {
       "size": 7130,
@@ -503,6 +503,14 @@
     "apps/frontend/src/shared/composables/useBreakpoint.ts": {
       "size": 653,
       "sha256": "00ddfe913aea89e6"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.test.ts": {
+      "size": 2405,
+      "sha256": "04a4b78a01d686e3"
+    },
+    "apps/frontend/src/shared/composables/useEventStream.ts": {
+      "size": 4098,
+      "sha256": "b6c7c9642ed9bbe1"
     },
     "apps/frontend/src/shared/composables/useTheme.ts": {
       "size": 385,
@@ -981,7 +989,7 @@
       "sha256": "87bb63f4f8428e46"
     },
     "forge.toml": {
-      "size": 107540,
+      "size": 109382,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
@@ -1079,6 +1087,18 @@
     "services/api/sdks/forge-core/src/forge_core/__init__.py": {
       "size": 1949,
       "sha256": "a7c18e6f20003f79"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/__init__.py": {
+      "size": 917,
+      "sha256": "8ac90195a1df3f51"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/filtering.py": {
+      "size": 2248,
+      "sha256": "8b50efca6c6c506d"
+    },
+    "services/api/sdks/forge-core/src/forge_core/api/pagination.py": {
+      "size": 3206,
+      "sha256": "533210dd695884dd"
     },
     "services/api/sdks/forge-core/src/forge_core/discovery.py": {
       "size": 3804,
@@ -1187,6 +1207,10 @@
     "services/api/sdks/forge-core/tests/unit/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
+    },
+    "services/api/sdks/forge-core/tests/unit/test_api.py": {
+      "size": 2434,
+      "sha256": "ddc88d9222018357"
     },
     "services/api/sdks/forge-core/tests/unit/test_discovery.py": {
       "size": 4322,

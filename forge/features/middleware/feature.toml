@@ -13,6 +13,7 @@ options = [
     "middleware.rate_limit",
     "middleware.security_headers",
     "middleware.pii_redaction",
+    "middleware.api_version",
     "middleware.response_cache",
 ]
 fragments = [
@@ -20,5 +21,6 @@ fragments = [
     "rate_limit",
     "security_headers",
     "pii_redaction",
+    "api_version",
     "response_cache",
 ]

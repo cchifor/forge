@@ -43,6 +43,7 @@ TOKEN_AUTHORITY_MODULES = (
     "metrics.py",
     "oidc.py",
     "ratelimit.py",
+    "realm_invariants.py",
     "redis.py",
     "routes.py",
     "routes_jwks.py",
@@ -75,12 +76,36 @@ def test_platform_auth_gatekeeper_fragment_registered() -> None:
 
 
 def test_gatekeeper_token_authority_modules_present() -> None:
-    """All 25 src/app/gatekeeper/*.py modules from platform must be shipped."""
+    """All src/app/gatekeeper/*.py modules from platform must be shipped."""
     gk_dir = _gatekeeper_root() / "src" / "app" / "gatekeeper"
     assert gk_dir.is_dir(), f"gatekeeper module dir missing: {gk_dir}"
     shipped = {p.name for p in gk_dir.glob("*.py")}
     missing = set(TOKEN_AUTHORITY_MODULES) - shipped
     assert not missing, f"gatekeeper modules not shipped: {sorted(missing)}"
+
+
+def test_gatekeeper_realm_invariant_probe_wired() -> None:
+    """The boot-time realm-invariant probe must be shipped and wired.
+
+    ``realm_invariants.verify_user_profile_active`` converts a User-Profile
+    schema drift (which would otherwise surface as a 502 on first
+    self-registration) into a loud boot-time crash. It must be imported and
+    invoked from the ASGI lifespan, guarded by ``gatekeeper_skip_realm_invariant``
+    so offline unit/test contexts can opt out, and the supporting admin
+    credentials must exist on the settings.
+    """
+    gk_src = _gatekeeper_root() / "src" / "app"
+    probe = gk_src / "gatekeeper" / "realm_invariants.py"
+    assert probe.is_file(), "realm_invariants.py not shipped"
+    assert "async def verify_user_profile_active" in probe.read_text(encoding="utf-8")
+
+    lifecycle = (gk_src / "core" / "lifecycle.py").read_text(encoding="utf-8")
+    assert "verify_user_profile_active" in lifecycle, "probe not imported in lifespan"
+    assert "gatekeeper_skip_realm_invariant" in lifecycle, "probe not guarded by skip flag"
+
+    config = (gk_src / "gatekeeper" / "config.py").read_text(encoding="utf-8")
+    for field in ("kc_admin_user", "kc_admin_password", "gatekeeper_skip_realm_invariant"):
+        assert field in config, f"settings missing {field}"
 
 
 def test_gatekeeper_keygen_script_shipped() -> None:
