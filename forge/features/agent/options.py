@@ -8,6 +8,7 @@ discriminator (``agent.mode``) and the provider selector
 from __future__ import annotations
 
 from forge.api import ForgeAPI
+from forge.config import BackendLanguage
 from forge.options._registry import (
     FeatureCategory,
     Option,
@@ -91,6 +92,13 @@ OPENROUTER_API_KEY; agent.streaming = true; agent.tools = true.""",
             # Initiative #7 — depends transitively on agent.streaming +
             # conversation.persistence, both of which write to the DB.
             requires_database=True,
+            # Python-only: the pydantic-ai runner + the AG-UI SSE endpoint are
+            # python fragments. Without this, a Node/Rust-only project could set
+            # agent.llm=True, the resolver would silently drop the (python-only)
+            # agent/agent_agui fragments, and the frontend would point chat at an
+            # endpoint that was never generated. Enforced for the active (True)
+            # value → such a project now fails validation with a clear error.
+            allowed_backends=(BackendLanguage.PYTHON,),
             enables={True: ("agent", "agent_agui")},
         )
     )

@@ -47,13 +47,14 @@ async def run_agent_agui(request: Request):
     body model), constructs the run, executes the agent, and returns a
     Starlette SSE ``StreamingResponse``.
     """
-    # Lazy import so non-agui imports of this package don't pay the
-    # pydantic-ai import cost.
-    from pydantic_ai.ui.ag_ui import AGUIAdapter  # type: ignore
-
-    from app.agents.llm_runner import build_agent
-
     try:
+        # Lazy import so non-agui imports of this package don't pay the
+        # pydantic-ai import cost — and so an import failure (missing
+        # pydantic-ai, broken llm_runner) also surfaces as an in-chat error.
+        from pydantic_ai.ui.ag_ui import AGUIAdapter  # type: ignore
+
+        from app.agents.llm_runner import build_agent
+
         agent = build_agent()
     except Exception as exc:  # noqa: BLE001 — surface as an in-chat error, not a 500
         # Agent construction can fail BEFORE the stream opens (e.g. the default
