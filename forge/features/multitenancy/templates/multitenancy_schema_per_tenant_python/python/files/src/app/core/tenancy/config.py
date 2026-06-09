@@ -1,9 +1,16 @@
-"""Env-driven configuration for tenant isolation (schema_per_tenant).
+"""Configuration for tenant isolation (schema_per_tenant).
 
-Resolved once at import via :func:`get_tenancy_settings` (lru-cached). All
-knobs map to the ``database.*`` forge options that selected this fragment, but
-are read from the environment at runtime so a deployment can override the
-resolution strategy / schema prefix without a re-generate:
+Two sources, by code path:
+
+- The **request path** uses ``app.state.tenancy_settings``, which the generator
+  bakes from the project's forge.toml choice (see the ``FORGE:APP_POST_CONFIGURE``
+  injection in this fragment's ``inject.yaml``). That is authoritative for
+  served requests — the forge-time ``database.tenant_resolution`` /
+  ``tenant_claim_path`` / ``tenant_header_name`` selection wins and is NOT
+  re-read from the environment per request.
+- **Out-of-band code** (workers / CLI / the imperative ``TenantSchemaHook``)
+  that has no ``app.state`` calls :func:`get_tenancy_settings`, which reads the
+  environment once (lru-cached) with the defaults below.
 
 ==========================  ==================================  ================
 Env var                     Meaning                             Default
@@ -16,11 +23,10 @@ Env var                     Meaning                             Default
                             to form the Postgres schema name.
 ==========================  ==================================  ================
 
-The defaults match the forge option defaults (``database.tenant_resolution``
-etc.); the generated ``.env.example`` records the project's chosen values. The
-schema prefix has no forge option (it is fragment-local, env-overridable) — it
-ensures the derived schema name starts with a letter (a bare numeric/UUID
-tenant id is not a legal leading identifier char).
+``TENANT_SCHEMA_PREFIX`` is the one knob written to the generated ``.env`` (it
+is a fragment ``env_var``); it ensures the derived schema name starts with a
+letter (a bare numeric/UUID tenant id is not a legal leading identifier char).
+The schema prefix has no forge option — it is fragment-local.
 """
 
 from __future__ import annotations

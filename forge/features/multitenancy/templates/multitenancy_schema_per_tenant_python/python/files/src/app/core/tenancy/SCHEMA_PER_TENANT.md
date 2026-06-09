@@ -47,8 +47,17 @@ ORM tables inside it via `schema_translate_map`.
   that `provision_tenant_schema` clones per tenant.
 - **Tenant-id safety.** `schema_name_for` accepts only `[A-Za-z0-9_-]` ids
   (UUIDs and slugs) and rejects anything else rather than sanitizing — a lossy
-  substitution could collide two tenants onto one schema. It also enforces the
+  substitution could collide two tenants onto one schema. For the same reason
+  it does **not** lowercase or trim the id (both are lossy: `A`/`a` and
+  ` a `/`a` would collapse), so the mapping stays injective; the name is
+  double-quoted at the call site, preserving case. It also enforces the
   Postgres 63-byte identifier limit.
+- **Provision before serving.** The bound `search_path` is `"tenant_<id>",
+  public`. If a tenant's schema is missing a table, the query falls THROUGH to
+  `public.<table>` — so a tenant served before its schema is provisioned would
+  read/write shared data. Always `provision_tenant_schema` a tenant before
+  routing traffic to it, and keep `public` free of tenant rows (it exists for
+  shared types/extensions and as the template the per-tenant schemas clone).
 - **Migrations.** `provision_tenant_schema` is a bootstrap convenience. For
   ongoing schema evolution across many tenant schemas, run Alembic per schema
   with `version_table_schema=<schema>` and a `schema_translate_map`, iterating

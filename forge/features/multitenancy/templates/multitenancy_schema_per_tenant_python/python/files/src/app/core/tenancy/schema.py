@@ -72,20 +72,26 @@ _MAX_IDENTIFIER_BYTES = 63
 
 
 def schema_name_for(tenant_id: Any, prefix: str = DEFAULT_SCHEMA_PREFIX) -> str:
-    """Return the (validated, lowercased) schema name for ``tenant_id``.
+    """Return the (validated) schema name for ``tenant_id``.
 
     Raises :class:`TenancyConfigError` when the tenant id is empty, carries a
-    char outside ``[A-Za-z0-9_-]``, or the resulting name exceeds Postgres'
-    63-byte identifier limit. Never substitutes/sanitizes (which could collide
-    tenants); rejects instead.
+    char outside ``[A-Za-z0-9_-]`` (which includes any surrounding whitespace),
+    or the resulting name exceeds Postgres' 63-byte identifier limit.
+
+    The mapping MUST be injective — two distinct tenant ids must never produce
+    the same schema name, or one tenant reads/writes another's rows. So this
+    does NOT ``strip()`` or ``lower()`` the id (both are lossy: ``" a "``/``"a"``
+    and ``"A"``/``"a"`` would collapse). The id is validated and used verbatim;
+    the result is double-quoted at the call site, so case is preserved
+    (``tenant_A`` and ``tenant_a`` stay distinct schemas).
     """
-    tid = str(tenant_id).strip()
+    tid = str(tenant_id)
     if not tid or not _TENANT_ID_RE.match(tid):
         raise TenancyConfigError(
-            f"tenant id {tenant_id!r} is not schema-safe; "
-            f"must be non-empty and match [A-Za-z0-9_-]+"
+            f"tenant id {tenant_id!r} is not schema-safe; must be non-empty, "
+            f"contain only [A-Za-z0-9_-], and carry no surrounding whitespace"
         )
-    name = f"{prefix}{tid}".lower()
+    name = f"{prefix}{tid}"
     if len(name.encode("utf-8")) > _MAX_IDENTIFIER_BYTES:
         raise TenancyConfigError(
             f"schema name {name!r} exceeds the Postgres {_MAX_IDENTIFIER_BYTES}-byte "
@@ -127,6 +133,10 @@ def register_search_path_listener(engine: Any, settings: TenancySettings | None 
         if tenant is None:
             return
         schema = schema_name_for(tenant, prefix)
+        # ``, public`` keeps shared types/extensions resolvable, but it also
+        # means an UN-provisioned tenant (whose schema lacks a table) falls
+        # THROUGH to public.<table>. Provisioning MUST run before a tenant is
+        # served, and ``public`` must hold no tenant rows. See SCHEMA_PER_TENANT.md.
         conn.exec_driver_sql(f"SET LOCAL search_path TO {_quote_ident(schema)}, public")
 
     return True
@@ -204,11 +214,13 @@ class TenantSchemaHook:
         from sqlalchemy import text  # noqa: PLC0415
 
         # set_config(..., true) is LOCAL — auto-reset at transaction end. The
-        # value is a parameter (set_config takes a string), so no identifier
-        # interpolation is needed here; schema_name_for already validated it.
+        # search_path VALUE is a bound parameter, but the schema name inside it
+        # must still be a double-quoted identifier: a search_path list element
+        # like a hyphenated UUID schema (tenant_<uuid>) is not a legal *unquoted*
+        # identifier, so we quote it (schema_name_for already validated it).
         await session.execute(
             text("SELECT set_config('search_path', :sp, true)"),
-            {"sp": f"{schema}, public"},
+            {"sp": f"{_quote_ident(schema)}, public"},
         )
 
     async def clear(self, session: Any) -> None:
