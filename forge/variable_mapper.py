@@ -249,6 +249,12 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "include_auth": fc.include_auth,
         "include_chat": fc.include_chat,
         "include_openapi": fc.include_openapi,
+        # Component-driven optional deps: the DagEditor component-feature needs
+        # @vue-flow/* + dagre, which no other surface uses. Gate them in
+        # package.json.jinja on this flag so they're added ONLY when the
+        # component is selected — keeping every other Vue project (and the
+        # golden snapshots) byte-identical. False by default (no component).
+        "include_dag_editor": "DagEditor" in (config.components or []),
         "api_base_url": api_base_url,
         "api_proxy_target": api_proxy_target,
         "env_api_base_url": env_api_base_url,
