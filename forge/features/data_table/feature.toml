@@ -1,0 +1,7 @@
+[feature]
+name = "DataTable"
+version = "1.0.0"
+summary = "A TanStack-Table data grid — column visibility/order/pinning/sizing + responsive tiers. Layer-1 component."
+category = "component"
+stability = "experimental"
+layer = 1
