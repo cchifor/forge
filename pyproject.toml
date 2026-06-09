@@ -35,7 +35,7 @@ dependencies = [
     # ``render_service_registry`` so the cost is paid only when
     # ``auth.service_discovery`` is on; declared here so the import is
     # honest and resolvable.
-    "argon2-cffi>=23.1.0",
+    "argon2-cffi>=25.1.0",
 ]
 
 [dependency-groups]
