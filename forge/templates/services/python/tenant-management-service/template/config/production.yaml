@@ -1,0 +1,30 @@
+server:
+  port: 5000
+  max_workers: 4
+  # default.yaml ships "critical" (quiet local/test runs); production needs
+  # uvicorn access + info logs for observability, so override it here.
+  log_level: "info"
+
+db:
+  url: "${DATABASE_URL}"
+  pool_size: 20
+  max_overflow: 40
+  pool_recycle: 1800
+  echo: false
+  application_name: "my-service"
+  ssl_mode: "require"
+
+security:
+  auth:
+    enabled: true
+
+discovery:
+  enabled: true
+
+tms:
+  keycloak_admin_url: "${KEYCLOAK_ADMIN_URL}"
+  keycloak_admin_user: "${KEYCLOAK_ADMIN_USER}"
+  keycloak_admin_password: "${KEYCLOAK_ADMIN_PASSWORD}"
+  redis_url: "${REDIS_URL}"
+  default_gatekeeper_client_id: "gatekeeper"
+  keycloak_ssl_required: "external"
