@@ -19,24 +19,41 @@ const resolved = computed(() => {
   return resolveCanvasComponent(canvasActivity.value.activityType)
 })
 
+// Closing the canvas while a deferred frontend tool is pending must RESOLVE the
+// tool call (as cancelled) so the agent isn't left waiting on an open deferred
+// call. respondToFrontendTool clears the canvas + resumes the run; for a
+// non-tool canvas (e.g. a backend ACTIVITY_SNAPSHOT) just clear it.
+function closeCanvas() {
+  const toolCallId = (canvasActivity.value?.content as { _toolCallId?: string } | undefined)
+    ?._toolCallId
+  if (toolCallId) {
+    respondToFrontendTool(toolCallId, JSON.stringify({ cancelled: true }))
+  } else {
+    clearCanvas()
+  }
+}
+
 function handleAction(action: WorkspaceAction) {
   // Frontend-tool round-trip: the canvas renderers (form / table / approval)
   // emit `{ type, toolCallId, data }`. When a toolCallId is present we resolve
   // the deferred AG-UI tool call and let the agent resume, instead of routing
-  // the action through the legacy HITL / sendMessage paths. `toolCallId` is not
-  // on the shared WorkspaceAction type (the renderers add it), so read it off
-  // the action defensively.
-  const toolCallId = (action as { toolCallId?: string }).toolCallId
-  if (toolCallId) {
-    const data = (action as { data?: unknown }).data
+  // the action through the legacy HITL / sendMessage paths.
+  if (action.toolCallId) {
     switch (action.type) {
       case 'form_submit':
+        // The tool's result is the submitted VALUES (per the tool contract),
+        // not the {values} wrapper.
+        respondToFrontendTool(
+          action.toolCallId,
+          JSON.stringify(action.data?.values ?? action.data),
+        )
+        return
       case 'table_submit':
       case 'approval_decision':
-        respondToFrontendTool(toolCallId, JSON.stringify(data))
+        respondToFrontendTool(action.toolCallId, JSON.stringify(action.data))
         return
       case 'form_cancel':
-        respondToFrontendTool(toolCallId, JSON.stringify({ cancelled: true }))
+        respondToFrontendTool(action.toolCallId, JSON.stringify({ cancelled: true }))
         return
       default:
         // Unknown tool-tagged action — fall through to the legacy handling.
@@ -75,7 +92,7 @@ function handleAction(action: WorkspaceAction) {
         variant="ghost"
         size="icon"
         class="h-8 w-8 interactive-press"
-        @click="clearCanvas"
+        @click="closeCanvas"
       >
         <X class="h-4 w-4" />
       </Button>

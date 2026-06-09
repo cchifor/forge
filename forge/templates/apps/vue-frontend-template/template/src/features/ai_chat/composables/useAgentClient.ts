@@ -44,6 +44,12 @@ interface ProtocolToolMessage {
     type: 'function'
     function: { name: string; arguments: string }
   }>
+  // Chronological anchor: the number of DISPLAY messages that existed when this
+  // protocol message was created. The outgoing wire history interleaves the two
+  // streams by this position so a deferred-tool call + its result land in their
+  // correct place in history (NOT bunched at the tail, which corrupts the
+  // backend's order-sensitive load_messages on every turn after the first).
+  pos: number
 }
 
 // Module-scoped reactive snapshot — single chat thread per app session.
@@ -112,6 +118,7 @@ function handleFrontendToolEvent(event: AgUiEvent): void {
         {
           id: crypto.randomUUID(),
           role: 'assistant',
+          pos: snapshot.value.messages.length,
           toolCalls: [
             {
               id: event.toolCallId,
@@ -159,6 +166,7 @@ function handleFrontendToolEvent(event: AgUiEvent): void {
           role: 'tool',
           content: '[displayed]',
           toolCallId,
+          pos: snapshot.value.messages.length,
         })
       }
       pendingDisplayOnlyTools.clear()
@@ -212,26 +220,38 @@ export function useAgentClient() {
       forwardedProps.attachment_ids = attachmentIds
     }
 
-    // Display messages from the snapshot, plus the side-channel protocol
-    // messages (assistant `toolCalls` + `role:'tool'` results) that carry the
-    // toolCallId the backend needs to resume a deferred frontend-tool call.
-    // The deferred-tool flow always appends the assistant tool-call record and
-    // the tool result AFTER the user/assistant text that triggered it, so
-    // concatenating the protocol tail preserves wire ordering.
-    const outgoingMessages: Array<Record<string, unknown>> = [
-      ...snapshot.value.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-      })),
-      ...protocolToolMessages.map((m) => {
+    // Build the ordered wire history: display messages (text) interleaved with
+    // the protocol messages (assistant `toolCalls` + `role:'tool'` results) at
+    // their recorded `pos` (= display length when created). This keeps a
+    // deferred-tool call + its result in their CHRONOLOGICAL place — emitting
+    // all protocol messages at the tail (the prior approach) corrupts the
+    // backend's order-sensitive load_messages on every turn after the first.
+    const outgoingMessages: Array<Record<string, unknown>> = []
+    const protoByPos = new Map<number, ProtocolToolMessage[]>()
+    for (const p of protocolToolMessages) {
+      const at = protoByPos.get(p.pos) ?? []
+      at.push(p)
+      protoByPos.set(p.pos, at)
+    }
+    const emitProtoAt = (pos: number) => {
+      for (const m of protoByPos.get(pos) ?? []) {
         const out: Record<string, unknown> = { id: m.id, role: m.role }
         if (m.content !== undefined) out.content = m.content
         if (m.toolCallId !== undefined) out.toolCallId = m.toolCallId
         if (m.toolCalls !== undefined) out.toolCalls = m.toolCalls
-        return out
-      }),
-    ]
+        outgoingMessages.push(out)
+      }
+    }
+    const display = snapshot.value.messages
+    for (let i = 0; i <= display.length; i++) {
+      // Protocol messages recorded when `i` display messages existed appear
+      // right after display[i-1] and before display[i].
+      emitProtoAt(i)
+      if (i < display.length) {
+        const m = display[i]
+        outgoingMessages.push({ id: m.id, role: m.role, content: m.content })
+      }
+    }
 
     const payload: AgUiRunPayload = {
       threadId: currentThreadId,
@@ -304,7 +324,13 @@ export function useAgentClient() {
   function respondToFrontendTool(toolCallId: string, result: string) {
     protocolToolMessages = [
       ...protocolToolMessages,
-      { id: crypto.randomUUID(), role: 'tool', content: result, toolCallId },
+      {
+        id: crypto.randomUUID(),
+        role: 'tool',
+        content: result,
+        toolCallId,
+        pos: snapshot.value.messages.length,
+      },
     ]
     // The interactive canvas has served its purpose — close it so the next
     // render isn't a stale form. (Display-only tools never reach here.)
@@ -344,6 +370,10 @@ export function useAgentClient() {
     // `messages` is a read-only computed view into the snapshot — truncate the
     // source snapshot instead of assigning to the computed (mirrors editAndResend).
     snapshot.value = { ...snapshot.value, messages: snapshot.value.messages.slice(0, idx) }
+    // Drop protocol (toolCalls / tool-result) messages anchored past the
+    // truncation point so a regenerated turn doesn't replay stale deferred-tool
+    // records after an unrelated, shortened transcript.
+    protocolToolMessages = protocolToolMessages.filter((m) => m.pos <= idx)
     error.value = null
     runAgent(lastRunOptions)
   }
