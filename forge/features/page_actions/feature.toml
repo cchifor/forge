@@ -1,0 +1,7 @@
+[feature]
+name = "PageActionGroup"
+version = "1.0.0"
+summary = "A responsive page-level action toolbar (primary buttons + overflow menu) — Layer-1 component."
+category = "component"
+stability = "experimental"
+layer = 1

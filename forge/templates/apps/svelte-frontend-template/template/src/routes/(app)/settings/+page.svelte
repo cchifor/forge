@@ -4,7 +4,8 @@
 		getSettingsStore,
 		type ThemeMode,
 		ColorSchemePicker,
-		DarkVariantSelector
+		DarkVariantSelector,
+		TextSizeSelector
 	} from '$lib/features/settings';
 	import { colorSchemes } from '$lib/shared/lib/color-schemes';
 
@@ -79,6 +80,18 @@
 						currentScheme={settings.colorScheme}
 						schemes={colorSchemes}
 						onselect={(name) => settings.setColorScheme(name)}
+					/>
+				</div>
+
+				<!-- Text Size -->
+				<div>
+					<span class="text-sm font-medium">Text Size</span>
+					<p class="mb-3 text-sm text-muted-foreground">
+						Adjust the base font size used across the interface
+					</p>
+					<TextSizeSelector
+						value={settings.textSize}
+						onchange={(v) => settings.setTextSize(v as 'sm' | 'md' | 'lg')}
 					/>
 				</div>
 			</div>

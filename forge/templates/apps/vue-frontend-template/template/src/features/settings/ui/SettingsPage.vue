@@ -20,7 +20,7 @@ import {
 } from '@/shared/stores/settings.store'
 
 const settingsStore = useSettingsStore()
-const { theme, darkModeVariant, colorScheme, resolvedTheme } = storeToRefs(settingsStore)
+const { theme, darkModeVariant, colorScheme, textSize, resolvedTheme } = storeToRefs(settingsStore)
 
 function setTheme(value: string) {
   settingsStore.setTheme(value as 'light' | 'dark' | 'system')
@@ -32,6 +32,10 @@ function setDarkModeVariant(value: string) {
 
 function setColorScheme(id: ColorSchemeId) {
   settingsStore.setColorScheme(id)
+}
+
+function setTextSize(value: string) {
+  settingsStore.setTextSize(value as 'sm' | 'md' | 'lg')
 }
 
 const schemeEntries = Object.entries(COLOR_SCHEMES) as [ColorSchemeId, (typeof COLOR_SCHEMES)[ColorSchemeId]][]
@@ -110,6 +114,24 @@ const schemeEntries = Object.entries(COLOR_SCHEMES) as [ColorSchemeId, (typeof C
                   class="absolute inset-0 m-auto h-5 w-5 text-white"
                 />
               </button>
+            </div>
+          </div>
+
+          <!-- Text Size -->
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Text Size</label>
+            <div>
+              <SegmentedButton :model-value="textSize" @update:model-value="setTextSize">
+                <SegmentedButtonItem value="sm">
+                  Small
+                </SegmentedButtonItem>
+                <SegmentedButtonItem value="md">
+                  Medium
+                </SegmentedButtonItem>
+                <SegmentedButtonItem value="lg">
+                  Large
+                </SegmentedButtonItem>
+              </SegmentedButton>
             </div>
           </div>
         </div>

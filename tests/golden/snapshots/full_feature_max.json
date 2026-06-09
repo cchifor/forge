@@ -97,8 +97,8 @@
       "sha256": "a8a8156973e9501d"
     },
     "apps/frontend/src/app/App.vue": {
-      "size": 622,
-      "sha256": "193967146c5d33c9"
+      "size": 702,
+      "sha256": "06f8adb5d1537975"
     },
     "apps/frontend/src/app/NotFoundPage.vue": {
       "size": 532,
@@ -129,8 +129,8 @@
       "sha256": "0fe8a31dae1278f2"
     },
     "apps/frontend/src/app/styles/main.css": {
-      "size": 5811,
-      "sha256": "71e789b307f83334"
+      "size": 5850,
+      "sha256": "f88a014b305ca09f"
     },
     "apps/frontend/src/core/ui-protocol/types.ts": {
       "size": 457,
@@ -457,8 +457,8 @@
       "sha256": "33b755402b0111b4"
     },
     "apps/frontend/src/features/settings/ui/SettingsPage.vue": {
-      "size": 4369,
-      "sha256": "73c61051d4f2a302"
+      "size": 5120,
+      "sha256": "1d4a3d3eeddab71e"
     },
     "apps/frontend/src/shared/api/client.test.ts": {
       "size": 2480,
@@ -493,8 +493,8 @@
       "sha256": "2c2974eedd710579"
     },
     "apps/frontend/src/shared/components/AppHeader.vue": {
-      "size": 1426,
-      "sha256": "54d6d5deab16fb0f"
+      "size": 3258,
+      "sha256": "e5103ae8d562f549"
     },
     "apps/frontend/src/shared/components/AppSidebar.vue": {
       "size": 6461,
@@ -503,6 +503,10 @@
     "apps/frontend/src/shared/components/ConfirmDialog.vue": {
       "size": 1475,
       "sha256": "d85068150273b69f"
+    },
+    "apps/frontend/src/shared/components/ConfirmHost.vue": {
+      "size": 1021,
+      "sha256": "5cf5eee0d8fb7f57"
     },
     "apps/frontend/src/shared/components/EmptyState.vue": {
       "size": 469,
@@ -517,8 +521,8 @@
       "sha256": "7b9a4c9b465f05c5"
     },
     "apps/frontend/src/shared/components/StatusBadge.vue": {
-      "size": 1069,
-      "sha256": "2ba59800e2d242d7"
+      "size": 2269,
+      "sha256": "aeaaef212d05bfb6"
     },
     "apps/frontend/src/shared/components/VerticalSplitter.vue": {
       "size": 1221,
@@ -560,6 +564,14 @@
       "size": 2443,
       "sha256": "d4c9b196c188a45d"
     },
+    "apps/frontend/src/shared/composables/useConfirm.test.ts": {
+      "size": 1705,
+      "sha256": "ae45f3ba70998397"
+    },
+    "apps/frontend/src/shared/composables/useConfirm.ts": {
+      "size": 2130,
+      "sha256": "fc7e2a6064bbd12c"
+    },
     "apps/frontend/src/shared/composables/useContainerSize.ts": {
       "size": 2574,
       "sha256": "49accc9614fd9de4"
@@ -571,6 +583,14 @@
     "apps/frontend/src/shared/composables/useEventStream.ts": {
       "size": 4098,
       "sha256": "b6c7c9642ed9bbe1"
+    },
+    "apps/frontend/src/shared/composables/usePageHeader.test.ts": {
+      "size": 2118,
+      "sha256": "28ec09c340706b3e"
+    },
+    "apps/frontend/src/shared/composables/usePageHeader.ts": {
+      "size": 3555,
+      "sha256": "26425a1a28f28a2f"
     },
     "apps/frontend/src/shared/composables/useRowSelection.test.ts": {
       "size": 1080,
@@ -665,12 +685,12 @@
       "sha256": "20b2cae43f6c2728"
     },
     "apps/frontend/src/shared/stores/settings.store.test.ts": {
-      "size": 1723,
-      "sha256": "10c85adef93fd6bc"
+      "size": 2610,
+      "sha256": "e73fc9607dd447c0"
     },
     "apps/frontend/src/shared/stores/settings.store.ts": {
-      "size": 4218,
-      "sha256": "b543247ad802d904"
+      "size": 4987,
+      "sha256": "3340ea6c283fb092"
     },
     "apps/frontend/src/shared/stores/ui.store.test.ts": {
       "size": 3441,
@@ -1069,7 +1089,7 @@
       "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 153294,
+      "size": 154361,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
