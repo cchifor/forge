@@ -212,6 +212,18 @@ class Fragment:
     # Svelte sibling (e.g. desktop-only canvas tooling, browser-
     # devtools-style integrations).
     frontend_skip_reason: str | None = None
+    # Per-backend opt-out for backend-scoped fragments. A backend-scoped
+    # fragment applies to every project backend of a supported language; this
+    # tuple excludes backends whose ``app_template`` variant is listed. Use it
+    # when a fragment's project-global option would otherwise land on a backend
+    # variant that owns an incompatible shape — e.g. ``multitenancy_rls_python``
+    # (``database.multitenancy=shared_rls``) must NOT apply to the
+    # ``tenant-management-service`` control-plane variant: TMS isolates by
+    # Keycloak realm, not Postgres RLS, and ships its own ``0002`` migration, so
+    # adding the RLS migration would create a second Alembic head. Empty (the
+    # default) preserves existing behavior — no built-in variant is excluded, so
+    # the golden snapshots stay byte-identical.
+    excluded_app_templates: tuple[str, ...] = ()
 
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations

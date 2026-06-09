@@ -89,6 +89,19 @@ def apply_features(
         impl = rf.fragment.implementations[bc.language]
         if impl.scope != "backend":
             continue
+        # Per-backend opt-out: a backend-scoped fragment whose project-global
+        # option would otherwise blanket every same-language backend can exclude
+        # specific app_template variants (e.g. the RLS fragment skips the
+        # tenant-management-service control plane, which owns its own migration
+        # chain). ``bc.app_template`` is the variant slug ("crud-service" for the
+        # baseline; possibly None for ad-hoc configs) — the ``or ""`` guards None.
+        if (bc.app_template or "") in rf.fragment.excluded_app_templates:
+            if not quiet:
+                print(
+                    f"  [frag] skipping '{rf.fragment.name}' for {bc.name} "
+                    f"(app_template '{bc.app_template}' excluded)"
+                )
+            continue
         if not quiet:
             print(f"  [frag] applying '{rf.fragment.name}' to {bc.name} ({bc.language.value})")
         ctx = FragmentContext.filtered(
