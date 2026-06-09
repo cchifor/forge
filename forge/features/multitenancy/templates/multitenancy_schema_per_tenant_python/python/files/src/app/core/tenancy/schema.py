@@ -10,13 +10,15 @@ query can physically only touch one tenant's data.
 Two composed binding seams (both fail closed):
 
 1. **:func:`register_search_path_listener` — the always-on default.** An engine
-   ``"begin"`` listener (installed at startup) binds ``SET LOCAL search_path`` on
-   EVERY transaction from :data:`current_tenant_var` (header/subdomain, set by
-   the middleware) or, when unset, ``''`` (fail closed). Because it fires for
-   every session — including raw/non-UoW sessions (workers, direct
-   ``session_factory`` use) — nothing falls open to ``public``. ``SET LOCAL``
-   scopes the change to the transaction, so a pooled connection never carries
-   one tenant's ``search_path`` into the next request.
+   ``"begin"`` listener (installed at startup against the MAIN APP ENGINE,
+   ``db.engine``) binds ``SET LOCAL search_path`` on every transaction from
+   :data:`current_tenant_var` (header/subdomain, set by the middleware) or, when
+   unset, ``''`` (fail closed). It fires for every session opened from the shared
+   session factory — including raw/non-UoW sessions on that engine. ``SET LOCAL``
+   scopes the change to the transaction, so a pooled connection never carries one
+   tenant's ``search_path`` into the next request. (Out-of-band code that creates
+   its OWN engine — RAG worker/search, CLI, admin — is NOT covered; it must
+   register the listener on its engine or use :class:`TenantSchemaHook`.)
 2. **:func:`bind_tenant_search_path` — the post-auth account override.**
    Installed on the request Unit-of-Work (``FORGE:UOW_SESSION_BINDER`` in
    ``app.core.ioc.security``), it runs inside the handler transaction after auth
