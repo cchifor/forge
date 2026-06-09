@@ -1,0 +1,14 @@
+from fastapi import APIRouter
+
+from app.api.v1.endpoints import admin, health, home, items, realms, tenants
+# FORGE:API_ENDPOINT_IMPORTS
+
+api_router = APIRouter()
+
+api_router.include_router(home.router, tags=["home"])
+api_router.include_router(health.router, prefix="/health", tags=["health"])
+api_router.include_router(items.router, prefix="/{{ entity_plural }}", tags=["{{ entity_plural }}"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(realms.router, prefix="/realms", tags=["realms"])
+api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
+# FORGE:API_ROUTER_REGISTRATION
