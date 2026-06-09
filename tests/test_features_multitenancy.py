@@ -45,6 +45,12 @@ FRAGMENT_NAME = "multitenancy_rls_python"
 SCHEMA_FRAGMENT_NAME = "multitenancy_schema_per_tenant_python"
 OPTION_PATH = "database.multitenancy"
 
+# The base python-service-template (carries forge_core + the IoC binder seam).
+_BASE_TEMPLATE = (
+    Path(__file__).resolve().parent.parent
+    / "forge/templates/services/python-service-template/template"
+)
+
 # Files the shared_rls fragment ADDS.
 EXPECTED_FILES = (
     "src/app/core/tenancy/__init__.py",
@@ -542,8 +548,46 @@ def test_render_lands_schema_files_and_injections(tmp_path: Path) -> None:
     assert "app.add_middleware(TenantSchemaMiddleware)" in main_py
     assert 'resolution="subdomain"' in main_py
 
+    # The per-transaction search_path is bound by the UoW session_binder
+    # installed at the IoC seam (post-auth, inside the handler) — this is what
+    # makes schema_per_tenant + token_claim work. The engine begin-listener is
+    # no longer the request-path binder.
+    ioc = (backend / "src/app/core/ioc/security.py").read_text(encoding="utf-8")
+    assert "bind_tenant_search_path" in ioc
+    assert "_SESSION_BINDER = _schema_session_binder" in ioc
+    assert "session_binder=_SESSION_BINDER" in ioc
     lifecycle = (backend / "src/app/core/lifecycle.py").read_text(encoding="utf-8")
-    assert "register_search_path_listener(db.engine)" in lifecycle
+    assert "register_search_path_listener(db.engine)" not in lifecycle
+
+
+def test_schema_binder_token_claim_and_fail_closed() -> None:
+    """The UoW search_path binder is the post-auth, account-driven seam that
+    makes token_claim work: it prefers the edge-resolved ContextVar (header/
+    subdomain), falls back to the authenticated account (token_claim), and fails
+    closed (empty search_path) when neither yields a tenant."""
+    schema = (_schema_fragment_root() / "src/app/core/tenancy/schema.py").read_text(
+        encoding="utf-8"
+    )
+    assert "async def bind_tenant_search_path(session: Any, account: Any | None)" in schema
+    assert "current_tenant_var.get()" in schema  # edge-resolved first
+    assert "account.customer_id" in schema or 'getattr(account, "customer_id"' in schema
+    assert "SET LOCAL search_path TO ''" in schema or "set_config('search_path', '', true)" in schema
+
+
+def test_base_uow_exposes_session_binder_seam() -> None:
+    """forge_core's UoW takes an optional session_binder, and the base IoC ships
+    an inert `_SESSION_BINDER = None` seam threaded into both UoWs (so a non-
+    schema project is unaffected; the fragment installs the real binder)."""
+    bt = Path(_BASE_TEMPLATE)
+    uow = (bt / "sdks/forge-core/src/forge_core/persistence/unit_of_work.py").read_text(
+        encoding="utf-8"
+    )
+    assert "session_binder:" in uow
+    assert "await self._session_binder(session, self._account)" in uow
+    ioc = (bt / "src/app/core/ioc/security.py").read_text(encoding="utf-8")
+    assert "_SESSION_BINDER = None" in ioc
+    assert "FORGE:UOW_SESSION_BINDER" in ioc
+    assert ioc.count("session_binder=_SESSION_BINDER") == 2  # auth + public UoW
 
 
 # --------------------------------------------------------------------------- #

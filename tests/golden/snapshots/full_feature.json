@@ -1257,8 +1257,8 @@
       "sha256": "3b7efc87011f7cfb"
     },
     "services/api/sdks/forge-core/src/forge_core/persistence/unit_of_work.py": {
-      "size": 10085,
-      "sha256": "a1223328de82ca12"
+      "size": 11006,
+      "sha256": "9d620c7045e53068"
     },
     "services/api/sdks/forge-core/src/forge_core/security/__init__.py": {
       "size": 3321,
@@ -1497,8 +1497,8 @@
       "sha256": "ba1da5b926b63cb9"
     },
     "services/api/src/app/core/ioc/security.py": {
-      "size": 1727,
-      "sha256": "af2a50eea5c642ee"
+      "size": 2355,
+      "sha256": "ba49ab687401804f"
     },
     "services/api/src/app/core/ioc/services.py": {
       "size": 616,

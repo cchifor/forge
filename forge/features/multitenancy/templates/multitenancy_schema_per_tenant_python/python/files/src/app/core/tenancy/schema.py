@@ -7,19 +7,23 @@ filtering rows by an RLS policy (the ``shared_rls`` strategy). The connection's
 schema — so unqualified table references resolve to that tenant's tables and a
 query can physically only touch one tenant's data.
 
-The seam mirrors ``app.core.tenancy.rls`` exactly so the two strategies are
-drop-in alternatives:
+Binding seams:
 
-1. The request middleware (:mod:`app.middleware.tenant_schema`) resolves the
-   tenant and sets :data:`current_tenant_var`.
-2. :func:`register_search_path_listener` (called once at startup against the
-   engine) installs a ``"begin"`` listener that, on every transaction begin,
-   reads :data:`current_tenant_var` and issues::
+1. **Request path — :func:`bind_tenant_search_path` (the UoW session binder).**
+   Installed on the request Unit-of-Work (``FORGE:UOW_SESSION_BINDER`` in
+   ``app.core.ioc.security``), it runs inside the handler transaction (post-auth)
+   and binds ``SET LOCAL search_path`` from the edge-resolved
+   :data:`current_tenant_var` (header/subdomain, set by the middleware) or, when
+   unset, the authenticated account tenant (``token_claim``). Fails closed
+   (``search_path = ''``) when no tenant is bound. ``SET LOCAL`` scopes the
+   change to the transaction, so a pooled connection never carries one tenant's
+   ``search_path`` into the next request.
+2. **Out-of-band — :class:`TenantSchemaHook`** for workers/tasks that open their
+   own session (no request UoW); they call ``await hook.bind(session, tenant)``.
 
-       SET LOCAL search_path TO "tenant_<id>", public
-
-   ``SET LOCAL`` scopes the change to the current transaction, so a pooled
-   connection never carries one tenant's ``search_path`` into the next request.
+(:func:`register_search_path_listener` remains available as an engine ``begin``
+listener for projects that want it, but the request path uses the UoW binder so
+the tenant — including a ``token_claim`` tenant — is known at bind time.)
 
 Schema-name safety: :func:`schema_name_for` builds the schema name from a
 configured prefix + the tenant id and ACCEPTS ONLY ``[A-Za-z0-9_-]`` tenant
@@ -244,8 +248,47 @@ class TenantSchemaHook:
         await session.execute(text("SELECT set_config('search_path', 'public', true)"))
 
 
+async def bind_tenant_search_path(session: Any, account: Any | None) -> None:
+    """UoW ``session_binder``: route ``search_path`` from the authenticated account.
+
+    Installed on ``AsyncUnitOfWork`` (via the IoC ``FORGE:UOW_SESSION_BINDER``
+    seam) so the per-transaction binding fires INSIDE the request handler, after
+    auth has resolved — the platform-faithful, post-auth binding point. The
+    tenant is the authenticated ``account.customer_id`` (the token-claim tenant),
+    so this is the path that makes ``schema_per_tenant`` + ``token_claim`` work.
+
+    FAIL CLOSED: with no account / no tenant (e.g. a ``PublicUnitOfWork``), bind
+    ``search_path = ''`` so unqualified app tables don't resolve — never leave the
+    default ``public`` active for an unauthenticated request. No-op off Postgres.
+    """
+    bind = getattr(session, "bind", None)
+    dialect = getattr(getattr(bind, "dialect", None), "name", "")
+    if dialect != "postgresql":
+        return
+
+    from sqlalchemy import text  # noqa: PLC0415
+
+    # Single coherent request-path source. Prefer the edge-resolved tenant
+    # (header / subdomain, set on the ContextVar by the middleware before the
+    # handler runs); fall back to the authenticated account's tenant
+    # (``token_claim`` — available post-auth, which is when this binder fires).
+    tenant = current_tenant_var.get()
+    if tenant is None and account is not None:
+        tenant = getattr(account, "customer_id", None)
+    if tenant is None:
+        # Fail closed — no tenant context ⇒ no app schema on the path.
+        await session.execute(text("SELECT set_config('search_path', '', true)"))
+        return
+    schema = schema_name_for(tenant, get_tenancy_settings().schema_prefix)
+    await session.execute(
+        text("SELECT set_config('search_path', :sp, true)"),
+        {"sp": f"{_quote_ident(schema)}, public"},
+    )
+
+
 __all__ = [
     "TenantSchemaHook",
+    "bind_tenant_search_path",
     "current_tenant_var",
     "provision_tenant_schema",
     "register_search_path_listener",

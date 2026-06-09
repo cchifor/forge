@@ -87,39 +87,41 @@ class TenantResolver:
         return label or None
 
     def _from_token_claim(self, request: Any) -> str | None:
-        claims = self._claims_for(request)
-        if not claims:
+        identity = getattr(getattr(request, "state", None), "identity", None)
+        if identity is None:
             return None
-        # Reuse the auth ClaimMapper when the provider installed one on
-        # app.state (oidc_generic / in_memory ship one). It carries the exact
-        # dot-path / whole-key resolution the verifier was configured with.
-        mapper = self._claim_mapper(request)
-        if mapper is not None:
-            value = mapper.extract(claims, path=self._settings.claim_path)
-        else:
-            value = _dot_path(claims, self._settings.claim_path)
-        return str(value) if value is not None else None
+        claims = self._raw_claims(identity)
+        if claims is not None:
+            # Apply the configured claim path to the verified JWT claims,
+            # reusing the provider's ClaimMapper when present (oidc/in_memory).
+            mapper = self._claim_mapper(request)
+            value = (
+                mapper.extract(claims, path=self._settings.claim_path)
+                if mapper is not None
+                else _dot_path(claims, self._settings.claim_path)
+            )
+            if value is not None:
+                return str(value)
+        # No raw claims (e.g. gatekeeper binds an IdentityContext) or the claim
+        # path missed — fall back to the identity's authoritative tenant id.
+        tenant_id = getattr(identity, "tenant_id", None)
+        return str(tenant_id) if tenant_id is not None else None
 
     # -- request introspection ----------------------------------------------
 
     @staticmethod
-    def _claims_for(request: Any) -> Mapping[str, Any] | None:
-        """Best-effort fetch of the verified claims dict.
+    def _raw_claims(identity: Any) -> Mapping[str, Any] | None:
+        """Verified JWT claims dict, if the provider exposes one.
 
-        The platform-auth middleware binds an identity on
-        ``request.state.identity``; depending on provider it exposes the raw
-        claims as ``.claims`` (verified JWT payload). When only an
-        ``IdentityContext`` is present we fall back to its ``tenant_id``.
+        forge's ``IdentityContext`` exposes ``.raw_claims``; some providers use
+        ``.claims``. Returns ``None`` when neither is a mapping (e.g. gatekeeper
+        binds an ``IdentityContext`` without raw claims — the caller then falls
+        back to ``identity.tenant_id``).
         """
-        identity = getattr(getattr(request, "state", None), "identity", None)
-        if identity is None:
-            return None
-        claims = getattr(identity, "claims", None)
-        if isinstance(claims, Mapping):
-            return claims
-        tenant_id = getattr(identity, "tenant_id", None)
-        if tenant_id is not None:
-            return {"tenant_id": tenant_id}
+        for attr in ("raw_claims", "claims"):
+            claims = getattr(identity, attr, None)
+            if isinstance(claims, Mapping):
+                return claims
         return None
 
     @staticmethod
