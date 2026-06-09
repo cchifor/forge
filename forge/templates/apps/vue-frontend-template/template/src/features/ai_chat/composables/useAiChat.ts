@@ -52,6 +52,13 @@ export function useAiChat() {
     // in `attachment_ids` and can act on them without a prompt body.
     // Reject truly empty sends.
     if (!trimmed && attachmentIds.length === 0) return
+    // Run-acquisition is atomic: bail BEFORE appending unless a run may start.
+    // `canStartRun()` is false while the agent is running AND while it's blocked
+    // on the user (a pending HITL prompt or an unresolved deferred frontend
+    // tool) — sending then would strand the user message, orphan the prompt, or
+    // ship history with an unmatched open tool call. Those are answered via
+    // respondToPrompt / respondToFrontendTool, not a free-form send.
+    if (!agentClient.canStartRun()) return
     agentClient.addUserMessage(content)
     agentClient.runAgent(options)
   }
