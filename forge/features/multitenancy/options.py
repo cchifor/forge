@@ -114,10 +114,13 @@ dialects.""",
             type=OptionType.ENUM,
             default="token_claim",
             options=("token_claim", "header", "subdomain"),
-            summary="How the per-request tenant id is discovered for RLS binding.",
+            summary="How the per-request tenant id is discovered for isolation binding.",
             description="""\
-Drives the ``TenantResolver`` shipped by ``database.multitenancy=shared_rls``.
-Only meaningful when a non-``none`` strategy is selected (otherwise inert).
+Drives the ``TenantResolver`` shipped by the non-``none`` strategies —
+``shared_rls`` (binds the resolved id to the RLS GUC) and ``schema_per_tenant``
+(routes the connection's ``search_path`` to the tenant schema). The resolver is
+identical across both; only the binding mechanism differs. Inert when
+``database.multitenancy=none``.
 
 - ``token_claim`` (default): read the tenant id from the verified JWT claims
   via a dot-path (``database.tenant_claim_path``), reusing the auth

@@ -476,13 +476,17 @@ def test_schema_router_quotes_and_validates() -> None:
     assert 'dialect.name != "postgresql"' in schema
 
 
-def test_schema_resolver_is_shared_with_rls() -> None:
-    """Both strategies ship the SAME resolver (byte-identical) — they only
-    differ in the binding mechanism."""
-    rls = (_fragment_root() / "src/app/core/tenancy/resolver.py").read_text(encoding="utf-8")
-    schema = (_schema_fragment_root() / "src/app/core/tenancy/resolver.py").read_text(
-        encoding="utf-8"
-    )
+def test_schema_resolver_code_matches_rls() -> None:
+    """Both strategies ship the SAME resolver CODE — they only differ in the
+    binding mechanism (and the module docstring, which is strategy-specific:
+    schema routing does not fail closed the way RLS does). Compare everything
+    from the first import onward so a logic drift is still caught."""
+    def _code(path: Path) -> str:
+        text = path.read_text(encoding="utf-8")
+        return text[text.index("from __future__") :]
+
+    rls = _code(_fragment_root() / "src/app/core/tenancy/resolver.py")
+    schema = _code(_schema_fragment_root() / "src/app/core/tenancy/resolver.py")
     assert rls == schema
 
 

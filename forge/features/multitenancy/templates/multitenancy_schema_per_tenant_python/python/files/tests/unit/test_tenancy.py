@@ -76,9 +76,20 @@ def test_load_from_env() -> None:
 
 def test_schema_name_for_slug_and_uuid() -> None:
     assert schema_name_for("acme") == "tenant_acme"
-    # UUID hyphens survive (allow-listed) and are lowercased.
+    # UUID hyphens survive (allow-listed); case is PRESERVED (no lowercasing —
+    # lowercasing would be lossy and could collide two tenants).
     uid = "550E8400-E29B-41D4-A716-446655440000"
-    assert schema_name_for(uid) == f"tenant_{uid.lower()}"
+    assert schema_name_for(uid) == f"tenant_{uid}"
+
+
+def test_schema_name_for_is_injective_on_case_and_whitespace() -> None:
+    # The map MUST be injective: distinct ids → distinct schemas. Case is
+    # preserved (not folded) and surrounding whitespace is rejected (not
+    # trimmed) — either lossy transform would collapse distinct tenants.
+    assert schema_name_for("ACME") != schema_name_for("acme")
+    for bad in (" acme", "acme ", " acme "):
+        with pytest.raises(TenancyConfigError):
+            schema_name_for(bad)
 
 
 def test_schema_name_for_custom_prefix() -> None:
@@ -149,8 +160,9 @@ async def test_hook_binds_search_path_on_postgres() -> None:
     await hook.bind(session, "acme")
     assert len(session.executed) == 1
     _, params = session.executed[0]
-    # set_config takes the value as a string parameter (no identifier interp).
-    assert params == {"sp": "tenant_acme, public"}
+    # The schema name inside the search_path value is double-quoted (a
+    # hyphenated UUID schema would be an illegal unquoted identifier).
+    assert params == {"sp": '"tenant_acme", public'}
 
 
 @pytest.mark.asyncio
