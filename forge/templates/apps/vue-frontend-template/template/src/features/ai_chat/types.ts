@@ -49,7 +49,7 @@ export interface ToolCallInfo extends _WireToolCallInfo {
   argsPretty?: string
 }
 
-export type WorkspaceAction = { type: string; data: Record<string, any> }
+export type WorkspaceAction = { type: string; toolCallId?: string; data: Record<string, any> }
 
 // ── HITL (Human-in-the-Loop) ──
 // ``UserPromptOption`` is the element type of ``UserPromptPayload.options``;
