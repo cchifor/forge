@@ -1127,19 +1127,28 @@ Discriminator for how strongly tenants are isolated in the database.
   cross-tenant reads/writes. Layers ON TOP of the existing TenantMixin —
   it adds the RLS policy + GUC binding + resolver, it does NOT re-add the
   ``customer_id`` column.
-- ``schema_per_tenant`` / ``db_per_tenant``: recognised values but NOT yet
-  implemented. forge accepts them in a forge.toml without rejecting the
-  whole config, but generation fails with an explicit "not yet implemented"
-  error rather than silently producing an un-isolated project. Use
-  ``shared_rls`` today.
+- ``schema_per_tenant``: per-tenant Postgres schema. Each tenant's tables
+  live in their own ``tenant_<id>`` schema; a request middleware resolves the
+  tenant (token claim / header / subdomain) and a session ``begin`` hook binds
+  ``SET LOCAL search_path`` to that schema, so unqualified queries physically
+  touch only one tenant's data. Ships ``provision_tenant_schema`` to clone the
+  table set into a new tenant schema. Unlike ``shared_rls`` (fail-closed), an
+  unbound request keeps the default ``search_path`` — pair with auth.
+- ``db_per_tenant``: recognised value but NOT yet implemented (separate
+  databases / connection pools per tenant). forge accepts it in a forge.toml
+  without rejecting the whole config, but generation fails with an explicit
+  "not yet implemented" error rather than silently producing an un-isolated
+  project. Use ``shared_rls`` or ``schema_per_tenant`` today.
 
-BACKENDS: python (shared_rls). The non-``none`` strategies are Python-only
-in 1.x — the RLS GUC hook + Alembic policy macros target the SQLAlchemy /
-Alembic stack the python-service-template ships.
-ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.
+BACKENDS: python (shared_rls, schema_per_tenant). The non-``none`` strategies
+are Python-only in 1.x — the GUC/search_path hooks + Alembic stack target the
+SQLAlchemy / Alembic stack the python-service-template ships.
+ENGINE: postgres. The GUC / search_path hooks are no-ops on non-Postgres
+dialects.
 
 **Enables fragments:**
 - on `shared_rls` → `multitenancy_rls_python`
+- on `schema_per_tenant` → `multitenancy_schema_per_tenant_python`
 
 ### `database.tenant_claim_path`
 

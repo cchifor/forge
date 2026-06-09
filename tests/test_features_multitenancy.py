@@ -42,6 +42,7 @@ from forge.options import OPTION_REGISTRY
 from forge.options._registry import OptionType
 
 FRAGMENT_NAME = "multitenancy_rls_python"
+SCHEMA_FRAGMENT_NAME = "multitenancy_schema_per_tenant_python"
 OPTION_PATH = "database.multitenancy"
 
 # Files the shared_rls fragment ADDS.
@@ -104,12 +105,15 @@ def test_multitenancy_option_registered() -> None:
     assert opt.allowed_backends == (BackendLanguage.PYTHON,)
 
 
-def test_multitenancy_enables_only_shared_rls() -> None:
+def test_multitenancy_enables_per_strategy() -> None:
     opt = OPTION_REGISTRY[OPTION_PATH]
-    # shared_rls maps to the RLS fragment; none + the deferred values map to nothing.
-    assert opt.enables == {"shared_rls": (FRAGMENT_NAME,)}
+    # shared_rls + schema_per_tenant each map to their fragment; none + the
+    # still-deferred db_per_tenant map to nothing.
+    assert opt.enables == {
+        "shared_rls": (FRAGMENT_NAME,),
+        "schema_per_tenant": (SCHEMA_FRAGMENT_NAME,),
+    }
     assert "none" not in opt.enables
-    assert "schema_per_tenant" not in opt.enables
     assert "db_per_tenant" not in opt.enables
 
 
@@ -174,24 +178,34 @@ def test_shared_rls_on_non_python_raises(lang: BackendLanguage) -> None:
     assert "python" in msg
 
 
-@pytest.mark.parametrize("strategy", ["schema_per_tenant", "db_per_tenant"])
-def test_deferred_strategies_raise_explicitly(strategy: str) -> None:
-    """schema/db-per-tenant are recognised but raise a clear not-implemented
-    error — never a silent no-op."""
+def test_deferred_strategy_raises_explicitly() -> None:
+    """db_per_tenant is recognised but raises a clear not-implemented error —
+    never a silent no-op. (schema_per_tenant is now implemented.)"""
     from forge.capability_resolver import resolve
 
     with pytest.raises(OptionsError) as exc:
-        resolve(_py_cfg(multitenancy=strategy))
+        resolve(_py_cfg(multitenancy="db_per_tenant"))
     msg = str(exc.value)
     assert "not-yet-implemented" in msg.lower() or "not yet implemented" in msg.lower()
-    assert "shared_rls" in msg  # points at the implemented alternative
+    # Points at the implemented alternatives.
+    assert "shared_rls" in msg
+    assert "schema_per_tenant" in msg
 
 
 def test_deferred_value_accepted_by_value_validation() -> None:
     """The value must be in the option's allowed set (validation accepts it);
     only the resolver refuses to GENERATE it."""
-    OPTION_REGISTRY[OPTION_PATH].validate_value("schema_per_tenant")
     OPTION_REGISTRY[OPTION_PATH].validate_value("db_per_tenant")
+
+
+def test_schema_per_tenant_no_longer_deferred() -> None:
+    """schema_per_tenant now resolves its fragment instead of raising."""
+    from forge.capability_resolver import resolve
+
+    plan = resolve(_py_cfg(multitenancy="schema_per_tenant"))
+    names = {rf.fragment.name for rf in plan.ordered}
+    assert SCHEMA_FRAGMENT_NAME in names
+    assert FRAGMENT_NAME not in names  # the two are mutually exclusive
 
 
 def test_default_value_does_not_trip_allowed_backends() -> None:
@@ -392,6 +406,128 @@ def test_render_default_none_no_tenancy_files(tmp_path: Path) -> None:
     assert not (backend / "src/app/core/tenancy").exists()
     assert not (backend / "alembic/versions/0002_enable_rls.py").exists()
     assert not (backend / "src/app/middleware/tenant_rls.py").exists()
+
+
+# --------------------------------------------------------------------------- #
+# schema_per_tenant fragment
+# --------------------------------------------------------------------------- #
+
+# Files the schema_per_tenant fragment ADDS. No alembic migration (per-tenant
+# schemas are materialized at runtime, not by a one-shot policy migration).
+SCHEMA_EXPECTED_FILES = (
+    "src/app/core/tenancy/__init__.py",
+    "src/app/core/tenancy/config.py",
+    "src/app/core/tenancy/resolver.py",
+    "src/app/core/tenancy/schema.py",
+    "src/app/core/tenancy/SCHEMA_PER_TENANT.md",
+    "src/app/middleware/tenant_schema.py",
+    "tests/unit/test_tenancy.py",
+)
+
+
+def _schema_fragment_root() -> Path:
+    impl = FRAGMENT_REGISTRY[SCHEMA_FRAGMENT_NAME].implementations[BackendLanguage.PYTHON]
+    return Path(impl.fragment_dir) / "files"
+
+
+def test_schema_fragment_python_only_backend_scoped() -> None:
+    frag = FRAGMENT_REGISTRY[SCHEMA_FRAGMENT_NAME]
+    assert set(frag.implementations) == {BackendLanguage.PYTHON}
+    assert frag.implementations[BackendLanguage.PYTHON].scope == "backend"
+    # Same control-plane exemption as the RLS fragment.
+    assert frag.excluded_app_templates == ("tenant-management-service",)
+
+
+def test_schema_fragment_reads_resolution_options() -> None:
+    impl = FRAGMENT_REGISTRY[SCHEMA_FRAGMENT_NAME].implementations[BackendLanguage.PYTHON]
+    assert "database.tenant_resolution" in impl.reads_options
+    assert "database.tenant_claim_path" in impl.reads_options
+    assert "database.tenant_header_name" in impl.reads_options
+    # Schema prefix surfaced as env (no forge option backs it).
+    assert ("TENANT_SCHEMA_PREFIX", "tenant_") in impl.env_vars
+
+
+@pytest.mark.parametrize("rel", SCHEMA_EXPECTED_FILES)
+def test_schema_fragment_ships_file(rel: str) -> None:
+    assert (_schema_fragment_root() / rel).is_file(), f"missing fragment file: {rel}"
+
+
+def test_schema_fragment_ships_no_rls_migration() -> None:
+    """schema_per_tenant provisions at runtime — it must NOT ship the RLS 0002
+    (which would collide with the base 0001 chain on a different strategy)."""
+    assert not (_schema_fragment_root() / "alembic/versions/0002_enable_rls.py").exists()
+
+
+def test_schema_router_quotes_and_validates() -> None:
+    """The search_path router must validate the tenant id (allow-list, not
+    sanitize) and quote the identifier — the injection defense."""
+    schema = (_schema_fragment_root() / "src/app/core/tenancy/schema.py").read_text(
+        encoding="utf-8"
+    )
+    assert "SET LOCAL search_path TO" in schema
+    assert "_quote_ident" in schema
+    assert "schema_name_for" in schema
+    # Allow-list regex (NOT a lossy sanitizer that could collide tenants).
+    assert "[A-Za-z0-9_-]" in schema
+    # 63-byte identifier limit enforced.
+    assert "63" in schema
+    # Provisioning + no-op-off-postgres.
+    assert "provision_tenant_schema" in schema
+    assert 'dialect.name != "postgresql"' in schema
+
+
+def test_schema_resolver_is_shared_with_rls() -> None:
+    """Both strategies ship the SAME resolver (byte-identical) — they only
+    differ in the binding mechanism."""
+    rls = (_fragment_root() / "src/app/core/tenancy/resolver.py").read_text(encoding="utf-8")
+    schema = (_schema_fragment_root() / "src/app/core/tenancy/resolver.py").read_text(
+        encoding="utf-8"
+    )
+    assert rls == schema
+
+
+@pytest.mark.parametrize("lang", [BackendLanguage.NODE, BackendLanguage.RUST])
+def test_schema_per_tenant_on_non_python_raises(lang: BackendLanguage) -> None:
+    """allowed_backends enforcement applies to schema_per_tenant too."""
+    from forge.capability_resolver import resolve
+
+    with pytest.raises(OptionsError) as exc:
+        resolve(_cfg_lang(lang, "schema_per_tenant"))
+    assert "database.multitenancy" in str(exc.value)
+
+
+def test_render_lands_schema_files_and_injections(tmp_path: Path) -> None:
+    cfg = ProjectConfig(
+        project_name="mts",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="api", project_name="mts", language=BackendLanguage.PYTHON, features=["items"]
+            )
+        ],
+        frontend=None,
+        options={
+            "database.multitenancy": "schema_per_tenant",
+            "database.tenant_resolution": "subdomain",
+        },
+    )
+    root = Path(generate(cfg, quiet=True, dry_run=True))
+    backend = root / "services" / "api"
+
+    assert (backend / "src/app/core/tenancy/schema.py").is_file()
+    assert (backend / "src/app/core/tenancy/resolver.py").is_file()
+    assert (backend / "src/app/core/tenancy/config.py").is_file()
+    assert (backend / "src/app/middleware/tenant_schema.py").is_file()
+    # No RLS migration shipped for this strategy.
+    assert not (backend / "alembic/versions/0002_enable_rls.py").exists()
+
+    main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
+    assert "from app.middleware.tenant_schema import TenantSchemaMiddleware" in main_py
+    assert "app.add_middleware(TenantSchemaMiddleware)" in main_py
+    assert 'resolution="subdomain"' in main_py
+
+    lifecycle = (backend / "src/app/core/lifecycle.py").read_text(encoding="utf-8")
+    assert "register_search_path_listener(db.engine)" in lifecycle
 
 
 # --------------------------------------------------------------------------- #
