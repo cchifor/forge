@@ -447,16 +447,17 @@ def _provider_needs_keycloak(provider: object) -> bool:
 # selection of either into an explicit "not yet implemented" error rather than
 # silently generating an un-isolated project (the value maps to no fragments,
 # which would otherwise be an invisible no-op).
-_MULTITENANCY_DEFERRED: frozenset[str] = frozenset({"schema_per_tenant", "db_per_tenant"})
+_MULTITENANCY_DEFERRED: frozenset[str] = frozenset({"db_per_tenant"})
 
 
 def _check_multitenancy_deferred(config: ProjectConfig) -> None:
     """Raise a clear error when a user selects a deferred multitenancy strategy.
 
-    ``schema_per_tenant`` / ``db_per_tenant`` are KNOWN (validation accepts
-    them) but NOT implemented in 1.x. Only a user-origin selection errors — a
-    persisted default never would (the default is ``none``). The message points
-    at the implemented alternative so the failure is actionable, not a dead end.
+    ``db_per_tenant`` is KNOWN (validation accepts it) but NOT implemented in
+    1.x (``shared_rls`` and ``schema_per_tenant`` are). Only a user-origin
+    selection errors — a persisted default never would (the default is
+    ``none``). The message points at the implemented alternatives so the
+    failure is actionable, not a dead end.
     """
     path = "database.multitenancy"
     value = config.options.get(path)
@@ -471,10 +472,15 @@ def _check_multitenancy_deferred(config: ProjectConfig) -> None:
         f"forge.toml (so a future version can realise it without a config "
         f"migration), but generation cannot proceed: it would produce a "
         f"project with no tenant isolation. Use database.multitenancy="
-        f"'shared_rls' (Postgres Row-Level Security, Python) today, or "
-        f"'none' for application-layer scoping only.",
+        f"'shared_rls' (Postgres Row-Level Security) or 'schema_per_tenant' "
+        f"(per-tenant Postgres schema), both Python, today — or 'none' for "
+        f"application-layer scoping only.",
         code=OPTIONS_INVALID_VALUE,
-        context={"option": path, "value": value, "implemented": ["none", "shared_rls"]},
+        context={
+            "option": path,
+            "value": value,
+            "implemented": ["none", "shared_rls", "schema_per_tenant"],
+        },
     )
 
 

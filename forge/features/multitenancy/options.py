@@ -12,11 +12,17 @@ generated persistence layer:
   SECURITY`` + a ``USING (customer_id = current_setting('app.current_tenant'))``
   policy, and each request/transaction binds the GUC via a session hook.
   Python tier-1 (Postgres-only).
-- ``schema_per_tenant`` / ``db_per_tenant``: KNOWN but DEFERRED. Validation
-  accepts them (so a forge.toml that pins one is not rejected outright), but
-  the resolver raises a clear "not yet implemented" error rather than
-  silently generating a project with no isolation. See the resolver guard
-  in ``forge/capability_resolver.py`` (``_check_multitenancy_deferred``).
+- ``schema_per_tenant``: per-tenant Postgres schema. Each tenant's tables
+  live in their own ``tenant_<id>`` schema; a request middleware resolves the
+  tenant and a session ``begin`` hook binds ``SET LOCAL search_path`` to that
+  schema, so unqualified queries physically touch only one tenant's data.
+  Python tier-1 (Postgres-only). Ships ``provision_tenant_schema`` to clone
+  the table set into a new tenant schema.
+- ``db_per_tenant``: KNOWN but DEFERRED. Validation accepts it (so a
+  forge.toml that pins it is not rejected outright), but the resolver raises a
+  clear "not yet implemented" error rather than silently generating a project
+  with no isolation. See the resolver guard in
+  ``forge/capability_resolver.py`` (``_check_multitenancy_deferred``).
 
 Resolution sub-options drive *how* the per-request tenant id is discovered.
 They compose with the just-landed auth ``ClaimMapper`` seam: with
@@ -62,16 +68,24 @@ Discriminator for how strongly tenants are isolated in the database.
   cross-tenant reads/writes. Layers ON TOP of the existing TenantMixin —
   it adds the RLS policy + GUC binding + resolver, it does NOT re-add the
   ``customer_id`` column.
-- ``schema_per_tenant`` / ``db_per_tenant``: recognised values but NOT yet
-  implemented. forge accepts them in a forge.toml without rejecting the
-  whole config, but generation fails with an explicit "not yet implemented"
-  error rather than silently producing an un-isolated project. Use
-  ``shared_rls`` today.
+- ``schema_per_tenant``: per-tenant Postgres schema. Each tenant's tables
+  live in their own ``tenant_<id>`` schema; a request middleware resolves the
+  tenant (token claim / header / subdomain) and a session ``begin`` hook binds
+  ``SET LOCAL search_path`` to that schema, so unqualified queries physically
+  touch only one tenant's data. Ships ``provision_tenant_schema`` to clone the
+  table set into a new tenant schema. Unlike ``shared_rls`` (fail-closed), an
+  unbound request keeps the default ``search_path`` — pair with auth.
+- ``db_per_tenant``: recognised value but NOT yet implemented (separate
+  databases / connection pools per tenant). forge accepts it in a forge.toml
+  without rejecting the whole config, but generation fails with an explicit
+  "not yet implemented" error rather than silently producing an un-isolated
+  project. Use ``shared_rls`` or ``schema_per_tenant`` today.
 
-BACKENDS: python (shared_rls). The non-``none`` strategies are Python-only
-in 1.x — the RLS GUC hook + Alembic policy macros target the SQLAlchemy /
-Alembic stack the python-service-template ships.
-ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.""",
+BACKENDS: python (shared_rls, schema_per_tenant). The non-``none`` strategies
+are Python-only in 1.x — the GUC/search_path hooks + Alembic stack target the
+SQLAlchemy / Alembic stack the python-service-template ships.
+ENGINE: postgres. The GUC / search_path hooks are no-ops on non-Postgres
+dialects.""",
             category=FeatureCategory.PLATFORM,
             requires_database=True,
             # The non-``none`` strategies ship a Python-only realisation in
@@ -84,10 +98,11 @@ ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.""",
             allowed_backends=(BackendLanguage.PYTHON,),
             enables={
                 "shared_rls": ("multitenancy_rls_python",),
-                # ``schema_per_tenant`` / ``db_per_tenant`` intentionally map
-                # to no fragments — they are recognised-but-deferred. The
-                # resolver's ``_check_multitenancy_deferred`` guard turns a
-                # user selection of either into an explicit OptionsError so
+                "schema_per_tenant": ("multitenancy_schema_per_tenant_python",),
+                # ``db_per_tenant`` intentionally maps to no fragment — it is
+                # recognised-but-deferred (separate databases / connection pools
+                # per tenant). The resolver's ``_check_multitenancy_deferred``
+                # guard turns a user selection into an explicit OptionsError so
                 # the value never silently no-ops.
             },
         )
@@ -99,10 +114,13 @@ ENGINE: postgres. The GUC hook is a no-op on non-Postgres dialects.""",
             type=OptionType.ENUM,
             default="token_claim",
             options=("token_claim", "header", "subdomain"),
-            summary="How the per-request tenant id is discovered for RLS binding.",
+            summary="How the per-request tenant id is discovered for isolation binding.",
             description="""\
-Drives the ``TenantResolver`` shipped by ``database.multitenancy=shared_rls``.
-Only meaningful when a non-``none`` strategy is selected (otherwise inert).
+Drives the ``TenantResolver`` shipped by the non-``none`` strategies —
+``shared_rls`` (binds the resolved id to the RLS GUC) and ``schema_per_tenant``
+(routes the connection's ``search_path`` to the tenant schema). The resolver is
+identical across both; only the binding mechanism differs. Inert when
+``database.multitenancy=none``.
 
 - ``token_claim`` (default): read the tenant id from the verified JWT claims
   via a dot-path (``database.tenant_claim_path``), reusing the auth

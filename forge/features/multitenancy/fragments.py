@@ -1,4 +1,19 @@
-"""Multitenancy fragments — Postgres Row-Level Security for Python backends.
+"""Multitenancy fragments — Postgres tenant isolation for Python backends.
+
+Two strategies, one per ``database.multitenancy`` value:
+
+- ``multitenancy_rls_python`` (``shared_rls``): one shared schema, Row-Level
+  Security policies filter rows by the ``app.current_tenant`` GUC.
+- ``multitenancy_schema_per_tenant_python`` (``schema_per_tenant``): one schema
+  per tenant; a per-transaction ``search_path`` hook routes queries to the
+  caller's ``tenant_<id>`` schema. No RLS migration (provisioned at runtime via
+  ``provision_tenant_schema``).
+
+Both share the same ``TenantResolver`` (token claim / header / subdomain),
+request-middleware + engine-``begin``-listener shape, and the
+``excluded_app_templates=("tenant-management-service",)`` exemption (the TMS
+control plane isolates by Keycloak realm, not the DB layer). They are mutually
+exclusive (a single enum value selects exactly one), so they never both apply.
 
 ``multitenancy_rls_python`` realises ``database.multitenancy=shared_rls``. It
 ships, per Python backend:
@@ -72,6 +87,38 @@ def register_all(api: ForgeAPI) -> None:
             # it isolates tenants by Keycloak realm (not Postgres RLS) and ships
             # its own ``0002_tms_tables`` migration off ``0001`` — adding the RLS
             # ``0002`` would create a second Alembic head and break its boot.
+            excluded_app_templates=("tenant-management-service",),
+        )
+    )
+
+    api.add_fragment(
+        Fragment(
+            name="multitenancy_schema_per_tenant_python",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("multitenancy_schema_per_tenant_python", "python"),
+                    # Backend-scoped (default) — files land per Python backend.
+                    env_vars=(
+                        # The schema prefix is a code default (DEFAULT_SCHEMA_PREFIX)
+                        # but surfaced as env for ops visibility / override. No
+                        # forge option backs it (keeps generated forge.toml byte-
+                        # identical for the off-by-default case).
+                        ("TENANT_SCHEMA_PREFIX", "tenant_"),
+                    ),
+                    # The rendered resolver + middleware are configured from
+                    # the chosen resolution strategy + claim/header names (same
+                    # three knobs the shared_rls fragment reads).
+                    reads_options=(
+                        "database.tenant_resolution",
+                        "database.tenant_claim_path",
+                        "database.tenant_header_name",
+                    ),
+                ),
+            },
+            capabilities=(),
+            # Same control-plane exemption as the RLS fragment: schema-per-tenant
+            # is project-global, but the TMS variant isolates by Keycloak realm
+            # and must not have its queries routed through per-tenant schemas.
             excluded_app_templates=("tenant-management-service",),
         )
     )
