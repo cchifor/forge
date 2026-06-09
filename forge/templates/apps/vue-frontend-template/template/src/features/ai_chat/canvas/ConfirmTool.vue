@@ -13,8 +13,16 @@ const emit = defineEmits<{
   action: [action: { type: string; toolCallId?: string; data: Record<string, any> }]
 }>()
 
-const toolCallId = computed(() => props.activity.content._toolCallId as string | undefined)
-const schema = computed(() => props.activity.content.props || props.activity.content)
+interface FrontendToolContent {
+  props?: Record<string, any>
+  _toolCallId?: string
+}
+
+const content = props.activity.content as FrontendToolContent
+const toolCallId = computed(() => content._toolCallId)
+const schema = computed<Record<string, any>>(
+  () => (content.props ?? props.activity.content) as Record<string, any>,
+)
 
 function decide(approved: boolean) {
   emit('action', { type: 'approval_decision', toolCallId: toolCallId.value, data: { approved } })

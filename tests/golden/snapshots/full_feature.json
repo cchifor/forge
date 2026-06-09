@@ -149,24 +149,24 @@
       "sha256": "3e94af2e4f513e22"
     },
     "apps/frontend/src/features/ai_chat/canvas/CanvasPane.vue": {
-      "size": 3924,
-      "sha256": "e0c6597c3a2ed560"
+      "size": 4536,
+      "sha256": "18572824acd40c11"
     },
     "apps/frontend/src/features/ai_chat/canvas/CodeViewer.vue": {
       "size": 4727,
       "sha256": "ed465afed298b456"
     },
     "apps/frontend/src/features/ai_chat/canvas/ConfirmTool.vue": {
-      "size": 1636,
-      "sha256": "b7031bab50d23a53"
+      "size": 1785,
+      "sha256": "28f1eb2818ccc9f0"
     },
     "apps/frontend/src/features/ai_chat/canvas/DataTable.vue": {
-      "size": 7184,
-      "sha256": "057ba52ab38fb2fa"
+      "size": 7969,
+      "sha256": "b93563138fa25d58"
     },
     "apps/frontend/src/features/ai_chat/canvas/DynamicForm.vue": {
-      "size": 4979,
-      "sha256": "d0a17d9080425753"
+      "size": 5128,
+      "sha256": "825206157149a870"
     },
     "apps/frontend/src/features/ai_chat/canvas/Report.vue": {
       "size": 4653,
@@ -225,8 +225,8 @@
       "sha256": "a982a29b904280e8"
     },
     "apps/frontend/src/features/ai_chat/composables/useAgentClient.ts": {
-      "size": 14116,
-      "sha256": "09578d31f7f2d479"
+      "size": 15558,
+      "sha256": "38916825c6a02a67"
     },
     "apps/frontend/src/features/ai_chat/composables/useAiChat.test.ts": {
       "size": 4153,
@@ -273,8 +273,8 @@
       "sha256": "aa0e75d1620345b5"
     },
     "apps/frontend/src/features/ai_chat/types.ts": {
-      "size": 2192,
-      "sha256": "2fc1d79050c23a1c"
+      "size": 2213,
+      "sha256": "0174a7aec04601c4"
     },
     "apps/frontend/src/features/ai_chat/ui/AgentStatusBar.test.ts": {
       "size": 2718,
