@@ -258,6 +258,17 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "api_base_url": api_base_url,
         "api_proxy_target": api_proxy_target,
         "env_api_base_url": env_api_base_url,
+        # VITE_AGENT_BASE_URL is the FULL url the frontend POSTs RunAgentInput
+        # to (the AG-UI SSE endpoint served by the agent_agui fragment, mounted
+        # at /api/v1/agent ON THE BACKEND). The browser must reach it the same
+        # way every other API call does: through the per-backend path segment
+        # `/api/{backend}/...` that the Vite dev proxy rewrites to `/api/...`
+        # and forwards to the backend (and that the generated feature clients
+        # use). So the URL carries the backend name: `{base}/api/{backend}/v1/agent`.
+        # ``env_api_base_url`` is the Vite dev-server origin locally (proxy
+        # rewrites + forwards) or the external API origin in external mode.
+        # Overridable via the env file.
+        "agent_base_url": f"{env_api_base_url}/api/{backend_name}/v1/agent",
         "server_port": fc.server_port,
         "keycloak_url": fc.keycloak_url,
         "keycloak_realm": fc.keycloak_realm,

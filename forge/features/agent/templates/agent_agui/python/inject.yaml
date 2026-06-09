@@ -1,0 +1,15 @@
+# agent_agui: mount the AG-UI SSE agent endpoint at /api/v1/agent via the
+# existing api.py router. This is the canonical transport the generated
+# frontend (useAgentClient on canvas-core) POSTs RunAgentInput to and
+# consumes AG-UI SSE from. api_router is already mounted at /api/v1, so the
+# /agent prefix below yields POST /api/v1/agent.
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ENDPOINT_IMPORTS
+  position: before
+  snippet: "from app.api.v1.endpoints import agui as agui_endpoint"
+
+- target: src/app/api/v1/api.py
+  marker: FORGE:API_ROUTER_REGISTRATION
+  position: before
+  snippet: 'api_router.include_router(agui_endpoint.router, prefix="/agent", tags=["agent"])'

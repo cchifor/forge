@@ -29,12 +29,12 @@
       "sha256": "ae83d48b4638adaf"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1180,
+      "size": 1261,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
-      "size": 86,
-      "sha256": "9cac0a8ff0f50df2"
+      "size": 103,
+      "sha256": "2a8262eeb56a16ac"
     },
     "apps/frontend/.env.development": {
       "size": 63,
@@ -1033,7 +1033,7 @@
       "sha256": "947d631a800e0199"
     },
     "forge.toml": {
-      "size": 150271,
+      "size": 151285,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1484,6 +1484,10 @@
       "size": 174,
       "sha256": "31910a941b109f81"
     },
+    "services/api/AGENT_AGUI_HARDENING.md": {
+      "size": 2916,
+      "sha256": "5e38997eb5be7f8c"
+    },
     "services/api/Dockerfile": {
       "size": 3581,
       "sha256": "1edbb3adc637aedd"
@@ -1553,8 +1557,8 @@
       "sha256": "941241dd501b2eb9"
     },
     "services/api/pyproject.toml": {
-      "size": 4112,
-      "sha256": "9e59000de350ad5c"
+      "size": 4160,
+      "sha256": "7691917a394c0343"
     },
     "services/api/sdks/forge-core/pyproject.toml": {
       "size": 1613,
@@ -1757,8 +1761,8 @@
       "sha256": "13d275c8cf77684d"
     },
     "services/api/src/app/agents/llm_runner.py": {
-      "size": 15173,
-      "sha256": "f7c01e3d18ff3350"
+      "size": 15775,
+      "sha256": "15215cd744853299"
     },
     "services/api/src/app/agents/runner.py": {
       "size": 1444,
@@ -1789,8 +1793,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/api.py": {
-      "size": 2772,
-      "sha256": "a108dbbb1be6c70e"
+      "size": 3094,
+      "sha256": "a27f2a21b7aac0d9"
     },
     "services/api/src/app/api/v1/endpoints/__init__.py": {
       "size": 0,
@@ -1803,6 +1807,10 @@
     "services/api/src/app/api/v1/endpoints/agent.py": {
       "size": 3026,
       "sha256": "3e799c04904069d8"
+    },
+    "services/api/src/app/api/v1/endpoints/agui.py": {
+      "size": 2518,
+      "sha256": "5fa973e7221f18a6"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
       "size": 2697,
