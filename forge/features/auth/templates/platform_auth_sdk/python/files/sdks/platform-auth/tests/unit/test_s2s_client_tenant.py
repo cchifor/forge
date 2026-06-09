@@ -149,7 +149,7 @@ def _user_jwt(jti: str = "u-1", tenant: str = "user-tenant") -> str:
             "iat": int(time.time()),
             "exp": int(time.time()) + 600,
             "jti": jti,
-            "https://platform/tenant_id": tenant,
+            "https://forge/tenant_id": tenant,
         },
         "some-test-secret-padded-out-to-32-chars-min!",
         algorithm="HS256",

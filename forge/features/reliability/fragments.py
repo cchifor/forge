@@ -86,6 +86,21 @@ def register_all(api: ForgeAPI) -> None:
         )
     )
 
+    # Resilient S2S HTTP base client (retry + circuit breaker + OAuth2 CC +
+    # correlation/identity propagation). Python-only, files-only fragment —
+    # subclassed by the user. httpx is already a service dependency, so no
+    # extra dep is declared. Off-by-default via ``reliability.service_client``.
+    api.add_fragment(
+        Fragment(
+            name="reliability_service_client",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_impl("reliability_service_client", "python"),
+                ),
+            },
+        )
+    )
+
     # -------------------------------------------------------------------------
     # Pillar E.2 — cache_port + adapters (RFC: deep-gliding-mccarthy §Pillar E).
     #

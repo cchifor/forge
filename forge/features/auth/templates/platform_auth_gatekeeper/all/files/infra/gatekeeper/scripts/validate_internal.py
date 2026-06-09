@@ -21,7 +21,7 @@ GK_URL = "http://gatekeeper:5000"
 APP_REALM = "app"
 GATEKEEPER_CLIENT_ID = "gatekeeper"
 DEFAULT_TENANT = "00000000-0000-0000-0000-000000000001"
-TENANT_CLAIM = "https://platform/tenant_id"
+TENANT_CLAIM = "https://forge/tenant_id"
 
 TEST_USERNAME = "tenant-hook-internal@local"
 TEST_PASSWORD = "ValidatePass123!"

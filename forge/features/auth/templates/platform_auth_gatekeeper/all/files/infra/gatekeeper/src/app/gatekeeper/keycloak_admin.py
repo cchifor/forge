@@ -4,7 +4,7 @@ Tiny Keycloak Admin REST client for the gatekeeper.
 
 Used by ``/callback`` to assign a default ``tenant_id`` attribute to
 self-registered users whose access tokens lack the
-``https://platform/tenant_id`` claim. Authenticates via the
+``https://forge/tenant_id`` claim. Authenticates via the
 ``client_credentials`` grant on the same confidential client the
 gatekeeper already uses for the OIDC flow (now with
 ``serviceAccountsEnabled=true`` and a ``manage-users`` role).

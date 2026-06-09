@@ -11,6 +11,7 @@ from forge.config import (
 from forge.docker_manager import (
     render_compose,
     render_frontend_dockerfile,
+    render_keycloak_realm,
     render_nginx_conf,
 )
 
@@ -207,3 +208,68 @@ class TestRenderNginxConf:
         content = path.read_text(encoding="utf-8")
 
         assert "/index.html" in content
+
+
+class TestKeycloakRealmTenantClaim:
+    """Regression guard for the generated realm's tenant_id wiring.
+
+    The gatekeeper ``/callback`` persists ``tenant_id`` on self-registered
+    users via the Keycloak Admin API. For that to work end-to-end the realm
+    must (1) declare ``tenant_id`` in the declarative user-profile with an
+    ``ADMIN_EDIT`` unmanaged policy (else Keycloak silently drops the write),
+    (2) grant the gatekeeper service account ``manage-users``/``view-users``
+    (else the Admin call 403s), and (3) emit the tenant claim under the same
+    namespace forge-core + the gatekeeper read (``https://forge/tenant_id``).
+    See gatekeeper ``config.py`` (``tenant_id_claim``) + ``routes.py``
+    (``set_user_attribute``).
+    """
+
+    # The forge ecosystem default: forge-core DEFAULT_TENANT_ID_CLAIM, the
+    # Node/Rust SDKs, the in_memory issuer, and the gatekeeper compose env
+    # (TENANT_ID_CLAIM) all read this namespace, so the realm mapper must
+    # emit the same one or the gatekeeper can't read the user token's tenant.
+    EXPECTED_CLAIM = "https://forge/tenant_id"
+
+    def _realm(self, tmp_path):
+        import json
+
+        config = _make_config(include_keycloak=True)
+        path = render_keycloak_realm(config, tmp_path)
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_tenant_claim_namespace_matches_gatekeeper(self, tmp_path):
+        import json
+
+        realm = self._realm(tmp_path)
+        claim_names = [
+            m["config"]["claim.name"]
+            for client in realm["clients"]
+            for m in client.get("protocolMappers", [])
+            if m["config"].get("user.attribute") == "tenant_id"
+        ]
+        # Both the SPA and gatekeeper clients carry the tenant_id mapper.
+        assert claim_names, "no tenant_id protocol mapper found"
+        assert all(c == self.EXPECTED_CLAIM for c in claim_names), claim_names
+        # Realm must use a single, consistent namespace (no stray platform/).
+        assert "https://platform/tenant_id" not in json.dumps(realm)
+
+    def test_userprofile_declares_tenant_id(self, tmp_path):
+        import json
+
+        realm = self._realm(tmp_path)
+        providers = realm["components"]["org.keycloak.userprofile.UserProfileProvider"]
+        cfg = providers[0]["config"]["kc.user.profile.config"][0]
+        attrs = json.loads(cfg)
+        names = {a["name"] for a in attrs["attributes"]}
+        assert "tenant_id" in names
+        assert attrs["unmanagedAttributePolicy"] == "ADMIN_EDIT"
+
+    def test_gatekeeper_service_account_can_manage_users(self, tmp_path):
+        realm = self._realm(tmp_path)
+        sa = next(
+            (u for u in realm["users"] if u.get("username") == "service-account-gatekeeper"),
+            None,
+        )
+        assert sa is not None, "service-account-gatekeeper user missing"
+        assert sa["serviceAccountClientId"] == "gatekeeper"
+        assert sa["clientRoles"]["realm-management"] == ["manage-users", "view-users"]

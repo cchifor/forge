@@ -13,6 +13,7 @@ options = [
     "observability.health",
     "observability.error_envelope",
     "observability.otel",
+    "observability.json_logging",
 ]
 fragments = [
     "observability",
@@ -20,4 +21,5 @@ fragments = [
     "error_port",
     "observability_otel",
     "observability_metrics_middleware",
+    "json_logging",
 ]

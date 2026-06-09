@@ -75,14 +75,28 @@ class GatekeeperSettings(BaseSettings):
     # Auto-assignment of tenant_id for self-registered users.
     # The Keycloak built-in registration form does not collect tenant_id, so
     # newly-registered users would otherwise produce tokens missing the
-    # `https://platform/tenant_id` claim that downstream services require.
+    # `https://forge/tenant_id` claim that downstream services require.
     # On `/callback`, the gatekeeper detects a missing claim, sets the
     # `tenant_id` attribute on the user via the Admin API (using the
     # gatekeeper client's service account), and refreshes the token so the
     # claim is present before any cookie is written.
     default_tenant_id: str = "00000000-0000-0000-0000-000000000001"
-    tenant_id_claim: str = "https://platform/tenant_id"
+    tenant_id_claim: str = "https://forge/tenant_id"
     keycloak_admin_realm: str = "app"
+
+    # ── Boot-time realm invariant probe ───────────────────────────────
+    # On startup the gatekeeper verifies (read-only) that the running
+    # Keycloak's User-Profile schema declares the attributes /callback
+    # depends on (``tenant_id``). Without it a schema drift would surface
+    # only as a 502 on the first self-registration. ``KC_ADMIN_USER`` /
+    # ``KC_ADMIN_PASSWORD`` grant the master-realm token used for the
+    # read-only ``GET /admin/realms/{realm}/users/profile`` probe (in
+    # prod these MUST come from a secret, not literal env). Set
+    # ``GATEKEEPER_SKIP_REALM_INVARIANT=true`` to skip the probe (offline
+    # unit tests / environments without an admin account).
+    kc_admin_user: str = "admin"
+    kc_admin_password: str = "admin"
+    gatekeeper_skip_realm_invariant: bool = False
 
     # ── Authorization ─────────────────────────────────────────────────
     # Realm role (from the Keycloak access token's ``realm_access.roles``)
@@ -249,6 +263,18 @@ def get_settings() -> GatekeeperSettings:
                 _logger.critical(
                     "Refusing to start in env=%s: COOKIE_SECURE is false. "
                     "Session cookies must be HTTPS-only in production.",
+                    _env,
+                )
+                _sys.exit(1)
+            if (
+                not _instance.gatekeeper_skip_realm_invariant
+                and _instance.kc_admin_password == "admin"
+            ):
+                _logger.critical(
+                    "Refusing to start in env=%s: KC_ADMIN_PASSWORD still holds the "
+                    "shipped dev default ('admin') while the realm-invariant probe "
+                    "is enabled. Set KC_ADMIN_PASSWORD from a secret, or disable the "
+                    "probe with GATEKEEPER_SKIP_REALM_INVARIANT=true.",
                     _env,
                 )
                 _sys.exit(1)

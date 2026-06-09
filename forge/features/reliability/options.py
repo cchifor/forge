@@ -52,6 +52,30 @@ TUNABLE VIA ENV: CIRCUIT_BREAKER_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT.""",
 
     api.add_option(
         Option(
+            path="reliability.service_client",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Resilient async S2S HTTP base client (retry + circuit breaker + OAuth2).",
+            description="""\
+Emits ``app/clients/service_client.py`` — a ``ServiceClient`` base class for
+service-to-service calls that composes httpx + exponential-backoff retry + an
+in-process circuit breaker + optional OAuth2 client-credentials auth, and
+propagates the request correlation id + caller identity (customer/user/tenant)
+on every outbound call. Subclass it with a ``base_url`` + ``service_name``.
+
+Self-contained (bundles its own lightweight breaker, no extra dependency) and
+distinct from ``reliability.circuit_breaker`` (a purgatory registry for
+wrapping arbitrary calls).
+
+BACKENDS: python
+DEPENDENCY: none (httpx already present).""",
+            category=FeatureCategory.RELIABILITY,
+            enables={True: ("reliability_service_client",)},
+        )
+    )
+
+    api.add_option(
+        Option(
             path="reliability.cache",
             type=OptionType.ENUM,
             default="none",
