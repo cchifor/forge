@@ -1074,7 +1074,7 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
 ``keycloak`` / ``auth0`` first-class providers are plugin-tier (deferred).
 
 **Enables fragments:**
-- on `gatekeeper` → `platform_auth_gatekeeper`, `platform_auth_gatekeeper_keygen`
+- on `gatekeeper` → `platform_auth_gatekeeper`, `platform_auth_gatekeeper_keygen`, `platform_auth_gatekeeper_realm_sync`
 - on `in_memory` → `platform_auth_in_memory_provider`
 - on `oidc_generic` → `platform_auth_oidc_provider`
 
