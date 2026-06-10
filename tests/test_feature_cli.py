@@ -117,7 +117,7 @@ class TestFeaturesList:
         raw = capsys.readouterr().out.strip()
         data = json.loads(raw)
         assert isinstance(data, list)
-        assert len(data) == 31
+        assert len(data) == 33
 
         # Each entry must have the expected keys
         for entry in data:

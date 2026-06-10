@@ -92,8 +92,8 @@ class TestManifestDiscovery:
     def test_all_manifests_discovered(self) -> None:
         """Every feature directory has a parseable feature.toml."""
         manifests = _discover_manifests()
-        assert len(manifests) == 31, (
-            f"Expected 31 feature manifests, discovered {len(manifests)}: "
+        assert len(manifests) == 33, (
+            f"Expected 33 feature manifests, discovered {len(manifests)}: "
             f"{sorted(m.name for m in manifests)}"
         )
 
@@ -118,8 +118,8 @@ class TestLoadAll:
     def test_load_all_populates_loaded_features(self) -> None:
         """load_all() discovers and loads all 28 built-in features."""
         result = feature_loader.load_all()
-        assert len(result) == 31
-        assert len(feature_loader.LOADED_FEATURES) == 31
+        assert len(result) == 33
+        assert len(feature_loader.LOADED_FEATURES) == 33
 
         loaded_names = {m.name for m in feature_loader.LOADED_FEATURES}
         # Spot-check a few features from different categories
@@ -163,7 +163,7 @@ class TestLoadAll:
         first = feature_loader.load_all()
         second = feature_loader.load_all()
         assert first is second
-        assert len(first) == 31
+        assert len(first) == 33
 
     def test_load_all_tolerates_loaded_features_desync(self) -> None:
         """load_all() must not re-register when registries are already
@@ -176,7 +176,7 @@ class TestLoadAll:
         skip those features instead.
         """
         feature_loader.load_all()
-        assert len(feature_loader.LOADED_FEATURES) == 31
+        assert len(feature_loader.LOADED_FEATURES) == 33
         n_options = len(OPTION_REGISTRY)
         n_fragments = len(FRAGMENT_REGISTRY)
 
@@ -190,7 +190,7 @@ class TestLoadAll:
         # Must not raise PluginError("already registered"), and must rebuild
         # the roster to a consistent state without duplicating registrations.
         result = feature_loader.load_all()
-        assert len(result) == 31
+        assert len(result) == 33
         assert len(OPTION_REGISTRY) == n_options
         assert len(FRAGMENT_REGISTRY) == n_fragments
 
