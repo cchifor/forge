@@ -16,7 +16,8 @@ review time.
 This is a COMPLETENESS check, not a soundness proof: it cannot trace the full
 Dishka provider graph, so routers gated only through an auth-bound service are
 listed explicitly (and covered by their own runtime tenant-isolation tests).
-Comments are stripped before matching so a pattern in a comment can't fool it.
+Imports, docstrings, and comments are stripped before matching so a pattern in
+an unused import / docstring / comment can't make a router look gated.
 
 Recognized directly-enforcing patterns (NOT ``oauth2_scheme``, which is
 ``auto_error=False`` and only paints the OpenAPI lock icon):
@@ -31,7 +32,10 @@ excluded.
 
 from __future__ import annotations
 
+import ast
+import io
 import re
+import tokenize
 from pathlib import Path
 
 import pytest
@@ -84,15 +88,59 @@ _ENFORCING_PATTERNS = (
 _ROUTER_RE = re.compile(r"^\s*router\s*=\s*APIRouter\(", re.MULTILINE)
 
 
-def _strip_comments(src: str) -> str:
-    lines = []
-    for line in src.splitlines():
-        # Drop full-line comments; keep code (inline comments are rare for
-        # these patterns and stripping them naively would corrupt strings).
-        if line.lstrip().startswith("#"):
-            continue
-        lines.append(line)
-    return "\n".join(lines)
+def _code_for_matching(src: str) -> str:
+    """Return the source with imports, docstrings, and comments removed so the
+    enforcing-pattern substring match can't be fooled by a pattern appearing
+    in an unused import, a docstring, or a comment. Exact spacing of the
+    REMAINING code is preserved so patterns like ``Depends(get_current_user)``
+    still match verbatim. Falls back to a full-line-comment strip if the file
+    doesn't parse as plain Python (e.g. a Jinja template)."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return "\n".join(
+            line for line in src.splitlines() if not line.lstrip().startswith("#")
+        )
+
+    blanked: set[int] = set()
+
+    def _blank(node) -> None:
+        for ln in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+            blanked.add(ln)
+
+    def _blank_docstring(body) -> None:
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            _blank(body[0])
+
+    _blank_docstring(tree.body)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            _blank(node)
+        elif isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            _blank_docstring(node.body)
+
+    lines = ["" if i in blanked else ln for i, ln in enumerate(src.splitlines(), 1)]
+
+    # Cut inline comments (tokenize identifies COMMENT tokens correctly, so a
+    # '#' inside a string literal is not mistaken for a comment).
+    try:
+        rendered = "\n".join(lines)
+        out = rendered.splitlines()
+        for tok in tokenize.generate_tokens(io.StringIO(rendered).readline):
+            if tok.type == tokenize.COMMENT:
+                row, col = tok.start
+                if row - 1 < len(out):
+                    out[row - 1] = out[row - 1][:col]
+        return "\n".join(out)
+    except tokenize.TokenError:
+        return "\n".join(lines)
 
 
 def _discover_routers() -> list[Path]:
@@ -125,7 +173,7 @@ def test_discovery_found_routers() -> None:
 @pytest.mark.parametrize("path", _ROUTERS, ids=_rel)
 def test_router_is_gated_or_explicitly_public(path: Path) -> None:
     rel = _rel(path)
-    src = _strip_comments(path.read_text(encoding="utf-8"))
+    src = _code_for_matching(path.read_text(encoding="utf-8"))
 
     gated = any(pat in src for pat in _ENFORCING_PATTERNS)
     if gated or rel in _PUBLIC_ALLOWLIST or rel in _GATED_VIA_SERVICE:
