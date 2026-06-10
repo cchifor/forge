@@ -711,3 +711,25 @@ def test_smoke_compose_up_uses_build(tmp_path, monkeypatch):
     up_cmds = [c for c in seen if "up" in c and "-d" in c]
     assert up_cmds, f"no compose-up invocation seen: {seen}"
     assert "--build" in up_cmds[0], f"smoke compose-up must include --build: {up_cmds[0]}"
+
+
+def test_compose_up_failure_writes_full_output(tmp_path, monkeypatch):
+    """A compose up/build failure must persist the FULL build output to the
+    artifact dir — when the image build fails no container starts, so
+    `docker compose logs` is empty and this is the only record of the
+    tsc/cargo error (the PR #170 diagnosability gap)."""
+
+    from tests.matrix import runner as _runner
+
+    log_dir = tmp_path / "compose-logs"
+    monkeypatch.setenv("FORGE_MATRIX_LOG_DIR", str(log_dir))
+
+    from pathlib import Path as _Path
+
+    text = _Path(_runner.__file__).read_text(encoding="utf-8")
+    # The failure branch must write a per-scenario compose-up log with both
+    # streams, and tail more than the old 5 lines.
+    branch = text.split("docker compose up -d --wait --build")[1].split("compose_up = True")[0]
+    assert "-compose-up.log" in branch
+    assert "up_result.stderr" in branch and "up_result.stdout" in branch
+    assert "[-20:]" in branch and "[-5:]" not in branch.split("return LaneResult")[0]

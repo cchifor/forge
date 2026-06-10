@@ -189,8 +189,8 @@
       "sha256": "f89e31d1e0084541"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/ag_ui_client.ts": {
-      "size": 10415,
-      "sha256": "c4bc5f8e195de690"
+      "size": 10921,
+      "sha256": "0e8b86b7b9e540e3"
     },
     "apps/frontend/src/features/ai_chat/canvas-core/events.ts": {
       "size": 6997,
@@ -1085,8 +1085,8 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 10800,
-      "sha256": "947d631a800e0199"
+      "size": 11376,
+      "sha256": "1c35845aaf972e64"
     },
     "forge.toml": {
       "size": 154361,
@@ -1205,8 +1205,8 @@
       "sha256": "824f021819eeddd5"
     },
     "infra/gatekeeper/src/app/core/config/domain.py": {
-      "size": 1656,
-      "sha256": "5f3b89bb799096c7"
+      "size": 2842,
+      "sha256": "2288835faa0c03cf"
     },
     "infra/gatekeeper/src/app/core/config/loader.py": {
       "size": 3683,
@@ -1241,8 +1241,8 @@
       "sha256": "0d031823b3226dd2"
     },
     "infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 16729,
-      "sha256": "c43971df83f0fc00"
+      "size": 17481,
+      "sha256": "807b2318eef7e98e"
     },
     "infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
       "size": 6933,
@@ -1553,8 +1553,8 @@
       "sha256": "b891350fb641d6b2"
     },
     "services/api/alembic/env.py": {
-      "size": 1699,
-      "sha256": "db090a8edbb9389c"
+      "size": 2601,
+      "sha256": "f4cf81b3a4cea15a"
     },
     "services/api/alembic/script.py.mako": {
       "size": 634,
@@ -1609,8 +1609,8 @@
       "sha256": "59e84d0358509122"
     },
     "services/api/entrypoint.sh": {
-      "size": 415,
-      "sha256": "941241dd501b2eb9"
+      "size": 506,
+      "sha256": "df2a39103908a6ed"
     },
     "services/api/pyproject.toml": {
       "size": 4160,
@@ -1705,8 +1705,8 @@
       "sha256": "47bea3047154b489"
     },
     "services/api/sdks/forge-core/src/forge_core/security/auth.py": {
-      "size": 7984,
-      "sha256": "59ea5b9853c90cec"
+      "size": 10539,
+      "sha256": "1b2f6df7961da043"
     },
     "services/api/sdks/forge-core/src/forge_core/security/exceptions.py": {
       "size": 2580,
@@ -1781,8 +1781,8 @@
       "sha256": "5b01c1e0d70302b2"
     },
     "services/api/sdks/forge-core/tests/unit/test_security.py": {
-      "size": 23962,
-      "sha256": "046174144f93639b"
+      "size": 27201,
+      "sha256": "0964461100e1f9b1"
     },
     "services/api/src/app/__init__.py": {
       "size": 0,
@@ -1857,20 +1857,20 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/endpoints/admin.py": {
-      "size": 2714,
-      "sha256": "eb85438faf026857"
+      "size": 2952,
+      "sha256": "d9627fdb6403d324"
     },
     "services/api/src/app/api/v1/endpoints/agent.py": {
-      "size": 3026,
-      "sha256": "3e799c04904069d8"
+      "size": 3699,
+      "sha256": "1c14b0c548f4634b"
     },
     "services/api/src/app/api/v1/endpoints/agui.py": {
       "size": 3731,
       "sha256": "af07734679395edb"
     },
     "services/api/src/app/api/v1/endpoints/chat_files.py": {
-      "size": 2697,
-      "sha256": "92eb9dddad263db8"
+      "size": 3576,
+      "sha256": "f22635cb4b352441"
     },
     "services/api/src/app/api/v1/endpoints/health.py": {
       "size": 1505,
@@ -1901,8 +1901,8 @@
       "sha256": "d7f2579c26481714"
     },
     "services/api/src/app/api/v1/endpoints/webhooks.py": {
-      "size": 3414,
-      "sha256": "45db4941bda6e69a"
+      "size": 5287,
+      "sha256": "5a3d03a60297fba9"
     },
     "services/api/src/app/cli/__init__.py": {
       "size": 752,
@@ -1941,8 +1941,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 6014,
-      "sha256": "1d6db5bf1bdfe5fb"
+      "size": 7184,
+      "sha256": "ad1c79b321fcc5fa"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -2185,8 +2185,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/services/chat_file_service.py": {
-      "size": 4308,
-      "sha256": "f0259dbc65cfda8d"
+      "size": 5085,
+      "sha256": "85d052423cfc77ec"
     },
     "services/api/src/app/services/health_service.py": {
       "size": 1109,
@@ -2197,8 +2197,8 @@
       "sha256": "382614b2222f4045"
     },
     "services/api/src/app/services/webhook_service.py": {
-      "size": 3929,
-      "sha256": "b9665a7507afe4f4"
+      "size": 9974,
+      "sha256": "502c2a85b656f905"
     },
     "services/api/src/service/client/auth.py": {
       "size": 2305,

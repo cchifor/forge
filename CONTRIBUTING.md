@@ -40,7 +40,7 @@ make test        # pytest (excludes -m e2e)
 make e2e         # full e2e suite (slow — needs uv, npm, cargo, git)
 ```
 
-CI runs `make check` on Linux + Windows for Python 3.11/3.12/3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
+CI runs `make check` on Linux + Windows for Python 3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
 
 ## Adding a new feature
 

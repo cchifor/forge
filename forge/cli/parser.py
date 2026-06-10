@@ -8,6 +8,7 @@ the completion generators (which introspect without consuming argv).
 from __future__ import annotations
 
 import argparse
+import functools
 
 from forge.config import FrontendFramework
 
@@ -29,6 +30,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parsing anything.
     """
     p = argparse.ArgumentParser(prog="forge", description="Project Generator")
+
+    # ``forge --version`` — prints the package version and exits 0. The weekly
+    # install-test + release-dryrun workflows assert this; argparse's version
+    # action short-circuits before any subcommand dispatch.
+    from forge import __version__ as _forge_version  # noqa: PLC0415
+
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"forge {_forge_version}",
+        help="Show the forge version and exit.",
+    )
 
     # Platform preset — the lowest-priority config layer (below user flags +
     # config-file values, exactly like a default). Seeds option overrides +
@@ -746,20 +759,49 @@ def _parse_args() -> argparse.Namespace:
     return _build_parser().parse_args()
 
 
+# Flags that modify HOW a run reports/logs, not WHAT to generate. They must
+# not flip a bare `forge` into headless generation on their own (running
+# `forge -v` should still open the interactive wizard).
+_MODE_ONLY_DESTS = frozenset(
+    {
+        "verbose",
+        "log_json",
+        "log_level",
+        "telemetry",
+        "telemetry_fields",
+        "telemetry_export",
+    }
+)
+
+_MISSING = object()
+
+
+@functools.lru_cache(maxsize=1)
+def _headless_baseline() -> dict[str, object]:
+    """The parsed namespace of a bare ``forge`` invocation — ground truth
+    for "did this flag change anything". Built once per process (plugin
+    commands register their flags before the first parse, so the baseline
+    includes them)."""
+    return dict(vars(_build_parser().parse_args([])))
+
+
 def _is_headless(args: argparse.Namespace) -> bool:
-    """Return True if any CLI flag or config file was provided."""
-    return (
-        args.config is not None
-        or args.project_name is not None
-        or args.frontend is not None
-        or args.yes
-        or args.quiet
-        or getattr(args, "json_output", False)
-        or args.no_docker
-        or args.backend_port is not None
-        or args.python_version is not None
-        or args.features is not None
-        or args.description is not None
-        or getattr(args, "layout", None) is not None
-        or bool(getattr(args, "set_options", []))
-    )
+    """Return True if any generation-relevant option deviates from a bare
+    ``forge`` invocation.
+
+    Replaces a hand-maintained 13-flag list that silently ignored every
+    flag it forgot (``forge --platform X`` dropped the preset and opened
+    the wizard): comparing the whole namespace against the no-argv
+    baseline means any flag the parser grows is detected automatically.
+    Report-only flags are denylisted in ``_MODE_ONLY_DESTS``; attributes
+    absent from hand-built namespaces (tests, embedders) are skipped.
+    """
+    for dest, default in _headless_baseline().items():
+        if dest in _MODE_ONLY_DESTS:
+            continue
+        value = getattr(args, dest, _MISSING)
+        if value is _MISSING:
+            continue
+        if value != default:
+            return True
+    return False

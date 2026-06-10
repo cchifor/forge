@@ -302,19 +302,13 @@ def test_rf1_reverse_then_forward_promotes_edits_to_baseline(
 
         data = read_forge_toml(project_root / "forge.toml")
         classification = classify_project_state(project_root, data.provenance)
-        # Filter the known pre-existing append-after-stamp drift on the
-        # files that the deps/env appliers mutate AFTER provenance is
-        # recorded (``.env.example``, ``pyproject.toml`` /
-        # ``package.json`` / ``Cargo.toml``). A fresh ``generate()``
-        # already classifies these as ``user-modified`` because the
-        # appliers append fragment deps/env after the manifest is
-        # stamped; restamping that infrastructure is a separate fix
-        # (tracked outside this PR). RF1 here scopes to BLOCK-mediated
-        # files — the harvest-cycle's actual contract.
+        # The deps/env appliers mutate the per-backend manifests (.env.example,
+        # pyproject.toml / package.json / Cargo.toml) after provenance first
+        # stamps them; generate()/update_project now re-record those manifests
+        # (_rerecord_mutated_manifests), so they no longer read as drift. No
+        # exclusion needed — RF1 asserts ZERO user-modified, manifests included.
         user_modified = [
-            p
-            for p, s in classification.items()
-            if s == "user-modified" and not _is_pre_existing_drift(p)
+            p for p, s in classification.items() if s == "user-modified"
         ]
         assert user_modified == [], (
             f"RF1 violation: post-cycle classification still reports "
@@ -531,28 +525,6 @@ def _is_excluded_rel(rel: str) -> bool:
     return rel.endswith(".copier-answers.yml")
 
 
-def _is_pre_existing_drift(rel: str) -> bool:
-    """Return True for files known to read as ``user-modified`` on fresh generate.
-
-    The deps + env appliers append fragment-declared content to the
-    base-template's ``pyproject.toml`` / ``package.json`` / ``Cargo.toml``
-    / ``.env.example`` AFTER the provenance manifest stamps the file's
-    sha256. So even a fresh ``generate()`` produces ``user-modified``
-    entries for these paths. Restamping the manifest after the appliers
-    run is the correct long-term fix and is out of scope here; RF1
-    scopes its assertion to BLOCK-mediated drift (the contract Phase 6
-    actually owns).
-
-    Returns True for paths that match the known-broken set, so the
-    RF1 check filters them before asserting zero.
-    """
-    leaf = rel.rsplit("/", 1)[-1]
-    return leaf in {
-        ".env.example",
-        "pyproject.toml",
-        "package.json",
-        "Cargo.toml",
-    }
 
 
 def _file_is_normalized_match(rel: str, pa: Path, pb: Path) -> bool:

@@ -275,7 +275,7 @@ wheels = [
 ]
 
 [[package]]
-name = "forge"
+name = "forge-cli"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },

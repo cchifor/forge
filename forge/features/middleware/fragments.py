@@ -32,6 +32,10 @@ def register_all(api: ForgeAPI) -> None:
         Fragment(
             name="correlation_id",
             order=90,  # outermost middleware — registers last, runs first
+            # The worker variant ships no FastAPI app (no src/app/main.py), so
+            # HTTP-shaped default-on fragments must skip it or generation
+            # crashes with "Injection target not found".
+            excluded_app_templates=("worker",),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("correlation_id", "python"),
@@ -62,6 +66,7 @@ def register_all(api: ForgeAPI) -> None:
         Fragment(
             name="rate_limit",
             order=50,
+            excluded_app_templates=("worker",),  # no HTTP surface to rate-limit
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("rate_limit", "python")
@@ -79,6 +84,7 @@ def register_all(api: ForgeAPI) -> None:
         Fragment(
             name="security_headers",
             order=80,  # below correlation_id (90) so registers inside it
+            excluded_app_templates=("worker",),  # no HTTP responses to decorate
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("security_headers", "python"),
@@ -121,6 +127,7 @@ def register_all(api: ForgeAPI) -> None:
     api.add_fragment(
         Fragment(
             name="pii_redaction",
+            excluded_app_templates=("worker",),  # middleware needs the FastAPI app
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("pii_redaction", "python"),

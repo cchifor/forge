@@ -198,3 +198,55 @@ class TestPlanUpdateWalkSpeed:
         finally:
             import shutil
             shutil.rmtree(project_root, ignore_errors=True)
+
+
+class TestReadForgeTomlSpeed:
+    """``read_forge_toml`` is on every sync verb's hot path (verify / harvest /
+    update / accept / resolve). It used tomlkit, which is ~700x slower than
+    stdlib tomllib on a large provenance manifest (~10s on a 79KB forge.toml).
+    The read path coerces to plain dicts, so tomllib is correct — guard the
+    perf so a regression to tomlkit can't silently reintroduce the 10s floor."""
+
+    # A 79KB manifest read in <1s with margin; tomllib does it in ~15ms, so 1s
+    # is ~60x headroom while still catching a tomlkit regression (which was ~10s).
+    BUDGET_S = 1.0
+
+    def test_read_under_budget(self, tmp_path: Path) -> None:
+        import time as _time
+
+        from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+        from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
+
+        root = Path(
+            generate(
+                ProjectConfig(
+                    project_name="perf_ft",
+                    output_dir=str(tmp_path),
+                    backends=[
+                        BackendConfig(
+                            name="api",
+                            project_name="perf_ft",
+                            language=BackendLanguage.PYTHON,
+                            features=["items", "orders"],
+                        )
+                    ],
+                    options={
+                        "observability.tracing": True,
+                        "middleware.rate_limit": True,
+                        "agent.llm": True,
+                        "llm.provider": "openai",
+                    },
+                ),
+                quiet=True,
+            )
+        )
+        manifest = root / "forge.toml"
+        t0 = _time.perf_counter()
+        data = read_forge_toml(manifest)
+        elapsed = _time.perf_counter() - t0
+        assert data.provenance, "sanity: manifest has provenance entries"
+        assert elapsed < self.BUDGET_S, (
+            f"read_forge_toml took {elapsed:.2f}s (> {self.BUDGET_S}s) — did the "
+            f"read path regress to tomlkit? Use stdlib tomllib."
+        )

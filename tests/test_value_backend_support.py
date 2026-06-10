@@ -183,7 +183,14 @@ def test_value_requires_backend_table_shape() -> None:
 
 
 def test_python_only_when_active_table_shape() -> None:
-    assert set(_PYTHON_ONLY_WHEN_ACTIVE) == {"rag.backend", "platform.mcp"}
+    # object_store.backend joined the Python-only set in #219 (its port +
+    # adapters are Python-only; selecting it on Node/Rust used to resolve to
+    # zero fragments — a silent no-op).
+    assert set(_PYTHON_ONLY_WHEN_ACTIVE) == {
+        "rag.backend",
+        "platform.mcp",
+        "object_store.backend",
+    }
     for langs in _PYTHON_ONLY_WHEN_ACTIVE.values():
         assert langs == frozenset({BackendLanguage.PYTHON})
 

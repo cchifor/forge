@@ -25,8 +25,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 7977,
-      "sha256": "9e4897c15ffa7503"
+      "size": 8442,
+      "sha256": "321dfb63eaeb26d9"
     },
     "forge.toml": {
       "size": 64833,
@@ -149,8 +149,8 @@
       "sha256": "f5937f3055082952"
     },
     "services/api-node/src/index.ts": {
-      "size": 423,
-      "sha256": "7e2937581c3e0e38"
+      "size": 1110,
+      "sha256": "fe062aafadda694d"
     },
     "services/api-node/src/lib/errors.ts": {
       "size": 4396,
@@ -293,8 +293,8 @@
       "sha256": "7a5a2d7522c4a366"
     },
     "services/api-py/alembic/env.py": {
-      "size": 1699,
-      "sha256": "db090a8edbb9389c"
+      "size": 2601,
+      "sha256": "f4cf81b3a4cea15a"
     },
     "services/api-py/alembic/script.py.mako": {
       "size": 634,
@@ -333,8 +333,8 @@
       "sha256": "7228bb9b2e539a51"
     },
     "services/api-py/entrypoint.sh": {
-      "size": 418,
-      "sha256": "1d41ef94dea036c4"
+      "size": 509,
+      "sha256": "5d0771035123f851"
     },
     "services/api-py/pyproject.toml": {
       "size": 4798,
@@ -429,8 +429,8 @@
       "sha256": "47bea3047154b489"
     },
     "services/api-py/sdks/forge-core/src/forge_core/security/auth.py": {
-      "size": 7984,
-      "sha256": "59ea5b9853c90cec"
+      "size": 10539,
+      "sha256": "1b2f6df7961da043"
     },
     "services/api-py/sdks/forge-core/src/forge_core/security/exceptions.py": {
       "size": 2580,
@@ -505,8 +505,8 @@
       "sha256": "5b01c1e0d70302b2"
     },
     "services/api-py/sdks/forge-core/tests/unit/test_security.py": {
-      "size": 23962,
-      "sha256": "046174144f93639b"
+      "size": 27201,
+      "sha256": "0964461100e1f9b1"
     },
     "services/api-py/src/app/__init__.py": {
       "size": 0,
@@ -537,8 +537,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api-py/src/app/api/v1/endpoints/admin.py": {
-      "size": 2714,
-      "sha256": "eb85438faf026857"
+      "size": 2952,
+      "sha256": "d9627fdb6403d324"
     },
     "services/api-py/src/app/api/v1/endpoints/health.py": {
       "size": 1505,
@@ -573,8 +573,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api-py/src/app/core/config/domain.py": {
-      "size": 6014,
-      "sha256": "1d6db5bf1bdfe5fb"
+      "size": 7184,
+      "sha256": "ad1c79b321fcc5fa"
     },
     "services/api-py/src/app/core/config/loader.py": {
       "size": 3530,

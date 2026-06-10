@@ -569,3 +569,91 @@ class TestMcpAuthGuardWithCoercion:
         )
         plan = resolve(cfg)  # auth stays generate → guard satisfied
         assert plan.option_values["auth.mode"] == "generate"
+
+
+# --- backend-scoped conflicts (llm/queue/cache shared Rust src/ports/mod.rs) --
+
+
+class TestBackendScopedConflicts:
+    """The llm_port/queue_port/cache_port conflict is a Rust-only file
+    collision (shared src/ports/mod.rs). It must NOT block Python/Node
+    projects, but MUST still fire on Rust."""
+
+    @staticmethod
+    def _cfg(lang: BackendLanguage):
+        return ProjectConfig(
+            project_name="p",
+            backends=[BackendConfig(name="b", project_name="p", language=lang)],
+            options={"llm.provider": "openai", "reliability.cache": "redis"},
+            option_origins={"llm.provider": "user", "reliability.cache": "user"},
+        )
+
+    def test_python_llm_plus_cache_coexist(self):
+        plan = resolve(self._cfg(BackendLanguage.PYTHON))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"llm_port", "cache_port"} <= names
+
+    def test_node_llm_plus_cache_coexist(self):
+        plan = resolve(self._cfg(BackendLanguage.NODE))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"llm_port", "cache_port"} <= names
+
+    def test_rust_llm_plus_cache_still_conflict(self):
+        with pytest.raises(OptionsError, match="conflict"):
+            resolve(self._cfg(BackendLanguage.RUST))
+
+
+class TestQueueObjectStoreFailFast:
+    """queue.backend / object_store.backend ship single-language adapters; a
+    wrong-language selection used to silently resolve to an adapter-less port
+    (or nothing). It must hard-error at config time instead."""
+
+    @staticmethod
+    def _cfg(lang: BackendLanguage, opts: dict):
+        return ProjectConfig(
+            project_name="p",
+            backends=[BackendConfig(name="b", project_name="p", language=lang)],
+            options=opts,
+            option_origins={k: "user" for k in opts},
+        )
+
+    @pytest.mark.parametrize(
+        "lang,value,ok",
+        [
+            (BackendLanguage.PYTHON, "redis", True),
+            (BackendLanguage.NODE, "redis", False),
+            (BackendLanguage.NODE, "bullmq", True),
+            (BackendLanguage.PYTHON, "bullmq", False),
+            (BackendLanguage.RUST, "apalis", True),
+            (BackendLanguage.NODE, "apalis", False),
+        ],
+    )
+    def test_queue_backend_requires_matching_language(self, lang, value, ok):
+        cfg = self._cfg(lang, {"queue.backend": value})
+        if ok:
+            resolve(cfg)
+        else:
+            with pytest.raises(OptionsError):
+                resolve(cfg)
+
+    @pytest.mark.parametrize(
+        "lang,ok",
+        [(BackendLanguage.PYTHON, True), (BackendLanguage.NODE, False), (BackendLanguage.RUST, False)],
+    )
+    def test_object_store_is_python_only(self, lang, ok):
+        cfg = self._cfg(lang, {"object_store.backend": "s3"})
+        if ok:
+            resolve(cfg)
+        else:
+            with pytest.raises(OptionsError):
+                resolve(cfg)
+
+    def test_defaulted_value_never_hard_errors(self):
+        # Same value as a persisted DEFAULT (origin != user) must not error.
+        cfg = ProjectConfig(
+            project_name="p",
+            backends=[BackendConfig(name="b", project_name="p", language=BackendLanguage.NODE)],
+            options={"queue.backend": "redis"},
+            option_origins={"queue.backend": "default"},
+        )
+        resolve(cfg)  # no raise

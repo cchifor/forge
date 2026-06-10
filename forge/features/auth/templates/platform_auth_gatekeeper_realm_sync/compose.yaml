@@ -31,6 +31,13 @@ service:
     KC_ADMIN_USER: "admin"
     KC_ADMIN_PASSWORD: "admin"
     REALM_JSON_PATH: "/realm/keycloak-realm.json"
+    # The gatekeeper image bakes ENV=production and realm_sync.py fails closed
+    # when env is a prod posture and KC_ADMIN_PASSWORD is the shipped dev
+    # default. This sidecar reuses that image, so the dev compose must pin
+    # ENV=development (parity with the gatekeeper service's own compose).
+    # A real production deploy overrides KC_ADMIN_PASSWORD AND sets
+    # ENV=production.
+    ENV: "development"
 
   extra:
     build:

@@ -8,8 +8,10 @@ Contract:
               then optionally tool_call / tool_result, closing with
               status=done or status=error.
 
-Auth: not gated by default (same posture as /tools). Wrap the route with
-your project's auth dependency before exposing publicly.
+Auth: gated. The handshake is verified by ``authenticate_websocket`` before
+``accept()``; an invalid/absent token in a real-auth posture closes the
+socket with code 1008. In a no-auth/dev project the verifier returns the
+dev user (permissive no-op), matching the SSE endpoint's posture.
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
+from forge_core.security.auth import authenticate_websocket
 
 from app.agents.events import (
     ConversationCreated,
@@ -35,6 +38,14 @@ async def agent_stream(
     websocket: WebSocket,
     conversation_id: uuid.UUID | None = Query(default=None),
 ) -> None:
+    # Authenticate BEFORE accepting: the HTTP auth middleware does not cover
+    # the WebSocket scope, so an unauthenticated /ws/agent would otherwise
+    # spend LLM budget for anyone. A None result in a real-auth posture means
+    # no/invalid token -> reject with 1008 (policy violation).
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     await websocket.accept()
     active_conv = conversation_id
     try:

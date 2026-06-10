@@ -33,6 +33,38 @@ pytestmark = pytest.mark.skipif(
 _REPO = Path(__file__).resolve().parent.parent
 _DETECT = _REPO / ".github" / "scripts" / "detect-prerelease.sh"
 _EXTRACT = _REPO / ".github" / "scripts" / "extract-changelog.sh"
+_CHECK_TAG = _REPO / ".github" / "scripts" / "check-tag-version.sh"
+
+
+def _pkg_version() -> str:
+    import re
+
+    text = (_REPO / "forge" / "__init__.py").read_text(encoding="utf-8")
+    return re.search(r'__version__ = "([^"]+)"', text).group(1)
+
+
+def _check_tag(tag: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(_CHECK_TAG), tag], capture_output=True, text=True
+    )
+
+
+def test_check_tag_version_matches_package():
+    v = _pkg_version()
+    assert _check_tag(f"v{v}").returncode == 0
+    assert _check_tag(v).returncode == 0  # leading v optional
+
+
+def test_check_tag_version_rejects_mismatch():
+    # A mismatched tag must fail (exit 4) so a stable tag can't publish a
+    # mismatched (e.g. alpha) version as latest.
+    r = _check_tag("v99.99.99")
+    assert r.returncode == 4
+    assert "does not match" in r.stderr
+
+
+def test_check_tag_version_requires_arg():
+    assert _check_tag("").returncode == 2
 
 
 def _detect(tag: str) -> str:

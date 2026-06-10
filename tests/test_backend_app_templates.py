@@ -15,20 +15,18 @@ import pytest
 from forge import backend_app_templates as bat
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 
-# Options that switch off every default-on Python fragment whose injection
-# targets the crud-service file shape (``src/app/main.py`` etc.). The worker
-# variant is a genuinely different service shape with no FastAPI app, so it
-# can't host those fragments — turning them off is the coherent worker config.
-_WORKER_OPTIONS = {
-    "middleware.pii_redaction": False,
-    "middleware.rate_limit": False,
-    "middleware.security_headers": False,
-    "middleware.correlation_id": "off",
-    "observability.error_envelope": False,
-    "platform.agents_md": False,
-    "reliability.connection_pool": False,
-    "security.csp": False,
-}
+# The default-on fragments whose injections target the crud-service file
+# shape (``src/app/main.py`` etc.) declare ``excluded_app_templates=
+# ("worker",)``, so a stock worker config generates without any opt-out
+# dance. This tuple documents that contract and drives the exclusion test.
+_WORKER_EXCLUDED_FRAGMENTS = (
+    "correlation_id",
+    "error_port",
+    "pii_redaction",
+    "rate_limit",
+    "reliability_connection_pool",
+    "security_headers",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -209,7 +207,13 @@ def test_api_add_backend_application_template_duplicate_raises():
 
 def test_worker_variant_renders_distinctive_files(tmp_path: Path):
     """A dry-run generation of the worker variant emits its distinctive
-    ``src/worker/`` package and NOT the crud-service ``src/app/main.py``."""
+    ``src/worker/`` package and NOT the crud-service ``src/app/main.py``.
+
+    Deliberately uses DEFAULT options: the HTTP-shaped default-on fragments
+    declare ``excluded_app_templates=("worker",)`` so a stock worker config
+    generates without the previously-required 8-option opt-out dance (the
+    pre-fix behavior was an InjectionError on the missing src/app/main.py).
+    """
     cfg = ProjectConfig(
         project_name="wk_demo",
         output_dir=str(tmp_path),
@@ -223,7 +227,7 @@ def test_worker_variant_renders_distinctive_files(tmp_path: Path):
             )
         ],
         frontend=None,
-        options=dict(_WORKER_OPTIONS),
+        options={},
     )
     from forge.generator import generate
 
@@ -248,6 +252,84 @@ def test_worker_variant_renders_distinctive_files(tmp_path: Path):
     pyproject = (svc / "pyproject.toml").read_text(encoding="utf-8")
     assert 'packages = ["src/worker"]' in pyproject
     assert "fastapi" not in pyproject
+
+
+def test_http_shaped_default_fragments_exclude_worker():
+    """Every default-on fragment that injects into the crud-service HTTP
+    shape must opt out of the worker variant, or stock worker generation
+    crashes with InjectionError on the missing ``src/app/main.py``."""
+    from forge.fragments import FRAGMENT_REGISTRY
+
+    for name in _WORKER_EXCLUDED_FRAGMENTS:
+        frag = FRAGMENT_REGISTRY.get(name)
+        assert frag is not None, name
+        assert "worker" in frag.excluded_app_templates, (
+            f"fragment '{name}' targets the crud-service HTTP shape and must "
+            f"declare excluded_app_templates=('worker', ...)"
+        )
+
+
+def test_user_selected_excluded_option_rejected_on_worker_only_project():
+    """A USER-origin option whose every fragment is excluded on every backend
+    variant must hard-error at resolve time (silently generating nothing
+    would betray an explicit selection); the same value as a persisted
+    DEFAULT must keep auto-skipping."""
+    from forge.errors import OptionsError
+
+    def _cfg(origins):
+        return ProjectConfig(
+            project_name="wk_guard",
+            backends=[
+                BackendConfig(
+                    name="notify-worker",
+                    project_name="wk_guard",
+                    language=BackendLanguage.PYTHON,
+                    app_template="worker",
+                    features=[],
+                )
+            ],
+            frontend=None,
+            options={"middleware.rate_limit": True},
+            option_origins=origins,
+        )
+
+    from forge.capability_resolver import resolve
+
+    with pytest.raises(OptionsError, match="app_template"):
+        resolve(_cfg({"middleware.rate_limit": "user"}))
+    # Same option as a persisted default: no error, fragment auto-skips.
+    resolve(_cfg({"middleware.rate_limit": "default"}))
+
+
+def test_user_selected_excluded_option_allowed_with_compatible_backend():
+    """The guard is per-project, not per-backend: when ANY backend can host
+    the fragment, an explicit selection is satisfied and must not error."""
+    cfg = ProjectConfig(
+        project_name="wk_mixed",
+        backends=[
+            BackendConfig(
+                name="api",
+                project_name="wk_mixed",
+                language=BackendLanguage.PYTHON,
+                app_template="crud-service",
+                features=[],
+            ),
+            BackendConfig(
+                name="notify-worker",
+                project_name="wk_mixed",
+                language=BackendLanguage.PYTHON,
+                app_template="worker",
+                features=[],
+            ),
+        ],
+        frontend=None,
+        options={"middleware.rate_limit": True},
+        option_origins={"middleware.rate_limit": "user"},
+    )
+    from forge.capability_resolver import resolve
+
+    plan = resolve(cfg)
+    assert any(rf.fragment.name == "rate_limit" for rf in plan.ordered)
 
 
 def test_crud_service_renders_baseline_shape(tmp_path: Path):

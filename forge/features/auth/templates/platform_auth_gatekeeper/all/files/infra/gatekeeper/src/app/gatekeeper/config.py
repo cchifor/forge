@@ -315,6 +315,19 @@ def get_settings() -> GatekeeperSettings:
 
         # Validate test bypass configuration
         if _instance.test_bypass_enabled:
+            # Fail closed in production: the test bypass mints a verified
+            # identity from a static token, so leaving it enabled outside
+            # dev/test is a full auth bypass. Resolved with the same env logic
+            # as the dev-secret guard above.
+            if _env.strip().lower() not in _DEV_SECRET_EXEMPT_ENVS:
+                _logger.critical(
+                    "Refusing to start in env=%s with GATEKEEPER test bypass "
+                    "ENABLED — it accepts a static token as a verified identity "
+                    "(a full auth bypass). Set TEST_BYPASS_ENABLED=false in "
+                    "production, or run under a dev/test ENV.",
+                    _env,
+                )
+                _sys.exit(1)
             if len(_instance.test_bypass_token) < 16:
                 _logger.warning(
                     "TEST_BYPASS_TOKEN is too short (< 16 chars) — bypass may be insecure"

@@ -116,8 +116,11 @@ def _build_artefacts(tmp_path: Path) -> tuple[Path, Path]:
         f"--- stderr ---\n{result.stderr}"
     )
 
-    sdists = list(dist_dir.glob("forge-*.tar.gz"))
-    wheels = list(dist_dir.glob("forge-*.whl"))
+    # The PyPI distribution is ``forge-cli`` (RFC-003); build artifacts
+    # normalize the hyphen to an underscore (``forge_cli-<ver>.{tar.gz,whl}``).
+    # The importable package + console script stay ``forge``.
+    sdists = list(dist_dir.glob("forge_cli-*.tar.gz"))
+    wheels = list(dist_dir.glob("forge_cli-*.whl"))
     assert len(sdists) == 1, f"expected exactly one sdist, got {sdists}"
     assert len(wheels) == 1, f"expected exactly one wheel, got {wheels}"
     return sdists[0], wheels[0]

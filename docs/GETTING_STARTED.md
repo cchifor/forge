@@ -5,8 +5,8 @@ A 10-minute tour from install to a running full-stack project.
 ## Install
 
 ```bash
-# Requires Python 3.11+.
-uv tool install forge   # or: pip install forge
+# Requires Python 3.13+.
+uv tool install forge-cli   # or: pip install forge-cli (the installed command is `forge`)
 
 # Sanity check.
 forge --version
@@ -183,7 +183,7 @@ EOF
 
 ## Next steps
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how forge itself is built
+- [architecture.md](architecture.md) — how forge itself is built
 - [FEATURES.md](FEATURES.md) — the full option catalogue
 - [plugin-development.md](plugin-development.md) — write your own plugins
 - [RFC-001 Versioning](rfcs/RFC-001-versioning-branching.md) — release cadence

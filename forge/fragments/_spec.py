@@ -132,6 +132,12 @@ class Fragment:
     depends_on: tuple[str, ...] = ()
     # Mutual-exclusion — fragments that cannot coexist with this one.
     conflicts_with: tuple[str, ...] = ()
+    # Backend languages the conflict is scoped to. Empty (default) = the
+    # conflict is unconditional. When set, ``conflicts_with`` only fires when
+    # BOTH fragments target a project backend of one of these languages — e.g.
+    # the llm/queue/cache port fragments only collide on Rust (shared
+    # ``src/ports/mod.rs``), so a pure-Python project may use them together.
+    conflict_backends: tuple[BackendLanguage, ...] = ()
     # Runtime capabilities this fragment needs (redis, postgres-pgvector,
     # qdrant, etc.). docker_manager reads these to provision extras.
     capabilities: tuple[str, ...] = ()

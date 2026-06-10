@@ -85,6 +85,63 @@ TEMPLATE_DIRS = {
     FrontendFramework.FLUTTER: "apps/flutter-frontend-template",
 }
 
+# The auth-middleware fragment per backend language. A backend's Dockerfile
+# gates the ``COPY --from=sdks`` + dependency wiring on whether ITS language's
+# middleware is in the plan (see _generate_backends). Keep in lockstep with the
+# platform_auth_*_middleware fragment names.
+_PLATFORM_AUTH_MIDDLEWARE: dict[BackendLanguage, str] = {
+    BackendLanguage.PYTHON: "platform_auth_python_middleware",
+    BackendLanguage.NODE: "platform_auth_node_middleware",
+    BackendLanguage.RUST: "platform_auth_rust_middleware",
+}
+
+# The per-backend dependency manifest the deps applier appends to. Together
+# with ``.env.example`` (the env applier's target) these are base-template
+# files that fragments mutate AFTER provenance first records them — see
+# _rerecord_mutated_manifests.
+_BACKEND_MANIFEST_BY_LANG: dict[BackendLanguage, str] = {
+    BackendLanguage.PYTHON: "pyproject.toml",
+    BackendLanguage.NODE: "package.json",
+    BackendLanguage.RUST: "Cargo.toml",
+}
+
+
+def _rerecord_mutated_manifests(
+    config: ProjectConfig, project_root: Path, collector: ProvenanceCollector
+) -> None:
+    """Re-stamp provenance for the per-backend dependency/env manifests AFTER
+    the fragment appliers mutate them.
+
+    The deps/env appliers append to ``pyproject.toml`` / ``package.json`` /
+    ``Cargo.toml`` / ``.env.example`` — files the base template already wrote
+    and recorded a baseline SHA for. Without re-recording, the manifest's
+    on-disk content diverges from that baseline, so ``forge --verify`` reports
+    day-0 drift (exit 10) on a freshly generated project. Re-record preserving
+    each file's original origin + template metadata so only the SHA refreshes.
+    """
+    for bc in config.backends:
+        backend_dir = project_root / "services" / bc.name
+        candidates: list[Path] = [backend_dir / ".env.example"]
+        manifest = _BACKEND_MANIFEST_BY_LANG.get(bc.language)
+        if manifest:
+            candidates.append(backend_dir / manifest)
+        for path in candidates:
+            try:
+                key = path.relative_to(project_root).as_posix()
+            except ValueError:
+                continue
+            existing = collector.records.get(key)
+            if existing is None or not path.is_file():
+                continue
+            collector.record(
+                path,
+                origin=existing.origin,
+                fragment_name=existing.fragment_name,
+                fragment_version=existing.fragment_version,
+                template_name=existing.template_name,
+                template_version=existing.template_version,
+            )
+
 
 def _resolve_final_root(output_dir: str | Path, project_slug: str) -> Path:
     """Resolve ``<output_dir>/<project_slug>``, refusing any result that escapes
@@ -233,6 +290,10 @@ def _generate_into(
     )
 
     rechain_backend_migrations(config, project_root, collector)
+    # Refresh provenance for the manifests the deps/env appliers mutated, so a
+    # freshly generated project passes ``forge --verify`` instead of reporting
+    # day-0 drift on its own pyproject.toml / .env.example (exit 10).
+    _rerecord_mutated_manifests(config, project_root, collector)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -326,16 +387,22 @@ def _generate_backends(
             language=bc.language.value,
         ):
             # ``platform-auth`` is the runtime SDK the auth middleware
-            # fragment imports from. It lives at ``sdks/platform-auth/``
-            # (shipped by ``platform_auth_sdk_python``) and needs both a
-            # ``"platform-auth"`` ``[project] dependencies`` entry and a
-            # ``[tool.uv.sources]`` path-dep so ``uv sync`` resolves it
-            # against the in-tree source. Flip the copier var only when
-            # the Python middleware fragment is actually in the plan —
-            # non-auth Python services don't ship sdks/platform-auth/ so
-            # they'd uv-sync-fail if we always emitted the entry.
-            includes_platform_auth = any(
-                rf.fragment.name == "platform_auth_python_middleware" for rf in plan.ordered
+            # fragment imports from. It lives at ``sdks/platform-auth-<lang>/``
+            # (shipped by the per-language ``platform_auth_sdk_*`` fragment)
+            # and the per-backend Dockerfile gates ``COPY --from=sdks`` plus
+            # the dependency wiring on this flag. Flip it only when the
+            # matching middleware fragment is actually in the plan — non-auth
+            # services don't ship the sdks tree, so an unconditional COPY/dep
+            # would fail the build/sync.
+            #
+            # MUST be per-backend-language: the check used to hardcode the
+            # Python fragment, so a Node/Rust backend with auth (but no Python
+            # backend) rendered its Dockerfile WITHOUT the sdks COPY while the
+            # project still shipped sdks/ and declared the file: dependency —
+            # node_vue_full / rust_vue_full image builds broke on PR #170 when
+            # that COPY was first gated on this stale flag.
+            includes_platform_auth = bool(_PLATFORM_AUTH_MIDDLEWARE.get(bc.language)) and any(
+                rf.fragment.name == _PLATFORM_AUTH_MIDDLEWARE[bc.language] for rf in plan.ordered
             )
             # Mirror the platform-auth gating for error_port: only wire the
             # central handler through ``DefaultErrorPort.serialize`` when the

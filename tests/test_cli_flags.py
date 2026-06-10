@@ -184,3 +184,22 @@ class TestIsHeadlessDetection:
     def test_no_flags_is_interactive(self) -> None:
         args = _args_stub()
         assert cli._is_headless(args) is False
+
+
+# -- --version ----------------------------------------------------------------
+
+
+class TestVersionFlag:
+    """``forge --version`` prints the package version and exits 0. The weekly
+    install-test and release-dryrun workflows assert this."""
+
+    def test_version_prints_and_exits_zero(self, capsys) -> None:
+        from forge import __version__
+        from forge.cli.parser import _build_parser
+
+        with pytest.raises(SystemExit) as exc:
+            _build_parser().parse_args(["--version"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert __version__ in out
+        assert out.startswith("forge ")

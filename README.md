@@ -72,7 +72,7 @@ flowchart LR
     Project ==>|docker compose up| Proj
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/plugin-development.md`](docs/plugin-development.md)). The layered component model ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)) resolves selected components into the same fragment plan, so component outputs flow through this exact resolver → injector → codegen path rather than a parallel pipeline.
+See [`docs/architecture.md`](docs/architecture.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/plugin-development.md`](docs/plugin-development.md)). The layered component model ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)) resolves selected components into the same fragment plan, so component outputs flow through this exact resolver → injector → codegen path rather than a parallel pipeline.
 
 ---
 
@@ -174,7 +174,7 @@ Introspect the **live** registry anytime with `forge --list` (plugin-aware), `fo
 - **[Docker](https://www.docker.com/) + Compose v2** — required to run the generated stack.
 - **Conditional toolchains for the backend / frontend you pick:** [Node.js](https://nodejs.org/) ≥ 22, [Rust](https://rustup.rs/) stable, [Flutter](https://docs.flutter.dev/get-started/install) ≥ 3.19.
 
-forge is tested on **Windows 11 (Git Bash), Ubuntu 22.04+, and macOS 14+**, against Python 3.11 / 3.12 / 3.13.
+forge is tested on **Windows 11 (Git Bash), Ubuntu 22.04+, and macOS 14+**, against Python 3.13.
 
 ---
 
@@ -585,7 +585,7 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 |---|---|
 | 10-minute tour from install to running stack | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
 | **Canonical option catalog** (per-option reference, auto-generated from `OPTION_REGISTRY`) | [`docs/FEATURES.md`](docs/FEATURES.md) |
-| Internal architecture (registries, injectors, codegen, provenance) | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Internal architecture (registries, injectors, codegen, provenance) | [`docs/architecture.md`](docs/architecture.md) |
 | Layered component model (three layers + data contracts, Vue 3) | [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md) |
 | Authoring a third-party plugin | [`docs/plugin-development.md`](docs/plugin-development.md) |
 | Adding a backend language | [`docs/adding-a-backend.md`](docs/adding-a-backend.md) |
@@ -684,7 +684,7 @@ make check      # ruff lint + ruff format --check + ty typecheck + pytest (~10s)
 - **Commit style:** [Conventional Commits](https://www.conventionalcommits.org/), imperative mood, subject line ≤ 50 chars, no AI co-author trailer. One logical change per PR.
 - **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md). Pick (or create) a feature namespace under `forge/features/<ns>/`, register the `Option` in its `options.py`, register the matching `Fragment` in its `fragments.py` (with its `FragmentImplSpec` pointing at `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`), drop files under `forge/features/<ns>/templates/<name>/<backend>/`, extend the registry invariants test in `tests/test_options.py`, and regenerate the option catalog with `uv run python tools/gen_features_doc.py` (the `tests/test_features_doc_in_sync.py` gate fails the build if you forget). Built-in features follow the same on-disk layout third-party plugins use — see [`docs/plugin-development.md`](docs/plugin-development.md).
 
-CI runs the full matrix — Ubuntu + Windows, Python 3.11 / 3.12 / 3.13 — on every push and PR. Nightly e2e runs on Ubuntu against Python 3.13.
+CI runs the full matrix — Ubuntu + Windows, Python 3.13 — on every push and PR. Nightly e2e runs on Ubuntu against Python 3.13.
 
 ---
 
@@ -706,7 +706,7 @@ MIT — see [`LICENSE`](LICENSE).
 
 Active development, weekly cadence.
 
-- **Today:** 39 Options registered across six product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform) plus a Layer-composition mode set + the new `auth.mode` discriminator, backed by **65 template fragments** including 11 in the new `auth/` namespace (Python / Node / Rust SDK ports, Gatekeeper as token authority + signing-key init service, per-language service middleware wirings, Vue / Svelte / Flutter session-timeout composables) — broken down by RFC-006 parity tier as **13 tier-1 cross-backend** (Python + Node + Rust), **5 tier-2 best-effort**, and **46 tier-3 Python-only** (pydantic-ai / LLM SDK / vector-store ecosystem; SDK-port ports). `forge --list` shows each option's tier so operators picking Node or Rust see upfront which knobs apply. Built-in features are colocated under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout). **1500+ tests passing**, including a 20-scenario cross-SDK parity gate (`forge/tests/contract/auth_sdk_parity/`) that runs Python / Node / Rust SDKs against the same JWT inputs and asserts matching outcomes. CI green on Linux + Windows against Python 3.11 / 3.12 / 3.13. Critical-path coverage gates enforce per-module floors (`forge/merge.py` 92%, `forge/updater.py` 83%, `forge/capability_resolver.py` 96%, plus six others — see [`docs/coverage-policy.md`](docs/coverage-policy.md)).
+- **Today:** 39 Options registered across six product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform) plus a Layer-composition mode set + the new `auth.mode` discriminator, backed by **65 template fragments** including 11 in the new `auth/` namespace (Python / Node / Rust SDK ports, Gatekeeper as token authority + signing-key init service, per-language service middleware wirings, Vue / Svelte / Flutter session-timeout composables) — broken down by RFC-006 parity tier as **13 tier-1 cross-backend** (Python + Node + Rust), **5 tier-2 best-effort**, and **46 tier-3 Python-only** (pydantic-ai / LLM SDK / vector-store ecosystem; SDK-port ports). `forge --list` shows each option's tier so operators picking Node or Rust see upfront which knobs apply. Built-in features are colocated under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout). **1500+ tests passing**, including a 20-scenario cross-SDK parity gate (`forge/tests/contract/auth_sdk_parity/`) that runs Python / Node / Rust SDKs against the same JWT inputs and asserts matching outcomes. CI green on Linux + Windows against Python 3.13. Critical-path coverage gates enforce per-module floors (`forge/merge.py` 92%, `forge/updater.py` 83%, `forge/capability_resolver.py` 96%, plus six others — see [`docs/coverage-policy.md`](docs/coverage-policy.md)).
 - **API stability:** 1.1.x adds merge-mode `forge --update` plus the plugin-SDK e2e gate. The `forge.api` plugin-registration surface carries a stable-API "Since" / "Compatibility" table per symbol; breaking changes between minors are still possible and called out in [`CHANGELOG.md`](CHANGELOG.md).
 - **Production-ready today:** the Foundation, Observability (`observability.tracing` + `observability.otel`), and Reliability categories (`middleware.correlation_id` / `middleware.rate_limit` / `middleware.security_headers` / `middleware.pii_redaction` / `reliability.connection_pool`); Async Work task queue + `queue.backend` port; most of the Platform category (`platform.admin`, `platform.webhooks`, `platform.cli_extensions`, `platform.agents_md`, `security.csp`); the Layer-composition discriminators (`backend.mode`, `frontend.mode`, `database.mode`).
 - **`auth.mode` (1.2.0 unreleased):** the Gatekeeper-as-sole-token-authority model — Python / Node / Rust verifier SDKs with cross-SDK parity gate; BFF Redis sessions with two-key TTL atomicity; ES256 algorithm-pinned JWT verification; RFC 8693 token-exchange S2S; inactivity-driven session timeout (Vue / Svelte / Flutter SPA composables). Structurally complete and parity-verified; the cutover from forge's pre-1.2 Keycloak-direct stack ships via `forge --migrate auth-keycloak-to-platform-auth`. See [`docs/auth-architecture.md`](docs/auth-architecture.md) and the [`UPGRADING.md`](UPGRADING.md#11--12--auth-stack-rebuild-unreleased) migration playbook.

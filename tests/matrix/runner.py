@@ -629,13 +629,32 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
             timeout=600,
         )
         if up_result.returncode != 0:
-            stderr_tail = "\n".join(up_result.stderr.strip().splitlines()[-5:])
+            # Persist the FULL build/up output to the artifact dir. When the
+            # IMAGE BUILD fails (tsc exit 2 / cargo exit 101) no container
+            # starts, so the finally-block's ``docker compose logs`` is empty —
+            # the only record of the compiler error is here, in up_result. The
+            # old 5-line console tail truncated it, which is exactly what made
+            # the PR #170 node/rust image-build break un-diagnosable from CI.
+            log_dir = os.environ.get("FORGE_MATRIX_LOG_DIR")
+            if log_dir:
+                out_dir = Path(log_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / f"{scenario.name}-compose-up.log").write_text(
+                    f"$ docker compose up -d --wait --build (exit {up_result.returncode})\n"
+                    f"--- stdout ---\n{up_result.stdout}\n"
+                    f"--- stderr ---\n{up_result.stderr}\n",
+                    encoding="utf-8",
+                )
+            stderr_tail = "\n".join(up_result.stderr.strip().splitlines()[-20:])
             return LaneResult(
                 scenario=scenario.name,
                 lane="smoke",
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
-                details=f"docker compose up failed (exit {up_result.returncode}): {stderr_tail}",
+                details=(
+                    f"docker compose up failed (exit {up_result.returncode}); "
+                    f"full output in {scenario.name}-compose-up.log:\n{stderr_tail}"
+                ),
             )
         compose_up = True
 

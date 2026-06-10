@@ -23,7 +23,6 @@ from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 # -- fragment-registry shape --------------------------------------------------
 
 
@@ -253,15 +252,22 @@ def test_resolver_pulls_in_port_and_adapter_on_rust() -> None:
     assert names.index("queue_port") < names.index("queue_apalis")
 
 
-def test_resolver_skips_apalis_silently_on_python_only_project() -> None:
-    """``queue.backend=apalis`` enables a (queue_port, queue_apalis)
-    bundle. On a Python-only project the resolver fans out: port lands
-    on Python, adapter skips silently. Matches the auth-stack
-    discriminator pattern."""
-    plan = resolve(_python_project({"queue.backend": "apalis"}))
-    names = [rf.fragment.name for rf in plan.ordered]
-    assert "queue_port" in names
-    assert "queue_apalis" not in names
+def test_resolver_rejects_apalis_on_python_only_project() -> None:
+    """``queue.backend=apalis`` ships its adapter on Rust only. Selecting it on
+    a Python-only project used to silently emit an adapter-less queue_port; it
+    now hard-errors at config time (fail-fast, #219). A persisted DEFAULT still
+    skips silently (origin discipline)."""
+    import pytest
+
+    from forge.errors import OptionsError
+
+    with pytest.raises(OptionsError, match="apalis"):
+        resolve(_python_project({"queue.backend": "apalis"}))
+
+    cfg = _python_project({"queue.backend": "apalis"})
+    cfg.option_origins = {"queue.backend": "default"}
+    plan = resolve(cfg)
+    assert "queue_apalis" not in [rf.fragment.name for rf in plan.ordered]
 
 
 def test_resolver_targets_only_rust_backend_in_mixed_project() -> None:

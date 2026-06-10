@@ -243,17 +243,38 @@ def _topo_sort(fragment_names: set[str]) -> list[str]:
     return order
 
 
-def _check_conflicts(fragment_names: set[str]) -> None:
+def _check_conflicts(
+    fragment_names: set[str], project_backends: tuple[BackendLanguage, ...] = ()
+) -> None:
+    present = set(project_backends)
     for name in fragment_names:
         spec = FRAGMENT_REGISTRY[name]
         for other in spec.conflicts_with:
-            if other in fragment_names:
-                a, b = sorted([name, other])
-                raise OptionsError(
-                    f"Fragments '{a}' and '{b}' conflict and cannot both be enabled.",
-                    code=OPTIONS_FRAGMENT_CONFLICT,
-                    context={"fragments": [a, b]},
+            if other not in fragment_names:
+                continue
+            # Backend-scoped conflicts (e.g. the Rust-only shared
+            # ``src/ports/mod.rs`` collision between llm/queue/cache ports)
+            # only fire when BOTH fragments land on a project backend of a
+            # scoped language. An unscoped conflict (the default) fires
+            # unconditionally, preserving prior behavior.
+            if spec.conflict_backends:
+                peer = FRAGMENT_REGISTRY[other]
+                shared = (
+                    set(_target_backends(spec, project_backends))
+                    & set(_target_backends(peer, project_backends))
+                    & set(spec.conflict_backends)
                 )
+                # ``present`` is empty for callers that don't pass backends
+                # (legacy / pure fragment-set checks) — fall back to the
+                # unconditional behavior so we never silently skip a conflict.
+                if present and not shared:
+                    continue
+            a, b = sorted([name, other])
+            raise OptionsError(
+                f"Fragments '{a}' and '{b}' conflict and cannot both be enabled.",
+                code=OPTIONS_FRAGMENT_CONFLICT,
+                context={"fragments": [a, b]},
+            )
 
 
 def _target_backends(
@@ -295,6 +316,14 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
     ("llm.provider", "anthropic"): frozenset({BackendLanguage.PYTHON}),
     ("llm.provider", "ollama"): frozenset({BackendLanguage.PYTHON}),
     ("llm.provider", "bedrock"): frozenset({BackendLanguage.PYTHON}),
+    # Each queue backend ships its ADAPTER on exactly one language (the
+    # ``queue_port`` interface is tri-language, but a port with no adapter is
+    # a service that boots then fails at first use). Reject the mismatch at
+    # config time instead of silently emitting the adapter-less port.
+    ("queue.backend", "redis"): frozenset({BackendLanguage.PYTHON}),
+    ("queue.backend", "sqs"): frozenset({BackendLanguage.PYTHON}),
+    ("queue.backend", "bullmq"): frozenset({BackendLanguage.NODE}),
+    ("queue.backend", "apalis"): frozenset({BackendLanguage.RUST}),
 }
 
 # Options where EVERY "active" (non-none / non-false) value is Python-only in
@@ -305,6 +334,10 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
 _PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
     "rag.backend": frozenset({BackendLanguage.PYTHON}),
     "platform.mcp": frozenset({BackendLanguage.PYTHON}),
+    # object_store ships only Python port + adapters today; selecting it on a
+    # Node/Rust-only project would otherwise resolve to ZERO fragments (a
+    # complete silent no-op).
+    "object_store.backend": frozenset({BackendLanguage.PYTHON}),
 }
 
 # Values that mean "feature off" for the options in _PYTHON_ONLY_WHEN_ACTIVE.
@@ -371,6 +404,76 @@ def _check_option_allowed_backends(
                 "value": value,
                 "allowed_backends": sorted(b.value for b in opt.allowed_backends),
                 "project_backends": [b.value for b in project_backends],
+            },
+        )
+
+
+def _check_app_template_exclusions(config: ProjectConfig) -> None:
+    """Reject a USER-selected option whose every enabled fragment is excluded
+    by every project backend's ``app_template`` variant.
+
+    ``Fragment.excluded_app_templates`` makes default-on fragments silently
+    skip incompatible variants (e.g. the HTTP middleware set on the
+    ``worker`` variant, which ships no FastAPI app — see the merge driver's
+    per-backend opt-out). Silent skipping is right for defaults but wrong
+    for explicit selections: a user who asks a worker-only project for
+    ``middleware.rate_limit=true`` would otherwise get nothing, with exit 0.
+    Hard-error at resolve time instead, mirroring the origin discipline of
+    ``_check_option_allowed_backends``.
+    """
+    if not config.backends:
+        return
+    origins = config.option_origins or {}
+    effective = _apply_option_defaults(config.options)
+    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    for path, opt in OPTION_REGISTRY.items():
+        if path not in user_set_paths:
+            continue
+        if origins.get(path, "user") != "user":
+            continue
+        value = effective.get(path, opt.default)
+        if not opt.is_active_value(value):
+            continue
+        frag_names = tuple(opt.enables.get(value, ()))
+        if not frag_names:
+            continue
+        applies_somewhere = False
+        excluding_variants: set[str] = set()
+        for name in frag_names:
+            frag = FRAGMENT_REGISTRY.get(name)
+            if frag is None:
+                continue
+            for bc in config.backends:
+                impl = frag.implementations.get(bc.language)
+                if impl is None:
+                    # Language coverage gaps are _check_value_backend_support's
+                    # job; this check only owns variant exclusions.
+                    continue
+                if impl.scope != "backend":
+                    applies_somewhere = True  # project-scoped impls always land
+                    break
+                if (bc.app_template or "") in frag.excluded_app_templates:
+                    excluding_variants.add(bc.app_template or "(unset)")
+                    continue
+                applies_somewhere = True
+                break
+            if applies_somewhere:
+                break
+        if applies_somewhere or not excluding_variants:
+            continue
+        variants = ", ".join(sorted(excluding_variants))
+        raise OptionsError(
+            f"Option '{path}={value!r}' is incompatible with this project's "
+            f"backend app_template variant(s) ({variants}): every fragment it "
+            f"enables ({', '.join(frag_names)}) is excluded on that service "
+            f"shape. Drop the option, or add a backend with a compatible "
+            f"app_template (e.g. crud-service).",
+            code=OPTIONS_INVALID_VALUE,
+            context={
+                "option": path,
+                "value": value,
+                "fragments": list(frag_names),
+                "excluding_app_templates": sorted(excluding_variants),
             },
         )
 
@@ -541,6 +644,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     project_backends = tuple(bc.language for bc in config.backends)
     _check_value_backend_support(config, project_backends)
     _check_option_allowed_backends(config, project_backends)
+    _check_app_template_exclusions(config)
     _check_multitenancy_deferred(config)
 
     option_values = _apply_option_defaults(config.options)
@@ -578,7 +682,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     fragment_set = _expand_deps(fragment_set)
     _check_security_constraints(option_values, fragment_set)
     _validate_reads_options(fragment_set)
-    _check_conflicts(fragment_set)
+    _check_conflicts(fragment_set, project_backends)
     order = _topo_sort(fragment_set)
 
     resolved: list[ResolvedFragment] = []

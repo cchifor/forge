@@ -117,6 +117,9 @@ def register_all(api: ForgeAPI) -> None:
             # be a downgrade. Plugins shipping custom envelopes implement
             # ``ErrorPort`` and register their adapter in place of
             # ``DefaultErrorPort``.
+            # The worker variant ships no HTTP app, so there is no exception
+            # handler to wrap in an envelope.
+            excluded_app_templates=("worker",),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("error_port", "python"),

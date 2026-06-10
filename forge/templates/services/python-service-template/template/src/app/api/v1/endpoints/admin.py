@@ -22,12 +22,19 @@ _PRODUCTION_ENVS = {"production", "prod", "staging"}
 def require_non_production() -> None:
     """Dependency: reject admin diagnostics when running in production.
 
-    The active environment is sourced from ``ENV`` (the same knob the config
-    loader's ``_active_env`` reads, and the value the Dockerfile bakes in as
-    ``ENV=production``). In a production-class environment the route is hidden
-    behind a ``404`` so the open log-level override can't be abused.
+    The active environment is sourced from ``ENV`` OR ``ENVIRONMENT`` — both
+    are honored by the other prod-posture guards in this service (secret guard,
+    CORS guard, in_memory issuer), so an ``ENVIRONMENT=production`` deployment
+    that does not also set ``ENV`` must NOT leave the unauthenticated
+    ``/admin/log-level`` route exposed. In a production-class environment the
+    route is hidden behind a ``404`` so the open log-level override can't be
+    abused.
     """
-    active_env = os.environ.get("ENV", "development").strip().lower()
+    active_env = (
+        os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development"))
+        .strip()
+        .lower()
+    )
     if active_env in _PRODUCTION_ENVS:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -650,6 +650,14 @@ def _update_locked(
 
     rechain_backend_migrations(config, project_root, collector)
 
+    # Refresh provenance for the manifests the deps/env appliers mutated after
+    # the collector seeded them, so an updated project passes ``forge --verify``
+    # instead of reporting drift on its own pyproject.toml / .env.example.
+    # Late import to avoid a generator <-> sync import cycle at module load.
+    from forge.generator import _rerecord_mutated_manifests  # noqa: PLC0415
+
+    _rerecord_mutated_manifests(config, project_root, collector)
+
     real_backends = tuple(bc for bc in config.backends if bc.name != "_frontend_only")
     _restamp_forge_toml(
         manifest=manifest,

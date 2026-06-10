@@ -34,9 +34,25 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# A fixed, project-stable key for the migration advisory lock. Any concurrent
+# replica running ``alembic upgrade head`` contends on this same key, so they
+# serialize instead of racing the same DDL.
+_MIGRATION_LOCK_KEY = 0x46_4F_52_47_45  # "FORGE"
+
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Serialize concurrent replicas: pg_advisory_xact_lock blocks until the
+        # lock is free and auto-releases when this migration transaction ends.
+        # The second replica then re-runs the (idempotent) upgrade, which is a
+        # no-op for already-applied revisions. SQLite dev paths skip — they are
+        # single-process. (Without this, the entrypoint comment promising a
+        # lock was false and two replicas could apply the same DDL at once.)
+        if connection.dialect.name == "postgresql":
+            connection.exec_driver_sql(
+                f"SELECT pg_advisory_xact_lock({_MIGRATION_LOCK_KEY})"
+            )
         context.run_migrations()
 
 

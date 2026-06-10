@@ -1,6 +1,7 @@
 #!/bin/sh
-# Run schema migrations before the server comes up. Alembic takes an
-# advisory lock on Postgres so concurrent replicas serialize safely.
+# Run schema migrations before the server comes up. alembic/env.py takes a
+# Postgres transaction-level advisory lock (pg_advisory_xact_lock) around the
+# upgrade, so concurrent replicas serialize instead of racing the same DDL.
 # SQLite dev paths still work because lifecycle._on_startup creates
 # tables in-memory when it finds an empty database.
 set -eu

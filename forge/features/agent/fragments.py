@@ -127,6 +127,11 @@ def register_all(api: ForgeAPI) -> None:
         Fragment(
             name="llm_port",
             conflicts_with=("queue_port", "cache_port"),
+            # The collision is the shared Rust ``src/ports/mod.rs`` file; on
+            # Python/Node the port impls own distinct files, so llm + queue/
+            # cache coexist fine there. Scope the conflict to Rust so it no
+            # longer blocks valid pure-Python/Node combinations.
+            conflict_backends=(BackendLanguage.RUST,),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("llm_port", "python"),
@@ -168,6 +173,10 @@ def register_all(api: ForgeAPI) -> None:
             name="llm_openai",
             depends_on=("llm_port",),
             conflicts_with=("queue_apalis", "cache_memory", "cache_redis"),
+            # Same story as llm_port: the collision is the shared Rust
+            # ``src/adapters/mod.rs`` file. Scope to Rust so Python/Node
+            # projects can use the OpenAI adapter alongside queue/cache.
+            conflict_backends=(BackendLanguage.RUST,),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("llm_openai", "python"),

@@ -24,6 +24,9 @@ def register_all(api: ForgeAPI) -> None:
     api.add_fragment(
         Fragment(
             name="reliability_connection_pool",
+            # Injects pool kwargs into the crud-service session factory; the
+            # worker variant owns its own DB wiring (src/worker/, no src/app).
+            excluded_app_templates=("worker",),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("reliability_connection_pool", "python"),
