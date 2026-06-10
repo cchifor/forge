@@ -243,17 +243,38 @@ def _topo_sort(fragment_names: set[str]) -> list[str]:
     return order
 
 
-def _check_conflicts(fragment_names: set[str]) -> None:
+def _check_conflicts(
+    fragment_names: set[str], project_backends: tuple[BackendLanguage, ...] = ()
+) -> None:
+    present = set(project_backends)
     for name in fragment_names:
         spec = FRAGMENT_REGISTRY[name]
         for other in spec.conflicts_with:
-            if other in fragment_names:
-                a, b = sorted([name, other])
-                raise OptionsError(
-                    f"Fragments '{a}' and '{b}' conflict and cannot both be enabled.",
-                    code=OPTIONS_FRAGMENT_CONFLICT,
-                    context={"fragments": [a, b]},
+            if other not in fragment_names:
+                continue
+            # Backend-scoped conflicts (e.g. the Rust-only shared
+            # ``src/ports/mod.rs`` collision between llm/queue/cache ports)
+            # only fire when BOTH fragments land on a project backend of a
+            # scoped language. An unscoped conflict (the default) fires
+            # unconditionally, preserving prior behavior.
+            if spec.conflict_backends:
+                peer = FRAGMENT_REGISTRY[other]
+                shared = (
+                    set(_target_backends(spec, project_backends))
+                    & set(_target_backends(peer, project_backends))
+                    & set(spec.conflict_backends)
                 )
+                # ``present`` is empty for callers that don't pass backends
+                # (legacy / pure fragment-set checks) — fall back to the
+                # unconditional behavior so we never silently skip a conflict.
+                if present and not shared:
+                    continue
+            a, b = sorted([name, other])
+            raise OptionsError(
+                f"Fragments '{a}' and '{b}' conflict and cannot both be enabled.",
+                code=OPTIONS_FRAGMENT_CONFLICT,
+                context={"fragments": [a, b]},
+            )
 
 
 def _target_backends(
@@ -649,7 +670,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     fragment_set = _expand_deps(fragment_set)
     _check_security_constraints(option_values, fragment_set)
     _validate_reads_options(fragment_set)
-    _check_conflicts(fragment_set)
+    _check_conflicts(fragment_set, project_backends)
     order = _topo_sort(fragment_set)
 
     resolved: list[ResolvedFragment] = []

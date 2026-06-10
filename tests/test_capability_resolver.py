@@ -569,3 +569,35 @@ class TestMcpAuthGuardWithCoercion:
         )
         plan = resolve(cfg)  # auth stays generate → guard satisfied
         assert plan.option_values["auth.mode"] == "generate"
+
+
+# --- backend-scoped conflicts (llm/queue/cache shared Rust src/ports/mod.rs) --
+
+
+class TestBackendScopedConflicts:
+    """The llm_port/queue_port/cache_port conflict is a Rust-only file
+    collision (shared src/ports/mod.rs). It must NOT block Python/Node
+    projects, but MUST still fire on Rust."""
+
+    @staticmethod
+    def _cfg(lang: BackendLanguage):
+        return ProjectConfig(
+            project_name="p",
+            backends=[BackendConfig(name="b", project_name="p", language=lang)],
+            options={"llm.provider": "openai", "reliability.cache": "redis"},
+            option_origins={"llm.provider": "user", "reliability.cache": "user"},
+        )
+
+    def test_python_llm_plus_cache_coexist(self):
+        plan = resolve(self._cfg(BackendLanguage.PYTHON))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"llm_port", "cache_port"} <= names
+
+    def test_node_llm_plus_cache_coexist(self):
+        plan = resolve(self._cfg(BackendLanguage.NODE))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"llm_port", "cache_port"} <= names
+
+    def test_rust_llm_plus_cache_still_conflict(self):
+        with pytest.raises(OptionsError, match="conflict"):
+            resolve(self._cfg(BackendLanguage.RUST))
