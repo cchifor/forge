@@ -400,3 +400,25 @@ scenarios:
           python_version: "3.13"
       options:
         database.mode: "none"
+
+  - name: py_schema_token_claim
+    description: Python schema-per-tenant multitenancy resolved by token_claim
+    lanes: [generate, verify]
+    port_base: 8170
+    expected_files:
+      - services/api/pyproject.toml
+      - docker-compose.yml
+      - forge.toml
+    config:
+      project_name: "Py Schema Tenant"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: python
+          features: ["items"]
+          server_port: 8170
+          python_version: "3.13"
+      options:
+        auth.mode: "none"
+        database.multitenancy: "schema_per_tenant"
+        database.tenant_resolution: "token_claim"

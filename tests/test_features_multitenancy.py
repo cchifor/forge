@@ -577,6 +577,46 @@ def test_schema_binder_is_account_authoritative_post_auth() -> None:
     assert "SET LOCAL search_path TO ''" in listener_block
 
 
+def test_fragments_ship_postgres_integration_tests() -> None:
+    """Both isolation strategies ship a real-Postgres integration test proving
+    cross-tenant isolation (skips without a DB). These are the integration layer
+    the unit/fake-session tests can't cover."""
+    schema_it = (
+        _schema_fragment_root() / "tests/integration/test_tenant_isolation_pg.py"
+    ).read_text(encoding="utf-8")
+    assert "bind_tenant_search_path" in schema_it
+    assert "must NOT see tenant A's row" in schema_it  # the isolation assertion
+    assert "TEST_DATABASE_URL" in schema_it and "skipif" in schema_it
+
+    rls_it = (_fragment_root() / "tests/integration/test_tenant_isolation_pg.py").read_text(
+        encoding="utf-8"
+    )
+    assert "current_setting('app.current_tenant'" in rls_it
+    assert "RLS leak" in rls_it
+    # RLS can't be validated as a SUPERUSER/BYPASSRLS role — skip in that case.
+    assert "rolsuper OR rolbypassrls" in rls_it
+
+
+def test_matrix_covers_schema_per_tenant_token_claim() -> None:
+    """A matrix scenario generates + verifies (ty-check) schema_per_tenant with
+    token_claim resolution, so a regression in the seam is caught in CI."""
+    scenarios = Path(__file__).resolve().parent / "matrix" / "scenarios.yaml"
+    text = scenarios.read_text(encoding="utf-8")
+    assert "py_schema_token_claim" in text
+    assert "database.tenant_resolution" in text and "token_claim" in text
+    assert "database.multitenancy" in text and "schema_per_tenant" in text
+
+
+def test_e2e_tenant_isolation_test_present() -> None:
+    """The e2e harness that boots real Postgres and runs the shipped integration
+    tests must exist (runs in the e2e CI lane)."""
+    e2e = Path(__file__).resolve().parent / "e2e" / "test_tenant_isolation_e2e.py"
+    assert e2e.is_file()
+    body = e2e.read_text(encoding="utf-8")
+    assert "pytest.mark.e2e" in body and "require_docker" in body
+    assert "postgres" in body.lower() and "TEST_DATABASE_URL" in body
+
+
 def test_base_uow_exposes_session_binder_seam() -> None:
     """forge_core's UoW takes an optional session_binder, and the base IoC ships
     an inert `_SESSION_BINDER = None` seam threaded into both UoWs (so a non-
