@@ -198,6 +198,11 @@ class GenerationReport:
     next_actions: list[NextAction] = field(default_factory=list)
     hidden_mutations: list[HiddenMutation] = field(default_factory=list)
     rollback_hint: str = ""
+    # Per-phase wall-clock in milliseconds (phase event name -> duration_ms),
+    # e.g. ``{"generate.codegen": 11, "generate.write_forge_toml": 137}``.
+    # Populated from the phase_timer hooks during generation; previously this
+    # timing was log-only (not in the --json payload).
+    phase_timings: dict[str, int] = field(default_factory=dict)
 
     # Schema version — bumped on backward-incompatible shape changes.
     _report_version: int = REPORT_VERSION
@@ -256,4 +261,6 @@ class GenerationReport:
         }
         if self.rollback_hint:
             out["rollback_hint"] = self.rollback_hint
+        if self.phase_timings:
+            out["phase_timings"] = dict(self.phase_timings)
         return out
