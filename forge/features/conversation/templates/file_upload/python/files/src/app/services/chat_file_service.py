@@ -97,7 +97,23 @@ class ChatFileStorage:
         return StoredFile(storage_path=relative, size_bytes=size)
 
     def path_for(self, storage_path: str) -> Path:
-        return self.root / storage_path
+        """Resolve ``storage_path`` under the upload root, refusing any result
+        that escapes it.
+
+        ``self.root / storage_path`` is NOT safe on its own: pathlib discards
+        the left operand when ``storage_path`` is absolute (``Path("/uploads")
+        / "/etc/passwd" == Path("/etc/passwd")``), and ``..`` segments can
+        climb out. Resolve both sides and assert containment so an attacker
+        cannot turn the download route into an arbitrary-file read.
+        """
+        root = self.root.resolve()
+        full = (root / storage_path).resolve()
+        if full != root and root not in full.parents:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="resolved path escapes the upload root",
+            )
+        return full
 
     def delete(self, storage_path: str) -> None:
         target = self.path_for(storage_path)
