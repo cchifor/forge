@@ -350,11 +350,8 @@ def _generate_backends(
             # project still shipped sdks/ and declared the file: dependency —
             # node_vue_full / rust_vue_full image builds broke on PR #170 when
             # that COPY was first gated on this stale flag.
-            includes_platform_auth = bool(
-                _PLATFORM_AUTH_MIDDLEWARE.get(bc.language)
-            ) and any(
-                rf.fragment.name == _PLATFORM_AUTH_MIDDLEWARE[bc.language]
-                for rf in plan.ordered
+            includes_platform_auth = bool(_PLATFORM_AUTH_MIDDLEWARE.get(bc.language)) and any(
+                rf.fragment.name == _PLATFORM_AUTH_MIDDLEWARE[bc.language] for rf in plan.ordered
             )
             # Mirror the platform-auth gating for error_port: only wire the
             # central handler through ``DefaultErrorPort.serialize`` when the

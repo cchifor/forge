@@ -480,9 +480,7 @@ def main() -> None:
             import shutil  # noqa: PLC0415
 
             _dry_tmp = project_root.parent
-            atexit.register(
-                lambda p=_dry_tmp: shutil.rmtree(p, ignore_errors=True)
-            )
+            atexit.register(lambda p=_dry_tmp: shutil.rmtree(p, ignore_errors=True))
     except TypeError as te:
         # generate() older signature (no dry_run kwarg) — fall back.
         # This branch also covers plugin-supplied generate() shims that
@@ -552,8 +550,7 @@ def main() -> None:
         if not quiet:
             if dry_run:
                 print(
-                    "\n  Dry run complete — no files written (the preview tree "
-                    "is removed on exit)."
+                    "\n  Dry run complete — no files written (the preview tree is removed on exit)."
                 )
             else:
                 print(f"\n  Project generated at: {project_root}")

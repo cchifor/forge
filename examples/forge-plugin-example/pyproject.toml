@@ -3,8 +3,11 @@ name = "forge-plugin-example"
 version = "0.1.0"
 description = "Reference forge plugin demonstrating the forge.plugins entry point."
 requires-python = ">=3.11"
+# The PyPI distribution is ``forge-cli`` (the bare ``forge`` name is owned by
+# an unrelated package); the importable package stays ``forge`` (plugin code
+# still does ``from forge.api import ...``). RFC-003.
 dependencies = [
-    "forge>=1.0.0a1",
+    "forge-cli>=1.0.0a1",
 ]
 readme = "README.md"
 authors = [{ name = "forge team" }]
