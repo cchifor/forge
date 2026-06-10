@@ -718,7 +718,6 @@ def test_compose_up_failure_writes_full_output(tmp_path, monkeypatch):
     artifact dir — when the image build fails no container starts, so
     `docker compose logs` is empty and this is the only record of the
     tsc/cargo error (the PR #170 diagnosability gap)."""
-    import subprocess as _sp
 
     from tests.matrix import runner as _runner
 
