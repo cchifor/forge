@@ -73,6 +73,6 @@
   marker: FORGE:UOW_SESSION_BINDER
   position: before
   snippet: |-
-    from app.core.tenancy.schema import bind_tenant_search_path as _schema_session_binder
+    from app.core.tenancy.schema import bind_tenant_search_path as _schema_session_binder  # noqa: E402
 
     _SESSION_BINDER = _schema_session_binder
