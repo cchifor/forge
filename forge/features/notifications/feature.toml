@@ -5,3 +5,10 @@ summary = "Live SSE-driven notification bell + center + toast host (Pinia) — L
 category = "component"
 stability = "experimental"
 layer = 2
+
+# NotificationBell renders inside the shared Popover primitive. Compose it as a
+# child so selecting NotificationCenter pulls the Popover component (which owns
+# shared/ui/popover/) into the closure — this feature no longer ships its own
+# inlined copy, so the two can be selected together without a file collision.
+[feature.component.children]
+Popover = "*"
