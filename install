@@ -36,7 +36,10 @@ ps_exec() {
 }
 
 get_version() {
-  "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1
+  # Wrapped in `|| true` so a cosmetic version lookup can never abort the
+  # installer: the trailing `head -1` SIGPIPEs the upstream `grep`, which
+  # under `set -o pipefail` returns non-zero.
+  { "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1; } || true
 }
 
 # -- Banner -------------------------------------------------------------------
@@ -55,10 +58,16 @@ if installed uv; then
   echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
 else
   echo -e "  ${MUTED}Installing uv...${NC}"
+  # `|| true`: the uv installer exits non-zero in a non-interactive shell
+  # (it prints a "restart your shell"/profile notice and returns non-zero),
+  # which under this script's `set -o pipefail` + `set -e` would abort the
+  # installer right after a SUCCESSFUL install — observed on macOS CI. The
+  # `installed uv` re-check below is the authoritative success signal, so we
+  # deliberately ignore the installer's own exit code here.
   if [[ "$os" == "windows" ]]; then
-    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | sed 's/^/    /'
+    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | sed 's/^/    /' || true
   else
-    curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | sed 's/^/    /'
+    curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | sed 's/^/    /' || true
   fi
   # Refresh PATH
   if [[ "$os" == "windows" ]]; then

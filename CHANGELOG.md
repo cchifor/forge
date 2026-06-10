@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Distribution
+
+- **GitHub-only distribution — no package registries.** forge is no longer
+  published to PyPI/npm/pub.dev; it installs from source via `./install`
+  (`uv tool install git+<repo>`). The registry publish jobs were removed from
+  `release.yml` and `release-dryrun.yml` was deleted — a tag now cuts only a
+  GitHub Release (built artifacts + CycloneDX SBOM + changelog notes), still
+  gated by the tag↔version check. Fixed the macOS install-script abort (the uv
+  installer's non-zero exit under `set -o pipefail`). `RELEASING.md` rewritten
+  and RFC-003 marked superseded.
+
 ### Security & regression fixes (wave 3)
 
 - **Generated Keycloak projects boot again.** The realm-sync sidecar pinned
