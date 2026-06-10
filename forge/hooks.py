@@ -34,6 +34,7 @@ and avoids restructuring the existing plugins surface.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -45,6 +46,7 @@ __all__ = [
     "register_hook",
     "registered_hooks",
     "reset_hooks_for_tests",
+    "unregister_hook",
 ]
 
 
@@ -128,6 +130,16 @@ def register_hook(hook: PhaseHook) -> None:
     the API surface is the supported entry point.
     """
     _HOOKS.append(hook)
+
+
+def unregister_hook(hook: PhaseHook) -> None:
+    """Remove ``hook`` from the firing registry if present (idempotent).
+
+    Used to scope a hook to a single operation — e.g. the generator
+    registers a phase-timings collector for one ``generate()`` call and
+    removes it in a ``finally`` so it never leaks into the next."""
+    with contextlib.suppress(ValueError):
+        _HOOKS.remove(hook)
 
 
 def registered_hooks() -> tuple[PhaseHook, ...]:

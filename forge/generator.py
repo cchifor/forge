@@ -106,6 +106,30 @@ _BACKEND_MANIFEST_BY_LANG: dict[BackendLanguage, str] = {
 }
 
 
+class _PhaseTimingsHook:
+    """A PhaseHook that records each phase's wall-clock into the report's
+    ``phase_timings`` map, so ``forge --json`` surfaces generation cost
+    (previously this timing was log-only). Scoped to one generate() call by
+    the register/unregister in ``_generate_into``."""
+
+    def __init__(self, report: GenerationReport) -> None:
+        self._report = report
+
+    def on_phase_start(self, name: str, ctx: dict[str, Any]) -> None:  # noqa: D102
+        pass
+
+    def on_phase_end(
+        self, name: str, ctx: dict[str, Any], duration_ms: int, error: Exception | None
+    ) -> None:
+        # Last-write-wins on a repeated phase name (e.g. per-backend copier
+        # runs share an event); the headline phases are unique, which is the
+        # common case the flame-chart consumer wants.
+        self._report.phase_timings[name] = duration_ms
+
+    def on_generate_complete(self, report: GenerationReport | None) -> None:  # noqa: D102
+        pass
+
+
 def _rerecord_mutated_manifests(
     config: ProjectConfig, project_root: Path, collector: ProvenanceCollector
 ) -> None:
@@ -256,6 +280,36 @@ def _generate_into(
     delegate without duplicating the phase sequence.
     """
     collector = _setup_provenance(project_root)
+    # When a report is requested, collect per-phase wall-clock into it so the
+    # ``--json`` payload carries timing (previously log-only). Scoped to this
+    # generate() via a hook removed in the finally below so it never leaks.
+    timings_hook = _PhaseTimingsHook(report) if report is not None else None
+    if timings_hook is not None:
+        from forge.hooks import register_hook  # noqa: PLC0415
+
+        register_hook(timings_hook)
+    try:
+        _run_generation_phases(
+            config, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
+        )
+    finally:
+        if timings_hook is not None:
+            from forge.hooks import unregister_hook  # noqa: PLC0415
+
+            unregister_hook(timings_hook)
+
+
+def _run_generation_phases(
+    config: ProjectConfig,
+    project_root: Path,
+    collector: ProvenanceCollector,
+    *,
+    quiet: bool,
+    dry_run: bool,
+    report: GenerationReport | None,
+) -> None:
+    """The ordered generation phases. Split out of ``_generate_into`` so the
+    timings-hook scope wraps exactly the phase sequence."""
     plan = _resolve_and_validate(config)
     _generate_backends(
         config, plan, project_root, collector, quiet=quiet, dry_run=dry_run, report=report
