@@ -25,13 +25,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
 
-from forge.config import BackendConfig, BackendLanguage, FrontendConfig, FrontendFramework, ProjectConfig
+from forge.config import (
+    BackendConfig,
+    BackendLanguage,
+    FrontendConfig,
+    FrontendFramework,
+    ProjectConfig,
+)
 from forge.generator import generate
-
 
 SNAPSHOT_ROOT = Path(__file__).resolve().parent / "golden" / "snapshots"
 
@@ -325,8 +331,14 @@ def test_golden_snapshot(preset_name: str, tmp_path: Path) -> None:
         keycloak_port=config.keycloak_port,
     )
 
+    # dry_run renders into its OWN throwaway temp dir (not output_dir) and
+    # leaves it for the caller to clean up — without this the suite leaks one
+    # forge-dry-* tree per preset per run into /tmp.
     project_root = generate(config_copy, quiet=True, dry_run=True)
-    actual = _snapshot_for(tmp_path, project_root)
+    try:
+        actual = _snapshot_for(tmp_path, project_root)
+    finally:
+        shutil.rmtree(project_root.parent, ignore_errors=True)
 
     snapshot_file = SNAPSHOT_ROOT / f"{preset_name}.json"
     if os.getenv("UPDATE_GOLDEN") == "1" or not snapshot_file.is_file():
