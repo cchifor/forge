@@ -724,8 +724,9 @@ def test_compose_up_failure_writes_full_output(tmp_path, monkeypatch):
     log_dir = tmp_path / "compose-logs"
     monkeypatch.setenv("FORGE_MATRIX_LOG_DIR", str(log_dir))
 
-    src = _runner.__file__
-    text = open(src, encoding="utf-8").read()
+    from pathlib import Path as _Path
+
+    text = _Path(_runner.__file__).read_text(encoding="utf-8")
     # The failure branch must write a per-scenario compose-up log with both
     # streams, and tail more than the old 5 lines.
     branch = text.split("docker compose up -d --wait --build")[1].split("compose_up = True")[0]
