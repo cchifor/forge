@@ -375,6 +375,76 @@ def _check_option_allowed_backends(
         )
 
 
+def _check_app_template_exclusions(config: ProjectConfig) -> None:
+    """Reject a USER-selected option whose every enabled fragment is excluded
+    by every project backend's ``app_template`` variant.
+
+    ``Fragment.excluded_app_templates`` makes default-on fragments silently
+    skip incompatible variants (e.g. the HTTP middleware set on the
+    ``worker`` variant, which ships no FastAPI app — see the merge driver's
+    per-backend opt-out). Silent skipping is right for defaults but wrong
+    for explicit selections: a user who asks a worker-only project for
+    ``middleware.rate_limit=true`` would otherwise get nothing, with exit 0.
+    Hard-error at resolve time instead, mirroring the origin discipline of
+    ``_check_option_allowed_backends``.
+    """
+    if not config.backends:
+        return
+    origins = config.option_origins or {}
+    effective = _apply_option_defaults(config.options)
+    user_set_paths = {resolve_alias(p) or p for p in config.options}
+    for path, opt in OPTION_REGISTRY.items():
+        if path not in user_set_paths:
+            continue
+        if origins.get(path, "user") != "user":
+            continue
+        value = effective.get(path, opt.default)
+        if not opt.is_active_value(value):
+            continue
+        frag_names = tuple(opt.enables.get(value, ()))
+        if not frag_names:
+            continue
+        applies_somewhere = False
+        excluding_variants: set[str] = set()
+        for name in frag_names:
+            frag = FRAGMENT_REGISTRY.get(name)
+            if frag is None:
+                continue
+            for bc in config.backends:
+                impl = frag.implementations.get(bc.language)
+                if impl is None:
+                    # Language coverage gaps are _check_value_backend_support's
+                    # job; this check only owns variant exclusions.
+                    continue
+                if impl.scope != "backend":
+                    applies_somewhere = True  # project-scoped impls always land
+                    break
+                if (bc.app_template or "") in frag.excluded_app_templates:
+                    excluding_variants.add(bc.app_template or "(unset)")
+                    continue
+                applies_somewhere = True
+                break
+            if applies_somewhere:
+                break
+        if applies_somewhere or not excluding_variants:
+            continue
+        variants = ", ".join(sorted(excluding_variants))
+        raise OptionsError(
+            f"Option '{path}={value!r}' is incompatible with this project's "
+            f"backend app_template variant(s) ({variants}): every fragment it "
+            f"enables ({', '.join(frag_names)}) is excluded on that service "
+            f"shape. Drop the option, or add a backend with a compatible "
+            f"app_template (e.g. crud-service).",
+            code=OPTIONS_INVALID_VALUE,
+            context={
+                "option": path,
+                "value": value,
+                "fragments": list(frag_names),
+                "excluding_app_templates": sorted(excluding_variants),
+            },
+        )
+
+
 def _check_value_backend_support(
     config: ProjectConfig, project_backends: tuple[BackendLanguage, ...]
 ) -> None:
@@ -541,6 +611,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     project_backends = tuple(bc.language for bc in config.backends)
     _check_value_backend_support(config, project_backends)
     _check_option_allowed_backends(config, project_backends)
+    _check_app_template_exclusions(config)
     _check_multitenancy_deferred(config)
 
     option_values = _apply_option_defaults(config.options)
