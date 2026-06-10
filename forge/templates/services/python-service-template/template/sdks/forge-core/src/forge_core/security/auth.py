@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, cast
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.datastructures import Headers
 from fastapi.openapi.models import OAuth2 as OAuth2Model
 from fastapi.security import OAuth2AuthorizationCodeBearer
@@ -183,6 +183,67 @@ async def authenticate_request(request: Request) -> User | None:
     user = user_from_identity(identity, request.headers)
     request.state.user = user
     request.state.identity = identity
+    return user
+
+
+def _websocket_token(websocket: WebSocket) -> str | None:
+    """Extract a bearer token from a WebSocket handshake.
+
+    WebSocket clients can't always set arbitrary headers, so accept the token
+    from (in order): the ``Authorization: Bearer`` header, the
+    ``Sec-WebSocket-Protocol`` subprotocol (``bearer, <token>``), or a
+    ``token`` / ``access_token`` query parameter. Cookies are NOT honored —
+    a WS handshake is not same-origin-protected the way fetch is, so trusting
+    an ambient cookie would reopen a CSRF-style vector.
+    """
+    auth_header = websocket.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip() or None
+    # Subprotocol form: clients send ["bearer", "<token>"]; Starlette joins
+    # the header as a comma-separated string.
+    proto = websocket.headers.get("sec-websocket-protocol")
+    if proto:
+        parts = [p.strip() for p in proto.split(",")]
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1] or None
+    return (
+        websocket.query_params.get("token")
+        or websocket.query_params.get("access_token")
+        or None
+    )
+
+
+async def authenticate_websocket(websocket: WebSocket) -> User | None:
+    """Verify a WebSocket handshake and return the authenticated ``User``.
+
+    Mirrors :func:`authenticate_request` for the WS lifecycle (which does not
+    run HTTP route dependencies): returns the dev user in dev mode with no
+    token, ``None`` when a token is absent (prod) or invalid. The caller MUST
+    close the socket (code 1008) when this returns ``None`` in a posture that
+    requires auth — this function never accepts/closes the socket itself.
+    """
+    bundle = getattr(websocket.app.state, _GUARD_KEY, None)
+    if bundle is None:
+        raise RuntimeError("Auth not initialized. Call initialize_auth() in lifespan.")
+    dev_mode = bool(getattr(websocket.app.state, _DEV_KEY, False))
+
+    token = _websocket_token(websocket)
+    if not token:
+        return _DEV_USER if dev_mode else None
+
+    try:
+        identity = await bundle.guard.verify(token)
+    except AuthError as exc:
+        _logger.warning(
+            "ws_auth_rejected reason=%s detail=%s",
+            exc.reason,
+            exc.detail,
+            extra={"reason": exc.reason, "detail": exc.detail},
+        )
+        return None
+
+    user = user_from_identity(identity, websocket.headers)
+    context.set_context(customer_id=user.customer_id, user_id=user.id)
     return user
 
 

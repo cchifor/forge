@@ -150,7 +150,10 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     ports:
-      - "15432:5432"
+      # Bound to loopback: services reach Postgres over the compose network
+      # (postgres:5432); this host map is dev convenience only and must not be
+      # exposed on the host's external interfaces.
+      - "127.0.0.1:15432:5432"
     environment:
       POSTGRES_DB: {{ db_name }}
       POSTGRES_USER: postgres
@@ -195,7 +198,9 @@ services:
     image: traefik:v2.11
     ports:
       - "80:80"
-      - "{{ traefik_dashboard_port }}:8080"
+      # Dashboard runs with TRAEFIK_API_INSECURE — keep it loopback-only so the
+      # routing config isn't exposed on the host's external interfaces.
+      - "127.0.0.1:{{ traefik_dashboard_port }}:8080"
     environment:
       TRAEFIK_API_INSECURE: "true"
       TRAEFIK_PROVIDERS_DOCKER: "true"
@@ -249,7 +254,8 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Loopback only — services use redis:6379 over the compose network.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -266,7 +272,8 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     ports:
-      - "5050:80"
+      # Loopback only — pgadmin is a local dev tool, never host-exposed.
+      - "127.0.0.1:5050:80"
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@localhost.com
       PGADMIN_DEFAULT_PASSWORD: admin

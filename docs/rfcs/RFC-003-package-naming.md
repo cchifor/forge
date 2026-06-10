@@ -1,10 +1,37 @@
 # RFC-003: Published-package naming and ownership
 
-- Status: Draft
+- Status: Accepted
 - Author: forge team
 - Created: 2026-04-20
-- Updated: 2026-04-20
-- Target: 1.0.0a4 (when canvas packages first publish)
+- Updated: 2026-06-10
+- Target: 1.2.0 (first public release)
+
+## Decision (2026-06-10)
+
+The original draft assumed `forge` was an available PyPI name and reserved an
+`@forge` npm scope. Both assumptions were wrong: PyPI `forge` is an unrelated
+third-party package, and the npm `@forge` scope belongs to Atlassian. The
+canvas vendoring decision (generated projects flatten canvas SOURCE into their
+own tree rather than depend on published packages) also removed the need to
+publish the canvas libraries for generated projects to work. Accordingly:
+
+1. **PyPI distribution name: `forge-cli`.** The installed console command stays
+   `forge` (`[project.scripts] forge = "forge.cli:main"`). This is the only
+   name change users see, and only when they `pip install forge-cli`.
+2. **Release scope for 1.2.0: the CLI only.** The standalone canvas npm/pub.dev
+   packages are NOT part of the 1.2.0 release — generated projects vendor the
+   canvas source, so nothing external is required for them to build. The
+   `packages/` trees remain in-repo (they are codegen targets + a future
+   standalone-publish option) but their publish jobs do not run for 1.2.0.
+3. **npm scope deferred.** If the standalone canvas packages are ever published,
+   they need a new scope (e.g. `@forge-canvas` or a personal scope); `@forge`
+   is unavailable. This decision is deferred until there is demand for the
+   standalone packages.
+4. **GitHub org deferred (Option B for now).** Everything stays personal-owned
+   under `github.com/cchifor/forge` until a succession/governance need arises.
+
+The sections below are the original draft, retained for context; where they
+conflict with the Decision above, the Decision wins.
 
 ## Summary
 

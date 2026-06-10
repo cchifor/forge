@@ -5,6 +5,55 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Security & regression fixes (wave 3)
+
+- **Generated Keycloak projects boot again.** The realm-sync sidecar pinned
+  `ENV=development` so its fail-closed guard no longer rejects the shipped dev
+  `KC_ADMIN_PASSWORD` under the image's baked `ENV=production`, restoring
+  `docker compose up` for every `include_keycloak` project.
+- **Node/Rust full-stack images build again.** The per-backend Dockerfile
+  `COPY --from=sdks` is gated on the backend's OWN-language platform-auth
+  middleware, not Python's — a Node/Rust-only auth project no longer ships
+  `sdks/` without the COPY.
+- **`worker` app_template generates with default options** via
+  `excluded_app_templates=("worker",)` on the HTTP-shaped default fragments
+  plus a resolve-time guard for explicit selections.
+- **`forge --platform <preset>` runs headless** — `_is_headless` now compares
+  the parsed namespace against the no-argv baseline, so every generation flag
+  is detected instead of a hand-maintained list.
+- **Generated-service security:** chat-files absolute-path LFI + tenant
+  scoping closed; webhooks cross-tenant IDOR + test-fire SSRF closed; the
+  `/ws/agent` WebSocket is authenticated; the `in_memory` dev issuer refuses
+  to boot in production; the CloudEvent stream is auth-gated; CORS
+  wildcard-with-credentials and the gatekeeper test-bypass fail closed in
+  production; dev-compose infra ports bind to loopback. A discovery-based
+  route-auth lint now requires every generated router to be gated or
+  explicitly public.
+- **Chat authenticates under the BFF.** The AG-UI client sends
+  `credentials: 'include'`, so a chat turn no longer 401s when auth is on.
+
+### Packaging
+
+- **Repository is now MIT-licensed** (root `LICENSE`, `pyproject` metadata).
+- **PyPI distribution name is `forge-cli`** (the `forge` name is owned by an
+  unrelated package); the installed console command stays `forge`. RFC-003.
+- **`forge --version`** prints the version and exits 0.
+
+### Recent merges (post-2026-05-23, previously unlogged)
+
+- **Platform generator (#170):** pluggable auth providers
+  (`gatekeeper`/`in_memory`/`oidc_generic`), a backend-template registry, and
+  multitenancy, with weld-free standalone builds.
+- **Selectable frontend layouts (#169):** six app-shell layouts across
+  Vue/Svelte/Flutter via template variants + `layout.toml` discovery.
+- **AG-UI SSE transport:** the `agent_agui` fragment serves the canonical
+  `POST /api/v1/agent` AG-UI SSE run protocol the generated frontend consumes.
+- **Token-claim multitenancy (#192–#194):** `schema_per_tenant` binds
+  `search_path` post-auth via the UoW; `shared_rls` binds the account GUC;
+  RLS fails closed on an empty GUC. Real-Postgres isolation tests added.
+- **Platform back-port tranche (#171–#182, #195):** primitives back-ported
+  from the platform line, including `Checkbox`/`Popover` UI components.
+
 ### Added
 
 - **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**

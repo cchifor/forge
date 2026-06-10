@@ -152,30 +152,23 @@ def test_orphan_conflicts_with_warns_not_raises(caplog: pytest.LogCaptureFixture
 # ---------------------------------------------------------------------------
 
 
-def test_asymmetric_conflicts_warns(caplog: pytest.LogCaptureFixture) -> None:
+def test_asymmetric_conflicts_are_silent(caplog: pytest.LogCaptureFixture) -> None:
+    # The symmetry audit was removed: _check_conflicts iterates EVERY fragment
+    # and checks its conflicts_with against the plan, so a one-directional
+    # declaration is already fully effective. A symmetry warning would only be
+    # per-invocation noise (it printed on every CLI run, including --help).
     reg = _FragmentRegistry()
     reg["a"] = _mk("a", conflicts_with=("b",))
-    reg["b"] = _mk("b")  # b doesn't declare conflict with a
+    reg["b"] = _mk("b")  # b doesn't declare conflict with a — intentional
     with caplog.at_level(logging.WARNING, logger="forge.fragments"):
         reg.freeze()
     assert reg.frozen
-    warnings = [rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING]
-    assert any("'a' declares conflict with 'b'" in w for w in warnings)
-
-
-def test_symmetric_conflicts_silent(caplog: pytest.LogCaptureFixture) -> None:
-    reg = _FragmentRegistry()
-    reg["a"] = _mk("a", conflicts_with=("b",))
-    reg["b"] = _mk("b", conflicts_with=("a",))
-    with caplog.at_level(logging.WARNING, logger="forge.fragments"):
-        reg.freeze()
-    # No symmetry complaint when both sides agree.
     symmetry_warnings = [
         rec.getMessage()
         for rec in caplog.records
         if rec.levelno == logging.WARNING and "declares conflict with" in rec.getMessage()
     ]
-    assert symmetry_warnings == []
+    assert symmetry_warnings == [], "the symmetry audit must not emit warnings"
 
 
 # ---------------------------------------------------------------------------

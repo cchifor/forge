@@ -552,6 +552,80 @@ class TestAuthenticateRequest:
             await auth.authenticate_request(req)  # type: ignore[arg-type]
 
 
+class _FakeWebSocket:
+    """Minimal duck-typed WebSocket for authenticate_websocket (app + headers
+    + query_params)."""
+
+    def __init__(
+        self,
+        app: _FakeApp,
+        *,
+        header_token: str | None = None,
+        query_token: str | None = None,
+        subprotocol_token: str | None = None,
+    ) -> None:
+        self.app = app
+        hdrs: dict[str, str] = {}
+        if header_token:
+            hdrs["authorization"] = f"Bearer {header_token}"
+        if subprotocol_token:
+            hdrs["sec-websocket-protocol"] = f"bearer, {subprotocol_token}"
+        self.headers = httpx.Headers(hdrs)
+        self.query_params = httpx.QueryParams(
+            {"token": query_token} if query_token else {}
+        )
+
+
+class TestAuthenticateWebsocket:
+    async def test_dev_mode_passthrough_synthesizes_dev_user(self) -> None:
+        app = _init_app(dev_mode=True)
+        ws = _FakeWebSocket(app)
+        user = await auth.authenticate_websocket(ws)  # type: ignore[arg-type]
+        assert user is not None and user.username == "dev-user"
+
+    async def test_no_token_no_dev_mode_returns_none(self) -> None:
+        app = _init_app(dev_mode=False)
+        ws = _FakeWebSocket(app)
+        assert await auth.authenticate_websocket(ws) is None  # type: ignore[arg-type]
+
+    async def test_valid_token_in_header(self) -> None:
+        kp = _Keypair()
+        app = _init_app(dev_mode=False, keypair=kp)
+        ws = _FakeWebSocket(app, header_token=kp.mint(extra={"preferred_username": "alice"}))
+        user = await auth.authenticate_websocket(ws)  # type: ignore[arg-type]
+        assert user is not None and user.customer_id == TENANT_ID
+
+    async def test_valid_token_in_query_param(self) -> None:
+        kp = _Keypair()
+        app = _init_app(dev_mode=False, keypair=kp)
+        ws = _FakeWebSocket(app, query_token=kp.mint())
+        user = await auth.authenticate_websocket(ws)  # type: ignore[arg-type]
+        assert user is not None and user.customer_id == TENANT_ID
+
+    async def test_valid_token_in_subprotocol(self) -> None:
+        kp = _Keypair()
+        app = _init_app(dev_mode=False, keypair=kp)
+        ws = _FakeWebSocket(app, subprotocol_token=kp.mint())
+        user = await auth.authenticate_websocket(ws)  # type: ignore[arg-type]
+        assert user is not None and user.customer_id == TENANT_ID
+
+    async def test_bad_token_returns_none_not_raises(self) -> None:
+        # Unlike the HTTP path (which raises 401), the WS path returns None so
+        # the endpoint can close(1008) — verified here it does not raise.
+        app = _init_app(dev_mode=False)
+        ws = _FakeWebSocket(app, header_token="not-a-jwt")
+        assert await auth.authenticate_websocket(ws) is None  # type: ignore[arg-type]
+
+    async def test_cookie_is_not_honored(self) -> None:
+        # A WS handshake isn't same-origin protected, so an ambient cookie
+        # must NOT authenticate. (No cookie attr on the fake — absence is the
+        # assertion: only header/query/subprotocol are read.)
+        app = _init_app(dev_mode=False)
+        ws = _FakeWebSocket(app)
+        assert not hasattr(ws, "cookies")
+        assert await auth.authenticate_websocket(ws) is None  # type: ignore[arg-type]
+
+
 def _make_user():
     from forge_core.domain.user import User
 

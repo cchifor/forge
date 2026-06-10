@@ -106,7 +106,6 @@ class _FragmentRegistry(dict[str, Fragment]):
     def _audit(self) -> None:
         self._audit_orphan_depends_on()
         self._audit_orphan_conflicts()
-        self._audit_conflict_symmetry()
         self._audit_no_cycles()
 
     def _audit_orphan_depends_on(self) -> None:
@@ -134,24 +133,13 @@ class _FragmentRegistry(dict[str, Fragment]):
                     sorted(missing),
                 )
 
-    def _audit_conflict_symmetry(self) -> None:
-        for frag in self.values():
-            for other in frag.conflicts_with:
-                peer = self.get(other)
-                if peer is None:
-                    continue  # already warned in _audit_orphan_conflicts
-                if frag.name not in peer.conflicts_with:
-                    logger.warning(
-                        "Fragment %r declares conflict with %r, but %r does "
-                        "not declare conflict with %r. conflicts_with should "
-                        "be symmetric — add %r to %r.conflicts_with.",
-                        frag.name,
-                        other,
-                        other,
-                        frag.name,
-                        frag.name,
-                        other,
-                    )
+    # NOTE: there is intentionally no conflict-symmetry audit. ``_check_conflicts``
+    # (capability_resolver) iterates EVERY fragment in the plan and checks its
+    # ``conflicts_with`` against the present set, so a conflict declared on one
+    # side (e.g. ``llm_port`` declaring conflict with ``queue_port``) is already
+    # fully effective regardless of direction. A symmetry audit would only emit
+    # noise (it printed on every CLI invocation, including ``--help``) without
+    # catching any real bug — declare a conflict once, on the owning fragment.
 
     def _audit_no_cycles(self) -> None:
         """Kahn's algorithm dry-run over the full registry.
