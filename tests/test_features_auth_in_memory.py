@@ -149,6 +149,78 @@ def test_dev_route_exposes_token_endpoint() -> None:
         assert field in src, f"dev token request must accept {field!r}"
 
 
+class TestProductionRefusal:
+    """``install_in_memory_auth`` must fail closed under a production posture —
+    the dev issuer mints arbitrary identity tokens with NO authentication, so a
+    stray prod deploy must crash at boot rather than silently expose minting.
+    The module imports ``app.*`` packages absent from forge's env, so the
+    guard is loaded with those stubbed and exercised for real."""
+
+    def _load_install_module(self):
+        import importlib.util
+        import sys
+        import types
+
+        # Stub the app.* + fastapi imports the module performs at top level.
+        if "fastapi" not in sys.modules:
+            fastapi_stub = types.ModuleType("fastapi")
+            fastapi_stub.FastAPI = object
+            sys.modules["fastapi"] = fastapi_stub
+        for name in (
+            "app",
+            "app.core",
+            "app.core.lifecycle",
+            "app.core.config",
+            "app.security",
+            "app.security.in_memory_issuer",
+        ):
+            sys.modules.setdefault(name, types.ModuleType(name))
+        sys.modules["app.core.config"].Settings = object
+        sys.modules["app.security.in_memory_issuer"].InMemoryIssuer = object
+        sys.modules["app.security.in_memory_issuer"].build_in_memory_auth_bundle = (
+            lambda *a, **k: None
+        )
+        path = (
+            _fragment_root() / "src/app/security/in_memory_auth.py"
+        )
+        spec = importlib.util.spec_from_file_location(
+            "_in_memory_auth_under_test", path
+        )
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+    @pytest.mark.parametrize("env", ["production", "prod", "staging", "PRODUCTION", ""])
+    def test_refuses_under_production_posture(self, env, monkeypatch):
+        mod = self._load_install_module()
+        monkeypatch.setenv("ENV", env)
+        with pytest.raises(mod.InMemoryAuthInProductionError):
+            mod._refuse_in_production()
+
+    def test_refuses_when_env_unset(self, monkeypatch):
+        mod = self._load_install_module()
+        monkeypatch.delenv("ENV", raising=False)
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        with pytest.raises(mod.InMemoryAuthInProductionError):
+            mod._refuse_in_production()
+
+    @pytest.mark.parametrize("env", ["development", "dev", "test", "testing", "local", "ci"])
+    def test_allows_dev_postures(self, env, monkeypatch):
+        mod = self._load_install_module()
+        monkeypatch.setenv("ENV", env)
+        mod._refuse_in_production()  # must not raise
+
+    def test_install_calls_the_guard(self) -> None:
+        # The guard must actually be invoked by install_in_memory_auth, not
+        # just defined.
+        src = (
+            _fragment_root() / "src/app/security/in_memory_auth.py"
+        ).read_text(encoding="utf-8")
+        body = src.split("def install_in_memory_auth")[1]
+        assert "_refuse_in_production()" in body
+
+
 def test_inject_yaml_switches_guard_and_mounts_route() -> None:
     inject = (Path(_fragment_root()).parent / "inject.yaml").read_text(encoding="utf-8")
     # Mounts the dev route on the v1 router.
