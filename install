@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# No `errexit` (`set -e`): this is a bootstrap installer whose steps return
+# non-zero by design — the uv installer exits non-zero in a non-interactive
+# shell, and the cosmetic `… | head` version pipelines SIGPIPE under pipefail.
+# macOS ships bash 3.2, whose errexit/pipefail/`|| true` handling aborts the
+# script even on guarded commands (observed: it died right after a SUCCESSFUL
+# uv install on macOS CI). We keep `nounset` + `pipefail` and verify the two
+# things that actually matter — uv and forge — explicitly instead.
+set -uo pipefail
 
 REPO="https://github.com/cchifor/forge.git"
 TOOL="git+${REPO}"
@@ -36,10 +43,7 @@ ps_exec() {
 }
 
 get_version() {
-  # Wrapped in `|| true` so a cosmetic version lookup can never abort the
-  # installer: the trailing `head -1` SIGPIPEs the upstream `grep`, which
-  # under `set -o pipefail` returns non-zero.
-  { "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1; } || true
+  "$@" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+[.0-9]*' | head -1
 }
 
 # -- Banner -------------------------------------------------------------------
@@ -58,26 +62,22 @@ if installed uv; then
   echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
 else
   echo -e "  ${MUTED}Installing uv...${NC}"
-  # `|| true`: the uv installer exits non-zero in a non-interactive shell
-  # (it prints a "restart your shell"/profile notice and returns non-zero),
-  # which under this script's `set -o pipefail` + `set -e` would abort the
-  # installer right after a SUCCESSFUL install — observed on macOS CI. The
-  # `installed uv` re-check below is the authoritative success signal, so we
-  # deliberately ignore the installer's own exit code here.
   if [[ "$os" == "windows" ]]; then
-    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | sed 's/^/    /' || true
+    ps_exec "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | sed 's/^/    /'
   else
-    curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | sed 's/^/    /' || true
+    curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | sed 's/^/    /'
   fi
-  # Refresh PATH
+  # Refresh PATH: uv installs to ~/.local/bin. Source its env file if present,
+  # and add the dir unconditionally so the verify below finds uv regardless.
   if [[ "$os" == "windows" ]]; then
     eval "$(powershell.exe -NoProfile -Command '
       $p = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
            [System.Environment]::GetEnvironmentVariable("Path","Machine")
       $p -split ";" | ForEach-Object { if ($_) { "export PATH=\"" + ($_ -replace "\\\\","/") + ":\$PATH\"" } }
-    ')" 2>/dev/null || true
+    ')" 2>/dev/null
   else
-    source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH"
+    source "$HOME/.local/bin/env" 2>/dev/null || true
+    export PATH="$HOME/.local/bin:$PATH"
   fi
   if installed uv; then
     echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
@@ -125,9 +125,18 @@ echo -e "  ${MUTED}Installing forge...${NC}"
 echo -e ""
 
 if [[ "$os" == "windows" ]]; then
-  ps_exec "uv tool install $TOOL" 2>&1 | sed 's/^/    /'
+  ps_exec "uv tool install --force $TOOL" 2>&1 | sed 's/^/    /'
 else
-  uv tool install "$TOOL" 2>&1 | sed 's/^/    /'
+  uv tool install --force "$TOOL" 2>&1 | sed 's/^/    /'
+fi
+
+# uv tool shims land in ~/.local/bin; make sure it's on PATH for the verify.
+export PATH="$HOME/.local/bin:$PATH"
+if ! installed forge; then
+  echo -e ""
+  echo -e "  ${RED}[!!] forge installation failed.${NC} See the output above."
+  echo -e "  ${MUTED}You can retry with: uv tool install --force ${TOOL}${NC}"
+  exit 1
 fi
 
 # -- Done ---------------------------------------------------------------------
