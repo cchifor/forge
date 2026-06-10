@@ -27,7 +27,7 @@ Forge is a **project generator**, not a framework. It composes:
 
 Read these three docs before touching code:
 
-- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — one-page dataflow.
+- [`docs/architecture.md`](architecture.md) — one-page dataflow.
 - [`docs/rfcs/RFC-006-cross-backend-fragment-contract.md`](rfcs/RFC-006-cross-backend-fragment-contract.md) —
   parity tiers explain why features fan out to N backends.
 - [`docs/coverage-policy.md`](coverage-policy.md) — the two-layer

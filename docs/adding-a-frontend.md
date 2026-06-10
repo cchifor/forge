@@ -31,7 +31,7 @@ A frontend is fully described by three pieces of metadata:
 3. **A `FrontendLayout`** (only if the framework participates in
    schema-first codegen) — the paths where generated UI-protocol types,
    canvas manifest, and shared enums land. See `forge/frontends.py` and
-   `docs/ARCHITECTURE.md` for the codegen pipeline that consumes these.
+   `docs/architecture.md` for the codegen pipeline that consumes these.
 
 Core frontends (Vue, Svelte, Flutter) short-circuit the spec registry
 and use `TEMPLATE_DIRS` in `forge/generator.py`, but they still appear
