@@ -316,6 +316,14 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
     ("llm.provider", "anthropic"): frozenset({BackendLanguage.PYTHON}),
     ("llm.provider", "ollama"): frozenset({BackendLanguage.PYTHON}),
     ("llm.provider", "bedrock"): frozenset({BackendLanguage.PYTHON}),
+    # Each queue backend ships its ADAPTER on exactly one language (the
+    # ``queue_port`` interface is tri-language, but a port with no adapter is
+    # a service that boots then fails at first use). Reject the mismatch at
+    # config time instead of silently emitting the adapter-less port.
+    ("queue.backend", "redis"): frozenset({BackendLanguage.PYTHON}),
+    ("queue.backend", "sqs"): frozenset({BackendLanguage.PYTHON}),
+    ("queue.backend", "bullmq"): frozenset({BackendLanguage.NODE}),
+    ("queue.backend", "apalis"): frozenset({BackendLanguage.RUST}),
 }
 
 # Options where EVERY "active" (non-none / non-false) value is Python-only in
@@ -326,6 +334,10 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
 _PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
     "rag.backend": frozenset({BackendLanguage.PYTHON}),
     "platform.mcp": frozenset({BackendLanguage.PYTHON}),
+    # object_store ships only Python port + adapters today; selecting it on a
+    # Node/Rust-only project would otherwise resolve to ZERO fragments (a
+    # complete silent no-op).
+    "object_store.backend": frozenset({BackendLanguage.PYTHON}),
 }
 
 # Values that mean "feature off" for the options in _PYTHON_ONLY_WHEN_ACTIVE.
