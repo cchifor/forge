@@ -22,12 +22,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from forge.capability_resolver import resolve
 from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.fragments import FRAGMENT_REGISTRY
-
 
 # -- fragment-registry shape --------------------------------------------------
 
@@ -233,17 +233,24 @@ def test_resolver_pulls_in_port_and_adapter_on_node() -> None:
     assert names.index("queue_port") < names.index("queue_bullmq")
 
 
-def test_resolver_skips_bullmq_silently_on_python_only_project() -> None:
-    """``queue.backend=bullmq`` enables (queue_port, queue_bullmq) — a
-    multi-fragment bundle. On a Python-only project, the resolver
-    silently fans out: queue_port lands on Python; queue_bullmq has no
-    matching backend and skips. This is the bundle/discriminator
-    pattern (matches ``auth.mode``). The Python service ends up with a
-    port and no adapter — calls fail at first-use with a clear
-    "no adapter wired" error, not at generate time."""
-    plan = resolve(_python_project({"queue.backend": "bullmq"}))
+def test_resolver_rejects_bullmq_on_python_only_project() -> None:
+    """``queue.backend=bullmq`` ships its adapter on Node only. Selecting it on
+    a Python-only project used to silently emit an adapter-less queue_port (a
+    service that boots then fails at first use); it now hard-errors at config
+    time (fail-fast, #219). The DEFAULT-origin case still skips silently."""
+    from forge.errors import OptionsError
+
+    with pytest.raises(OptionsError, match="bullmq"):
+        resolve(_python_project({"queue.backend": "bullmq"}))
+
+
+def test_resolver_default_origin_bullmq_skips_on_python() -> None:
+    """A persisted DEFAULT (origin != user) must never hard-error — the
+    fail-fast only fires for explicit user selections."""
+    cfg = _python_project({"queue.backend": "bullmq"})
+    cfg.option_origins = {"queue.backend": "default"}
+    plan = resolve(cfg)
     names = [rf.fragment.name for rf in plan.ordered]
-    assert "queue_port" in names
     assert "queue_bullmq" not in names
 
 
