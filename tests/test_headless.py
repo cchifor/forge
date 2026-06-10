@@ -60,6 +60,66 @@ class TestIsHeadless:
         assert _is_headless(_default_args(frontend="vue"))
 
 
+class TestEveryFlagTriggersHeadless:
+    """Regression guard for the silently-discarded-flags bug: _is_headless
+    used to be a hand-maintained 13-flag list, so `forge --platform X`
+    (and ~15 other flags) dropped the flag and opened the wizard. The
+    generic baseline comparison must detect EVERY current and future
+    generation flag; report-only flags are denylisted explicitly."""
+
+    @staticmethod
+    def _sample_argv(action) -> list[str] | None:
+        flag = action.option_strings[-1]
+        if action.nargs == 0:
+            return [flag]
+        if action.choices:
+            for choice in action.choices:
+                if choice != action.default:
+                    return [flag, str(choice)]
+            return None  # degenerate: single choice equal to the default
+        if action.type is int or isinstance(action.default, int):
+            return [flag, str((action.default or 0) + 1)]
+        if isinstance(action.default, str):
+            return [flag, action.default + "x"]
+        return [flag, "sample"]
+
+    def test_every_option_flag_triggers_headless(self):
+        from forge.cli.parser import _MODE_ONLY_DESTS, _build_parser
+
+        parser = _build_parser()
+        missed: list[str] = []
+        for action in parser._actions:
+            if not action.option_strings or action.dest == "help":
+                continue
+            if action.dest in _MODE_ONLY_DESTS:
+                continue
+            argv = self._sample_argv(action)
+            if argv is None:
+                continue
+            ns = parser.parse_args(argv)
+            if not _is_headless(ns):
+                missed.append(" ".join(argv))
+        assert not missed, (
+            "flags parsed but NOT detected by _is_headless (they would be "
+            f"silently discarded in interactive mode): {missed}"
+        )
+
+    def test_mode_only_flags_stay_interactive(self):
+        from forge.cli.parser import _build_parser
+
+        parser = _build_parser()
+        for argv in (["--verbose"], ["--log-json"], ["--log-level", "DEBUG"]):
+            assert not _is_headless(parser.parse_args(argv)), argv
+
+    def test_platform_flag_is_headless(self):
+        # The motivating bug: `forge --platform <preset>` must run headless
+        # with the preset applied, not silently fall into the wizard.
+        from forge.cli.parser import _build_parser
+
+        ns = _build_parser().parse_args(["--platform", "monolithic"])
+        assert _is_headless(ns)
+
+
 class TestBuildConfig:
     def test_defaults_only(self):
         config = _build_config(_default_args(), {})
