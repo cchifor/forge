@@ -89,7 +89,11 @@ class TestEveryFlagTriggersHeadless:
         parser = _build_parser()
         missed: list[str] = []
         for action in parser._actions:
-            if not action.option_strings or action.dest == "help":
+            if not action.option_strings or action.dest in ("help", "version"):
+                continue
+            # Terminal actions (--help, --version) exit during parse; they are
+            # not generation flags.
+            if type(action).__name__ in ("_HelpAction", "_VersionAction"):
                 continue
             if action.dest in _MODE_ONLY_DESTS:
                 continue

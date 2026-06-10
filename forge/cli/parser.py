@@ -31,6 +31,18 @@ def _build_parser() -> argparse.ArgumentParser:
     """
     p = argparse.ArgumentParser(prog="forge", description="Project Generator")
 
+    # ``forge --version`` — prints the package version and exits 0. The weekly
+    # install-test + release-dryrun workflows assert this; argparse's version
+    # action short-circuits before any subcommand dispatch.
+    from forge import __version__ as _forge_version  # noqa: PLC0415
+
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"forge {_forge_version}",
+        help="Show the forge version and exit.",
+    )
+
     # Platform preset — the lowest-priority config layer (below user flags +
     # config-file values, exactly like a default). Seeds option overrides +
     # per-backend app_template/depends_on + an optional frontend. Choices are
