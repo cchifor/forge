@@ -309,18 +309,22 @@ jobs:
     needs: matrix-setup
     runs-on: ubuntu-latest
     # Smoke is ~10 min/scenario (Docker pull + compose up + tests +
-    # teardown). 20 min cap leaves slack for cold caches without
-    # blocking a runner for hours on a hung compose stack.
-    timeout-minutes: 20
+    # teardown). 25 min cap leaves slack for cold caches and the
+    # Keycloak boot in py_vue_full without blocking a runner for hours
+    # on a hung compose stack.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         # The two fastest smoke-opted-in scenarios from
-        # tests/matrix/scenarios.yaml — both are min-config single-
-        # backend stacks (no Keycloak, no options) which keeps the PR
-        # critical path bounded. Do not fan out to the full smoke set
-        # here; that's nightly's job.
-        scenario: [py_svelte_min, node_svelte_min]
+        # tests/matrix/scenarios.yaml (min-config single-backend stacks)
+        # plus ONE Keycloak-enabled scenario. The Keycloak leg exists so
+        # fail-closed guards in the gatekeeper/realm-sync sidecars get
+        # compose-context coverage before merge — the 2026-06-09 realm-sync
+        # guard regression shipped precisely because no PR lane booted a
+        # Keycloak stack. Do not fan out to the full smoke set here;
+        # that's nightly's job.
+        scenario: [py_svelte_min, node_svelte_min, py_vue_full]
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
