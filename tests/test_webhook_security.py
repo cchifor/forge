@@ -155,3 +155,34 @@ class TestDeliveryHardening:
         body = src.split("async def deliver")[1]
         assert "validate_outbound_url(webhook.url)" in body
         assert "follow_redirects=False" in body
+
+    def test_deliver_uses_connect_time_guard_transport(self, svc):
+        # The authoritative anti-rebinding control: deliver must connect via the
+        # guard transport, and post the ORIGINAL webhook.url (so Host/SNI/cert
+        # verification stay correct) rather than a rewritten IP URL.
+        src = _SERVICE.read_text(encoding="utf-8")
+        body = src.split("async def deliver")[1]
+        assert "transport=_guarded_transport()" in body
+        assert "client.post(webhook.url" in body
+
+    def test_guard_backend_validates_at_connect(self, svc):
+        # The backend wrapper must validate the host at connect_tcp (closing the
+        # TOCTOU a pre-flight check alone leaves open).
+        src = _SERVICE.read_text(encoding="utf-8")
+        gt = src.split("def _guarded_transport")[1]
+        assert "async def connect_tcp" in gt
+        assert "_resolve_and_validate(host, port)" in gt
+        assert "connect_tcp(\n                validated_ip" in gt
+
+    def test_resolve_and_validate_blocks_internal_literals(self, svc):
+        for bad in ("127.0.0.1", "169.254.169.254", "10.0.0.1", "192.168.0.1", "::1"):
+            with pytest.raises(svc.WebhookUrlError):
+                svc._resolve_and_validate(bad, 443)
+
+    def test_resolve_and_validate_blocks_rebinding_resolution(self, svc, monkeypatch):
+        monkeypatch.setattr(
+            svc.socket, "getaddrinfo",
+            lambda *a, **k: [(2, 1, 6, "", ("10.1.2.3", 443))],
+        )
+        with pytest.raises(svc.WebhookUrlError):
+            svc._resolve_and_validate("totally-public.example", 443)
