@@ -85,6 +85,16 @@ TEMPLATE_DIRS = {
     FrontendFramework.FLUTTER: "apps/flutter-frontend-template",
 }
 
+# The auth-middleware fragment per backend language. A backend's Dockerfile
+# gates the ``COPY --from=sdks`` + dependency wiring on whether ITS language's
+# middleware is in the plan (see _generate_backends). Keep in lockstep with the
+# platform_auth_*_middleware fragment names.
+_PLATFORM_AUTH_MIDDLEWARE: dict[BackendLanguage, str] = {
+    BackendLanguage.PYTHON: "platform_auth_python_middleware",
+    BackendLanguage.NODE: "platform_auth_node_middleware",
+    BackendLanguage.RUST: "platform_auth_rust_middleware",
+}
+
 
 def _resolve_final_root(output_dir: str | Path, project_slug: str) -> Path:
     """Resolve ``<output_dir>/<project_slug>``, refusing any result that escapes
@@ -326,16 +336,25 @@ def _generate_backends(
             language=bc.language.value,
         ):
             # ``platform-auth`` is the runtime SDK the auth middleware
-            # fragment imports from. It lives at ``sdks/platform-auth/``
-            # (shipped by ``platform_auth_sdk_python``) and needs both a
-            # ``"platform-auth"`` ``[project] dependencies`` entry and a
-            # ``[tool.uv.sources]`` path-dep so ``uv sync`` resolves it
-            # against the in-tree source. Flip the copier var only when
-            # the Python middleware fragment is actually in the plan —
-            # non-auth Python services don't ship sdks/platform-auth/ so
-            # they'd uv-sync-fail if we always emitted the entry.
-            includes_platform_auth = any(
-                rf.fragment.name == "platform_auth_python_middleware" for rf in plan.ordered
+            # fragment imports from. It lives at ``sdks/platform-auth-<lang>/``
+            # (shipped by the per-language ``platform_auth_sdk_*`` fragment)
+            # and the per-backend Dockerfile gates ``COPY --from=sdks`` plus
+            # the dependency wiring on this flag. Flip it only when the
+            # matching middleware fragment is actually in the plan — non-auth
+            # services don't ship the sdks tree, so an unconditional COPY/dep
+            # would fail the build/sync.
+            #
+            # MUST be per-backend-language: the check used to hardcode the
+            # Python fragment, so a Node/Rust backend with auth (but no Python
+            # backend) rendered its Dockerfile WITHOUT the sdks COPY while the
+            # project still shipped sdks/ and declared the file: dependency —
+            # node_vue_full / rust_vue_full image builds broke on PR #170 when
+            # that COPY was first gated on this stale flag.
+            includes_platform_auth = bool(
+                _PLATFORM_AUTH_MIDDLEWARE.get(bc.language)
+            ) and any(
+                rf.fragment.name == _PLATFORM_AUTH_MIDDLEWARE[bc.language]
+                for rf in plan.ordered
             )
             # Mirror the platform-auth gating for error_port: only wire the
             # central handler through ``DefaultErrorPort.serialize`` when the
