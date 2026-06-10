@@ -89,6 +89,7 @@ to ``forge.toml`` re-generation — the refactor is a hard cutover.
 from __future__ import annotations
 
 import logging
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -225,7 +226,13 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
     """
     if not path.is_file():
         raise FileNotFoundError(f"forge.toml not found at {path}")
-    doc = tomlkit.parse(path.read_text(encoding="utf-8"))
+    # Parse with stdlib tomllib, not tomlkit: the read path coerces everything
+    # to plain Python via _coerce_*/_unwrap (style preservation is unused on
+    # read; only write_forge_toml needs tomlkit, and it rebuilds the document
+    # from scratch). tomlkit.parse is ~700x slower on a large provenance
+    # manifest — ~10s on a 79KB forge.toml that tomllib reads in ~15ms — and
+    # every sync verb (verify/harvest/update/accept/resolve) pays it.
+    doc = tomllib.loads(path.read_text(encoding="utf-8"))
 
     forge = doc.get("forge")
     if forge is None:
