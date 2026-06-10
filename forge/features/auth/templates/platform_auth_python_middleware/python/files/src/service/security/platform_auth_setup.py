@@ -14,6 +14,7 @@ from platform_auth import (
     AuthGuard,
     InMemoryIssuerTrustMap,
     JWKSCache,
+    MayActPolicy,
     StaticMayActPolicy,
 )
 
@@ -43,14 +44,18 @@ class AuthGuardBundle:
     guard: AuthGuard
     jwks: JWKSCache
     trust_map: InMemoryIssuerTrustMap
-    may_act: StaticMayActPolicy
+    # The may-act policy collaborator. Typed as the ``MayActPolicy`` protocol
+    # so the bundle accepts any implementation — the gatekeeper path supplies
+    # a ``StaticMayActPolicy`` (the default below), while the in-memory dev
+    # issuer supplies ``AllowAllMayActPolicy`` (break-glass; dev/test only).
+    may_act: MayActPolicy
 
 
 def build_auth_guard(
     config: AuthConfig,
     *,
     trust_map: InMemoryIssuerTrustMap | None = None,
-    may_act: StaticMayActPolicy | None = None,
+    may_act: MayActPolicy | None = None,
 ) -> AuthGuardBundle:
     """Wire an :class:`AuthGuard` against the configured gatekeeper issuer."""
     jwks = JWKSCache()
