@@ -34,6 +34,7 @@ from uuid import UUID
 import httpx
 import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
+from jwt.algorithms import ECAlgorithm
 from cryptography.hazmat.primitives.asymmetric import ec
 from platform_auth import (
     AllowAllMayActPolicy,
@@ -107,7 +108,7 @@ class InMemoryIssuer:
 
     def public_jwk(self) -> dict[str, Any]:
         """Return the public-key half of the keypair as a JWK dict."""
-        jwk_str = pyjwt.algorithms.ECAlgorithm.to_jwk(self._private_key.public_key())
+        jwk_str = ECAlgorithm.to_jwk(self._private_key.public_key())
         jwk: dict[str, Any] = json.loads(jwk_str)
         jwk["kid"] = self._kid
         jwk["alg"] = "ES256"

@@ -23,12 +23,19 @@ EVERYTHING here is IDEMPOTENT — safe to re-run:
 
 The policy predicate is::
 
-    USING (customer_id = current_setting('app.current_tenant', true)::uuid)
-    WITH CHECK (customer_id = current_setting('app.current_tenant', true)::uuid)
+    USING (customer_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+    WITH CHECK (customer_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
 
-``current_setting(..., true)`` returns NULL (rather than erroring) when the
-GUC is unset, so an unbound connection sees zero rows instead of crashing —
-fail-closed, never fail-open.
+``current_setting(..., true)`` returns NULL when the GUC was never set on the
+connection, but a *custom* (dotted/placeholder) GUC that has been bound once
+with ``SET LOCAL`` reverts to an **empty string** — not NULL — at transaction
+end, and that empty value lingers on the pooled connection. A bare
+``''::uuid`` cast then raises ``invalid input syntax for type uuid`` for the
+next unbound request reusing that connection. Wrapping the read in
+``NULLIF(..., '')`` collapses both the never-set (NULL) and the
+reverted-empty ('') cases to NULL, so an unbound connection sees zero rows
+instead of crashing — fail-closed, never fail-open, on a fresh OR a recycled
+connection.
 
 Postgres-only: the migration short-circuits to a no-op on any non-postgres
 dialect so the same migration chain runs on SQLite test databases.
@@ -82,8 +89,8 @@ def _enable_rls(table: str) -> None:
             EXECUTE 'ALTER TABLE {table} FORCE ROW LEVEL SECURITY';
             EXECUTE 'DROP POLICY IF EXISTS {policy} ON {table}';
             EXECUTE 'CREATE POLICY {policy} ON {table} '
-                || 'USING ({TENANT_COLUMN} = current_setting(''{TENANT_GUC}'', true)::uuid) '
-                || 'WITH CHECK ({TENANT_COLUMN} = current_setting(''{TENANT_GUC}'', true)::uuid)';
+                || 'USING ({TENANT_COLUMN} = NULLIF(current_setting(''{TENANT_GUC}'', true), '''')::uuid) '
+                || 'WITH CHECK ({TENANT_COLUMN} = NULLIF(current_setting(''{TENANT_GUC}'', true), '''')::uuid)';
         END
         $$;
         """

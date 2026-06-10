@@ -68,8 +68,8 @@ async def test_shared_rls_cross_tenant_isolation() -> None:
         await conn.exec_driver_sql("ALTER TABLE rls_probe FORCE ROW LEVEL SECURITY")
         await conn.exec_driver_sql(
             "CREATE POLICY rls_probe_tenant ON rls_probe "
-            "USING (customer_id = current_setting('app.current_tenant', true)::uuid) "
-            "WITH CHECK (customer_id = current_setting('app.current_tenant', true)::uuid)"
+            "USING (customer_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid) "
+            "WITH CHECK (customer_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)"
         )
 
     def _uow(account: _Account | None) -> AsyncUnitOfWork:
@@ -91,18 +91,14 @@ async def test_shared_rls_cross_tenant_isolation() -> None:
         assert seen_a == 1, "tenant A must see its own row"
         assert seen_b == 0, "tenant B must NOT see tenant A's row — RLS leak"
 
-        # No tenant context (PublicUnitOfWork) ⇒ fail closed: either zero rows
-        # (NULL GUC) or an error (the policy's ``::uuid`` cast on an empty GUC —
-        # a known shared_rls policy detail). Both deny data; assert it never
-        # returns tenant A's row.
-        seen_public = 0
-        try:
-            async with _uow(None) as uow:
-                seen_public = (
-                    await uow.session.execute(text("SELECT count(*) FROM rls_probe"))
-                ).scalar()
-        except Exception:  # noqa: BLE001 — policy cast on empty GUC is also fail-closed
-            seen_public = 0
+        # No tenant context (PublicUnitOfWork) ⇒ fail closed with ZERO rows.
+        # The policy's ``NULLIF(current_setting(...), '')`` collapses both the
+        # never-set (NULL) and reverted-empty ('') GUC to NULL, so the cast
+        # never raises — even on a connection recycled from a prior tenant.
+        async with _uow(None) as uow:
+            seen_public = (
+                await uow.session.execute(text("SELECT count(*) FROM rls_probe"))
+            ).scalar()
         assert seen_public == 0, "no tenant context must not see tenant data (fail closed)"
     finally:
         async with engine.begin() as conn:

@@ -2213,8 +2213,8 @@
       "sha256": "a2176bf53eb5f7c3"
     },
     "services/api/src/service/security/platform_auth_setup.py": {
-      "size": 2111,
-      "sha256": "0943be2861683b1d"
+      "size": 2428,
+      "sha256": "44f4f4eeb9a1b220"
     },
     "services/api/tests/__init__.py": {
       "size": 0,
