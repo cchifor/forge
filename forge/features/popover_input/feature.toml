@@ -1,0 +1,7 @@
+[feature]
+name = "Popover"
+version = "1.0.0"
+summary = "A popover wrapping radix-vue PopoverRoot/Trigger/Portal/Content — Layer-1 pure-UI component."
+category = "component"
+stability = "experimental"
+layer = 1

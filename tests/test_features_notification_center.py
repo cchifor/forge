@@ -74,6 +74,24 @@ def test_emitted_when_selected(tmp_path: Path) -> None:
         _one(root, rel)
 
 
+def test_composes_popover_primitive_without_collision(tmp_path: Path) -> None:
+    """NotificationCenter sources shared/ui/popover/ from the Popover primitive.
+
+    It declares ``Popover`` as a child component rather than shipping its own
+    inlined copy, so selecting both ``NotificationCenter`` and ``Popover``
+    together emits the popover files exactly once (no strict file-copy clash).
+    """
+    # Child pull: NotificationCenter alone still materializes the popover.
+    root = _gen(tmp_path / "a", ["NotificationCenter"])
+    assert "Popover" in COMPONENT_REGISTRY
+    assert len(list(root.rglob("shared/ui/popover/PopoverContent.vue"))) == 1
+
+    # Co-selection must not collide on the shared path.
+    both = _gen(tmp_path / "b", ["NotificationCenter", "Popover"])
+    assert len(list(both.rglob("shared/ui/popover/PopoverContent.vue"))) == 1
+    assert len(list(both.rglob("shared/ui/popover/index.ts"))) == 1
+
+
 def test_builds_on_useeventstream_and_is_platform_free(tmp_path: Path) -> None:
     root = _gen(tmp_path, ["NotificationCenter"])
     nf = _one(root, "features/notifications/store.ts").parent
