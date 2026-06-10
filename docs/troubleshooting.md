@@ -30,9 +30,9 @@ might have regressed.
 
 **Fix.** Verify `uv.lock` has the pinned version (`ty==0.0.29` as of
 1.1.0-alpha.1). Re-run `uv sync --all-extras --dev`. If the error
-persists, open the `Release dry-run` workflow or run
-`tests/test_ty_canary.py` locally — a canary failure indicates ty
-regressed, a forge typecheck failure indicates forge code needs updates.
+persists, run `tests/test_ty_canary.py` locally — a canary failure
+indicates ty regressed, a forge typecheck failure indicates forge code
+needs updates.
 
 ## Generation
 
@@ -180,23 +180,22 @@ catches this on every `package-integrity` CI run.
 3. If you just want the bad build gone: `rm -rf dist/ build/
    forge.egg-info/` and retry.
 
-### Release blocked: "No successful release-dryrun/ok check-run"
+### Release tag failed to cut a GitHub Release
 
-**Symptom.** Tagging a release triggers `release.yml` which fails
-immediately in the `preflight-dryrun` job.
+**Symptom.** Pushing a `vX.Y.Z` tag triggers `release.yml` and the
+`github-release` job fails.
 
-**Cause.** Epic Z requires a successful `release-dryrun.yml` run on
-the same SHA within 72h before tagging.
+**Cause & fix.** forge is GitHub-only (no registry publishing), so the job
+has just two fail-closed checks:
+- **Check tag matches package version** — the tag and `forge/__init__.py`
+  `__version__` disagree. Align them, delete the tag, retag.
+- **Extract changelog section** — the `[Unreleased]` CHANGELOG section is
+  empty. Add notes, recommit, retag.
 
-**Fix.**
-1. Actions → "Release dry-run" → Run workflow → wait for green.
-2. Re-push the tag. `preflight-dryrun` consumes the check-run the
-   rehearsal wrote and lets the publish proceed.
-
-Emergency escape: set repo variable `SKIP_DRYRUN_GATE=true` in
-Settings → Secrets and variables → Actions → Variables. Reset (or
-delete) after the emergency release — the variable change is
-auditable in the repo log.
+The job is idempotent and nothing is published to a registry, so re-pushing
+the corrected tag simply recreates the Release — there's no partial-publish
+state to clean up. (There is no longer a `release-dryrun` rehearsal or
+`SKIP_DRYRUN_GATE` — both were removed with the publish pipeline.)
 
 ## Contributing
 

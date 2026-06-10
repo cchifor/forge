@@ -4,129 +4,30 @@ Procedures for forge maintainers. Each section is self-contained: context paragr
 
 ---
 
-## 1. Recovering from a botched release
+## 1. Recovering from a failed release
 
-The release pipeline (`release.yml`) publishes in strict order: PyPI first, then npm packages (`@forge/canvas-vue`, `@forge/canvas-svelte`) in parallel, then pub.dev (`forge_canvas_core` before `forge_canvas`). A GitHub Release is created only after all registries succeed. If a mid-pipeline job fails, earlier registries already have the version and later ones do not.
+forge is distributed **GitHub-only** — `release.yml` publishes to no registry
+(no PyPI/npm/pub.dev). A tag push runs a single `github-release` job that builds
+the sdist+wheel, generates a CycloneDX SBOM, and cuts a GitHub Release from the
+`[Unreleased]` CHANGELOG section, gated by the tag\u2194version check.
 
-### 1.1 Identify which registries succeeded
+### 1.1 If the `github-release` job fails
 
-1. Open **Actions > Release** for the tag's workflow run. Each publish job has its own status:
-   - `publish-pypi` -- PyPI (OIDC trusted publishing, no token)
-   - `publish-npm-canvas-vue` -- npm `@forge/canvas-vue`
-   - `publish-npm-canvas-svelte` -- npm `@forge/canvas-svelte`
-   - `publish-pub-dev-core` -- pub.dev `forge_canvas_core` (Dart, no Flutter)
-   - `publish-pub-dev` -- pub.dev `forge_canvas` (Flutter)
-   - `github-release` -- GitHub Release from CHANGELOG section
+1. Open **Actions > Release** for the tag's run and read the failed step:
+   - **Check tag matches package version** — the tag and `forge/__init__.py`
+     `__version__` disagree. Fix the version (or retag) so they match.
+   - **Extract changelog section** — the `[Unreleased]` section is empty/missing.
+     Add notes, recommit, retag.
+   - **Build / SBOM** — a packaging error; reproduce locally with `uv build`.
+2. The job is idempotent — re-running it (or re-pushing the tag) recreates the
+   GitHub Release. Nothing was published to a registry, so there is **no
+   partial-publish state** to reconcile.
 
-2. Cross-check with the registries directly:
-   ```bash
-   # PyPI
-   curl -s https://pypi.org/pypi/forge/json | jq '.releases["1.0.0a1"]'
+### 1.2 Rolling back a release
 
-   # npm
-   npm view @forge/canvas-vue@1.0.0-alpha.1 version 2>/dev/null
-   npm view @forge/canvas-svelte@1.0.0-alpha.1 version 2>/dev/null
-
-   # pub.dev
-   curl -s https://pub.dev/api/packages/forge_canvas_core | jq '.versions[].version' | grep 1.0.0
-   curl -s https://pub.dev/api/packages/forge_canvas | jq '.versions[].version' | grep 1.0.0
-   ```
-
-### 1.2 Manual publish to a failed registry
-
-3. Check out the tagged commit:
-   ```bash
-   git checkout v1.0.0a1
-   ```
-
-4. **PyPI** (failed `publish-pypi`):
-   ```bash
-   uv build
-   # Stable release:
-   uv publish
-   # Pre-release (tag contains '-'):
-   UV_PUBLISH_URL=https://test.pypi.org/legacy/ uv publish
-   ```
-
-5. **npm canvas-vue** (failed `publish-npm-canvas-vue`):
-   ```bash
-   cd packages/canvas-vue
-   npm ci && npm run build
-   # Stable:
-   npm publish --access public
-   # Alpha:
-   npm publish --tag alpha --access public
-   # Beta:
-   npm publish --tag beta --access public
-   ```
-
-6. **npm canvas-svelte** (failed `publish-npm-canvas-svelte`) -- same pattern:
-   ```bash
-   cd packages/canvas-svelte
-   npm ci && npm run build
-   npm publish --access public
-   ```
-
-7. **pub.dev forge_canvas_core** (failed `publish-pub-dev-core`):
-   ```bash
-   cd packages/forge-canvas-core-dart
-   # Credentials: place pub-credentials.json from 1Password/vault
-   mkdir -p ~/.config/dart
-   cp /path/to/pub-credentials.json ~/.config/dart/pub-credentials.json
-   dart pub get && dart analyze && dart test
-   dart pub publish --force
-   ```
-
-8. **pub.dev forge_canvas** (failed `publish-pub-dev`) -- requires `forge_canvas_core` already on pub.dev:
-   ```bash
-   cd packages/forge-canvas-dart
-   mkdir -p ~/.config/dart
-   cp /path/to/pub-credentials.json ~/.config/dart/pub-credentials.json
-   flutter pub get && flutter analyze
-   flutter pub publish --force
-   ```
-
-9. **GitHub Release** (failed `github-release`) -- extract the CHANGELOG section and create manually:
-   ```bash
-   VERSION="1.0.0a1"
-   awk -v v="$VERSION" \
-     '/^## \[/ { in_section=0 } $0 ~ "^## \\[" v "\\]" { in_section=1; next } in_section' \
-     CHANGELOG.md > release-notes.md
-   gh release create "v${VERSION}" --notes-file release-notes.md
-   ```
-
-### 1.3 Version rollback
-
-10. Registry packages are immutable -- you cannot unpublish and re-push the same version to PyPI or pub.dev (npm has a 72h unpublish window). If the released artefact is broken:
-    ```bash
-    # Yank from PyPI (hides from install, does not delete):
-    uv tool run --from twine twine yank forge 1.0.0a1
-
-    # Deprecate on npm:
-    npm deprecate @forge/canvas-vue@1.0.0-alpha.1 "broken release, use 1.0.0-alpha.2"
-
-    # pub.dev: retract via the web UI (pub.dev > Your packages > Retract version)
-    ```
-
-11. Cut a patch release immediately (e.g. `v1.0.0a2`) with the fix. Follow the normal release process in `RELEASING.md`.
-
-### 1.4 When `SKIP_DRYRUN_GATE` is acceptable
-
-12. The `preflight-dryrun` job in `release.yml` requires a `release-dryrun/ok` check-run on the tagged SHA within 72 hours. If you need to ship an emergency fix and cannot wait for a dry-run cycle:
-    ```
-    Settings > Secrets and variables > Actions > Variables
-    Set: SKIP_DRYRUN_GATE = true
-    ```
-
-13. The bypass is auditable -- variable mutations appear in the repo audit log. After the emergency release:
-    ```
-    Settings > Secrets and variables > Actions > Variables
-    Delete or set: SKIP_DRYRUN_GATE = false
-    ```
-
-14. A lingering `SKIP_DRYRUN_GATE=true` silently disables the safety gate for all future releases. Check it after every emergency.
-
----
+Delete the GitHub Release and the tag (`git push --delete origin vX.Y.Z`).
+Because nothing is published to a registry, no version is "stuck" downstream —
+users install from source via `./install`, so a bad tag simply isn't installed.
 
 ## 2. Debugging a plugin that modifies generated output
 
@@ -330,7 +231,7 @@ The `forge.toml` manifest at a generated project's root tracks every file's prov
 
 ## 4. CI failure triage
 
-Three workflow files drive CI: `ci.yml` (every push/PR to main), `matrix-nightly.yml` (03:00 UTC nightly + on-demand via labels), and `release.yml` / `release-dryrun.yml` (tag-triggered). Each has a distinct failure profile.
+Three workflow families drive CI: `ci.yml` (every push/PR to main), `matrix-nightly.yml` (03:00 UTC nightly + on-demand via labels), and `release.yml` (tag-triggered — cuts a GitHub Release; no registry publishing). Each has a distinct failure profile.
 
 ### 4.1 ci.yml: lint, typecheck, test hierarchy
 
@@ -412,19 +313,16 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
 
 13. **`publish-dashboard`** -- aggregates per-scenario JSON status artifacts into a markdown grid on the workflow summary. If it reports "no lanes ran", all lanes were cancelled or filtered out -- check individual job logs.
 
-### 4.3 release.yml: pre-publish gates
+### 4.3 release.yml: the GitHub Release job
 
-14. **`preflight-dryrun`** -- queries the `release-dryrun/ok` check-run on the tagged SHA. Fails unless a successful dry-run completed within 72 hours:
-    - Fix: run **Actions > Release dry-run > Run workflow** against the commit, wait for green, re-push the tag.
-    - Escape hatch: set repo variable `SKIP_DRYRUN_GATE=true` (see section 1.4).
-
-15. **`publish-pypi`** depends on `preflight-dryrun`. Uses OIDC trusted publishing (no API token). Pre-releases (tag contains `-`) go to TestPyPI.
-
-16. **`publish-npm-*`** depends on `publish-pypi`. Both npm packages publish in parallel. Requires `NPM_AUTH_TOKEN` secret.
-
-17. **`publish-pub-dev-core`** depends on `publish-pypi`. **`publish-pub-dev`** depends on `publish-pub-dev-core` (ordering matters: `forge_canvas` declares `forge_canvas_core` as a runtime dep). Both require `PUB_DEV_CREDENTIALS` secret.
-
-18. **`github-release`** depends on all five publish jobs. Extracts the CHANGELOG section and creates the GitHub Release.
+14. **`github-release`** is the only job. A tag push builds the sdist+wheel,
+    generates a CycloneDX SBOM, and cuts a GitHub Release from the
+    `[Unreleased]` CHANGELOG section, attaching `dist/*` + the SBOM. forge
+    publishes to no registry, so there are no publish credentials and no
+    pre-publish dry-run gate — only two fail-closed checks:
+    - **Check tag matches package version** — the tag and `forge/__init__.py`
+      `__version__` must agree.
+    - **Extract changelog section** — `[Unreleased]` must be non-empty.
 
 ### 4.4 Common false positives
 
@@ -439,6 +337,6 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
 
 22. **`package-integrity` fails** -- a template file was removed or a build artefact leaked into the wheel. Check `tests/test_package_integrity.py` for the sentinel list and contaminant whitelist.
 
-23. **`changelog-extract` fails in release-dryrun** -- `CHANGELOG.md` still has `[Unreleased]` instead of a dated `## [X.Y.Z]` section. Finalize the changelog before re-running the rehearsal.
+23. **`Extract changelog section` fails in `release.yml`** -- the `[Unreleased]` section in `CHANGELOG.md` is empty or missing. Add release notes under `[Unreleased]` and retag.
 
 24. **Nightly `publish-dashboard` shows "no lanes ran"** -- the `gate` job filtered everything out. Check whether `scenarios.yaml` has scenarios with the expected `lanes` entries, or whether a label-triggered run used the wrong label.
