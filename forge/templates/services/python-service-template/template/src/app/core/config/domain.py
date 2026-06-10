@@ -47,6 +47,27 @@ class CorsConfig(BaseModel):
     allow_headers: list[str] = ["*"]
     max_age: int = 3600
 
+    @model_validator(mode="after")
+    def _reject_wildcard_with_credentials_in_prod(self) -> "CorsConfig":
+        # Starlette reflects the request Origin (rather than sending ``*``) when
+        # allow_origins=["*"] AND allow_credentials=True — i.e. ANY website can
+        # make credentialed cross-origin requests. Harmless while CORS is off
+        # (the default), but a footgun once enabled. Fail closed in production
+        # so a real deploy must name its allowed origins; dev/test keep the
+        # permissive default for local cross-origin work.
+        if not self.enabled:
+            return self
+        env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production")).lower()
+        if env in ("development", "dev", "local", "test", "testing", "ci"):
+            return self
+        if self.allow_credentials and "*" in self.allow_origins:
+            raise ValueError(
+                "CORS allow_origins=['*'] with allow_credentials=True reflects "
+                "any origin for credentialed requests — refused in production. "
+                "List the exact allowed origins, or set allow_credentials=False."
+            )
+        return self
+
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
