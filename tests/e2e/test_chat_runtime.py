@@ -96,11 +96,14 @@ for raw in resp.text.splitlines():
         types.append(obj["type"])
 print("EVENT_TYPES", ",".join(types))
 
+# Assert the canonical AG-UI envelope ORDER, not just presence: RUN_STARTED
+# must open the stream, RUN_FINISHED must close it, and at least one text
+# frame must land strictly in between.
 ok = (
     resp.status_code == 200
-    and "RUN_STARTED" in types
-    and "RUN_FINISHED" in types
-    and any("TEXT_MESSAGE" in t for t in types)
+    and types[:1] == ["RUN_STARTED"]
+    and types[-1:] == ["RUN_FINISHED"]
+    and any("TEXT_MESSAGE" in t for t in types[1:-1])
 )
 print("CHAT_TURN_OK" if ok else "CHAT_TURN_FAIL")
 sys.exit(0 if ok else 1)
