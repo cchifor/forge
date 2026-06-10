@@ -57,8 +57,8 @@
       "sha256": "b891350fb641d6b2"
     },
     "services/api/alembic/env.py": {
-      "size": 1699,
-      "sha256": "db090a8edbb9389c"
+      "size": 2601,
+      "sha256": "f4cf81b3a4cea15a"
     },
     "services/api/alembic/script.py.mako": {
       "size": 634,
@@ -97,8 +97,8 @@
       "sha256": "59e84d0358509122"
     },
     "services/api/entrypoint.sh": {
-      "size": 415,
-      "sha256": "941241dd501b2eb9"
+      "size": 506,
+      "sha256": "df2a39103908a6ed"
     },
     "services/api/pyproject.toml": {
       "size": 4795,
