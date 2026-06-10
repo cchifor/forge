@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 _CONFIG_PATH = (
     Path(__file__).resolve().parent.parent
     / "forge"
@@ -183,3 +185,65 @@ class TestRealmSyncSidecarProdGuard:
             "realm_sync.py _DEV_ENVS must include 'development' (the value "
             "pinned by the realm-sync sidecar compose template)"
         )
+
+
+class TestGatekeeperCorsProdGuard:
+    """The gatekeeper IS the auth/BFF edge, so a reflected-origin + credentials
+    CORS posture is especially dangerous here. The CorsConfig must refuse
+    allow_origins=['*'] + allow_credentials=True in production (parity with the
+    generated service guard)."""
+
+    def _load_domain(self):
+        import importlib.util
+
+        domain = (
+            next(
+                p
+                for p in _CONFIG_PATH.parents
+                if p.name == "gatekeeper" and p.parent.name == "infra"
+            )
+            / "src"
+            / "app"
+            / "core"
+            / "config"
+            / "domain.py"
+        )
+        spec = importlib.util.spec_from_file_location("_gk_domain_under_test", domain)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def _cors(self, mod, **over):
+        kwargs = dict(
+            enabled=True,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            max_age=600,
+        )
+        kwargs.update(over)
+        return mod.CorsConfig(**kwargs)
+
+    def test_wildcard_credentials_rejected_in_prod(self, monkeypatch):
+        mod = self._load_domain()
+        monkeypatch.setenv("ENV", "production")
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            self._cors(mod)
+
+    def test_wildcard_credentials_allowed_in_dev(self, monkeypatch):
+        mod = self._load_domain()
+        monkeypatch.setenv("ENV", "development")
+        self._cors(mod)  # no raise
+
+    def test_disabled_cors_is_never_rejected(self, monkeypatch):
+        mod = self._load_domain()
+        monkeypatch.setenv("ENV", "production")
+        self._cors(mod, enabled=False)  # no raise
+
+    def test_explicit_origins_allowed_in_prod(self, monkeypatch):
+        mod = self._load_domain()
+        monkeypatch.setenv("ENV", "production")
+        self._cors(mod, allow_origins=["https://app.example.com"])  # no raise

@@ -1,7 +1,8 @@
 # src/app/core/config/domain.py
+import os
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # --- Sub-Models ---
 
@@ -33,6 +34,27 @@ class CorsConfig(BaseModel):
     allow_methods: list[str]
     allow_headers: list[str]
     max_age: int
+
+    @model_validator(mode="after")
+    def _reject_wildcard_with_credentials_in_prod(self) -> "CorsConfig":
+        # The gatekeeper IS the auth/BFF edge, so a reflected-origin +
+        # credentials CORS posture is especially dangerous here. Mirror the
+        # generated service guard: when CORS is enabled, refuse
+        # allow_origins=['*'] + allow_credentials=True in a production posture
+        # (Starlette reflects any origin for credentialed requests). Dev/test
+        # keep the permissive default for local cross-origin work.
+        if not self.enabled:
+            return self
+        env = os.getenv("ENV", os.getenv("ENVIRONMENT", "production")).strip().lower()
+        if env in ("development", "dev", "local", "test", "testing", "ci"):
+            return self
+        if self.allow_credentials and "*" in self.allow_origins:
+            raise ValueError(
+                "CORS allow_origins=['*'] with allow_credentials=True reflects "
+                "any origin for credentialed requests — refused in production. "
+                "List the exact allowed origins, or set allow_credentials=False."
+            )
+        return self
 
 
 class ServerConfig(BaseModel):
