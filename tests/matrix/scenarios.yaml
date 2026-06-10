@@ -419,6 +419,10 @@ scenarios:
           server_port: 8170
           python_version: "3.13"
       options:
-        auth.mode: "none"
+        # in_memory exercises the schema-per-tenant UoW binder alongside a real
+        # (zero-dependency) auth stack, and guards the in_memory_issuer /
+        # platform_auth_setup ty-0.0.46 fixes from regressing.
+        auth.mode: "generate"
+        auth.provider: "in_memory"
         database.multitenancy: "schema_per_tenant"
         database.tenant_resolution: "token_claim"
