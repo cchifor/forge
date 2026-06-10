@@ -54,6 +54,14 @@ export interface AgUiClientOptions<E> {
   maxBackoffMs?: number
   /** Extra HTTP headers (e.g. `Authorization`). */
   headers?: Record<string, string>
+  /**
+   * Fetch credentials mode. Defaults to `'include'` so the BFF session
+   * cookie is sent with the agent request — when auth is enabled the
+   * generated app authenticates via that cookie (the proxy injects the
+   * bearer token server-side), exactly like the main API client. Without
+   * this the agent endpoint would 401 in any auth-enabled deployment.
+   */
+  credentials?: RequestCredentials
   /** Optional `fetch` override for testing. Defaults to `globalThis.fetch`. */
   fetch?: typeof globalThis.fetch
 }
@@ -102,6 +110,7 @@ export class AgUiClient<E> {
       initialBackoffMs: options.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS,
       maxBackoffMs: options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS,
       headers: options.headers ?? {},
+      credentials: options.credentials ?? 'include',
       fetch: options.fetch ?? globalThis.fetch.bind(globalThis),
     }
     this.currentBackoff = this.options.initialBackoffMs
@@ -150,6 +159,7 @@ export class AgUiClient<E> {
     const res = await this.options.fetch(this.options.url, {
       method: 'POST',
       headers,
+      credentials: this.options.credentials,
       body: JSON.stringify(payload),
       signal,
     })
