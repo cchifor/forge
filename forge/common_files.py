@@ -38,15 +38,24 @@ def apply_common_files(
         project_root / ".pre-commit-config.yaml",
         collector,
     )
-    # CI workflow: pick the backend-language-appropriate template for the
-    # first backend. Projects with multiple backends get the first one's
-    # workflow; mixed-stack CI is a follow-up.
-    if config.backends:
-        bc = config.backends[0]
+    # CI workflows: emit one per distinct backend language. The first
+    # language keeps the canonical ``ci.yml`` name (back-compat + golden
+    # stability for single-backend projects); each additional language gets
+    # ``ci-<lang>.yml`` so a multi-backend project ships a workflow per stack
+    # instead of only the first backend's.
+    workflows_dir = project_root / ".github" / "workflows"
+    seen_languages: set[object] = set()
+    is_first = True
+    for bc in config.backends:
+        if bc.language in seen_languages:
+            continue
+        seen_languages.add(bc.language)
         ci_src = _ci_source_for(bc)
-        if ci_src is not None:
-            ci_dst = project_root / ".github" / "workflows" / "ci.yml"
-            _copy_if_absent(ci_src, ci_dst, collector)
+        if ci_src is None:
+            continue
+        filename = "ci.yml" if is_first else f"ci-{bc.language.value}.yml"
+        is_first = False
+        _copy_if_absent(ci_src, workflows_dir / filename, collector)
 
 
 def _ci_source_for(bc: BackendConfig) -> Path | None:
@@ -55,6 +64,8 @@ def _ci_source_for(bc: BackendConfig) -> Path | None:
 
     mapping = {
         BackendLanguage.PYTHON: COMMON_DIR / "ci_python.yml",
+        BackendLanguage.NODE: COMMON_DIR / "ci_node.yml",
+        BackendLanguage.RUST: COMMON_DIR / "ci_rust.yml",
     }
     return mapping.get(bc.language)
 
