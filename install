@@ -129,15 +129,34 @@ if [[ "$os" == "windows" ]]; then
 else
   uv tool install --force "$TOOL" 2>&1 | sed 's/^/    /'
 fi
+# Capture uv's exit code (not sed's) — without errexit a failed install would
+# otherwise pass silently, and a pre-existing `forge` on PATH (e.g. Foundry's)
+# could make the verify below report false success.
+install_rc=${PIPESTATUS[0]}
 
-# uv tool shims land in ~/.local/bin; make sure it's on PATH for the verify.
-export PATH="$HOME/.local/bin:$PATH"
-if ! installed forge; then
+# uv installs the `forge` shim into its tool bin dir, which is configurable
+# (UV_TOOL_BIN_DIR / XDG_BIN_HOME) — ask uv rather than assuming ~/.local/bin.
+# Prepend it so the uv-installed forge wins over any other `forge` on PATH.
+uv_bin="$(uv tool dir --bin 2>/dev/null || echo "$HOME/.local/bin")"
+export PATH="$uv_bin:$PATH"
+
+forge_path="$(command -v forge 2>/dev/null || true)"
+if [ "$install_rc" -ne 0 ] || [ -z "$forge_path" ]; then
   echo -e ""
   echo -e "  ${RED}[!!] forge installation failed.${NC} See the output above."
   echo -e "  ${MUTED}You can retry with: uv tool install --force ${TOOL}${NC}"
   exit 1
 fi
+# Warn (don't fail) if a DIFFERENT `forge` shadows ours — e.g. Foundry also
+# ships a `forge`. We prepended uv_bin, so this only triggers on odd setups.
+case "$os:$forge_path" in
+  windows:*) : ;;  # path semantics differ under git-bash; skip the check
+  *:"$uv_bin"/*) : ;;  # the uv-installed forge — good
+  *)
+    echo -e "  ${WARN}[--]${NC} another 'forge' is first on PATH: ${forge_path}"
+    echo -e "       ${MUTED}forge (the generator) is at ${uv_bin}/forge — put that dir ahead on PATH${NC}"
+    ;;
+esac
 
 # -- Done ---------------------------------------------------------------------
 
