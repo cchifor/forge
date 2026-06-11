@@ -34,6 +34,7 @@ import {
   type ChatRole,
   type ChatStateSnapshot,
   type ToolCallInfo,
+  type UserPromptOption,
   type UserPromptPayload,
   type WorkspaceActivity,
 } from './snapshot.js'
@@ -218,18 +219,22 @@ function reduceCustom(
 function parseUserPrompt(value: unknown): UserPromptPayload | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
-  const toolCallId = String(v['toolCallId'] ?? '')
+  // The wire payload uses snake_case `tool_call_id` (the ui-protocol schema);
+  // accept the camelCase form too for resilience to older producers.
+  const toolCallId = String(v['tool_call_id'] ?? v['toolCallId'] ?? '')
   const question = String(v['question'] ?? '')
   if (!toolCallId || !question) return null
   const rawOptions = Array.isArray(v['options']) ? v['options'] : []
   const options = rawOptions
     .filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
-    .map((o) => ({
-      id: String(o['id'] ?? ''),
-      label: String(o['label'] ?? ''),
-    }))
-    .filter((o) => o.id && o.label)
-  return { toolCallId, question, options }
+    .map((o) => {
+      const opt: UserPromptOption = { label: String(o['label'] ?? '') }
+      if (o['description'] != null) opt.description = String(o['description'])
+      if (o['recommended'] != null) opt.recommended = String(o['recommended'])
+      return opt
+    })
+    .filter((o) => o.label)
+  return { tool_call_id: toolCallId, question, options }
 }
 
 /** Resolve the pending prompt by id, clearing it from the snapshot. */
@@ -237,7 +242,7 @@ export function clearPendingPromptIfMatches(
   snapshot: ChatStateSnapshot,
   toolCallId: string,
 ): ChatStateSnapshot {
-  if (!snapshot.pendingPrompt || snapshot.pendingPrompt.toolCallId !== toolCallId) {
+  if (!snapshot.pendingPrompt || snapshot.pendingPrompt.tool_call_id !== toolCallId) {
     return snapshot
   }
   return { ...snapshot, pendingPrompt: null }

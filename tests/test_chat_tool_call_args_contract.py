@@ -51,7 +51,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 
 VUE_REDUCER = (
-    _REPO_ROOT / "packages/canvas-core/src/reducer.ts"
+    _REPO_ROOT
+    / "forge/templates/apps/vue-frontend-template/template/src/features"
+    / "ai_chat/canvas-core/reducer.ts"
 )
 VUE_TYPES = (
     _REPO_ROOT
@@ -70,7 +72,9 @@ VUE_TEST = (
 )
 
 SVELTE_REDUCER = (
-    _REPO_ROOT / "packages/canvas-core/src/reducer.ts"
+    _REPO_ROOT
+    / "forge/templates/apps/svelte-frontend-template/template/src/lib"
+    / "features/chat/canvas-core/reducer.ts"
 )
 SVELTE_TYPES = (
     _REPO_ROOT
