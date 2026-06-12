@@ -23,20 +23,25 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
 
       - name: Format check
         run: cargo fmt --all -- --check
 
+      # ``--locked`` builds the exact versions the committed Cargo.lock pins,
+      # so a stale lockfile fails HERE (matching the prod Docker
+      # ``cargo build --locked``) rather than only in the image build. The
+      # ``$([ -f Cargo.lock ] ...)`` guard falls back to an unlocked build
+      # when no lockfile is committed.
       # Runtime-checked sqlx (no ``query!`` macros) — build needs no database.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets
+        run: cargo clippy --workspace --all-targets $([ -f Cargo.lock ] && echo --locked)
 
       - name: Build
-        run: cargo build --workspace
+        run: cargo build --workspace $([ -f Cargo.lock ] && echo --locked)
 
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace $([ -f Cargo.lock ] && echo --locked)
 
   security:
     runs-on: ubuntu-latest

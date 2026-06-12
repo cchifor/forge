@@ -5,8 +5,8 @@
       "sha256": "2ac15b8600196a9b"
     },
     ".github/workflows/ci.yml": {
-      "size": 1598,
-      "sha256": "8eeaf5a94a8dfb2b"
+      "size": 2001,
+      "sha256": "86b50773713cc8f7"
     },
     ".gitignore": {
       "size": 491,
@@ -53,8 +53,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api/Dockerfile": {
-      "size": 3328,
-      "sha256": "367c1c8e367282b9"
+      "size": 3683,
+      "sha256": "45793a0d3e685156"
     },
     "services/api/README.md": {
       "size": 1402,

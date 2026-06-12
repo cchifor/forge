@@ -42,18 +42,23 @@ COPY migrations ./services/{{ project_slug }}/migrations/
 # Dep-priming dummy build at the workspace level. Cargo resolves every
 # path = "../sdks/<name>" against the workspace root, downloads + builds
 # every transitive dep once, and caches the resulting target/ tree.
-RUN mkdir -p services/{{ project_slug }}/src/bin \
+# ``--locked`` pins the exact versions the committed Cargo.lock resolved
+# (reproducible builds); it's omitted when the lockfile is absent (project
+# generated on a host without cargo, so forge couldn't resolve one).
+RUN LOCKED=$([ -f Cargo.lock ] && echo --locked || true) \
+    && mkdir -p services/{{ project_slug }}/src/bin \
     && echo "fn main() {}" > services/{{ project_slug }}/src/main.rs \
     && echo "fn main() {}" > services/{{ project_slug }}/src/bin/migrate.rs \
-    && cargo build --release --workspace \
+    && cargo build --release --workspace $LOCKED \
     && rm -rf services/{{ project_slug }}/src
 
 # Copy real source and force rebuild only the binaries we ship — the
 # workspace deps (incl. the SDK) stay cached. ``touch`` invalidates the
 # bin targets so sqlx::migrate! re-embeds the migrations.
 COPY src ./services/{{ project_slug }}/src/
-RUN touch services/{{ project_slug }}/src/main.rs services/{{ project_slug }}/src/bin/migrate.rs \
-    && cargo build --release -p {{ project_name }}
+RUN LOCKED=$([ -f Cargo.lock ] && echo --locked || true) \
+    && touch services/{{ project_slug }}/src/main.rs services/{{ project_slug }}/src/bin/migrate.rs \
+    && cargo build --release -p {{ project_name }} $LOCKED
 
 # --- Runtime Stage ---
 FROM debian:bookworm-slim

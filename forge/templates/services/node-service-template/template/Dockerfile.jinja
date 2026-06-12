@@ -38,8 +38,15 @@ COPY package.json ./services/{{ project_slug }}/
 # Workspace install: links every workspace member into the shared
 # node_modules/ at the root and runs each member's `prepare` hook —
 # the SDK's `prepare: tsc` produces sdks/platform-auth-node/dist/
-# before this service's downstream `tsc` ever runs.
-RUN npm install --workspaces --include-workspace-root
+# before this service's downstream `tsc` ever runs. ``npm ci`` installs
+# the exact tree the committed package-lock.json pins (reproducible,
+# faster); fall back to ``npm install`` when the lockfile is absent
+# (project generated on a host without Node, so forge couldn't resolve one).
+RUN if [ -f package-lock.json ]; then \
+        npm ci --workspaces --include-workspace-root; \
+    else \
+        npm install --workspaces --include-workspace-root; \
+    fi
 
 WORKDIR /workspace/services/{{ project_slug }}
 
