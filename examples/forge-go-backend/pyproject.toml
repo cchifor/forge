@@ -1,0 +1,35 @@
+[project]
+name = "forge-go-backend"
+version = "0.1.0"
+description = "Reference forge plugin: registers a Go (net/http) backend language via the plugin SDK."
+requires-python = ">=3.11"
+# The PyPI distribution is ``forge-cli`` (the bare ``forge`` name is owned by
+# an unrelated package); the importable package stays ``forge`` (plugin code
+# still does ``from forge.api import ...``). RFC-003.
+dependencies = [
+    "forge-cli>=1.0.0a1",
+]
+readme = "README.md"
+authors = [{ name = "forge team" }]
+
+[project.entry-points."forge.plugins"]
+go_backend = "forge_go_backend:register"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The Go service template ships as package data so wheel installs (not just
+# editable installs) can resolve the absolute ``template_dir`` the plugin
+# hands to ``add_backend``. Without this, ``pip install forge-go-backend``
+# (no -e) would leave ``go-service-template/`` outside the wheel and
+# generation would fail with a missing-template error.
+forge_go_backend = [
+    "go-service-template/copier.yml",
+    "go-service-template/_forge_template.toml",
+    "go-service-template/template/**/*",
+]

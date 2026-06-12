@@ -1,0 +1,55 @@
+// Command {{ project_slug }} is a minimal Go (net/http) service scaffolded
+// by forge's reference Go backend plugin. It demonstrates that a
+// plugin-registered backend language generates and compiles end-to-end.
+//
+// Routes (mirroring forge's other backends' health convention):
+//
+//	GET /api/v1/health/live   liveness probe
+//	GET /api/v1/health/ready  readiness probe
+//	GET /                     service info
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/health/live", health)
+	mux.HandleFunc("/api/v1/health/ready", health)
+	mux.HandleFunc("/", root)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "{{ server_port }}"
+	}
+	addr := ":" + port
+	log.Printf("{{ project_slug }} listening on %s", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+func health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func root(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"service": "{{ project_slug }}",
+		"message": "{{ project_description }}",
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}

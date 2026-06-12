@@ -54,6 +54,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   templates, and the worker Dockerfile's uv stage is `ghcr.io/astral-sh/uv:0.11.16`
   (matching the main service Dockerfile) — no more silent `:latest` drift.
 
+### Plugin SDK
+
+- **`add_backend` now genuinely generates** (#224): registering a backend
+  language through `ForgeAPI.add_backend` produces a working project end to
+  end, not just a registry entry. Five generator paths that coerced the
+  language string with `BackendLanguage(...)` — crashing on anything but
+  python/node/rust — now resolve through `resolve_backend_language` (the
+  forge.toml writer, the config-file `backends:` parser, the `add-backend`
+  command, the `--update` template-version walk, and the variable-mapper
+  context builder). `add_backend` also seeds the language's default
+  `crud-service` application-template variant so a `BackendConfig` on it
+  validates out of the box, and the CLI's `--backend-language` /
+  `--add-backend-language` choices are built after plugin load so a
+  registered language is selectable (and shown in `--help`).
+- **Reference Go backend plugin** (`examples/forge-go-backend`): a worked
+  example that registers a Go (net/http) backend language — template shipped
+  as package data, an absolute `template_dir`, and a `BackendToolchain`
+  wiring `go build`/`go vet`/`gofmt`. Exercised by `tests/test_plugin_backend_go.py`,
+  which generates a Go project and compiles it.
+
 ### Recent merges (post-2026-05-23, previously unlogged)
 
 - **Platform generator (#170):** pluggable auth providers

@@ -17,6 +17,10 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from forge.config import BackendLanguage
 
 
 def _dispatch_add_backend(args) -> None:
@@ -24,9 +28,16 @@ def _dispatch_add_backend(args) -> None:
     name = getattr(args, "add_backend_name", None)
     project_path = Path(getattr(args, "project_path", ".")).resolve()
 
-    if language not in ("python", "node", "rust"):
+    # Validate against every registered language (built-ins + plugin
+    # backends loaded earlier in ``main()``), not a hardcoded triple — a
+    # plugin that registered ``go`` makes ``--add-backend-language go`` valid.
+    from forge.config import available_backend_languages  # noqa: PLC0415
+
+    valid_languages = available_backend_languages()
+    if language not in valid_languages:
         print(
-            f"error: --add-backend-language must be python|node|rust, got {language!r}",
+            f"error: --add-backend-language must be one of "
+            f"{'|'.join(valid_languages)}, got {language!r}",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -45,7 +56,7 @@ def _dispatch_add_backend(args) -> None:
     from forge.config import (  # noqa: PLC0415
         BACKEND_REGISTRY,  # noqa: PLC0415
         BackendConfig,
-        BackendLanguage,
+        resolve_backend_language,
     )
     from forge.generator import _generate_single_backend  # noqa: PLC0415
     from forge.sync.manifest import read_forge_toml  # noqa: PLC0415
@@ -61,11 +72,14 @@ def _dispatch_add_backend(args) -> None:
     data = read_forge_toml(manifest)
     project_name = data.project_name or project_path.name
 
-    lang_enum = BackendLanguage(language)
+    lang_enum = resolve_backend_language(language)
     bc = BackendConfig(
         name=name,
         project_name=project_name,
-        language=lang_enum,
+        # cast: a plugin language is a _PluginLanguage sentinel that behaves
+        # like a BackendLanguage member at runtime (registry key, ``.value``)
+        # but isn't statically one. See forge.config.resolve_backend_language.
+        language=cast("BackendLanguage", lang_enum),
         features=["items"],
         server_port=5000,
     )

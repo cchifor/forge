@@ -1,0 +1,29 @@
+# {{ project_name }}
+
+{{ project_description }}
+
+A minimal Go (net/http) service scaffolded by forge's reference Go backend
+plugin — a worked example of registering a brand-new backend **language**
+through the plugin SDK (`forge.api.ForgeAPI.add_backend`).
+
+## Run
+
+```bash
+go run .            # serves on :{{ server_port }} (override with PORT)
+go test ./...       # unit tests
+```
+
+## Endpoints
+
+| Method | Path                    | Description     |
+|--------|-------------------------|-----------------|
+| GET    | `/api/v1/health/live`   | liveness probe  |
+| GET    | `/api/v1/health/ready`  | readiness probe |
+| GET    | `/`                     | service info    |
+
+## Docker
+
+```bash
+docker build -t {{ project_slug }} .
+docker run -p {{ server_port }}:{{ server_port }} {{ project_slug }}
+```

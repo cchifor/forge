@@ -1,0 +1,36 @@
+# Multi-stage build for the {{ project_slug }} Go service.
+#
+# Builder compiles a static binary (CGO disabled) so the runtime image can
+# be a minimal Alpine with no Go toolchain. The build context is this
+# service directory — the reference service is self-contained (stdlib only),
+# so it needs no workspace-root or additional build contexts.
+
+# --- Builder Stage ---
+FROM golang:{{ go_version }}-alpine AS builder
+WORKDIR /src
+
+# Module graph first so the dependency layer caches independently of source
+# edits. The reference service is stdlib-only, so this resolves nothing —
+# but a fork that adds dependencies gets layer caching for free.
+COPY go.mod ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/{{ project_slug }} .
+
+# --- Runtime Stage ---
+FROM alpine:3.20
+
+RUN apk add --no-cache curl \
+    && adduser -D -u 10001 appuser
+
+COPY --from=builder /out/{{ project_slug }} /app/{{ project_slug }}
+
+USER appuser
+ENV PORT={{ server_port }}
+EXPOSE {{ server_port }}
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -fsS "http://localhost:{{ server_port }}/api/v1/health/live" || exit 1
+
+ENTRYPOINT ["/app/{{ project_slug }}"]

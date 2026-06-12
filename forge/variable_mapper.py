@@ -129,11 +129,20 @@ def backend_context(
         "project_description": bc.description,
         "server_port": bc.server_port,
         "db_name": bc.name.replace("-", "_"),
-        spec.version_field: getattr(bc, spec.version_field),
         "entity_plural": _primary_feature(bc),
         "include_platform_auth": include_platform_auth,
         "include_error_envelope": include_error_envelope,
     }
+    # Thread the language's version into the template context. Built-ins
+    # carry their version field as a ``BackendConfig`` attribute
+    # (``python_version`` / ``node_version`` / ``rust_edition``); a
+    # plugin-registered language's ``version_field`` (e.g. ``go_version``)
+    # has no such attribute, so we leave the key absent and let the plugin
+    # template's own copier.yml default apply — the plugin owns its
+    # template and its version default.
+    version_value = getattr(bc, spec.version_field, None)
+    if version_value is not None:
+        ctx[spec.version_field] = version_value
     # Only thread sdk_consumption when the caller set it. Leaving the
     # key absent lets copier.yml's own default (``monorepo``) apply,
     # preserving the production-platform shape; CI and standalone
