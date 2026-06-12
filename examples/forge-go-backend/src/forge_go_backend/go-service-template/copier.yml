@@ -41,5 +41,5 @@ entity_plural:
 
 go_version:
   type: str
-  help: "Minimum Go toolchain version (go.mod directive — a conservative floor; newer toolchains build it forward-compatibly)"
-  default: "1.19"
+  help: "Recommended Go toolchain (Docker builder image tag). Separate from the go.mod floor, which stays at 1.19."
+  default: "1.22"

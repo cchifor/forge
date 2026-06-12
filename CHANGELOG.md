@@ -58,16 +58,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 - **`add_backend` now genuinely generates** (#224): registering a backend
   language through `ForgeAPI.add_backend` produces a working project end to
-  end, not just a registry entry. Five generator paths that coerced the
-  language string with `BackendLanguage(...)` — crashing on anything but
-  python/node/rust — now resolve through `resolve_backend_language` (the
-  forge.toml writer, the config-file `backends:` parser, the `add-backend`
-  command, the `--update` template-version walk, and the variable-mapper
-  context builder). `add_backend` also seeds the language's default
-  `crud-service` application-template variant so a `BackendConfig` on it
-  validates out of the box, and the CLI's `--backend-language` /
-  `--add-backend-language` choices are built after plugin load so a
-  registered language is selectable (and shown in `--help`).
+  end, not just a registry entry. The paths that coerced the language string
+  with `BackendLanguage(...)` — crashing on anything but python/node/rust —
+  now resolve through `resolve_backend_language`: the forge.toml writer, the
+  config-file `backends:` parser, the `add-backend` command, the `--update`
+  template-version walk, the variable-mapper context builder, and the
+  interactive backend prompt. `add_backend` also seeds the language's default
+  `crud-service` application-template variant so a `BackendConfig` validates
+  out of the box; the CLI's `--backend-language` / `--add-backend-language`
+  choices are built after plugin load (selectable + shown in `--help`); the
+  `--update` backend scan infers plugin backends from their `.copier-answers`
+  `_src_path`; and the root compose no longer emits a migrate sidecar for a
+  stateless plugin backend (which would have deadlocked `docker compose up`).
 - **Reference Go backend plugin** (`examples/forge-go-backend`): a worked
   example that registers a Go (net/http) backend language — template shipped
   as package data, an absolute `template_dir`, and a `BackendToolchain`

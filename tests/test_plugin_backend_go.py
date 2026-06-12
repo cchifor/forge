@@ -137,11 +137,36 @@ def test_go_backend_generates(tmp_path: Path, go_backend_registered: None) -> No
     assert (service_dir / "main.go").is_file(), "Go service source missing"
     assert (service_dir / "go.mod").read_text(encoding="utf-8").startswith("module api")
     assert (service_dir / "Dockerfile").is_file()
+    # The rendered .gitignore must be templated (not the literal Jinja token).
+    gitignore = (service_dir / ".gitignore").read_text(encoding="utf-8")
+    assert "/api" in gitignore and "{{" not in gitignore
     # forge.toml's template-version walk (a former crash site) recorded the
     # plugin language's template without raising.
-    assert '"go"' in (project_root / "forge.toml").read_text(encoding="utf-8") or (
-        "go" in (project_root / "forge.toml").read_text(encoding="utf-8")
-    )
+    assert "go" in (project_root / "forge.toml").read_text(encoding="utf-8")
+
+    # The root compose must NOT emit a migrate sidecar for the stateless
+    # plugin backend — doing so would deadlock `docker compose up` (the
+    # sidecar would run the server image, never exit, and the service's
+    # service_completed_successfully dependency would block forever).
+    compose = (project_root / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "api-migrate:" not in compose, "stateless plugin backend got a migrate sidecar"
+    assert "service_completed_successfully" not in compose
+
+
+def test_update_infers_plugin_backend(tmp_path: Path, go_backend_registered: None) -> None:
+    """`forge --update`'s backend discovery finds the plugin backend via its
+    .copier-answers _src_path — without this it'd report the Go-only project
+    as having no services and skip its template-version checks."""
+    from forge.generator import generate
+    from forge.sync.forge_to_project.updater import _infer_backends
+
+    config = _make_go_config(tmp_path)
+    config.validate()
+    project_root = generate(config, quiet=True)
+
+    backends = _infer_backends(project_root)
+    assert [bc.name for bc in backends] == ["api"]
+    assert backends[0].language.value == "go"
 
 
 def test_go_backend_compiles(

@@ -109,6 +109,18 @@ def _prompt_backend(
     version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
     features = _ask_features()
 
+    # ``spec.version_field`` is a real ``BackendConfig`` attribute only for the
+    # built-ins (python_version / node_version / rust_edition). A plugin
+    # language's version field (e.g. ``go_version``) isn't a dataclass field,
+    # so passing it as a kwarg would raise TypeError — its value lives in the
+    # plugin template's copier default instead. Guard on the actual field set.
+    from dataclasses import fields as _dc_fields  # noqa: PLC0415
+
+    version_kwargs = (
+        {spec.version_field: version}
+        if spec.version_field in {f.name for f in _dc_fields(BackendConfig)}
+        else {}
+    )
     return BackendConfig(
         name=name,
         project_name=project_name,
@@ -120,7 +132,7 @@ def _prompt_backend(
         # node_version / rust_edition), all ``str`` fields — ty can't resolve the
         # dynamic key so it checks ``str`` against the widest field; suppress as
         # with ``language=`` above.
-        **{spec.version_field: version},  # ty:ignore[invalid-argument-type]
+        **version_kwargs,  # ty:ignore[invalid-argument-type]
     )
 
 

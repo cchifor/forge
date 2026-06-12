@@ -866,6 +866,7 @@ def _infer_backends(
     for backend_dir in sorted(services.iterdir()):
         if not backend_dir.is_dir():
             continue
+        matched = False
         for marker, lang in markers.items():
             if (backend_dir / marker).is_file():
                 out.append(
@@ -875,9 +876,61 @@ def _infer_backends(
                         language=lang,
                     )
                 )
+                matched = True
                 break
+        if matched:
+            continue
+        # Plugin-backend fallback: a plugin language (e.g. ``go``) has no
+        # built-in marker file, so match the service's ``.copier-answers.yml``
+        # ``_src_path`` against a registered backend's ``template_dir``. Only
+        # resolves when the plugin is loaded (installed) at update time — an
+        # uninstalled plugin's service can't be template-updated anyway.
+        plugin_lang = _infer_plugin_backend_language(backend_dir)
+        if plugin_lang is not None:
+            out.append(
+                BackendConfig(
+                    name=backend_dir.name,
+                    project_name=project_root.name,
+                    language=cast("BackendLanguage", plugin_lang),
+                )
+            )
     _ = manifest_frontend  # accepted for forward-compat; see docstring
     return out
+
+
+def _infer_plugin_backend_language(backend_dir: Path):
+    """Resolve a plugin backend's language from its ``.copier-answers.yml``.
+
+    A plugin-registered backend ships no built-in marker file, so we match
+    the recorded ``_src_path`` (the absolute template dir forge rendered from)
+    against the ``template_dir`` of every registered backend spec. Returns the
+    language key (a ``_PluginLanguage`` sentinel) or ``None`` when there's no
+    answers file, no match, or the owning plugin isn't loaded.
+    """
+    answers = backend_dir / ".copier-answers.yml"
+    if not answers.is_file():
+        return None
+    import yaml  # noqa: PLC0415
+
+    try:
+        data = yaml.safe_load(answers.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    src = data.get("_src_path")
+    if not src:
+        return None
+    from forge.config import BACKEND_REGISTRY  # noqa: PLC0415
+
+    src_resolved = Path(str(src)).resolve()
+    for lang, spec in BACKEND_REGISTRY.items():
+        # Built-in specs carry a relative template_dir; plugin specs an
+        # absolute one. Compare resolved paths (and the raw string) so both
+        # forms match the recorded answer.
+        if str(spec.template_dir) == str(src) or Path(spec.template_dir).resolve() == src_resolved:
+            return lang
+    return None
 
 
 def _cleanup_orphaned_frontend_codegen(
