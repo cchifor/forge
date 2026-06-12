@@ -67,10 +67,5 @@ pub trait QueuePort: Send + Sync {
 
     /// Reject a message — requeue (default) or send to DLQ if
     /// `requeue == false`.
-    async fn nack(
-        &self,
-        topic: &str,
-        receipt: &str,
-        requeue: bool,
-    ) -> Result<(), QueueError>;
+    async fn nack(&self, topic: &str, receipt: &str, requeue: bool) -> Result<(), QueueError>;
 }

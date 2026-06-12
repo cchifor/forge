@@ -11,6 +11,7 @@
 //! directly.
 
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
@@ -18,14 +19,12 @@ use async_openai::{
         ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, ChatCompletionToolType,
         CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs, FunctionObjectArgs,
     },
-    Client,
 };
 use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
 
 use crate::ports::llm::{
-    ChatMessage, ChatPrompt, ChatRole, LlmChunk, LlmError, LlmOptions, LlmPort, Tool,
-    ToolCallChunk,
+    ChatMessage, ChatPrompt, ChatRole, LlmChunk, LlmError, LlmOptions, LlmPort, Tool, ToolCallChunk,
 };
 
 const DEFAULT_EMBED_MODEL: &str = "text-embedding-3-small";
@@ -35,7 +34,9 @@ fn api_key() -> String {
 }
 
 fn base_url() -> Option<String> {
-    std::env::var("OPENAI_BASE_URL").ok().filter(|s| !s.is_empty())
+    std::env::var("OPENAI_BASE_URL")
+        .ok()
+        .filter(|s| !s.is_empty())
 }
 
 /// OpenAI adapter. Owns a single `async_openai::Client` re-used across
