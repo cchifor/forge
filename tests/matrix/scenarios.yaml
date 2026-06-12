@@ -456,7 +456,12 @@ scenarios:
         platform.webhooks: true
 
   - name: rust_ports
-    description: Rust port adapters compile — webhooks, headless (queue=apalis + llm are known-broken on Rust today, filed separately; this locks the webhooks port + base so they can't regress)
+    description: >-
+      Rust port adapters compile — llm.provider=openai + queue=apalis +
+      reliability.cache + webhooks all on one backend. Exercises the shared
+      ports/mod.rs + adapters/mod.rs injection (#236) and the apalis consumer
+      rewritten against apalis 0.6's public WorkerBuilder API (#235). Every
+      Rust port + adapter now coexists; this scenario locks that in.
     lanes: [generate, verify]
     port_base: 8190
     expected_files:
@@ -472,4 +477,7 @@ scenarios:
           server_port: 8190
           rust_edition: "2024"
       options:
+        llm.provider: openai
+        queue.backend: apalis
+        reliability.cache: memory
         platform.webhooks: true

@@ -26,9 +26,8 @@ fn max_entries() -> NonZeroUsize {
         .and_then(|s| s.parse::<usize>().ok())
         .filter(|n| *n > 0)
         .unwrap_or(DEFAULT_MAX_ENTRIES);
-    NonZeroUsize::new(parsed).unwrap_or_else(|| {
-        NonZeroUsize::new(DEFAULT_MAX_ENTRIES).expect("default is non-zero")
-    })
+    NonZeroUsize::new(parsed)
+        .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_MAX_ENTRIES).expect("default is non-zero"))
 }
 
 struct Entry {
