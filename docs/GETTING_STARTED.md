@@ -5,8 +5,10 @@ A 10-minute tour from install to a running full-stack project.
 ## Install
 
 ```bash
-# Requires Python 3.13+.
-uv tool install forge-cli   # or: pip install forge-cli (the installed command is `forge`)
+# Requires Python 3.13+. forge is installed from source (GitHub-only — it is
+# not published to PyPI). The installer bootstraps uv if it's missing.
+curl -fsSL https://raw.githubusercontent.com/cchifor/forge/main/install | bash
+# or, directly:  uv tool install git+https://github.com/cchifor/forge.git
 
 # Sanity check.
 forge --version

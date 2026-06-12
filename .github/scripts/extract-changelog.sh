@@ -12,9 +12,9 @@
 # and prints every line until the next "## [" heading, with leading/trailing
 # blank lines trimmed.
 #
-# Exits 1 (with a stderr message) when the section is absent or empty, so a
-# release job fails loudly instead of publishing empty notes. Both release.yml
-# and release-dryrun.yml share this single extractor (WS-4.2).
+# Exits 1 (with a stderr message) when the section is absent or empty, so the
+# release job fails loudly instead of cutting a GitHub Release with empty notes.
+# Used by release.yml's github-release job (WS-4.2).
 set -euo pipefail
 
 version="${1:-}"

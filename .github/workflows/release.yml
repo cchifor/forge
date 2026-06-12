@@ -1,9 +1,10 @@
 name: Release
 
-# Triggered on tag push matching v*.*.* (including pre-release identifiers).
-# Publishes every package in lockstep order: PyPI first (forge CLI, since
-# fragment rollout hinges on it), then npm scopes, then pub.dev. Any
-# failure halts the pipeline and surfaces which registry failed.
+# Triggered on a version tag push. forge is distributed GitHub-only — there is
+# NO package-registry publishing (no PyPI / npm / pub.dev). Users install from
+# source via ./install, which runs `uv tool install git+<repo>`. This workflow
+# only cuts a GitHub Release carrying the built sdist+wheel, a CycloneDX SBOM,
+# and the changelog notes, so every tag has a downloadable, pinned snapshot.
 
 on:
   push:
@@ -11,96 +12,24 @@ on:
       - 'v*.*.*'
       - 'v*.*.*-*'   # pre-release identifiers (alpha, beta, rc)
 
-# Per-tag concurrency group — protects against re-triggering THE SAME
-# tag while one of its publish jobs is mid-flight (eg. someone pushes
-# v1.2.0 twice). GitHub Actions concurrency cannot truly serialise
-# different tags: a workflow-level group (`release-publish`) with
-# `cancel-in-progress: false` would actually *cancel* older pending
-# runs when a newer one is queued (per the GHA docs: only the running
-# run is preserved, every other run in the same group is purged when a
-# new one arrives). Per-tag grouping lets v1.2.0 and v1.2.1 publish in
-# parallel — registries (PyPI / npm / pub.dev) tolerate concurrent
-# distinct-version uploads, so this is the safer trade-off than
-# silently dropping a queued release.
 concurrency:
-  group: release-publish-${{ github.ref_name }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  # Epic Z (1.1.0-alpha.1) — release rehearsal gate. Queries the
-  # `release-dryrun/ok` check-run on the tagged commit's SHA and
-  # fails fast unless a successful dry-run completed within 72h.
-  # Every publish-* job depends on this, so a broken build, an
-  # npm publish misconfiguration, or a malformed CHANGELOG section
-  # gets caught in the separate `release-dryrun.yml` workflow before
-  # we ever touch PyPI / npm / pub.dev.
-  #
-  # Escape hatch: repo variable SKIP_DRYRUN_GATE=true short-circuits
-  # the check (auditable — variable mutations are in the repo log).
-  # Use sparingly; the gate exists to save you from yourself.
-  preflight-dryrun:
-    name: Preflight — release-dryrun/ok within 72h
+  github-release:
+    name: Create GitHub release
     runs-on: ubuntu-latest
     permissions:
-      checks: read
-    steps:
-      - name: Check for a recent release-dryrun/ok
-        if: vars.SKIP_DRYRUN_GATE != 'true'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const sha = context.sha;
-            const resp = await github.rest.checks.listForRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: sha,
-              check_name: "release-dryrun/ok",
-            });
-            const cutoffMs = 72 * 60 * 60 * 1000;
-            const now = Date.now();
-            const recent = resp.data.check_runs.find((r) => {
-              if (r.conclusion !== "success") return false;
-              const t = r.completed_at ? new Date(r.completed_at).getTime() : 0;
-              return (now - t) < cutoffMs;
-            });
-            if (!recent) {
-              core.setFailed([
-                `No successful release-dryrun/ok check-run for ${sha} within 72h.`,
-                "",
-                "Fix: run the 'Release dry-run' workflow against this commit",
-                "(Actions → Release dry-run → Run workflow), wait for green,",
-                "then re-push the tag. See RELEASING.md 'Pre-release dry-run protocol'.",
-                "",
-                "Escape hatch: set repo variable SKIP_DRYRUN_GATE=true (auditable).",
-              ].join("\n"));
-              return;
-            }
-            core.notice(`release-dryrun/ok from ${recent.completed_at} — gate cleared.`);
-
-      - name: Skip-gate escape hatch active
-        if: vars.SKIP_DRYRUN_GATE == 'true'
-        run: |
-          echo "::warning::SKIP_DRYRUN_GATE=true — release dry-run gate bypassed."
-          echo "Consider re-enabling after this release."
-
-  publish-pypi:
-    name: Publish forge (PyPI)
-    needs: preflight-dryrun
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      # Trusted publishing via OIDC — no API token required.
-      # https://docs.pypi.org/trusted-publishers/
-      id-token: write
+      contents: write
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      # Fail closed if the tag and the package __version__ disagree — otherwise
-      # a stable tag would publish whatever the metadata carries (e.g. an
-      # alpha) as `latest`. See .github/scripts/check-tag-version.sh.
+      # Fail closed if the tag and the package __version__ disagree, so a tag
+      # never cuts a release whose artifacts carry a different version.
       - name: Check tag matches package version
         run: bash .github/scripts/check-tag-version.sh "${{ github.ref_name }}"
 
@@ -112,190 +41,6 @@ jobs:
       - name: Build sdist + wheel
         run: uv build
 
-      # PEP440-aware prerelease detection — a1/b1/rc1/.devN have NO hyphen,
-      # so the old contains(ref,'-') check published an alpha as a stable
-      # release. See .github/scripts/detect-prerelease.sh (WS-4.1).
-      - name: Detect prerelease
-        id: prerelease
-        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
-
-      - name: Publish to TestPyPI (pre-release)
-        if: steps.prerelease.outputs.is_prerelease == 'true'
-        env:
-          UV_PUBLISH_URL: https://test.pypi.org/legacy/
-        run: uv publish
-
-      - name: Publish to PyPI (stable)
-        if: steps.prerelease.outputs.is_prerelease == 'false'
-        run: uv publish
-
-  publish-npm-canvas-vue:
-    name: Publish @forge/canvas-vue
-    needs: publish-pypi
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Install Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org/'
-
-      - name: Install + build
-        working-directory: packages/canvas-vue
-        run: |
-          npm ci
-          npm run build
-
-      - name: Detect prerelease
-        id: prerelease
-        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
-
-      # Prerelease tags publish under the npm "next" dist-tag so they never
-      # become the default `npm install` target; stable tags take "latest".
-      - name: Publish (prerelease → next)
-        if: steps.prerelease.outputs.is_prerelease == 'true'
-        working-directory: packages/canvas-vue
-        run: npm publish --tag next --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-      - name: Publish (latest)
-        if: steps.prerelease.outputs.is_prerelease == 'false'
-        working-directory: packages/canvas-vue
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-  publish-npm-canvas-svelte:
-    name: Publish @forge/canvas-svelte
-    needs: publish-pypi
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Install Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org/'
-
-      - name: Install + build
-        working-directory: packages/canvas-svelte
-        run: |
-          npm ci
-          npm run build
-
-      - name: Detect prerelease
-        id: prerelease
-        run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
-
-      - name: Publish (prerelease → next)
-        if: steps.prerelease.outputs.is_prerelease == 'true'
-        working-directory: packages/canvas-svelte
-        run: npm publish --tag next --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-      - name: Publish (latest)
-        if: steps.prerelease.outputs.is_prerelease == 'false'
-        working-directory: packages/canvas-svelte
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-  publish-pub-dev-core:
-    name: Publish forge_canvas_core (pub.dev)
-    # Must run BEFORE publish-pub-dev: forge_canvas declares
-    # `forge_canvas_core: ^1.0.0-alpha.1` as a runtime dep, and pub.dev
-    # strips `dependency_overrides` at publish time so the in-tree
-    # `path:` override won't help downstream consumers. publish-pub-dev
-    # validates the resolved dep graph and would 4xx if core isn't on
-    # the registry yet.
-    needs: publish-pypi
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      # Dart-only — no Flutter toolchain needed. forge_canvas_core has
-      # no Flutter dep (that's the entire point of the Phase 2B split);
-      # using `setup-dart` keeps the publish image small + matches the
-      # package's actual sdk constraint (`>=3.0.0 <4.0.0`).
-      - name: Setup Dart
-        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
-        with:
-          sdk: stable
-
-      - name: Configure pub.dev credentials
-        working-directory: packages/forge-canvas-core-dart
-        run: |
-          mkdir -p ~/.config/dart
-          echo "${{ secrets.PUB_DEV_CREDENTIALS }}" > ~/.config/dart/pub-credentials.json
-
-      - name: Analyze
-        working-directory: packages/forge-canvas-core-dart
-        run: |
-          dart pub get
-          dart analyze
-
-      - name: Test
-        working-directory: packages/forge-canvas-core-dart
-        run: dart test
-
-      - name: Publish
-        working-directory: packages/forge-canvas-core-dart
-        run: dart pub publish --force
-
-  publish-pub-dev:
-    name: Publish forge_canvas (pub.dev)
-    # Depend on -core so the publishes serialize correctly: pub.dev
-    # resolves forge_canvas's `forge_canvas_core: ^X.Y.Z` dep against
-    # the registry, not the dependency_overrides path.
-    needs: publish-pub-dev-core
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: '3.24.x'
-
-      - name: Configure pub.dev credentials
-        working-directory: packages/forge-canvas-dart
-        run: |
-          mkdir -p ~/.config/dart
-          echo "${{ secrets.PUB_DEV_CREDENTIALS }}" > ~/.config/dart/pub-credentials.json
-
-      - name: Analyze
-        working-directory: packages/forge-canvas-dart
-        run: |
-          flutter pub get
-          flutter analyze
-
-      - name: Publish
-        working-directory: packages/forge-canvas-dart
-        run: flutter pub publish --force
-
-  github-release:
-    name: Create GitHub release
-    needs: [publish-pypi, publish-npm-canvas-vue, publish-npm-canvas-svelte, publish-pub-dev-core, publish-pub-dev]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-
       - name: Detect prerelease
         id: prerelease
         run: bash .github/scripts/detect-prerelease.sh "${{ github.ref_name }}"
@@ -303,22 +48,16 @@ jobs:
       - name: Extract changelog section
         id: changelog
         run: |
-          # Shared extractor (WS-4.2): pull the [Unreleased] section's body
-          # for the release notes and FAIL if it is empty/missing, so a
-          # release never ships blank notes. The cut-Unreleased→dated step
-          # belongs in the tag-cutting workflow; at publish time the section
-          # being released still lives under [Unreleased].
+          # Pull the [Unreleased] section body for the release notes; fail if
+          # it's empty/missing so a release never ships blank notes.
           bash .github/scripts/extract-changelog.sh Unreleased CHANGELOG.md > release-notes.md
           cat release-notes.md
 
-      # Task 7 / 3B — CycloneDX SBOM. Generates a machine-readable
-      # software bill of materials from the locked dependency graph and
-      # attaches it to the GitHub release as a downloadable asset.
+      # CycloneDX SBOM from the locked dependency graph, attached to the release
+      # as a downloadable supply-chain artifact.
       - name: Generate CycloneDX SBOM
         run: |
           uv sync --all-extras --dev
-          # cyclonedx-py is the actual CLI shipped by the cyclonedx-bom
-          # package; `cyclonedx-bom` is not an executable form (WS-4.5).
           uvx --from cyclonedx-bom cyclonedx-py environment \
             --output-format json --output-file forge-sbom.cdx.json
 
@@ -327,8 +66,6 @@ jobs:
         with:
           body_path: release-notes.md
           prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}
-
-      - name: Attach SBOM to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" forge-sbom.cdx.json --clobber
+          files: |
+            dist/*
+            forge-sbom.cdx.json

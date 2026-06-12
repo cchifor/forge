@@ -87,9 +87,9 @@ Use `/review` in Claude Code to run the checklist automatically.
 ## Release cadence
 
 - **Alpha → beta → stable** follows RFC-001 (versioning + branching).
-- **Every release** is preceded by a dry-run rehearsal
-  (`.github/workflows/release-dryrun.yml`). The 72h validity window is
-  enforced by `release.yml`'s preflight gate.
+- **Distribution is GitHub-only** — no registry publishing. A `vX.Y.Z` tag
+  triggers `release.yml`, which cuts a GitHub Release (built sdist+wheel,
+  CycloneDX SBOM, and `[Unreleased]` changelog notes). See `RELEASING.md`.
 - **Breaking-change policy**: see RFC-002. Any option path removal,
   CLI flag removal, or error code removal requires one full release
   cycle of deprecation warnings before the remove lands.

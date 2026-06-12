@@ -510,7 +510,7 @@ Each generated project ships its own test suites — backend unit tests via `uv 
 Plugins extend forge with new options, fragments, backends, or frontends — same shape as the built-ins. Install one alongside forge and it's discovered automatically through the `forge.plugins` entry-point group:
 
 ```bash forge-plugin-install
-uv tool install --with forge-plugin-foo forge
+uv tool install --with forge-plugin-foo git+https://github.com/cchifor/forge.git
 forge --plugins list
 # Loaded plugins (1):
 #   * foo v0.1.0  (forge_plugin_foo:register)
