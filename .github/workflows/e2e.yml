@@ -243,11 +243,15 @@ jobs:
   # failing nightly that nobody sees is how regressions ship). Schedule-only;
   # de-dupes onto the shared open ``nightly-failure`` tracking issue.
   notify-e2e-nightly-failure:
-    needs: e2e-nightly-full
+    # e2e-nightly-full `needs: e2e-core`, so an e2e-core failure SKIPS the
+    # nightly job (result 'skipped', not 'failure'). Watch both so a broken
+    # prerequisite still notifies instead of dying silently.
+    needs: [e2e-core, e2e-nightly-full]
     if: >-
       always() &&
       github.event_name == 'schedule' &&
-      needs.e2e-nightly-full.result == 'failure'
+      (needs.e2e-core.result == 'failure' ||
+       needs.e2e-nightly-full.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -269,7 +273,7 @@ jobs:
             "Reproduce locally with \`uv run pytest -m e2e\`; see the job log for the failing test(s).")
           existing=$(gh issue list --state open --label nightly-failure \
             --search "Nightly CI failed in:title" \
-            --json number --jq '.[0].number' 2>/dev/null || true)
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -n "${existing}" ]; then
             gh issue comment "${existing}" --body "${body}"
           else

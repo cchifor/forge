@@ -415,7 +415,8 @@ jobs:
     if: >-
       always() &&
       github.event_name == 'schedule' &&
-      (needs.smoke.result == 'failure' ||
+      (needs.gate.result == 'failure' ||
+       needs.smoke.result == 'failure' ||
        needs.roundtrip.result == 'failure' ||
        needs.update.result == 'failure' ||
        needs.publish-dashboard.result == 'failure')
@@ -453,7 +454,7 @@ jobs:
           # Comment on an existing open tracking issue if present; else open one.
           existing=$(gh issue list --state open --label nightly-failure \
             --search "Nightly CI failed in:title" \
-            --json number --jq '.[0].number' 2>/dev/null || true)
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -n "${existing}" ]; then
             gh issue comment "${existing}" --body "${body}"
           else

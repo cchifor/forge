@@ -34,13 +34,15 @@ def _notify_jobs(jobs: dict) -> dict[str, dict]:
 
 
 @pytest.mark.parametrize(
-    ("workflow", "work_job"),
+    ("workflow", "work_job", "prereq_job"),
     [
-        ("matrix-nightly.yml", "smoke"),
-        ("e2e.yml", "e2e-nightly-full"),
+        ("matrix-nightly.yml", "smoke", "gate"),
+        ("e2e.yml", "e2e-nightly-full", "e2e-core"),
     ],
 )
-def test_scheduled_nightly_has_failure_notifier(workflow: str, work_job: str) -> None:
+def test_scheduled_nightly_has_failure_notifier(
+    workflow: str, work_job: str, prereq_job: str
+) -> None:
     jobs = _load(workflow)["jobs"]
     notifiers = _notify_jobs(jobs)
     assert notifiers, (
@@ -61,6 +63,18 @@ def test_scheduled_nightly_has_failure_notifier(workflow: str, work_job: str) ->
     needs = [needs] if isinstance(needs, str) else needs
     assert work_job in needs, (
         f"{workflow} notifier must `needs: {work_job}` to react to its result; got {needs}"
+    )
+
+    # The scheduling prerequisite (gate / e2e-core) SKIPS the work job when it
+    # fails, so the notifier must watch the prerequisite too — else a broken
+    # prerequisite dies silently (codex review of #233).
+    assert prereq_job in needs, (
+        f"{workflow} notifier must `needs: {prereq_job}` so a prerequisite "
+        f"failure isn't silent; got {needs}"
+    )
+    assert f"needs.{prereq_job}.result" in cond, (
+        f"{workflow} notifier `if:` must check needs.{prereq_job}.result so a "
+        f"skipped work job (from a failed prerequisite) still notifies; got {cond!r}"
     )
 
     # It needs issue-write to open/comment the tracking issue.
