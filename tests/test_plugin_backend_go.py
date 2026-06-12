@@ -32,10 +32,16 @@ _GO_PLUGIN_SRC = _REPO_ROOT / "examples" / "forge-go-backend" / "src"
 
 @pytest.fixture
 def go_backend_registered():
-    """Register the reference Go backend into the live registries for the
-    test, then scrub the additions so other tests see the built-in-only
-    registry. Mirrors the snapshot/restore pattern in
-    ``test_plugin_backend_language.py``."""
+    """Ensure the reference Go backend is registered for the test, then scrub
+    anything we added so other tests see the built-in-only registry.
+
+    Idempotent so it works in both worlds: in normal CI the plugin isn't
+    pip-installed, so we import it from ``examples/`` and ``register()`` it
+    in-process (and scrub afterward); in the plugin-e2e job it *is* installed,
+    so the entry-point ``load_all`` already registered ``go`` — we detect that
+    and reuse it without re-registering (which would trip the collision guard)
+    and without scrubbing (we didn't add it). Mirrors the snapshot/restore
+    pattern in ``test_plugin_backend_language.py``."""
     if not _GO_PLUGIN_SRC.is_dir():
         pytest.skip(f"reference Go plugin not found at {_GO_PLUGIN_SRC}")
     if str(_GO_PLUGIN_SRC) not in sys.path:
@@ -46,17 +52,21 @@ def go_backend_registered():
     from forge.backend_app_templates import BACKEND_APPLICATION_TEMPLATES
     from forge.config import BACKEND_REGISTRY, PLUGIN_LANGUAGES
 
+    already_registered = "go" in PLUGIN_LANGUAGES
     reg_snapshot = dict(BACKEND_REGISTRY)
     lang_snapshot = dict(PLUGIN_LANGUAGES)
     app_snapshot = dict(BACKEND_APPLICATION_TEMPLATES)
 
-    api = ForgeAPI(
-        PluginRegistration(name="forge-go-backend", module="forge_go_backend")
-    )
-    mod.register(api)
+    if not already_registered:
+        api = ForgeAPI(
+            PluginRegistration(name="forge-go-backend", module="forge_go_backend")
+        )
+        mod.register(api)
     try:
         yield
     finally:
+        if already_registered:
+            return  # not ours to remove — a prior load_all owns it
         for value in list(PLUGIN_LANGUAGES):
             if value not in lang_snapshot:
                 sentinel = PLUGIN_LANGUAGES.pop(value)
