@@ -151,14 +151,17 @@ describe('reduce — tool calls', () => {
     expect(s1.activeToolCalls).toEqual([{ id: 't1', name: 'read_file', status: 'running' }])
   })
 
-  it('TOOL_CALL_ARGS is intentionally a no-op (Pillar G.2 will revisit)', () => {
+  it('TOOL_CALL_ARGS buffers the streamed delta into argsBuffer', () => {
     const s0 = reduce(EMPTY_CHAT_SNAPSHOT, {
       type: 'TOOL_CALL_START',
       toolCallId: 't1',
       toolCallName: 'read_file',
     })
     const s1 = reduce(s0, { type: 'TOOL_CALL_ARGS', toolCallId: 't1', delta: '{"path"' })
-    expect(s1).toBe(s0)
+    const s2 = reduce(s1, { type: 'TOOL_CALL_ARGS', toolCallId: 't1', delta: ': "x"}' })
+    // No longer a no-op: deltas accumulate so TOOL_CALL_END can pretty-print
+    // (cross-stack contract in tests/test_chat_tool_call_args_contract.py).
+    expect(s2.activeToolCalls[0]?.argsBuffer).toBe('{"path": "x"}')
   })
 
   it('TOOL_CALL_END marks the call completed', () => {
@@ -174,20 +177,22 @@ describe('reduce — tool calls', () => {
 
 describe('reduce — custom + activity', () => {
   it('CUSTOM deepagent.user_prompt sets pendingPrompt', () => {
+    // Wire payload is snake_case `tool_call_id` per the ui-protocol schema; the
+    // option shape is { label, description?, recommended? } (no synthetic id).
     const s1 = reduce(EMPTY_CHAT_SNAPSHOT, {
       type: 'CUSTOM',
       name: 'deepagent.user_prompt',
       value: {
-        toolCallId: 't1',
+        tool_call_id: 't1',
         question: 'Continue?',
         options: [
-          { id: 'yes', label: 'Yes' },
-          { id: 'no', label: 'No' },
+          { label: 'Yes' },
+          { label: 'No', recommended: 'true' },
         ],
       },
     })
     expect(s1.pendingPrompt).toMatchObject({
-      toolCallId: 't1',
+      tool_call_id: 't1',
       question: 'Continue?',
     })
     expect(s1.pendingPrompt?.options).toHaveLength(2)
