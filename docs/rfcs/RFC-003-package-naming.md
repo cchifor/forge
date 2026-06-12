@@ -1,9 +1,13 @@
 # RFC-003: Published-package naming and ownership
 
-- Status: Accepted
+- Status: **Superseded (2026-06-11)** — forge is distributed **GitHub-only**; no
+  packages are published to any registry, so naming/ownership is moot. Retained
+  as the historical record of *why* registry publishing was dropped (the PyPI
+  `forge` collision and the Atlassian-owned `@forge` npm scope made publishing
+  costly for no benefit given source-install via `./install`). See `RELEASING.md`.
 - Author: forge team
 - Created: 2026-04-20
-- Updated: 2026-06-10
+- Updated: 2026-06-11
 - Target: 1.2.0 (first public release)
 
 ## Decision (2026-06-10)

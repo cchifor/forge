@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# No `errexit` (`set -e`): this is a bootstrap installer whose steps return
+# non-zero by design — the uv installer exits non-zero in a non-interactive
+# shell, and the cosmetic `… | head` version pipelines SIGPIPE under pipefail.
+# macOS ships bash 3.2, whose errexit/pipefail/`|| true` handling aborts the
+# script even on guarded commands (observed: it died right after a SUCCESSFUL
+# uv install on macOS CI). We keep `nounset` + `pipefail` and verify the two
+# things that actually matter — uv and forge — explicitly instead.
+set -uo pipefail
 
 REPO="https://github.com/cchifor/forge.git"
 TOOL="git+${REPO}"
@@ -60,15 +67,17 @@ else
   else
     curl -LsSf https://astral.sh/uv/install.sh | sh 2>&1 | sed 's/^/    /'
   fi
-  # Refresh PATH
+  # Refresh PATH: uv installs to ~/.local/bin. Source its env file if present,
+  # and add the dir unconditionally so the verify below finds uv regardless.
   if [[ "$os" == "windows" ]]; then
     eval "$(powershell.exe -NoProfile -Command '
       $p = [System.Environment]::GetEnvironmentVariable("Path","User") + ";" +
            [System.Environment]::GetEnvironmentVariable("Path","Machine")
       $p -split ";" | ForEach-Object { if ($_) { "export PATH=\"" + ($_ -replace "\\\\","/") + ":\$PATH\"" } }
-    ')" 2>/dev/null || true
+    ')" 2>/dev/null
   else
-    source "$HOME/.local/bin/env" 2>/dev/null || export PATH="$HOME/.local/bin:$PATH"
+    source "$HOME/.local/bin/env" 2>/dev/null || true
+    export PATH="$HOME/.local/bin:$PATH"
   fi
   if installed uv; then
     echo -e "  ${GREEN}[ok]${NC} uv $(get_version uv --version)"
@@ -116,10 +125,38 @@ echo -e "  ${MUTED}Installing forge...${NC}"
 echo -e ""
 
 if [[ "$os" == "windows" ]]; then
-  ps_exec "uv tool install $TOOL" 2>&1 | sed 's/^/    /'
+  ps_exec "uv tool install --force $TOOL" 2>&1 | sed 's/^/    /'
 else
-  uv tool install "$TOOL" 2>&1 | sed 's/^/    /'
+  uv tool install --force "$TOOL" 2>&1 | sed 's/^/    /'
 fi
+# Capture uv's exit code (not sed's) — without errexit a failed install would
+# otherwise pass silently, and a pre-existing `forge` on PATH (e.g. Foundry's)
+# could make the verify below report false success.
+install_rc=${PIPESTATUS[0]}
+
+# uv installs the `forge` shim into its tool bin dir, which is configurable
+# (UV_TOOL_BIN_DIR / XDG_BIN_HOME) — ask uv rather than assuming ~/.local/bin.
+# Prepend it so the uv-installed forge wins over any other `forge` on PATH.
+uv_bin="$(uv tool dir --bin 2>/dev/null || echo "$HOME/.local/bin")"
+export PATH="$uv_bin:$PATH"
+
+forge_path="$(command -v forge 2>/dev/null || true)"
+if [ "$install_rc" -ne 0 ] || [ -z "$forge_path" ]; then
+  echo -e ""
+  echo -e "  ${RED}[!!] forge installation failed.${NC} See the output above."
+  echo -e "  ${MUTED}You can retry with: uv tool install --force ${TOOL}${NC}"
+  exit 1
+fi
+# Warn (don't fail) if a DIFFERENT `forge` shadows ours — e.g. Foundry also
+# ships a `forge`. We prepended uv_bin, so this only triggers on odd setups.
+case "$os:$forge_path" in
+  windows:*) : ;;  # path semantics differ under git-bash; skip the check
+  *:"$uv_bin"/*) : ;;  # the uv-installed forge — good
+  *)
+    echo -e "  ${WARN}[--]${NC} another 'forge' is first on PATH: ${forge_path}"
+    echo -e "       ${MUTED}forge (the generator) is at ${uv_bin}/forge — put that dir ahead on PATH${NC}"
+    ;;
+esac
 
 # -- Done ---------------------------------------------------------------------
 

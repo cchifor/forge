@@ -1,9 +1,13 @@
 # RFC-004: Release rehearsal before 1.0.0
 
-- Status: Accepted
+- Status: **Superseded (2026-06-11)** — the release rehearsal existed to de-risk
+  publishing to PyPI/npm/pub.dev. forge is now distributed **GitHub-only** (no
+  registry publishing), so there is nothing to rehearse: `release.yml` cuts a
+  GitHub Release and `release-dryrun.yml` was removed. Retained as historical
+  context. See `RELEASING.md`.
 - Author: forge team
 - Created: 2026-04-20
-- Updated: 2026-04-20
+- Updated: 2026-06-11
 - Target: 1.0.0rc1
 
 ## Summary
