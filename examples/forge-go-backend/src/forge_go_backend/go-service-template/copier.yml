@@ -1,0 +1,45 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_skip_if_exists:
+  - ".env"
+
+# ---------------------------------------------------------------------------
+# Questions. forge feeds these as ``data`` (from variable_mapper.backend_
+# context) with ``defaults=True``, so they are answered non-interactively;
+# the defaults below only matter for a standalone ``copier copy`` run.
+# ---------------------------------------------------------------------------
+
+project_name:
+  type: str
+  help: "Service name in kebab-case"
+  default: "my-service"
+
+project_description:
+  type: str
+  help: "One-line description"
+  default: "A Go microservice"
+
+project_slug:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', '_') }}"
+
+server_port:
+  type: int
+  help: "HTTP server port"
+  default: 5000
+
+db_name:
+  type: str
+  when: false
+  default: "{{ project_name | replace('-', '_') }}"
+
+entity_plural:
+  type: str
+  when: false
+  default: "items"
+
+go_version:
+  type: str
+  help: "Recommended Go toolchain (Docker builder image tag). Separate from the go.mod floor, which stays at 1.19."
+  default: "1.22"

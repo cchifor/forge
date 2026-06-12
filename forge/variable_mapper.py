@@ -129,11 +129,23 @@ def backend_context(
         "project_description": bc.description,
         "server_port": bc.server_port,
         "db_name": bc.name.replace("-", "_"),
-        spec.version_field: getattr(bc, spec.version_field),
         "entity_plural": _primary_feature(bc),
         "include_platform_auth": include_platform_auth,
         "include_error_envelope": include_error_envelope,
     }
+    # Thread the language's version into the template context so it's pinned
+    # in ``.copier-answers.yml`` (a later ``copier update`` won't drift if the
+    # template default changes). Built-ins carry their version field as a
+    # ``BackendConfig`` attribute (``python_version`` / ``node_version`` /
+    # ``rust_edition``); a plugin-registered language's ``version_field`` (e.g.
+    # ``go_version``) has no such attribute, so we fall back to the spec's
+    # first declared choice (the recommended version) rather than leaving the
+    # key unpinned.
+    version_value = getattr(bc, spec.version_field, None)
+    if version_value is None and spec.version_choices:
+        version_value = spec.version_choices[0]
+    if version_value is not None:
+        ctx[spec.version_field] = version_value
     # Only thread sdk_consumption when the caller set it. Leaving the
     # key absent lets copier.yml's own default (``monorepo``) apply,
     # preserving the production-platform shape; CI and standalone

@@ -866,6 +866,7 @@ def _infer_backends(
     for backend_dir in sorted(services.iterdir()):
         if not backend_dir.is_dir():
             continue
+        matched = False
         for marker, lang in markers.items():
             if (backend_dir / marker).is_file():
                 out.append(
@@ -875,9 +876,80 @@ def _infer_backends(
                         language=lang,
                     )
                 )
+                matched = True
                 break
+        if matched:
+            continue
+        # Plugin-backend fallback: a plugin language (e.g. ``go``) has no
+        # built-in marker file, so match the service's ``.copier-answers.yml``
+        # ``_src_path`` against a registered backend's ``template_dir``.
+        src_path = _copier_src_path(backend_dir)
+        plugin_lang = _resolve_language_from_src_path(src_path)
+        if plugin_lang is not None:
+            out.append(
+                BackendConfig(
+                    name=backend_dir.name,
+                    project_name=project_root.name,
+                    language=cast("BackendLanguage", plugin_lang),
+                )
+            )
+        elif src_path is not None:
+            # The directory IS a forge-rendered service (it has a copier-answers
+            # ``_src_path``) but its template maps to no loaded backend — almost
+            # always a plugin backend whose package isn't installed. Fail loud:
+            # silently skipping it would regenerate ``forge.toml`` WITHOUT this
+            # backend, dropping it from ``[forge.templates]`` (data loss).
+            raise ForgeError(
+                f"Cannot resolve the backend language for 'services/{backend_dir.name}' "
+                f"(rendered from {src_path!r}). If it's a plugin backend, install the "
+                f"plugin that provides it before running --update."
+            )
     _ = manifest_frontend  # accepted for forward-compat; see docstring
     return out
+
+
+def _copier_src_path(backend_dir: Path) -> str | None:
+    """Return the ``_src_path`` recorded in a service's ``.copier-answers.yml``.
+
+    Its presence is the signal that ``backend_dir`` is a forge-rendered service
+    (vs. an unrelated ``services/<name>`` directory). ``None`` when there's no
+    answers file, it's unreadable, or it carries no ``_src_path``.
+    """
+    answers = backend_dir / ".copier-answers.yml"
+    if not answers.is_file():
+        return None
+    import yaml  # noqa: PLC0415
+
+    try:
+        data = yaml.safe_load(answers.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    src = data.get("_src_path")
+    return str(src) if src else None
+
+
+def _resolve_language_from_src_path(src: str | None):
+    """Match a copier ``_src_path`` against a registered backend's template dir.
+
+    A plugin-registered backend ships no built-in marker file, so we map the
+    recorded template dir (absolute for plugins, relative for built-ins) back to
+    its language key (a ``_PluginLanguage`` sentinel). ``None`` when ``src`` is
+    falsy or no registered spec matches (e.g. the owning plugin isn't loaded).
+    """
+    if not src:
+        return None
+    from forge.config import BACKEND_REGISTRY  # noqa: PLC0415
+
+    src_resolved = Path(src).resolve()
+    for lang, spec in BACKEND_REGISTRY.items():
+        # Built-in specs carry a relative template_dir; plugin specs an
+        # absolute one. Compare resolved paths (and the raw string) so both
+        # forms match the recorded answer.
+        if str(spec.template_dir) == src or Path(spec.template_dir).resolve() == src_resolved:
+            return lang
+    return None
 
 
 def _cleanup_orphaned_frontend_codegen(

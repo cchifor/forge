@@ -1,0 +1,25 @@
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestHealthLive(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health/live", nil)
+	rec := httptest.NewRecorder()
+	health(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health/live: got %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestRootNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/nope", nil)
+	rec := httptest.NewRecorder()
+	root(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("root /nope: got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
