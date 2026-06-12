@@ -61,8 +61,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api-node/Dockerfile": {
-      "size": 3373,
-      "sha256": "1761def47097f42a"
+      "size": 3728,
+      "sha256": "fb4ec1fe1a1eaffd"
     },
     "services/api-node/README.md": {
       "size": 1412,

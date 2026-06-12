@@ -53,6 +53,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `pgadmin` service is `dpage/pgadmin4:9` (was `:latest`) across all compose
   templates, and the worker Dockerfile's uv stage is `ghcr.io/astral-sh/uv:0.11.16`
   (matching the main service Dockerfile) — no more silent `:latest` drift.
+- **Reproducible dependency installs via committed lockfiles** (#223): the
+  generator now resolves a workspace-root `package-lock.json` (Node) /
+  `Cargo.lock` (Rust) at creation time (`_generate_lockfiles`, toolchain-gated
+  and best-effort), and the service Dockerfiles install frozen — `npm ci` and
+  `cargo build --locked` when the lockfile is present, falling back to
+  `npm install` / unlocked `cargo build` when it isn't. Builds now pin the
+  exact transitive versions forge resolved instead of drifting with registry
+  HEAD. Lockfiles are committed but stay snapshot-excluded (host-asymmetric)
+  while remaining visible to the round-trip diff.
 
 ### Recent merges (post-2026-05-23, previously unlogged)
 

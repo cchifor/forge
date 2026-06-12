@@ -106,9 +106,12 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
 
         if is_generated_artefact(rel) or (
             # Snapshot-only: dependency lockfile content varies with the
-            # snapshot host's npm version / registry HEAD.
+            # snapshot host's npm / cargo version + registry HEAD (and is
+            # only produced when the toolchain ran at generation time).
             rel.endswith("/package-lock.json")
             or rel == "package-lock.json"
+            or rel.endswith("/Cargo.lock")
+            or rel == "Cargo.lock"
             # Snapshot-only: Vue auto-import declarations are produced at
             # first ``npm run dev`` / ``vue-tsc`` — whether they exist on
             # the snapshot host depends on Node availability.

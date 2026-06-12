@@ -19,8 +19,8 @@ buckets:
   is the Cargo workspace's shared build artifact tree.
 
 Deliberate omissions (kept visible to FR2 even when ignored by golden
-snapshots): ``package-lock.json`` / ``auto-imports.d.ts`` /
-``/api/generated/``. These ARE deterministic on a single CI host (frozen
+snapshots): ``package-lock.json`` / ``Cargo.lock`` / ``auto-imports.d.ts``
+/ ``/api/generated/``. These ARE deterministic on a single CI host (frozen
 lockfiles, deterministic codegen) and an FR2 difference in them indicates
 a real round-trip bug — exactly what roundtrip should catch. Golden
 snapshots treat them as host-asymmetric noise instead because the snapshot
