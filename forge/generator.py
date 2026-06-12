@@ -37,6 +37,7 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
     frontend_uses_subdirectory,
+    resolve_backend_language,
     validate_slug,
 )
 from forge.docker_manager import (
@@ -1040,7 +1041,10 @@ def _write_forge_toml(
     templates: dict[str, str] = {}
     template_versions: dict[str, str] = {}
     for lang in sorted({bc.language.value for bc in config.backends}):
-        spec = BACKEND_REGISTRY[BackendLanguage(lang)]
+        # ``resolve_backend_language`` (not ``BackendLanguage(lang)``) so a
+        # plugin-registered language resolves to its _PluginLanguage sentinel
+        # key instead of raising ValueError — both index BACKEND_REGISTRY.
+        spec = BACKEND_REGISTRY[resolve_backend_language(lang)]
         templates[lang] = spec.template_dir
         template_versions[lang] = _resolve_template_version_for(spec.template_dir, spec.version)
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:

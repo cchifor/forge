@@ -27,6 +27,7 @@ from forge.config._backend import (
     BackendLanguage,
     BackendSpec,
     _PluginLanguage,
+    available_backend_languages,
     register_backend_language,
     resolve_backend_language,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "BackendLanguage",
     "BackendSpec",
     "_PluginLanguage",
+    "available_backend_languages",
     "register_backend_language",
     "resolve_backend_language",
     # Frontend

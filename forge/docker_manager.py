@@ -103,6 +103,13 @@ def render_compose(
     )
 
     # Build per-backend context list for the template loop
+    # Only the built-in languages ship a database migration step (and thus a
+    # ``<svc>-migrate`` sidecar the service waits on). A plugin-registered
+    # backend has no migrate command branch in the compose template, so
+    # emitting the sidecar would deadlock the stack — the sidecar would run
+    # the server image, never exit, and the service's
+    # ``service_completed_successfully`` dependency would block forever.
+    _BUILTIN_MIGRATING = {BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST}
     backends_ctx = []
     for bc in config.backends:
         backends_ctx.append(
@@ -111,6 +118,7 @@ def render_compose(
                 "language": bc.language.value,
                 "port": bc.server_port,
                 "db_name": bc.name.replace("-", "_"),
+                "has_migrations": bc.language in _BUILTIN_MIGRATING,
                 # Phase 4: per-service S2S / inter-service env block. Empty
                 # dict when synthesis is inactive → the template's loop emits
                 # nothing (golden-stable).

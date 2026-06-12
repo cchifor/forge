@@ -41,8 +41,8 @@ def _build_template_update_tasks(
     from forge.config import (  # noqa: PLC0415
         BACKEND_REGISTRY,
         FRONTEND_SPECS,
-        BackendLanguage,
         FrontendFramework,
+        resolve_backend_language,
     )
     from forge.sync.forge_to_project.template_update import (  # noqa: PLC0415
         TemplateUpdateTask,
@@ -66,9 +66,14 @@ def _build_template_update_tasks(
         template_path: Path | None = None
         spec_default = "1.0.0"
 
-        # Backend language?
+        # Backend language? ``resolve_backend_language`` (not the
+        # ``BackendLanguage`` constructor) so a plugin-registered language
+        # in the manifest resolves to its sentinel and gets update-checked,
+        # instead of silently falling into the ``None`` branch and being
+        # skipped. A genuinely unknown value (plugin uninstalled) still
+        # raises ValueError → None → skip.
         try:
-            backend_lang = BackendLanguage(lang)
+            backend_lang = resolve_backend_language(lang)
         except ValueError:
             backend_lang = None  # type: ignore[assignment]
         if backend_lang is not None and lang in backend_languages:

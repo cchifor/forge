@@ -106,9 +106,20 @@ def _prompt_backend(
     language = label_to_lang[chosen_label]
     spec = BACKEND_REGISTRY[language]
     port = _ask_port("Backend server port:", default=str(default_port))
-    version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
     features = _ask_features()
 
+    # ``spec.version_field`` is a real ``BackendConfig`` attribute only for the
+    # built-ins (python_version / node_version / rust_edition). A plugin
+    # language's version field (e.g. ``go_version``) isn't a dataclass field
+    # and has nowhere to be stored, so we DON'T prompt for it — asking and then
+    # silently dropping the answer would be misleading. The plugin template's
+    # own copier default (surfaced via the spec's first version choice) applies.
+    from dataclasses import fields as _dc_fields  # noqa: PLC0415
+
+    version_kwargs: dict[str, str] = {}
+    if spec.version_field in {f.name for f in _dc_fields(BackendConfig)}:
+        version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
+        version_kwargs = {spec.version_field: version}
     return BackendConfig(
         name=name,
         project_name=project_name,
@@ -120,7 +131,7 @@ def _prompt_backend(
         # node_version / rust_edition), all ``str`` fields — ty can't resolve the
         # dynamic key so it checks ``str`` against the widest field; suppress as
         # with ``language=`` above.
-        **{spec.version_field: version},  # ty:ignore[invalid-argument-type]
+        **version_kwargs,  # ty:ignore[invalid-argument-type]
     )
 
 

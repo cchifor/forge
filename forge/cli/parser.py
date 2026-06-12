@@ -74,11 +74,19 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--description", metavar="DESC")
     p.add_argument("--output-dir", metavar="DIR", default=".")
 
-    # Backend
+    # Backend. Choices are read at parser-build time, which ``main()`` runs
+    # AFTER ``feature_loader.load_all()`` — so a plugin that registered a
+    # backend (e.g. ``go``) shows up in ``--backend-language``/``--help``.
+    # Completion/introspection callers that skip plugin load just see the
+    # three built-ins, which is the correct baseline.
+    from forge.config import available_backend_languages  # noqa: PLC0415
+
+    backend_language_choices = available_backend_languages()
     p.add_argument(
         "--backend-language",
-        choices=["python", "node", "rust"],
-        help="Backend language: python (FastAPI), node (Fastify), or rust (Axum)",
+        choices=backend_language_choices,
+        help="Backend language: python (FastAPI), node (Fastify), rust (Axum), "
+        "or any plugin-registered backend.",
     )
     p.add_argument("--backend-name", metavar="NAME", help="Backend service name (default: backend)")
     p.add_argument("--backend-port", type=int, metavar="PORT")
@@ -606,9 +614,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # add-backend — scaffold an additional backend in an existing project.
+    # Same dynamic choice set as --backend-language (built-ins + plugins).
     p.add_argument(
         "--add-backend-language",
-        choices=["python", "node", "rust"],
+        choices=backend_language_choices,
         metavar="LANG",
         help="Language for the new backend with `forge --add-backend-language python --add-backend-name <name>`",
     )

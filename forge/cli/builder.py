@@ -72,10 +72,25 @@ def _backend_language(value: object) -> BackendLanguage:
     An absent key defaults to ``"python"`` at the call sites; a *present* but
     unknown value (e.g. ``language: cobol``) is a user mistake worth surfacing
     rather than silently coercing to Python.
+
+    Resolves through ``resolve_backend_language`` so a plugin-registered
+    language (e.g. ``go``) parses from a config file's ``backends:`` list
+    just like the three built-ins — the error lists whatever is actually
+    registered at parse time.
     """
-    if value in ("python", "node", "rust"):
-        return BackendLanguage(value)
-    raise ValueError(f"Unknown backend language {value!r}; valid languages are python, node, rust.")
+    from forge.config import available_backend_languages, resolve_backend_language  # noqa: PLC0415
+
+    try:
+        # cast: a plugin language resolves to a _PluginLanguage sentinel, which
+        # quacks like a BackendLanguage member (``.value``, hashes into the
+        # registries) but isn't statically one. The runtime is correct; the
+        # cast bridges the dynamic plugin surface to the static annotation.
+        return cast("BackendLanguage", resolve_backend_language(str(value)))
+    except ValueError:
+        valid = ", ".join(available_backend_languages())
+        raise ValueError(
+            f"Unknown backend language {value!r}; valid languages are {valid}."
+        ) from None
 
 
 def _build_backends_from_cfg(

@@ -84,6 +84,18 @@ def resolve_backend_language(value: str) -> BackendLanguage | _PluginLanguage:
     raise ValueError(f"Unknown backend language: {value!r}")
 
 
+def available_backend_languages() -> list[str]:
+    """Wire values of every backend language forge can generate right now —
+    the three built-ins plus any a plugin has registered via
+    :meth:`forge.api.ForgeAPI.add_backend`.
+
+    Read at call time (not import time) so the CLI's ``--backend-language``
+    choices reflect plugins loaded earlier in ``main()``. Built-ins come
+    first in declaration order; plugin languages follow, sorted.
+    """
+    return [member.value for member in BackendLanguage] + sorted(PLUGIN_LANGUAGES)
+
+
 def _default_toolchain_factory() -> Any:
     """Lazy import to break the config → toolchains cycle.
 

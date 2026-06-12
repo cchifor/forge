@@ -456,14 +456,31 @@ class ForgeAPI:
 
         1.0.0a2+ lets plugins extend ``BackendLanguage`` via a sentinel
         (``_PluginLanguage``) so a plugin can ship a brand-new backend
-        (e.g. ``go``, ``java``) without forking forge. The sentinel is
-        accepted by ``BackendLanguage(value)`` via the ``_missing_``
-        hook, so every downstream call that looks up a backend by its
-        string value works transparently.
+        (e.g. ``go``, ``java``) without forking forge. The sentinel isn't
+        a real enum member (the enum machinery refuses to mint one), so
+        downstream call sites resolve a language *string* through
+        ``forge.config.resolve_backend_language`` rather than the
+        ``BackendLanguage(value)`` constructor — the resolver returns the
+        sentinel for plugin values and the enum member for built-ins, and
+        both index ``BACKEND_REGISTRY`` and the app-template registry.
 
-        Raises ``ValueError`` if ``language_value`` is already a built-in
+        Registering a backend also seeds its default ``crud-service``
+        application-template variant (pointing at ``spec.template_dir``,
+        mirroring the built-ins) so a ``BackendConfig`` on the new language
+        validates and generates without the plugin having to call
+        :meth:`add_backend_application_template` separately. The built-in
+        seeding runs at import time — before plugins load — so a
+        plugin language would otherwise have no variant at all.
+
+        Raises ``PluginError`` if ``language_value`` is already a built-in
         or already registered by another plugin.
         """
+        from forge.backend_app_templates import (  # noqa: PLC0415
+            DEFAULT_BACKEND_TEMPLATE,
+            BackendApplicationTemplate,
+            get_backend_application_template,
+            register_backend_application_template,
+        )
         from forge.config import (  # noqa: PLC0415
             BACKEND_REGISTRY,
             PLUGIN_LANGUAGES,
@@ -508,6 +525,25 @@ class ForgeAPI:
                     )
             sentinel = register_backend_language(language_value)
             BACKEND_REGISTRY[sentinel] = spec
+
+        # Seed the default ``crud-service`` variant for the new language so a
+        # ``BackendConfig`` on it validates + generates out of the box. The
+        # built-in seeding (``_register_builtin_crud_services``) already ran at
+        # import, before this plugin loaded, so a plugin language has no variant
+        # yet. Guard against double-registration for the built-in re-register
+        # path (a plugin overriding a built-in's spec).
+        language_key = builtin if builtin is not None else sentinel
+        if get_backend_application_template(language_key, DEFAULT_BACKEND_TEMPLATE) is None:
+            register_backend_application_template(
+                BackendApplicationTemplate(
+                    language=language_key,
+                    variant=DEFAULT_BACKEND_TEMPLATE,
+                    template_dir=spec.template_dir,
+                    display_label=f"{spec.display_label} — CRUD service",
+                    supported=True,
+                    base_template_dir="",
+                )
+            )
         self._registration.backends_added += 1
 
     def add_backend_application_template(

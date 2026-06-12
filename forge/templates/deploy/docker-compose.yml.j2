@@ -12,7 +12,7 @@
 
 services:
 {% for be in backends %}
-{% if database_mode != "none" %}
+{% if database_mode != "none" and be.has_migrations %}
   # ── Migrations for {{ be.name }} ──
   {{ be.name }}-migrate:
     build:
@@ -123,9 +123,9 @@ services:
       - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite"
 {% endif %}
       - "traefik.http.services.{{ be.name }}.loadbalancer.server.port={{ be.port }}"
-{% if database_mode != "none" or include_keycloak %}
+{% if (database_mode != "none" and be.has_migrations) or include_keycloak %}
     depends_on:
-{% if database_mode != "none" %}
+{% if database_mode != "none" and be.has_migrations %}
       {{ be.name }}-migrate:
         condition: service_completed_successfully
 {% endif %}

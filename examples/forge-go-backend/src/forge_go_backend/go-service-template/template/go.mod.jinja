@@ -1,0 +1,8 @@
+module {{ project_slug }}
+
+// The ``go`` directive is a conservative minimum (this stdlib-only service
+// needs no modern language features), so the module builds on any toolchain
+// from 1.19 up. ``go_version`` (the Docker builder image + the pinned answer)
+// tracks the *recommended* toolchain separately — bump this floor only when
+// you actually adopt a newer-Go feature.
+go 1.19

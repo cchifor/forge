@@ -1,0 +1,22 @@
+# docker-compose fragment for the {{ project_slug }} Go service. The
+# reference service is stateless (no database / auth dependency), so the
+# fragment is just the service itself — kept structurally parallel to the
+# built-in Python/Node/Rust fragments so platform orchestration is uniform.
+
+services:
+  {{ project_slug }}:
+    build:
+      context: ./services/{{ project_slug }}
+      dockerfile: Dockerfile
+    ports:
+      - "{{ server_port }}:{{ server_port }}"
+    environment:
+      PORT: "{{ server_port }}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.{{ project_slug }}.rule=Host(`app.localhost`) && PathPrefix(`/api/{{ project_slug }}`)"
+      - "traefik.http.routers.{{ project_slug }}.middlewares={{ project_slug }}-rewrite"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.regex=^/api/{{ project_slug }}/(.*)"
+      - "traefik.http.middlewares.{{ project_slug }}-rewrite.replacepathregex.replacement=/api/$$1"
+      - "traefik.http.services.{{ project_slug }}.loadbalancer.server.port={{ server_port }}"
+    networks: [app-network]
