@@ -23,9 +23,18 @@ jobs:
           cache: npm
 
       # Installs every workspace (services/*, sdks/*, apps/*). The in-tree
-      # SDKs build first via their own ``prepare`` scripts.
+      # SDKs build first via their own ``prepare`` scripts. ``npm ci``
+      # installs exactly what the committed lockfile pins — so a stale
+      # lockfile fails HERE (matching the prod Docker ``npm ci``) instead
+      # of slipping through CI on a silent ``npm install`` re-resolve.
+      # Falls back to ``npm install`` when no lockfile is committed.
       - name: Install dependencies
-        run: npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       # Prisma needs no database for ``generate`` — the client is built from
       # the committed schema. ``--if-present`` skips workspaces (e.g. a

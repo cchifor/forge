@@ -179,8 +179,16 @@ def test_node_svelte_scaffolds_and_vitest_passes(
     _inject_weld_stubs(project_root)
     backend_dir = project_root / "services" / "backend-node"
     assert (backend_dir / "package.json").exists(), "node backend package.json missing"
-    assert (backend_dir / "package-lock.json").exists(), (
-        "npm install lockfile missing — Docker builds would fail"
+    # The authoritative lockfile lives at the npm-workspace ROOT — that's
+    # what the service Dockerfile COPYs (from the project_root build
+    # context) for its ``npm ci``. The generator resolves it post-assembly
+    # in ``_generate_lockfiles`` and prunes any per-service stray so the
+    # workspace ships a single canonical lockfile.
+    assert (project_root / "package-lock.json").exists(), (
+        "workspace-root package-lock.json missing — Docker `npm ci` would fail"
+    )
+    assert not (backend_dir / "package-lock.json").exists(), (
+        "per-service package-lock.json should be pruned in favor of the root lockfile"
     )
 
     result = _run(["npx", "--yes", "vitest", "run"], cwd=backend_dir)

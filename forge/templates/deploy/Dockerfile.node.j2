@@ -12,14 +12,20 @@ RUN npm install -g bun
 
 {% if package_manager == "pnpm" %}
 COPY package.json pnpm-lock.yaml* ./
+# Frozen install when the committed lockfile is present (reproducible);
+# fall back to a resolving install when it's absent (project generated on
+# a host without pnpm, so forge couldn't resolve one).
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
 {% elif package_manager == "yarn" %}
 COPY package.json yarn.lock* ./
+RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile; else yarn install; fi
 {% elif package_manager == "bun" %}
 COPY package.json bun.lockb* ./
+RUN if [ -f bun.lockb ]; then bun install --frozen-lockfile; else bun install; fi
 {% else %}
 COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 {% endif %}
-RUN {{ package_manager }} install
 
 COPY . .
 RUN {{ package_manager }} run build

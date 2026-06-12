@@ -828,9 +828,72 @@ def _finalize(
         _write_forge_toml(config, project_root, plan, collector=collector)
 
     if not dry_run:
+        _generate_lockfiles(config, project_root, quiet=quiet)
         _log("  Initializing git repository ...")
         _cleanup_sub_git_repos(project_root)
         _git_init(project_root)
+
+
+def _generate_lockfiles(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
+    """Emit workspace-root dependency lockfiles so the generated Docker
+    images install frozen (``npm ci`` / ``cargo build --locked``).
+
+    Runs in :func:`_finalize` AFTER the workspace-root manifests
+    (``package.json`` / ``Cargo.toml``) are rendered, so each lockfile
+    reflects the whole resolved workspace topology — not the per-service
+    fallback the backend toolchain's ``install`` step produces before the
+    root manifests exist.
+
+    Both steps are best-effort and toolchain-gated: when the language's
+    package manager isn't on PATH (or resolution fails), the step is
+    skipped and the matching Dockerfile falls back to a non-frozen
+    install. A missing lockfile must never abort generation.
+    """
+    languages = {bc.language for bc in config.backends}
+
+    # Node — emit the root ``package-lock.json`` an ``npm ci`` build needs.
+    # ``--package-lock-only`` resolves the dependency graph and writes the
+    # lockfile WITHOUT materializing node_modules/ (fast + deterministic).
+    if BackendLanguage.NODE in languages:
+        root_pkg = project_root / "package.json"
+        if root_pkg.is_file() and "workspaces" in root_pkg.read_text(encoding="utf-8"):
+            if not quiet:
+                print("  Generating package-lock.json ...")
+            produced = _run_backend_cmd(
+                project_root,
+                [
+                    "npm",
+                    "install",
+                    "--package-lock-only",
+                    "--workspaces",
+                    "--include-workspace-root",
+                ],
+                "Generate package-lock.json",
+                quiet=quiet,
+            )
+            # The per-service standalone install (toolchain.install, run
+            # before the root manifest existed) may have left a member-level
+            # package-lock.json. In an npm workspace only the root lockfile
+            # is authoritative, so drop the strays to avoid shipping a
+            # misleading duplicate alongside the canonical root lockfile.
+            if produced and (project_root / "package-lock.json").is_file():
+                for stray in project_root.glob("services/*/package-lock.json"):
+                    stray.unlink()
+
+    # Rust — emit the root ``Cargo.lock`` a ``cargo build --locked`` needs.
+    # ``cargo generate-lockfile`` resolves the workspace WITHOUT compiling
+    # (no target/ tree), mirroring npm's ``--package-lock-only``.
+    if BackendLanguage.RUST in languages:
+        root_cargo = project_root / "Cargo.toml"
+        if root_cargo.is_file():
+            if not quiet:
+                print("  Generating Cargo.lock ...")
+            _run_backend_cmd(
+                project_root,
+                ["cargo", "generate-lockfile"],
+                "Generate Cargo.lock",
+                quiet=quiet,
+            )
 
 
 # Directories that frontend / backend toolchains create AFTER forge has
@@ -1304,6 +1367,7 @@ def _run_backend_cmd(
     description: str,
     *,
     required: bool = False,
+    quiet: bool = False,
 ) -> bool:
     """Run a command in the backend directory, printing status.
 
@@ -1311,6 +1375,9 @@ def _run_backend_cmd(
     GeneratorError so the project isn't left in a half-built state. When
     `required=False` (default), failures are logged and skipped — appropriate for
     best-effort interactive setup steps like `cargo fmt --check` or `vitest run`.
+
+    When `quiet=True`, the per-step status lines are suppressed (the caller
+    drives its own logging); errors still raise when `required=True`.
 
     On Windows, Python's ``subprocess`` doesn't walk ``PATHEXT`` when
     resolving bare executable names, so ``npm`` (which ships as
@@ -1335,7 +1402,8 @@ def _run_backend_cmd(
         msg = f"{description} timed out (5m)"
         if required:
             raise GeneratorError(f"{msg} while running: {' '.join(cmd)}") from e
-        print(f"  [!!] {msg}")
+        if not quiet:
+            print(f"  [!!] {msg}")
         return False
     except FileNotFoundError as e:
         msg = f"{description} skipped ({cmd[0]} not found)"
@@ -1343,17 +1411,21 @@ def _run_backend_cmd(
             raise GeneratorError(
                 f"required tool '{cmd[0]}' not found on PATH (needed for: {description})"
             ) from e
-        print(f"  [!!] {msg}")
+        if not quiet:
+            print(f"  [!!] {msg}")
         return False
     if result.returncode == 0:
-        print(f"  [ok] {description}")
+        if not quiet:
+            print(f"  [ok] {description}")
         return True
-    print(f"  [!!] {description} failed")
+    if not quiet:
+        print(f"  [!!] {description} failed")
     stderr_tail = ""
     if result.stderr:
         stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
-        for line in stderr_tail.splitlines():
-            print(f"       {line}")
+        if not quiet:
+            for line in stderr_tail.splitlines():
+                print(f"       {line}")
     if required:
         suffix = f"\n{stderr_tail}" if stderr_tail else ""
         raise GeneratorError(
