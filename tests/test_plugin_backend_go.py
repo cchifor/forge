@@ -169,6 +169,26 @@ def test_update_infers_plugin_backend(tmp_path: Path, go_backend_registered: Non
     assert backends[0].language.value == "go"
 
 
+def test_update_fails_loud_on_unresolvable_backend(tmp_path: Path) -> None:
+    """A forge-rendered service whose template maps to no loaded backend (a
+    plugin backend whose package isn't installed) must make --update fail
+    loudly — silently skipping it would drop the backend from forge.toml."""
+    from forge.errors import ForgeError
+    from forge.sync.forge_to_project.updater import _infer_backends
+
+    svc = tmp_path / "services" / "mystery"
+    svc.mkdir(parents=True)
+    # Rendered-service signal (copier-answers with a _src_path) but no built-in
+    # marker and a template dir that matches nothing in the registry.
+    (svc / ".copier-answers.yml").write_text(
+        "_src_path: /nonexistent/some-plugin/template\nserver_port: 9000\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ForgeError, match="Cannot resolve the backend language"):
+        _infer_backends(tmp_path)
+
+
 def test_go_backend_compiles(
     tmp_path: Path, go_backend_registered: None, require_go: None
 ) -> None:
