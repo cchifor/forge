@@ -29,8 +29,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 8442,
-      "sha256": "321dfb63eaeb26d9"
+      "size": 8437,
+      "sha256": "6e7cf0e7eee11aed"
     },
     "forge.toml": {
       "size": 65048,
@@ -93,8 +93,8 @@
       "sha256": "ce35b7b9030657d9"
     },
     "services/api-node/docker-compose.yaml": {
-      "size": 853,
-      "sha256": "f06c0e04ecc8de65"
+      "size": 848,
+      "sha256": "63a04909dd71eda8"
     },
     "services/api-node/entrypoint.sh": {
       "size": 306,
@@ -333,8 +333,8 @@
       "sha256": "5d34a567b7df8878"
     },
     "services/api-py/docker-compose.yaml": {
-      "size": 877,
-      "sha256": "7228bb9b2e539a51"
+      "size": 872,
+      "sha256": "213012e7ba45724c"
     },
     "services/api-py/entrypoint.sh": {
       "size": 509,

@@ -49,6 +49,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **PyPI distribution name is `forge-cli`** (the `forge` name is owned by an
   unrelated package); the installed console command stays `forge`. RFC-003.
 - **`forge --version`** prints the version and exits 0.
+- **Pinned floating base images in generated projects** (#223): the dev
+  `pgadmin` service is `dpage/pgadmin4:9` (was `:latest`) across all compose
+  templates, and the worker Dockerfile's uv stage is `ghcr.io/astral-sh/uv:0.11.16`
+  (matching the main service Dockerfile) — no more silent `:latest` drift.
 
 ### Recent merges (post-2026-05-23, previously unlogged)
 
