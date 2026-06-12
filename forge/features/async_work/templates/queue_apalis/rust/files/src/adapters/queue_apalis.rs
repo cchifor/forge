@@ -170,7 +170,11 @@ impl QueuePort for ApalisQueueAdapter {
                 tokio::sync::mpsc::channel::<(JsonEnvelope, oneshot::Sender<Disposition>)>(
                     batch_size.max(1),
                 );
-            let worker_name = format!("forge-consumer-{topic}");
+            // The worker name is the Redis consumer identity apalis heartbeats
+            // and orphan-tracks under, so make it unique per consume() call —
+            // a shared name across stream instances or service replicas would
+            // confuse orphan recovery for in-flight jobs.
+            let worker_name = format!("forge-consumer-{topic}-{}", uuid::Uuid::new_v4());
             let worker = WorkerBuilder::new(worker_name)
                 .backend(storage)
                 .build_fn(move |job: JsonEnvelope| {
@@ -178,8 +182,12 @@ impl QueuePort for ApalisQueueAdapter {
                     async move {
                         let (disp_tx, disp_rx) = oneshot::channel::<Disposition>();
                         // A closed channel means the consumer stream was
-                        // dropped — requeue so the message is redelivered
-                        // instead of being falsely acked.
+                        // dropped before this job was handed over — fail it so
+                        // it isn't acked. (If the stream drops AFTER hand-over,
+                        // ``disp_rx.await`` is cancelled with the worker rather
+                        // than resolving here; that job is redelivered via
+                        // apalis's orphan recovery — Redis ``reenqueue_orphaned_
+                        // after``, 5 min by default — not immediately.)
                         if tx.send((job, disp_tx)).await.is_err() {
                             return Err(worker_error("consumer stream closed"));
                         }
@@ -218,7 +226,10 @@ impl QueuePort for ApalisQueueAdapter {
     }
 
     async fn ack(&self, _topic: &str, receipt: &str) -> Result<(), QueueError> {
-        // Resolve the worker handler's disposition → apalis acks the job.
+        // Resolve the worker handler's disposition; the actual Redis ack runs
+        // when the handler resumes, which requires the consume() stream to keep
+        // being polled — the normal consume-loop shape (next → process → ack →
+        // next) satisfies this.
         let disp = self
             .pending
             .lock()

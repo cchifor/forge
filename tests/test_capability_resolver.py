@@ -606,6 +606,33 @@ class TestBackendScopedConflicts:
         names = {rf.fragment.name for rf in plan.ordered}
         assert {"llm_port", "cache_port"} <= names
 
+    def test_backend_scoped_conflict_mechanism(self):
+        """The ``conflict_backends`` resolver mechanism still works for any
+        fragment that opts in — even though no built-in uses it now (#236
+        retired the only ones). A scoped conflict fires only when both
+        fragments land on a project backend of the scoped language; on any
+        other backend they coexist."""
+        from forge.capability_resolver import _check_conflicts
+        from forge.fragments import FRAGMENT_REGISTRY
+
+        impls = {
+            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir="syn/python"),
+            BackendLanguage.RUST: FragmentImplSpec(fragment_dir="syn/rust"),
+        }
+        a = _mk_fragment(
+            "syn_a",
+            implementations=impls,
+            conflicts_with=("syn_b",),
+            conflict_backends=(BackendLanguage.RUST,),
+        )
+        b = _mk_fragment("syn_b", implementations=impls)
+        with patch.dict(FRAGMENT_REGISTRY, {"syn_a": a, "syn_b": b}):
+            # Both land on the scoped (Rust) backend → conflict fires.
+            with pytest.raises(OptionsError, match="conflict"):
+                _check_conflicts({"syn_a", "syn_b"}, (BackendLanguage.RUST,))
+            # Same pair on a non-scoped backend → no conflict.
+            _check_conflicts({"syn_a", "syn_b"}, (BackendLanguage.PYTHON,))
+
 
 class TestQueueObjectStoreFailFast:
     """queue.backend / object_store.backend ship single-language adapters; a
