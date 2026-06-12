@@ -575,9 +575,11 @@ class TestMcpAuthGuardWithCoercion:
 
 
 class TestBackendScopedConflicts:
-    """The llm_port/queue_port/cache_port conflict is a Rust-only file
-    collision (shared src/ports/mod.rs). It must NOT block Python/Node
-    projects, but MUST still fire on Rust."""
+    """llm + cache (and llm + queue) coexist on ALL three backends. The old
+    Rust-only ``conflicts_with`` mutex existed because the llm Rust fragments
+    overwrote the shared ``src/ports/mod.rs`` / ``src/adapters/mod.rs``; #236
+    converted them to inject into those shared files like queue/cache do, so
+    the mutex is retired and Rust behaves like Python/Node."""
 
     @staticmethod
     def _cfg(lang: BackendLanguage):
@@ -598,9 +600,11 @@ class TestBackendScopedConflicts:
         names = {rf.fragment.name for rf in plan.ordered}
         assert {"llm_port", "cache_port"} <= names
 
-    def test_rust_llm_plus_cache_still_conflict(self):
-        with pytest.raises(OptionsError, match="conflict"):
-            resolve(self._cfg(BackendLanguage.RUST))
+    def test_rust_llm_plus_cache_coexist(self):
+        # #236: shared mod.rs injection retired the Rust mutex.
+        plan = resolve(self._cfg(BackendLanguage.RUST))
+        names = {rf.fragment.name for rf in plan.ordered}
+        assert {"llm_port", "cache_port"} <= names
 
 
 class TestQueueObjectStoreFailFast:

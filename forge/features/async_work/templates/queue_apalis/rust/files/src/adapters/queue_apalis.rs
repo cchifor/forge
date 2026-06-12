@@ -7,16 +7,24 @@
 //! ``JsonEnvelope`` and using a per-topic ``RedisStorage``, cached on
 //! the adapter struct.
 //!
-//! Delivery: at-least-once. Apalis tracks retries via the storage's
-//! retry policy (configurable per-topic in production code; this
-//! scaffolding uses Apalis defaults — 3 attempts with linear back-off).
-//! ``nack(requeue=true)`` re-enqueues via the same storage;
-//! ``nack(requeue=false)`` drops the job into Apalis's "dead" state,
-//! which is the canonical DLQ.
+//! Consumption: apalis 0.6 has no public "pull one message" call —
+//! ``RedisStorage::fetch_next`` is private and worker-scoped. So
+//! ``consume`` runs a real apalis worker (the public ``WorkerBuilder``
+//! model) whose handler hands each decoded job to the port's stream and
+//! then BLOCKS on a per-message disposition the consumer signals via
+//! ``ack`` / ``nack``. That keeps apalis the source of truth for the
+//! job lifecycle: the handler returns ``Ok`` (ack), ``Error::Failed``
+//! (requeue/retry) or ``Error::Abort`` (dead-letter) according to the
+//! consumer's decision, so delivery is genuinely at-least-once and
+//! ``nack`` actually requeues / DLQs rather than just dropping bookkeeping.
+//!
+//! The worker future is driven INLINE inside the consume stream (not a
+//! detached ``tokio::spawn``), so dropping the stream stops the worker —
+//! no leaked background task, and an un-acked in-flight message is
+//! redelivered rather than silently marked done.
 //!
 //! The ``topic`` parameter is the Apalis namespace; each unique topic
-//! gets its own ``RedisStorage`` instance, lazy-initialized on first
-//! use.
+//! gets its own ``RedisStorage`` instance, lazy-initialized on first use.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,9 +35,30 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, oneshot};
 
 use crate::ports::queue::{QueueError, QueueMessage, QueuePort};
+
+/// What the consumer decided about an in-flight message. The apalis
+/// worker's handler awaits one of these per message and maps it onto
+/// apalis's job outcome (ack / retry / dead-letter).
+enum Disposition {
+    Ack,
+    Requeue,
+    Dlq,
+}
+
+fn worker_error(msg: &str) -> Error {
+    Error::Failed(Arc::new(Box::<dyn std::error::Error + Send + Sync>::from(
+        msg.to_string(),
+    )))
+}
+
+fn abort_error(msg: &str) -> Error {
+    Error::Abort(Arc::new(Box::<dyn std::error::Error + Send + Sync>::from(
+        msg.to_string(),
+    )))
+}
 
 /// Apalis-side envelope. Maps to the cross-language ``{id, body}`` shape
 /// from RFC-012; ``topic`` is carried inside the message rather than on
@@ -47,17 +76,19 @@ fn broker_url() -> String {
 
 /// Concrete adapter. Stores per-topic ``RedisStorage<JsonEnvelope>``
 /// handles behind a ``Mutex`` so consumers and producers across tokio
-/// tasks can share one adapter instance.
+/// tasks can share one adapter instance. ``pending`` maps a yielded
+/// message's receipt to the oneshot the worker handler is awaiting, so
+/// ``ack`` / ``nack`` can resolve the job's outcome.
 pub struct ApalisQueueAdapter {
     storages: Arc<Mutex<HashMap<String, RedisStorage<JsonEnvelope>>>>,
-    inflight: Arc<Mutex<HashMap<String, JsonEnvelope>>>,
+    pending: Arc<Mutex<HashMap<String, oneshot::Sender<Disposition>>>>,
 }
 
 impl ApalisQueueAdapter {
     pub fn new() -> Self {
         Self {
             storages: Arc::new(Mutex::new(HashMap::new())),
-            inflight: Arc::new(Mutex::new(HashMap::new())),
+            pending: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -123,7 +154,7 @@ impl QueuePort for ApalisQueueAdapter {
         topic: &'a str,
         batch_size: usize,
     ) -> BoxStream<'a, Result<QueueMessage, QueueError>> {
-        let inflight = self.inflight.clone();
+        let pending = self.pending.clone();
         let stream = async_stream::stream! {
             let storage = match self.storage_for(topic).await {
                 Ok(s) => s,
@@ -132,75 +163,89 @@ impl QueuePort for ApalisQueueAdapter {
                     return;
                 }
             };
-            // Apalis 0.6's only public consumption path is a worker driven by
-            // ``WorkerBuilder`` (the internal ``fetch_next`` pull is private and
-            // worker-scoped). To expose the cross-language ``QueuePort``'s
-            // poll-on-stream shape, we run a real apalis worker on a background
-            // task whose handler forwards each decoded job into a channel that
-            // this stream drains. apalis acks a job when the handler returns
-            // ``Ok`` — i.e. once it's handed to the channel — so delivery is
-            // at-least-once up to that boundary. Throughput workloads should
-            // wire the ``WorkerBuilder`` directly with a real handler instead.
-            let (tx, mut rx) = tokio::sync::mpsc::channel::<JsonEnvelope>(batch_size.max(1));
+            // The apalis worker's handler hands each job + a disposition
+            // sender to this stream over a bounded channel, then awaits the
+            // consumer's ack/nack.
+            let (tx, mut rx) =
+                tokio::sync::mpsc::channel::<(JsonEnvelope, oneshot::Sender<Disposition>)>(
+                    batch_size.max(1),
+                );
             let worker_name = format!("forge-consumer-{topic}");
-            tokio::spawn(async move {
-                let worker = WorkerBuilder::new(worker_name)
-                    .backend(storage)
-                    .build_fn(move |job: JsonEnvelope| {
-                        let tx = tx.clone();
-                        async move {
-                            // A closed receiver means the consumer stream was
-                            // dropped; we still ack (return Ok) since no one is
-                            // waiting for the message any more.
-                            let _ = tx.send(job).await;
-                            Ok::<(), std::convert::Infallible>(())
+            let worker = WorkerBuilder::new(worker_name)
+                .backend(storage)
+                .build_fn(move |job: JsonEnvelope| {
+                    let tx = tx.clone();
+                    async move {
+                        let (disp_tx, disp_rx) = oneshot::channel::<Disposition>();
+                        // A closed channel means the consumer stream was
+                        // dropped — requeue so the message is redelivered
+                        // instead of being falsely acked.
+                        if tx.send((job, disp_tx)).await.is_err() {
+                            return Err(worker_error("consumer stream closed"));
                         }
-                    });
-                worker.run().await;
-            });
-            while let Some(envelope) = rx.recv().await {
-                let receipt = envelope.id.clone();
-                inflight.lock().await.insert(receipt.clone(), envelope.clone());
-                yield Ok(QueueMessage {
-                    id: envelope.id,
-                    body: envelope.body,
-                    receipt,
+                        match disp_rx.await {
+                            Ok(Disposition::Ack) => Ok(()),
+                            Ok(Disposition::Requeue) => Err(worker_error("nack: requeue")),
+                            Ok(Disposition::Dlq) => Err(abort_error("nack: dead-letter")),
+                            // Consumer dropped the message without acking →
+                            // requeue (at-least-once).
+                            Err(_) => Err(worker_error("consumer dropped message")),
+                        }
+                    }
                 });
+            // Drive the worker INLINE (not tokio::spawn) so dropping this
+            // stream stops the worker and its in-flight handlers.
+            let mut worker_fut = std::pin::pin!(worker.run());
+            loop {
+                tokio::select! {
+                    _ = &mut worker_fut => break,
+                    maybe = rx.recv() => match maybe {
+                        Some((envelope, disp_tx)) => {
+                            let receipt = envelope.id.clone();
+                            pending.lock().await.insert(receipt.clone(), disp_tx);
+                            yield Ok(QueueMessage {
+                                id: envelope.id,
+                                body: envelope.body,
+                                receipt,
+                            });
+                        }
+                        None => break,
+                    }
+                }
             }
         };
         Box::pin(stream)
     }
 
     async fn ack(&self, _topic: &str, receipt: &str) -> Result<(), QueueError> {
-        // Apalis acks via ``ack_job`` on the storage; we look up the
-        // in-flight envelope and drop the bookkeeping entry.
-        let mut inflight = self.inflight.lock().await;
-        if inflight.remove(receipt).is_none() {
-            return Err(QueueError::UnknownReceipt(receipt.to_string()));
-        }
+        // Resolve the worker handler's disposition → apalis acks the job.
+        let disp = self
+            .pending
+            .lock()
+            .await
+            .remove(receipt)
+            .ok_or_else(|| QueueError::UnknownReceipt(receipt.to_string()))?;
+        // A closed receiver means the worker already moved on (e.g. retry
+        // timeout reclaimed the job); the ack is then a no-op.
+        let _ = disp.send(Disposition::Ack);
         Ok(())
     }
 
-    async fn nack(&self, topic: &str, receipt: &str, requeue: bool) -> Result<(), QueueError> {
-        let mut inflight = self.inflight.lock().await;
-        let envelope = inflight
+    async fn nack(&self, _topic: &str, receipt: &str, requeue: bool) -> Result<(), QueueError> {
+        let disp = self
+            .pending
+            .lock()
+            .await
             .remove(receipt)
             .ok_or_else(|| QueueError::UnknownReceipt(receipt.to_string()))?;
-        drop(inflight);
-        if requeue {
-            let mut storage = self.storage_for(topic).await?;
-            storage
-                .push(envelope)
-                .await
-                .map_err(|e| QueueError::Transport(e.to_string()))?;
-        }
-        // requeue=false → DLQ. Apalis tracks failed jobs in a separate
-        // Redis keyset; dropping the in-flight entry without re-pushing
-        // lets Apalis's retry-exhausted policy route it there.
-        // No explicit move-to-failed call needed in this minimal
-        // scaffolding; production code wires a DLQ handler on the
-        // ``WorkerBuilder`` instead.
-        let _ = (topic, requeue);
+        // requeue=true → retry via apalis's policy; requeue=false → abort to
+        // the dead-letter set. Either way apalis owns the job state.
+        let decision = if requeue {
+            Disposition::Requeue
+        } else {
+            Disposition::Dlq
+        };
+        let _ = disp.send(decision);
         Ok(())
     }
 }
