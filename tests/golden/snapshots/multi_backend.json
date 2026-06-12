@@ -5,8 +5,8 @@
       "sha256": "2ac15b8600196a9b"
     },
     ".github/workflows/ci-node.yml": {
-      "size": 1598,
-      "sha256": "8eeaf5a94a8dfb2b"
+      "size": 2001,
+      "sha256": "86b50773713cc8f7"
     },
     ".github/workflows/ci.yml": {
       "size": 1170,

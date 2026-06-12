@@ -45,8 +45,8 @@
       "sha256": "3ee819008690beca"
     },
     "apps/frontend/Dockerfile": {
-      "size": 300,
-      "sha256": "b111e771b45b6c55"
+      "size": 351,
+      "sha256": "79338cd1159182d7"
     },
     "apps/frontend/components.json": {
       "size": 430,

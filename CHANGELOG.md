@@ -61,7 +61,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `npm install` / unlocked `cargo build` when it isn't. Builds now pin the
   exact transitive versions forge resolved instead of drifting with registry
   HEAD. Lockfiles are committed but stay snapshot-excluded (host-asymmetric)
-  while remaining visible to the round-trip diff.
+  while remaining visible to the round-trip diff. The frontend image install
+  is frozen too (`npm ci` / `<pm> install --frozen-lockfile` per package
+  manager), and the generated CI workflows now install frozen (`npm ci`,
+  `cargo … --locked`) so a stale lockfile fails in CI rather than only in the
+  prod Docker build.
 
 ### Recent merges (post-2026-05-23, previously unlogged)
 
