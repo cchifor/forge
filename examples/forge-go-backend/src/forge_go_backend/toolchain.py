@@ -41,7 +41,9 @@ def _run(backend_dir: Path, cmd: list[str], description: str, *, quiet: bool) ->
         duration_ms = int((perf_counter() - start) * 1000)
         if not quiet:
             print(f"  [!!] {description} skipped ({cmd[0]} not found)")
-        return Check(name=description, status="skip", details=f"{cmd[0]} not found", duration_ms=duration_ms)
+        return Check(
+            name=description, status="skip", details=f"{cmd[0]} not found", duration_ms=duration_ms
+        )
     except subprocess.TimeoutExpired:
         duration_ms = int((perf_counter() - start) * 1000)
         if not quiet:
@@ -58,7 +60,12 @@ def _run(backend_dir: Path, cmd: list[str], description: str, *, quiet: bool) ->
         print(f"  [!!] {description} failed")
         for line in tail.splitlines():
             print(f"       {line}")
-    return Check(name=description, status="fail", details=tail or f"exit {result.returncode}", duration_ms=duration_ms)
+    return Check(
+        name=description,
+        status="fail",
+        details=tail or f"exit {result.returncode}",
+        duration_ms=duration_ms,
+    )
 
 
 class GoToolchain:

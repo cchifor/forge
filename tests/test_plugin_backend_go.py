@@ -58,25 +58,24 @@ def go_backend_registered():
     app_snapshot = dict(BACKEND_APPLICATION_TEMPLATES)
 
     if not already_registered:
-        api = ForgeAPI(
-            PluginRegistration(name="forge-go-backend", module="forge_go_backend")
-        )
+        api = ForgeAPI(PluginRegistration(name="forge-go-backend", module="forge_go_backend"))
         mod.register(api)
     try:
         yield
     finally:
-        if already_registered:
-            return  # not ours to remove — a prior load_all owns it
-        for value in list(PLUGIN_LANGUAGES):
-            if value not in lang_snapshot:
-                sentinel = PLUGIN_LANGUAGES.pop(value)
-                BACKEND_REGISTRY.pop(sentinel, None)
-        for key in list(BACKEND_REGISTRY):
-            if key not in reg_snapshot:
-                BACKEND_REGISTRY.pop(key)
-        for key in list(BACKEND_APPLICATION_TEMPLATES):
-            if key not in app_snapshot:
-                BACKEND_APPLICATION_TEMPLATES.pop(key)
+        # Only scrub what we added. If a prior load_all (the plugin-e2e job's
+        # entry-point install) owns the registration, leave it untouched.
+        if not already_registered:
+            for value in list(PLUGIN_LANGUAGES):
+                if value not in lang_snapshot:
+                    sentinel = PLUGIN_LANGUAGES.pop(value)
+                    BACKEND_REGISTRY.pop(sentinel, None)
+            for key in list(BACKEND_REGISTRY):
+                if key not in reg_snapshot:
+                    BACKEND_REGISTRY.pop(key)
+            for key in list(BACKEND_APPLICATION_TEMPLATES):
+                if key not in app_snapshot:
+                    BACKEND_APPLICATION_TEMPLATES.pop(key)
 
 
 @pytest.fixture
@@ -189,9 +188,7 @@ def test_update_fails_loud_on_unresolvable_backend(tmp_path: Path) -> None:
         _infer_backends(tmp_path)
 
 
-def test_go_backend_compiles(
-    tmp_path: Path, go_backend_registered: None, require_go: None
-) -> None:
+def test_go_backend_compiles(tmp_path: Path, go_backend_registered: None, require_go: None) -> None:
     """The generated Go service builds, vets, and tests green — end-to-end
     proof that a plugin backend produces a working project."""
     from forge.generator import generate

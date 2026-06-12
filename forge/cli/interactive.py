@@ -118,9 +118,7 @@ def _prompt_backend(
 
     version_kwargs: dict[str, str] = {}
     if spec.version_field in {f.name for f in _dc_fields(BackendConfig)}:
-        version = _ask_select(
-            f"{spec.display_label} version:", choices=list(spec.version_choices)
-        )
+        version = _ask_select(f"{spec.display_label} version:", choices=list(spec.version_choices))
         version_kwargs = {spec.version_field: version}
     return BackendConfig(
         name=name,

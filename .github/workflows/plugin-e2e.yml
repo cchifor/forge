@@ -69,7 +69,7 @@ jobs:
           uv pip install -e examples/forge-plugin-example
           uv pip install -e examples/forge-go-backend
       - name: Set up Go (for the generated Go backend's compile check)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.22"
       - name: pytest -m plugin_e2e

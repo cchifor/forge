@@ -32,7 +32,6 @@ from pathlib import Path
 
 from forge.api import ForgeAPI
 from forge.config import BackendSpec
-
 from forge_go_backend.toolchain import GO_TOOLCHAIN
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
