@@ -18,6 +18,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Security & regression fixes (wave 3)
 
+- **Every Rust capability port now coexists on one backend** (#235, #236). The
+  `llm_port`/`llm_openai` Rust fragments shipped a full `src/ports/mod.rs` and
+  `src/adapters/mod.rs` that overwrote the base template's shared files — so
+  even an llm-only Rust project failed to generate, and a `conflicts_with`
+  mutex blocked llm + queue/cache combos. They now INJECT `pub mod llm;` /
+  `pub mod llm_openai;` into the shared mod.rs (like queue/cache), retiring the
+  mutex; llm + queue(apalis) + cache + webhooks all generate and compile on a
+  single Rust backend. The apalis consumer was rewritten off the private
+  `RedisStorage::fetch_next` onto apalis 0.6's public `WorkerBuilder` API
+  (a background worker feeds the `QueuePort::consume` stream via a channel).
+  The `rust_ports` matrix scenario now exercises all four together
+  (build + clippy + fmt) instead of webhooks-only.
 - **Generated Keycloak projects boot again.** The realm-sync sidecar pinned
   `ENV=development` so its fail-closed guard no longer rejects the shipped dev
   `KC_ADMIN_PASSWORD` under the image's baked `ENV=production`, restoring

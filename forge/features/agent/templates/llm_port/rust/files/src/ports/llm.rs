@@ -59,7 +59,11 @@ pub struct ChatMessage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Correlation id linking this `tool` message to a prior assistant tool call.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "toolCallId")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "toolCallId"
+    )]
     pub tool_call_id: Option<String>,
 }
 
@@ -94,7 +98,11 @@ pub struct ToolCallChunk {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Partial JSON arguments accumulated so far.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "argumentsDelta")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "argumentsDelta"
+    )]
     pub arguments_delta: Option<String>,
     /// Caller-side correlation id for matching tool calls to results.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,7 +115,11 @@ pub struct LlmChunk {
     /// Text delta appended to the assistant's reply on this chunk.
     pub delta: String,
     /// Set on the terminal chunk — `stop` / `length` / `tool_use` / `content_filter`.
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "finishReason")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "finishReason"
+    )]
     pub finish_reason: Option<String>,
     /// Tool-call delta, when this chunk advances an in-flight tool invocation.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "toolCall")]

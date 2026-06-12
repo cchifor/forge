@@ -1,9 +1,13 @@
-- target: src/lib.rs
-  marker: FORGE:LIB_MOD_REGISTRATION
+# ``llm_port`` injects ``pub mod llm;`` into the base template's shared
+# ``src/ports/mod.rs`` (at the FORGE:PORTS_MOD_REGISTRATION marker), exactly
+# like ``queue_port`` and ``cache_port`` — so every Rust port coexists in one
+# generated ports module instead of each shipping a colliding full file. The
+# base ``src/lib.rs`` already declares ``pub mod ports;`` unconditionally, so
+# (unlike the old full-file form) we DON'T re-declare it here — that would
+# emit a duplicate ``pub mod ports;`` (E0428).
+- target: src/ports/mod.rs
+  marker: FORGE:PORTS_MOD_REGISTRATION
   position: after
   zone: generated
   snippet: |-
-    // LLM port — adapter-less startup keeps the ``LlmPort`` trait
-    // available for typing; an adapter (llm.provider=openai) wires the
-    // concrete impl behind it.
-    pub mod ports;
+    pub mod llm;

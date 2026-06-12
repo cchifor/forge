@@ -19,13 +19,12 @@
 //! use.
 
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use apalis::prelude::*;
 use apalis_redis::{Config as RedisConfig, RedisStorage};
 use async_trait::async_trait;
-use futures::stream::{BoxStream, StreamExt};
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -105,8 +104,7 @@ impl QueuePort for ApalisQueueAdapter {
             // Apalis exposes scheduled delivery via ``schedule`` taking
             // a chrono ``DateTime``; map ``delay_seconds`` onto an
             // offset from "now".
-            let when = chrono::Utc::now()
-                + chrono::Duration::seconds(delay_seconds as i64);
+            let when = chrono::Utc::now() + chrono::Duration::seconds(delay_seconds as i64);
             storage
                 .schedule(envelope, when.timestamp())
                 .await
@@ -123,7 +121,7 @@ impl QueuePort for ApalisQueueAdapter {
     fn consume<'a>(
         &'a self,
         topic: &'a str,
-        _batch_size: usize,
+        batch_size: usize,
     ) -> BoxStream<'a, Result<QueueMessage, QueueError>> {
         let inflight = self.inflight.clone();
         let stream = async_stream::stream! {
@@ -134,35 +132,40 @@ impl QueuePort for ApalisQueueAdapter {
                     return;
                 }
             };
-            // Apalis's pull-loop is the worker monitor in production;
-            // for the port contract we expose a simpler poll-on-stream
-            // shape so app code can use plain ``while let Some(msg) =
-            // stream.next().await`` without bringing in a full
-            // ``Monitor`` setup. The trade-off: this is best-effort
-            // for development / lightweight consumers; throughput
-            // workloads should wire the Apalis ``WorkerBuilder``
-            // directly using the same storage handle.
-            let mut storage = storage;
-            loop {
-                match storage.fetch_next("worker").await {
-                    Ok(Some(req)) => {
-                        let envelope: JsonEnvelope = req.take();
-                        let receipt = envelope.id.clone();
-                        inflight.lock().await.insert(receipt.clone(), envelope.clone());
-                        yield Ok(QueueMessage {
-                            id: envelope.id,
-                            body: envelope.body,
-                            receipt,
-                        });
-                    }
-                    Ok(None) => {
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    }
-                    Err(e) => {
-                        yield Err(QueueError::Transport(e.to_string()));
-                        return;
-                    }
-                }
+            // Apalis 0.6's only public consumption path is a worker driven by
+            // ``WorkerBuilder`` (the internal ``fetch_next`` pull is private and
+            // worker-scoped). To expose the cross-language ``QueuePort``'s
+            // poll-on-stream shape, we run a real apalis worker on a background
+            // task whose handler forwards each decoded job into a channel that
+            // this stream drains. apalis acks a job when the handler returns
+            // ``Ok`` — i.e. once it's handed to the channel — so delivery is
+            // at-least-once up to that boundary. Throughput workloads should
+            // wire the ``WorkerBuilder`` directly with a real handler instead.
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<JsonEnvelope>(batch_size.max(1));
+            let worker_name = format!("forge-consumer-{topic}");
+            tokio::spawn(async move {
+                let worker = WorkerBuilder::new(worker_name)
+                    .backend(storage)
+                    .build_fn(move |job: JsonEnvelope| {
+                        let tx = tx.clone();
+                        async move {
+                            // A closed receiver means the consumer stream was
+                            // dropped; we still ack (return Ok) since no one is
+                            // waiting for the message any more.
+                            let _ = tx.send(job).await;
+                            Ok::<(), std::convert::Infallible>(())
+                        }
+                    });
+                worker.run().await;
+            });
+            while let Some(envelope) = rx.recv().await {
+                let receipt = envelope.id.clone();
+                inflight.lock().await.insert(receipt.clone(), envelope.clone());
+                yield Ok(QueueMessage {
+                    id: envelope.id,
+                    body: envelope.body,
+                    receipt,
+                });
             }
         };
         Box::pin(stream)
@@ -178,12 +181,7 @@ impl QueuePort for ApalisQueueAdapter {
         Ok(())
     }
 
-    async fn nack(
-        &self,
-        topic: &str,
-        receipt: &str,
-        requeue: bool,
-    ) -> Result<(), QueueError> {
+    async fn nack(&self, topic: &str, receipt: &str, requeue: bool) -> Result<(), QueueError> {
         let mut inflight = self.inflight.lock().await;
         let envelope = inflight
             .remove(receipt)

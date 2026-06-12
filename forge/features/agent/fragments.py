@@ -115,23 +115,16 @@ def register_all(api: ForgeAPI) -> None:
     # Pillar D.2 — ``llm_port`` is tier-1 from Pillar D.2 onward.
     # Python + Node + Rust all ship the port interface; auto-derivation
     # from the three-built-in coverage tags this as tier 1. The Rust impl
-    # uses the same `src/ports/mod.rs` file that `queue_port` and
-    # `cache_port` Rust impls own — strict file applier mode collides if
-    # two of those are enabled together on a single Rust backend; the
-    # `conflicts_with` declaration below makes the resolver fail loudly
-    # at plan-build time. The proper architectural fix is Pillar A.4
-    # `PortSpec` rendering a single shared `src/ports/mod.rs` at the
-    # renderer layer (PR #88 ships the spec; first consumer migration
-    # tracked separately).
+    # INJECTS ``pub mod llm;`` into the base template's shared
+    # ``src/ports/mod.rs`` (via inject.yaml), exactly like ``queue_port`` and
+    # ``cache_port`` — so llm + queue + cache + webhooks all coexist on one
+    # Rust backend. (Before #236 the Rust impl shipped a full ``ports/mod.rs``
+    # that overwrote the base, so it needed a ``conflicts_with`` mutex and
+    # couldn't even generate alone; converting it to an injector retires
+    # that mutex.)
     api.add_fragment(
         Fragment(
             name="llm_port",
-            conflicts_with=("queue_port", "cache_port"),
-            # The collision is the shared Rust ``src/ports/mod.rs`` file; on
-            # Python/Node the port impls own distinct files, so llm + queue/
-            # cache coexist fine there. Scope the conflict to Rust so it no
-            # longer blocks valid pure-Python/Node combinations.
-            conflict_backends=(BackendLanguage.RUST,),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("llm_port", "python"),
@@ -164,19 +157,15 @@ def register_all(api: ForgeAPI) -> None:
     # Rust uses the ``async-openai`` crate. Both stream
     # ``LlmChunk`` events behind the same port contract as the Python
     # adapter (text delta, role assistant, tool-call delta, finish reason).
-    # Rust adapter ships its own `src/adapters/mod.rs` which collides with
-    # `queue_apalis` and the `cache_memory`/`cache_redis` Rust adapters
-    # under strict file applier mode — declare the conflict so plan-build
-    # fails loudly rather than the generated tree being corrupted.
+    # The Rust adapter INJECTS ``pub mod llm_openai;`` into the base
+    # ``src/adapters/mod.rs`` (via inject.yaml), like ``queue_apalis`` /
+    # ``cache_memory`` / ``cache_redis`` — so it coexists with queue + cache on
+    # one Rust backend. (Before #236 it shipped a full ``adapters/mod.rs`` that
+    # overwrote the base, requiring the ``conflicts_with`` mutex retired here.)
     api.add_fragment(
         Fragment(
             name="llm_openai",
             depends_on=("llm_port",),
-            conflicts_with=("queue_apalis", "cache_memory", "cache_redis"),
-            # Same story as llm_port: the collision is the shared Rust
-            # ``src/adapters/mod.rs`` file. Scope to Rust so Python/Node
-            # projects can use the OpenAI adapter alongside queue/cache.
-            conflict_backends=(BackendLanguage.RUST,),
             implementations={
                 BackendLanguage.PYTHON: FragmentImplSpec(
                     fragment_dir=_impl("llm_openai", "python"),

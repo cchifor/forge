@@ -82,24 +82,41 @@ def test_llm_openai_rust_env_vars_match_python() -> None:
     assert "OPENAI_BASE_URL" in env_names
 
 
-def test_llm_port_conflicts_with_queue_and_cache_port() -> None:
-    """Codex Phase B parallel for cache_port: ``src/ports/mod.rs``
-    collides with `queue_port` + `cache_port` on Rust under strict
-    file-applier mode. Declare the conflict so the resolver errors
-    loudly at plan-build time."""
+def test_llm_port_no_longer_conflicts_with_queue_and_cache() -> None:
+    """#236: ``llm_port`` now INJECTS ``pub mod llm;`` into the base
+    template's shared ``src/ports/mod.rs`` (like ``queue_port`` /
+    ``cache_port``) instead of shipping a full file that overwrote it — so
+    the old ``conflicts_with`` Rust mutex is retired and llm + queue + cache
+    coexist on one Rust backend."""
     frag = FRAGMENT_REGISTRY["llm_port"]
-    assert "queue_port" in frag.conflicts_with
-    assert "cache_port" in frag.conflicts_with
+    assert "queue_port" not in frag.conflicts_with
+    assert "cache_port" not in frag.conflicts_with
 
 
-def test_llm_openai_conflicts_with_other_rust_adapters() -> None:
-    """``src/adapters/mod.rs`` collides with queue_apalis +
-    cache_memory + cache_redis on Rust. Same pattern as the port-
-    mod.rs collision, one level deeper."""
+def test_llm_openai_no_longer_conflicts_with_other_rust_adapters() -> None:
+    """#236: ``llm_openai`` injects ``pub mod llm_openai;`` into the shared
+    ``src/adapters/mod.rs`` (like queue_apalis / cache_memory / cache_redis),
+    so it no longer conflicts with them on Rust."""
     frag = FRAGMENT_REGISTRY["llm_openai"]
-    assert "queue_apalis" in frag.conflicts_with
-    assert "cache_memory" in frag.conflicts_with
-    assert "cache_redis" in frag.conflicts_with
+    assert "queue_apalis" not in frag.conflicts_with
+    assert "cache_memory" not in frag.conflicts_with
+    assert "cache_redis" not in frag.conflicts_with
+
+
+def test_llm_queue_cache_coexist_on_rust() -> None:
+    """#236 regression guard: a Rust backend with llm + queue + cache all
+    resolves (the old mutex used to reject this at plan-build time)."""
+    plan = resolve(
+        _rust_project(
+            {
+                "llm.provider": "openai",
+                "queue.backend": "apalis",
+                "reliability.cache": "memory",
+            }
+        )
+    )
+    names = {rf.fragment.name for rf in plan.ordered}
+    assert {"llm_port", "llm_openai", "queue_port", "cache_port"} <= names
 
 
 # -- on-disk file shape -------------------------------------------------------
@@ -114,37 +131,58 @@ def _adapter_root() -> Path:
 
 
 def test_port_files_land_at_conventional_paths() -> None:
+    """#236: the port ships only ``ports/llm.rs`` (a new file). It must NOT
+    ship ``ports/mod.rs`` — that's the base template's shared file the port
+    injects into, not overwrites."""
     port_rs = _port_root() / "files" / "src" / "ports" / "llm.rs"
     mod_rs = _port_root() / "files" / "src" / "ports" / "mod.rs"
     assert port_rs.is_file(), f"port file missing at {port_rs}"
-    assert mod_rs.is_file(), f"ports/mod.rs missing at {mod_rs}"
+    assert not mod_rs.exists(), (
+        "llm_port must not ship ports/mod.rs — it injects into the base "
+        "template's shared mod.rs (see #236)"
+    )
 
 
 def test_adapter_files_land_at_conventional_paths() -> None:
+    """#236: the adapter ships only ``adapters/llm_openai.rs``; ``adapters/
+    mod.rs`` is the base template's shared file it injects into."""
     adapter_rs = _adapter_root() / "files" / "src" / "adapters" / "llm_openai.rs"
     mod_rs = _adapter_root() / "files" / "src" / "adapters" / "mod.rs"
     assert adapter_rs.is_file(), f"adapter file missing at {adapter_rs}"
-    assert mod_rs.is_file(), f"adapters/mod.rs missing at {mod_rs}"
+    assert not mod_rs.exists(), (
+        "llm_openai must not ship adapters/mod.rs — it injects into the base "
+        "template's shared mod.rs (see #236)"
+    )
 
 
 def test_port_inject_yaml_registers_ports_module() -> None:
+    """#236: the port registers ``pub mod llm;`` at the shared ports/mod.rs
+    marker — like queue_port/cache_port — NOT a full-file overwrite, and NOT a
+    duplicate ``pub mod ports;`` in lib.rs (the base already declares it)."""
     inject = _port_root() / "inject.yaml"
     assert inject.is_file()
     entries = yaml.safe_load(inject.read_text(encoding="utf-8"))
     assert isinstance(entries, list) and len(entries) >= 1
     e = entries[0]
-    assert e["target"] == "src/lib.rs"
-    assert "LIB_MOD_REGISTRATION" in e["marker"]
-    assert "pub mod ports" in e["snippet"]
+    assert e["target"] == "src/ports/mod.rs"
+    assert "PORTS_MOD_REGISTRATION" in e["marker"]
+    assert "pub mod llm;" in e["snippet"]
+    # Must NOT re-declare ``pub mod ports;`` in lib.rs (base owns it).
+    assert not any("LIB_MOD_REGISTRATION" in ent.get("marker", "") for ent in entries)
 
 
 def test_adapter_inject_yaml_registers_adapters_module() -> None:
+    """#236: the adapter registers ``pub mod llm_openai;`` at the shared
+    adapters/mod.rs marker (not a full-file overwrite, not a lib.rs dup)."""
     inject = _adapter_root() / "inject.yaml"
     assert inject.is_file()
     entries = yaml.safe_load(inject.read_text(encoding="utf-8"))
     assert isinstance(entries, list) and len(entries) >= 1
-    snippets = " ".join(e.get("snippet", "") for e in entries)
-    assert "pub mod adapters" in snippets
+    e = entries[0]
+    assert e["target"] == "src/adapters/mod.rs"
+    assert "ADAPTERS_MOD_REGISTRATION" in e["marker"]
+    assert "pub mod llm_openai;" in e["snippet"]
+    assert not any("LIB_MOD_REGISTRATION" in ent.get("marker", "") for ent in entries)
 
 
 # -- port + adapter source shape ---------------------------------------------

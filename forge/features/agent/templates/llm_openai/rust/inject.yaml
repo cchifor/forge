@@ -1,8 +1,13 @@
-- target: src/lib.rs
-  marker: FORGE:LIB_MOD_REGISTRATION
+# ``llm_openai`` injects ``pub mod llm_openai;`` into the base template's
+# shared ``src/adapters/mod.rs`` (at FORGE:ADAPTERS_MOD_REGISTRATION), exactly
+# like ``queue_apalis`` / ``cache_memory`` / ``cache_redis`` — so every Rust
+# adapter coexists in one generated module instead of each shipping a colliding
+# full file. The base ``src/lib.rs`` already declares ``pub mod adapters;``
+# unconditionally, so we DON'T re-declare it here (that would emit a duplicate
+# ``pub mod adapters;``, E0428).
+- target: src/adapters/mod.rs
+  marker: FORGE:ADAPTERS_MOD_REGISTRATION
   position: after
   zone: generated
   snippet: |-
-    // LLM adapter: OpenAI — concrete impl plugged in behind the
-    // ``crate::ports::llm::LlmPort`` trait.
-    pub mod adapters;
+    pub mod llm_openai;
