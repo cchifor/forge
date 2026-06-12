@@ -6,9 +6,10 @@ mod items;
 use axum::Router;
 use sqlx::PgPool;
 
-// ``#[rustfmt::skip]`` keeps the ``FORGE:ROUTES_NESTED_REGISTRATION``
-// marker pinned at the chain-method indent so fragments can inject
-// ``.nest(...)`` calls before it without rustfmt reshuffling.
+// ``#[rustfmt::skip]`` keeps the nested-registration marker (below) pinned
+// at the chain-method indent so fragments can inject ``.nest(...)`` calls
+// before it without rustfmt reshuffling. (The marker token is written once,
+// on its own line below, so the unique-marker injector resolves it.)
 #[rustfmt::skip]
 pub fn api_routes() -> Router<PgPool> {
     Router::new()

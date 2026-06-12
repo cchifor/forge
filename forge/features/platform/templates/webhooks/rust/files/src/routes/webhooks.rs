@@ -1,15 +1,15 @@
 //! /api/v1/webhooks CRUD + /test-fire endpoints.
 
+use axum::Router;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post};
-use axum::Router;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::services::webhooks::{
-    create_webhook, delete_webhook, deliver, get_webhook, list_webhooks, WebhookCreate,
+    WebhookCreate, create_webhook, delete_webhook, deliver, get_webhook, list_webhooks,
 };
 
 pub fn routes<S>() -> Router<S>

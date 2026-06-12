@@ -123,7 +123,10 @@ pub fn create_webhook(data: WebhookCreate) -> Webhook {
         extra_headers: data.extra_headers,
         created_at: now_iso(),
     };
-    registry().lock().unwrap().insert(webhook.id, webhook.clone());
+    registry()
+        .lock()
+        .unwrap()
+        .insert(webhook.id, webhook.clone());
     webhook
 }
 
@@ -183,7 +186,11 @@ pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> Deliver
                 webhook_id: webhook.id,
                 status_code: Some(code),
                 ok,
-                error: if ok { None } else { Some(format!("http {}", code)) },
+                error: if ok {
+                    None
+                } else {
+                    Some(format!("http {}", code))
+                },
                 duration_ms: start.elapsed().as_millis() as u64,
             }
         }
