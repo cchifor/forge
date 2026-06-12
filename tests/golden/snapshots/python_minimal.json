@@ -25,8 +25,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 5060,
-      "sha256": "4896cb9bc2eb8168"
+      "size": 5055,
+      "sha256": "f927755a02f8049b"
     },
     "forge.toml": {
       "size": 46726,
@@ -93,8 +93,8 @@
       "sha256": "6542e2dde53f34c8"
     },
     "services/api/docker-compose.yaml": {
-      "size": 871,
-      "sha256": "59e84d0358509122"
+      "size": 866,
+      "sha256": "66de67c35887d2bb"
     },
     "services/api/entrypoint.sh": {
       "size": 506,

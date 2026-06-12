@@ -29,8 +29,8 @@
       "sha256": "d6164c9760e96556"
     },
     "docker-compose.yml": {
-      "size": 5014,
-      "sha256": "7f039a48c80ea242"
+      "size": 5009,
+      "sha256": "6399554a8689ee15"
     },
     "forge.toml": {
       "size": 20360,
@@ -85,8 +85,8 @@
       "sha256": "ff04888b0a9406a4"
     },
     "services/api/docker-compose.yaml": {
-      "size": 1184,
-      "sha256": "75b5e8e3cc47181c"
+      "size": 1179,
+      "sha256": "85252244f63144a2"
     },
     "services/api/migrations/0001_initial.sql": {
       "size": 1494,
