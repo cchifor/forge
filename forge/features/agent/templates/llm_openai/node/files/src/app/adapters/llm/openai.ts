@@ -15,7 +15,7 @@
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { embed as aiEmbed, streamText, type CoreMessage } from "ai";
+import { embed as aiEmbed, jsonSchema, streamText, type CoreMessage, type ToolSet } from "ai";
 
 import type {
 	ChatMessage,
@@ -109,15 +109,17 @@ function toCoreMessage(m: ChatMessage): CoreMessage {
 	}
 }
 
-function toAiTools(tools: Tool[]): Record<string, unknown> {
+function toAiTools(tools: Tool[]): ToolSet {
 	// AI SDK takes tools as a `{ toolName: {description, parameters} }`
-	// dictionary; we keep the JSON Schema verbatim under `parameters`.
-	// Strict schema-validation lives one level up in the agent loop.
-	const out: Record<string, unknown> = {};
+	// dictionary; the JSON Schema is wrapped with `jsonSchema()` so each entry
+	// is a SDK `Schema` and the dict satisfies `ToolSet` (not a raw object —
+	// AI SDK 4 typed `tools` as `ToolSet`). Strict schema-validation lives one
+	// level up in the agent loop.
+	const out: ToolSet = {};
 	for (const tool of tools) {
 		out[tool.name] = {
 			description: tool.description,
-			parameters: tool.inputSchema,
+			parameters: jsonSchema(tool.inputSchema as Parameters<typeof jsonSchema>[0]),
 		};
 	}
 	return out;

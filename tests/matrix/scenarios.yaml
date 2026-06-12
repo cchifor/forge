@@ -426,3 +426,50 @@ scenarios:
         auth.provider: "in_memory"
         database.multitenancy: "schema_per_tenant"
         database.tenant_resolution: "token_claim"
+
+  # Port-compile scenarios (#213) — the tri-language port code (queue / cache /
+  # llm / webhooks) was only ever asserted by string-matching; nothing actually
+  # compiled it. These two enable the real Node/Rust port adapters in lanes
+  # [generate, verify] so `tsc --noEmit` / `cargo build` catch a broken adapter
+  # on PR instead of shipping it. (They surfaced the AI-SDK `ToolSet` type drift
+  # and the duplicate routes-marker that this PR fixes.)
+  - name: node_ports
+    description: Node port adapters compile — queue (bullmq) + response_cache + llm (openai) + webhooks, headless
+    lanes: [generate, verify]
+    port_base: 8180
+    expected_files:
+      - services/api/package.json
+      - docker-compose.yml
+    config:
+      project_name: "Node Ports"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: node
+          features: ["items"]
+          server_port: 8180
+          node_version: "22"
+      options:
+        queue.backend: bullmq
+        middleware.response_cache: true
+        llm.provider: openai
+        platform.webhooks: true
+
+  - name: rust_ports
+    description: Rust port adapters compile — webhooks, headless (queue=apalis + llm are known-broken on Rust today, filed separately; this locks the webhooks port + base so they can't regress)
+    lanes: [generate, verify]
+    port_base: 8190
+    expected_files:
+      - services/api/Cargo.toml
+      - docker-compose.yml
+    config:
+      project_name: "Rust Ports"
+      include_keycloak: false
+      backends:
+        - name: api
+          language: rust
+          features: ["items"]
+          server_port: 8190
+          rust_edition: "2024"
+      options:
+        platform.webhooks: true
