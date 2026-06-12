@@ -238,3 +238,41 @@ jobs:
         working-directory: packages/forge-canvas-dart
         run: |
           if [ -d test ]; then flutter test; else echo "no tests yet"; fi
+
+  # Notify maintainers when the SCHEDULED nightly e2e suite fails (#217 — a
+  # failing nightly that nobody sees is how regressions ship). Schedule-only;
+  # de-dupes onto the shared open ``nightly-failure`` tracking issue.
+  notify-e2e-nightly-failure:
+    needs: e2e-nightly-full
+    if: >-
+      always() &&
+      github.event_name == 'schedule' &&
+      needs.e2e-nightly-full.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the nightly-failure tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create nightly-failure --color B60205 \
+            --description "An automated nightly workflow failed" 2>/dev/null || true
+          body=$(printf '%s\n' \
+            "The scheduled full e2e suite (\`e2e-nightly-full\`) failed on $(date -u +%Y-%m-%dT%H:%MZ)." \
+            "" \
+            "Run: ${RUN_URL}" \
+            "" \
+            "Reproduce locally with \`uv run pytest -m e2e\`; see the job log for the failing test(s).")
+          existing=$(gh issue list --state open --label nightly-failure \
+            --search "Nightly CI failed in:title" \
+            --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create --title "Nightly CI failed" \
+              --label nightly-failure --body "${body}"
+          fi

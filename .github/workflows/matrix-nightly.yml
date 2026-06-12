@@ -405,3 +405,58 @@ jobs:
         with:
           name: matrix-status-grid
           path: matrix-status.md
+
+  # Surface a failed SCHEDULED nightly to maintainers instead of letting it die
+  # silently in the Actions tab (the exact way regressions shipped unnoticed —
+  # WS / #217). Fires ONLY on ``schedule`` so PR / workflow_dispatch / label
+  # runs never open issues. De-dupes onto one open ``nightly-failure`` issue.
+  notify-on-failure:
+    needs: [gate, smoke, roundtrip, update, publish-dashboard]
+    if: >-
+      always() &&
+      github.event_name == 'schedule' &&
+      (needs.smoke.result == 'failure' ||
+       needs.roundtrip.result == 'failure' ||
+       needs.update.result == 'failure' ||
+       needs.publish-dashboard.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the nightly-failure tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          R_SMOKE: ${{ needs.smoke.result }}
+          R_ROUND: ${{ needs.roundtrip.result }}
+          R_UPDATE: ${{ needs.update.result }}
+          R_DASH: ${{ needs.publish-dashboard.result }}
+        run: |
+          set -euo pipefail
+          # Idempotent: the label may not exist yet on a fresh repo.
+          gh label create nightly-failure --color B60205 \
+            --description "An automated nightly workflow failed" 2>/dev/null || true
+          body=$(printf '%s\n' \
+            "The scheduled \`matrix-nightly\` workflow failed on $(date -u +%Y-%m-%dT%H:%MZ)." \
+            "" \
+            "| lane | result |" \
+            "| --- | --- |" \
+            "| smoke | ${R_SMOKE} |" \
+            "| roundtrip | ${R_ROUND} |" \
+            "| update | ${R_UPDATE} |" \
+            "| dashboard | ${R_DASH} |" \
+            "" \
+            "Run: ${RUN_URL}" \
+            "" \
+            "See the run's job summary + the \`matrix-status-grid\` artifact for the scenario × lane grid.")
+          # Comment on an existing open tracking issue if present; else open one.
+          existing=$(gh issue list --state open --label nightly-failure \
+            --search "Nightly CI failed in:title" \
+            --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create --title "Nightly CI failed" \
+              --label nightly-failure --body "${body}"
+          fi
