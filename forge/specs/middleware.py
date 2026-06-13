@@ -21,10 +21,10 @@ middleware. Epic K replaced that with one Python dataclass + one snippet per
 backend, and a per-backend renderer that emits the right ``_Injection``
 records at plan time.
 
-Pillar A.2 generalises that dispatch so ``ServiceRegistrationSpec`` (RFC-009),
-``ErrorCodeSpec`` (RFC-007), and future ``LifespanHookSpec`` / ``PortSpec``
-all flow through the same :class:`~forge.appliers.renderers.FragmentRenderer`
-protocol on :meth:`FragmentPlan.from_impl`.
+Pillar A.2 generalises that dispatch through the
+:class:`~forge.appliers.renderers.FragmentRenderer` protocol on
+:meth:`FragmentPlan.from_impl`, so future declarative spec types can flow
+through the same path. ``MiddlewareSpec`` is the only implementer today.
 
 Usage shape inside ``forge/fragments.py``::
 
