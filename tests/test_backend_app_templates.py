@@ -358,3 +358,37 @@ def test_crud_service_renders_baseline_shape(tmp_path: Path):
     assert (svc / "src" / "app" / "api" / "v1" / "endpoints" / "items.py").is_file()
     # ...and NOT the worker package.
     assert not (svc / "src" / "worker").exists()
+
+
+def test_two_stage_variant_renders_nonempty_app_title(tmp_path: Path):
+    """A two-stage variant overlay (tenant-management-service) must render a
+    non-empty ``app.title`` in config/default.yaml.
+
+    Regression for the chronic multitenant-saas nightly boot crash: the
+    overlay's copier.yml declares no questions, so it relied on the generator
+    supplying every ctx var — but ``project_title`` was a copier ``when:false``
+    default the overlay never computed, so ``title: ""`` rendered and the
+    generated FastAPI app aborted at boot ("A title must be provided for
+    OpenAPI"). ``variable_mapper.backend_context`` now supplies project_title.
+    """
+    cfg = ProjectConfig(
+        project_name="tms_demo",
+        output_dir=str(tmp_path),
+        backends=[
+            BackendConfig(
+                name="tms",
+                project_name="tms_demo",
+                language=BackendLanguage.PYTHON,
+                app_template="tenant-management-service",
+                features=["items"],
+            )
+        ],
+        frontend=None,
+    )
+    from forge.generator import generate
+
+    root = generate(cfg, quiet=True, dry_run=True)
+    cfg_yaml = (root / "services" / "tms" / "config" / "default.yaml").read_text(encoding="utf-8")
+    # The overlay overwrites the base config; its title must not be empty.
+    assert 'title: ""' not in cfg_yaml, "two-stage variant rendered an empty app.title"
+    assert 'title: "Tms"' in cfg_yaml
