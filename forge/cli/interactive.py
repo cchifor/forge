@@ -13,7 +13,7 @@ deterministic deque-driven stub.
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import questionary
 
@@ -174,16 +174,23 @@ def _collect_inputs() -> ProjectConfig | None:
 
     print()
     print("  -- Frontend --")
-    fw_choice = _ask_select(
-        "Frontend framework:",
-        choices=["Vue 3", "Svelte 5", "Flutter", "None"],
+    from forge.config import (  # noqa: PLC0415
+        FRONTEND_SPECS,
+        _PluginFramework,
+        resolve_frontend_framework,
     )
-    fw_map = {
+
+    fw_map: dict[str, FrontendFramework | _PluginFramework] = {
         "Vue 3": FrontendFramework.VUE,
         "Svelte 5": FrontendFramework.SVELTE,
         "Flutter": FrontendFramework.FLUTTER,
         "None": FrontendFramework.NONE,
     }
+    # Append any plugin-registered frontends (their display_label → sentinel)
+    # so they're selectable interactively, not just via --frontend/--config.
+    for value, spec in FRONTEND_SPECS.items():
+        fw_map[spec.display_label] = resolve_frontend_framework(value)
+    fw_choice = _ask_select("Frontend framework:", choices=list(fw_map.keys()))
     framework = fw_map[fw_choice]
 
     frontend: FrontendConfig | None = None
@@ -197,10 +204,16 @@ def _collect_inputs() -> ProjectConfig | None:
             FrontendFramework.SVELTE: ["npm", "pnpm", "bun"],
             FrontendFramework.FLUTTER: [],
         }
-        pkg_manager = "npm"
-        choices = pkg_choices.get(framework, [])
-        if choices:
-            pkg_manager = _ask_select("Package manager:", choices=choices)
+        # A plugin frontend declares its package manager on its FrontendSpec;
+        # built-ins prompt from the known set.
+        if isinstance(framework, _PluginFramework):
+            spec = FRONTEND_SPECS.get(framework.value)
+            pkg_manager = spec.package_manager if spec is not None else "npm"
+        else:
+            pkg_manager = "npm"
+            choices = pkg_choices.get(framework, [])
+            if choices:
+                pkg_manager = _ask_select("Package manager:", choices=choices)
 
         fe_port = 5173
         if framework != FrontendFramework.FLUTTER:
@@ -247,7 +260,9 @@ def _collect_inputs() -> ProjectConfig | None:
             layout = _labels[_picked]
 
         frontend = FrontendConfig(
-            framework=framework,
+            # cast: a plugin framework is a _PluginFramework sentinel that
+            # behaves like a FrontendFramework member at runtime.
+            framework=cast("FrontendFramework", framework),
             project_name=project_name,
             description=description,
             author_name=author_name,

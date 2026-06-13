@@ -26,12 +26,15 @@ on:
       - "forge/services/**"
       - "forge/generator.py"
       - "forge/variable_mapper.py"
+      - "forge/docker_manager.py"
       - "forge/backend_app_templates.py"
       - "forge/cli/**"
       - "examples/forge-plugin-example/**"
       - "examples/forge-go-backend/**"
+      - "examples/forge-vite-frontend/**"
       - "tests/test_plugin_e2e.py"
       - "tests/test_plugin_backend_go.py"
+      - "tests/test_plugin_frontend_vite.py"
       - ".github/workflows/plugin-e2e.yml"
       - "pyproject.toml"
 
@@ -68,15 +71,20 @@ jobs:
         run: |
           uv pip install -e examples/forge-plugin-example
           uv pip install -e examples/forge-go-backend
+          uv pip install -e examples/forge-vite-frontend
       - name: Set up Go (for the generated Go backend's compile check)
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: "1.22"
+      - name: Set up Node (for the generated Vite frontend's build check)
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: "22"
       - name: pytest -m plugin_e2e
         run: uv run pytest -m plugin_e2e -v --no-cov
-      # The Go-backend generation + compile suite is import-path based (no
-      # pip install needed) and isn't ``plugin_e2e``-marked, so run it
-      # explicitly here too — this lane has Go on PATH, so the compile
-      # assertion actually exercises ``go build`` rather than skipping.
-      - name: pytest go-backend e2e
-        run: uv run pytest tests/test_plugin_backend_go.py -v --no-cov
+      # These suites are import-path based (no pip install needed) and aren't
+      # ``plugin_e2e``-marked, so run them explicitly — this lane has Go + Node
+      # on PATH, so the compile/build assertions actually exercise ``go build``
+      # / ``npm run build`` rather than skipping.
+      - name: pytest go-backend + vite-frontend e2e
+        run: uv run pytest tests/test_plugin_backend_go.py tests/test_plugin_frontend_vite.py -v --no-cov

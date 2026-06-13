@@ -426,6 +426,50 @@ def e2e_context(config: ProjectConfig) -> dict[str, Any]:
     }
 
 
+def plugin_frontend_context(config: ProjectConfig) -> dict[str, Any]:
+    """Build the Copier data dict for a plugin-registered frontend framework.
+
+    Plugin frontends have no bespoke per-framework mapper, so they get a
+    generic, framework-agnostic context: the common keys every frontend
+    template uses (project identity, the resolved API base/proxy URLs, auth +
+    keycloak coordinates, server port, package manager). Copier renders with
+    ``defaults=True``, so a plugin template's ``copier.yml`` only needs to
+    declare questions for the keys it actually consumes — extras are ignored.
+    """
+    fc = config.frontend
+    if fc is None:
+        raise ValueError("Plugin frontend config is required.")
+    bc = config.backend
+    backend_port = bc.server_port if bc else 5000
+    backend_name = bc.name if bc else "backend"
+    api_base_url, api_proxy_target, env_api_base_url = _frontend_api_urls(
+        config, backend_name, backend_port
+    )
+    return {
+        "project_name": fc.project_name,
+        "project_slug": config.frontend_slug,
+        "app_title": fc.project_name,
+        "description": fc.description,
+        "features": ", ".join(config.all_features),
+        "author_name": fc.author_name,
+        "version": fc.version,
+        "include_auth": fc.include_auth,
+        "include_chat": fc.include_chat,
+        "include_openapi": fc.include_openapi,
+        "package_manager": fc.package_manager,
+        "api_base_url": api_base_url,
+        "api_proxy_target": api_proxy_target,
+        "env_api_base_url": env_api_base_url,
+        "server_port": fc.server_port,
+        "keycloak_url": fc.keycloak_url,
+        "keycloak_realm": fc.keycloak_realm,
+        "keycloak_client_id": fc.keycloak_client_id or config.frontend_slug,
+        "default_color_scheme": fc.default_color_scheme,
+        "backend_features": _build_backend_features_json(config),
+        "proxy_targets": _build_proxy_targets_json(config),
+    }
+
+
 def frontend_context(config: ProjectConfig) -> dict[str, Any]:
     """Dispatch to the correct frontend mapper."""
     if config.frontend is None:
@@ -435,9 +479,10 @@ def frontend_context(config: ProjectConfig) -> dict[str, Any]:
         FrontendFramework.SVELTE: svelte_context,
         FrontendFramework.FLUTTER: flutter_context,
     }
-    fn = mapping.get(config.frontend.framework)
-    if fn is None:
-        raise ValueError(f"No mapper for {config.frontend.framework}")
+    # Built-ins use their bespoke mapper; a plugin framework (a
+    # _PluginFramework sentinel, absent from the mapping) gets the generic
+    # plugin context instead of raising.
+    fn = mapping.get(config.frontend.framework, plugin_frontend_context)
     ctx = fn(config)
     # Expose the selected layout so variant templates / post-generate can branch
     # on it (e.g. layout-aware chat stripping). Unused by the built-in sidebar

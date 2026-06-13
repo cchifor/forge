@@ -1,0 +1,32 @@
+_subdirectory: template
+_templates_suffix: .jinja
+_skip_if_exists:
+  - ".env"
+
+# forge feeds these as ``data`` (from variable_mapper.plugin_frontend_context)
+# with ``defaults=True``, so they're answered non-interactively; the defaults
+# below only matter for a standalone ``copier copy`` run.
+
+project_name:
+  type: str
+  help: "App name"
+  default: "My App"
+
+project_slug:
+  type: str
+  when: false
+  default: "{{ project_name | lower | replace(' ', '-') }}"
+
+description:
+  type: str
+  default: "A Vite + TypeScript SPA"
+
+server_port:
+  type: int
+  help: "Vite dev-server port"
+  default: 5173
+
+api_base_url:
+  type: str
+  help: "Backend origin the dev-server proxy forwards /api/* to"
+  default: "http://localhost:8000"

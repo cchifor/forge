@@ -53,6 +53,8 @@ from forge.config import (
     FrontendConfig,
     FrontendFramework,
     ProjectConfig,
+    _PluginFramework,
+    resolve_frontend_framework,
 )
 from forge.errors import (
     PROVENANCE_MANIFEST_MISSING,
@@ -162,7 +164,10 @@ def _update_locked(
         current_version = "0.0.0+unknown"
 
     backends = _infer_backends(project_root, manifest_frontend=data.frontend)
-    frontend_framework = _frontend_framework_from_manifest(data.frontend)
+    # cast: a plugin frontend resolves to a _PluginFramework sentinel that
+    # behaves like a FrontendFramework member at runtime (==, .value) but isn't
+    # statically one; downstream consumers treat it uniformly.
+    frontend_framework = cast("FrontendFramework", _frontend_framework_from_manifest(data.frontend))
     # ``has_recorded_frontend`` covers both the built-in framework
     # case (Vue / Svelte / Flutter — ``frontend_framework`` lights up)
     # and plugin frontends (``frontend.framework`` is set but doesn't
@@ -1026,7 +1031,7 @@ def _cleanup_orphaned_frontend_codegen(
 
 def _frontend_framework_from_manifest(
     frontend: ForgeFrontendData,
-) -> FrontendFramework:
+) -> FrontendFramework | _PluginFramework:
     """Map the manifest's ``[forge.frontend]`` record onto a :class:`FrontendFramework`.
 
     Returns :attr:`FrontendFramework.NONE` when the manifest doesn't
@@ -1043,9 +1048,13 @@ def _frontend_framework_from_manifest(
     if not frontend.framework:
         return FrontendFramework.NONE
     try:
-        return FrontendFramework(frontend.framework)
+        # resolve_frontend_framework returns the built-in member OR a plugin
+        # sentinel, so a plugin frontend (its package installed at update time)
+        # is template-updated instead of being silently dropped to NONE.
+        return resolve_frontend_framework(frontend.framework)
     except ValueError:
-        # Plugin framework or stray value — be conservative.
+        # Genuinely unknown (e.g. the plugin that provided it isn't installed)
+        # — be conservative and treat as not-introspectable.
         return FrontendFramework.NONE
 
 
