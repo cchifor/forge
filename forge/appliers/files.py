@@ -108,7 +108,7 @@ def _build_render_context(ctx: FragmentContext) -> dict[str, Any]:
         base_vars = backend_context(ctx.backend_config)
     except Exception:
         base_vars = {}
-    for key in ("project_name", "project_slug", "project_description"):
+    for key in ("project_name", "project_slug", "project_description", "server_port"):
         if key in base_vars:
             context[key] = base_vars[key]
     project_name = base_vars.get("project_name") or ctx.backend_config.name

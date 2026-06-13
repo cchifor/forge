@@ -789,6 +789,9 @@ def _apply_project_scope(
             # Frontend-targeted project fragments (layered components, auth Vue
             # fragments) emit into the active app at apps/<slug>/, not the root.
             frontend_dir=(project_root / "apps" / config.frontend_slug if _has_frontend else None),
+            # So project-level templates (e.g. the Helm chart values.yaml) that
+            # render {{ server_port }} pick up the primary backend's port.
+            primary_server_port=(config.backend.server_port if config.backend else None),
         )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)

@@ -96,3 +96,35 @@ def test_none_target_emits_no_deploy_files(tmp_path: Path):
     root = generate(config, quiet=True)
     assert not (root / "helm").exists()
     assert not list(root.rglob("k8s/deployment.yaml"))
+
+
+def test_k8s_port_tracks_server_port(tmp_path: Path):
+    """The k8s containerPort + Helm targetPort must follow the backend's
+    configured server_port (not a hardcoded 8000). The probes reference the
+    named ``http`` port, so a correct containerPort makes them probe the right
+    port. Regression for the static-8000 mismatch.
+    """
+    config = ProjectConfig(
+        project_name="Deploy Proj",
+        backends=[
+            BackendConfig(
+                project_name="Deploy Proj",
+                language=BackendLanguage.PYTHON,
+                server_port=8137,  # deliberately non-default, non-8000
+            ),
+        ],
+        options={"deploy.target": "kubernetes"},
+        output_dir=str(tmp_path),
+    )
+    root = generate(config, quiet=True)
+
+    deployment = next(root.rglob("k8s/deployment.yaml")).read_text(encoding="utf-8")
+    assert "containerPort: 8137" in deployment
+    assert "containerPort: 8000" not in deployment
+    # Probes target the named "http" port (→ containerPort), and the health
+    # paths match the Dockerfile HEALTHCHECK.
+    assert "/api/v1/health/live" in deployment and "/api/v1/health/ready" in deployment
+
+    values = (root / "helm" / "values.yaml").read_text(encoding="utf-8")
+    assert "targetPort: 8137" in values
+    assert "targetPort: 8000" not in values
