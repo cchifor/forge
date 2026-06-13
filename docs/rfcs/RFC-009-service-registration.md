@@ -2,11 +2,19 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Accepted |
+| Status | Superseded (never implemented) |
 | Author | Architecture review 2026-04 |
 | Epic | 1.0.0-ga |
 | Supersedes | — |
 | Replaces | — |
+
+> **Superseded 2026-06-13.** The `PortSpec` / `service_registration` renderer
+> seam this RFC described was never adopted: the shared-`ports/mod.rs`
+> collision it was meant to solve was instead handled by `inject.yaml` markers
+> (#236), so the dead scaffolding (`forge/service_registration.py`,
+> `forge/specs/port.py`, the `_shared/service_registration` + `_shared/port_spec`
+> templates) was removed. The generic `FragmentRenderer` protocol +
+> `MiddlewareSpec` (its sole implementer) remain.
 
 ## Summary
 

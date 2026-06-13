@@ -3,17 +3,15 @@
 Generalises the Epic K :class:`~forge.specs.middleware.MiddlewareSpec`
 contract so :class:`~forge.appliers.plan.FragmentPlan.from_impl` can
 iterate over a heterogeneous tuple of declarative specs and dispatch
-each one's renderer uniformly. RFC-007 ``ErrorCodeSpec``, RFC-009
-``ServiceRegistrationSpec``, the future ``LifespanHookSpec``, and the
-``PortSpec`` introduced in Pillar D / E all conform to this protocol.
+each one's renderer uniformly. Today :class:`MiddlewareSpec` is the only
+implementer; the protocol stays generic so future spec types can be
+added without changing the plan/pipeline machinery.
 
 The protocol intentionally does NOT mandate the Jinja-environment
 parameter — :class:`MiddlewareSpec` renders its snippets verbatim from
-string fields, while RFC-009 ``ServiceRegistrationSpec`` will render
-through the macros under
-``forge/templates/_shared/service_registration/{python,node,rust}.jinja``.
-Both shapes are valid; the protocol receives ``jinja_env`` as a keyword
-and renderers ignore it when they don't need one.
+string fields, while a future template-backed spec could render through
+Jinja macros. Both shapes are valid; the protocol receives ``jinja_env``
+as a keyword and renderers ignore it when they don't need one.
 
 Contract recap (what every implementer must expose):
 
