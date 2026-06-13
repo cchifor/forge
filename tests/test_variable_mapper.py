@@ -132,6 +132,10 @@ class TestBackendContext:
             # and the Python compose fragment / entrypoint. See
             # test_backend_context_unified_across_languages for the why.
             "project_slug",
+            # project_title mirrors copier's when:false default so two-stage
+            # variant overlays (which declare no copier questions) render a
+            # non-empty app.title. See test_backend_app_templates.
+            "project_title",
             "project_description",
             "server_port",
             "db_name",

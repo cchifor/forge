@@ -126,6 +126,17 @@ def backend_context(
         # (npm install fails). Frontend builders set the same key from
         # ``config.frontend_slug``; for backends, ``bc.name`` is the source of truth.
         "project_slug": bc.name,
+        # project_title mirrors the base copier.yml's ``when: false`` default
+        # (``{{ project_name | replace('-', ' ') | title }}``). Supplying it in
+        # the context — not just relying on copier's derived default — means
+        # two-stage application-template variants (which render an overlay with
+        # its OWN copier.yml that declares no questions, e.g.
+        # tenant-management-service) get a non-empty title. Without it the
+        # overlay's ``config/default.yaml`` renders ``title: ""`` and the
+        # generated FastAPI app crashes at boot ("A title must be provided for
+        # OpenAPI"). Built-in single-stage renders are unchanged (this value
+        # equals what copier computed for them).
+        "project_title": bc.name.replace("-", " ").title(),
         "project_description": bc.description,
         "server_port": bc.server_port,
         "db_name": bc.name.replace("-", "_"),

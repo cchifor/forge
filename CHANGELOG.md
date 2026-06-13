@@ -18,6 +18,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Security & regression fixes (wave 3)
 
+- **Two-stage application-template variants render a non-empty `app.title`.**
+  A variant overlay (e.g. `tenant-management-service`) ships its own
+  `copier.yml` that declares no questions, so it never computed copier's
+  `project_title` `when:false` default — its `config/default.yaml` rendered
+  `title: ""`, and the generated FastAPI app aborted at boot ("A title must be
+  provided for OpenAPI"). This was the chronic `multitenant-saas` nightly
+  compose-boot failure (the `tms` control-plane service crash-looped).
+  `variable_mapper.backend_context` now supplies `project_title` directly, so
+  every render stage (base + overlay) gets it. Built-in single-stage renders
+  are byte-identical (the value matches what copier computed).
 - **Every Rust capability port now coexists on one backend** (#235, #236). The
   `llm_port`/`llm_openai` Rust fragments shipped a full `src/ports/mod.rs` and
   `src/adapters/mod.rs` that overwrote the base template's shared files — so
