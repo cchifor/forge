@@ -1,0 +1,34 @@
+[project]
+name = "forge-vite-frontend"
+version = "0.1.0"
+description = "Reference forge plugin: registers a Vite (vanilla-TS) frontend framework via the plugin SDK."
+requires-python = ">=3.11"
+# The PyPI distribution is ``forge-cli`` (the bare ``forge`` name is owned by
+# an unrelated package); the importable package stays ``forge``. RFC-003.
+dependencies = [
+    "forge-cli>=1.0.0a1",
+]
+readme = "README.md"
+authors = [{ name = "forge team" }]
+
+[project.entry-points."forge.plugins"]
+vite_frontend = "forge_vite_frontend:register"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The Vite template ships as package data so wheel installs (not just editable
+# installs) can resolve the absolute ``template_dir`` the plugin hands to
+# ``add_frontend``. Without this, ``pip install forge-vite-frontend`` (no -e)
+# would leave ``vite-frontend-template/`` outside the wheel and generation
+# would fail with a missing-template error.
+forge_vite_frontend = [
+    "vite-frontend-template/copier.yml",
+    "vite-frontend-template/_forge_template.toml",
+    "vite-frontend-template/template/**/*",
+]

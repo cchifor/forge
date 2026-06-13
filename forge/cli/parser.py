@@ -94,8 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--node-version", choices=["22", "24"])
     p.add_argument("--rust-edition", choices=["2021", "2024"])
 
-    # Frontend
-    p.add_argument("--frontend", choices=list(FRAMEWORK_MAP.keys()), metavar="FRAMEWORK")
+    # Frontend. Choices are read at parser-build time (after plugin load, like
+    # --backend-language), so a plugin that registered a frontend (e.g. solid)
+    # is selectable and shown in --help; introspection callers that skip plugin
+    # load just see the built-ins.
+    from forge.config import available_frontend_frameworks  # noqa: PLC0415
+
+    p.add_argument("--frontend", choices=available_frontend_frameworks(), metavar="FRAMEWORK")
     p.add_argument("--features", metavar="LIST", help="Comma-separated CRUD entities")
     p.add_argument("--author-name", metavar="NAME")
     p.add_argument("--package-manager", choices=["npm", "pnpm", "yarn", "bun"])

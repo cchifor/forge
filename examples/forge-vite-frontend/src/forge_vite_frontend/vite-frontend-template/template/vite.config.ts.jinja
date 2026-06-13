@@ -1,0 +1,16 @@
+import { defineConfig } from "vite";
+
+// Dev server proxies ``/api/*`` to the backend so the SPA can call the API
+// without CORS during ``npm run dev``. (In the built image, nginx — see
+// nginx.conf — handles the same proxying.)
+export default defineConfig({
+  server: {
+    port: {{ server_port }},
+    proxy: {
+      "/api": {
+        target: "{{ api_base_url }}",
+        changeOrigin: true,
+      },
+    },
+  },
+});

@@ -51,6 +51,20 @@ class FrontendSpec:
     display_label: str  # shown in CLI prompts and log messages
     uses_subdirectory: bool = True
     version: str = "1.0.0"  # template semver; see :mod:`forge.sync.template_version`
+    # ``node_based`` (default True) marks a JS/TS SPA built with npm-family
+    # tooling — the common case (Solid/Qwik/Remix/Vite). It drives two things:
+    # the project gets an npm-workspace root, and the frontend image uses the
+    # Node multi-stage Dockerfile (vs. a Flutter-style build). Set False for a
+    # plugin frontend that isn't Node-built.
+    node_based: bool = True
+    # ``build_dir`` is the directory the template's production build emits
+    # (copied into the nginx runtime image). Vite/Solid default to ``dist``;
+    # SvelteKit-style adapters use ``build``. Only consulted for node_based
+    # plugin frontends.
+    build_dir: str = "dist"
+    # ``package_manager`` the template expects (npm/pnpm/yarn/bun). The Node
+    # Dockerfile + workspace wiring use it; defaults to npm.
+    package_manager: str = "npm"
 
 
 def frontend_uses_subdirectory(
@@ -126,6 +140,19 @@ def resolve_frontend_framework(value: str) -> FrontendFramework | _PluginFramewo
     if value in PLUGIN_FRAMEWORKS:
         return PLUGIN_FRAMEWORKS[value]
     raise ValueError(f"Unknown frontend framework: {value!r}")
+
+
+def available_frontend_frameworks() -> list[str]:
+    """Wire values of every frontend framework forge can generate right now —
+    the built-ins plus any a plugin registered via
+    :meth:`forge.api.ForgeAPI.add_frontend`.
+
+    Read at call time (not import time) so the CLI's ``--frontend`` choices
+    reflect plugins loaded earlier in ``main()``. Built-ins first (declaration
+    order), plugin frameworks after, sorted. Mirrors
+    ``available_backend_languages``.
+    """
+    return [member.value for member in FrontendFramework] + sorted(PLUGIN_FRAMEWORKS)
 
 
 # Reserved feature names for frontend templates

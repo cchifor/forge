@@ -100,6 +100,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   as package data, an absolute `template_dir`, and a `BackendToolchain`
   wiring `go build`/`go vet`/`gofmt`. Exercised by `tests/test_plugin_backend_go.py`,
   which generates a Go project and compiles it.
+- **`add_frontend` now genuinely generates** — the frontend twin of the
+  `add_backend` fix. A plugin-registered framework used to crash (`No mapper`
+  in the variable-mapper) or render nothing (`_generate_frontend` only knew
+  the built-in `TEMPLATE_DIRS`). The frontend dispatch now consults
+  `FRONTEND_SPECS` for plugin frameworks: a generic `plugin_frontend_context`
+  mapper, template-dir lookup in `_generate_frontend` + the forge.toml writer,
+  the `--frontend` CLI choices + interactive prompt built after plugin load,
+  the `--update` manifest resolution, and the npm-workspace / frontend
+  Dockerfile wiring (driven by new `FrontendSpec.node_based` / `build_dir` /
+  `package_manager` fields). A config-file `frontend.framework` now resolves
+  through `resolve_frontend_framework` instead of silently coercing to `none`.
+- **Reference Vite frontend plugin** (`examples/forge-vite-frontend`):
+  registers a Vite (vanilla-TS) frontend framework. Exercised by
+  `tests/test_plugin_frontend_vite.py`, which generates the SPA and builds it
+  (`npm install` + `npm run build` → `dist/`).
 
 ### Recent merges (post-2026-05-23, previously unlogged)
 
