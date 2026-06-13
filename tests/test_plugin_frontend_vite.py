@@ -141,12 +141,18 @@ def test_vite_frontend_builds(
     project_root = generate(config, quiet=True)
     fe_dir = project_root / "apps" / "frontend"
 
-    for cmd, label, timeout in (
-        (["npm", "install"], "install", 400),
-        (["npm", "run", "build"], "build", 300),
+    # Resolve the npm executable up-front: on Windows ``npm`` is ``npm.cmd`` and
+    # Python's subprocess doesn't walk PATHEXT for a bare name, so passing
+    # ``"npm"`` raises FileNotFoundError. ``shutil.which`` does walk it (same
+    # fix forge's own _run_backend_cmd uses).
+    npm = shutil.which("npm")
+    assert npm is not None  # guarded by require_npm
+    for args, label, timeout in (
+        (["install"], "install", 400),
+        (["run", "build"], "build", 300),
     ):
         result = subprocess.run(
-            cmd, cwd=str(fe_dir), capture_output=True, text=True, timeout=timeout
+            [npm, *args], cwd=str(fe_dir), capture_output=True, text=True, timeout=timeout
         )
         assert result.returncode == 0, (
             f"npm {label} failed for the generated frontend:\n"
