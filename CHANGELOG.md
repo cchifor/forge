@@ -65,6 +65,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `pgadmin` service is `dpage/pgadmin4:9` (was `:latest`) across all compose
   templates, and the worker Dockerfile's uv stage is `ghcr.io/astral-sh/uv:0.11.16`
   (matching the main service Dockerfile) — no more silent `:latest` drift.
+- **Generated k8s probes now hit the right port.** The raw Kubernetes
+  `deployment.yaml` hardcoded `containerPort: 8000` while the backend listens on
+  the configured `server_port` (default 5000) — so the liveness/readiness
+  probes (which target the named `http` port) failed for any non-8000 project.
+  `containerPort` now renders from `server_port`, and the Helm chart's
+  `values.yaml` `targetPort` default follows the primary backend's port too
+  (threaded into the project-scope render context). Health paths
+  (`/api/v1/health/{live,ready}`) already matched the Dockerfile HEALTHCHECK.
 - **Reproducible dependency installs via committed lockfiles** (#223): the
   generator now resolves a workspace-root `package-lock.json` (Node) /
   `Cargo.lock` (Rust) at creation time (`_generate_lockfiles`, toolchain-gated

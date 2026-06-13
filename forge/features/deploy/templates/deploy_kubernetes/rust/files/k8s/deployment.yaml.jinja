@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: app-node
+  name: app-rust
   labels:
     app.kubernetes.io/name: app
-    app.kubernetes.io/component: node
+    app.kubernetes.io/component: rust
 spec:
   replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: app
-      app.kubernetes.io/component: node
+      app.kubernetes.io/component: rust
   template:
     metadata:
       labels:
         app.kubernetes.io/name: app
-        app.kubernetes.io/component: node
+        app.kubernetes.io/component: rust
     spec:
       securityContext:
         runAsNonRoot: true
@@ -23,14 +23,14 @@ spec:
         fsGroup: 10001
       containers:
         - name: api
-          image: ghcr.io/example/app:node-latest
+          image: ghcr.io/example/app:rust-latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ server_port }}
           envFrom:
             - configMapRef:
-                name: app-node-config
+                name: app-rust-config
           livenessProbe:
             httpGet:
               path: /api/v1/health/live
@@ -56,7 +56,7 @@ spec:
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
