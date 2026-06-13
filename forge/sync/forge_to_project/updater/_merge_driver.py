@@ -137,8 +137,16 @@ def apply_project_features(
     option_values: Mapping[str, Any] | None = None,
     frontend_framework: FrontendFramework | None = None,
     frontend_dir: Path | None = None,
+    primary_server_port: int | None = None,
 ) -> None:
     """Apply project-scoped fragment implementations at the project root.
+
+    ``primary_server_port`` (when provided) is carried on the synthetic
+    project-scope ``BackendConfig`` proxy so a project-level template that
+    renders ``{{ server_port }}`` (e.g. the Helm chart's ``values.yaml``)
+    picks up the project's primary backend port instead of the default. The
+    updater passes ``None`` (it doesn't re-render port-bearing project
+    templates), keeping the proxy's default port.
 
     See :func:`apply_features` for ``update_mode``, ``file_baselines``,
     and ``option_values`` semantics.
@@ -184,7 +192,15 @@ def apply_project_features(
             if impl.scope == "project":
                 if not quiet:
                     print(f"  [frag] applying '{rf.fragment.name}' to {apply_root}")
-                proxy = BackendConfig(name="project", project_name="", language=lang)
+                # 5000 mirrors BackendConfig's own default server_port; the
+                # primary backend's port (when known) makes project-level
+                # templates like the Helm values.yaml render the real port.
+                proxy = BackendConfig(
+                    name="project",
+                    project_name="",
+                    language=lang,
+                    server_port=primary_server_port if primary_server_port else 5000,
+                )
                 ctx = FragmentContext.filtered(
                     backend_config=proxy,
                     backend_dir=apply_root,
