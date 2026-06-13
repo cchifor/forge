@@ -723,12 +723,22 @@ def _generate_frontend_extras(config: ProjectConfig, project_root: Path, *, quie
         _log("  Generating Playwright e2e tests ...")
         _generate_e2e_tests(config, project_root, quiet=quiet)
 
-    # 5. Render frontend Dockerfile and nginx.conf (all frameworks)
+    # 5. Render frontend Dockerfile and nginx.conf — built-ins always, and
+    # node-based plugin frontends (npm build → nginx static serve). A
+    # non-node plugin frontend ships its OWN deploy assets in its template
+    # (forge can't presume the build tooling), so skip forge's Node/nginx
+    # render for it.
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
-        _log("  Rendering frontend Dockerfile ...")
-        frontend_dir = project_root / "apps" / config.frontend_slug
-        render_frontend_dockerfile(config, frontend_dir)
-        render_nginx_conf(config, frontend_dir)
+        fw = config.frontend.framework
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        _spec = FRONTEND_SPECS.get(fw.value)
+        forge_renders_deploy = _spec is None or _spec.node_based
+        if forge_renders_deploy:
+            _log("  Rendering frontend Dockerfile ...")
+            frontend_dir = project_root / "apps" / config.frontend_slug
+            render_frontend_dockerfile(config, frontend_dir)
+            render_nginx_conf(config, frontend_dir)
 
 
 def _apply_project_scope(
@@ -1049,17 +1059,17 @@ def _write_forge_toml(
         template_versions[lang] = _resolve_template_version_for(spec.template_dir, spec.version)
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
         fw = config.frontend.framework
-        template_dir = TEMPLATE_DIRS.get(fw)
+        # Built-in frontends dispatch via TEMPLATE_DIRS; plugin frontends carry
+        # their template_dir on the registered FrontendSpec. Resolve either so
+        # the frontend is recorded in [forge.templates] (required for --update).
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        frontend_spec = FRONTEND_SPECS.get(fw.value)
+        template_dir = TEMPLATE_DIRS.get(fw) or (
+            frontend_spec.template_dir if frontend_spec is not None else None
+        )
         if template_dir:
             templates[fw.value] = template_dir
-            # Built-in frontends don't carry a FrontendSpec (the generator
-            # dispatches via TEMPLATE_DIRS, not FRONTEND_SPECS). Plugin
-            # frontends do — look them up, otherwise treat as "1.0.0" so
-            # the on-disk ``_forge_template.toml`` (or its absence) drives
-            # resolution.
-            from forge.config import FRONTEND_SPECS  # noqa: PLC0415
-
-            frontend_spec = FRONTEND_SPECS.get(fw.value)
             spec_default = frontend_spec.version if frontend_spec is not None else "1.0.0"
             template_versions[fw.value] = _resolve_template_version_for(template_dir, spec_default)
 
@@ -1340,6 +1350,15 @@ def _generate_frontend(
     layout_name = config.frontend.layout or DEFAULT_LAYOUT
     variant = get_layout_variant(fw, layout_name)
     template_dir = variant.template_dir if variant is not None else TEMPLATE_DIRS.get(fw)
+    if template_dir is None:
+        # Plugin framework: TEMPLATE_DIRS is built-ins only, and plugin
+        # frameworks ship no layout variants — resolve the template dir from
+        # the FrontendSpec the plugin registered via add_frontend.
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        spec = FRONTEND_SPECS.get(fw.value)
+        if spec is not None:
+            template_dir = spec.template_dir
     if template_dir is None:
         raise GeneratorError(f"No template for framework {fw.value!r} (layout {layout_name!r})")
 

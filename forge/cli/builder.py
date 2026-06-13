@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 from typing import Any, cast
 
-from forge.cli.parser import FRAMEWORK_MAP
 from forge.config import (
     DEFAULT_REALM,
     BackendConfig,
@@ -155,17 +154,44 @@ def _build_frontend_from_cfg(
 ) -> tuple[FrontendConfig | None, bool]:
     """Build optional frontend config; returns (frontend, include_auth)."""
     fw_str = r.get("frontend", "frontend", "framework", default="none")
-    framework = FRAMEWORK_MAP.get(fw_str, FrontendFramework.NONE)
+    # Resolve through resolve_frontend_framework so a plugin framework (e.g.
+    # ``solid``) parses from a config file's ``frontend.framework`` instead of
+    # being silently coerced to NONE by ``FRAMEWORK_MAP.get(..., NONE)``. A
+    # genuinely unknown value still surfaces a clear error.
+    from forge.config import (  # noqa: PLC0415
+        available_frontend_frameworks,
+        resolve_frontend_framework,
+    )
+
+    try:
+        framework = resolve_frontend_framework(str(fw_str))
+    except ValueError:
+        valid = ", ".join(available_frontend_frameworks())
+        raise ValueError(
+            f"Unknown frontend framework {fw_str!r}; valid frameworks are {valid}."
+        ) from None
     if framework == FrontendFramework.NONE:
         return None, False
 
+    # A plugin frontend declares its package manager on its FrontendSpec; use
+    # that as the default (an explicit user value still wins) so a headless
+    # ``--frontend <plugin>`` matches what the interactive prompt picks.
+    from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+    _spec = FRONTEND_SPECS.get(framework.value)
+    _pkg_default = _spec.package_manager if _spec is not None else "npm"
+
     include_auth = r.get("include_auth", "frontend", "include_auth", default=True)
     frontend = FrontendConfig(
-        framework=framework,
+        # cast: a plugin framework is a _PluginFramework sentinel that behaves
+        # like a FrontendFramework member at runtime but isn't statically one.
+        framework=cast("FrontendFramework", framework),
         project_name=project_name,
         description=description,
         author_name=r.get("author_name", "frontend", "author_name", default="Your Name"),
-        package_manager=r.get("package_manager", "frontend", "package_manager", default="npm"),
+        package_manager=r.get(
+            "package_manager", "frontend", "package_manager", default=_pkg_default
+        ),
         include_auth=include_auth,
         include_chat=r.get("include_chat", "frontend", "include_chat", default=False),
         include_openapi=r.get("include_openapi", "frontend", "include_openapi", default=False),

@@ -203,6 +203,14 @@ def _project_has_node(config: ProjectConfig, active_fragments: set[str]) -> bool
         FrontendFramework.SVELTE,
     ):
         return True
+    # A node-based plugin frontend (e.g. Solid/Qwik) also needs the npm
+    # workspace root — its FrontendSpec declares node_based.
+    if config.frontend is not None:
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        spec = FRONTEND_SPECS.get(config.frontend.framework.value)
+        if spec is not None and spec.node_based:
+            return True
     return "platform_auth_sdk_node" in active_fragments
 
 
@@ -297,10 +305,16 @@ def render_frontend_dockerfile(config: ProjectConfig, frontend_dir: Path) -> Pat
         template = env.get_template("deploy/Dockerfile.flutter.j2")
         context: dict[str, object] = {}
     else:
+        # Built-in node frontends key build_dir off BUILD_DIR; a plugin
+        # frontend declares it (+ package_manager) on its FrontendSpec.
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        spec = FRONTEND_SPECS.get(fc.framework.value)
+        build_dir = spec.build_dir if spec is not None else BUILD_DIR.get(fc.framework, "dist")
         template = env.get_template("deploy/Dockerfile.node.j2")
         context = {
             "package_manager": fc.package_manager,
-            "build_dir": BUILD_DIR.get(fc.framework, "dist"),
+            "build_dir": build_dir,
         }
 
     output = template.render(context)

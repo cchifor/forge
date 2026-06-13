@@ -1,0 +1,25 @@
+// Entry point for the {{ project_name }} SPA — a minimal vanilla-TS app that
+// renders a heading and pings the backend's health endpoint to prove the
+// dev-proxy wiring works end to end.
+const app = document.querySelector<HTMLDivElement>("#app")!;
+
+app.innerHTML = `
+  <main>
+    <h1>{{ project_name }}</h1>
+    <p>{{ description }}</p>
+    <p id="health">checking backend…</p>
+  </main>
+`;
+
+async function checkHealth(): Promise<void> {
+  const el = document.querySelector<HTMLParagraphElement>("#health")!;
+  try {
+    // Relative path → goes through the dev proxy (vite) / nginx (prod).
+    const res = await fetch("/api/v1/health/live");
+    el.textContent = res.ok ? "backend: ok" : `backend: ${res.status}`;
+  } catch {
+    el.textContent = "backend: unreachable";
+  }
+}
+
+void checkHealth();
