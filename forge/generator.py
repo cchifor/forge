@@ -723,12 +723,22 @@ def _generate_frontend_extras(config: ProjectConfig, project_root: Path, *, quie
         _log("  Generating Playwright e2e tests ...")
         _generate_e2e_tests(config, project_root, quiet=quiet)
 
-    # 5. Render frontend Dockerfile and nginx.conf (all frameworks)
+    # 5. Render frontend Dockerfile and nginx.conf — built-ins always, and
+    # node-based plugin frontends (npm build → nginx static serve). A
+    # non-node plugin frontend ships its OWN deploy assets in its template
+    # (forge can't presume the build tooling), so skip forge's Node/nginx
+    # render for it.
     if config.frontend and config.frontend.framework != FrontendFramework.NONE:
-        _log("  Rendering frontend Dockerfile ...")
-        frontend_dir = project_root / "apps" / config.frontend_slug
-        render_frontend_dockerfile(config, frontend_dir)
-        render_nginx_conf(config, frontend_dir)
+        fw = config.frontend.framework
+        from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+        _spec = FRONTEND_SPECS.get(fw.value)
+        forge_renders_deploy = _spec is None or _spec.node_based
+        if forge_renders_deploy:
+            _log("  Rendering frontend Dockerfile ...")
+            frontend_dir = project_root / "apps" / config.frontend_slug
+            render_frontend_dockerfile(config, frontend_dir)
+            render_nginx_conf(config, frontend_dir)
 
 
 def _apply_project_scope(

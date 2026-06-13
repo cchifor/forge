@@ -173,6 +173,14 @@ def _build_frontend_from_cfg(
     if framework == FrontendFramework.NONE:
         return None, False
 
+    # A plugin frontend declares its package manager on its FrontendSpec; use
+    # that as the default (an explicit user value still wins) so a headless
+    # ``--frontend <plugin>`` matches what the interactive prompt picks.
+    from forge.config import FRONTEND_SPECS  # noqa: PLC0415
+
+    _spec = FRONTEND_SPECS.get(framework.value)
+    _pkg_default = _spec.package_manager if _spec is not None else "npm"
+
     include_auth = r.get("include_auth", "frontend", "include_auth", default=True)
     frontend = FrontendConfig(
         # cast: a plugin framework is a _PluginFramework sentinel that behaves
@@ -181,7 +189,9 @@ def _build_frontend_from_cfg(
         project_name=project_name,
         description=description,
         author_name=r.get("author_name", "frontend", "author_name", default="Your Name"),
-        package_manager=r.get("package_manager", "frontend", "package_manager", default="npm"),
+        package_manager=r.get(
+            "package_manager", "frontend", "package_manager", default=_pkg_default
+        ),
         include_auth=include_auth,
         include_chat=r.get("include_chat", "frontend", "include_chat", default=False),
         include_openapi=r.get("include_openapi", "frontend", "include_openapi", default=False),

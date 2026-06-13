@@ -269,19 +269,14 @@ class FrontendConfig:
         # latter imports FrontendFramework from this package).
         from forge.layout_variants import available_layouts, get_layout_variant  # noqa: PLC0415
 
-        # Only the built-ins ship a layout registry today; plugin frontends keep
-        # their existing (layout-agnostic) path until they register variants.
-        _builtin_fws = (
-            FrontendFramework.VUE,
-            FrontendFramework.SVELTE,
-            FrontendFramework.FLUTTER,
-        )
-        if (
-            self.framework in _builtin_fws
-            and get_layout_variant(self.framework, self.layout) is None
-        ):
-            avail = available_layouts(self.framework)
+        # Validate the layout for any framework that ships a layout registry —
+        # the built-ins, plus any plugin frontend that registered variants via
+        # add_frontend_layout. A framework with no registered layouts (the
+        # common plugin case) skips validation and uses its layout-agnostic
+        # template path.
+        avail = available_layouts(self.framework)
+        if avail and get_layout_variant(self.framework, self.layout) is None:
             raise ValueError(
                 f"Layout '{self.layout}' is not available for {self.framework.value}. "
-                f"Choose from: {', '.join(avail) if avail else '(none registered)'}"
+                f"Choose from: {', '.join(avail)}"
             )
