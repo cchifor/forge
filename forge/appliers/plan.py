@@ -240,9 +240,8 @@ class FragmentPlan:
 
         ``renderers`` + ``backend`` (Pillar A.2, 1.3.0) let the applier
         expand any :class:`~forge.appliers.renderers.FragmentRenderer`
-        — :class:`MiddlewareSpec`, future ``ServiceRegistrationSpec``
-        (RFC-009), ``ErrorCodeSpec`` (RFC-007), ``LifespanHookSpec``,
-        ``PortSpec`` — into ``_Injection`` records via each renderer's
+        — :class:`MiddlewareSpec` today, plus any future declarative spec
+        type — into ``_Injection`` records via each renderer's
         own :meth:`~FragmentRenderer.render`. Renderers whose
         ``backend`` doesn't match are silently dropped so one fragment
         can carry renderers for every backend it supports. Synth'd
@@ -320,8 +319,7 @@ def _render_all(
     - :class:`MiddlewareSpec`s — which carry an explicit ``order`` — keep
       the same "outermost first" ordering they had under
       :func:`forge.specs.middleware.render_middleware_injections`.
-    - Other renderers (RFC-009 ``ServiceRegistrationSpec``, RFC-007
-      ``ErrorCodeSpec``) that omit ``order`` slot in at the default 100
+    - Any future renderer that omits ``order`` slots in at the default 100
       bucket, tiebroken by ``name`` — stable across runs without forcing
       every spec kind to expose a sortable order.
 

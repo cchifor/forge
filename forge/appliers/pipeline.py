@@ -20,10 +20,9 @@ Swap an applier by constructing a pipeline with your own instance:
 Epic K uses this swap for its ``MiddlewareSpec``-aware injection
 applier that synthesises injections on the fly from a fragment's
 declared middlewares. Pillar A.2 (1.3.0) generalises that shape so
-every declarative spec — ``MiddlewareSpec``, future
-``ServiceRegistrationSpec`` / ``ErrorCodeSpec`` / ``LifespanHookSpec``
-/ ``PortSpec`` — flows through the same
-:class:`~forge.appliers.renderers.FragmentRenderer` dispatch.
+every declarative spec flows through the same
+:class:`~forge.appliers.renderers.FragmentRenderer` dispatch
+(``MiddlewareSpec`` is the only implementer today).
 """
 
 from __future__ import annotations
@@ -73,10 +72,9 @@ class FragmentPipeline:
 
         ``renderers`` (Pillar A.2, 1.3.0) are
         :class:`~forge.appliers.renderers.FragmentRenderer` instances —
-        :class:`MiddlewareSpec` and future ``ServiceRegistrationSpec`` /
-        ``ErrorCodeSpec`` / ``LifespanHookSpec`` / ``PortSpec``. Each is
-        expanded into injections at plan-build time via its own
-        :meth:`~FragmentRenderer.render`.
+        :class:`MiddlewareSpec` today, plus any future declarative spec
+        type. Each is expanded into injections at plan-build time via its
+        own :meth:`~FragmentRenderer.render`.
 
         ``middlewares`` (Epic K) is preserved for one release as a
         compatibility shim — :meth:`FragmentPlan.from_impl` folds the

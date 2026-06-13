@@ -79,6 +79,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `cargo … --locked`) so a stale lockfile fails in CI rather than only in the
   prod Docker build.
 
+### Internal
+
+- **Removed the never-adopted `PortSpec` / `service_registration` seam.** The
+  Pillar A.4 / RFC-009 renderer scaffolding (`forge/service_registration.py`,
+  `forge/specs/port.py`, the `_shared/service_registration` + `_shared/port_spec`
+  templates, and their tests) had zero consumers — no `Fragment` ever populated
+  a `PortSpec`, and the shared-`ports/mod.rs` collision it was meant to solve
+  was instead handled by `inject.yaml` markers (#236). RFC-009 is marked
+  superseded. The generic `FragmentRenderer` protocol and `MiddlewareSpec` (its
+  one live implementer, via `Fragment.middlewares`) are unchanged.
+
 ### Plugin SDK
 
 - **`add_backend` now genuinely generates** (#224): registering a backend
