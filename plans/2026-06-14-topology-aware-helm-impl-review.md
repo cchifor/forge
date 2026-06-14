@@ -1,6 +1,18 @@
 # Implementation review — topology-aware-helm — round 1
 
-<!-- codex-impl-review-status: pending -->
+<!-- codex-impl-review-status: finalized -->
+<!-- converged round 1: 1 important finding (parallel migrate-Job safety) ADDRESSED in source
+     (jobs.yaml comment + DEPLOYMENT.md note); 2 nits codex concluded need no action. -->
+<!-- phase-B model: codex exec -m gpt-5.5 -->
+
+## Resolution
+
+- **Parallel migrate-Job safety (important)** — ADDRESSED. `jobs.yaml` and
+  `docs/DEPLOYMENT.md` now document that the shared hook-weight runs migrate Jobs
+  in parallel, which is safe because each backend owns its own database, with
+  guidance to use ascending weights for a shared DB.
+- **keycloak_port unused / zero-path Ingress (nits)** — no action: codex itself
+  concluded both are intentional / not realizable under forge's invariants.
 
 ## Summary
 
@@ -15,17 +27,14 @@
 ### Migration Job hooks execute in parallel — safe due to per-backend databases
 **Location:** jobs.yaml:20–21 (helm.sh/hook-weight: "-5")
 **Severity:** important
-<!-- codex: All migration Jobs use the same hook weight (-5), so Helm executes them in parallel by default. This is safe because each backend has its own database (derived from backend name via db_name normalization), and migrations don't cross-reference other backends' schemas. However, the plan should explicitly document this assumption to prevent future regressions if multi-database coordination is needed. Recommend adding a comment in jobs.yaml noting "each backend migrates its own database; parallel execution is safe" and potentially documenting in docs/DEPLOYMENT.md. -->
 
 ### Keycloak realm/keycloak_port in topology computed but port unused
 **Location:** forge/config/_topology.py:159, values.yaml.jinja:129–131
 **Severity:** nit
-<!-- codex: compute_topology returns keycloak_port (5000 by default from config), but the generated values.yaml uses a hardcoded URL (keycloak.example.com) without incorporating the port. Not a bug — keycloak URLs are typically external managed services with hostnames, not bare IP:port pairs. keycloak_port remains in the topology for consistency with compose, but its absence from the chart is intentional. -->
 
 ### One potential edge case: zero-path Ingress
 **Location:** ingress.yaml:23–32
 **Severity:** nit
-<!-- codex: If a project has no backends and no frontend (which violates forge constraints, but hypothetically), the Ingress paths array would be empty. However, forge enforces that projects have either backends or a frontend, so this is not realizable in practice. Frontend-only projects get the root path (/) pointing to frontend. No guard needed, but could document the invariant. -->
 
 ### Verified-correct (no action)
 The remaining round-1 findings were codex CONFIRMATIONS, not critiques — each verified against the source and tests, no change required:
