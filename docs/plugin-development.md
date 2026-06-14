@@ -275,11 +275,15 @@ Built-in forge features (under `forge/features/<ns>/`) follow the same conventio
 
 ### `api.add_backend(language_value, spec)`
 
-Registers a new `BackendLanguage` member plus its `BackendSpec`. **Phase 0.3 ships this as a stub** — plugin-defined backend languages require `BackendLanguage` to be a plugin-extensible enum, which is a 1.0.0a2 deliverable. Until then, calling `add_backend` with an unknown language raises `NotImplementedError`.
+Registers a new backend language so a plugin can ship a brand-new backend (e.g. `go`, `java`) without forking forge — **stable since 1.0.0a2**. Because the `BackendLanguage` enum can't mint plugin members, downstream call sites resolve the language *string* through `forge.config.resolve_backend_language` (it returns a `_PluginLanguage` sentinel for plugin values and the enum member for built-ins; both index `BACKEND_REGISTRY` and the app-template registry). `spec` is a [`BackendSpec`](../forge/config/_backend.py) (`template_dir`, `display_label`, and the per-language toolchain fields). Registering a backend also seeds its default `crud-service` application-template variant pointing at `spec.template_dir`, so a `BackendConfig` on the new language validates and generates without a separate `add_backend_application_template` call. Raises `PluginError` if the language collides with a built-in or another plugin. See [`examples/forge-go-backend/`](../examples/forge-go-backend) for a complete reference that compiles, vets, and tests under the plugin-e2e gate.
+
+### `api.add_frontend(value, spec)`
+
+The mirror of `add_backend`: registers a new frontend framework so a plugin can ship its own templates (Solid, Qwik, Remix, …) without forking forge — **stable since 1.0.0a4**. Resolve the framework string via `forge.config.resolve_frontend_framework(value)`; the generator dispatches it as a Copier-only render. `spec` is a [`FrontendSpec`](../forge/config/_frontend.py): `template_dir`, `display_label`, `uses_subdirectory` (default `True`), `node_based` (default `True`), `build_dir` (the production-build output dir, consulted for node-based frameworks), and `package_manager`. Raises `PluginError` on a built-in or duplicate-plugin-name collision. See [`examples/forge-vite-frontend/`](../examples/forge-vite-frontend) for a reference that installs and builds.
 
 ### `api.add_command(name, handler)`
 
-Registers a new CLI subcommand. The handler signature is `(args: argparse.Namespace) -> int`. **Phase 0.3 ships this as a capture-only hook** — the dispatcher integration lands with the Phase 2 command-object polish (1.0.0a3).
+Registers a new CLI subcommand. The handler signature is `(args: argparse.Namespace) -> int`. **Stable since 1.0.0a4** — the CLI dispatcher invokes registered plugin commands.
 
 ### `api.add_emitter(target, emitter)`
 
@@ -429,15 +433,18 @@ real entries follow.
 
 _(none yet — applications open via [GitHub Discussions](https://github.com/cchifor/forge/discussions). Open a thread titled "Featured plugin application: forge-plugin-&lt;name&gt;" with a link to the plugin repo, the PyPI page, and a one-paragraph confirmation of the five criteria above.)_
 
-## Future plugin capabilities
+## Plugin SDK timeline
 
-The plugin SDK grows with each alpha:
+The stable plugin surface grew across the alphas — everything below has **shipped** (see the stability table in `forge/api.py` for the authoritative per-method status):
 
-| Alpha | Added capability |
+| Since | Capability |
 |---|---|
-| 1.0.0a1 (this release) | Options, fragments, hooks for commands/emitters |
-| 1.0.0a2 | Plugin-defined backend languages (initial); emitter pipeline wiring shipped in 1.2.0-draft (Initiative #2 — `add_emitter` retains the callable + `run_codegen` invokes registered plugin emitters with `(project_root, config, resolved)` after the built-in passes) |
-| 1.0.0a3 | Command dispatcher integration (Phase 2.2); path resolver for plugin-owned fragment directories |
-| 1.0.0a4 | Plugin-defined frontends with canvas package integration (Phase 3.1) |
+| 1.0.0a1 | Options, fragments, hooks for commands/emitters |
+| 1.0.0a2 | Plugin-defined **backend languages** (`add_backend`); emitter pipeline wiring (`run_codegen` invokes registered plugin emitters after the built-in passes) |
+| 1.0.0a3 | Command dispatcher integration; path resolver for plugin-owned fragment directories |
+| 1.0.0a4 | Plugin-defined **frontends** (`add_frontend`); `add_command` |
+| 1.1.0a1 | `add_service` (compose service registration) |
+
+Provisional / roadmap surface (signatures may still change — see `forge/api.py`): `add_frontend_layout` (1.3) and `add_backend_application_template` (1.4) for plugins that extend an existing language/framework with new layout or app-template variants.
 
 See the 1.0 roadmap in `docs/roadmap.md` for scope and status.
