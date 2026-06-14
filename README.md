@@ -4,7 +4,7 @@
 
 *The single-command, polyglot full-stack generator for production services, agent platforms, and RAG apps.*
 
-[![version](https://img.shields.io/badge/version-1.2.0--alpha.1-blue?style=flat-square)](https://github.com/cchifor/forge)
+[![version](https://img.shields.io/badge/version-1.2.0-blue?style=flat-square)](https://github.com/cchifor/forge)
 [![python](https://img.shields.io/badge/python-%3E%3D3.13-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
 [![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=flat-square)](https://github.com/cchifor/forge)

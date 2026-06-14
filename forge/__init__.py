@@ -1,6 +1,6 @@
 """forge: Full-stack project generator."""
 
-__version__ = "1.2.0a1"
+__version__ = "1.2.0"
 
 # Importing these populates the option/fragment registry singletons (and,
 # transitively via feature_loader, makes them available before any feature
