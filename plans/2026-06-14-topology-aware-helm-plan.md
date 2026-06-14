@@ -1,14 +1,5 @@
 # Forge: topology-aware Helm chart generation + app/deploy folder separation
 
-## Codex Review
-
-- **Architecture fork is sound**: `apply_project_features` is called by both `generator._apply_project_scope` (~line 780) and `updater._update_locked` (~line 544), so fragment-based topology threading rides the existing merge/provenance rail as intended.
-- **Backend reconstruction confirmed**: the updater infers real backends (lines 166-221) before `apply_project_features`, so `compute_topology` yields current topology on `--update`, not stale proxy defaults.
-- **Jinja + three-way merge works**: `FragmentFileApplier` renders `.jinja` at apply time with multi-doc YAML via loops; three-way merge compares rendered bodies (not raw templates), enabling idempotent updates.
-- **Byte-identity protected**: optional `project_topology` + `StrictUndefined` is sufficient; non-deploy projects unaffected.
-- **S2S secret hashing verified**: `render_service_registry` stores argon2 hashes, not plaintexts (`docker_manager.py:511`); stub+doc mitigation is adequate.
-- **CRITICAL FIX**: the updater passes `primary_server_port=None`, so the helm port wouldn't be correct on `--update` — must thread the port (and topology) through the update path.
-
 ## Context
 
 Forge already ships a `deploy.target=kubernetes` feature, but it is hollow:
@@ -110,7 +101,15 @@ topology object through:
    `topology=` param, pass to `FragmentContext.filtered(project_topology=...)`.
 5. **Call sites pass topology (both paths):** `generator._apply_project_scope` and
    `updater/__init__.py:_update_locked` each call `compute_topology(config, plan)` (the updater already
-   reconstructs `config.backends`) and pass `topology=`.
+   reconstructs `config.backends` at lines 166-221) and pass `topology=`.
+   **Per-backend ports on `--update` (codex Phase-A fix):** the chart reads each workload's port from
+   `topology.backends[*].port` — it does **not** depend on the single-proxy `{{ server_port }}` var.
+   But the updater today passes `primary_server_port=None` to `apply_project_features`
+   (`_merge_driver.py` docstring; generator passes the real port at ~line 794). So the updater MUST
+   also reconstruct and pass `primary_server_port=<primary backend port>` (belt-and-suspenders for any
+   residual `{{ server_port }}` usage); the per-backend ports come from `topology` regardless. A
+   keep-up-to-date test asserts a port change re-renders the right containerPort/targetPort on
+   `--update`.
 
 **Byte-identity safety:** non-deploy projects are unaffected — only the helm fragment references
 `topology.*`; `StrictUndefined` catches typos; existing golden snapshots (none enable
@@ -251,6 +250,6 @@ adjudicate the **fragment-vs-renderer fork** and the chart design, incorporate, 
 implement Wave 1 with strict TDD, running **codex Phase-B** impl review per wave. Conventional Commits,
 no AI-coauthor trailers.
 
-<!-- codex: Updater must pass config.backend.server_port to apply_project_features, not None; generator correctly passes it at line 794 (forge/generator.py) to populate Helm values.yaml render-time {{ server_port }}. Updater line 549 (forge/sync/forge_to_project/updater/__init__.py) omits this, breaking --update topology accuracy on the helm chart. -->
-
-<!-- codex-review-status: complete -->
+<!-- codex-review-status: finalized -->
+<!-- phase-A verdict: fork SOUND (codex gpt-5.5); one fix folded in: updater threads topology + primary_server_port on --update -->
+<!-- phase-B model: codex exec -m gpt-5.5 (gpt-5.3-codex blocked for this account) -->
