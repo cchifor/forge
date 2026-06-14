@@ -541,6 +541,17 @@ def _update_locked(
                     "project-scope fragment(s) (no backend to host them)"
                 )
 
+    # Attach the recorded frontend BEFORE computing deployment topology (and
+    # before codegen below): the updater builds ``config`` without a frontend
+    # (the resolver doesn't need one), but the topology-aware Helm chart needs
+    # ``has_frontend`` to be correct on ``forge --update``.
+    if config.frontend is None and frontend_framework != FrontendFramework.NONE:
+        config.frontend = FrontendConfig(
+            framework=frontend_framework, project_name=config.project_name
+        )
+
+    from forge.config._topology import compute_topology  # noqa: PLC0415
+
     apply_project_features(
         project_root,
         project_apply_plan,
@@ -550,19 +561,20 @@ def _update_locked(
         collector=collector,
         option_values=plan.option_values,
         frontend_framework=frontend_framework,
+        # Keep the topology-aware Helm chart current on --update: per-backend
+        # ports flow through ``topology``; ``primary_server_port`` covers any
+        # residual single-port ``{{ server_port }}`` usage (the updater used to
+        # pass None here, pinning the chart to the proxy default port).
+        primary_server_port=(config.backend.server_port if config.backend else None),
+        topology=compute_topology(config, plan),
     )
 
     # Re-run schema-driven codegen so template/codegen changes reach existing
     # projects on ``forge --update`` (historically codegen ran only at fresh
     # ``generate`` time). This is what propagates e.g. the apps/<slug> frontend
-    # relocation, ui_protocol/event-union/enum/canvas regeneration. The updater's
-    # ``config`` carries no frontend (the resolver doesn't need one); attach a
-    # minimal one so the frontend emitters fire, then clean the pre-relocation
-    # orphaned ``frontend/`` tree.
-    if frontend_framework != FrontendFramework.NONE:
-        config.frontend = FrontendConfig(
-            framework=frontend_framework, project_name=config.project_name
-        )
+    # relocation, ui_protocol/event-union/enum/canvas regeneration. The frontend
+    # the codegen emitters need was already attached to ``config`` above (before
+    # the topology computation), so it's available here too.
     from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
 
     # Codegen overwrites its own authoritative generated files (origin=

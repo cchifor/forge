@@ -774,6 +774,8 @@ def _apply_project_scope(
     )
 
     with phase_timer(_logger, "generate.apply_project_features"):
+        from forge.config._topology import compute_topology  # noqa: PLC0415
+
         _has_frontend = (
             config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
         )
@@ -792,6 +794,8 @@ def _apply_project_scope(
             # So project-level templates (e.g. the Helm chart values.yaml) that
             # render {{ server_port }} pick up the primary backend's port.
             primary_server_port=(config.backend.server_port if config.backend else None),
+            # Deployment topology for the topology-aware Helm chart fragment.
+            topology=compute_topology(config, plan),
         )
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)

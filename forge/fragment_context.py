@@ -73,6 +73,14 @@ class FragmentContext:
     last-recorded fragment SHAs. Populated by the updater from the
     project's ``forge.toml`` provenance table; empty during fresh
     generation (``strict`` mode never reads it).
+
+    ``project_topology`` is the optional deployment-topology dict
+    (:func:`forge.config._topology.compute_topology`) — the same model
+    that drives ``docker-compose.yml``. Project-scope fragments that emit
+    topology-aware infra (the ``deploy_helm_chart`` chart) read it as the
+    ``topology`` Jinja variable. ``None`` for every other fragment, so
+    output is byte-identical for projects that don't opt into a
+    topology-rendered artifact.
     """
 
     backend_config: BackendConfig
@@ -82,6 +90,7 @@ class FragmentContext:
     provenance: ProvenanceCollector | None
     update_mode: UpdateMode = "strict"
     file_baselines: Mapping[str, str] = field(default_factory=dict)
+    project_topology: Mapping[str, Any] | None = None
 
     @classmethod
     def filtered(
@@ -95,6 +104,7 @@ class FragmentContext:
         provenance: ProvenanceCollector | None = None,
         update_mode: UpdateMode = "strict",
         file_baselines: Mapping[str, str] | None = None,
+        project_topology: Mapping[str, Any] | None = None,
     ) -> FragmentContext:
         """Build a context where ``options`` contains only ``reads_options``.
 
@@ -114,4 +124,5 @@ class FragmentContext:
             provenance=provenance,
             update_mode=update_mode,
             file_baselines=file_baselines or {},
+            project_topology=project_topology,
         )
