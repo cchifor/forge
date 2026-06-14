@@ -23,6 +23,10 @@ from forge.sync.project_to_forge.verify import verify_project
         (BackendLanguage.PYTHON, {"observability.tracing": True, "middleware.rate_limit": True}),
         (BackendLanguage.NODE, {"middleware.rate_limit": True}),
         (BackendLanguage.RUST, {"middleware.rate_limit": True}),
+        # database.mode=none runs the DB stripper, which rewrites
+        # tests/unit/test_config.py + test_lifecycle.py in place — both must be
+        # re-recorded post-strip or a virgin stateless project fails verify.
+        (BackendLanguage.PYTHON, {"database.mode": "none"}),
     ],
 )
 def test_fresh_generate_verify_is_clean(lang, opts, tmp_path):

@@ -362,6 +362,12 @@ _STRIPPER_TOUCHED_FILES: tuple[str, ...] = (
     "src/app/core/config/domain.py",
     "src/app/core/config/loader.py",
     "src/app/cli/__init__.py",
+    # In-place test strippers (_strip_test_config_dbconfig /
+    # _strip_test_lifecycle_db_hooks below) — these rewrite the files but were
+    # missing here, so their post-strip SHA was never re-recorded and a fresh
+    # ``database.mode=none`` project failed day-0 ``forge --verify``.
+    "tests/unit/test_config.py",
+    "tests/unit/test_lifecycle.py",
 )
 
 
