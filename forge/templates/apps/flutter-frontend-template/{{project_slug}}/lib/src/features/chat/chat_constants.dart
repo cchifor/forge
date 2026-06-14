@@ -7,7 +7,7 @@ class ChatModel {
 const availableModels = <ChatModel>[
   ChatModel(id: 'gpt-4.1', label: 'GPT-4.1'),
   ChatModel(id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini'),
-  ChatModel(id: 'claude-sonnet-4', label: 'Claude Sonnet 4'),
+  ChatModel(id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6'),
 ];
 
 enum ApprovalMode { defaultMode, bypass }
@@ -23,5 +23,5 @@ extension ApprovalModeX on ApprovalMode {
       value == 'bypass' ? ApprovalMode.bypass : ApprovalMode.defaultMode;
 }
 
-const defaultModelId = 'claude-sonnet-4';
+const defaultModelId = 'claude-sonnet-4-6';
 const defaultApprovalMode = ApprovalMode.defaultMode;
