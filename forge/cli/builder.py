@@ -45,7 +45,8 @@ _KNOWN_TOP_LEVEL_CONFIG_KEYS: frozenset[str] = frozenset(
         "backends",  # multi-backend list
         "frontend",
         "include_keycloak",
-        "keycloak",
+        "keycloak",  # nested {port, realm, ...}
+        "keycloak_port",  # flat shorthand used by matrix scenario configs
         "options",
         "components",
         "platform_template",
