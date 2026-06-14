@@ -37,11 +37,19 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) lets LLM agents d
 
 The endpoint is **read-only and additive** — the write path is unchanged. A missing log file (no calls yet) returns `{"entries": []}`. Storage IO failures surface as `500` so monitoring catches them; invalid `limit` values surface as `422` via FastAPI's `Query` validator. Decisions in the wire shape match the on-disk vocabulary: `approved`, `auto`, `rejected-bad-token`, plus any `error` string when the downstream tool call raised.
 
-## Planned rollout
+## Rollout history
+
+**Live now (1.2.0):** the MCP protocol types, the iframe sandbox + approval-mode
+enum, the `mcp.config.json` format, and the backend router (`/mcp/tools`,
+`/mcp/invoke`, and the [audit endpoint](#audit-endpoint) above). The frontend
+Tool Discovery / Approval Dialog panels are the remaining roadmap items.
+
+The table below records the original per-alpha sequencing of the capability (the
+current release is `1.2.0`, not `1.0.0a1`):
 
 | Alpha | Deliverable |
 |---|---|
-| 1.0.0a1 (this) | Protocol types + iframe sandbox + approval mode enum |
+| 1.0.0a1 | Protocol types + iframe sandbox + approval mode enum |
 | 1.0.0a2 | `mcp.config.json` format + backend router scaffold |
 | 1.0.0a3 | Tool Discovery panel (Vue + Svelte + Flutter) |
 | 1.0.0a4 | Approval Dialog (Vue + Svelte + Flutter) + docs/mcp-integration-guide.md |
