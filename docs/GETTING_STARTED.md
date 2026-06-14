@@ -34,36 +34,18 @@ forge --platform multitenant-saas --project-name app # tenant control plane + RL
 
 Each preset assembles several services behind a shared Keycloak + Gatekeeper auth stack, with service-to-service trust (and per-tenant Postgres RLS for `multitenant-saas`). A preset is just the lowest-priority config layer, so your CLI flags and `--config` still win. See the [platform generator guide](platform-generator-guide.md) for the preset comparison, how S2S auth and multitenancy work, and **the dev-posture credentials you must rotate before deploying.**
 
-## Drop a new service into the platform monorepo
+## Add another backend to a project
 
-Since 1.2.0-alpha.1, the Python service template is wired to drop straight into `platform/services/`. The generated service consumes the platform's [10 weld-* SDKs](https://github.com/your-org/platform/blob/main/sdks/README.md) via monorepo path deps and inherits the same Dockerfile, docker-compose fragment, and Traefik routing conventions as every existing platform service.
-
-```bash
-cd /path/to/platform
-forge --template python-service \
-      --set project_name=widget \
-      --set service_port=5042 \
-      --set sdk_consumption=monorepo \
-      --output services/widget
-```
-
-What you get out of the box:
-
-- `pyproject.toml` declaring the default weld-* base (`auth, core, fastapi, observability, http-client, events`) with `[tool.uv.sources]` pointing at `../../sdks/weld-*`.
-- Multi-stage `Dockerfile` that copies weld-* source from the `sdks` build context, builds wheels, and strips `[tool.uv.sources]` so the runtime image resolves from `/wheels`.
-- `docker-compose.fragment.yaml` merged into the platform compose file: separate `widget-migrate` job + `widget` runtime service, Traefik path-rewrite for `/api/widget`, `depends_on` on postgres-healthy + keycloak-healthy.
-- `src/app/` skeleton already importing from `weld.core.persistence.*`, `weld.fastapi.security.*`, `weld.fastapi.api.errors.Error`, `weld.core.discovery`. No `src/service/` shim.
-
-Then enable any of the opt-in feature modules with `--set`:
+forge projects are multi-backend monorepos. To add a service to an existing project, run from the project root:
 
 ```bash
---set events.bus=postgres_notify   # CloudEvents bus + transactional outbox
---set streaming.sse=true           # /api/v1/stream SSE endpoint
---set connectors.enabled=true      # weld-connectors registry
---set connectors.backends='["http","sql"]'
---set airlock.client=true          # Airlock sandbox-orchestrator client
---set mcp_template.server=true     # First-party MCP integration server
+cd my_platform
+forge --add-backend-language python --add-backend-name billing
+# …or node / rust:
+forge --add-backend-language rust --add-backend-name search
 ```
+
+forge re-renders the project with the new service wired in: a `services/<name>/` tree with its own Dockerfile, a `<name>-migrate` + `<name>` block in `docker-compose.yml`, and Traefik routing for `/api/<name>`. Each backend owns its own CRUD entities. Your existing services and edits are preserved by the three-zone merge (see [Re-apply safely](#re-apply-safely) below). Tune the new backend with the same `--set option.path=value` flags you'd use at generation time — browse them with `forge --list`.
 
 ## Headless mode (the AI-agent / CI path)
 
