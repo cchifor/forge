@@ -66,3 +66,25 @@ def test_build_config_rejects_typo_end_to_end():
 def test_build_config_accepts_valid_config():
     config = _build_config(_args(), {"project_name": "demo"})
     assert config.project_name == "demo"
+
+
+def test_allowlist_covers_every_matrix_scenario_key():
+    # Every top-level key a real scenario config uses must be allowlisted, or
+    # `_build_config` rejects the scenario (this is what `keycloak_port` tripped:
+    # the allowlist drifted from the configs forge actually ships/tests).
+    import pathlib
+
+    import yaml
+
+    data = yaml.safe_load(
+        (pathlib.Path(__file__).parent / "matrix" / "scenarios.yaml").read_text(encoding="utf-8")
+    )
+    scen = data["scenarios"] if isinstance(data, dict) and "scenarios" in data else data
+    items = scen if isinstance(scen, list) else list(scen.values())
+    used: set[str] = set()
+    for s in items:
+        cfg = s.get("config", {})
+        if isinstance(cfg, dict):
+            used |= set(cfg)
+    missing = used - _KNOWN_TOP_LEVEL_CONFIG_KEYS
+    assert not missing, f"scenario config keys not in the allowlist: {sorted(missing)}"
