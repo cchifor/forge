@@ -1,0 +1,61 @@
+name: E2E platform boot
+
+# Boot the flagship `--platform` presets in CI when a PR touches the templates
+# that assemble them. The full platform compose-boot suite
+# (tests/e2e/test_platform_compose_boot.py) otherwise runs ONLY in the
+# schedule-gated `e2e-nightly-full` job, so a platform regression in a PR got
+# zero signal and had a ~24h blind window — which is exactly how the
+# multitenant-saas preset shipped red for three nights before #245. This lane
+# closes that window: it runs the heaviest preset (multitenant-saas, a full
+# Keycloak + Gatekeeper + TMS + RLS-app boot) plus one synthesis S2S
+# round-trip (microservices) on any PR that changes platform / deploy /
+# synthesis / TMS / crud-base templates. Mirrors ci.yml::matrix-smoke-fast in
+# spirit (a fast, targeted compose check on the PR path).
+#
+# tests/test_e2e_coverage.py guards that this lane keeps covering every preset.
+
+on:
+  pull_request:
+    paths:
+      - "forge/templates/platforms/**"
+      - "forge/templates/deploy/**"
+      - "forge/synthesis/**"
+      - "forge/templates/services/python/tenant-management-service/**"
+      - "forge/templates/services/python-service-template/**"
+      - "tests/e2e/test_platform_compose_boot.py"
+      - ".github/workflows/e2e-platform-boot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-platform-boot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  platform-boot:
+    name: platform compose-boot (multitenant-saas + S2S)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+      - name: Install Python 3.13
+        run: uv python install 3.13
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@forge.local"
+          git config --global user.name "Forge CI"
+      - name: Install forge
+        run: uv sync --all-groups
+      - name: Boot the flagship platform presets
+        # docker + docker compose are preinstalled on ubuntu-latest. The
+        # platform presets are Python-only (tms + app are FastAPI), so no
+        # node/rust/flutter toolchains are needed here. ``-k`` selects the
+        # heaviest boot (multitenant-saas) + one S2S round-trip (microservices).
+        env:
+          FORGE_E2E_PLATFORM: "1"
+        run: uv run pytest tests/e2e/test_platform_compose_boot.py -m e2e -v -rs --no-cov -k "multitenant_saas or microservices"
