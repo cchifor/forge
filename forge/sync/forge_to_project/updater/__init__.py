@@ -884,18 +884,17 @@ def _infer_backends(
         if not backend_dir.is_dir():
             continue
         recovered_port = _recovered_server_port(backend_dir)
-        port_kw = {"server_port": recovered_port} if recovered_port is not None else {}
         matched = False
         for marker, lang in markers.items():
             if (backend_dir / marker).is_file():
-                out.append(
-                    BackendConfig(
-                        name=backend_dir.name,
-                        project_name=project_root.name,
-                        language=lang,
-                        **port_kw,
-                    )
+                bc = BackendConfig(
+                    name=backend_dir.name,
+                    project_name=project_root.name,
+                    language=lang,
                 )
+                if recovered_port is not None:
+                    bc.server_port = recovered_port
+                out.append(bc)
                 matched = True
                 break
         if matched:
@@ -906,14 +905,14 @@ def _infer_backends(
         src_path = _copier_src_path(backend_dir)
         plugin_lang = _resolve_language_from_src_path(src_path)
         if plugin_lang is not None:
-            out.append(
-                BackendConfig(
-                    name=backend_dir.name,
-                    project_name=project_root.name,
-                    language=cast("BackendLanguage", plugin_lang),
-                    **port_kw,
-                )
+            bc = BackendConfig(
+                name=backend_dir.name,
+                project_name=project_root.name,
+                language=cast("BackendLanguage", plugin_lang),
             )
+            if recovered_port is not None:
+                bc.server_port = recovered_port
+            out.append(bc)
         elif src_path is not None:
             # The directory IS a forge-rendered service (it has a copier-answers
             # ``_src_path``) but its template maps to no loaded backend — almost
