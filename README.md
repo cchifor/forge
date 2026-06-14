@@ -494,14 +494,15 @@ my_platform/
 │   └── api/                   # FastAPI / Fastify / Axum app, its own Dockerfile + tests
 ├── apps/
 │   └── frontend/              # Vue / Svelte / Flutter SPA (or absent for frontend=none)
+├── packages/                  # Shared / vendored SDKs (platform-auth, etc.; only with --include-auth)
 ├── deploy/                    # ── deployment & infra artifacts ──
 │   ├── helm/                  # Topology-aware Helm chart (with deploy.target=kubernetes)
 │   ├── k8s/                   # Raw manifests, derived via `make k8s-manifests`
-│   └── compose/               # init-db.sh + other compose support files
-├── infra/                     # Only present with --include-auth
-│   ├── keycloak-realm.json    # Pre-configured realm, validated at generate-time
-│   ├── keycloak/              # Keycloak Dockerfile + themes
-│   └── gatekeeper/            # OIDC ForwardAuth proxy
+│   ├── compose/               # init-db.sh + other compose support files
+│   └── infra/                 # Keycloak + Gatekeeper sources, realm (only with --include-auth)
+│       ├── keycloak-realm.json
+│       ├── keycloak/          # Keycloak Dockerfile + themes
+│       └── gatekeeper/        # OIDC ForwardAuth proxy
 ├── tests/
 │   └── e2e/                   # Playwright suite (8 tests per feature + 4 auth flows)
 ├── AGENTS.md                  # Orientation for AI coding agents

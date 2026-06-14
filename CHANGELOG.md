@@ -32,10 +32,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   now recovers each backend's `server_port` from `.copier-answers.yml` so the
   re-rendered chart keeps the right container ports.
 - **`deploy/` boundary.** Generated projects now separate application code
-  (`services/`, `apps/`) from deployment artifacts under `deploy/`
-  (`helm/`, `k8s/`, `compose/`). `init-db.sh` moved to `deploy/compose/`; a root
-  `Makefile` wraps the deploy commands and derives `deploy/k8s/` raw manifests
-  from the chart via `helm template` (so they can't drift).
+  (`services/`, `apps/`, `packages/`) from deployment artifacts under `deploy/`
+  (`helm/`, `k8s/`, `compose/`, `infra/`):
+  - `init-db.sh` moved to `deploy/compose/`; a root `Makefile` wraps the deploy
+    commands and derives `deploy/k8s/` raw manifests from the chart via
+    `helm template` (so they can't drift).
+  - The project-root SDK tree (`platform-auth`, etc.) moved from `sdks/` to
+    `packages/`, matching the `apps/`/`services/`/`packages/` monorepo
+    convention (the backend-local `services/<svc>/sdks/forge-core` is unchanged).
+  - The auth-owned Keycloak + Gatekeeper sources and the realm JSON moved from
+    `infra/` to `deploy/infra/`.
+  - The frontend `nginx.conf` is no longer baked into the image — it is mounted
+    (a compose bind-mount; a ConfigMap in the chart), so routing config is a
+    deployment concern.
+- **In-cluster Gatekeeper (dev/demo).** With `infra.inCluster=true` +
+  `infra.gatekeeper.enabled=true` the chart emits an in-cluster Gatekeeper
+  (keygen initContainer for signing keys + a post-install realm-sync Job).
+  Off by default — production uses an external/managed Gatekeeper.
 
 ### Distribution
 
