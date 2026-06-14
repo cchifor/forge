@@ -1,7 +1,7 @@
 """Shared library fragment — project-scoped Python SDK scaffold.
 
 Registers ``shared_lib_python`` as a project-scoped fragment that drops
-a shared Python package at ``<project>/sdks/shared/``. The package
+a shared Python package at ``<project>/packages/shared/``. The package
 provides a ``shared`` importable namespace with Pydantic domain models
 and a utilities directory for cross-backend code reuse.
 
@@ -26,7 +26,7 @@ def _impl(name: str, lang: str) -> str:
 
 
 def register_all(api: ForgeAPI) -> None:
-    # Project-scoped: the shared SDK lives at ``<project>/sdks/shared/`` and
+    # Project-scoped: the shared SDK lives at ``<project>/packages/shared/`` and
     # is referenced by every Python backend's pyproject.toml as a path
     # dependency. Only registers ``BackendLanguage.PYTHON`` so the
     # parity_tier auto-derives to 3 (python-only).

@@ -19,17 +19,17 @@ services:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
       # Multi-stage Dockerfiles reference the platform's weld-* SDK
-      # source tree via ``COPY --from=sdks`` and the workspace root
+      # source tree via ``COPY --from=packages`` and the workspace root
       # (workspace package.json + lockfile) via ``COPY --from=project_root``.
       # ``additional_contexts`` binds those build-context names to the
-      # on-disk ``./sdks/`` directory and the project root (sibling /
-      # parent of the compose file). The ``sdks`` context is only declared
-      # when a project-root ``sdks/`` tree actually ships (the platform-auth
+      # on-disk ``./packages/`` directory and the project root (sibling /
+      # parent of the compose file). The ``packages`` context is only declared
+      # when a project-root ``packages/`` tree actually ships (the platform-auth
       # SDK fragments) — BuildKit FAILS the build on a declared-but-missing
       # context dir, and forge-core comes from the main context, not here.
       additional_contexts:
 {% if has_project_sdks %}
-        sdks: ./sdks
+        packages: ./packages
 {% endif %}
         project_root: .
     environment:
@@ -57,10 +57,10 @@ services:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
       # See the {{ be.name }}-migrate build above — same rationale (the
-      # ``sdks`` context is only declared when a project-root sdks/ ships).
+      # ``packages`` context is only declared when a project-root packages/ ships).
       additional_contexts:
 {% if has_project_sdks %}
-        sdks: ./sdks
+        packages: ./packages
 {% endif %}
         project_root: .
     # Direct host:container port so the matrix-nightly lane-C smoke

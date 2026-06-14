@@ -29,8 +29,8 @@
       "sha256": "22237aeddb41cfae"
     },
     "docker-compose.yml": {
-      "size": 5375,
-      "sha256": "c89be2adec7a69d5"
+      "size": 5399,
+      "sha256": "0d5d5e297f0ee7a4"
     },
     "forge.toml": {
       "size": 46733,
@@ -49,8 +49,8 @@
       "sha256": "31910a941b109f81"
     },
     "services/api/Dockerfile": {
-      "size": 3052,
-      "sha256": "ee87721b8296ee64"
+      "size": 3088,
+      "sha256": "d9dbd8a44533ddc5"
     },
     "services/api/README.md": {
       "size": 33686,
@@ -89,8 +89,8 @@
       "sha256": "c0859dec5b712b9b"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 2902,
-      "sha256": "6542e2dde53f34c8"
+      "size": 2946,
+      "sha256": "c56d8d2cbb9ccdeb"
     },
     "services/api/docker-compose.yaml": {
       "size": 866,
@@ -101,8 +101,8 @@
       "sha256": "df2a39103908a6ed"
     },
     "services/api/pyproject.toml": {
-      "size": 4795,
-      "sha256": "9e509ebee58f221a"
+      "size": 4803,
+      "sha256": "098e76dab2bc3a56"
     },
     "services/api/sdks/forge-core/pyproject.toml": {
       "size": 1613,

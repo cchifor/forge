@@ -10,7 +10,7 @@ every CI run on main since the auth Wave 1 Node middleware landed).
 
 The deps applier now rewrites the ``workspace:`` spec to a relative
 ``file:`` path pointing at the in-tree SDK at
-``<project>/sdks/<unscoped-name>/``. The path is normalized to POSIX
+``<project>/packages/<unscoped-name>/``. The path is normalized to POSIX
 separators so the generated ``package.json`` doesn't differ between
 Linux and Windows runners.
 """
@@ -35,7 +35,7 @@ def test_workspace_spec_rewrites_to_relative_file_path(tmp_path: Path) -> None:
     """Multi-backend layout: backend at services/<name>/, SDK at sdks/<name>/."""
     project = tmp_path / "proj"
     backend_pkg = project / "services" / "node-svc" / "package.json"
-    sdk_root = project / "sdks" / "platform-auth-node"
+    sdk_root = project / "packages" / "platform-auth-node"
     sdk_root.mkdir(parents=True)
     _write_pkg(backend_pkg)
 
@@ -43,7 +43,7 @@ def test_workspace_spec_rewrites_to_relative_file_path(tmp_path: Path) -> None:
 
     written = json.loads(backend_pkg.read_text(encoding="utf-8"))
     spec = written["dependencies"]["@forge/platform-auth-node"]
-    assert spec == "file:../../sdks/platform-auth-node", (
+    assert spec == "file:../../packages/platform-auth-node", (
         f"expected forward-slash relative file: spec, got {spec!r}"
     )
 
@@ -52,7 +52,7 @@ def test_workspace_spec_rewrites_for_single_level_backend(tmp_path: Path) -> Non
     """Single-backend layout: backend at root-of-project, SDK at sdks/<name>/."""
     project = tmp_path / "proj"
     backend_pkg = project / "node-svc" / "package.json"
-    (project / "sdks" / "platform-auth-node").mkdir(parents=True)
+    (project / "packages" / "platform-auth-node").mkdir(parents=True)
     _write_pkg(backend_pkg)
 
     _add_node_deps(backend_pkg, ("@forge/platform-auth-node@workspace:*",))
@@ -60,7 +60,7 @@ def test_workspace_spec_rewrites_for_single_level_backend(tmp_path: Path) -> Non
     spec = json.loads(backend_pkg.read_text(encoding="utf-8"))["dependencies"][
         "@forge/platform-auth-node"
     ]
-    assert spec == "file:../sdks/platform-auth-node"
+    assert spec == "file:../packages/platform-auth-node"
 
 
 def test_workspace_spec_preserved_when_sdk_missing(tmp_path: Path) -> None:
@@ -85,20 +85,20 @@ def test_workspace_spec_preserved_when_sdk_missing(tmp_path: Path) -> None:
 def test_unscoped_workspace_dep_also_rewrites(tmp_path: Path) -> None:
     project = tmp_path / "proj"
     backend_pkg = project / "services" / "node-svc" / "package.json"
-    (project / "sdks" / "some-pkg").mkdir(parents=True)
+    (project / "packages" / "some-pkg").mkdir(parents=True)
     _write_pkg(backend_pkg)
 
     _add_node_deps(backend_pkg, ("some-pkg@workspace:*",))
 
     spec = json.loads(backend_pkg.read_text(encoding="utf-8"))["dependencies"]["some-pkg"]
-    assert spec == "file:../../sdks/some-pkg"
+    assert spec == "file:../../packages/some-pkg"
 
 
 def test_existing_dep_not_overwritten(tmp_path: Path) -> None:
     """If the dep already has a version pinned, the rewrite must not clobber it."""
     project = tmp_path / "proj"
     backend_pkg = project / "services" / "node-svc" / "package.json"
-    (project / "sdks" / "platform-auth-node").mkdir(parents=True)
+    (project / "packages" / "platform-auth-node").mkdir(parents=True)
     backend_pkg.parent.mkdir(parents=True, exist_ok=True)
     backend_pkg.write_text(
         json.dumps(
@@ -133,7 +133,7 @@ def test_project_root_supplied_resolves_unconditionally(tmp_path: Path) -> None:
     _write_pkg(backend_pkg)
     # Deliberately do NOT create sdks/ — the rewrite should still emit
     # the file: path because project_root is supplied.
-    assert not (project / "sdks").exists()
+    assert not (project / "packages").exists()
 
     _add_node_deps(
         backend_pkg,
@@ -144,7 +144,7 @@ def test_project_root_supplied_resolves_unconditionally(tmp_path: Path) -> None:
     spec = json.loads(backend_pkg.read_text(encoding="utf-8"))["dependencies"][
         "@forge/platform-auth-node"
     ]
-    assert spec == "file:../../sdks/platform-auth-node"
+    assert spec == "file:../../packages/platform-auth-node"
 
 
 def test_non_workspace_specs_unchanged(tmp_path: Path) -> None:

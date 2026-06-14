@@ -9,10 +9,10 @@ lane (and the e2e Python lane).
 The Python service template's ``pyproject.toml.jinja`` lists
 ``weld-{auth,core,fastapi,observability,http-client,events}`` as
 runtime dependencies and ``[tool.uv.sources]`` points each at
-``../../sdks/weld-<name>/`` — the in-platform-monorepo SDK trees. The
+``../../packages/weld-<name>/`` — the in-platform-monorepo SDK trees. The
 matrix CI runner has no platform sibling tree, so the real weld-*
 sources are unavailable and ``uv sync`` fails with
-``Distribution not found at: file:///.../sdks/weld-auth``.
+``Distribution not found at: file:///.../packages/weld-auth``.
 
 These stubs let the lane B verify (``uv sync`` + ``ruff check`` +
 ``ruff format`` + ``ty check`` + ``pytest``) run end-to-end without
@@ -26,7 +26,7 @@ runtime behavior.
 
 ``tests/matrix/runner.py::_inject_weld_stubs`` walks this directory
 and ``shutil.copytree``s every ``weld-<name>/`` into
-``<project_root>/sdks/`` after ``generate()`` and before
+``<project_root>/packages/`` after ``generate()`` and before
 ``toolchain.verify()``. Same hook in ``tests/e2e/test_full_generation.py``.
 
 **Maintenance**

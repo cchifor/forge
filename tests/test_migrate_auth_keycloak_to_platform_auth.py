@@ -15,8 +15,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from forge.migrations.base import discover_migrations
 from forge.migrations.migrate_auth_keycloak_to_platform_auth import (
     DESCRIPTION,
@@ -31,7 +29,6 @@ from forge.migrations.migrate_auth_keycloak_to_platform_auth import (
     run,
 )
 
-
 # ---------------------------------------------------------------- registration
 
 
@@ -43,9 +40,7 @@ def test_codemod_registered_in_discover() -> None:
     the CLI calls.
     """
     migrations = {m.name: m for m in discover_migrations()}
-    assert NAME in migrations, (
-        f"codemod {NAME!r} not in discover_migrations() — CLI can't reach it"
-    )
+    assert NAME in migrations, f"codemod {NAME!r} not in discover_migrations() — CLI can't reach it"
     entry = migrations[NAME]
     assert entry.from_version == FROM
     assert entry.to_version == TO
@@ -79,8 +74,8 @@ def test_codemod_skips_when_no_legacy_signals(tmp_path: Path) -> None:
 def test_codemod_skips_when_already_migrated(tmp_path: Path) -> None:
     """Re-running on a post-migrated project is idempotent."""
     # Drop a marker that the SDK fragment already shipped.
-    (tmp_path / "sdks" / "platform-auth").mkdir(parents=True)
-    (tmp_path / "sdks" / "platform-auth" / "pyproject.toml").write_text(
+    (tmp_path / "packages" / "platform-auth").mkdir(parents=True)
+    (tmp_path / "packages" / "platform-auth" / "pyproject.toml").write_text(
         '[project]\nname = "platform-auth"\n', encoding="utf-8"
     )
     report = run(tmp_path, dry_run=False, quiet=True)
@@ -104,9 +99,7 @@ def test_env_renames_load_bearing_keys() -> None:
         "KEYCLOAK_CLIENT_SECRET": "GATEKEEPER_CLIENT_SECRET",
     }
     for old, new in must_rename.items():
-        assert rename_dict.get(old) == new, (
-            f"ENV_RENAMES must rename {old} → {new}"
-        )
+        assert rename_dict.get(old) == new, f"ENV_RENAMES must rename {old} → {new}"
 
 
 def test_env_removals_drop_obsolete_keys() -> None:
@@ -233,9 +226,7 @@ def test_env_rename_skips_when_canonical_already_set(tmp_path: Path) -> None:
         (c for c in report.changes if "dropped" in c and "canonical" in c),
         None,
     )
-    assert drop_msg is not None, (
-        "codemod should report dropping the alias when canonical is set"
-    )
+    assert drop_msg is not None, "codemod should report dropping the alias when canonical is set"
 
 
 # ---------------------------------------------------------------- python deps
@@ -255,19 +246,17 @@ def test_python_keycloak_dep_stripped(tmp_path: Path) -> None:
     svc.mkdir(parents=True)
     pyproject = svc / "pyproject.toml"
     pyproject.write_text(
-        '[project]\n'
+        "[project]\n"
         'name = "myservice"\n'
-        'dependencies = [\n'
+        "dependencies = [\n"
         '    "fastapi>=0.115",\n'
         '    "python-keycloak>=5.0",\n'
         '    "httpx>=0.27",\n'
-        ']\n',
+        "]\n",
         encoding="utf-8",
     )
     # Also drop a marker .env so detection fires.
-    (tmp_path / ".env").write_text(
-        "KEYCLOAK_CLIENT_ID=foo\n", encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text("KEYCLOAK_CLIENT_ID=foo\n", encoding="utf-8")
     report = run(tmp_path, dry_run=False, quiet=True)
     assert report.applied
     new_text = pyproject.read_text(encoding="utf-8")
@@ -290,9 +279,7 @@ def test_legacy_python_files_removed(tmp_path: Path) -> None:
     (providers / "keycloak.py").write_text("# legacy\n", encoding="utf-8")
     (providers / "dev.py").write_text("# legacy\n", encoding="utf-8")
     # Trigger detection.
-    (tmp_path / ".env").write_text(
-        "KEYCLOAK_CLIENT_ID=foo\n", encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text("KEYCLOAK_CLIENT_ID=foo\n", encoding="utf-8")
 
     report = run(tmp_path, dry_run=False, quiet=True)
     assert report.applied
@@ -309,9 +296,7 @@ def test_legacy_python_files_paths_match_constant() -> None:
         "src/service/security/providers/dev.py",
     }
     actual = set(LEGACY_PYTHON_FILES)
-    assert expected.issubset(actual), (
-        f"LEGACY_PYTHON_FILES missing: {sorted(expected - actual)}"
-    )
+    assert expected.issubset(actual), f"LEGACY_PYTHON_FILES missing: {sorted(expected - actual)}"
 
 
 # ---------------------------------------------------------------- end-to-end
@@ -324,17 +309,13 @@ def test_full_migration_flow(tmp_path: Path) -> None:
     provider file), runs the codemod, asserts every signal cleared.
     """
     # 1. Legacy env.
-    (tmp_path / ".env").write_text(
-        _legacy_env_text(), encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text(_legacy_env_text(), encoding="utf-8")
     # 2. Legacy Python service with python-keycloak dep + provider file.
     services = tmp_path / "services"
     svc = services / "api"
     svc.mkdir(parents=True)
     (svc / "pyproject.toml").write_text(
-        '[project]\n'
-        'name = "api"\n'
-        'dependencies = ["python-keycloak>=5.0"]\n',
+        '[project]\nname = "api"\ndependencies = ["python-keycloak>=5.0"]\n',
         encoding="utf-8",
     )
     providers = svc / "src" / "service" / "security" / "providers"
@@ -361,6 +342,5 @@ def test_full_migration_flow(tmp_path: Path) -> None:
     # Either skipped (no legacy detected post-migration) OR applied
     # with zero changes — both are valid idempotent outcomes.
     assert not second.applied or len(second.changes) == 0, (
-        f"second run should be idempotent; got applied={second.applied} "
-        f"changes={second.changes}"
+        f"second run should be idempotent; got applied={second.applied} changes={second.changes}"
     )

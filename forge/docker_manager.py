@@ -91,12 +91,12 @@ def render_compose(
         config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
     )
 
-    # Whether a project-root ``sdks/`` tree actually ships — only the
+    # Whether a project-root ``packages/`` tree actually ships — only the
     # platform-auth SDK fragments create it. forge-core is backend-local
     # (services/<svc>/sdks/forge-core, main build context), so a no-auth
-    # project has no project-root ``sdks/``. Declaring the ``sdks`` build
+    # project has no project-root ``packages/``. Declaring the ``packages`` build
     # context when the dir is absent makes ``docker compose build`` fail
-    # ("failed to get build context sdks") — so gate the context on this.
+    # ("failed to get build context packages") — so gate the context on this.
     active_fragments = {rf.fragment.name for rf in plan.ordered} if plan is not None else set()
     has_project_sdks = bool(
         active_fragments
@@ -183,11 +183,11 @@ def render_compose(
 
 # -- Workspace root manifests -------------------------------------------------
 #
-# Generated projects are flat monorepos (apps/, services/, sdks/). With
-# cross-package source deps (``file:../sdks/<name>`` for Node,
-# ``path = "../sdks/<name>"`` for Rust), they need a workspace root so:
+# Generated projects are flat monorepos (apps/, services/, packages/). With
+# cross-package source deps (``file:../packages/<name>`` for Node,
+# ``path = "../packages/<name>"`` for Rust), they need a workspace root so:
 #
-#   - the in-tree SDK (e.g. ``sdks/platform-auth-node``) builds before
+#   - the in-tree SDK (e.g. ``packages/platform-auth-node``) builds before
 #     its consumers run ``tsc --noEmit`` against missing ``dist/``
 #     artifacts (matrix-verify Node was tripping on this), and
 #   - the Rust SDK path-dep resolves at the workspace root rather than
@@ -268,12 +268,12 @@ def render_workspace_cargo_toml(
     rust_backends = [
         {"name": b.name} for b in config.backends if b.language == BackendLanguage.RUST
     ]
-    # The Rust SDK ships at ``sdks/platform-auth-rs/`` per the fragment's
+    # The Rust SDK ships at ``packages/platform-auth-rs/`` per the fragment's
     # files/ tree. Only listing one SDK today; new Rust SDKs would append
     # to this list when their fragments enter the plan.
     rust_sdk_members: list[str] = []
     if "platform_auth_sdk_rust" in active:
-        rust_sdk_members.append("sdks/platform-auth-rs")
+        rust_sdk_members.append("packages/platform-auth-rs")
 
     # Pick a workspace edition: the first Rust backend's edition wins. If
     # there are no Rust backends but the SDK is present (unusual but

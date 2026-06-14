@@ -75,7 +75,7 @@ Lane = Literal["generate", "verify", "smoke", "roundtrip", "update"]
 ALL_LANES: tuple[Lane, ...] = ("generate", "verify", "smoke", "roundtrip", "update")
 
 SCENARIOS_YAML = Path(__file__).parent / "scenarios.yaml"
-WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "sdks"
+WELD_STUBS_DIR = Path(__file__).parent / "fixtures" / "packages"
 
 
 _INSTALL_TIMEOUT_SECONDS = 300
@@ -135,9 +135,7 @@ def _verify_frontend(fe_cfg, fe_dir: Path) -> _FrontendVerifyOutcome:
 
     framework = getattr(fe_cfg, "framework", None)
     if framework is None or framework == FrontendFramework.NONE:
-        return _FrontendVerifyOutcome(
-            status="skip", skip_reason="no frontend configured"
-        )
+        return _FrontendVerifyOutcome(status="skip", skip_reason="no frontend configured")
     if getattr(framework, "value", None) == "flutter":
         return _FrontendVerifyOutcome(
             status="skip",
@@ -192,14 +190,14 @@ def _run_frontend_step(
 
 
 def _inject_weld_stubs(project_root: Path) -> None:
-    """Drop matrix-CI weld-* SDK stub packages into ``<project>/sdks/``.
+    """Drop matrix-CI weld-* SDK stub packages into ``<project>/packages/``.
 
     Generated Python services declare ``[tool.uv.sources]`` entries
-    pointing at ``../../sdks/weld-<name>/`` — the platform monorepo's
+    pointing at ``../../packages/weld-<name>/`` — the platform monorepo's
     in-tree SDK paths. Matrix CI has no platform sibling tree, so the
     real weld-* sources are unavailable and ``uv sync`` fails. These
     minimal namespace-package stubs (defined under
-    ``tests/matrix/fixtures/sdks/``) let the verify lane run end-to-end
+    ``tests/matrix/fixtures/packages/``) let the verify lane run end-to-end
     (uv sync → ruff → ty → pytest) without the real weld monorepo.
 
     The stubs expose the same import surface as ``weld-*`` and contain
@@ -211,16 +209,16 @@ def _inject_weld_stubs(project_root: Path) -> None:
     UUID strings, and so on.
 
     Idempotent — ``weld-*`` sub-dirs are skipped if already present
-    (the auth fragment ships its own ``sdks/platform-auth/``).
+    (the auth fragment ships its own ``packages/platform-auth/``).
     """
     if not WELD_STUBS_DIR.is_dir():
         return
-    sdks_dir = project_root / "sdks"
-    sdks_dir.mkdir(parents=True, exist_ok=True)
+    packages_dir = project_root / "packages"
+    packages_dir.mkdir(parents=True, exist_ok=True)
     for stub in WELD_STUBS_DIR.iterdir():
         if not stub.is_dir() or not stub.name.startswith("weld-"):
             continue
-        target = sdks_dir / stub.name
+        target = packages_dir / stub.name
         if target.exists():
             continue
         shutil.copytree(str(stub), str(target))
@@ -490,7 +488,7 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 details=f"generate raised {type(e).__name__}({e.code}): {e.message}",
             )
 
-        # Drop minimal weld-* stub SDKs into <project>/sdks/ so Python
+        # Drop minimal weld-* stub SDKs into <project>/packages/ so Python
         # services' [tool.uv.sources] entries resolve. See
         # _inject_weld_stubs docstring for the rationale.
         _inject_weld_stubs(project_root)
@@ -598,7 +596,7 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 details=f"generate failed: {e}",
             )
 
-        # Drop weld-* stubs into <project>/sdks/ so Python-service Docker
+        # Drop weld-* stubs into <project>/packages/ so Python-service Docker
         # builds (which run ``uv sync`` against the same [tool.uv.sources])
         # have something to resolve against. Same hook as the verify lane.
         _inject_weld_stubs(project_root)
@@ -862,8 +860,7 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details=(
-                    f"day-0 `forge --verify` not clean ({vres.worst}); "
-                    f"drift on {drifted[:8]}"
+                    f"day-0 `forge --verify` not clean ({vres.worst}); drift on {drifted[:8]}"
                 ),
             )
 
@@ -910,8 +907,7 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 scenario,
                 start,
                 reason=(
-                    "no safe-apply block candidate after edit "
-                    "(fragment must be Jinja-templated)"
+                    "no safe-apply block candidate after edit (fragment must be Jinja-templated)"
                 ),
                 gate_message=(
                     "FR1 passed and a literal block was edited, but harvest "
@@ -938,9 +934,7 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
         # needed and concurrent invocations don't share state.
         sandbox_forge_root = _materialize_forge_sandbox(tmp / "forge-sandbox")
         try:
-            report = apply_bundle_to_fragments(
-                bundle_post, sandbox_forge_root, quiet=True
-            )
+            report = apply_bundle_to_fragments(bundle_post, sandbox_forge_root, quiet=True)
         except Exception as exc:  # noqa: BLE001
             return LaneResult(
                 scenario=scenario.name,
@@ -957,8 +951,7 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details=(
-                    f"apply-back errored on {report.errored} block "
-                    f"candidate(s); first: {first_err}"
+                    f"apply-back errored on {report.errored} block candidate(s); first: {first_err}"
                 ),
             )
 

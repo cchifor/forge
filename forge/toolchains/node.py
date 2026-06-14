@@ -5,7 +5,7 @@ image at build time. When the generated project ships a workspace root
 (``<project>/package.json`` with ``workspaces``), we install at that
 root with ``--workspaces --include-workspace-root`` so each workspace
 member's ``prepare`` hook runs — that's how the in-tree SDKs (e.g.
-``sdks/platform-auth-node``) get their ``dist/`` artifacts built before
+``packages/platform-auth-node``) get their ``dist/`` artifacts built before
 the consumer's ``tsc --noEmit`` resolves their type declarations.
 
 Verify mirrors the pre-Epic-S flow: ``biome check --write`` +

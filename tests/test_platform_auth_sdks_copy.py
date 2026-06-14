@@ -62,7 +62,7 @@ def test_auth_backend_dockerfile_copies_sdks(language, tmp_path):
     cfg = _auth_project(f"auth_{language.value}", language, tmp_path)
     root = generate(cfg, quiet=True, dry_run=True)
 
-    sdks_dir = root / "sdks"
+    sdks_dir = root / "packages"
     assert sdks_dir.is_dir(), "auth project must ship the sdks/ tree"
 
     dockerfile = (root / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
@@ -95,9 +95,7 @@ def test_noauth_backend_dockerfile_omits_sdks_copy(tmp_path):
         project_name="noauth_node",
         output_dir=str(tmp_path),
         backends=[
-            BackendConfig(
-                name="api", project_name="noauth_node", language=BackendLanguage.NODE
-            )
+            BackendConfig(name="api", project_name="noauth_node", language=BackendLanguage.NODE)
         ],
         frontend=FrontendConfig(
             project_name="noauth_node",

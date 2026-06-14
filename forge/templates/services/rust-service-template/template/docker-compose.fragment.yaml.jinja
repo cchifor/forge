@@ -8,14 +8,14 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
       # Workspace orchestration: project_root exposes the root
-      # Cargo.toml + Cargo.lock; sdks exposes in-tree SDK source.
+      # Cargo.toml + Cargo.lock; packages exposes in-tree SDK source.
       # Required so the multi-stage build can run
-      # `cargo build --workspace` and resolve `path = "../sdks/<name>"`
+      # `cargo build --workspace` and resolve `path = "../packages/<name>"`
       # deps (BuildKit can't reach above the main build context without
       # these).
       additional_contexts:
         project_root: .
-        sdks: ./sdks
+        packages: ./packages
     environment:
       RUST_LOG: info
       DATABASE_URL: "postgres://postgres:postgres@postgres:5432/{{ db_name }}"
@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
       additional_contexts:
         project_root: .
-        sdks: ./sdks
+        packages: ./packages
     ports:
       - "{{ server_port }}:{{ server_port }}"
     environment:

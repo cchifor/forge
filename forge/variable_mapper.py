@@ -160,8 +160,8 @@ def backend_context(
     # Only thread sdk_consumption when the caller set it. Leaving the
     # key absent lets copier.yml's own default (``monorepo``) apply,
     # preserving the production-platform shape; CI and standalone
-    # generators pass ``"none"`` to short-circuit the ``COPY --from=sdks``
-    # build stage when there's no sibling ``sdks/`` tree.
+    # generators pass ``"none"`` to short-circuit the ``COPY --from=packages``
+    # build stage when there's no sibling ``packages/`` tree.
     if bc.sdk_consumption is not None:
         ctx["sdk_consumption"] = bc.sdk_consumption
     return ctx

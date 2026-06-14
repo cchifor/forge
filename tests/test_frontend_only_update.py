@@ -393,7 +393,7 @@ class TestResolverBridgeForFrontendOnly:
         # create either, despite ``auth.mode=generate`` pulling in
         # Python project-scope fragments at the resolver layer.
         update_project(root, quiet=True)
-        assert not (root / "sdks").exists(), (
+        assert not (root / "packages").exists(), (
             "synth bridge must NOT emit platform_auth_sdk_python files "
             "into a frontend-only project (no Python backend to host them)"
         )
