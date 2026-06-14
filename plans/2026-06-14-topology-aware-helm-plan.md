@@ -1,5 +1,14 @@
 # Forge: topology-aware Helm chart generation + app/deploy folder separation
 
+## Codex Review
+
+- **Architecture fork is sound**: `apply_project_features` is called by both `generator._apply_project_scope` (~line 780) and `updater._update_locked` (~line 544), so fragment-based topology threading rides the existing merge/provenance rail as intended.
+- **Backend reconstruction confirmed**: the updater infers real backends (lines 166-221) before `apply_project_features`, so `compute_topology` yields current topology on `--update`, not stale proxy defaults.
+- **Jinja + three-way merge works**: `FragmentFileApplier` renders `.jinja` at apply time with multi-doc YAML via loops; three-way merge compares rendered bodies (not raw templates), enabling idempotent updates.
+- **Byte-identity protected**: optional `project_topology` + `StrictUndefined` is sufficient; non-deploy projects unaffected.
+- **S2S secret hashing verified**: `render_service_registry` stores argon2 hashes, not plaintexts (`docker_manager.py:511`); stub+doc mitigation is adequate.
+- **CRITICAL FIX**: the updater passes `primary_server_port=None`, so the helm port wouldn't be correct on `--update` — must thread the port (and topology) through the update path.
+
 ## Context
 
 Forge already ships a `deploy.target=kubernetes` feature, but it is hollow:
@@ -242,4 +251,6 @@ adjudicate the **fragment-vs-renderer fork** and the chart design, incorporate, 
 implement Wave 1 with strict TDD, running **codex Phase-B** impl review per wave. Conventional Commits,
 no AI-coauthor trailers.
 
-<!-- codex-review-status: pending -->
+<!-- codex: Updater must pass config.backend.server_port to apply_project_features, not None; generator correctly passes it at line 794 (forge/generator.py) to populate Helm values.yaml render-time {{ server_port }}. Updater line 549 (forge/sync/forge_to_project/updater/__init__.py) omits this, breaking --update topology accuracy on the helm chart. -->
+
+<!-- codex-review-status: complete -->
