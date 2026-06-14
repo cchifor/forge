@@ -77,6 +77,12 @@ class BackendApplicationTemplate:
             rendered *before* ``template_dir`` overlays it. Empty ⇒
             self-contained single render (the preferred shape for whole
             services, and how ``crud-service`` ships).
+        requires_services: Infra services this variant needs at boot (e.g.
+            ``("redis",)`` for ``tenant-management-service``, whose outbox
+            relay connects to Redis on startup). ``render_compose`` adds a
+            ``depends_on: <svc>: condition: service_healthy`` edge for each
+            one that is actually rendered, so the service doesn't crash-loop
+            racing an infra container that isn't up yet.
     """
 
     language: LanguageKey
@@ -85,6 +91,7 @@ class BackendApplicationTemplate:
     display_label: str
     supported: bool = True
     base_template_dir: str = ""
+    requires_services: tuple[str, ...] = ()
 
 
 BACKEND_APPLICATION_TEMPLATES: dict[tuple[LanguageKey, str], BackendApplicationTemplate] = {}
@@ -198,6 +205,10 @@ def _discover_manifests() -> None:
         language = _language_from_value(str(lang_value))
         if language is None:
             continue
+        requires_raw = template.get("requires_services", [])
+        requires_services = (
+            tuple(str(s) for s in requires_raw) if isinstance(requires_raw, list) else ()
+        )
         register_backend_application_template(
             BackendApplicationTemplate(
                 language=language,
@@ -206,6 +217,7 @@ def _discover_manifests() -> None:
                 display_label=str(template.get("display_label", variant)),
                 supported=bool(template.get("supported", True)),
                 base_template_dir=str(template.get("base", "")),
+                requires_services=requires_services,
             )
         )
 

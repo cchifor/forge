@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
+from forge.backend_app_templates import (
+    DEFAULT_BACKEND_TEMPLATE,
+    get_backend_application_template,
+)
 from forge.config import (
     DEFAULT_REALM,
     TRAEFIK_DASHBOARD_PORT,
@@ -110,8 +114,40 @@ def render_compose(
     # the server image, never exit, and the service's
     # ``service_completed_successfully`` dependency would block forever.
     _BUILTIN_MIGRATING = {BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST}
+
+    # Phase B1: ``database_mode=none`` suppresses the postgres container and
+    # per-backend migrate sidecars. Keycloak has its own DB needs, so the
+    # postgres service still renders when it's enabled — ``render_postgres``
+    # captures the combined condition so the template stays readable.
+    database_mode = config.database_mode
+    render_postgres = (bool(config.backends) and database_mode != "none") or config.include_keycloak
+
+    # Infra services the compose will actually render. A backend only gets a
+    # ``depends_on`` edge to a service in this set — declaring a dependency on
+    # an unrendered service makes ``docker compose up`` fail with "depends on
+    # undefined service". ``redis``/``keycloak`` render only under
+    # ``include_keycloak``; capability services (cache/queue/etc.) come in via
+    # ``extra_services``.
+    rendered_infra: set[str] = {str(svc["name"]) for svc in extra_services}
+    if config.include_keycloak:
+        rendered_infra |= {"keycloak", "redis"}
+    if render_postgres:
+        rendered_infra.add("postgres")
+
     backends_ctx = []
     for bc in config.backends:
+        # An app-template variant can declare infra it needs at boot (e.g. the
+        # TMS outbox relay needs Redis); add a healthcheck-gated depends_on for
+        # each such service that's actually in the stack so it doesn't race the
+        # infra container and crash-loop.
+        app_tmpl = get_backend_application_template(
+            bc.language, bc.app_template or DEFAULT_BACKEND_TEMPLATE
+        )
+        depends_on_services = [
+            svc
+            for svc in (app_tmpl.requires_services if app_tmpl else ())
+            if svc in rendered_infra
+        ]
         backends_ctx.append(
             {
                 "name": bc.name,
@@ -119,6 +155,7 @@ def render_compose(
                 "port": bc.server_port,
                 "db_name": bc.name.replace("-", "_"),
                 "has_migrations": bc.language in _BUILTIN_MIGRATING,
+                "depends_on_services": depends_on_services,
                 # Phase 4: per-service S2S / inter-service env block. Empty
                 # dict when synthesis is inactive → the template's loop emits
                 # nothing (golden-stable).
@@ -128,13 +165,6 @@ def render_compose(
 
     # Primary backend (first) for backward-compat references
     primary = config.backend
-
-    # Phase B1: ``database_mode=none`` suppresses the postgres container and
-    # per-backend migrate sidecars. Keycloak has its own DB needs, so the
-    # postgres service still renders when it's enabled — ``render_postgres``
-    # captures the combined condition so the template stays readable.
-    database_mode = config.database_mode
-    render_postgres = (bool(backends_ctx) and database_mode != "none") or config.include_keycloak
 
     context = {
         "project_slug": config.project_slug,
