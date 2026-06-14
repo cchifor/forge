@@ -1,0 +1,30 @@
+# Production overrides for {{ topology.project_slug }}.
+#
+# Copy this file to `values-prod.yaml` (which forge NEVER tracks or overwrites)
+# and edit, then:
+#
+#     helm install {{ topology.project_slug | replace("_", "-") }} ./deploy/helm -f values-prod.yaml
+#
+# Only override what differs from values.yaml — Helm deep-merges this on top.
+
+ingress:
+  host: {{ topology.project_slug | replace("_", "-") }}.your-domain.com
+  className: nginx
+
+# Point at your managed datastores (the default posture is external/managed):
+externalServices:
+  postgres:
+    host: your-postgres-host
+    port: 5432
+
+# Per-workload image tags + scaling (uncomment and set real values):
+# workloads:
+#   <backend-name>:
+#     image:
+#       repository: ghcr.io/your-org/{{ topology.project_slug | replace("_", "-") }}-<backend-name>
+#       tag: "v1.2.3"
+#     replicaCount: 3
+
+# For demos only — spin up in-cluster Postgres/Redis instead of managed ones:
+# infra:
+#   inCluster: true

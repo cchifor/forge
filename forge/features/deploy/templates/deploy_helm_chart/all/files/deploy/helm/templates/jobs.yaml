@@ -1,0 +1,46 @@
+{{- /* DB migration Jobs — one per backend that ships migrations. Run as a
+       pre-install/pre-upgrade Helm hook so the schema is current before the
+       Deployment rolls. A failed migration blocks the release (intended).
+
+       The keygen / realm-sync init Jobs the compose stack runs for the auth
+       gatekeeper are NOT emitted here yet: they depend on the gatekeeper image
+       + scripts that live under infra/ (a later wave moves that into deploy/).
+       Until then, run them out-of-band or supply your own. */ -}}
+{{- range $name, $w := .Values.workloads }}
+{{- if $w.hasMigrations }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s-migrate" $.Release.Name $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}-migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/name: {{ $name }}-migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: "{{ $w.image.repository }}:{{ $w.image.tag }}"
+          imagePullPolicy: {{ $w.image.pullPolicy }}
+          command: {{ toJson $w.migrateCommand }}
+          envFrom:
+            - configMapRef:
+                name: {{ printf "%s-%s-config" $.Release.Name $name | trunc 63 | trimSuffix "-" }}
+            - secretRef:
+                name: {{ printf "%s-%s-secret" $.Release.Name $name | trunc 63 | trimSuffix "-" }}
+                optional: true
+{{- end }}
+{{- end }}

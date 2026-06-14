@@ -1,0 +1,153 @@
+# Default values for the {{ topology.project_slug }} chart.
+#
+# THIS FILE IS FORGE-OWNED. It is re-rendered from the project's deployment
+# topology on every `forge --update`, so its structure tracks your backends,
+# frontend, and platform services. Override per environment with a SEPARATE
+# file that forge never touches:
+#
+#     helm install {{ topology.project_slug | replace("_", "-") }} ./deploy/helm -f values-prod.yaml
+#
+# (Start from values-prod.yaml.example.) Editing this file directly works too,
+# but forge re-renders it on update — a three-way merge preserves your edits or
+# drops a .forge-merge sidecar on conflict.
+
+# Per-backend workloads, keyed by service name. The chart's templates `range`
+# over this map, so adding/removing a backend (then `forge --update`) adds or
+# removes its Deployment/Service/HPA automatically.
+workloads:
+{%- for be in topology.backends %}
+  {{ be.name }}:
+    language: {{ be.language }}
+    image:
+      repository: ghcr.io/example/{{ topology.project_slug }}-{{ be.name }}
+      tag: latest
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: {{ be.port }}
+    # A migration runs as a pre-install/pre-upgrade Helm hook Job before the
+    # Deployment rolls (see templates/jobs.yaml).
+    hasMigrations: {{ "true" if be.has_migrations else "false" }}
+    migrateCommand:
+{%- if be.language == "python" %}
+      ["python", "-m", "app", "db", "upgrade"]
+{%- elif be.language == "node" %}
+      ["npx", "prisma", "migrate", "deploy"]
+{%- elif be.language == "rust" %}
+      ["/app/migrate"]
+{%- else %}
+      []
+{%- endif %}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+    # Non-secret env -> ConfigMap (templates/configmap.yaml).
+    env:
+{%- if be.language == "python" %}
+      ENV: "production"
+      LOG_LEVEL: "info"
+      APP__SERVER__PORT: "{{ be.port }}"
+{%- elif be.language == "node" %}
+      NODE_ENV: "production"
+      LOG_LEVEL: "info"
+      APP__SERVER__PORT: "{{ be.port }}"
+{%- elif be.language == "rust" %}
+      PORT: "{{ be.port }}"
+      RUST_LOG: "info"
+{%- else %}
+      ENV: "production"
+{%- endif %}
+    # Secret env -> Secret (templates/secret.yaml). Placeholders only: forge
+    # NEVER bakes a real credential into the chart. Override via values-prod.yaml
+    # or wire an ExternalSecret (see templates/secret.yaml).
+    secretEnv:
+{%- if be.language == "python" %}
+      APP__DB__URL: "postgresql+asyncpg://CHANGEME@postgres:5432/{{ be.db_name }}"
+{%- elif be.language == "node" %}
+      APP__DB__URL: "postgresql://CHANGEME@postgres:5432/{{ be.db_name }}"
+      DATABASE_URL: "postgresql://CHANGEME@postgres:5432/{{ be.db_name }}"
+{%- elif be.language == "rust" %}
+      DATABASE_URL: "postgresql://CHANGEME@postgres:5432/{{ be.db_name }}"
+{%- endif %}
+{%- endfor %}
+
+# Frontend (nginx serving the built SPA). Disabled when the project has no
+# frontend layer.
+frontend:
+  enabled: {{ "true" if topology.has_frontend else "false" }}
+  image:
+    repository: ghcr.io/example/{{ topology.project_slug }}-{{ topology.frontend_slug or "frontend" }}
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# HTTP ingress. Replaces the dev-only Traefik in docker-compose. The rewrite
+# annotation below is nginx-ingress-specific; switch className + annotations
+# for a different controller (Traefik Middleware CRD, Gateway API, ...).
+ingress:
+  enabled: true
+  className: nginx
+  host: {{ topology.project_slug }}.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /api/$2
+  # Per-backend path prefixes (/api/<name>) + the frontend root, derived from
+  # the topology so they match the compose Traefik routing.
+  paths:
+{%- for be in topology.backends %}
+    - path: /api/{{ be.name }}(/|$)(.*)
+      pathType: ImplementationSpecific
+      service: {{ be.name }}
+{%- endfor %}
+
+# Datastores. EXTERNAL by default (production posture): point these at your
+# managed Postgres/Redis/Keycloak. Flip infra.inCluster=true to spin up
+# in-cluster stand-ins (kind/minikube only — NOT production-grade).
+externalServices:
+  postgres:
+    host: postgres.example.com
+    port: 5432
+{%- if topology.include_keycloak %}
+  redis:
+    host: redis.example.com
+    port: 6379
+  keycloak:
+    url: https://keycloak.example.com
+    realm: forge
+{%- endif %}
+
+infra:
+  inCluster: false
+{%- if topology.render_postgres %}
+  postgres:
+    image: pgvector/pgvector:pg16
+    storage: 10Gi
+{%- endif %}
+{%- if topology.include_keycloak %}
+  redis:
+    image: redis:7-alpine
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    realm: forge
+{%- endif %}
+
+# Pod security: non-root by default (matches the raw-k8s + compose posture).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
