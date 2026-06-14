@@ -1,6 +1,6 @@
 """Regression guard for the PR #170 node/rust image-build break.
 
-``generator.py`` gates each backend's ``COPY --from=sdks`` (and the
+``generator.py`` gates each backend's ``COPY --from=packages`` (and the
 platform-auth dependency wiring) on whether the backend's OWN-language
 auth middleware fragment is in the resolved plan. The check originally
 hardcoded the Python fragment, so a Node/Rust backend with auth but no
@@ -62,13 +62,13 @@ def test_auth_backend_dockerfile_copies_sdks(language, tmp_path):
     cfg = _auth_project(f"auth_{language.value}", language, tmp_path)
     root = generate(cfg, quiet=True, dry_run=True)
 
-    sdks_dir = root / "packages"
-    assert sdks_dir.is_dir(), "auth project must ship the sdks/ tree"
+    packages_dir = root / "packages"
+    assert packages_dir.is_dir(), "auth project must ship the packages/ tree"
 
     dockerfile = (root / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
-    assert "--from=sdks" in dockerfile, (
-        f"{language.value} auth backend ships sdks/ but its Dockerfile has no "
-        f"COPY --from=sdks — the image build will fail on the unresolved "
+    assert "--from=packages" in dockerfile, (
+        f"{language.value} auth backend ships packages/ but its Dockerfile has no "
+        f"COPY --from=packages — the image build will fail on the unresolved "
         f"platform-auth dependency"
     )
 
@@ -89,7 +89,7 @@ def test_middleware_map_covers_every_builtin_language():
 
 
 def test_noauth_backend_dockerfile_omits_sdks_copy(tmp_path):
-    """The inverse: a no-auth project ships no sdks/ tree, so the COPY must
+    """The inverse: a no-auth project ships no packages/ tree, so the COPY must
     be absent (an unconditional COPY would fail the build)."""
     cfg = ProjectConfig(
         project_name="noauth_node",
@@ -106,4 +106,4 @@ def test_noauth_backend_dockerfile_omits_sdks_copy(tmp_path):
     )
     root = generate(cfg, quiet=True, dry_run=True)
     dockerfile = (root / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
-    assert "--from=sdks" not in dockerfile
+    assert "--from=packages" not in dockerfile
