@@ -154,7 +154,9 @@ def compute_topology(
         "backends": backends,
         "has_frontend": has_frontend,
         "frontend_slug": config.frontend_slug if has_frontend else "",
-        "frontend_port": (config.frontend.server_port if config.frontend and has_frontend else 5173),
+        "frontend_port": (
+            config.frontend.server_port if config.frontend and has_frontend else 5173
+        ),
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
         "database_mode": database_mode,

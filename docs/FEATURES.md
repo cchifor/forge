@@ -1221,22 +1221,24 @@ Selects the deployment infrastructure scaffold.
   ``docker-compose.yml`` forge already emits for local dev.
 - ``docker-compose``: reserved for explicit compose-targeted tweaks; today
   identical to ``none`` since compose is always generated.
-- ``kubernetes``: emits Kubernetes-native manifests under each backend's
-  ``k8s/`` (Deployment + Service + ConfigMap), a project-level
-  HorizontalPodAutoscaler, AND a Helm chart under ``helm/`` for templated,
-  multi-environment promotion.
+- ``kubernetes``: emits a TOPOLOGY-AWARE Helm umbrella chart under
+  ``deploy/helm/`` — one Deployment/Service/HPA per backend plus the
+  frontend, an Ingress, per-backend ConfigMap/Secret, and optional
+  in-cluster datastores. The chart is rendered from the project's actual
+  topology and re-rendered on ``forge --update`` so it never goes stale.
 
-KUBERNETES manifests wire liveness/readiness probes to ``/health``, set
-resource requests/limits, and run as a non-root user. Per-environment
-values (image, replicas, namespace) live in the Helm chart's
-``values.yaml`` and resolve at ``helm install`` time; the raw ``k8s/``
-manifests use generic labels + an ``envFrom`` ConfigMap so they apply
-cleanly with ``kubectl apply -k`` / kustomize overlays.
+The chart's ``values.yaml`` is forge-owned (topology defaults, three-way
+merged on update); copy ``values-prod.yaml.example`` to ``values-prod.yaml``
+(which forge never touches) for per-environment overrides. Datastores are
+EXTERNAL by default (managed Postgres/Redis/Keycloak via values); set
+``infra.inCluster=true`` for throwaway in-cluster stand-ins. Raw manifests
+are derived on demand via ``helm template`` (see the generated Makefile),
+so ``deploy/k8s/`` can never drift from the chart.
 
-BACKENDS: python, node, rust (tier 1 — manifests are language-agnostic).
+BACKENDS: python, node, rust (tier 1 — the chart is language-agnostic).
 
 **Enables fragments:**
-- on `kubernetes` → `deploy_kubernetes`, `deploy_k8s_hpa`, `deploy_helm_chart`
+- on `kubernetes` → `deploy_helm_chart`
 
 ### `frontend.openapi_spec_url`
 
@@ -1384,10 +1386,10 @@ ENDPOINTS: none — CLI surface only.
 
 **Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** python
 
-_Scaffold a shared Python package in sdks/ for cross-backend code reuse._
+_Scaffold a shared Python package in packages/ for cross-backend code reuse._
 
 Drops a ready-to-import ``shared`` Python package at
-``<project>/sdks/shared/`` with Pydantic domain models, a utilities
+``<project>/packages/shared/`` with Pydantic domain models, a utilities
 namespace, and smoke tests. Every Python backend can reference it as
 a ``[tool.uv.sources]`` path dependency for zero-publish local
 development.
@@ -1444,9 +1446,9 @@ ENDPOINTS: /api/v1/webhooks (CRUD + /{id}/test fire)
 
 _Strict Content-Security-Policy + HSTS + X-Content-Type-Options via nginx._
 
-Drops ``infra/nginx-csp.conf`` with production-ready strict CSP (no
+Drops ``deploy/infra/nginx-csp.conf`` with production-ready strict CSP (no
 unsafe-inline, strict-dynamic, nonce-based script tags), HSTS, and
-related defence-in-depth headers. ``include infra/nginx-csp.conf;`` from
+related defence-in-depth headers. ``include deploy/infra/nginx-csp.conf;`` from
 any nginx server{} block.
 
 BACKENDS: all (project-scoped)
