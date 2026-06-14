@@ -488,12 +488,16 @@ Traefik routes `/api/api-py/...` to FastAPI and `/api/api-rs/...` to Axum, each 
 ```text forge-generated-tree
 my_platform/
 ├── forge.toml                 # forge version, template paths, enabled features
-├── docker-compose.yml         # Traefik + services + Postgres + optional Keycloak
-├── init-db.sh                 # Creates per-service + Keycloak databases
-├── services/
+├── docker-compose.yml         # Traefik + services + Postgres + optional Keycloak (local dev)
+├── Makefile                   # deploy helpers (only with deploy.target=kubernetes)
+├── services/                  # ── application code ──
 │   └── api/                   # FastAPI / Fastify / Axum app, its own Dockerfile + tests
 ├── apps/
 │   └── frontend/              # Vue / Svelte / Flutter SPA (or absent for frontend=none)
+├── deploy/                    # ── deployment & infra artifacts ──
+│   ├── helm/                  # Topology-aware Helm chart (with deploy.target=kubernetes)
+│   ├── k8s/                   # Raw manifests, derived via `make k8s-manifests`
+│   └── compose/               # init-db.sh + other compose support files
 ├── infra/                     # Only present with --include-auth
 │   ├── keycloak-realm.json    # Pre-configured realm, validated at generate-time
 │   ├── keycloak/              # Keycloak Dockerfile + themes
@@ -634,7 +638,7 @@ ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/a
 | **Considered** | `cli_commands` ports to Node + Rust | npm scripts cover much of Node's surface; clap layered on `src/bin/migrate.rs` for Rust. |
 | **Considered** | `response_cache/rust` | `moka` + tower layer once a canonical idiom emerges. |
 | **Considered** | Alternative embeddings providers | Cohere, local `sentence-transformers`; same pattern as `rag_embeddings_voyage`. |
-| **Shipped** | Kubernetes manifests | `deploy.target=kubernetes` generates k8s manifests + a Helm chart (`deploy_kubernetes` / `deploy_helm_chart` / `deploy_k8s_hpa` fragments) alongside `docker-compose.yml`. |
+| **Shipped** | Kubernetes / Helm | `deploy.target=kubernetes` generates a **topology-aware** Helm umbrella chart under `deploy/helm/` — one Deployment/Service/HPA per backend plus the frontend, an Ingress, per-backend ConfigMap/Secret, and optional in-cluster datastores (`infra.inCluster`). The chart's `values.yaml` is rendered from the project topology and **re-rendered on `forge --update`** so it never goes stale; datastores are external/managed by default. Raw manifests in `deploy/k8s/` are derived from the chart via `make k8s-manifests` (no drift). |
 | **Considered** | Template render cache | Memoise repeated `_common/` template renders across multi-backend projects to cut wall-clock on big stacks. |
 | **Shipped** | Layered component model (Vue 3) | Composable three-layer system (Layer-1 basic / Layer-2 composed / Layer-3 templates) on top of option→fragment generation. Components consume a data contract — greenfield (forge emits the backend slice) or brownfield (bind an existing OpenAPI backend via `frontend.openapi_spec_url` + a non-Turing-complete transform DSL) — and compile to project-scoped, `target_frontends`-gated fragments through the existing appliers. Seeds: `EntityList` + `StatCard` (L1), `Console` + `ChatFirst` (L3). CLI: `--component-cmd {list,scaffold}`, `--template-cmd list`. Emitted contract types gated by a real `vue-tsc` zero-error check; `forge --update` re-runs frontend codegen into `apps/<frontend>/`. See [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md). (1.2.0 unreleased) |
 | **Shipped** | Bidirectional sync — `forge --harvest` / `--verify` / `--resolve` / `--emit-pr` | Reverse-direction sync: user edits to fragment-emitted blocks round-trip back as candidate patches against the live forge tree. Three-way merge with symbolic outcomes; `.forge-merge` sidecars on conflict; interactive resolver TUI. Cross-language harvest parity emits sibling-impl suggestions for tier-1 fragments. AST-level literal detection (libcst) flags pure literal swaps as Option-promotion candidates with proposed `Option(...)` declarations. Round-trip invariants FR1 / FR2 / RF1 codified as pytest tests + matrix lane D nightly gate. Six new CLI verbs (`--harvest`, `--verify`, `--accept-harvested`, `--reapply-baseline`, `--emit-pr`, `--resolve`). (1.2.0 unreleased) |

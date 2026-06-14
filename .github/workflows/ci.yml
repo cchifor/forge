@@ -28,6 +28,29 @@ jobs:
       - name: ruff format --check
         run: uv run ruff format --check forge/
 
+  # Validity gate for the topology-aware Helm chart: generate a kubernetes
+  # project, then `helm lint` + `helm template` + `kubeconform -strict` against
+  # the rendered manifests (tests/test_deploy_helm_validation.py). helm +
+  # kubeconform are installed from pinned releases; without them the test skips.
+  deploy-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras --dev
+      - name: Install helm + kubeconform
+        run: |
+          curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar xz
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          sudo install kubeconform /usr/local/bin/kubeconform
+          helm version --short && kubeconform -v
+      - name: Validate generated Helm chart
+        run: uv run pytest tests/test_deploy_helm_validation.py -v --no-cov
+
   # Epic X (1.1.0-alpha.1) — typecheck split into forge + canary. A
   # failure in `typecheck-forge` alone is a forge typing regression. A
   # failure in `typecheck-ty-canary` alone is an upstream ty regression
