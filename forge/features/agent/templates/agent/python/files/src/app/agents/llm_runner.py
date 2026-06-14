@@ -56,11 +56,11 @@ class _RunnerConfig:
 
 def _default_model(provider: str) -> str:
     return {
-        "anthropic": "claude-sonnet-4-5",
+        "anthropic": "claude-sonnet-4-6",
         "openai": "gpt-4o-mini",
         "google": "gemini-1.5-flash",
-        "openrouter": "anthropic/claude-sonnet-4-5",
-    }.get(provider, "claude-sonnet-4-5")
+        "openrouter": "anthropic/claude-sonnet-4-6",
+    }.get(provider, "claude-sonnet-4-6")
 
 
 _agent_singleton: Any | None = None

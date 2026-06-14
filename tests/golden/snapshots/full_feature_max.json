@@ -265,8 +265,8 @@
       "sha256": "ab07a4bcb9c0e3ed"
     },
     "apps/frontend/src/features/ai_chat/constants.ts": {
-      "size": 1076,
-      "sha256": "793bd4c4061e467f"
+      "size": 1071,
+      "sha256": "303448466fe64cba"
     },
     "apps/frontend/src/features/ai_chat/events.gen.ts": {
       "size": 4093,
@@ -1818,7 +1818,7 @@
     },
     "services/api/src/app/agents/llm_runner.py": {
       "size": 15775,
-      "sha256": "15215cd744853299"
+      "sha256": "1c834b81adf6dd26"
     },
     "services/api/src/app/agents/runner.py": {
       "size": 1444,

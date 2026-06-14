@@ -261,8 +261,8 @@
       "sha256": "ab07a4bcb9c0e3ed"
     },
     "apps/frontend/src/features/ai_chat/constants.ts": {
-      "size": 1076,
-      "sha256": "793bd4c4061e467f"
+      "size": 1071,
+      "sha256": "303448466fe64cba"
     },
     "apps/frontend/src/features/ai_chat/events.gen.ts": {
       "size": 4093,
