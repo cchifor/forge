@@ -14,6 +14,7 @@ caller can surface those rewrites in the JSON envelope under
 from __future__ import annotations
 
 import argparse
+import difflib
 from typing import Any, cast
 
 from forge.config import (
@@ -27,6 +28,53 @@ from forge.config import (
 )
 from forge.options import OPTION_REGISTRY, OptionType
 from forge.reports import HiddenMutation
+
+# Every top-level key forge recognizes in a ``--config`` file. A user file
+# with any *other* top-level key is almost always a typo (``fronend:`` →
+# ``frontend:``): silently dropping it produced a confidently-wrong project
+# (e.g. one with no frontend) and a 0 exit code, so the mistake only surfaced
+# much later. ``_build_config`` rejects unknown keys with a close-match hint.
+# Keep in sync with the top-level keys read in this module (+ the dict
+# ``_apply_platform_preset`` deep-merges, which only adds these same keys).
+_KNOWN_TOP_LEVEL_CONFIG_KEYS: frozenset[str] = frozenset(
+    {
+        "project_name",
+        "description",
+        "output_dir",
+        "backend",  # single-backend shorthand (back-compat with `backends:`)
+        "backends",  # multi-backend list
+        "frontend",
+        "include_keycloak",
+        "keycloak",
+        "options",
+        "components",
+        "platform_template",
+    }
+)
+
+
+def _reject_unknown_top_level_keys(cfg: dict[str, Any]) -> None:
+    """Fail fast on an unrecognized top-level ``--config`` key.
+
+    A typo like ``fronend:`` would otherwise be silently ignored and the
+    project generated without that section — a confidently-wrong result the
+    user only discovers after the fact. Surface it at parse time with the
+    closest valid key so the fix is obvious.
+    """
+    if not isinstance(cfg, dict):
+        return
+    unknown = [k for k in cfg if k not in _KNOWN_TOP_LEVEL_CONFIG_KEYS]
+    if not unknown:
+        return
+    valid = ", ".join(sorted(_KNOWN_TOP_LEVEL_CONFIG_KEYS))
+    parts: list[str] = []
+    for key in unknown:
+        close = difflib.get_close_matches(key, _KNOWN_TOP_LEVEL_CONFIG_KEYS, n=1)
+        parts.append(f"{key!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+    raise ValueError(
+        f"Unknown config key{'s' if len(unknown) > 1 else ''}: {', '.join(parts)}. "
+        f"Valid top-level keys: {valid}."
+    )
 
 
 class _Resolver:
@@ -362,6 +410,11 @@ def _build_config(
     the JSON envelope. ``None`` (the default) preserves the pre-#5
     behaviour where rewrites were silent.
     """
+    # Reject typo'd top-level keys in the *user* config before the trusted
+    # platform preset is merged in — a silently-dropped ``fronend:`` used to
+    # generate a frontend-less project with a 0 exit code.
+    _reject_unknown_top_level_keys(cfg)
+
     # Platform preset (Phase 4) — apply BEFORE anything else so it sits as the
     # lowest-priority layer: the preset's config dict is deep-merged UNDER the
     # user cfg, so every user CLI flag and config-file value still wins. With no
