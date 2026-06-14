@@ -10,6 +10,15 @@ on:
   schedule:
     - cron: "0 5 * * *"  # 05:00 UTC daily
   workflow_dispatch:
+    inputs:
+      pytest_filter:
+        description: >-
+          Optional pytest -k expression for an on-demand run of the unfiltered
+          nightly job (e.g. a single flagship test to confirm a fix). Injected
+          via PYTEST_ADDOPTS so the run command stays literally unfiltered;
+          leave blank to run the whole suite.
+        required: false
+        default: ""
   pull_request:
     paths:
       - "forge/templates/**"
@@ -154,7 +163,11 @@ jobs:
   # guards that this job stays unfiltered.
   e2e-nightly-full:
     name: full e2e suite (unfiltered, nightly)
-    if: github.event_name == 'schedule'
+    # Scheduled nightly + on-demand (workflow_dispatch) so a maintainer can
+    # confirm a flagship fix without waiting up to 24h for the next cron — the
+    # platform compose-boot tests live ONLY in this job, so they were otherwise
+    # un-reproducible on demand. Stays off the PR path (still expensive).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     needs: e2e-core
@@ -183,9 +196,13 @@ jobs:
         run: uv sync --all-groups
       - name: Run the full e2e suite (unfiltered)
         # Opt env-gated suites IN so they exercise rather than skip (the
-        # platform drop-in suite gates on FORGE_E2E_PLATFORM).
+        # platform drop-in suite gates on FORGE_E2E_PLATFORM). On a manual
+        # dispatch with `pytest_filter`, PYTEST_ADDOPTS narrows the selection
+        # (the run line below stays literally unfiltered so the
+        # test_e2e_coverage guard keeps the scheduled nightly honest).
         env:
           FORGE_E2E_PLATFORM: "1"
+          PYTEST_ADDOPTS: ${{ inputs.pytest_filter != '' && format('-k {0}', inputs.pytest_filter) || '' }}
         run: uv run pytest -m e2e -v -rs --no-cov
 
   e2e-canvas-packages:
