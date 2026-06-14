@@ -5,6 +5,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Deployment
+
+- **Topology-aware Helm chart that stays current on `forge --update`.**
+  `deploy.target=kubernetes` now emits a single Helm umbrella chart under
+  `deploy/helm/` (replacing the old static single-service chart + the
+  `deploy_kubernetes`/`deploy_k8s_hpa` raw-manifest fragments). The chart's
+  `values.yaml` is rendered from the project's deployment topology — one
+  `workloads` entry per backend (correct language/port/migrations) plus the
+  frontend and platform-service toggles — so it produces one Deployment /
+  Service / HPA per backend, a frontend Deployment, an Ingress (replacing the
+  dev-only Traefik), and per-backend ConfigMap + Secret. The chart bodies are
+  pure Go-templates that `range` over `.Values.workloads`, so multi-backend
+  works without per-service template duplication. Datastores are external by
+  default (managed Postgres/Redis/Keycloak via `externalServices`); set
+  `infra.inCluster=true` for throwaway in-cluster stand-ins. DB migrations run
+  as `pre-install`/`pre-upgrade` Helm hook Jobs; S2S/DB secrets are `CHANGEME`
+  placeholders (never baked). Validated by `helm lint` + `helm template` +
+  `kubeconform -strict` in a new `deploy-helm` CI job.
+- **Keep-current plumbing.** The chart is a project-scope fragment, so it rides
+  the existing `apply_project_features` → three-way-merge → provenance rail: it
+  is re-rendered from the live topology on `forge --update` and user edits to
+  the forge-owned `values.yaml` are preserved (or surfaced as a `.forge-merge`
+  sidecar). `forge.config._topology.compute_topology` is the single source of
+  truth shared with `docker-compose.yml` (so the two can't drift); the updater
+  now recovers each backend's `server_port` from `.copier-answers.yml` so the
+  re-rendered chart keeps the right container ports.
+- **`deploy/` boundary.** Generated projects now separate application code
+  (`services/`, `apps/`) from deployment artifacts under `deploy/`
+  (`helm/`, `k8s/`, `compose/`). `init-db.sh` moved to `deploy/compose/`; a root
+  `Makefile` wraps the deploy commands and derives `deploy/k8s/` raw manifests
+  from the chart via `helm template` (so they can't drift).
+
 ### Distribution
 
 - **GitHub-only distribution — no package registries.** forge is no longer
