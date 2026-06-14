@@ -229,13 +229,13 @@ services:
   # by the ``platform_auth_gatekeeper`` + ``platform_auth_gatekeeper_keygen``
   # fragments via declarative compose.yaml entries (registered through
   # ``forge.services.fragment_compose``). The fragments build the
-  # service block from the same ``./infra/gatekeeper/`` source tree that
+  # service block from the same ``./deploy/infra/gatekeeper/`` source tree that
   # used to be hand-rolled here.
 
   # ── Identity Provider ──
   keycloak:
     build:
-      context: ./infra/keycloak
+      context: ./deploy/infra/keycloak
       dockerfile: Dockerfile
     command: start-dev --import-realm
     ports:
@@ -250,7 +250,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./infra/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./deploy/infra/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy

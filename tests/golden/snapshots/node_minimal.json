@@ -24,24 +24,24 @@
       "size": 1912,
       "sha256": "ae83d48b4638adaf"
     },
+    "deploy/infra/nginx-csp.conf": {
+      "size": 1661,
+      "sha256": "22237aeddb41cfae"
+    },
     "docker-compose.yml": {
       "size": 5688,
       "sha256": "f6de4ae5f8fd44d1"
     },
     "forge.toml": {
-      "size": 23061,
+      "size": 23068,
       "sha256": "<version-dependent>"
-    },
-    "infra/nginx-csp.conf": {
-      "size": 1654,
-      "sha256": "045bea9db1cb85bd"
     },
     "package.json": {
       "size": 490,
       "sha256": "00c3328620ea0718"
     },
     "services/api/.copier-answers.yml": {
-      "size": 508,
+      "size": 527,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {

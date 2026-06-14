@@ -2,7 +2,7 @@
 """Keycloak realm User-Profile schema sync (one-shot sidecar).
 
 Keycloak's ``--import-realm`` only imports the realm on *first* boot against an
-empty database. Edits to ``infra/keycloak-realm.json`` after that never reach a
+empty database. Edits to ``deploy/infra/keycloak-realm.json`` after that never reach a
 running Keycloak whose pgdata already holds the old realm. The most
 consequential casualty is the User-Profile schema: a realm imported before the
 ``tenant_id`` attribute existed has ``unmanagedAttributePolicy=DISABLED``, so

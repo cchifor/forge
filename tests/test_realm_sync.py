@@ -17,7 +17,7 @@ import pytest
 _SCRIPT = (
     Path(__file__).resolve().parent.parent
     / "forge/features/auth/templates/platform_auth_gatekeeper/all/files"
-    / "infra/gatekeeper/scripts/realm_sync.py"
+    / "deploy/infra/gatekeeper/scripts/realm_sync.py"
 )
 
 
@@ -104,7 +104,9 @@ class TestSync:
             if req.method == "PUT":
                 return httpx.Response(204)
             # GET reads back WITHOUT tenant_id — silent-drop the sync must catch.
-            return httpx.Response(200, json={"attributes": [], "unmanagedAttributePolicy": "ADMIN_EDIT"})
+            return httpx.Response(
+                200, json={"attributes": [], "unmanagedAttributePolicy": "ADMIN_EDIT"}
+            )
 
         with pytest.raises(rs.RealmSyncError):
             asyncio.run(

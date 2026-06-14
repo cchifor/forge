@@ -195,9 +195,7 @@ class TestFrontendOnlyUpdateNegative:
         with pytest.raises(ProvenanceError, match="Nothing to update"):
             update_project(root, quiet=True)
 
-    def test_explicit_framework_none_treated_as_no_frontend(
-        self, tmp_path: Path
-    ) -> None:
+    def test_explicit_framework_none_treated_as_no_frontend(self, tmp_path: Path) -> None:
         """A v4 manifest with ``[forge.frontend] framework = "none"``
         must be treated as "no frontend layer" — not as a synth-bridge
         trigger. Pinned because the bridge would otherwise pull in
@@ -219,9 +217,7 @@ class TestFrontendOnlyUpdateNegative:
         with pytest.raises(ProvenanceError, match="Nothing to update"):
             update_project(root, quiet=True)
 
-    def test_malformed_v3_manifest_falls_back_to_empty_frontend(
-        self, tmp_path: Path
-    ) -> None:
+    def test_malformed_v3_manifest_falls_back_to_empty_frontend(self, tmp_path: Path) -> None:
         """A hand-rolled v3 with no apps/ scan target loads with empty frontend.
 
         Negative regression: the inference fallback never raises on a
@@ -254,9 +250,7 @@ class TestFrontendOnlyUpdateNegative:
         # JSON parse fails, framework collapses to "".
         garbage = root / "apps" / "frontend"
         garbage.mkdir(parents=True)
-        (garbage / "package.json").write_text(
-            "// not json at all\n", encoding="utf-8"
-        )
+        (garbage / "package.json").write_text("// not json at all\n", encoding="utf-8")
 
         data = read_forge_toml(root / "forge.toml")
         # Inference found apps/frontend/ but the parse failed; framework empty.
@@ -289,9 +283,7 @@ class TestFrontendFrameworkFromManifest:
         assert _frontend_framework_from_manifest(fe) == FrontendFramework.FLUTTER
 
     def test_empty_record_collapses_to_none(self) -> None:
-        assert _frontend_framework_from_manifest(ForgeFrontendData()) == (
-            FrontendFramework.NONE
-        )
+        assert _frontend_framework_from_manifest(ForgeFrontendData()) == (FrontendFramework.NONE)
 
     def test_unknown_plugin_framework_collapses_to_none(self) -> None:
         """Plugin-registered frameworks we don't know about are treated as NONE.
@@ -355,9 +347,7 @@ class TestResolverBridgeForFrontendOnly:
         assert "_frontend_only" not in summary["backends"]
         assert summary["backends"] == []
 
-    def test_manifest_restamp_does_not_leak_synth_backend(
-        self, tmp_path: Path
-    ) -> None:
+    def test_manifest_restamp_does_not_leak_synth_backend(self, tmp_path: Path) -> None:
         """The re-stamped ``forge.toml`` must not record the synth
         backend's language (Python) in ``[forge.templates]``.
 
@@ -373,9 +363,7 @@ class TestResolverBridgeForFrontendOnly:
         assert "vue" in data.templates
         assert "python" not in data.templates
 
-    def test_synth_bridge_narrows_to_frontend_targeted_only(
-        self, tmp_path: Path
-    ) -> None:
+    def test_synth_bridge_narrows_to_frontend_targeted_only(self, tmp_path: Path) -> None:
         """Synth-bridge narrowing: when the only "backend" in play is
         the placeholder, project-scope fragments without
         ``target_frontends`` (e.g. ``platform_auth_sdk_python``,
@@ -409,14 +397,11 @@ class TestResolverBridgeForFrontendOnly:
             "synth bridge must NOT emit platform_auth_sdk_python files "
             "into a frontend-only project (no Python backend to host them)"
         )
-        assert not (root / "infra" / "gatekeeper").exists(), (
-            "synth bridge must NOT emit platform_auth_gatekeeper files "
-            "into a frontend-only project"
+        assert not (root / "deploy" / "infra" / "gatekeeper").exists(), (
+            "synth bridge must NOT emit platform_auth_gatekeeper files into a frontend-only project"
         )
 
-    def test_synth_bridge_pulls_in_frontend_targeted_fragments(
-        self, tmp_path: Path
-    ) -> None:
+    def test_synth_bridge_pulls_in_frontend_targeted_fragments(self, tmp_path: Path) -> None:
         """Direct check at the resolver layer: with the synth backend,
         ``auth.mode=generate`` pulls every per-frontend session-timeout
         fragment into the plan. Without the bridge, the plan would be
@@ -479,9 +464,7 @@ class TestPluginFrontendOnlyUpdate:
     ``FrontendFramework.NONE`` for the unknown name.
     """
 
-    def test_plugin_frontend_only_update_does_not_raise(
-        self, tmp_path: Path
-    ) -> None:
+    def test_plugin_frontend_only_update_does_not_raise(self, tmp_path: Path) -> None:
         # Write a manifest claiming a plugin framework "solid". No
         # apps/frontend/ on disk (the test scenario is "manifest has
         # the framework, project layout is whatever the plugin uses").
@@ -494,9 +477,7 @@ class TestPluginFrontendOnlyUpdate:
             templates={},
             options={"backend.mode": "none"},
             option_origins={"backend.mode": "user"},
-            frontend=ForgeFrontendData(
-                framework="solid", app_dir="apps/solid-frontend"
-            ),
+            frontend=ForgeFrontendData(framework="solid", app_dir="apps/solid-frontend"),
         )
         # Update should not raise "Nothing to update" — the manifest
         # records a frontend layer (plugin), even if we can't dispatch

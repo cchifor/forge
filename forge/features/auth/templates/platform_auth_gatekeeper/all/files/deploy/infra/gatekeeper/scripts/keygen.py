@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# infra/gatekeeper/scripts/keygen.py
+# deploy/infra/gatekeeper/scripts/keygen.py
 """Idempotent ECDSA P-256 signing-key generator for the gatekeeper KeyRing.
 
 Used as the ``gatekeeper-keygen`` one-shot service in docker-compose.yml.
@@ -8,7 +8,7 @@ deployments should use ``KEY_BACKEND=kms`` instead of this script.
 
 Run ad-hoc:
 
-    uv run python infra/gatekeeper/scripts/keygen.py /path/to/secrets
+    uv run python deploy/infra/gatekeeper/scripts/keygen.py /path/to/secrets
 
 Or via the container:
 

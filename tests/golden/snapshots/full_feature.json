@@ -1080,17 +1080,17 @@
       "size": 2335,
       "sha256": "ae230a441cacd3bd"
     },
+    "deploy/infra/nginx-csp.conf": {
+      "size": 1661,
+      "sha256": "22237aeddb41cfae"
+    },
     "docker-compose.yml": {
       "size": 6508,
       "sha256": "8c3607aac24cd2fd"
     },
     "forge.toml": {
-      "size": 115220,
+      "size": 115227,
       "sha256": "<version-dependent>"
-    },
-    "infra/nginx-csp.conf": {
-      "size": 1654,
-      "sha256": "045bea9db1cb85bd"
     },
     "package.json": {
       "size": 490,

@@ -386,7 +386,7 @@ def render_keycloak_realm(
             raise GeneratorError(
                 f"Rendered Keycloak realm JSON is missing required top-level key '{required}'."
             )
-    infra_dir = project_root / "infra"
+    infra_dir = project_root / "deploy" / "infra"
     infra_dir.mkdir(parents=True, exist_ok=True)
     realm_path = infra_dir / "keycloak-realm.json"
     realm_path.write_text(output, encoding="utf-8")
@@ -527,7 +527,9 @@ def render_service_registry(
     )
     output = f"{header}\n{body}"
 
-    registry_path = project_root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    registry_path = (
+        project_root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    )
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text(output, encoding="utf-8")
     return registry_path

@@ -53,7 +53,7 @@ def register_all(api: ForgeAPI) -> None:
     # Project-scoped, language-agnostic ("all"): Gatekeeper is a self-contained
     # Python FastAPI container that runs regardless of which backend languages
     # the project picked. Every project that opts into ``auth.mode=generate``
-    # gets the same Gatekeeper image. Lands at ``<project>/infra/gatekeeper/``.
+    # gets the same Gatekeeper image. Lands at ``<project>/deploy/infra/gatekeeper/``.
     #
     # What ships (verbatim port from ``platform/infra/gatekeeper/``):
     #   - 25 modules under ``src/app/gatekeeper/`` (ES256 token minting,
@@ -418,7 +418,7 @@ def register_all(api: ForgeAPI) -> None:
     )
 
     # keycloak-realm-sync one-shot sidecar. Reconciles the running realm's
-    # User-Profile schema from infra/keycloak-realm.json on every boot (Keycloak
+    # User-Profile schema from deploy/infra/keycloak-realm.json on every boot (Keycloak
     # only imports once), so the gatekeeper's realm-invariant probe finds the
     # schema present instead of crash-looping on stale pgdata. Reuses the
     # gatekeeper image (realm_sync.py ships in the gatekeeper fragment tree).

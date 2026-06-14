@@ -1,7 +1,7 @@
 """Boot-time realm invariant probes.
 
 A recurring auth-chain failure is that the running Keycloak's User-Profile
-schema can silently drift from ``infra/keycloak-realm.json``. When it does,
+schema can silently drift from ``deploy/infra/keycloak-realm.json``. When it does,
 gatekeeper's ``/callback`` ``set_user_attribute('tenant_id', ...)`` raises only
 on the *first* self-registration — every prior boot looked fine.
 
@@ -115,7 +115,7 @@ async def verify_user_profile_active(
                 "self-registration. Most likely the keycloak-realm-sync sidecar "
                 "did not run, or pgdata holds a stale schema. Add the attribute "
                 "under components['org.keycloak.userprofile.UserProfileProvider'][0]"
-                ".config['kc.user.profile.config'] in infra/keycloak-realm.json, "
+                ".config['kc.user.profile.config'] in deploy/infra/keycloak-realm.json, "
                 "or apply directly to a running realm via "
                 "PUT /admin/realms/{realm}/users/profile (which is exactly what "
                 "the keycloak-realm-sync sidecar does)."

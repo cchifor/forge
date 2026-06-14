@@ -692,13 +692,13 @@ def _render_docker_stack(
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
             gatekeeper_src = TEMPLATES_DIR / "infra" / "gatekeeper"
-            gatekeeper_dst = project_root / "infra" / "gatekeeper"
+            gatekeeper_dst = project_root / "deploy" / "infra" / "gatekeeper"
             if gatekeeper_src.exists():
                 shutil.copytree(str(gatekeeper_src), str(gatekeeper_dst), dirs_exist_ok=True)
             # Copy keycloak (Dockerfile + themes)
             _log("  Copying keycloak ...")
             keycloak_src = TEMPLATES_DIR / "infra" / "keycloak"
-            keycloak_dst = project_root / "infra" / "keycloak"
+            keycloak_dst = project_root / "deploy" / "infra" / "keycloak"
             if keycloak_src.exists():
                 shutil.copytree(str(keycloak_src), str(keycloak_dst), dirs_exist_ok=True)
             # Copy validate.sh (LF line endings for Linux containers)
