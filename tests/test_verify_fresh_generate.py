@@ -35,7 +35,7 @@ def test_fresh_generate_verify_is_clean(lang, opts, tmp_path):
     )
     root = Path(generate(cfg, quiet=True))
     res = verify_project(root, scope="all", fail_on="drift")
-    drifted = [r.path for r in res.records if r.status == "user-modified"]
+    drifted = [r.rel_path for r in res.records if r.status == "user-modified"]
     assert res.worst == "clean", f"fresh-generate verify not clean; drift on {drifted[:8]}"
 
 
@@ -50,5 +50,27 @@ def test_manifests_recorded_after_appliers(tmp_path):
     )
     root = Path(generate(cfg, quiet=True))
     res = verify_project(root, scope="all", fail_on="drift")
-    drifted = {r.path.rsplit("/", 1)[-1] for r in res.records if r.status == "user-modified"}
+    drifted = {r.rel_path.rsplit("/", 1)[-1] for r in res.records if r.status == "user-modified"}
     assert not (drifted & {"pyproject.toml", ".env.example"}), f"manifest drift: {drifted}"
+
+
+def test_verify_drift_surfaces_rel_path(tmp_path):
+    # The drift diagnostic only evaluates ``r.rel_path`` for user-modified
+    # records, so a clean fresh-generate never exercises it — a typo'd
+    # attribute (the original ``r.path``) hid behind the happy path and would
+    # only ``AttributeError`` once a real day-0 regression appeared. Force the
+    # drift branch so the diagnostic stays exercised.
+    cfg = ProjectConfig(
+        project_name="vdrift",
+        output_dir=str(tmp_path),
+        backends=[BackendConfig(name="api", project_name="vdrift", language=BackendLanguage.PYTHON, features=["items"])],
+    )
+    root = Path(generate(cfg, quiet=True))
+    clean = verify_project(root, scope="all", fail_on="drift")
+    assert clean.worst == "clean"
+    victim = next(r for r in clean.records if r.rel_path.endswith(".py"))
+    fpath = root / victim.rel_path
+    fpath.write_text(fpath.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+    res = verify_project(root, scope="all", fail_on="drift")
+    drifted = [r.rel_path for r in res.records if r.status == "user-modified"]
+    assert victim.rel_path in drifted, f"expected {victim.rel_path} in drift list {drifted[:8]}"
