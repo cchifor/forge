@@ -305,8 +305,8 @@
       "sha256": "c6f22e0b2fbb0465"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChat.vue": {
-      "size": 14978,
-      "sha256": "14cfd701dd725469"
+      "size": 14973,
+      "sha256": "0f941bc8bfb4fd5e"
     },
     "apps/frontend/src/features/ai_chat/ui/AiChatButton.vue": {
       "size": 1084,

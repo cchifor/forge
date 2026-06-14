@@ -27,7 +27,7 @@ import UserPromptCard from './UserPromptCard.vue'
 const MODEL_OPTIONS = [
   { value: 'openai:gpt-4.1', label: 'GPT-4.1' },
   { value: 'openai:gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-  { value: 'anthropic:claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  { value: 'anthropic:claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
 ]
 
 const route = useRoute()
