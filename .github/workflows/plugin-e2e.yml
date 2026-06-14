@@ -28,6 +28,10 @@ on:
       - "forge/variable_mapper.py"
       - "forge/docker_manager.py"
       - "forge/backend_app_templates.py"
+      # The updater resolves plugin backends/frontends during `forge --update`
+      # (test_plugin_e2e.py exercises that cycle); without this, a PR that only
+      # touches updater logic would skip the plugin-e2e gate.
+      - "forge/sync/forge_to_project/updater/**"
       - "forge/cli/**"
       - "examples/forge-plugin-example/**"
       - "examples/forge-go-backend/**"
