@@ -23,6 +23,17 @@ forge
 
 Answer the prompts. Pick a backend (Python, Node, or Rust), a frontend (Vue, Svelte, Flutter, or none), a project name, and off you go. forge writes the project under the current directory and optionally runs `docker compose up`.
 
+## Stand up a whole platform (`--platform`)
+
+To scaffold a multi-service *system* instead of a single backend, pick a platform preset:
+
+```bash
+forge --platform microservices --project-name shop   # gateway + services + auth + event bus
+forge --platform multitenant-saas --project-name app # tenant control plane + RLS-isolated app
+```
+
+Each preset assembles several services behind a shared Keycloak + Gatekeeper auth stack, with service-to-service trust (and per-tenant Postgres RLS for `multitenant-saas`). A preset is just the lowest-priority config layer, so your CLI flags and `--config` still win. See the [platform generator guide](platform-generator-guide.md) for the preset comparison, how S2S auth and multitenancy work, and **the dev-posture credentials you must rotate before deploying.**
+
 ## Drop a new service into the platform monorepo
 
 Since 1.2.0-alpha.1, the Python service template is wired to drop straight into `platform/services/`. The generated service consumes the platform's [10 weld-* SDKs](https://github.com/your-org/platform/blob/main/sdks/README.md) via monorepo path deps and inherits the same Dockerfile, docker-compose fragment, and Traefik routing conventions as every existing platform service.

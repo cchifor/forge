@@ -72,6 +72,8 @@ flowchart LR
     Project ==>|docker compose up| Proj
 ```
 
+Generate a whole multi-service **system** in one command with the platform presets — `forge --platform {monolithic,microservices,headless-api,multitenant-saas}` assembles several services behind a shared auth/gateway stack (with S2S trust and, for the SaaS preset, per-tenant RLS isolation). See [`docs/platform-generator-guide.md`](docs/platform-generator-guide.md).
+
 See [`docs/architecture.md`](docs/architecture.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/plugin-development.md`](docs/plugin-development.md)). The layered component model ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)) resolves selected components into the same fragment plan, so component outputs flow through this exact resolver → injector → codegen path rather than a parallel pipeline.
 
 ---
