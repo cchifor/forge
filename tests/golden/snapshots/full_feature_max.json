@@ -45,8 +45,8 @@
       "sha256": "3ee819008690beca"
     },
     "apps/frontend/Dockerfile": {
-      "size": 351,
-      "sha256": "79338cd1159182d7"
+      "size": 561,
+      "sha256": "601806cd08a11e8c"
     },
     "apps/frontend/components.json": {
       "size": 430,
@@ -1089,8 +1089,8 @@
       "sha256": "da27485bdd9e4e50"
     },
     "docker-compose.yml": {
-      "size": 11706,
-      "sha256": "f3db3a5abab9e6f3"
+      "size": 11929,
+      "sha256": "6356b126eed37440"
     },
     "forge.toml": {
       "size": 154376,

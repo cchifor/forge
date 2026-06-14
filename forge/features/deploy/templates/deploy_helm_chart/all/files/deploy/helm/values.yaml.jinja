@@ -89,6 +89,11 @@ frontend:
     pullPolicy: IfNotPresent
   replicaCount: 2
   port: 80
+  # nginx config served by the frontend pod (mounted as a ConfigMap, not baked
+  # into the image). Empty = a sane SPA fallback (try_files -> index.html); the
+  # Ingress handles /api routing, so the pod doesn't proxy backends. Override
+  # with your own server block if needed.
+  nginxConf: ""
   resources:
     requests:
       cpu: 50m

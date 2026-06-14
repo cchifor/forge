@@ -34,6 +34,9 @@ RUN {{ package_manager }} run build
 FROM nginx:alpine
 
 COPY --from=builder /app/{{ build_dir }} /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# nginx.conf is NOT baked into the image — it is supplied at runtime: a
+# bind-mount in docker-compose, a ConfigMap in the Helm chart. This keeps the
+# routing config a deployment concern (overridable per environment) rather than
+# a build-time constant.
 
 EXPOSE 80

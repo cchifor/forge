@@ -41,8 +41,8 @@
       "sha256": "3ee819008690beca"
     },
     "apps/frontend/Dockerfile": {
-      "size": 351,
-      "sha256": "79338cd1159182d7"
+      "size": 561,
+      "sha256": "601806cd08a11e8c"
     },
     "apps/frontend/components.json": {
       "size": 430,
@@ -1081,8 +1081,8 @@
       "sha256": "ae230a441cacd3bd"
     },
     "docker-compose.yml": {
-      "size": 6285,
-      "sha256": "e0612ba2193804a7"
+      "size": 6508,
+      "sha256": "8c3607aac24cd2fd"
     },
     "forge.toml": {
       "size": 115220,
@@ -1097,7 +1097,7 @@
       "sha256": "ad4b41688ef6d746"
     },
     "services/api/.copier-answers.yml": {
-      "size": 514,
+      "size": 533,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
