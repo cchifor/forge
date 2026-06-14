@@ -73,6 +73,11 @@ services:
     environment:
 {% if be.language == "python" %}
       ENV: development
+      # The pydantic config reads ``APP__SERVER__PORT`` (RFC-008 ``APP__``
+      # prefix). Without it the listener binds the schema default (5000), so on
+      # a non-default port the ``{{ be.port }}:{{ be.port }}`` host map and the
+      # Dockerfile healthcheck (both on {{ be.port }}) would hit a closed port.
+      APP__SERVER__PORT: "{{ be.port }}"
 {% if database_mode != "none" %}
       APP__DB__URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/{{ be.db_name }}"
 {% endif %}
@@ -123,7 +128,7 @@ services:
       - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite"
 {% endif %}
       - "traefik.http.services.{{ be.name }}.loadbalancer.server.port={{ be.port }}"
-{% if (database_mode != "none" and be.has_migrations) or include_keycloak %}
+{% if (database_mode != "none" and be.has_migrations) or include_keycloak or be.depends_on_services %}
     depends_on:
 {% if database_mode != "none" and be.has_migrations %}
       {{ be.name }}-migrate:
@@ -133,6 +138,10 @@ services:
       keycloak:
         condition: service_healthy
 {% endif %}
+{% for svc in be.depends_on_services %}
+      {{ svc }}:
+        condition: service_healthy
+{% endfor %}
 {% endif %}
     networks:
       - app-network

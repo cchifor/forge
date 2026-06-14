@@ -20,3 +20,6 @@ template_dir = "services/python/tenant-management-service"
 base = "services/python-service-template"
 display_label = "Python — Tenant Management Service"
 supported = true
+# The TMS outbox relay opens a Redis connection at startup (lifecycle.py),
+# so the service must wait for Redis to be healthy or it crash-loops on boot.
+requires_services = ["redis"]
