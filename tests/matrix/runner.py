@@ -805,6 +805,7 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
     from forge.sync.project_to_forge import (  # noqa: PLC0415
         apply_bundle_to_fragments,
         harvest_project,
+        verify_project,
     )
 
     start = perf_counter()
@@ -841,6 +842,28 @@ def run_lane_roundtrip(scenario: Scenario) -> LaneResult:
                     f"FR1 violation: fresh-generate produced "
                     f"{len(fr1_offenders)} block/files candidate(s); "
                     f"first: {fr1_offenders[0].fragment}/{fr1_offenders[0].rel_path}"
+                ),
+            )
+
+        # Day-0 verify must be clean too: a virgin project that fails
+        # ``forge --verify`` (exit 10) is the P3.6.1 regression — the deps/env
+        # appliers mutate manifests after provenance stamps them, and
+        # generate() now re-records them. The 3-language unit test
+        # (tests/test_verify_fresh_generate.py) locks this for one config each;
+        # asserting it here locks it across the whole scenario grid so a future
+        # applier that forgets to re-record can't ship green. verify_project is
+        # read-only — no restore step, safe alongside the apply-back below.
+        vres = verify_project(Path(project_a), scope="all", fail_on="drift")
+        if vres.worst != "clean":
+            drifted = [r.rel_path for r in vres.records if r.status != "unchanged"]
+            return LaneResult(
+                scenario=scenario.name,
+                lane="roundtrip",
+                status="fail",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details=(
+                    f"day-0 `forge --verify` not clean ({vres.worst}); "
+                    f"drift on {drifted[:8]}"
                 ),
             )
 
