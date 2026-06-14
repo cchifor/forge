@@ -144,9 +144,7 @@ def render_compose(
             bc.language, bc.app_template or DEFAULT_BACKEND_TEMPLATE
         )
         depends_on_services = [
-            svc
-            for svc in (app_tmpl.requires_services if app_tmpl else ())
-            if svc in rendered_infra
+            svc for svc in (app_tmpl.requires_services if app_tmpl else ()) if svc in rendered_infra
         ]
         backends_ctx.append(
             {
