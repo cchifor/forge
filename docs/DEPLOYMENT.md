@@ -152,7 +152,11 @@ supply your own) until a later release moves that tooling under `deploy/`.
 
 Each backend that ships migrations gets a `Job` annotated as a
 `pre-install,pre-upgrade` Helm hook, so the schema is current before the
-Deployment rolls. A failed migration blocks the release (intended).
+Deployment rolls. A failed migration blocks the release (intended). All migrate
+Jobs share one hook weight and therefore run **in parallel** — safe because each
+backend owns its own database (so migrations never collide). If you point
+multiple backends at a single shared database, give those Jobs distinct
+ascending `helm.sh/hook-weight`s so Helm serialises them.
 
 ### Ingress
 

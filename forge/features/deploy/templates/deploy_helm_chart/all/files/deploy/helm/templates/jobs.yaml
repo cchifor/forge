@@ -2,6 +2,13 @@
        pre-install/pre-upgrade Helm hook so the schema is current before the
        Deployment rolls. A failed migration blocks the release (intended).
 
+       PARALLELISM: every migrate Job uses the same hook-weight (-5), so Helm
+       runs them concurrently. That is safe because each backend owns its own
+       database (db_name = the backend's name), and migrations never touch
+       another backend's schema. If you ever introduce a SHARED database that
+       multiple backends migrate, give those Jobs distinct ascending
+       hook-weights so Helm serialises them.
+
        The keygen / realm-sync init Jobs the compose stack runs for the auth
        gatekeeper are NOT emitted here yet: they depend on the gatekeeper image
        + scripts that live under infra/ (a later wave moves that into deploy/).
