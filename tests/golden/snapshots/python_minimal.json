@@ -25,8 +25,8 @@
       "sha256": "ae83d48b4638adaf"
     },
     "docker-compose.yml": {
-      "size": 5055,
-      "sha256": "f927755a02f8049b"
+      "size": 5375,
+      "sha256": "c89be2adec7a69d5"
     },
     "forge.toml": {
       "size": 46726,
