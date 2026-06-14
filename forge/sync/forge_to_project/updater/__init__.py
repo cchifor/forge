@@ -883,6 +883,8 @@ def _infer_backends(
     for backend_dir in sorted(services.iterdir()):
         if not backend_dir.is_dir():
             continue
+        recovered_port = _recovered_server_port(backend_dir)
+        port_kw = {"server_port": recovered_port} if recovered_port is not None else {}
         matched = False
         for marker, lang in markers.items():
             if (backend_dir / marker).is_file():
@@ -891,6 +893,7 @@ def _infer_backends(
                         name=backend_dir.name,
                         project_name=project_root.name,
                         language=lang,
+                        **port_kw,
                     )
                 )
                 matched = True
@@ -908,6 +911,7 @@ def _infer_backends(
                     name=backend_dir.name,
                     project_name=project_root.name,
                     language=cast("BackendLanguage", plugin_lang),
+                    **port_kw,
                 )
             )
         elif src_path is not None:
@@ -925,13 +929,8 @@ def _infer_backends(
     return out
 
 
-def _copier_src_path(backend_dir: Path) -> str | None:
-    """Return the ``_src_path`` recorded in a service's ``.copier-answers.yml``.
-
-    Its presence is the signal that ``backend_dir`` is a forge-rendered service
-    (vs. an unrelated ``services/<name>`` directory). ``None`` when there's no
-    answers file, it's unreadable, or it carries no ``_src_path``.
-    """
+def _copier_answers(backend_dir: Path) -> dict | None:
+    """Parse a service's ``.copier-answers.yml`` into a dict (or ``None``)."""
     answers = backend_dir / ".copier-answers.yml"
     if not answers.is_file():
         return None
@@ -941,10 +940,42 @@ def _copier_src_path(backend_dir: Path) -> str | None:
         data = yaml.safe_load(answers.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return None
-    if not isinstance(data, dict):
+    return data if isinstance(data, dict) else None
+
+
+def _copier_src_path(backend_dir: Path) -> str | None:
+    """Return the ``_src_path`` recorded in a service's ``.copier-answers.yml``.
+
+    Its presence is the signal that ``backend_dir`` is a forge-rendered service
+    (vs. an unrelated ``services/<name>`` directory). ``None`` when there's no
+    answers file, it's unreadable, or it carries no ``_src_path``.
+    """
+    data = _copier_answers(backend_dir)
+    if not data:
         return None
     src = data.get("_src_path")
     return str(src) if src else None
+
+
+def _recovered_server_port(backend_dir: Path) -> int | None:
+    """Recover a backend's ``server_port`` from its ``.copier-answers.yml``.
+
+    The updater reconstructs ``BackendConfig`` from on-disk layout, which would
+    otherwise reset ``server_port`` to its default (5000). Re-reading the
+    recorded answer keeps the deployment topology — and therefore the Helm
+    chart's per-workload containerPort — correct on ``forge --update``.
+    """
+    data = _copier_answers(backend_dir)
+    if not data:
+        return None
+    port = data.get("server_port")
+    if isinstance(port, bool):  # bool is an int subclass — reject explicitly
+        return None
+    if isinstance(port, int):
+        return port
+    if isinstance(port, str) and port.isdigit():
+        return int(port)
+    return None
 
 
 def _resolve_language_from_src_path(src: str | None):
