@@ -162,4 +162,118 @@ spec:
       port: 8080
       targetPort: http
 {{- end }}
+{{- if and .Values.infra.gatekeeper .Values.infra.gatekeeper.enabled }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ printf "%s-gatekeeper-registry" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: gatekeeper
+type: Opaque
+stringData:
+  service_registry.yaml: |
+    # Placeholder S2S registry — override with your real registry (argon2
+    # hashes of per-service shared secrets). See docs/DEPLOYMENT.md.
+    services: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-gatekeeper" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: gatekeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: gatekeeper
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: gatekeeper
+    spec:
+      initContainers:
+        # keygen mints ES256 signing keys into a pod-shared emptyDir before the
+        # gatekeeper server starts (the compose keygen one-shot, in-pod form).
+        - name: keygen
+          image: "{{ .Values.infra.gatekeeper.image.repository }}:{{ .Values.infra.gatekeeper.image.tag }}"
+          imagePullPolicy: {{ .Values.infra.gatekeeper.image.pullPolicy }}
+          command: ["python", "scripts/keygen.py"]
+          env:
+            - name: SIGNING_KEY_DIR
+              value: /run/secrets/gatekeeper-signing
+            - name: KEY_BACKEND
+              value: file
+          volumeMounts:
+            - name: signing-keys
+              mountPath: /run/secrets/gatekeeper-signing
+      containers:
+        - name: gatekeeper
+          image: "{{ .Values.infra.gatekeeper.image.repository }}:{{ .Values.infra.gatekeeper.image.tag }}"
+          imagePullPolicy: {{ .Values.infra.gatekeeper.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5000
+          env:
+            - name: ENV
+              value: development
+            - name: KEYCLOAK_BASE_URL
+              value: http://{{ printf "%s-keycloak" .Release.Name }}:8080/realms
+            - name: GATEKEEPER_CLIENT_ID
+              value: gatekeeper
+            - name: GATEKEEPER_CLIENT_SECRET
+              value: {{ .Values.infra.gatekeeper.clientSecret | quote }}
+            - name: REDIS_URL
+              value: redis://{{ printf "%s-redis" .Release.Name }}:6379
+            - name: GATEKEEPER_ISSUER
+              value: http://{{ printf "%s-gatekeeper" .Release.Name }}:5000
+            - name: SIGNING_KEY_DIR
+              value: /run/secrets/gatekeeper-signing
+            - name: KEY_BACKEND
+              value: file
+            - name: SERVICE_REGISTRY_PATH
+              value: /run/secrets/gatekeeper-service-registry/service_registry.yaml
+          volumeMounts:
+            - name: signing-keys
+              mountPath: /run/secrets/gatekeeper-signing
+              readOnly: true
+            - name: service-registry
+              mountPath: /run/secrets/gatekeeper-service-registry
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /auth/jwks
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /auth/jwks
+              port: http
+      volumes:
+        - name: signing-keys
+          emptyDir: {}
+        - name: service-registry
+          secret:
+            secretName: {{ printf "%s-gatekeeper-registry" .Release.Name | trunc 63 | trimSuffix "-" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-gatekeeper" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: gatekeeper
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: gatekeeper
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+{{- end }}
 {{- end }}

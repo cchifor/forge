@@ -149,6 +149,19 @@ infra:
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
     realm: forge
+  # In-cluster Gatekeeper (OIDC ForwardAuth + S2S token authority). OFF by
+  # default even with infra.inCluster — production uses an external/managed
+  # gatekeeper. Enable for a full in-cluster auth demo AFTER building+pushing
+  # the gatekeeper image from deploy/infra/gatekeeper/. A keygen initContainer
+  # mints signing keys; a post-install Job syncs the realm into Keycloak.
+  gatekeeper:
+    enabled: false
+    image:
+      repository: ghcr.io/example/{{ topology.project_slug }}-gatekeeper
+      tag: latest
+      pullPolicy: IfNotPresent
+    # S2S client secret — placeholder; override or wire an ExternalSecret.
+    clientSecret: "CHANGEME"
 {%- endif %}
 
 # Pod security: non-root by default (matches the raw-k8s + compose posture).

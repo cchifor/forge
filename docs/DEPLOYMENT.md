@@ -142,11 +142,22 @@ credential into the chart. Before going live, either:
 
 **Auth caveat:** the local stack derives gatekeeper service-to-service secrets
 deterministically and stores their **argon2 hashes** in
-`infra/gatekeeper/secrets/service_registry.yaml`. If you rotate the S2S Secret
-in the cluster you must regenerate that registry too, or S2S auth will reject
-the new credential. The gatekeeper keygen / realm-sync init Jobs the compose
-stack runs are **not** emitted by the chart yet — run them out-of-band (or
-supply your own) until a later release moves that tooling under `deploy/`.
+`deploy/infra/gatekeeper/secrets/service_registry.yaml`. If you rotate the S2S
+Secret in the cluster you must regenerate that registry too, or S2S auth will
+reject the new credential.
+
+### In-cluster gatekeeper (dev/demo)
+
+For a full in-cluster auth demo (kind/minikube), set both `infra.inCluster=true`
+and `infra.gatekeeper.enabled=true`. The chart then emits an in-cluster
+Gatekeeper Deployment whose **keygen initContainer** mints ES256 signing keys
+into a pod-shared volume before the server starts, plus a **post-install
+realm-sync Job** that imports the Keycloak realm (bundled into the chart as
+`deploy/helm/files/keycloak-realm.json`) via the Admin API. This is **off by
+default** and **dev-only** — you must first build and push the gatekeeper image
+from `deploy/infra/gatekeeper/`, and the shipped `service_registry.yaml` is a
+placeholder. Production should run a managed/external Gatekeeper and Keycloak
+(point `externalServices.*` at them).
 
 ### Migrations
 
