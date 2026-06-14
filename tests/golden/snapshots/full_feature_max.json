@@ -1084,12 +1084,16 @@
       "size": 2335,
       "sha256": "ae230a441cacd3bd"
     },
+    "deploy/compose/init-db.sh": {
+      "size": 337,
+      "sha256": "da27485bdd9e4e50"
+    },
     "docker-compose.yml": {
-      "size": 11691,
-      "sha256": "409e140ca9517cbb"
+      "size": 11706,
+      "sha256": "f3db3a5abab9e6f3"
     },
     "forge.toml": {
-      "size": 154361,
+      "size": 154376,
       "sha256": "<version-dependent>"
     },
     "infra/gatekeeper/.gitignore": {
@@ -1404,10 +1408,6 @@
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
-    "init-db.sh": {
-      "size": 337,
-      "sha256": "da27485bdd9e4e50"
-    },
     "package.json": {
       "size": 488,
       "sha256": "14941d230a07f31f"
@@ -1529,7 +1529,7 @@
       "sha256": "d776524c5649390a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 513,
+      "size": 532,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {

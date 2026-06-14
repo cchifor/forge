@@ -28,28 +28,28 @@
       "size": 1912,
       "sha256": "ae83d48b4638adaf"
     },
+    "deploy/compose/init-db.sh": {
+      "size": 343,
+      "sha256": "72fe8243235d907b"
+    },
     "docker-compose.yml": {
-      "size": 8757,
-      "sha256": "c05f9ff52419685b"
+      "size": 8772,
+      "sha256": "961ddf6cbc68ba6c"
     },
     "forge.toml": {
-      "size": 65048,
+      "size": 65063,
       "sha256": "<version-dependent>"
     },
     "infra/nginx-csp.conf": {
       "size": 1654,
       "sha256": "045bea9db1cb85bd"
     },
-    "init-db.sh": {
-      "size": 343,
-      "sha256": "72fe8243235d907b"
-    },
     "package.json": {
       "size": 492,
       "sha256": "a61f953d38587e4c"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 524,
+      "size": 548,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -277,7 +277,7 @@
       "sha256": "d9a9fd079970435c"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 523,
+      "size": 545,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {

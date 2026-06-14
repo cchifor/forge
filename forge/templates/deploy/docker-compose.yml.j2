@@ -170,7 +170,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 {% if backends | length > 1 or include_keycloak %}
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./deploy/compose/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
 {% endif %}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

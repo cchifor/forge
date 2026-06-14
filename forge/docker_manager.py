@@ -428,7 +428,10 @@ def render_init_db(
         extra_dbs.add(synthesis.event_bus_db)
 
     output = template.render({"extra_databases": sorted(extra_dbs)})
-    init_path = project_root / "init-db.sh"
+    # Deployment/orchestration support files live under deploy/ to keep the
+    # project root focused on app code; the compose volume mount points here.
+    init_path = project_root / "deploy" / "compose" / "init-db.sh"
+    init_path.parent.mkdir(parents=True, exist_ok=True)
     # Write with LF line endings (CRLF breaks shebang in Linux containers)
     init_path.write_bytes(output.replace("\r\n", "\n").encode("utf-8"))
     return init_path
