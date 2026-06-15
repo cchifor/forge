@@ -65,6 +65,19 @@ workloads:
 {%- else %}
       ENV: "production"
 {%- endif %}
+{%- if topology.include_keycloak %}
+      # Auth env mirrors docker-compose: the backend default is auth-OFF, so a
+      # keycloak project MUST carry these to deploy with authentication ON. The
+      # server_url/issuer point at the IN-CLUSTER keycloak + gatekeeper Services
+      # (templates/infra.yaml, infra.inCluster=true). For an EXTERNAL/managed
+      # keycloak, override these via values-prod.yaml.
+      APP__SECURITY__AUTH__ENABLED: "true"
+      APP__SECURITY__AUTH__SERVER_URL: "http://keycloak:8080"
+      APP__SECURITY__AUTH__REALM: "{{ topology.keycloak_realm }}"
+      APP__SECURITY__AUTH__CLIENT_ID: "{{ topology.keycloak_client_id }}"
+      GATEKEEPER_ISSUER: "http://gatekeeper:5000"
+      SERVICE_AUDIENCE: "forge-services"
+{%- endif %}
     # Secret env -> Secret (templates/secret.yaml). Placeholders only: forge
     # NEVER bakes a real credential into the chart. Override via values-prod.yaml
     # or wire an ExternalSecret (see templates/secret.yaml).
