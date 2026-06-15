@@ -450,7 +450,15 @@ impl S2SClient {
                 "token endpoint response missing 'access_token'".into(),
             ));
         }
-        let expires_in = payload.expires_in.unwrap_or(300);
+        // Spec-compliant servers always return a positive `expires_in`;
+        // default defensively (matching Python `expires_in <= 0` and
+        // Node `rawExpiresIn > 0 ? rawExpiresIn : 300`) so a missing or
+        // non-positive value yields a usable TTL instead of a token
+        // that's never cached.
+        let expires_in = match payload.expires_in {
+            Some(n) if n > 0 => n,
+            _ => 300,
+        };
         let safety = self.config.safety_margin_seconds.min(expires_in);
         let ttl = Duration::from_secs(expires_in - safety);
         Ok(CachedToken {
