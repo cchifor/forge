@@ -88,6 +88,16 @@ class TestLoadEnumYaml:
         with pytest.raises(GeneratorError, match="non-empty"):
             load_enum_yaml(bad)
 
+    def test_rejects_members_that_mangle_to_same_identifier(self, tmp_path: Path) -> None:
+        """Two distinct wire values that collapse to the same mangled member
+        identifier (e.g. ``read-only`` and ``read_only`` → ``READ_ONLY``)
+        produce uncompilable code in every target; ``load_enum_yaml`` must
+        reject the file naming the colliding wire values + identifier."""
+        bad = tmp_path / "bad.yaml"
+        bad.write_text("name: Access\nvalues:\n  - read-only\n  - read_only\n")
+        with pytest.raises(GeneratorError, match="read-only.*read_only|read_only.*read-only"):
+            load_enum_yaml(bad)
+
 
 class TestEmitPython:
     def test_produces_str_enum(self, item_status: EnumSpec) -> None:
@@ -109,6 +119,21 @@ class TestEmitTypescript:
         out = emit_typescript(item_status)
         assert 'export type ItemStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";' in out
         assert "ItemStatus_VALUES" in out
+
+    def test_value_with_comma_space_not_split(self) -> None:
+        """A wire value containing ``', '`` must survive intact in the TS
+        literal union — the union must split on enum-value boundaries, not on
+        a comma-space that happens to appear inside a single value."""
+        spec = EnumSpec(
+            name="Greeting",
+            description="",
+            values=(
+                EnumValue(value="hello, world"),
+                EnumValue(value="bye"),
+            ),
+        )
+        out = emit_typescript(spec)
+        assert 'export type Greeting = "hello, world" | "bye";' in out
 
 
 class TestEmitZod:

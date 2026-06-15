@@ -16,6 +16,7 @@ from forge.codegen.openapi_binding import (
     assert_bindings_valid,
     index_operations,
     validate_bindings,
+    validate_bindings_document,
 )
 from forge.errors import GeneratorError
 
@@ -144,3 +145,52 @@ class TestBindingRobustness:
         bindings = {"list": {"operation_id": "listItems", "response": {"items": "ghost.path"}}}
         violations = validate_bindings(contract, bindings, spec)
         assert any("ghost.path" in v or "source" in v.lower() for v in violations)
+
+
+class TestCoerceValidation:
+    """An invalid transform ``coerce`` kind must be rejected at binding
+    validation, not slip through to a generic GeneratorError at TS-emit time."""
+
+    def test_unknown_coerce_kind_is_violation(self) -> None:
+        # `count <- total` resolves fine, but the coerce kind is not whitelisted.
+        b = {
+            "list": {
+                "operation_id": "listItems",
+                "response": {"items": "data", "count": {"from": "total", "coerce": "bogus"}},
+            }
+        }
+        violations = validate_bindings(_CONTRACT, b, _SPEC)
+        assert any("bogus" in v and "coerc" in v.lower() for v in violations), violations
+
+    def test_valid_coerce_kind_no_violation(self) -> None:
+        # A whitelisted coercion on a resolvable source path is accepted.
+        b = {
+            "list": {
+                "operation_id": "listItems",
+                "response": {"items": "data", "count": {"from": "total", "coerce": "int"}},
+            }
+        }
+        assert validate_bindings(_CONTRACT, b, _SPEC) == []
+
+    def test_assert_raises_feature_contract_violation_on_bad_coerce(self) -> None:
+        b = {
+            "list": {
+                "operation_id": "listItems",
+                "response": {"items": "data", "count": {"from": "total", "coerce": "bogus"}},
+            }
+        }
+        with pytest.raises(GeneratorError) as exc:
+            assert_bindings_valid(_CONTRACT, b, _SPEC)
+        assert exc.value.code == "FEATURE_CONTRACT_VIOLATION"
+
+    def test_document_rejects_unknown_coerce_kind(self) -> None:
+        document = {
+            "EntityList": {
+                "list": {
+                    "operation_id": "listItems",
+                    "response": {"items": "data", "count": {"from": "total", "coerce": "bogus"}},
+                }
+            }
+        }
+        violations = validate_bindings_document({"EntityList": _CONTRACT}, document, _SPEC)
+        assert any("bogus" in v and "EntityList" in v for v in violations), violations

@@ -106,7 +106,38 @@ def load_enum_yaml(path: Path) -> EnumSpec:
         else:
             raise GeneratorError(f"{path}.values[{i}]: must be a string or mapping")
 
-    return EnumSpec(name=name, description=description, values=tuple(values))
+    spec = EnumSpec(name=name, description=description, values=tuple(values))
+    _check_member_collisions(spec, source=str(path))
+    return spec
+
+
+def _check_member_collisions(spec: EnumSpec, *, source: str | None = None) -> None:
+    """Reject enums whose values mangle to a shared member identifier.
+
+    Distinct wire values can collapse to the same identifier in a target
+    language (``read-only`` and ``read_only`` → ``READ_ONLY`` in Python,
+    ``ReadOnly`` in Rust, ``readOnly`` in Dart). That emits a duplicate
+    member and uncompilable code in *every* target, so we fail loudly at
+    load time naming both colliding wire values and the identifier they
+    share, rather than shipping broken codegen.
+    """
+    prefix = f"{source}: " if source else ""
+    for label, mangler in (
+        ("Python", _py_member),
+        ("Rust", _rust_variant),
+        ("Dart", _dart_member),
+    ):
+        seen: dict[str, str] = {}
+        for v in spec.values:
+            ident = mangler(v.value)
+            prior = seen.get(ident)
+            if prior is not None and prior != v.value:
+                raise GeneratorError(
+                    f"{prefix}enum {spec.name!r}: values {prior!r} and "
+                    f"{v.value!r} both mangle to the {label} identifier "
+                    f"{ident!r}; rename one to keep them distinct"
+                )
+            seen[ident] = v.value
 
 
 # -- Emitters -----------------------------------------------------------------
@@ -136,12 +167,14 @@ def emit_python(spec: EnumSpec) -> str:
 
 def emit_typescript(spec: EnumSpec) -> str:
     """Emit a TS literal union type + runtime tuple for iteration."""
-    values = ", ".join(f'"{v.value}"' for v in spec.values)
+    quoted = [f'"{v.value}"' for v in spec.values]
+    union = " | ".join(quoted)
+    values = ", ".join(quoted)
     description = f"/** {spec.description} */\n" if spec.description else ""
     return (
         f"// Generated from {spec.name}.yaml — do not edit by hand.\n\n"
         f"{description}"
-        f"export type {spec.name} = {values.replace(', ', ' | ')};\n\n"
+        f"export type {spec.name} = {union};\n\n"
         f"export const {spec.name}_VALUES = [{values}] as const;\n"
     )
 
