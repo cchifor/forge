@@ -9,8 +9,8 @@
 #     Service `depends_on` it with `condition: service_completed_successfully`
 #     so the API never comes up against a stale schema.
 #   * <svc>: the runtime container.
-#     - additional_contexts pins the `sdks` build context to ../../sdks so
-#       the Dockerfile's `COPY --from=sdks` resolves correctly.
+#     - additional_contexts pins the `packages` build context to ../../packages so
+#       the Dockerfile's `COPY --from=packages` resolves correctly.
 #     - traefik labels expose the service behind `{{ service_path_prefix }}`
 #       with path-rewrite middleware that strips the prefix before forwarding.
 #     - depends_on includes keycloak so the auth middleware can verify tokens
@@ -22,11 +22,11 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
 {%- if sdk_consumption == "monorepo" %}
-      # The project-root ``sdks`` tree (platform-auth) is exposed as a
-      # build context so the Dockerfile's ``COPY --from=sdks`` resolves.
+      # The project-root ``packages`` tree (platform-auth) is exposed as a
+      # build context so the Dockerfile's ``COPY --from=packages`` resolves.
       # forge-core ships inside this backend, so it needs no extra context.
       additional_contexts:
-        sdks: ./sdks
+        packages: ./packages
 {%- endif %}
     environment:
       ENV: development
@@ -42,11 +42,11 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
 {%- if sdk_consumption == "monorepo" %}
-      # The project-root ``sdks`` tree (platform-auth) is exposed as a
-      # build context so the Dockerfile's ``COPY --from=sdks`` resolves.
+      # The project-root ``packages`` tree (platform-auth) is exposed as a
+      # build context so the Dockerfile's ``COPY --from=packages`` resolves.
       # forge-core ships inside this backend, so it needs no extra context.
       additional_contexts:
-        sdks: ./sdks
+        packages: ./packages
 {%- endif %}
     ports:
       - "{{ server_port }}:{{ server_port }}"

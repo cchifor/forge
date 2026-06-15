@@ -84,7 +84,7 @@ def _load_vendored_registry_model(project_root: Path):
     with. The module is registered in ``sys.modules`` so pydantic can resolve
     the ``ServiceClient`` forward reference during ``model_rebuild()``.
     """
-    schema = project_root / "infra" / "gatekeeper" / "src" / "app" / "gatekeeper"
+    schema = project_root / "deploy" / "infra" / "gatekeeper" / "src" / "app" / "gatekeeper"
     schema = schema / "service_registry.py"
     spec = importlib.util.spec_from_file_location("forge_test_gk_registry", schema)
     assert spec is not None and spec.loader is not None
@@ -118,7 +118,7 @@ def _gateway_compose_secret(compose_text: str) -> str:
 
 def test_service_registry_exists_and_validates_against_vendored_model(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path)
-    registry_path = root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    registry_path = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
     assert registry_path.is_file(), "synthesized service_registry.yaml not rendered"
 
     raw = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
@@ -151,9 +151,9 @@ def test_service_registry_exists_and_validates_against_vendored_model(tmp_path: 
 
 def test_service_registry_loud_dev_header(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path)
-    text = (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text(
-        encoding="utf-8"
-    )
+    text = (
+        root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    ).read_text(encoding="utf-8")
     assert text.startswith(
         "# DEV-ONLY synthesized S2S secrets — rotate before any non-local deployment."
     )
@@ -167,7 +167,9 @@ def test_service_registry_loud_dev_header(tmp_path: Path) -> None:
 
 def test_keycloak_realm_has_service_clients(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path)
-    realm = json.loads((root / "infra" / "keycloak-realm.json").read_text(encoding="utf-8"))
+    realm = json.loads(
+        (root / "deploy" / "infra" / "keycloak-realm.json").read_text(encoding="utf-8")
+    )
 
     by_id = {c["clientId"]: c for c in realm["clients"]}
     assert {"svc-gateway", "svc-orders", "svc-inventory"} <= set(by_id)
@@ -215,7 +217,7 @@ def test_hash_plaintext_coherence(tmp_path: Path) -> None:
     plaintext = _gateway_compose_secret(compose)
 
     raw = yaml.safe_load(
-        (root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text(
+        (root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml").read_text(
             encoding="utf-8"
         )
     )
@@ -232,7 +234,7 @@ def test_event_bus_postgres_notify_wires_db_and_env(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path, event_bus="postgres_notify")
 
     # init-db.sh provisions the shared events database.
-    init_db = (root / "init-db.sh").read_text(encoding="utf-8")
+    init_db = (root / "deploy" / "compose" / "init-db.sh").read_text(encoding="utf-8")
     assert "events" in init_db
     assert "CREATE DATABASE events" in init_db
 
@@ -246,7 +248,7 @@ def test_event_bus_off_emits_no_bus_url(tmp_path: Path) -> None:
     root = _generate_shop(tmp_path, event_bus="none")
     compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
     assert "APP__EVENTS__BUS_URL" not in compose
-    init_db = (root / "init-db.sh").read_text(encoding="utf-8")
+    init_db = (root / "deploy" / "compose" / "init-db.sh").read_text(encoding="utf-8")
     assert "CREATE DATABASE events" not in init_db
 
 

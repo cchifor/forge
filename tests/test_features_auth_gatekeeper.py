@@ -60,7 +60,7 @@ TOKEN_AUTHORITY_MODULES = (
 def _gatekeeper_root() -> Path:
     frag = FRAGMENT_REGISTRY["platform_auth_gatekeeper"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    return Path(impl.fragment_dir) / "files" / "infra" / "gatekeeper"
+    return Path(impl.fragment_dir) / "files" / "deploy" / "infra" / "gatekeeper"
 
 
 def test_platform_auth_gatekeeper_fragment_registered() -> None:
@@ -130,7 +130,11 @@ def test_keycloak_realm_sync_sidecar_wired() -> None:
     assert "platform_auth_gatekeeper_realm_sync" in enables
     # Gatekeeper waits for the sync to complete before booting.
     gk_compose = (
-        Path(FRAGMENT_REGISTRY["platform_auth_gatekeeper"].implementations[BackendLanguage.PYTHON].fragment_dir).parent
+        Path(
+            FRAGMENT_REGISTRY["platform_auth_gatekeeper"]
+            .implementations[BackendLanguage.PYTHON]
+            .fragment_dir
+        ).parent
         / "compose.yaml"
     ).read_text(encoding="utf-8")
     assert "keycloak-realm-sync" in gk_compose
@@ -149,9 +153,9 @@ def test_apikeys_endpoints_derive_tenant_from_verified_session() -> None:
     matching how downstream
     services consume the verified bearer JWT (the legacy plain-header trust
     path is gone everywhere else)."""
-    src = (
-        _gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py"
-    ).read_text(encoding="utf-8")
+    src = (_gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py").read_text(
+        encoding="utf-8"
+    )
 
     # Positive: tenant comes from the verified session store.
     assert "server_session" in src and "check_validity" in src, (
@@ -166,9 +170,9 @@ def test_apikeys_endpoints_derive_tenant_from_verified_session() -> None:
 
 
 def _apikeys_api_src() -> str:
-    return (
-        _gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py"
-    ).read_text(encoding="utf-8")
+    return (_gatekeeper_root() / "src" / "app" / "gatekeeper" / "apikeys_api.py").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_apikeys_endpoints_enforce_admin_role() -> None:
@@ -193,11 +197,11 @@ def test_apikeys_endpoints_enforce_admin_role() -> None:
     assert "authz" in src and "extract_realm_roles" in src, (
         "api-keys must extract roles via the authz.extract_realm_roles helper"
     )
-    assert "is_authorized" in src, (
-        "api-keys must decide access via authz.is_authorized"
-    )
-    assert "verify_token" in src and "realm_access" in src.lower() or (
-        "verify_token" in src and "extract_realm_roles" in src
+    assert "is_authorized" in src, "api-keys must decide access via authz.is_authorized"
+    assert (
+        "verify_token" in src
+        and "realm_access" in src.lower()
+        or ("verify_token" in src and "extract_realm_roles" in src)
     ), (
         "api-keys must verify the session access token and read realm roles "
         "(mirroring /auth/userinfo) to determine admin authorization"
@@ -209,9 +213,7 @@ def test_apikeys_endpoints_enforce_admin_role() -> None:
     )
 
     # An unauthorized caller is rejected with 403.
-    assert "403" in src, (
-        "api-keys must return HTTP 403 when the caller lacks the admin role"
-    )
+    assert "403" in src, "api-keys must return HTTP 403 when the caller lacks the admin role"
 
 
 def test_apikeys_state_changing_endpoints_check_origin() -> None:
@@ -231,12 +233,8 @@ def test_apikeys_state_changing_endpoints_check_origin() -> None:
     src = _apikeys_api_src()
 
     # The CSRF primitive must be imported from helpers and actually invoked.
-    assert "check_origin" in src, (
-        "api-keys must use helpers.check_origin for CSRF defense"
-    )
-    assert "check_origin(" in src, (
-        "check_origin must be CALLED, not merely imported"
-    )
+    assert "check_origin" in src, "api-keys must use helpers.check_origin for CSRF defense"
+    assert "check_origin(" in src, "check_origin must be CALLED, not merely imported"
 
     def _handler_body(decorator: str, signature: str) -> str:
         start = src.index(decorator)
@@ -250,10 +248,8 @@ def test_apikeys_state_changing_endpoints_check_origin() -> None:
     csrf_guards: list[str] = []
     for m in re.finditer(r"^(async )?def (\w+)\(", src, flags=re.MULTILINE):
         name = m.group(2)
-        nxt = re.search(
-            r"^(async )?def ", src[m.end():], flags=re.MULTILINE
-        )
-        fn_body = src[m.end():][: nxt.start()] if nxt else src[m.end():]
+        nxt = re.search(r"^(async )?def ", src[m.end() :], flags=re.MULTILINE)
+        fn_body = src[m.end() :][: nxt.start()] if nxt else src[m.end() :]
         if "check_origin(" in fn_body:
             csrf_guards.append(name)
 
@@ -294,18 +290,14 @@ def test_apikeys_create_bounds_role_delegation_to_admin_roles() -> None:
         "create_key must capture the admin's verified roles from _require_admin"
     )
     assert (
-        "async def _require_admin(request: Request, session: ServerSession) -> list[str]:"
-        in src
+        "async def _require_admin(request: Request, session: ServerSession) -> list[str]:" in src
     ), "_require_admin must return the verified role list"
 
     # The delegation bound + its 422 rejection.
     assert "authz.is_subset_of_roles(body.roles, admin_roles)" in src, (
-        "create_key must reject roles that exceed the admin's own via "
-        "authz.is_subset_of_roles"
+        "create_key must reject roles that exceed the admin's own via authz.is_subset_of_roles"
     )
-    assert "status_code=422" in src, (
-        "an over-broad role delegation must be rejected with HTTP 422"
-    )
+    assert "status_code=422" in src, "an over-broad role delegation must be rejected with HTTP 422"
 
 
 def test_gatekeeper_dockerfile_shipped() -> None:
@@ -539,9 +531,7 @@ def test_gatekeeper_keygen_compose_yaml_parses() -> None:
 
 
 def _gk_src(module: str) -> str:
-    return (
-        _gatekeeper_root() / "src" / "app" / "gatekeeper" / module
-    ).read_text(encoding="utf-8")
+    return (_gatekeeper_root() / "src" / "app" / "gatekeeper" / module).read_text(encoding="utf-8")
 
 
 def test_oidc_pkce_pure_helper_module_shipped() -> None:
@@ -563,17 +553,14 @@ def test_oidc_pkce_pure_helper_module_shipped() -> None:
     assert "sha256" in src and "urlsafe_b64encode" in src and 'rstrip(b"="' in src
     # Dependency-free: no heavy runtime imports.
     for forbidden in ("import fastapi", "import redis", "import jwt", "from app."):
-        assert forbidden not in src, (
-            f"oidc_pkce.py must stay stdlib-only — found {forbidden!r}"
-        )
+        assert forbidden not in src, f"oidc_pkce.py must stay stdlib-only — found {forbidden!r}"
 
 
 def test_config_has_oidc_state_envelope_ttl() -> None:
     """A configurable TTL bounds the PKCE/nonce/state envelope lifetime."""
     src = _gk_src("config.py")
     assert "oidc_state_envelope_ttl_seconds" in src, (
-        "config must expose oidc_state_envelope_ttl_seconds for the bound-"
-        "state envelope TTL"
+        "config must expose oidc_state_envelope_ttl_seconds for the bound-state envelope TTL"
     )
 
 
@@ -583,9 +570,7 @@ def test_build_login_url_accepts_pkce_and_nonce_params() -> None:
     assert "def build_login_url(" in src
     sig = src.split("def build_login_url(")[1].split(")")[0]
     assert "nonce" in sig, "build_login_url must accept a nonce parameter"
-    assert "code_challenge" in sig, (
-        "build_login_url must accept a code_challenge parameter"
-    )
+    assert "code_challenge" in sig, "build_login_url must accept a code_challenge parameter"
     assert "code_challenge_method" in sig, (
         "build_login_url must accept a code_challenge_method parameter"
     )
@@ -615,14 +600,10 @@ def test_routes_define_bound_state_envelope_store() -> None:
     assert "get_redis" in src, "routes must use the redis client for the envelope"
     # Atomic set-with-TTL using the configurable lifetime.
     assert "oidc_state_envelope_ttl_seconds" in src
-    assert "setex(" in src or "ex=" in src, (
-        "envelope must be stored with a TTL (setex / ex=)"
-    )
+    assert "setex(" in src or "ex=" in src, "envelope must be stored with a TTL (setex / ex=)"
     # Single-use: the envelope is popped with an ATOMIC get-and-delete
     # (GETDEL) — never a get-then-delete TOCTOU pair.
-    assert "getdel(" in src, (
-        "the envelope pop must use an atomic getdel (single-use, no TOCTOU)"
-    )
+    assert "getdel(" in src, "the envelope pop must use an atomic getdel (single-use, no TOCTOU)"
 
 
 def test_login_handler_stores_envelope_and_sends_pkce_nonce() -> None:
@@ -651,9 +632,7 @@ def test_login_handler_stores_envelope_and_sends_pkce_nonce() -> None:
         "pkce_challenge_s256(",
     ):
         assert helper in begin, f"_begin_oidc_login must call {helper!r}"
-    assert "_store_auth_state(" in begin, (
-        "_begin_oidc_login must store the bound-state envelope"
-    )
+    assert "_store_auth_state(" in begin, "_begin_oidc_login must store the bound-state envelope"
     assert "code_challenge" in begin
     assert "code_challenge_method" in begin and "S256" in begin
     assert "nonce" in begin
@@ -667,9 +646,7 @@ def test_callback_pops_envelope_verifies_nonce_passes_verifier() -> None:
     cb = src.split("async def callback(")[1]
 
     # Looks the envelope up + deletes it (single-use) via the pop helper.
-    assert "_pop_auth_state(" in cb, (
-        "/callback must pop (get-then-delete) the bound-state envelope"
-    )
+    assert "_pop_auth_state(" in cb, "/callback must pop (get-then-delete) the bound-state envelope"
 
     # Fails closed when the envelope is missing/expired.
     assert "400" in cb or "401" in cb, (
@@ -734,13 +711,9 @@ def test_session_expiry_redirect_mints_envelope() -> None:
     assert "async def _redirect_to_login(" in src
     # ... and every caller must await it.
     assert "_redirect_to_login(request" in src
-    non_await = src.count(
-        "return _redirect_to_login(request, tenant, forwarded_host, tc=tc)"
-    )
+    non_await = src.count("return _redirect_to_login(request, tenant, forwarded_host, tc=tc)")
     assert non_await == 0, "all _redirect_to_login call sites must be awaited"
-    await_calls = src.count(
-        "await _redirect_to_login(request, tenant, forwarded_host, tc=tc)"
-    )
+    await_calls = src.count("await _redirect_to_login(request, tenant, forwarded_host, tc=tc)")
     assert await_calls >= 5, "expected the auth/refresh call sites to be awaited"
 
 
@@ -768,9 +741,7 @@ def test_pop_auth_state_is_atomic_single_use() -> None:
     pop = _routes_func("_pop_auth_state")
     assert "getdel(" in pop, "_pop_auth_state must use atomic getdel"
     assert "redis.get(" not in pop or "getdel" in pop
-    assert "redis.delete(" not in pop, (
-        "_pop_auth_state must not do a separate delete (TOCTOU)"
-    )
+    assert "redis.delete(" not in pop, "_pop_auth_state must not do a separate delete (TOCTOU)"
 
 
 def test_callback_rejects_empty_code_verifier_and_nonce() -> None:
@@ -797,9 +768,9 @@ def test_build_login_url_method_default_none() -> None:
     the challenge and the method are provided."""
     src = _gk_src("helpers.py")
     assert "code_challenge_method: str | None = None" in src
-    assert (
-        "if code_challenge is not None and code_challenge_method is not None:" in src
-    ), "build_login_url must require BOTH challenge and method before appending"
+    assert "if code_challenge is not None and code_challenge_method is not None:" in src, (
+        "build_login_url must require BOTH challenge and method before appending"
+    )
 
 
 def test_oidc_pkce_envelope_extractors_shipped() -> None:

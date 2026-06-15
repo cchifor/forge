@@ -20,7 +20,6 @@ from pathlib import Path
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 # The 6 modules ported verbatim from platform/services/{any}/src/.
 # Each addresses a different layer of the auth stack:
 #   - middleware: per-request verification (single-pass)
@@ -59,7 +58,7 @@ def test_python_middleware_fragment_registered() -> None:
 
 def test_python_middleware_depends_on_sdk() -> None:
     """The middleware imports ``from platform_auth import AuthGuard``.
-    The SDK fragment ships ``sdks/platform-auth/`` at the project
+    The SDK fragment ships ``packages/platform-auth/`` at the project
     root; without it, the imports don't resolve.
     """
     frag = FRAGMENT_REGISTRY["platform_auth_python_middleware"]
@@ -108,12 +107,11 @@ def test_auth_context_middleware_uses_sdk() -> None:
     )
     # The actual SDK import lives in service/security/auth.py — pin
     # it there so the chain is complete.
-    auth_shim = (
-        _fragment_root() / "src" / "service" / "security" / "auth.py"
-    ).read_text(encoding="utf-8")
+    auth_shim = (_fragment_root() / "src" / "service" / "security" / "auth.py").read_text(
+        encoding="utf-8"
+    )
     assert "from platform_auth" in auth_shim or "platform_auth" in auth_shim, (
-        "service/security/auth.py (the shim middleware delegates to) "
-        "must import from platform_auth"
+        "service/security/auth.py (the shim middleware delegates to) must import from platform_auth"
     )
 
 
@@ -122,14 +120,12 @@ def test_platform_auth_setup_constructs_auth_guard_bundle() -> None:
     + may-act policy from environment config — that's the integration
     point Phase 3 unblocks for downstream Phase 9 / 10 work.
     """
-    text = (
-        _fragment_root() / "src" / "service" / "security" / "platform_auth_setup.py"
-    ).read_text(encoding="utf-8")
+    text = (_fragment_root() / "src" / "service" / "security" / "platform_auth_setup.py").read_text(
+        encoding="utf-8"
+    )
     must_reference = ("AuthGuard", "JWKSCache")
     missing = [name for name in must_reference if name not in text]
-    assert not missing, (
-        f"platform_auth_setup.py must reference {missing} from the SDK"
-    )
+    assert not missing, f"platform_auth_setup.py must reference {missing} from the SDK"
 
 
 def test_core_auth_exposes_fastapi_dependencies() -> None:
@@ -173,9 +169,7 @@ def test_service_client_auth_caches_tokens() -> None:
     """``service/client/auth.py`` is the outbound-S2S helper. It must
     cache tokens (otherwise every outbound call mints a fresh token,
     blowing up the IdP load)."""
-    text = (_fragment_root() / "src" / "service" / "client" / "auth.py").read_text(
-        encoding="utf-8"
-    )
+    text = (_fragment_root() / "src" / "service" / "client" / "auth.py").read_text(encoding="utf-8")
     # Cache-class implementation lives inline — ClientCredentialsAuth.
     assert "ClientCredentialsAuth" in text, (
         "service/client/auth.py must define ClientCredentialsAuth — "
@@ -207,6 +201,6 @@ def test_python_middleware_fragment_wired_to_auth_mode() -> None:
         "platform_auth_python_middleware fragment must be in "
         "auth.mode=generate's enables tuple after the Phase 3 Wave 2 "
         "cutover — without it, a generated Python project gets the "
-        "SDK at sdks/platform-auth/ but no middleware wiring it into "
+        "SDK at packages/platform-auth/ but no middleware wiring it into "
         "FastAPI."
     )

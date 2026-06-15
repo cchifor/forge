@@ -1,16 +1,19 @@
-"""``deploy.*`` features — Kubernetes/Helm deployment scaffolding.
+"""``deploy.*`` features — topology-aware Helm chart deployment.
 
-Adds a ``deploy.target`` option. When set to ``kubernetes`` it emits
-Kubernetes-native manifests (Deployment, Service, ConfigMap) per backend
-plus a project-level HorizontalPodAutoscaler and a Helm chart under
-``helm/``. The default (``none``) and ``docker-compose`` emit nothing here,
-so projects that don't opt in are byte-identical to before.
+Adds a ``deploy.target`` option. When set to ``kubernetes`` it emits a
+single topology-aware Helm umbrella chart under ``deploy/helm/``: one
+Deployment/Service/HPA per backend, the frontend, an Ingress, and per-backend
+ConfigMap/Secret, with optional in-cluster datastores behind an
+``infra.inCluster`` values toggle. The default (``none``) and
+``docker-compose`` emit nothing here, so projects that don't opt in are
+byte-identical to before.
 
-The emitted manifests are static (verbatim-copied): the Helm chart carries
-per-environment values in ``values.yaml`` and resolves them at ``helm
-install`` time via Go-templates, and the raw ``k8s/`` manifests use generic
-labels + an ``envFrom`` ConfigMap so image/namespace are set at apply time.
-This keeps the fragment a pure file-copy (no generation-time templating).
+The chart's ``values.yaml`` is rendered at generate AND ``forge --update``
+time from the project's deployment topology (the ``topology`` Jinja
+variable, see :func:`forge.config._topology.compute_topology`), so the chart
+stays current as backends/ports/frontend change. The chart's
+``templates/*.yaml`` are pure Go-templates copied verbatim and resolve at
+``helm install`` time.
 """
 
 from __future__ import annotations

@@ -24,24 +24,24 @@
       "size": 1912,
       "sha256": "ae83d48b4638adaf"
     },
+    "deploy/infra/nginx-csp.conf": {
+      "size": 1661,
+      "sha256": "22237aeddb41cfae"
+    },
     "docker-compose.yml": {
-      "size": 5688,
-      "sha256": "f6de4ae5f8fd44d1"
+      "size": 5712,
+      "sha256": "6a5b8740cc1c34fe"
     },
     "forge.toml": {
-      "size": 23061,
+      "size": 23068,
       "sha256": "<version-dependent>"
     },
-    "infra/nginx-csp.conf": {
-      "size": 1654,
-      "sha256": "045bea9db1cb85bd"
-    },
     "package.json": {
-      "size": 490,
-      "sha256": "00c3328620ea0718"
+      "size": 498,
+      "sha256": "87cb099d9bd5fb20"
     },
     "services/api/.copier-answers.yml": {
-      "size": 508,
+      "size": 527,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -53,8 +53,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api/Dockerfile": {
-      "size": 3683,
-      "sha256": "45793a0d3e685156"
+      "size": 3711,
+      "sha256": "dd2d20f1c6f1bc9f"
     },
     "services/api/README.md": {
       "size": 1402,
@@ -81,8 +81,8 @@
       "sha256": "850f3272a17446e4"
     },
     "services/api/docker-compose.fragment.yaml": {
-      "size": 1916,
-      "sha256": "adcca448862091c7"
+      "size": 1940,
+      "sha256": "02d623a23a7a5b8a"
     },
     "services/api/docker-compose.yaml": {
       "size": 838,

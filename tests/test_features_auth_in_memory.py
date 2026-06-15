@@ -177,15 +177,11 @@ class TestProductionRefusal:
             sys.modules.setdefault(name, types.ModuleType(name))
         sys.modules["app.core.config"].Settings = object
         sys.modules["app.security.in_memory_issuer"].InMemoryIssuer = object
-        sys.modules["app.security.in_memory_issuer"].build_in_memory_auth_bundle = (
-            lambda *a, **k: None
+        sys.modules["app.security.in_memory_issuer"].build_in_memory_auth_bundle = lambda *a, **k: (
+            None
         )
-        path = (
-            _fragment_root() / "src/app/security/in_memory_auth.py"
-        )
-        spec = importlib.util.spec_from_file_location(
-            "_in_memory_auth_under_test", path
-        )
+        path = _fragment_root() / "src/app/security/in_memory_auth.py"
+        spec = importlib.util.spec_from_file_location("_in_memory_auth_under_test", path)
         mod = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = mod
         spec.loader.exec_module(mod)
@@ -214,9 +210,7 @@ class TestProductionRefusal:
     def test_install_calls_the_guard(self) -> None:
         # The guard must actually be invoked by install_in_memory_auth, not
         # just defined.
-        src = (
-            _fragment_root() / "src/app/security/in_memory_auth.py"
-        ).read_text(encoding="utf-8")
+        src = (_fragment_root() / "src/app/security/in_memory_auth.py").read_text(encoding="utf-8")
         body = src.split("def install_in_memory_auth")[1]
         assert "_refuse_in_production()" in body
 
@@ -318,7 +312,7 @@ def test_in_memory_render_lands_issuer_and_route(tmp_path: Path) -> None:
     assert (backend / "src/app/api/v1/endpoints/dev_auth.py").is_file()
 
     # NO gatekeeper container.
-    assert not (root / "infra" / "gatekeeper").exists(), (
+    assert not (root / "deploy" / "infra" / "gatekeeper").exists(), (
         "in_memory must NOT generate the gatekeeper container"
     )
 

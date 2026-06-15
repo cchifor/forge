@@ -8,14 +8,14 @@ services:
       context: ./services/{{ project_slug }}
       dockerfile: Dockerfile
       # Workspace orchestration: project_root exposes the root
-      # package.json + lockfile; sdks exposes in-tree SDK source.
+      # package.json + lockfile; packages exposes in-tree SDK source.
       # Required so the multi-stage build can run
       # `npm install --workspaces --include-workspace-root` and resolve
-      # `file:../sdks/<name>` deps (BuildKit can't reach above the main
+      # `file:../packages/<name>` deps (BuildKit can't reach above the main
       # build context without these).
       additional_contexts:
         project_root: .
-        sdks: ./sdks
+        packages: ./packages
     environment:
       NODE_ENV: development
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/{{ db_name }}"
@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
       additional_contexts:
         project_root: .
-        sdks: ./sdks
+        packages: ./packages
     ports:
       - "{{ server_port }}:{{ server_port }}"
     environment:

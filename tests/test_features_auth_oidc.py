@@ -385,7 +385,7 @@ def test_oidc_render_lands_modules_and_no_infra(tmp_path: Path) -> None:
     assert (backend / "src/app/security/oidc_auth.py").is_file()
 
     # NO gatekeeper container / infra dir.
-    assert not (root / "infra" / "gatekeeper").exists(), (
+    assert not (root / "deploy" / "infra" / "gatekeeper").exists(), (
         "oidc_generic must NOT generate the gatekeeper container"
     )
 

@@ -96,6 +96,96 @@ If deploying with `docker run` or Kubernetes (without the compose template),
 you must set `COOKIE_SECURE=false` explicitly for non-HTTPS environments.
 The default is `true` — cookies will not be sent over plain HTTP.
 
+## Kubernetes (Helm)
+
+Generating with `deploy.target=kubernetes` emits a **topology-aware Helm
+umbrella chart** under `deploy/helm/`. The chart mirrors your project: one
+Deployment + Service + HorizontalPodAutoscaler per backend, the frontend, an
+Ingress, and a per-backend ConfigMap + Secret. Its `values.yaml` is rendered
+from the project's deployment topology, so it always reflects the real set of
+backends, ports, and the frontend.
+
+### Quick start
+
+```bash
+# Lint + render (raw manifests, derived from the chart — never hand-edited):
+make helm-lint
+make k8s-manifests          # writes deploy/k8s/rendered.yaml
+
+# Install (copy the example first and fill in your overrides):
+cp deploy/helm/values-prod.yaml.example deploy/helm/values-prod.yaml
+make helm-install           # helm upgrade --install ... -f deploy/helm/values-prod.yaml
+```
+
+`values.yaml` is **forge-owned** — it is re-rendered (and three-way merged) on
+every `forge --update`. Put your per-environment overrides in
+`values-prod.yaml`, which forge **never** tracks or overwrites.
+
+### Datastores
+
+Postgres / Redis / Keycloak are **external by default** (the production
+posture): point `externalServices.*` at your managed instances. For a throwaway
+dev cluster (kind / minikube), set `infra.inCluster=true` to spin up in-cluster
+stand-ins (Postgres StatefulSet + PVC, Redis, Keycloak) — these are **not**
+production-grade.
+
+### Secrets (read this before production)
+
+forge ships **only placeholders** in each workload's `secretEnv` (DB URLs,
+client secrets carry `CHANGEME`). It never bakes a real or deterministic
+credential into the chart. Before going live, either:
+
+- override `secretEnv` in `values-prod.yaml`, or
+- delete the generated `Secret`s and wire an `ExternalSecret` / SealedSecret /
+  CSI volume of the same name (the Deployment's `secretRef` is `optional`, so an
+  externally-managed Secret takes over).
+
+**Auth caveat:** the local stack derives gatekeeper service-to-service secrets
+deterministically and stores their **argon2 hashes** in
+`deploy/infra/gatekeeper/secrets/service_registry.yaml`. If you rotate the S2S
+Secret in the cluster you must regenerate that registry too, or S2S auth will
+reject the new credential.
+
+### In-cluster gatekeeper (dev/demo)
+
+For a full in-cluster auth demo (kind/minikube), set both `infra.inCluster=true`
+and `infra.gatekeeper.enabled=true`. The chart then emits an in-cluster
+Gatekeeper Deployment whose **keygen initContainer** mints ES256 signing keys
+into a pod-shared volume before the server starts, plus a **post-install
+realm-sync Job** that imports the Keycloak realm (bundled into the chart as
+`deploy/helm/files/keycloak-realm.json`) via the Admin API. This is **off by
+default** and **dev-only** — you must first build and push the gatekeeper image
+from `deploy/infra/gatekeeper/`, and the shipped `service_registry.yaml` is a
+placeholder. Production should run a managed/external Gatekeeper and Keycloak
+(point `externalServices.*` at them).
+
+### Migrations
+
+Each backend that ships migrations gets a `Job` annotated as a
+`pre-install,pre-upgrade` Helm hook, so the schema is current before the
+Deployment rolls. A failed migration blocks the release (intended). All migrate
+Jobs share one hook weight and therefore run **in parallel** — safe because each
+backend owns its own database (so migrations never collide). If you point
+multiple backends at a single shared database, give those Jobs distinct
+ascending `helm.sh/hook-weight`s so Helm serialises them.
+
+### Ingress
+
+A standard `networking.k8s.io/v1` Ingress routes `/api/<backend>` to each
+backend Service and `/` to the frontend. `ingress.className` and
+`ingress.host` are values you set per environment. The default rewrite
+annotation is **nginx-ingress specific** — for a different controller (Traefik
+Middleware CRD, Gateway API, ...) change `ingress.className` and
+`ingress.annotations` accordingly.
+
+### Keeping the chart current
+
+`forge --update` re-renders `deploy/helm/values.yaml` from the current
+topology: add a backend, change a port, or add the frontend and the chart picks
+it up. Your `values-prod.yaml` is never touched; edits to the forge-owned files
+are preserved via three-way merge (or surfaced as a `.forge-merge` sidecar on a
+genuine conflict).
+
 ## Monitoring
 
 Generated projects include:

@@ -225,7 +225,7 @@ class TestMicroservicesIntegration:
         config.validate()
         root = generate(config, quiet=True, dry_run=True)
 
-        registry = root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+        registry = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
         assert registry.is_file()
         registry_text = registry.read_text(encoding="utf-8")
         for client_id in ("svc-gateway", "svc-orders", "svc-inventory"):
@@ -239,7 +239,7 @@ class TestMicroservicesIntegration:
         assert 'platform_template = "microservices"' in forge_toml
 
         # postgres_notify ⇒ a shared events db in init-db.sh.
-        init_db = (root / "init-db.sh").read_text(encoding="utf-8")
+        init_db = (root / "deploy" / "compose" / "init-db.sh").read_text(encoding="utf-8")
         assert "events" in init_db
 
 
@@ -259,7 +259,7 @@ class TestHeadlessApiIntegration:
         config.validate()
         root = generate(config, quiet=True, dry_run=True)
 
-        registry = root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+        registry = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
         assert registry.is_file()
         registry_text = registry.read_text(encoding="utf-8")
         assert "svc-gateway" in registry_text
@@ -267,7 +267,7 @@ class TestHeadlessApiIntegration:
 
         # No event bus ⇒ no `events` database line in init-db.sh. Match the
         # exact createdb token so the literal word in comments can't false-trip.
-        init_db = (root / "init-db.sh").read_text(encoding="utf-8")
+        init_db = (root / "deploy" / "compose" / "init-db.sh").read_text(encoding="utf-8")
         created = {
             line.strip().strip("\"'")
             for line in init_db.splitlines()
@@ -297,7 +297,7 @@ class TestMonolithicIntegration:
         root = generate(config, quiet=True, dry_run=True)
 
         # Single service + no keycloak ⇒ synthesis is a no-op; no S2S registry.
-        registry = root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+        registry = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
         assert not registry.exists()
 
         # Exactly one backend service tree.
@@ -323,9 +323,7 @@ class TestMultitenantSaasIntegration:
         assert by_name["app"].app_template == "crud-service"
 
     def test_dry_run_stands_up_full_topology(self) -> None:
-        config = _build_config(
-            _args(platform="multitenant-saas"), {"project_name": "Acme SaaS"}
-        )
+        config = _build_config(_args(platform="multitenant-saas"), {"project_name": "Acme SaaS"})
         config.validate()
         root = generate(config, quiet=True, dry_run=True)
 
@@ -345,10 +343,10 @@ class TestMultitenantSaasIntegration:
         assert (root / "services/app/src/app/middleware/tenant_rls.py").is_file()
         # Gatekeeper edge auth + the corrected Keycloak realm + the realm-sync
         # sidecar (auto-bundled with the gatekeeper provider).
-        assert (root / "infra/keycloak-realm.json").is_file()
-        assert (root / "infra/gatekeeper/scripts/realm_sync.py").is_file()
+        assert (root / "deploy/infra/keycloak-realm.json").is_file()
+        assert (root / "deploy/infra/gatekeeper/scripts/realm_sync.py").is_file()
         # The realm mints the tenant claim the app's RLS reads.
-        realm = (root / "infra/keycloak-realm.json").read_text(encoding="utf-8")
+        realm = (root / "deploy/infra/keycloak-realm.json").read_text(encoding="utf-8")
         assert "tenant_id" in realm
         # Vue frontend present (not headless).
         assert (root / "apps/frontend/package.json").is_file()
@@ -358,9 +356,7 @@ class TestMultitenantSaasIntegration:
             assert f"{svc}:" in compose, f"compose missing service: {svc}"
 
     def test_persisted_in_forge_toml(self) -> None:
-        config = _build_config(
-            _args(platform="multitenant-saas"), {"project_name": "Acme SaaS"}
-        )
+        config = _build_config(_args(platform="multitenant-saas"), {"project_name": "Acme SaaS"})
         config.validate()
         root = generate(config, quiet=True, dry_run=True)
         forge_toml = (root / "forge.toml").read_text(encoding="utf-8")

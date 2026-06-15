@@ -12,7 +12,7 @@ infer from fragment provenance alone:
 
   1. **Detect** legacy state — ``python-keycloak`` in ``pyproject.toml``,
      presence of ``service/security/providers/keycloak.py``, header-only
-     ``middleware/tenant.{ts,rs}``, missing ``sdks/platform-auth*/``.
+     ``middleware/tenant.{ts,rs}``, missing ``packages/platform-auth*/``.
      If the project is *already* on platform-auth (or has no auth at
      all), the codemod skips with a clear reason.
 
@@ -41,7 +41,7 @@ infer from fragment provenance alone:
      ``SERVICE_REGISTRY_PATH``, ``SVC_AUTH_BACKEND`` — with safe
      defaults documented inline.
 
-The fragment-file work (shipping ``sdks/platform-auth*/``, the new
+The fragment-file work (shipping ``packages/platform-auth*/``, the new
 gatekeeper sources, the per-language middleware fragments) is handled
 by the existing ``forge --update`` infrastructure once the Phase 2
 cutover wires ``auth.mode=generate`` to enable the new fragments.
@@ -206,7 +206,7 @@ def _detect_legacy(project_root: Path) -> _LegacySignals:
             has_old_env_keys = True
             break
 
-    sdk_path = project_root / "sdks" / "platform-auth"
+    sdk_path = project_root / "packages" / "platform-auth"
     has_platform_auth_sdk = sdk_path.is_dir()
 
     return _LegacySignals(
@@ -422,7 +422,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
             name=NAME,
             applied=False,
             skipped_reason=(
-                f"sdks/platform-auth/ already present and no legacy signals — "
+                f"packages/platform-auth/ already present and no legacy signals — "
                 f"migration appears already applied at {project_root}"
             ),
         )
@@ -460,7 +460,7 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
 
     # 4. Final guidance — what to do next.
     next_steps = (
-        "Run `forge --update` to ship the new sdks/platform-auth*/ trees, "
+        "Run `forge --update` to ship the new packages/platform-auth*/ trees, "
         "the upgraded infra/gatekeeper/, and the per-language middleware "
         "fragments. Then `docker compose up --build` to boot the new stack. "
         "See UPGRADING.md §'1.1 → 1.2' for the full playbook."

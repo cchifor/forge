@@ -31,7 +31,7 @@ def _impl(name: str, lang: str) -> str:
 def register_all(api: ForgeAPI) -> None:
     # Phase 1 — Python SDK port.
     #
-    # Project-scoped: the SDK lives at ``<project>/sdks/platform-auth/`` and is
+    # Project-scoped: the SDK lives at ``<project>/packages/platform-auth/`` and is
     # referenced by every Python backend's pyproject.toml as a path dependency.
     # Only registers ``BackendLanguage.PYTHON`` so the parity_tier auto-derives
     # to 3 (python-only). Phase 4 adds platform_auth_sdk_node (also project-
@@ -53,7 +53,7 @@ def register_all(api: ForgeAPI) -> None:
     # Project-scoped, language-agnostic ("all"): Gatekeeper is a self-contained
     # Python FastAPI container that runs regardless of which backend languages
     # the project picked. Every project that opts into ``auth.mode=generate``
-    # gets the same Gatekeeper image. Lands at ``<project>/infra/gatekeeper/``.
+    # gets the same Gatekeeper image. Lands at ``<project>/deploy/infra/gatekeeper/``.
     #
     # What ships (verbatim port from ``platform/infra/gatekeeper/``):
     #   - 25 modules under ``src/app/gatekeeper/`` (ES256 token minting,
@@ -107,7 +107,7 @@ def register_all(api: ForgeAPI) -> None:
 
     # Phase 4 — Node SDK port (greenfield).
     #
-    # Project-scoped: the SDK lives at ``<project>/sdks/platform-auth-node/``
+    # Project-scoped: the SDK lives at ``<project>/packages/platform-auth-node/``
     # and is referenced by every Node backend's package.json as a workspace
     # dependency. Mirrors the Python SDK's public surface — AuthGuard,
     # IdentityContext, JWKSCache, MayActPolicy, IssuerTrustMap, scope
@@ -139,7 +139,7 @@ def register_all(api: ForgeAPI) -> None:
 
     # Phase 6 — Rust SDK port (greenfield).
     #
-    # Project-scoped: the SDK lives at ``<project>/sdks/platform-auth-rs/``
+    # Project-scoped: the SDK lives at ``<project>/packages/platform-auth-rs/``
     # and is referenced by every Rust backend's Cargo.toml as a path
     # dependency. Mirrors the Python and Node SDKs' public surface —
     # AuthGuard, IdentityContext, JwksCache, MayActPolicy, IssuerTrustMap,
@@ -165,7 +165,7 @@ def register_all(api: ForgeAPI) -> None:
                     # which is the wrong file for project-scoped
                     # fragments — the consumer pulls the SDK in via
                     # the Phase 7 middleware fragment's
-                    # ``platform-auth = { path = "../sdks/platform-auth-rs" }``
+                    # ``platform-auth = { path = "../packages/platform-auth-rs" }``
                     # entry.
                 ),
             },
@@ -281,7 +281,7 @@ def register_all(api: ForgeAPI) -> None:
     #
     # Depends on ``platform_auth_sdk_python`` so the path-dep import
     # (``from platform_auth import AuthGuard``) resolves; the SDK fragment
-    # ships ``sdks/platform-auth/`` once at the project root, this fragment
+    # ships ``packages/platform-auth/`` once at the project root, this fragment
     # wires it into each Python service's middleware chain.
     #
     # NOT yet wired into ``auth.mode=generate``'s enables map — same
@@ -375,11 +375,11 @@ def register_all(api: ForgeAPI) -> None:
                     fragment_dir=_impl("platform_auth_rust_middleware", "rust"),
                     # Backend-scoped (default). Path is two levels up from
                     # ``<project>/services/<name>/Cargo.toml``: ``..`` →
-                    # ``services/``, ``../..`` → project root, then ``sdks/``.
+                    # ``services/``, ``../..`` → project root, then ``packages/``.
                     # Earlier shipped as one level which only worked when
                     # services/ was the project root.
                     dependencies=(
-                        'platform-auth = { path = "../../sdks/platform-auth-rs" }',
+                        'platform-auth = { path = "../../packages/platform-auth-rs" }',
                         'serde_json = "1"',
                     ),
                 ),
@@ -418,7 +418,7 @@ def register_all(api: ForgeAPI) -> None:
     )
 
     # keycloak-realm-sync one-shot sidecar. Reconciles the running realm's
-    # User-Profile schema from infra/keycloak-realm.json on every boot (Keycloak
+    # User-Profile schema from deploy/infra/keycloak-realm.json on every boot (Keycloak
     # only imports once), so the gatekeeper's realm-invariant probe finds the
     # schema present instead of crash-looping on stale pgdata. Reuses the
     # gatekeeper image (realm_sync.py ships in the gatekeeper fragment tree).

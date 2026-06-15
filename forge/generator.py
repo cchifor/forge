@@ -692,13 +692,13 @@ def _render_docker_stack(
             # Copy gatekeeper service
             _log("  Copying gatekeeper ...")
             gatekeeper_src = TEMPLATES_DIR / "infra" / "gatekeeper"
-            gatekeeper_dst = project_root / "infra" / "gatekeeper"
+            gatekeeper_dst = project_root / "deploy" / "infra" / "gatekeeper"
             if gatekeeper_src.exists():
                 shutil.copytree(str(gatekeeper_src), str(gatekeeper_dst), dirs_exist_ok=True)
             # Copy keycloak (Dockerfile + themes)
             _log("  Copying keycloak ...")
             keycloak_src = TEMPLATES_DIR / "infra" / "keycloak"
-            keycloak_dst = project_root / "infra" / "keycloak"
+            keycloak_dst = project_root / "deploy" / "infra" / "keycloak"
             if keycloak_src.exists():
                 shutil.copytree(str(keycloak_src), str(keycloak_dst), dirs_exist_ok=True)
             # Copy validate.sh (LF line endings for Linux containers)
@@ -774,6 +774,8 @@ def _apply_project_scope(
     )
 
     with phase_timer(_logger, "generate.apply_project_features"):
+        from forge.config._topology import compute_topology  # noqa: PLC0415
+
         _has_frontend = (
             config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
         )
@@ -792,7 +794,21 @@ def _apply_project_scope(
             # So project-level templates (e.g. the Helm chart values.yaml) that
             # render {{ server_port }} pick up the primary backend's port.
             primary_server_port=(config.backend.server_port if config.backend else None),
+            # Deployment topology for the topology-aware Helm chart fragment.
+            topology=compute_topology(config, plan),
         )
+
+    # Bundle the Keycloak realm into the Helm chart's files/ so the in-cluster
+    # realm-sync Job can mount it via ``.Files.Get``. Only for a kubernetes
+    # deploy target with keycloak — the realm JSON was rendered into
+    # deploy/infra/ in the docker phase above.
+    if plan.option_values.get("deploy.target") == "kubernetes":
+        _realm = project_root / "deploy" / "infra" / "keycloak-realm.json"
+        if _realm.is_file():
+            _realm_dst = project_root / "deploy" / "helm" / "files" / "keycloak-realm.json"
+            _realm_dst.parent.mkdir(parents=True, exist_ok=True)
+            _realm_dst.write_text(_realm.read_text(encoding="utf-8"), encoding="utf-8")
+            collector.record(_realm_dst, origin="base-template")
 
     # Drop shared quality-signal files (.editorconfig, .gitignore, CI, pre-commit)
     # if the per-template generators haven't already provided them.

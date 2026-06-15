@@ -30,6 +30,7 @@ def _load_pkce_module():
         / "platform_auth_gatekeeper"
         / "all"
         / "files"
+        / "deploy"
         / "infra"
         / "gatekeeper"
         / "src"
@@ -55,9 +56,7 @@ RFC7636_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 RFC7636_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 
 # The unreserved character set permitted in a PKCE code_verifier (RFC 7636 §4.1).
-_UNRESERVED = set(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-)
+_UNRESERVED = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
 
 class TestS256Challenge:

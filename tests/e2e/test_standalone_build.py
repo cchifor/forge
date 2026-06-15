@@ -11,7 +11,7 @@ Two postures are exercised, both of which must come out weld-free:
 
 * **auth off** (``auth.mode=none``) — the minimal default project.
 * **auth.mode=generate** — the full platform-auth stack (SDK at
-  ``sdks/platform-auth/`` + middleware fragment + gatekeeper-provider config).
+  ``packages/platform-auth/`` + middleware fragment + gatekeeper-provider config).
 
 Marked ``@pytest.mark.e2e`` (heavy / opt-in like the other scaffold-and-run
 tests). Run explicitly with ``pytest -m e2e -k standalone_build``.
@@ -311,7 +311,7 @@ def test_auth_generate_project_builds_weld_free(
     backend_dir = project_root / "services" / "svc"
     assert backend_dir.is_dir()
     # The platform-auth SDK ships at the project root; it must be present.
-    assert (project_root / "sdks" / "platform-auth").is_dir()
+    assert (project_root / "packages" / "platform-auth").is_dir()
     _build_and_test(backend_dir)
 
 
@@ -474,5 +474,5 @@ def test_full_feature_max_project_builds_weld_free(
     backend_dir = project_root / "services" / "svc"
     assert backend_dir.is_dir()
     # Both always-shipped/auth SDKs vendor in at the project root.
-    assert (project_root / "sdks" / "platform-auth").is_dir()
+    assert (project_root / "packages" / "platform-auth").is_dir()
     _build_and_test(backend_dir)

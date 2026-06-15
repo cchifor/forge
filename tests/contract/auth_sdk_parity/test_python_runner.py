@@ -40,7 +40,7 @@ crypto_ec = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.ec")
 
 # Add the forge-shipped SDK template's src/ to sys.path so we can
 # ``import platform_auth``. The fragment template is at
-# ``forge/features/auth/templates/platform_auth_sdk/python/files/sdks/platform-auth/src/``.
+# ``forge/features/auth/templates/platform_auth_sdk/python/files/packages/platform-auth/src/``.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 _SDK_SRC = (
     REPO_ROOT
@@ -51,7 +51,7 @@ _SDK_SRC = (
     / "platform_auth_sdk"
     / "python"
     / "files"
-    / "sdks"
+    / "packages"
     / "platform-auth"
     / "src"
 )
@@ -62,7 +62,6 @@ if str(_SDK_SRC) not in sys.path:
 # import ...`` style, so the package needs to be importable from the
 # top of sys.path.
 from platform_auth import (  # noqa: E402
-    AuthError,
     AuthGuard,
     InMemoryIssuerTrustMap,
     InvalidToken,
@@ -84,7 +83,6 @@ from tests.contract.auth_sdk_parity.scenarios import (  # noqa: E402
     SCENARIOS,
     Scenario,
 )
-
 
 # ---------------------------------------------------------------- helpers
 
@@ -132,7 +130,8 @@ def _mint_token(scenario: Scenario, private_key: Any, kid: str) -> str:
     now = int(time.time())
     issued_at = now + (scenario.issued_at or 0)
     expires_at = (
-        scenario.expires_at if scenario.expires_at and scenario.expires_at != 0
+        scenario.expires_at
+        if scenario.expires_at and scenario.expires_at != 0
         else issued_at + scenario.ttl_seconds
     )
     # The scenario's expires_at/issued_at are negative offsets from
@@ -143,8 +142,7 @@ def _mint_token(scenario: Scenario, private_key: Any, kid: str) -> str:
         expires_at = now + scenario.expires_at
 
     audiences = (
-        list(scenario.audience) if isinstance(scenario.audience, tuple)
-        else [scenario.audience]
+        list(scenario.audience) if isinstance(scenario.audience, tuple) else [scenario.audience]
     )
 
     payload: dict[str, Any] = {
@@ -193,14 +191,10 @@ def _mint_token(scenario: Scenario, private_key: Any, kid: str) -> str:
         # Symmetric — sign with a dummy shared secret. The verifier
         # rejects HS256 by allowlist, so it never tries to verify the
         # signature; we just need the token to be parseable.
-        return pyjwt.encode(
-            payload, "dummy-secret", algorithm="HS256", headers=headers
-        )
+        return pyjwt.encode(payload, "dummy-secret", algorithm="HS256", headers=headers)
 
     # Default ES256 — sign with the per-scenario keypair.
-    return pyjwt.encode(
-        payload, private_key, algorithm=scenario.algorithm, headers=headers
-    )
+    return pyjwt.encode(payload, private_key, algorithm=scenario.algorithm, headers=headers)
 
 
 def _build_auth_guard(
@@ -213,9 +207,7 @@ def _build_auth_guard(
     Pre-populates the JWKSCache with the in-memory JWKS (no real HTTP
     fetch — the cache is stuffed via httpx MockTransport).
     """
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(200, json=jwks)
-    )
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=jwks))
     http_client = httpx.AsyncClient(transport=transport, timeout=2.0)
     cache = JWKSCache(http_client=http_client)
     # Always register the *canonical* issuer (not scenario.issuer) so
@@ -260,9 +252,7 @@ def _build_auth_guard(
         may_act = StaticMayActPolicy(inverted)
 
     revocation = (
-        _DenylistStore(scenario.revocation_denylist)
-        if scenario.revocation_denylist
-        else None
+        _DenylistStore(scenario.revocation_denylist) if scenario.revocation_denylist else None
     )
 
     return AuthGuard(

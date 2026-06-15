@@ -36,7 +36,6 @@ import pytest
 
 from tests.contract.auth_sdk_parity.scenarios import scenarios_as_json
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUST_SDK_DIR = (
     REPO_ROOT
@@ -47,7 +46,7 @@ RUST_SDK_DIR = (
     / "platform_auth_sdk_rust"
     / "rust"
     / "files"
-    / "sdks"
+    / "packages"
     / "platform-auth-rs"
 )
 

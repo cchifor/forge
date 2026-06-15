@@ -9,16 +9,17 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
-from forge.backend_app_templates import (
-    DEFAULT_BACKEND_TEMPLATE,
-    get_backend_application_template,
-)
 from forge.config import (
     DEFAULT_REALM,
     TRAEFIK_DASHBOARD_PORT,
     BackendLanguage,
     FrontendFramework,
     ProjectConfig,
+)
+from forge.config._topology import (
+    backend_topology_entry,
+    compute_render_postgres,
+    compute_rendered_infra,
 )
 from forge.errors import GeneratorError
 from forge.services.registry import get_services_for_capabilities
@@ -90,12 +91,12 @@ def render_compose(
         config.frontend is not None and config.frontend.framework != FrontendFramework.NONE
     )
 
-    # Whether a project-root ``sdks/`` tree actually ships — only the
+    # Whether a project-root ``packages/`` tree actually ships — only the
     # platform-auth SDK fragments create it. forge-core is backend-local
     # (services/<svc>/sdks/forge-core, main build context), so a no-auth
-    # project has no project-root ``sdks/``. Declaring the ``sdks`` build
+    # project has no project-root ``packages/``. Declaring the ``packages`` build
     # context when the dir is absent makes ``docker compose build`` fail
-    # ("failed to get build context sdks") — so gate the context on this.
+    # ("failed to get build context packages") — so gate the context on this.
     active_fragments = {rf.fragment.name for rf in plan.ordered} if plan is not None else set()
     has_project_sdks = bool(
         active_fragments
@@ -106,21 +107,22 @@ def render_compose(
         }
     )
 
-    # Build per-backend context list for the template loop
-    # Only the built-in languages ship a database migration step (and thus a
-    # ``<svc>-migrate`` sidecar the service waits on). A plugin-registered
-    # backend has no migrate command branch in the compose template, so
-    # emitting the sidecar would deadlock the stack — the sidecar would run
-    # the server image, never exit, and the service's
-    # ``service_completed_successfully`` dependency would block forever.
-    _BUILTIN_MIGRATING = {BackendLanguage.PYTHON, BackendLanguage.NODE, BackendLanguage.RUST}
+    # Build per-backend context list for the template loop. The per-backend
+    # entry shape and the postgres predicate live in ``forge.config._topology``
+    # so this compose render and the topology-aware Helm chart can't drift —
+    # ``backend_topology_entry`` is the single source of truth for a backend's
+    # name/port/db/migrations/deps/S2S, ``compute_render_postgres`` for whether
+    # a Postgres service is in the stack.
 
     # Phase B1: ``database_mode=none`` suppresses the postgres container and
     # per-backend migrate sidecars. Keycloak has its own DB needs, so the
-    # postgres service still renders when it's enabled — ``render_postgres``
-    # captures the combined condition so the template stays readable.
+    # postgres service still renders when it's enabled.
     database_mode = config.database_mode
-    render_postgres = (bool(config.backends) and database_mode != "none") or config.include_keycloak
+    render_postgres = compute_render_postgres(
+        has_backends=bool(config.backends),
+        database_mode=database_mode,
+        include_keycloak=config.include_keycloak,
+    )
 
     # Infra services the compose will actually render. A backend only gets a
     # ``depends_on`` edge to a service in this set — declaring a dependency on
@@ -128,38 +130,13 @@ def render_compose(
     # undefined service". ``redis``/``keycloak`` render only under
     # ``include_keycloak``; capability services (cache/queue/etc.) come in via
     # ``extra_services``.
-    rendered_infra: set[str] = {str(svc["name"]) for svc in extra_services}
-    if config.include_keycloak:
-        rendered_infra |= {"keycloak", "redis"}
-    if render_postgres:
-        rendered_infra.add("postgres")
+    rendered_infra: set[str] = compute_rendered_infra(
+        config,
+        render_postgres=render_postgres,
+        extra_service_names=tuple(str(svc["name"]) for svc in extra_services),
+    )
 
-    backends_ctx = []
-    for bc in config.backends:
-        # An app-template variant can declare infra it needs at boot (e.g. the
-        # TMS outbox relay needs Redis); add a healthcheck-gated depends_on for
-        # each such service that's actually in the stack so it doesn't race the
-        # infra container and crash-loop.
-        app_tmpl = get_backend_application_template(
-            bc.language, bc.app_template or DEFAULT_BACKEND_TEMPLATE
-        )
-        depends_on_services = [
-            svc for svc in (app_tmpl.requires_services if app_tmpl else ()) if svc in rendered_infra
-        ]
-        backends_ctx.append(
-            {
-                "name": bc.name,
-                "language": bc.language.value,
-                "port": bc.server_port,
-                "db_name": bc.name.replace("-", "_"),
-                "has_migrations": bc.language in _BUILTIN_MIGRATING,
-                "depends_on_services": depends_on_services,
-                # Phase 4: per-service S2S / inter-service env block. Empty
-                # dict when synthesis is inactive → the template's loop emits
-                # nothing (golden-stable).
-                "synthesis_env": synthesis.env_for(bc.name) if synthesis else {},
-            }
-        )
+    backends_ctx = [backend_topology_entry(bc, synthesis, rendered_infra) for bc in config.backends]
 
     # Primary backend (first) for backward-compat references
     primary = config.backend
@@ -206,11 +183,11 @@ def render_compose(
 
 # -- Workspace root manifests -------------------------------------------------
 #
-# Generated projects are flat monorepos (apps/, services/, sdks/). With
-# cross-package source deps (``file:../sdks/<name>`` for Node,
-# ``path = "../sdks/<name>"`` for Rust), they need a workspace root so:
+# Generated projects are flat monorepos (apps/, services/, packages/). With
+# cross-package source deps (``file:../packages/<name>`` for Node,
+# ``path = "../packages/<name>"`` for Rust), they need a workspace root so:
 #
-#   - the in-tree SDK (e.g. ``sdks/platform-auth-node``) builds before
+#   - the in-tree SDK (e.g. ``packages/platform-auth-node``) builds before
 #     its consumers run ``tsc --noEmit`` against missing ``dist/``
 #     artifacts (matrix-verify Node was tripping on this), and
 #   - the Rust SDK path-dep resolves at the workspace root rather than
@@ -291,12 +268,12 @@ def render_workspace_cargo_toml(
     rust_backends = [
         {"name": b.name} for b in config.backends if b.language == BackendLanguage.RUST
     ]
-    # The Rust SDK ships at ``sdks/platform-auth-rs/`` per the fragment's
+    # The Rust SDK ships at ``packages/platform-auth-rs/`` per the fragment's
     # files/ tree. Only listing one SDK today; new Rust SDKs would append
     # to this list when their fragments enter the plan.
     rust_sdk_members: list[str] = []
     if "platform_auth_sdk_rust" in active:
-        rust_sdk_members.append("sdks/platform-auth-rs")
+        rust_sdk_members.append("packages/platform-auth-rs")
 
     # Pick a workspace edition: the first Rust backend's edition wins. If
     # there are no Rust backends but the SDK is present (unusual but
@@ -409,7 +386,7 @@ def render_keycloak_realm(
             raise GeneratorError(
                 f"Rendered Keycloak realm JSON is missing required top-level key '{required}'."
             )
-    infra_dir = project_root / "infra"
+    infra_dir = project_root / "deploy" / "infra"
     infra_dir.mkdir(parents=True, exist_ok=True)
     realm_path = infra_dir / "keycloak-realm.json"
     realm_path.write_text(output, encoding="utf-8")
@@ -451,7 +428,10 @@ def render_init_db(
         extra_dbs.add(synthesis.event_bus_db)
 
     output = template.render({"extra_databases": sorted(extra_dbs)})
-    init_path = project_root / "init-db.sh"
+    # Deployment/orchestration support files live under deploy/ to keep the
+    # project root focused on app code; the compose volume mount points here.
+    init_path = project_root / "deploy" / "compose" / "init-db.sh"
+    init_path.parent.mkdir(parents=True, exist_ok=True)
     # Write with LF line endings (CRLF breaks shebang in Linux containers)
     init_path.write_bytes(output.replace("\r\n", "\n").encode("utf-8"))
     return init_path
@@ -547,7 +527,9 @@ def render_service_registry(
     )
     output = f"{header}\n{body}"
 
-    registry_path = project_root / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    registry_path = (
+        project_root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    )
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry_path.write_text(output, encoding="utf-8")
     return registry_path

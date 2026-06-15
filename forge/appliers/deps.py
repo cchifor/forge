@@ -131,7 +131,7 @@ def _add_node_deps(
             # npm (≤ v10) doesn't support the `workspace:` URL protocol —
             # only pnpm and yarn berry do. Rewrite to a relative ``file:``
             # path pointing at the conventional in-tree SDK location at
-            # ``<project>/sdks/<unscoped-name>/``. The path is computed
+            # ``<project>/packages/<unscoped-name>/``. The path is computed
             # *unconditionally* (no on-disk existence check) because
             # project-scoped SDK fragments are applied AFTER backend-
             # scoped middleware fragments in the generator pipeline —
@@ -153,7 +153,7 @@ def _rewrite_workspace_spec(
 ) -> str | None:
     """Resolve ``workspace:*`` to ``file:<relative-path>`` against an in-tree SDK.
 
-    Convention: SDKs live at ``<project_root>/sdks/<unscoped-name>/``.
+    Convention: SDKs live at ``<project_root>/packages/<unscoped-name>/``.
     When ``project_root`` is supplied (the normal path from
     :class:`FragmentDepsApplier`), the SDK path is computed
     unconditionally — the SDK fragment is project-scoped and applied
@@ -162,7 +162,7 @@ def _rewrite_workspace_spec(
 
     The fallback path (``project_root=None``, kept for direct callers and
     legacy tests) walks up from the consuming ``package.json`` looking
-    for ``<ancestor>/sdks/<unscoped-name>/`` on disk. Returns ``None``
+    for ``<ancestor>/packages/<unscoped-name>/`` on disk. Returns ``None``
     if it can't find it — preserving the original ``workspace:*`` spec
     so ``npm install`` fails loudly with the same EUNSUPPORTEDPROTOCOL
     rather than silently writing a broken ``file:./missing`` path.
@@ -177,13 +177,13 @@ def _rewrite_workspace_spec(
     backend_dir = package_json.parent.resolve()
 
     if project_root is not None:
-        candidate = project_root.resolve() / "sdks" / unscoped
+        candidate = project_root.resolve() / "packages" / unscoped
         rel = os.path.relpath(candidate, backend_dir)
         return "file:" + rel.replace(os.sep, "/")
 
     current = backend_dir
     while True:
-        candidate = current / "sdks" / unscoped
+        candidate = current / "packages" / unscoped
         if candidate.is_dir():
             rel = os.path.relpath(candidate, backend_dir)
             return "file:" + rel.replace(os.sep, "/")

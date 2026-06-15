@@ -26,6 +26,7 @@ _APIKEYS_PATH = (
     / "platform_auth_gatekeeper"
     / "all"
     / "files"
+    / "deploy"
     / "infra"
     / "gatekeeper"
     / "src"
@@ -105,9 +106,9 @@ class TestRevokeTenantScoping:
         revoked = asyncio.run(module.revoke_api_key("hashB", "tenant-A"))
 
         assert revoked is False, "cross-tenant revoke must report failure"
-        assert (
-            asyncio.run(fake.get("apikey:hashB")) is not None
-        ), "tenant-B's key must survive a cross-tenant revoke attempt"
+        assert asyncio.run(fake.get("apikey:hashB")) is not None, (
+            "tenant-B's key must survive a cross-tenant revoke attempt"
+        )
 
     def test_revoke_allows_same_tenant(self) -> None:
         module, fake = _load_apikeys_module()

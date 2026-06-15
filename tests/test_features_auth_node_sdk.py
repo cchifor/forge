@@ -21,7 +21,6 @@ from pathlib import Path
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 # Source modules that mirror the Python SDK's public surface. Any
 # divergence here is a parity-breaking change and the cross-SDK parity
 # fixtures will catch it at Phase 9.
@@ -53,7 +52,7 @@ DEFERRED_MODULES: tuple[str, ...] = ()
 def _sdk_root() -> Path:
     frag = FRAGMENT_REGISTRY["platform_auth_sdk_node"]
     impl = frag.implementations[BackendLanguage.NODE]
-    return Path(impl.fragment_dir) / "files" / "sdks" / "platform-auth-node"
+    return Path(impl.fragment_dir) / "files" / "packages" / "platform-auth-node"
 
 
 def test_platform_auth_sdk_node_fragment_registered() -> None:
@@ -184,12 +183,12 @@ def test_node_sdk_default_tenant_claim_is_forge_namespaced() -> None:
     ``https://forge/tenant_id``, NOT ``https://platform/tenant_id``.
     """
     auth_guard = (_sdk_root() / "src" / "AuthGuard.ts").read_text(encoding="utf-8")
-    assert (
-        '"https://forge/tenant_id"' in auth_guard
-    ), "DEFAULT_TENANT_ID_CLAIM must be the forge-namespaced URL"
-    assert (
-        '"https://platform/tenant_id"' not in auth_guard
-    ), "AuthGuard.ts still references the platform-namespaced tenant claim"
+    assert '"https://forge/tenant_id"' in auth_guard, (
+        "DEFAULT_TENANT_ID_CLAIM must be the forge-namespaced URL"
+    )
+    assert '"https://platform/tenant_id"' not in auth_guard, (
+        "AuthGuard.ts still references the platform-namespaced tenant claim"
+    )
 
 
 def test_node_sdk_algorithms_are_asymmetric_only() -> None:
@@ -200,9 +199,9 @@ def test_node_sdk_algorithms_are_asymmetric_only() -> None:
     future config change can't silently widen it.
     """
     auth_guard = (_sdk_root() / "src" / "AuthGuard.ts").read_text(encoding="utf-8")
-    assert (
-        'export const DEFAULT_ALGORITHMS = ["ES256"]' in auth_guard
-    ), "DEFAULT_ALGORITHMS must be a single-element ES256 tuple"
+    assert 'export const DEFAULT_ALGORITHMS = ["ES256"]' in auth_guard, (
+        "DEFAULT_ALGORITHMS must be a single-element ES256 tuple"
+    )
 
 
 def test_node_sdk_plugin_module_exposes_fastify_integration() -> None:
@@ -294,9 +293,7 @@ def test_node_sdk_s2s_client_caches_with_lru() -> None:
     assert "lru-cache" in text or "LRUCache" in text, (
         "S2SClient.ts must use lru-cache for bounded token caching"
     )
-    assert "maxCacheEntries" in text, (
-        "S2SClient.ts must accept maxCacheEntries as a config knob"
-    )
+    assert "maxCacheEntries" in text, "S2SClient.ts must accept maxCacheEntries as a config knob"
 
 
 def test_node_sdk_s2s_client_safety_margin_default() -> None:
@@ -337,9 +334,9 @@ def test_node_sdk_testing_uses_forge_namespaced_default_claim() -> None:
     or test tokens won't verify out-of-the-box.
     """
     testing_text = (_sdk_root() / "src" / "testing.ts").read_text(encoding="utf-8")
-    assert (
-        '"https://forge/tenant_id"' in testing_text
-    ), "buildTestToken must default the tenant_id claim to https://forge/tenant_id"
+    assert '"https://forge/tenant_id"' in testing_text, (
+        "buildTestToken must default the tenant_id claim to https://forge/tenant_id"
+    )
 
 
 def test_node_sdk_testing_helper_uses_aligned_claim_names() -> None:
@@ -424,7 +421,7 @@ def test_node_sdk_parity_runner_shipped() -> None:
     Behavioural verification (running the 19 scenarios end-to-end)
     happens via the SDK's vitest invocation:
 
-        cd <project>/sdks/platform-auth-node
+        cd <project>/packages/platform-auth-node
         npm install
         PARITY_FIXTURES=<scenarios.json> npx vitest run test/parity_runner.test.ts
 
@@ -434,21 +431,19 @@ def test_node_sdk_parity_runner_shipped() -> None:
     language `reason()` slug contract).
     """
     runner_path = _sdk_root() / "test" / "parity_runner.test.ts"
-    assert runner_path.is_file(), (
-        f"parity_runner.test.ts missing at {runner_path}"
-    )
+    assert runner_path.is_file(), f"parity_runner.test.ts missing at {runner_path}"
     text = runner_path.read_text(encoding="utf-8")
     must_have = (
         # Loads scenarios from the env var path.
         "PARITY_FIXTURES",
         # Imports the SDK's public surface.
-        '../src/index.js',
+        "../src/index.js",
         # Imports the testing helper.
-        '../src/testing.js',
+        "../src/testing.js",
         "buildTestToken",
         "generateTestKeypair",
         # vitest test framework.
-        "from \"vitest\"",
+        'from "vitest"',
         "describe",
         # Slug → constructor map (cross-language reason() contract).
         "SLUG_TO_CTOR",
@@ -480,9 +475,7 @@ def test_node_sdk_audit_callback_shape_matches_cross_sdk_contract() -> None:
     snake_case + Option types (``tenant_id: Option<String>``). Field
     presence + types pinned here so all three stay aligned.
     """
-    auth_guard_text = (
-        _sdk_root() / "src" / "AuthGuard.ts"
-    ).read_text(encoding="utf-8")
+    auth_guard_text = (_sdk_root() / "src" / "AuthGuard.ts").read_text(encoding="utf-8")
     must_have = (
         "export type AuthAuditRecord",
         "export type AuthAuditCallback",
@@ -503,9 +496,7 @@ def test_node_sdk_audit_callback_shape_matches_cross_sdk_contract() -> None:
         "audit?: AuthAuditCallback",
     )
     missing = [name for name in must_have if name not in auth_guard_text]
-    assert not missing, (
-        f"AuthGuard.ts missing audit-callback wiring: {missing}"
-    )
+    assert not missing, f"AuthGuard.ts missing audit-callback wiring: {missing}"
 
 
 def test_node_sdk_audit_callback_test_shipped() -> None:
@@ -516,7 +507,7 @@ def test_node_sdk_audit_callback_test_shipped() -> None:
 
     Behavioural verification runs via:
 
-        cd <project>/sdks/platform-auth-node
+        cd <project>/packages/platform-auth-node
         npx vitest run test/audit_callback.test.ts
 
     Pinning the structural presence here so a future template refactor
@@ -524,9 +515,7 @@ def test_node_sdk_audit_callback_test_shipped() -> None:
     assertions (record-shape, tenant_slug propagation, deny-no-op).
     """
     test_path = _sdk_root() / "test" / "audit_callback.test.ts"
-    assert test_path.is_file(), (
-        f"audit_callback.test.ts missing at {test_path}"
-    )
+    assert test_path.is_file(), f"audit_callback.test.ts missing at {test_path}"
     text = test_path.read_text(encoding="utf-8")
     must_have = (
         # Imports the SDK's public surface + testing helper.
@@ -546,9 +535,7 @@ def test_node_sdk_audit_callback_test_shipped() -> None:
         "does not fire on the deny path",
     )
     missing = [name for name in must_have if name not in text]
-    assert not missing, (
-        f"audit_callback.test.ts missing required wiring: {missing}"
-    )
+    assert not missing, f"audit_callback.test.ts missing required wiring: {missing}"
 
 
 def test_node_sdk_emit_audit_fires_only_on_allow_path() -> None:
@@ -559,9 +546,7 @@ def test_node_sdk_emit_audit_fires_only_on_allow_path() -> None:
     Pinning the call site count here so a future refactor that adds
     deny-path emit lands in lockstep across all three SDKs.
     """
-    auth_guard_text = (
-        _sdk_root() / "src" / "AuthGuard.ts"
-    ).read_text(encoding="utf-8")
+    auth_guard_text = (_sdk_root() / "src" / "AuthGuard.ts").read_text(encoding="utf-8")
     # Only one call site: the success path emits with `decision: "allow"`.
     allow_emit_count = auth_guard_text.count('_emitAudit({ decision: "allow"')
     assert allow_emit_count == 1, (

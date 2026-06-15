@@ -19,17 +19,17 @@ services:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
       # Multi-stage Dockerfiles reference the platform's weld-* SDK
-      # source tree via ``COPY --from=sdks`` and the workspace root
+      # source tree via ``COPY --from=packages`` and the workspace root
       # (workspace package.json + lockfile) via ``COPY --from=project_root``.
       # ``additional_contexts`` binds those build-context names to the
-      # on-disk ``./sdks/`` directory and the project root (sibling /
-      # parent of the compose file). The ``sdks`` context is only declared
-      # when a project-root ``sdks/`` tree actually ships (the platform-auth
+      # on-disk ``./packages/`` directory and the project root (sibling /
+      # parent of the compose file). The ``packages`` context is only declared
+      # when a project-root ``packages/`` tree actually ships (the platform-auth
       # SDK fragments) — BuildKit FAILS the build on a declared-but-missing
       # context dir, and forge-core comes from the main context, not here.
       additional_contexts:
 {% if has_project_sdks %}
-        sdks: ./sdks
+        packages: ./packages
 {% endif %}
         project_root: .
     environment:
@@ -57,10 +57,10 @@ services:
       context: ./services/{{ be.name }}
       dockerfile: Dockerfile
       # See the {{ be.name }}-migrate build above — same rationale (the
-      # ``sdks`` context is only declared when a project-root sdks/ ships).
+      # ``packages`` context is only declared when a project-root packages/ ships).
       additional_contexts:
 {% if has_project_sdks %}
-        sdks: ./sdks
+        packages: ./packages
 {% endif %}
         project_root: .
     # Direct host:container port so the matrix-nightly lane-C smoke
@@ -170,7 +170,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 {% if backends | length > 1 or include_keycloak %}
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./deploy/compose/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
 {% endif %}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -187,6 +187,10 @@ services:
     build:
       context: ./apps/{{ frontend_slug }}
       dockerfile: Dockerfile
+    # nginx.conf is mounted (not baked) so routing config is a deployment
+    # concern. The Helm chart supplies it via a ConfigMap instead.
+    volumes:
+      - ./apps/{{ frontend_slug }}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`app.localhost`)"
@@ -225,13 +229,13 @@ services:
   # by the ``platform_auth_gatekeeper`` + ``platform_auth_gatekeeper_keygen``
   # fragments via declarative compose.yaml entries (registered through
   # ``forge.services.fragment_compose``). The fragments build the
-  # service block from the same ``./infra/gatekeeper/`` source tree that
+  # service block from the same ``./deploy/infra/gatekeeper/`` source tree that
   # used to be hand-rolled here.
 
   # ── Identity Provider ──
   keycloak:
     build:
-      context: ./infra/keycloak
+      context: ./deploy/infra/keycloak
       dockerfile: Dockerfile
     command: start-dev --import-realm
     ports:
@@ -246,7 +250,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     volumes:
-      - ./infra/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./deploy/infra/keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy

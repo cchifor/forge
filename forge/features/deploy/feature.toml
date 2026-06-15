@@ -1,7 +1,7 @@
 [feature]
 name = "deploy"
-version = "1.0.0"
-summary = "Kubernetes/Helm deployment scaffolding — Deployment, Service, HPA, probes, Helm chart."
+version = "2.0.0"
+summary = "Topology-aware Helm chart deployment — per-backend Deployment/Service/HPA, frontend, Ingress, kept current on update."
 category = "platform"
 stability = "beta"
 
@@ -12,7 +12,5 @@ options = [
     "deploy.target",
 ]
 fragments = [
-    "deploy_kubernetes",
-    "deploy_k8s_hpa",
     "deploy_helm_chart",
 ]
