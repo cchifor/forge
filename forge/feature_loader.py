@@ -154,14 +154,20 @@ def load_all() -> list[FeatureManifest]:
     _load_plugins()
 
     # Phase 5: freeze the fragment registry — only once.
+    #
+    # The freeze() audit (orphan depends_on / dependency cycles) is a HARD
+    # gate, not a tolerable plugin-load failure: a FragmentError here means
+    # the registry is internally inconsistent and must not be used for
+    # generation. Unlike a broken external plugin (collected into
+    # FAILED_PLUGINS and warned about), an audit failure leaves the registry
+    # UNFROZEN, so swallowing it would let generation proceed against an
+    # audit-failed registry. Re-raise so the CLI hard-fails.
     if not FRAGMENT_REGISTRY.frozen:
         try:
             FRAGMENT_REGISTRY.freeze()
         except FragmentError as exc:
-            from forge.plugins import FAILED_PLUGINS  # noqa: PLC0415
-
-            FAILED_PLUGINS.append(("<registry audit>", f"{type(exc).__name__}: {exc}"))
             logger.error("FRAGMENT_REGISTRY audit failed: %s", exc)
+            raise
 
     # Phase 6: validate manifest contracts (warn-only).
     registered_options = frozenset(OPTION_REGISTRY.keys())
