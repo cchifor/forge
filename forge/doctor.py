@@ -319,6 +319,35 @@ def check_ts_morph_toolchain() -> CheckResult:
             ),
         )
 
+    # The helper must itself parse as valid JS. A syntax error (e.g. a
+    # stray Python-ism leaking into a template literal) makes `node` exit
+    # non-zero on *every* invocation, so AST injection silently degrades to
+    # regex while ts-morph still looks "reachable". Probe it explicitly so
+    # doctor surfaces the breakage instead of reporting a false "ok".
+    try:
+        check = subprocess.run(
+            [node, "--check", str(_HELPER_PATH)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:  # noqa: BLE001
+        check = None
+    if check is not None and check.returncode != 0:
+        first_line = next(
+            (ln for ln in check.stderr.splitlines() if ln.strip()), "syntax error"
+        )
+        return CheckResult(
+            name="ts-morph:toolchain",
+            status="warn",
+            detail=(
+                "ts-morph helper does not parse (`node --check` failed) — "
+                f"AST injection unavailable, regex fallback in use: {first_line.strip()}"
+            ),
+            fix="Report this as a forge bug; the shipped helper should always parse.",
+        )
+
     flag = os.getenv("FORGE_TS_AST", "").strip().lower()
     enabled = flag in ("1", "true", "yes", "on")
     state = "active (FORGE_TS_AST=1)" if enabled else ("available — set FORGE_TS_AST=1 to opt in")
