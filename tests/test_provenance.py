@@ -32,6 +32,28 @@ class TestSha256Of:
         p.write_text("content")
         assert sha256_of(p) == sha256_of(p)
 
+    def test_crlf_straddling_chunk_boundary_matches_merge(self, tmp_path: Path) -> None:
+        """A CRLF split across the 64 KiB read boundary must still collapse.
+
+        ``sha256_of`` streams the file in 65536-byte chunks. If a ``\\r\\n``
+        lands with the CR as the last byte of one chunk and the LF as the
+        first byte of the next, a naive per-chunk ``replace(b"\\r\\n", b"\\n")``
+        never sees the pair and leaves a stray CR in the digest — diverging
+        from ``merge.sha256_of_file`` (which normalizes the whole content
+        globally). That divergence breaks the update/harvest round-trip for
+        CRLF files at exactly this size.
+        """
+        from forge.sync.merge import sha256_of_file  # noqa: PLC0415
+
+        # 65535 filler bytes, then a CRLF whose CR is byte 65535 (end of the
+        # first 65536-byte chunk) and whose LF is byte 65536 (start of the
+        # second chunk).
+        data = b"a" * 65535 + b"\r\n" + b"b" * 16
+        f = tmp_path / "straddle.txt"
+        f.write_bytes(data)
+
+        assert sha256_of(f) == sha256_of_file(f)
+
 
 class TestProvenanceCollector:
     def test_records_file_with_relative_path(self, tmp_path: Path) -> None:
