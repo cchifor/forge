@@ -33,7 +33,7 @@ def register_all(api: ForgeAPI) -> None:
 Layer discriminator for the authentication subsystem. ``generate`` ships
 the platform-auth model end-to-end:
 
-- Per-language verifier SDKs at ``<project>/sdks/platform-auth*/``
+- Per-language verifier SDKs at ``<project>/packages/platform-auth*/``
   (Python / Node / Rust). Each ships ``AuthGuard``, ``IdentityContext``,
   multi-issuer ``JWKSCache`` with stale-serve, ``MayActPolicy`` (RFC 8693),
   ``IssuerTrustMap``, ``RevocationStore``, scope-matching with wildcards,
@@ -69,7 +69,7 @@ Gatekeeper container (Phase 2 cutover) to mint internal JWTs.""",
             enables={
                 "generate": (
                     # SDK ports — one per backend language. Ship to
-                    # ``<project>/sdks/platform-auth*/`` (a NEW path, no
+                    # ``<project>/packages/platform-auth*/`` (a NEW path, no
                     # collision with forge's existing service templates).
                     "platform_auth_sdk_python",
                     "platform_auth_sdk_node",

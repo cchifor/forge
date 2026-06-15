@@ -48,7 +48,7 @@ dependencies = [
     "forge-core",
 {%- if include_platform_auth | default(false) %}
     # platform-auth — runtime SDK consumed by ``platform_auth_python_middleware``.
-    # Source lives at ``sdks/platform-auth/`` (shipped by the
+    # Source lives at ``packages/platform-auth/`` (shipped by the
     # ``platform_auth_sdk_python`` fragment); [tool.uv.sources] below
     # points uv at the path-dep.
     "platform-auth",
@@ -58,10 +58,10 @@ dependencies = [
 [tool.uv.sources]
 # forge-core ships inside this backend (base template) at ``sdks/forge-core``,
 # so its path-dep is backend-relative — unlike the platform-auth SDK which
-# lives at the project-root ``sdks/`` tree (``../../sdks/...``).
+# lives at the project-root ``packages/`` tree (``../../packages/...``).
 forge-core = { path = "sdks/forge-core" }
 {%- if include_platform_auth | default(false) %}
-platform-auth = { path = "../../sdks/platform-auth" }
+platform-auth = { path = "../../packages/platform-auth" }
 {%- endif %}
 
 [dependency-groups]

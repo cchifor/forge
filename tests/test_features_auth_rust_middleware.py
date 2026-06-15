@@ -26,10 +26,7 @@ import yaml
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
-EXPECTED_FILES = (
-    "src/middleware/auth.rs",
-)
+EXPECTED_FILES = ("src/middleware/auth.rs",)
 
 
 def _fragment_root() -> Path:
@@ -68,9 +65,9 @@ def test_rust_middleware_path_dep_declared() -> None:
     frag = FRAGMENT_REGISTRY["platform_auth_rust_middleware"]
     impl = frag.implementations[BackendLanguage.RUST]
     deps = impl.dependencies
-    assert any("platform-auth" in d and "../sdks/platform-auth-rs" in d for d in deps), (
+    assert any("platform-auth" in d and "../packages/platform-auth-rs" in d for d in deps), (
         f"fragment must declare platform-auth as a path-dep against "
-        f"../sdks/platform-auth-rs; got {deps}"
+        f"../packages/platform-auth-rs; got {deps}"
     )
 
 
@@ -171,8 +168,7 @@ def test_inject_yaml_wires_module_and_layer() -> None:
     assert inject_path.is_file(), f"inject.yaml missing at {inject_path}"
     blocks = yaml.safe_load(inject_path.read_text(encoding="utf-8"))
     assert isinstance(blocks, list) and len(blocks) >= 3, (
-        "inject.yaml must declare at least three injections "
-        "(mod registration + import + layer)"
+        "inject.yaml must declare at least three injections (mod registration + import + layer)"
     )
     targets = {b["target"] for b in blocks}
     snippets = " ".join(b["snippet"] for b in blocks)
@@ -180,9 +176,7 @@ def test_inject_yaml_wires_module_and_layer() -> None:
     assert "src/middleware/mod.rs" in targets, (
         "inject.yaml must register the auth submodule via middleware/mod.rs"
     )
-    assert "src/app.rs" in targets, (
-        "inject.yaml must wire the layer into src/app.rs"
-    )
+    assert "src/app.rs" in targets, "inject.yaml must wire the layer into src/app.rs"
     assert "pub mod auth" in snippets, (
         "inject.yaml must declare `pub mod auth;` in middleware/mod.rs"
     )
@@ -214,6 +208,6 @@ def test_rust_middleware_fragment_wired_to_auth_mode() -> None:
         "platform_auth_rust_middleware fragment must be in "
         "auth.mode=generate's enables tuple after the Phase 7 Wave 2 "
         "cutover — without it, a generated Rust project gets the SDK "
-        "at sdks/platform-auth-rs/ but no middleware wiring it into "
+        "at packages/platform-auth-rs/ but no middleware wiring it into "
         "Axum."
     )

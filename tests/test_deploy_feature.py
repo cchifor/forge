@@ -1,31 +1,41 @@
-"""WS-10.1: the ``deploy`` feature emits Kubernetes manifests + a Helm chart.
+"""The ``deploy`` feature emits a topology-aware Helm umbrella chart.
 
-``deploy.target=kubernetes`` adds per-backend ``k8s/`` manifests, a
-project-level HPA, and a Helm chart under ``helm/``. The default
-(``none``) emits nothing, so existing projects are unaffected.
+``deploy.target=kubernetes`` renders a single Helm chart under
+``deploy/helm/`` whose ``values.yaml`` is built from the project's deployment
+topology — one ``workloads`` entry per backend plus the frontend and
+platform-service toggles. The chart's ``templates/*.yaml`` are pure Go and
+``range`` over ``.Values.workloads``. The default (``none``) emits nothing, so
+existing projects are unaffected.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+import yaml
+
+from forge.config import BackendConfig, BackendLanguage, FrontendConfig, ProjectConfig
+from forge.config._frontend import FrontendFramework
 from forge.generator import generate
 
 
-def _k8s_config(tmp_path: Path, *, target: str = "kubernetes") -> ProjectConfig:
+def _k8s_config(*, target: str = "kubernetes", port: int = 8000, **kw) -> ProjectConfig:
     return ProjectConfig(
         project_name="Deploy Proj",
-        backends=[
-            BackendConfig(
-                project_name="Deploy Proj",
-                language=BackendLanguage.PYTHON,
-                server_port=8000,
-            ),
-        ],
+        backends=[BackendConfig(name="api", language=BackendLanguage.PYTHON, server_port=port)],
         options={"deploy.target": target},
-        output_dir=str(tmp_path),
+        **kw,
     )
+
+
+def _gen(config: ProjectConfig) -> Path:
+    # dry_run skips the per-backend toolchain install (no network needed) and
+    # returns the generated project root in a temp dir.
+    return generate(config, quiet=True, dry_run=True)
+
+
+def _values(root: Path) -> dict:
+    return yaml.safe_load((root / "deploy" / "helm" / "values.yaml").read_text(encoding="utf-8"))
 
 
 # --- registration ---------------------------------------------------------
@@ -35,8 +45,7 @@ def test_deploy_feature_is_discovered():
     from forge import feature_loader as fl
 
     fl.load_all()
-    names = {m.name for m in fl.LOADED_FEATURES}
-    assert "deploy" in names
+    assert "deploy" in {m.name for m in fl.LOADED_FEATURES}
 
 
 def test_deploy_target_option_registered():
@@ -48,83 +57,86 @@ def test_deploy_target_option_registered():
     assert opt.default == "none"
 
 
-def test_kubernetes_enables_three_fragments():
+def test_kubernetes_enables_only_helm_chart():
     from forge.options._registry import OPTION_REGISTRY
 
     opt = OPTION_REGISTRY["deploy.target"]
-    assert set(opt.enables["kubernetes"]) == {
-        "deploy_kubernetes",
-        "deploy_k8s_hpa",
-        "deploy_helm_chart",
-    }
+    assert set(opt.enables["kubernetes"]) == {"deploy_helm_chart"}
     assert opt.enables.get("none", ()) == ()
     assert opt.enables.get("docker-compose", ()) == ()
 
 
-def test_three_deploy_fragments_registered():
+def test_helm_fragment_registered_and_retired_fragments_absent():
     from forge.fragments import FRAGMENT_REGISTRY
 
-    for name in ("deploy_kubernetes", "deploy_k8s_hpa", "deploy_helm_chart"):
-        assert name in FRAGMENT_REGISTRY, name
+    assert "deploy_helm_chart" in FRAGMENT_REGISTRY
+    # The static per-backend raw-k8s + placeholder-HPA fragments were retired in
+    # favour of the topology-aware chart (deploy/k8s is now helm-template-derived).
+    assert "deploy_kubernetes" not in FRAGMENT_REGISTRY
+    assert "deploy_k8s_hpa" not in FRAGMENT_REGISTRY
 
 
 # --- generation -----------------------------------------------------------
 
 
-def test_kubernetes_target_emits_manifests(tmp_path: Path):
-    config = _k8s_config(tmp_path)
-    root = generate(config, quiet=True)
-    assert root.exists()
-    assert list(root.rglob("k8s/deployment.yaml")), "expected a k8s/deployment.yaml"
-    assert (root / "helm" / "Chart.yaml").is_file(), "expected helm/Chart.yaml"
-    assert (root / "k8s" / "hpa.yaml").is_file(), "expected project-level k8s/hpa.yaml"
-
-
-def test_helm_go_templates_survive_verbatim(tmp_path: Path):
-    config = _k8s_config(tmp_path)
-    root = generate(config, quiet=True)
-    dep = root / "helm" / "templates" / "deployment.yaml"
-    assert dep.is_file()
-    text = dep.read_text(encoding="utf-8")
-    # Helm Go-template syntax must NOT have been Jinja-rendered/stripped.
-    assert "{{ .Values.image.repository }}" in text
-    assert '{{ include "app.fullname" . }}' in text
-
-
-def test_none_target_emits_no_deploy_files(tmp_path: Path):
-    config = _k8s_config(tmp_path, target="none")
-    root = generate(config, quiet=True)
+def test_kubernetes_target_emits_topology_chart():
+    root = _gen(_k8s_config())
+    helm = root / "deploy" / "helm"
+    assert (helm / "Chart.yaml").is_file()
+    assert (helm / "values.yaml").is_file()
+    assert (helm / "templates" / "deployments.yaml").is_file()
+    # The chart lands under deploy/, not the old project-root helm/.
     assert not (root / "helm").exists()
-    assert not list(root.rglob("k8s/deployment.yaml"))
+    # values.yaml carries a per-backend workload entry built from topology.
+    assert "api" in _values(root)["workloads"]
 
 
-def test_k8s_port_tracks_server_port(tmp_path: Path):
-    """The k8s containerPort + Helm targetPort must follow the backend's
-    configured server_port (not a hardcoded 8000). The probes reference the
-    named ``http`` port, so a correct containerPort makes them probe the right
-    port. Regression for the static-8000 mismatch.
-    """
+def test_helm_go_templates_survive_verbatim():
+    """The chart bodies are pure Go-templates copied verbatim — Jinja must not
+    have rendered/stripped the ``{{ .Values.* }}`` / ``range`` syntax."""
+    root = _gen(_k8s_config())
+    text = (root / "deploy" / "helm" / "templates" / "deployments.yaml").read_text(encoding="utf-8")
+    assert "range $name, $w := .Values.workloads" in text
+    assert "{{ $w.image.repository }}" in text
+    assert 'include "app.labels" $' in text
+
+
+def test_none_target_emits_no_deploy_chart():
+    root = _gen(_k8s_config(target="none"))
+    assert not (root / "deploy" / "helm").exists()
+
+
+def test_workload_port_tracks_server_port():
+    """A workload's containerPort follows the backend's configured server_port
+    (regression for the old static-8000 mismatch)."""
+    root = _gen(_k8s_config(port=8137))
+    api = _values(root)["workloads"]["api"]
+    assert api["containerPort"] == 8137
+    assert api["language"] == "python"
+    assert api["env"]["APP__SERVER__PORT"] == "8137"
+
+
+def test_multi_backend_emits_one_workload_each():
     config = ProjectConfig(
-        project_name="Deploy Proj",
+        project_name="Multi",
         backends=[
-            BackendConfig(
-                project_name="Deploy Proj",
-                language=BackendLanguage.PYTHON,
-                server_port=8137,  # deliberately non-default, non-8000
-            ),
+            BackendConfig(name="user-api", language=BackendLanguage.PYTHON, server_port=8001),
+            BackendConfig(name="billing", language=BackendLanguage.NODE, server_port=8002),
         ],
+        frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="Multi"),
         options={"deploy.target": "kubernetes"},
-        output_dir=str(tmp_path),
     )
-    root = generate(config, quiet=True)
+    workloads = _values(_gen(config))["workloads"]
+    assert set(workloads) == {"user-api", "billing"}
+    assert workloads["user-api"]["containerPort"] == 8001
+    assert workloads["billing"]["containerPort"] == 8002
+    # The frontend Deployment is enabled because the project has a frontend.
+    assert _values(_gen(config))["frontend"]["enabled"] is True
 
-    deployment = next(root.rglob("k8s/deployment.yaml")).read_text(encoding="utf-8")
-    assert "containerPort: 8137" in deployment
-    assert "containerPort: 8000" not in deployment
-    # Probes target the named "http" port (→ containerPort), and the health
-    # paths match the Dockerfile HEALTHCHECK.
-    assert "/api/v1/health/live" in deployment and "/api/v1/health/ready" in deployment
 
-    values = (root / "helm" / "values.yaml").read_text(encoding="utf-8")
-    assert "targetPort: 8137" in values
-    assert "targetPort: 8000" not in values
+def test_secret_env_is_placeholder_not_hardcoded():
+    """forge must NOT bake a real or deterministic credential into the chart —
+    secretEnv carries CHANGEME placeholders the user overrides at deploy time."""
+    api = _values(_gen(_k8s_config()))["workloads"]["api"]
+    db_url = api["secretEnv"]["APP__DB__URL"]
+    assert "CHANGEME" in db_url

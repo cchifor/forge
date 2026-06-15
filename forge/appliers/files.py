@@ -114,6 +114,12 @@ def _build_render_context(ctx: FragmentContext) -> dict[str, Any]:
     project_name = base_vars.get("project_name") or ctx.backend_config.name
     # copier derives project_title via ``when: false`` default — reproduce.
     context["project_title"] = str(project_name).replace("-", " ").title()
+
+    # Deployment topology (compute_topology) — exposed as ``topology`` only
+    # when the caller threaded it (the project-scope helm chart). Absent for
+    # every other fragment, so their rendered output is byte-identical.
+    if ctx.project_topology is not None:
+        context["topology"] = ctx.project_topology
     return context
 
 

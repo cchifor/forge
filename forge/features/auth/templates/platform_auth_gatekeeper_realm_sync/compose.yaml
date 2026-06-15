@@ -1,7 +1,7 @@
 # Declarative compose service for the keycloak-realm-sync one-shot sidecar.
 #
 # Keycloak's --import-realm only imports on first boot against an empty DB, so
-# later edits to infra/keycloak-realm.json (notably the User-Profile schema /
+# later edits to deploy/infra/keycloak-realm.json (notably the User-Profile schema /
 # tenant_id attribute) never reach a Keycloak whose pgdata holds the old realm.
 # This one-shot reads the User-Profile JSON out of the mounted realm file and
 # PUTs it to the running realm via the Admin API, then exits. Gatekeeper waits
@@ -23,7 +23,7 @@ service:
   restart: "no"  # one-shot; not service-managed restart
 
   volumes:
-    - "./infra/keycloak-realm.json:/realm/keycloak-realm.json:ro"
+    - "./deploy/infra/keycloak-realm.json:/realm/keycloak-realm.json:ro"
 
   environment:
     KEYCLOAK_BASE_URL: "http://keycloak:8080/realms"
@@ -41,5 +41,5 @@ service:
 
   extra:
     build:
-      context: ./infra/gatekeeper
+      context: ./deploy/infra/gatekeeper
       dockerfile: Dockerfile

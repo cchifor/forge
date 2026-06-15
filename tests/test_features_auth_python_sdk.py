@@ -13,12 +13,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 from forge.options import OPTION_REGISTRY
-
 
 PUBLIC_SDK_MODULES = (
     "__init__.py",
@@ -86,7 +83,7 @@ def test_platform_auth_sdk_files_present() -> None:
     frag = FRAGMENT_REGISTRY["platform_auth_sdk_python"]
     impl = frag.implementations[BackendLanguage.PYTHON]
     src_dir = (
-        Path(impl.fragment_dir) / "files" / "sdks" / "platform-auth" / "src" / "platform_auth"
+        Path(impl.fragment_dir) / "files" / "packages" / "platform-auth" / "src" / "platform_auth"
     )
     assert src_dir.is_dir(), f"SDK src/ tree missing: {src_dir}"
     shipped = {p.name for p in src_dir.glob("*.py")}
@@ -98,9 +95,7 @@ def test_platform_auth_sdk_pyproject_targets_supported_pythons() -> None:
     """pyproject must require Python 3.11+ (forge's CI matrix floor)."""
     frag = FRAGMENT_REGISTRY["platform_auth_sdk_python"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    pyproject = (
-        Path(impl.fragment_dir) / "files" / "sdks" / "platform-auth" / "pyproject.toml"
-    )
+    pyproject = Path(impl.fragment_dir) / "files" / "packages" / "platform-auth" / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     assert 'requires-python = ">=3.11"' in text, (
         "pyproject.toml must lower the >=3.13 floor from the upstream "
@@ -128,7 +123,7 @@ def test_platform_auth_sdk_testing_helper_uses_aligned_claim_kwargs() -> None:
     testing_text = (
         Path(impl.fragment_dir)
         / "files"
-        / "sdks"
+        / "packages"
         / "platform-auth"
         / "src"
         / "platform_auth"
@@ -144,9 +139,7 @@ def test_platform_auth_sdk_testing_helper_uses_aligned_claim_kwargs() -> None:
         "roles_claim: list(roles)",
     )
     missing = [name for name in must_have if name not in testing_text]
-    assert not missing, (
-        f"build_test_token missing aligned claim-name kwargs: {missing}"
-    )
+    assert not missing, f"build_test_token missing aligned claim-name kwargs: {missing}"
 
 
 def test_platform_auth_sdk_audit_callback_shape_matches_cross_sdk_contract() -> None:
@@ -166,7 +159,7 @@ def test_platform_auth_sdk_audit_callback_shape_matches_cross_sdk_contract() -> 
     auth_guard = (
         Path(impl.fragment_dir)
         / "files"
-        / "sdks"
+        / "packages"
         / "platform-auth"
         / "src"
         / "platform_auth"
@@ -192,9 +185,7 @@ def test_platform_auth_sdk_audit_callback_shape_matches_cross_sdk_contract() -> 
         "self._audit = audit",
     )
     missing = [name for name in must_have if name not in auth_guard]
-    assert not missing, (
-        f"auth_guard.py missing audit-record wiring: {missing}"
-    )
+    assert not missing, f"auth_guard.py missing audit-record wiring: {missing}"
 
 
 def test_platform_auth_sdk_emit_audit_fires_only_on_allow_path() -> None:
@@ -208,7 +199,7 @@ def test_platform_auth_sdk_emit_audit_fires_only_on_allow_path() -> None:
     auth_guard = (
         Path(impl.fragment_dir)
         / "files"
-        / "sdks"
+        / "packages"
         / "platform-auth"
         / "src"
         / "platform_auth"
@@ -217,9 +208,7 @@ def test_platform_auth_sdk_emit_audit_fires_only_on_allow_path() -> None:
     # Exactly one allow-path call site (the success path before
     # `return identity`).
     allow_count = auth_guard.count('decision="allow"')
-    assert allow_count == 1, (
-        f"expected exactly 1 allow-path _emit_audit call, found {allow_count}"
-    )
+    assert allow_count == 1, f"expected exactly 1 allow-path _emit_audit call, found {allow_count}"
     deny_count = auth_guard.count('decision="deny"')
     assert deny_count == 0, (
         "deny-path _emit_audit is reserved for forward-compat parity; "
@@ -231,9 +220,7 @@ def test_platform_auth_sdk_tests_shipped() -> None:
     """The fragment must also ship the upstream unit-test suite verbatim."""
     frag = FRAGMENT_REGISTRY["platform_auth_sdk_python"]
     impl = frag.implementations[BackendLanguage.PYTHON]
-    test_dir = (
-        Path(impl.fragment_dir) / "files" / "sdks" / "platform-auth" / "tests" / "unit"
-    )
+    test_dir = Path(impl.fragment_dir) / "files" / "packages" / "platform-auth" / "tests" / "unit"
     assert test_dir.is_dir()
     shipped_tests = {p.name for p in test_dir.glob("test_*.py")}
     expected = {

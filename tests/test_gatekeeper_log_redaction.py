@@ -43,6 +43,7 @@ _GK_MIDDLEWARE = (
     / "platform_auth_gatekeeper"
     / "all"
     / "files"
+    / "deploy"
     / "infra"
     / "gatekeeper"
     / "src"
@@ -59,6 +60,7 @@ _GK_GATEKEEPER = (
     / "platform_auth_gatekeeper"
     / "all"
     / "files"
+    / "deploy"
     / "infra"
     / "gatekeeper"
     / "src"
@@ -110,9 +112,7 @@ class TestRedactQueryParamsDict:
         assert out == {"code": REDACTED, "state": REDACTED}
 
     def test_refresh_and_access_token_redacted(self, redaction) -> None:
-        out = redaction.redact_query_params(
-            {"refresh_token": "rt-abc", "access_token": "at-xyz"}
-        )
+        out = redaction.redact_query_params({"refresh_token": "rt-abc", "access_token": "at-xyz"})
         assert out == {"refresh_token": REDACTED, "access_token": REDACTED}
 
     def test_id_token_and_authorization_redacted(self, redaction) -> None:
@@ -256,9 +256,7 @@ def test_access_formatter_runs_query_through_redactor() -> None:
     ``code``/``state`` and any ``refresh_token``)."""
     src = _middleware_src("logging.py")
     # The redactor is imported and invoked.
-    assert "redact_query_params" in src, (
-        "logging.py must import and call redact_query_params"
-    )
+    assert "redact_query_params" in src, "logging.py must import and call redact_query_params"
     assert "redact_query_params(" in src, "redact_query_params must be CALLED"
     # The query value must be the redactor's output. The raw
     # ``dict(request.query_params)`` may only appear as the ARGUMENT to the
@@ -345,8 +343,7 @@ def test_sensitive_session_log_calls_are_fingerprinted() -> None:
         assert start != -1, f"{keyword!r} not inside a logger call"
         call = src[start : idx + 300]
         assert "session_fp(" in call, (
-            f"the {keyword!r} log call must feed session_fp(session_id), "
-            "not the raw session_id"
+            f"the {keyword!r} log call must feed session_fp(session_id), not the raw session_id"
         )
         # Defensive: the raw `session_id,` positional must not appear here.
         assert not re.search(r"\n\s*session_id,\s*\n", call), (

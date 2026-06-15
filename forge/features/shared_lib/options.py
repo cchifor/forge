@@ -16,10 +16,10 @@ def register_all(api: ForgeAPI) -> None:
             path="platform.shared_lib",
             type=OptionType.BOOL,
             default=False,
-            summary="Scaffold a shared Python package in sdks/ for cross-backend code reuse.",
+            summary="Scaffold a shared Python package in packages/ for cross-backend code reuse.",
             description="""\
 Drops a ready-to-import ``shared`` Python package at
-``<project>/sdks/shared/`` with Pydantic domain models, a utilities
+``<project>/packages/shared/`` with Pydantic domain models, a utilities
 namespace, and smoke tests. Every Python backend can reference it as
 a ``[tool.uv.sources]`` path dependency for zero-publish local
 development.

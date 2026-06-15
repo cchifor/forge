@@ -2,15 +2,15 @@
 # service directory, plus two `additional_contexts:` from compose:
 #   * `project_root` — exposes the workspace root's package.json +
 #     package-lock.json so `npm install --workspaces` knows the topology.
-#   * `sdks` — exposes the project-root sdks/ tree so in-tree SDK source
-#     (e.g. sdks/platform-auth-node) is reachable. Without this the
-#     generated `file:../sdks/<name>` deps fail to resolve at build time
+#   * `packages` — exposes the project-root packages/ tree so in-tree SDK source
+#     (e.g. packages/platform-auth-node) is reachable. Without this the
+#     generated `file:../packages/<name>` deps fail to resolve at build time
 #     (BuildKit forbids paths above the main context).
 #
 # Build expects the workspace layout:
 #   /workspace/                       (WORKDIR)
 #     package.json + package-lock.json   (from project_root context)
-#     sdks/...                            (from sdks context)
+#     packages/...                            (from packages context)
 #     services/{{ project_slug }}/         (this service — main context)
 
 # --- Builder Stage ---
@@ -22,13 +22,13 @@ WORKDIR /workspace
 COPY --from=project_root package.json package-lock.json* ./
 
 {%- if include_platform_auth | default(false) %}
-# In-tree SDK source — only present when a project-root ``sdks/`` tree ships
+# In-tree SDK source — only present when a project-root ``packages/`` tree ships
 # (auth). Each SDK's `prepare` runs during the workspace install below to
-# produce its dist/ artifacts. The compose ``sdks`` build context is gated on
+# produce its dist/ artifacts. The compose ``packages`` build context is gated on
 # the same condition (has_project_sdks); an unconditional COPY here would make
-# BuildKit resolve ``sdks`` as an image ref ("sdks:latest") for a no-auth node
+# BuildKit resolve ``packages`` as an image ref ("packages:latest") for a no-auth node
 # project and fail.
-COPY --from=sdks . ./sdks/
+COPY --from=packages . ./packages/
 {%- endif %}
 
 # This service's manifest, ahead of source, so the dep layer caches
@@ -37,7 +37,7 @@ COPY package.json ./services/{{ project_slug }}/
 
 # Workspace install: links every workspace member into the shared
 # node_modules/ at the root and runs each member's `prepare` hook —
-# the SDK's `prepare: tsc` produces sdks/platform-auth-node/dist/
+# the SDK's `prepare: tsc` produces packages/platform-auth-node/dist/
 # before this service's downstream `tsc` ever runs. ``npm ci`` installs
 # the exact tree the committed package-lock.json pins (reproducible,
 # faster); fall back to ``npm install`` when the lockfile is absent
@@ -80,7 +80,7 @@ WORKDIR /workspace/services/{{ project_slug }}
 COPY --from=builder /workspace/package.json /workspace/package-lock.json* /workspace/
 COPY --from=builder /workspace/node_modules /workspace/node_modules/
 {%- if include_platform_auth | default(false) %}
-COPY --from=builder /workspace/sdks /workspace/sdks/
+COPY --from=builder /workspace/packages /workspace/packages/
 {%- endif %}
 COPY --from=builder /workspace/services/{{ project_slug }}/node_modules ./node_modules/
 COPY --from=builder /workspace/services/{{ project_slug }}/dist ./dist/

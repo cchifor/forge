@@ -20,7 +20,6 @@ from pathlib import Path
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 # Source modules that mirror the Python + Node SDKs' public surface.
 PUBLIC_SDK_MODULES = (
     "auth_guard.rs",
@@ -50,7 +49,7 @@ DEFERRED_MODULES: tuple[str, ...] = ()
 def _sdk_root() -> Path:
     frag = FRAGMENT_REGISTRY["platform_auth_sdk_rust"]
     impl = frag.implementations[BackendLanguage.RUST]
-    return Path(impl.fragment_dir) / "files" / "sdks" / "platform-auth-rs"
+    return Path(impl.fragment_dir) / "files" / "packages" / "platform-auth-rs"
 
 
 def test_platform_auth_sdk_rust_fragment_registered() -> None:
@@ -145,12 +144,12 @@ def test_rust_sdk_default_tenant_claim_is_forge_namespaced() -> None:
     ``https://forge/tenant_id``, NOT ``https://platform/tenant_id``.
     """
     auth_guard = (_sdk_root() / "src" / "auth_guard.rs").read_text(encoding="utf-8")
-    assert (
-        '"https://forge/tenant_id"' in auth_guard
-    ), "DEFAULT_TENANT_ID_CLAIM must be the forge-namespaced URL"
-    assert (
-        '"https://platform/tenant_id"' not in auth_guard
-    ), "auth_guard.rs still references the platform-namespaced tenant claim"
+    assert '"https://forge/tenant_id"' in auth_guard, (
+        "DEFAULT_TENANT_ID_CLAIM must be the forge-namespaced URL"
+    )
+    assert '"https://platform/tenant_id"' not in auth_guard, (
+        "auth_guard.rs still references the platform-namespaced tenant claim"
+    )
 
 
 def test_rust_sdk_algorithms_are_asymmetric_only() -> None:
@@ -158,9 +157,7 @@ def test_rust_sdk_algorithms_are_asymmetric_only() -> None:
     enum can't represent ``none`` so symmetric/none rejection is
     structural, but the default tuple is still pinned to ES256."""
     auth_guard = (_sdk_root() / "src" / "auth_guard.rs").read_text(encoding="utf-8")
-    assert (
-        "Algorithm::ES256" in auth_guard
-    ), "default_algorithms() must reference Algorithm::ES256"
+    assert "Algorithm::ES256" in auth_guard, "default_algorithms() must reference Algorithm::ES256"
 
 
 def test_rust_sdk_s2s_client_exposes_oauth2_grants() -> None:
@@ -240,9 +237,7 @@ def test_rust_sdk_axum_layer_gated_behind_feature() -> None:
         '#[cfg(feature = "axum")]\npub use require_scope::',
     )
     missing = [phrase for phrase in must_gate if phrase not in lib_text]
-    assert not missing, (
-        f"lib.rs must gate axum integration behind the feature: {missing}"
-    )
+    assert not missing, f"lib.rs must gate axum integration behind the feature: {missing}"
 
 
 def test_rust_sdk_extractor_implements_from_request_parts() -> None:
@@ -305,9 +300,9 @@ def test_rust_sdk_testing_module_gated_behind_feature() -> None:
         "lib.rs must gate testing module behind the testing feature"
     )
     cargo = (_sdk_root() / "Cargo.toml").read_text(encoding="utf-8")
-    assert (
-        'testing = ["dep:p256", "dep:ecdsa", "dep:rand"]' in cargo
-    ), "Cargo.toml must define a `testing` feature pulling p256/ecdsa/rand"
+    assert 'testing = ["dep:p256", "dep:ecdsa", "dep:rand"]' in cargo, (
+        "Cargo.toml must define a `testing` feature pulling p256/ecdsa/rand"
+    )
 
 
 def test_rust_sdk_testing_module_exposes_token_minter() -> None:
@@ -332,9 +327,9 @@ def test_rust_sdk_testing_module_exposes_token_minter() -> None:
 def test_rust_sdk_testing_uses_forge_namespaced_default_claim() -> None:
     """build_test_token defaults to ``https://forge/tenant_id`` claim."""
     testing_text = (_sdk_root() / "src" / "testing.rs").read_text(encoding="utf-8")
-    assert (
-        '"https://forge/tenant_id"' in testing_text
-    ), "build_test_token must default tenant_id_claim to https://forge/tenant_id"
+    assert '"https://forge/tenant_id"' in testing_text, (
+        "build_test_token must default tenant_id_claim to https://forge/tenant_id"
+    )
 
 
 def test_rust_sdk_verify_emits_tracing_span() -> None:
@@ -382,7 +377,7 @@ def test_rust_sdk_parity_runner_shipped() -> None:
     Behavioural verification (running the 19 scenarios end-to-end)
     happens via the SDK's cargo invocation:
 
-        cd <project>/sdks/platform-auth-rs
+        cd <project>/packages/platform-auth-rs
         PARITY_FIXTURES=<scenarios.json> cargo test --features testing --test parity_runner
 
     This test gates the runner's *structural* presence + load-bearing
@@ -390,12 +385,8 @@ def test_rust_sdk_parity_runner_shipped() -> None:
     AuthGuard + the testing-helper's TestEcdsaKeypair, must check the
     cross-language ``reason()`` slug contract).
     """
-    runner_path = (
-        _sdk_root() / "tests" / "parity_runner.rs"
-    )
-    assert runner_path.is_file(), (
-        f"parity_runner.rs missing at {runner_path}"
-    )
+    runner_path = _sdk_root() / "tests" / "parity_runner.rs"
+    assert runner_path.is_file(), f"parity_runner.rs missing at {runner_path}"
     text = runner_path.read_text(encoding="utf-8")
     must_have = (
         # File-level cfg gate so cargo test under the bare default
@@ -442,9 +433,7 @@ def test_rust_sdk_axum_integration_test_shipped() -> None:
     slugs).
     """
     integration_path = _sdk_root() / "tests" / "integration_axum.rs"
-    assert integration_path.is_file(), (
-        f"integration_axum.rs missing at {integration_path}"
-    )
+    assert integration_path.is_file(), f"integration_axum.rs missing at {integration_path}"
     text = integration_path.read_text(encoding="utf-8")
     must_have = (
         # Both features required — pulls in AuthLayer + the testing
@@ -475,9 +464,7 @@ def test_rust_sdk_axum_integration_test_shipped() -> None:
     if "FromRequestParts" in missing and len(missing) == 1:
         # Tolerated — test uses extractor without naming the trait.
         missing = []
-    assert not missing, (
-        f"integration_axum.rs missing required wiring: {missing}"
-    )
+    assert not missing, f"integration_axum.rs missing required wiring: {missing}"
 
 
 def test_rust_sdk_audit_callback_module_present() -> None:
@@ -544,9 +531,7 @@ def test_rust_sdk_auth_guard_emits_audit_on_allow_path() -> None:
     assert "AuthDecision::Allow" in auth_guard_text, (
         "verify_inner must emit AuthDecision::Allow on the success path"
     )
-    assert "fn emit_audit" in auth_guard_text, (
-        "AuthGuard must define a private emit_audit helper"
-    )
+    assert "fn emit_audit" in auth_guard_text, "AuthGuard must define a private emit_audit helper"
 
 
 def test_rust_sdk_testing_helper_uses_aligned_claim_names() -> None:

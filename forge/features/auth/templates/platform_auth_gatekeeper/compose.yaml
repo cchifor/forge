@@ -17,7 +17,7 @@ service:
   name: gatekeeper
   # ``image:`` is required by the fragment_compose schema, but the real
   # build instruction lives in ``extra.build`` since this image is built
-  # locally from the shipped infra/gatekeeper/ directory rather than
+  # locally from the shipped deploy/infra/gatekeeper/ directory rather than
   # pulled from a registry. The ``image:`` value is the local tag the
   # build will produce.
   image: forge-gatekeeper:local
@@ -44,7 +44,7 @@ service:
   # - service_registry.yaml (per-project entries appended by Phase 3+)
   volumes:
     - "gatekeeper_signing_keys:/run/secrets/gatekeeper-signing:ro"
-    - "./infra/gatekeeper/secrets/service_registry.yaml:/run/secrets/gatekeeper-service-registry/service_registry.yaml:ro"
+    - "./deploy/infra/gatekeeper/secrets/service_registry.yaml:/run/secrets/gatekeeper-service-registry/service_registry.yaml:ro"
 
   named_volumes:
     - gatekeeper_signing_keys
@@ -106,5 +106,5 @@ service:
   # from the project tree, not pulled from a registry.
   extra:
     build:
-      context: ./infra/gatekeeper
+      context: ./deploy/infra/gatekeeper
       dockerfile: Dockerfile

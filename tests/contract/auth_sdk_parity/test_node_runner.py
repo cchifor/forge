@@ -14,7 +14,7 @@ Production CI activates the runner by ensuring Node + npm install
 have been done in the SDK template directory before pytest runs:
 
 ```bash
-(cd forge/features/auth/templates/platform_auth_sdk_node/node/files/sdks/platform-auth-node && npm install)
+(cd forge/features/auth/templates/platform_auth_sdk_node/node/files/packages/platform-auth-node && npm install)
 uv run pytest tests/contract/auth_sdk_parity/test_node_runner.py
 ```
 
@@ -34,7 +34,6 @@ import pytest
 
 from tests.contract.auth_sdk_parity.scenarios import scenarios_as_json
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NODE_SDK_DIR = (
     REPO_ROOT
@@ -45,7 +44,7 @@ NODE_SDK_DIR = (
     / "platform_auth_sdk_node"
     / "node"
     / "files"
-    / "sdks"
+    / "packages"
     / "platform-auth-node"
 )
 

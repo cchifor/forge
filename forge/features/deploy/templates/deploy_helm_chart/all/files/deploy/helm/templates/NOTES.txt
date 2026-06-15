@@ -1,0 +1,28 @@
+{{ .Chart.Name }} {{ .Chart.Version }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Backends deployed:
+{{- range $name, $w := .Values.workloads }}
+  - {{ $name }} ({{ $w.language }}) on container port {{ $w.containerPort }}
+{{- end }}
+{{- if .Values.frontend.enabled }}
+  - frontend (nginx) on port {{ .Values.frontend.port }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Reach the app at: http(s)://{{ .Values.ingress.host }}/
+  Backend APIs are under /api/<backend-name>/...
+{{- end }}
+
+{{- if .Values.infra.inCluster }}
+
+NOTE: infra.inCluster=true — in-cluster Postgres/Redis/Keycloak are running.
+These are for dev/demo only. Use managed datastores (externalServices) in prod.
+{{- else }}
+
+Datastores are EXTERNAL: make sure externalServices.* point at your managed
+Postgres/Redis/Keycloak, and that each workload's Secret carries real
+credentials (forge ships placeholders only — see deploy/helm/templates/secret.yaml).
+{{- end }}
+
+Update this chart any time the project changes:  forge --update

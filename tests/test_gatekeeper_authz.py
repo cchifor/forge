@@ -30,6 +30,7 @@ def _load_authz_module():
         / "platform_auth_gatekeeper"
         / "all"
         / "files"
+        / "deploy"
         / "infra"
         / "gatekeeper"
         / "src"
@@ -99,9 +100,10 @@ class TestExtractRealmRoles:
     def test_coerces_role_entries_to_str(self, authz) -> None:
         # Defensive: mixed-type entries are normalised so downstream
         # exact-string comparison is well-defined.
-        assert authz.extract_realm_roles(
-            {"realm_access": {"roles": ["admin", 123]}}
-        ) == ["admin", "123"]
+        assert authz.extract_realm_roles({"realm_access": {"roles": ["admin", 123]}}) == [
+            "admin",
+            "123",
+        ]
 
 
 class TestEndToEndDecision:

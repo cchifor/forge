@@ -2,14 +2,14 @@
 # service directory plus two `additional_contexts:` from compose:
 #   * `project_root` — exposes the workspace-root Cargo.toml + Cargo.lock
 #     so cargo resolves the workspace topology at build time.
-#   * `sdks` — exposes the project-root sdks/ tree so `path = "../sdks/<name>"`
-#     deps resolve against /workspace/sdks/<name>/ in the builder image
+#   * `packages` — exposes the project-root packages/ tree so `path = "../packages/<name>"`
+#     deps resolve against /workspace/packages/<name>/ in the builder image
 #     (BuildKit forbids paths above the main context without this).
 #
 # Build expects the workspace layout:
 #   /workspace/                       (WORKDIR)
 #     Cargo.toml + Cargo.lock            (from project_root context)
-#     sdks/...                            (from sdks context)
+#     packages/...                            (from packages context)
 #     services/{{ project_slug }}/         (this service — main context)
 
 # --- Builder Stage ---
@@ -26,11 +26,11 @@ COPY --from=project_root Cargo.toml Cargo.lock* ./
 
 {%- if include_platform_auth | default(false) %}
 # In-tree SDK source — path deps in Cargo.toml resolve against
-# /workspace/sdks/<name>/ at build time. Only copied when a project-root
-# ``sdks/`` tree actually ships (auth); the compose ``sdks`` build context is
+# /workspace/packages/<name>/ at build time. Only copied when a project-root
+# ``packages/`` tree actually ships (auth); the compose ``packages`` build context is
 # gated on the same condition (has_project_sdks), so an unconditional COPY
 # here would fail BuildKit for a no-auth rust project (missing context).
-COPY --from=sdks . ./sdks/
+COPY --from=packages . ./packages/
 {%- endif %}
 
 # This service's manifest + migrations ahead of source so the cargo dep
@@ -40,7 +40,7 @@ COPY Cargo.toml ./services/{{ project_slug }}/
 COPY migrations ./services/{{ project_slug }}/migrations/
 
 # Dep-priming dummy build at the workspace level. Cargo resolves every
-# path = "../sdks/<name>" against the workspace root, downloads + builds
+# path = "../packages/<name>" against the workspace root, downloads + builds
 # every transitive dep once, and caches the resulting target/ tree.
 # ``--locked`` pins the exact versions the committed Cargo.lock resolved
 # (reproducible builds); it's omitted when the lockfile is absent (project

@@ -1,0 +1,15 @@
+{{- /* Per-backend non-secret env. Secrets live in templates/secret.yaml. */ -}}
+{{- range $name, $w := .Values.workloads }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s-config" $.Release.Name $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+data:
+  {{- range $k, $v := $w.env }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end }}

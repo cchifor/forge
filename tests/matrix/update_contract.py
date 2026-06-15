@@ -42,7 +42,7 @@ Finally runs ``python -m forge --harvest --harvest-out=- --project-path
 Uses ``subprocess.run([sys.executable, "-m", "forge", ...])`` so the
 same argparse / builder / dispatcher path real users hit gets
 exercised — complementary to lane D's direct Python-API round-trip.
-Drops weld-* SDK stubs into ``<project>/sdks/`` via
+Drops weld-* SDK stubs into ``<project>/packages/`` via
 ``_inject_weld_stubs`` from the runner so ``forge --update`` resolves
 the same package set as lanes B/C (the auth fragment's manifest entries
 depend on the stubs being present even for a no-op re-apply).
@@ -96,7 +96,7 @@ def run_update_contract(
     same ingestion path the CLI uses, so the runner and the lane stay
     in lock-step with config-file merge rules. ``inject_stubs`` is the
     runner's ``_inject_weld_stubs`` so the matrix-CI SDK shims drop
-    into ``<project>/sdks/`` before ``--update`` resolves them.
+    into ``<project>/packages/`` before ``--update`` resolves them.
 
     Returns a :class:`LaneResult` consistent with the other lanes.
     Any per-mode or harvest failure is surfaced via ``details``; the

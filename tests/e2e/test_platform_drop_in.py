@@ -47,7 +47,7 @@ def _platform_root() -> Path:
     if not raw:
         pytest.skip("FORGE_PLATFORM_PATH unset")
     root = Path(raw).resolve()
-    if not (root / "sdks" / "weld-core" / "pyproject.toml").is_file():
+    if not (root / "packages" / "weld-core" / "pyproject.toml").is_file():
         pytest.skip(
             f"{root} does not look like a platform monorepo "
             "(missing sdks/weld-core/pyproject.toml)."
@@ -134,7 +134,7 @@ def test_python_service_drops_into_platform(tmp_path: Path) -> None:
     for sdk in ("weld-auth", "weld-core", "weld-fastapi", "weld-events"):
         assert sdk in pyproject, f"{sdk} missing from generated pyproject"
     assert "[tool.uv.sources]" in pyproject
-    assert "../../sdks/weld-" in pyproject
+    assert "../../packages/weld-" in pyproject
 
     # Platform-level gates. Each is best-effort — the test xfails on
     # missing toolchain instead of red, because the platform tree is

@@ -98,9 +98,7 @@ def _code_for_matching(src: str) -> str:
     try:
         tree = ast.parse(src)
     except SyntaxError:
-        return "\n".join(
-            line for line in src.splitlines() if not line.lstrip().startswith("#")
-        )
+        return "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
 
     blanked: set[int] = set()
 
@@ -121,9 +119,7 @@ def _code_for_matching(src: str) -> str:
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             _blank(node)
-        elif isinstance(
-            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-        ):
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             _blank_docstring(node.body)
 
     lines = ["" if i in blanked else ln for i, ln in enumerate(src.splitlines(), 1)]
@@ -150,7 +146,7 @@ def _discover_routers() -> list[Path]:
             rel = path.as_posix()
             if root is _FEATURES and "/files/" not in rel:
                 continue
-            if "/infra/gatekeeper/" in rel:
+            if "/deploy/infra/gatekeeper/" in rel:
                 continue
             text = path.read_text(encoding="utf-8")
             if _ROUTER_RE.search(text):

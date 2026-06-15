@@ -18,9 +18,9 @@ def register_all(api: ForgeAPI) -> None:
             default=True,
             summary="Strict Content-Security-Policy + HSTS + X-Content-Type-Options via nginx.",
             description="""\
-Drops ``infra/nginx-csp.conf`` with production-ready strict CSP (no
+Drops ``deploy/infra/nginx-csp.conf`` with production-ready strict CSP (no
 unsafe-inline, strict-dynamic, nonce-based script tags), HSTS, and
-related defence-in-depth headers. ``include infra/nginx-csp.conf;`` from
+related defence-in-depth headers. ``include deploy/infra/nginx-csp.conf;`` from
 any nginx server{} block.
 
 BACKENDS: all (project-scoped)

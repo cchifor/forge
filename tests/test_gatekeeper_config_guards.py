@@ -20,6 +20,7 @@ _CONFIG_PATH = (
     / "platform_auth_gatekeeper"
     / "all"
     / "files"
+    / "deploy"
     / "infra"
     / "gatekeeper"
     / "src"
@@ -109,11 +110,7 @@ class TestDevSecretProdGuard:
         )
 
     def _dev_compose(self):
-        feature_root = next(
-            p
-            for p in _CONFIG_PATH.parents
-            if p.name == "platform_auth_gatekeeper"
-        )
+        feature_root = next(p for p in _CONFIG_PATH.parents if p.name == "platform_auth_gatekeeper")
         compose = feature_root / "compose.yaml"
         assert compose.is_file(), compose
         return compose.read_text(encoding="utf-8")
@@ -145,12 +142,8 @@ class TestRealmSyncSidecarProdGuard:
     out of the box (the 2026-06-09/10 nightly regression)."""
 
     def _sidecar_compose(self) -> str:
-        templates_root = next(
-            p for p in _CONFIG_PATH.parents if p.name == "templates"
-        )
-        compose = (
-            templates_root / "platform_auth_gatekeeper_realm_sync" / "compose.yaml"
-        )
+        templates_root = next(p for p in _CONFIG_PATH.parents if p.name == "templates")
+        compose = templates_root / "platform_auth_gatekeeper_realm_sync" / "compose.yaml"
         assert compose.is_file(), compose
         return compose.read_text(encoding="utf-8")
 
@@ -173,13 +166,9 @@ class TestRealmSyncSidecarProdGuard:
         # Tie the compose pin to the guard's own allow-list so a rename of
         # either side fails this test instead of regressing compose-up.
         gatekeeper_root = next(
-            p
-            for p in _CONFIG_PATH.parents
-            if p.name == "gatekeeper" and (p / "scripts").is_dir()
+            p for p in _CONFIG_PATH.parents if p.name == "gatekeeper" and (p / "scripts").is_dir()
         )
-        script = (gatekeeper_root / "scripts" / "realm_sync.py").read_text(
-            encoding="utf-8"
-        )
+        script = (gatekeeper_root / "scripts" / "realm_sync.py").read_text(encoding="utf-8")
         dev_envs_literal = script.split("_DEV_ENVS")[1].split("})")[0]
         assert '"development"' in dev_envs_literal, (
             "realm_sync.py _DEV_ENVS must include 'development' (the value "

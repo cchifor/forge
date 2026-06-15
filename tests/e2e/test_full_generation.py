@@ -72,9 +72,7 @@ def _real_typecheck_errors(frontend_dir: Path) -> list[str]:
     """
     res = _run(["npx", "--yes", "vue-tsc", "--noEmit", "-p", "tsconfig.app.json"], cwd=frontend_dir)
     return [
-        line.strip()
-        for line in (res.stdout + "\n" + res.stderr).splitlines()
-        if "error TS" in line
+        line.strip() for line in (res.stdout + "\n" + res.stderr).splitlines() if "error TS" in line
     ]
 
 
@@ -260,15 +258,15 @@ def test_multi_backend_with_keycloak_scaffolds(
     assert (project_root / "services" / "api-rust" / "Cargo.toml").exists()
 
     # Multi-backend init-db.sh must list all three databases.
-    init_db = (project_root / "init-db.sh").read_text(encoding="utf-8")
+    init_db = (project_root / "deploy" / "compose" / "init-db.sh").read_text(encoding="utf-8")
     assert "api_py" in init_db or "api-py" in init_db
     assert "api_node" in init_db or "api-node" in init_db
     assert "api_rust" in init_db or "api-rust" in init_db
 
     # Keycloak realm + gatekeeper must be present.
-    assert (project_root / "infra" / "gatekeeper").is_dir()
-    assert (project_root / "infra" / "keycloak").is_dir()
-    assert (project_root / "infra" / "keycloak-realm.json").exists()
+    assert (project_root / "deploy" / "infra" / "gatekeeper").is_dir()
+    assert (project_root / "deploy" / "infra" / "keycloak").is_dir()
+    assert (project_root / "deploy" / "infra" / "keycloak-realm.json").exists()
 
     # docker-compose.yml must reference all three backends.
     compose = (project_root / "docker-compose.yml").read_text(encoding="utf-8")
@@ -332,9 +330,7 @@ def test_console_template_greenfield_typechecks(
     frontend_dir = project_root / "apps" / "frontend"
     # The L3 template composes its L1 child: both the page and StatCard land.
     assert (frontend_dir / "src" / "shared" / "components" / "StatCard.vue").is_file()
-    assert (
-        frontend_dir / "src" / "features" / "console" / "ui" / "DashboardPage.vue"
-    ).is_file()
+    assert (frontend_dir / "src" / "features" / "console" / "ui" / "DashboardPage.vue").is_file()
 
     result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
     assert result.returncode == 0, (
@@ -612,9 +608,7 @@ def test_chatfirst_template_greenfield_typechecks(
     project_root = generate(config, quiet=True)
     _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
-    assert (
-        frontend_dir / "src" / "features" / "chatfirst" / "ui" / "ResultsPage.vue"
-    ).is_file()
+    assert (frontend_dir / "src" / "features" / "chatfirst" / "ui" / "ResultsPage.vue").is_file()
 
     result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
     assert result.returncode == 0, (
@@ -734,9 +728,7 @@ def test_flutter_minimal_analyzes(
     # actually owe a generated project is "no errors or warnings"; infos are
     # advisory style. So assert on the severity lines, not the exit code.
     analyze_out = f"{result.stdout}\n{result.stderr}"
-    severe = [
-        ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln
-    ]
+    severe = [ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln]
     assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)
 
 
@@ -810,7 +802,5 @@ def test_flutter_full_analyzes(
     # actually owe a generated project is "no errors or warnings"; infos are
     # advisory style. So assert on the severity lines, not the exit code.
     analyze_out = f"{result.stdout}\n{result.stderr}"
-    severe = [
-        ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln
-    ]
+    severe = [ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln]
     assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)

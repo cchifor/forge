@@ -23,7 +23,6 @@ import yaml
 from forge.config import BackendLanguage
 from forge.fragments import FRAGMENT_REGISTRY
 
-
 EXPECTED_FILES = (
     "src/middleware/auth.ts",
     # ``src/types/auth.ts`` now ships from the base node-service-template
@@ -103,9 +102,7 @@ def test_auth_bootstrap_uses_sdk_plugin() -> None:
         "@forge/platform-auth-node",
     )
     missing = [name for name in must_reference if name not in text]
-    assert not missing, (
-        f"middleware/auth.ts missing required wiring: {missing}"
-    )
+    assert not missing, f"middleware/auth.ts missing required wiring: {missing}"
 
 
 def test_auth_bootstrap_default_tenant_claim_is_forge_namespaced() -> None:
@@ -135,7 +132,15 @@ def test_types_auth_stub_ships_in_base_template() -> None:
     """
     from forge.generator import TEMPLATES_DIR  # noqa: PLC0415
 
-    stub = TEMPLATES_DIR / "services" / "node-service-template" / "template" / "src" / "types" / "auth.ts"
+    stub = (
+        TEMPLATES_DIR
+        / "services"
+        / "node-service-template"
+        / "template"
+        / "src"
+        / "types"
+        / "auth.ts"
+    )
     assert stub.is_file(), f"base-template auth.ts stub missing at {stub}"
     text = stub.read_text(encoding="utf-8")
     for symbol in ("IdentityContext", "AuthenticatedRequest", "AuthError", "buildIdentity"):
@@ -195,6 +200,6 @@ def test_node_middleware_fragment_wired_to_auth_mode() -> None:
         "platform_auth_node_middleware fragment must be in "
         "auth.mode=generate's enables tuple after the Phase 5 Wave 2 "
         "cutover — without it, a generated Node project gets the SDK "
-        "at sdks/platform-auth-node/ but no middleware wiring it "
+        "at packages/platform-auth-node/ but no middleware wiring it "
         "into Fastify."
     )

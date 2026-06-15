@@ -38,5 +38,5 @@ service:
   extra:
     user: root
     build:
-      context: ./infra/gatekeeper
+      context: ./deploy/infra/gatekeeper
       dockerfile: Dockerfile

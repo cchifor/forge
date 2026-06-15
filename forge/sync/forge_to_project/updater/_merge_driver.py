@@ -138,6 +138,7 @@ def apply_project_features(
     frontend_framework: FrontendFramework | None = None,
     frontend_dir: Path | None = None,
     primary_server_port: int | None = None,
+    topology: Mapping[str, Any] | None = None,
 ) -> None:
     """Apply project-scoped fragment implementations at the project root.
 
@@ -210,6 +211,7 @@ def apply_project_features(
                     provenance=collector,
                     update_mode=update_mode,
                     file_baselines=file_baselines,
+                    project_topology=topology,
                 )
                 # Project-scope fragments typically don't declare middlewares
                 # (they emit project-level files like AGENTS.md). Pass the
