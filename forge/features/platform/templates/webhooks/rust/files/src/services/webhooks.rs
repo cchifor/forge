@@ -85,6 +85,93 @@ fn generate_secret() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
+/// Reject webhook targets that point at internal/non-public hosts (SSRF) or use
+/// a non-http(s) scheme. Mirrors the Python feature's `validate_outbound_url`.
+///
+/// Host/scheme are parsed manually (no `url` crate) so the webhooks feature
+/// pulls in no new dependency. Loopback / link-local (incl. the
+/// 169.254.169.254 cloud-metadata endpoint) / RFC1918 private ranges are
+/// blocked as literals; DNS names are not resolved here, so this pre-flight is
+/// paired with `redirect::Policy::none()` on the client so a 3xx to an internal
+/// host cannot bypass it.
+fn validate_outbound_url(raw_url: &str) -> Result<(), String> {
+    let (scheme, rest) = raw_url
+        .split_once("://")
+        .ok_or_else(|| format!("invalid webhook URL: {}", raw_url))?;
+    let scheme = scheme.to_ascii_lowercase();
+    if scheme != "https" && scheme != "http" {
+        return Err(format!("unsupported URL scheme {}; use https", scheme));
+    }
+    // Authority = everything up to the first '/', '?' or '#'.
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("");
+    // Strip any userinfo ("user:pass@host").
+    let hostport = authority.rsplit('@').next().unwrap_or(authority);
+    // Pull the host out of host[:port], handling bracketed IPv6 literals.
+    let host = if let Some(after) = hostport.strip_prefix('[') {
+        after.split(']').next().unwrap_or("")
+    } else {
+        hostport.rsplit_once(':').map(|(h, _)| h).unwrap_or(hostport)
+    };
+    let host = host.trim().to_ascii_lowercase();
+    if host.is_empty() {
+        return Err("webhook URL has no host".to_string());
+    }
+    if is_blocked_host(&host) {
+        return Err(format!("{} is a non-public address; refused", host));
+    }
+    Ok(())
+}
+
+fn is_blocked_host(host: &str) -> bool {
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+    if host.contains(':') {
+        // IPv6 literal.
+        if host == "::1" || host == "::" {
+            return true;
+        }
+        // link-local fe80::/10 and unique-local fc00::/7.
+        if host.starts_with("fe8")
+            || host.starts_with("fe9")
+            || host.starts_with("fea")
+            || host.starts_with("feb")
+            || host.starts_with("fc")
+            || host.starts_with("fd")
+        {
+            return true;
+        }
+        // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1).
+        if let Some(mapped) = host.rsplit(':').next() {
+            if mapped.contains('.') {
+                return is_blocked_ipv4(mapped);
+            }
+        }
+        return false;
+    }
+    is_blocked_ipv4(&host)
+}
+
+fn is_blocked_ipv4(host: &str) -> bool {
+    let octets: Vec<u8> = host
+        .split('.')
+        .filter_map(|p| p.parse::<u8>().ok())
+        .collect();
+    if octets.len() != 4 || host.split('.').count() != 4 {
+        return false;
+    }
+    let (a, b) = (octets[0], octets[1]);
+    a == 127            // loopback 127.0.0.0/8
+        || a == 10      // RFC1918 10.0.0.0/8
+        || (a == 192 && b == 168) // RFC1918 192.168.0.0/16
+        || (a == 172 && (16..=31).contains(&b)) // RFC1918 172.16.0.0/12
+        || (a == 169 && b == 254) // link-local 169.254.0.0/16 (metadata)
+        || a == 0       // 0.0.0.0/8 unspecified
+}
+
 fn sign(secret: &str, timestamp: &str, nonce: &str, body: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac key");
     mac.update(timestamp.as_bytes());
@@ -140,6 +227,19 @@ pub fn delete_webhook(id: &Uuid) -> bool {
 
 pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> DeliveryResult {
     let start = std::time::Instant::now();
+
+    // Fast pre-flight SSRF reject (scheme + host literal). Paired with the
+    // no-redirect client policy below so a 3xx to an internal host can't bypass it.
+    if let Err(e) = validate_outbound_url(&webhook.url) {
+        return DeliveryResult {
+            webhook_id: webhook.id,
+            status_code: None,
+            ok: false,
+            error: Some(format!("refused: {}", e)),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+    }
+
     let body = serde_json::to_vec(&serde_json::json!({ "event": event, "data": payload }))
         .unwrap_or_default();
     let timestamp = SystemTime::now()
@@ -151,6 +251,9 @@ pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> Deliver
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        // Do not auto-follow 3xx (reqwest follows up to 10 by default): a
+        // redirect to an internal host would bypass validate_outbound_url above.
+        .redirect(reqwest::redirect::Policy::none())
         .build();
     let client = match client {
         Ok(c) => c,
