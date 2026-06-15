@@ -1225,8 +1225,8 @@
       "sha256": "34bcdba3aaf1d37b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 6284,
-      "sha256": "31aaf37d14fefc23"
+      "size": 6816,
+      "sha256": "9aacb5f4d50ee103"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
       "size": 10873,
@@ -1257,8 +1257,8 @@
       "sha256": "881fa215637bf95f"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/internal_token_cache.py": {
-      "size": 10468,
-      "sha256": "f0da55e56b2f527b"
+      "size": 11373,
+      "sha256": "fc3074e3a2111eb6"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/jwks.py": {
       "size": 5403,
@@ -1297,8 +1297,8 @@
       "sha256": "bebbec570db9b36e"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 38421,
-      "sha256": "32712a01d310c5aa"
+      "size": 39082,
+      "sha256": "aa84b3c93024245b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
@@ -1317,8 +1317,8 @@
       "sha256": "52c90aac44694e93"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/service_registry.py": {
-      "size": 5174,
-      "sha256": "6563dea9c17783ba"
+      "size": 5998,
+      "sha256": "65c6f0db128246a0"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/service_token.py": {
       "size": 25742,
@@ -1401,8 +1401,8 @@
       "sha256": "22237aeddb41cfae"
     },
     "docker-compose.yml": {
-      "size": 12025,
-      "sha256": "33ca2e1f86641a77"
+      "size": 12339,
+      "sha256": "021622c48beac1f0"
     },
     "forge.toml": {
       "size": 155038,
