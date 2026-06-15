@@ -23,7 +23,7 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from app.gatekeeper.apikeys import validate_api_key
+from app.gatekeeper.apikeys import cache_subject, validate_api_key
 from app.gatekeeper.config import get_settings
 from app.gatekeeper.internal_token import AuthMethod
 from app.gatekeeper.keycloak_admin import GatekeeperKeycloakAdmin
@@ -96,22 +96,31 @@ def _synthetic_keycloak_payload(
     roles: list[str],
     tenant_id: str,
     auth_method_label: str,
+    jti_subject: str | None = None,
 ) -> dict[str, Any]:
     """Build a Keycloak-shaped payload for non-OIDC tracks (api_key / test).
 
     The internal-token mint expects the same claim shape as a real
     Keycloak access token so a single mint helper covers both human and
     machine paths. Stable ``jti`` (no timestamp) lets the per-jti cache
-    deduplicate repeat requests from the same caller.
+    deduplicate repeat requests from the *same credential*.
+
+    ``jti_subject`` controls the per-credential portion of the cache jti
+    (defaulting to ``user_id``). Callers MUST pass a per-credential value
+    (e.g. ``apikeys.cache_subject(record)`` = ``tenant_id:key_id``) rather
+    than relying on ``user_id``/``sub``; otherwise two distinct credentials
+    that share an owner sub collapse onto one cached internal JWT and the
+    first-minted bearer (its roles/tenant) is served to the others.
     """
     now = int(time.time())
+    jti_seed = jti_subject if jti_subject is not None else user_id
     return {
         "sub": user_id,
         "iss": "gatekeeper-internal-machine",
         "aud": "gatekeeper",
         "iat": now,
         "exp": now + 300,
-        "jti": f"{auth_method_label}:{user_id}",
+        "jti": f"{auth_method_label}:{jti_seed}",
         "email": email,
         "realm_access": {"roles": list(roles)},
         "https://forge/tenant_id": tenant_id,
@@ -480,6 +489,7 @@ async def auth(request: Request) -> Response:
                 roles=record.roles,
                 tenant_id=record.tenant_id,
                 auth_method_label="api-key",
+                jti_subject=cache_subject(record),
             ),
             auth_method="api_key",
         )
@@ -519,6 +529,7 @@ async def auth(request: Request) -> Response:
                         roles=["tester"],
                         tenant_id=tenant,
                         auth_method_label="test-bypass",
+                        jti_subject=tenant,
                     ),
                     auth_method="api_key",
                 )
