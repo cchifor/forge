@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
 from collections import OrderedDict
@@ -13,6 +14,24 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+
+def is_trusted_peer(ip: str) -> bool:
+    """Return ``True`` when ``ip`` is an in-cluster / proxy peer we trust to
+    have set ``X-Forwarded-For`` honestly.
+
+    Heuristic: trust loopback, RFC1918 private, and link-local addresses — the
+    documented Traefik topology terminates external traffic at an in-cluster
+    reverse proxy whose peer address is private. A public transport peer means
+    the request reached us directly (or via an XFF-appending hop), so a
+    client-supplied XFF can't be trusted. A stricter explicit CIDR allowlist
+    can be layered on top of this later.
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback or addr.is_link_local
 
 # Cap on the number of distinct client buckets kept in memory. Once exceeded,
 # the least-recently-used bucket is evicted. Without this, a flood of unique
@@ -94,14 +113,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Behind a reverse proxy / load balancer, ``request.client.host`` is the
         # proxy's address, shared by every anonymous client — keying on it would
         # collapse them all into one bucket. Prefer the left-most (originating)
-        # address from X-Forwarded-For when present. NOTE: only trust XFF when
-        # the app sits behind a trusted proxy that sets it; if clients can reach
-        # the app directly, strip/override XFF at the proxy.
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            client_ip = forwarded.split(",", 1)[0].strip()
-            if client_ip:
-                return f"ip:{client_ip}"
-        if request.client:
-            return f"ip:{request.client.host}"
+        # address from X-Forwarded-For when present.
+        #
+        # SECURITY: only trust X-Forwarded-For when the immediate transport peer
+        # is itself a trusted in-cluster proxy (private / loopback / link-local
+        # — the documented Traefik topology). If the peer is a public address
+        # the request reached us directly (internet-facing) or via an
+        # XFF-appending hop, and a client-supplied XFF could be used to spoof /
+        # evade its rate-limit bucket — so we ignore it and key on the peer.
+        peer_host = request.client.host if request.client else None
+        if peer_host and is_trusted_peer(peer_host):
+            forwarded = request.headers.get("x-forwarded-for")
+            if forwarded:
+                client_ip = forwarded.split(",", 1)[0].strip()
+                if client_ip:
+                    return f"ip:{client_ip}"
+        if peer_host:
+            return f"ip:{peer_host}"
         return "anonymous"
