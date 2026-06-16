@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import UUID
 
 import app.core.lifecycle as _lifecycle
 import httpx
@@ -37,6 +38,7 @@ from platform_auth import (
     InMemoryIssuerTrustMap,
     JWKSCache,
     StaticMayActPolicy,
+    TenantTrust,
 )
 from forge_core.domain.config import AuthConfig
 from service.security.platform_auth_setup import AuthGuardBundle
@@ -47,6 +49,14 @@ logger = logging.getLogger(__name__)
 # downstream code (diagnostics, custom tenant resolution) can reach them.
 OIDC_SETTINGS_STATE_KEY = "oidc_settings"
 OIDC_CLAIM_MAPPER_STATE_KEY = "oidc_claim_mapper"
+
+# Default/known tenant the configured issuer is seeded for, mirroring the
+# ``in_memory`` provider's ``DEV_TENANT_ID``. Seeding the trust map with this
+# tenant→issuer binding is what lets the guard run ``strict_trust=True`` and
+# still accept tokens for the configured issuer (single-realm deployments).
+# Multi-tenant deployments register their real tenants out of band (TMS / a
+# populated trust map injected via ``build_oidc_auth_guard(trust_map=...)``).
+DEFAULT_TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
 
 def resolve_jwks_uri(settings: OIDCSettings) -> str:
@@ -86,9 +96,16 @@ def build_oidc_auth_guard(
 
     Registers the discovered (or overridden) ``issuer`` → ``jwks_uri`` pair in
     a ``JWKSCache`` and constructs an :class:`AuthGuard` with the configured
-    algorithms + audience + tenant claim. The trust map / may-act policy
-    default to permissive single-issuer dev defaults; production deployments
-    populate the trust map per tenant out of band.
+    algorithms + audience + tenant claim.
+
+    The trust map is **seeded** with the configured issuer bound to
+    :data:`DEFAULT_TENANT_ID` (mirroring how the ``in_memory`` provider seeds
+    its map), and the guard runs with ``strict_trust=True``. This fails closed:
+    a token from an *unknown* issuer / for an *unregistered* tenant is rejected,
+    while a token for the configured issuer + known tenant is accepted. Pass an
+    explicit ``trust_map`` to register additional tenants out of band (TMS /
+    multi-tenant realms) — it is used verbatim, so callers that want a different
+    posture supply their own pre-populated map.
 
     ``jwks_uri`` may be passed pre-resolved (the installer resolves it once);
     when omitted it is resolved here via :func:`resolve_jwks_uri`.
@@ -99,13 +116,24 @@ def build_oidc_auth_guard(
     jwks = JWKSCache(http_client=http_client) if http_client is not None else JWKSCache()
     jwks.register_issuer(settings.issuer_normalised, resolved_uri)
 
-    trust = trust_map if trust_map is not None else InMemoryIssuerTrustMap()
+    if trust_map is not None:
+        trust = trust_map
+    else:
+        trust = InMemoryIssuerTrustMap()
+        # Seed the configured issuer for the default/known tenant so the guard
+        # can fail-closed (strict_trust) while still accepting the configured
+        # issuer's tokens.
+        trust.set(
+            DEFAULT_TENANT_ID,
+            TenantTrust(expected_issuer=settings.issuer_normalised, suspended=False),
+        )
     policy = may_act if may_act is not None else StaticMayActPolicy()
 
     guard = AuthGuard(
         audience=settings.audience,
         jwks=jwks,
         trust_map=trust,
+        strict_trust=True,
         may_act=policy,
         algorithms=settings.algorithms,
         tenant_id_claim=config.tenant_id_claim,

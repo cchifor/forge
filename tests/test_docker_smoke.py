@@ -208,3 +208,44 @@ class TestComposeValidatorPortParity:
             f"validator reservations {sorted(reserved)} drift from the compose "
             f"template's published infra host ports {sorted(infra_published)}"
         )
+
+
+class TestBackendAuthPointsAtGatekeeper:
+    """In the gatekeeper sole-issuer model the backend validates gatekeeper's
+    internal JWT (iss=gatekeeper, JWKS at <server_url>/auth/jwks, aud=the
+    gatekeeper's internal-token audience). So a keycloak-enabled backend's
+    APP__SECURITY__AUTH__SERVER_URL must point at gatekeeper (not Keycloak) and
+    agree with GATEKEEPER_ISSUER, and its AUDIENCE must match the gatekeeper's
+    INTERNAL_TOKEN_AUDIENCE. Regression guard for the server_url/audience
+    mismatch that made backends reject every gatekeeper token.
+    """
+
+    def test_server_url_and_audience_match_gatekeeper(self, tmp_path):
+        config = ProjectConfig(
+            project_name="smoke-test",
+            output_dir=str(tmp_path),
+            backends=[BackendConfig(project_name="smoke-test", name="api", server_port=5010)],
+            include_keycloak=True,
+            keycloak_port=8080,
+        )
+        project_root = generate(config, quiet=True)
+        doc = yaml.safe_load((project_root / "docker-compose.yml").read_text(encoding="utf-8"))
+        be = doc["services"]["api"]["environment"]
+        gk = doc["services"]["gatekeeper"]["environment"]
+
+        assert be["APP__SECURITY__AUTH__SERVER_URL"] == "http://gatekeeper:5000"
+        # server_url is the trusted issuer + JWKS source; it must agree with the
+        # issuer gatekeeper actually stamps on the token.
+        assert be["APP__SECURITY__AUTH__SERVER_URL"] == be["GATEKEEPER_ISSUER"]
+        # The backend's expected audience must match what gatekeeper mints.
+        assert be["APP__SECURITY__AUTH__AUDIENCE"] == gk["INTERNAL_TOKEN_AUDIENCE"]
+        # The backend's forge_core auth setup derives the JWKS URI from
+        # server_url + realm as the Keycloak-style
+        # ``/realms/<realm>/protocol/openid-connect/certs`` path UNLESS JWKS_URI
+        # is pinned. Gatekeeper serves JWKS at ``/auth/jwks``, so without this
+        # pin every token verification 404s on the (non-existent) certs path.
+        assert be["APP__SECURITY__AUTH__JWKS_URI"] == "http://gatekeeper:5000/auth/jwks"
+        assert (
+            be["APP__SECURITY__AUTH__JWKS_URI"]
+            == be["APP__SECURITY__AUTH__SERVER_URL"].rstrip("/") + "/auth/jwks"
+        )

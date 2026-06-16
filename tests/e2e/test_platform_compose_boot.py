@@ -139,11 +139,35 @@ print("HEALTH_OK")
 """
 
 # --- the live S2S round-trip, run inside the gateway container ---------------
+#
+# This exercises a *protected* downstream route (``/api/v1/items``), not a
+# health probe: the orders ``AuthContextMiddleware`` excludes ``/health*`` from
+# verification, so only a non-excluded path actually drives the JWKS-backed
+# token verifier. We prove two things end-to-end:
+#   1. the verifier is live — a malformed bearer is rejected (401/403);
+#   2. a token freshly minted from the synthesized registry secret is ACCEPTED
+#      (200), which requires the backend to fetch gatekeeper's JWKS and validate
+#      iss/aud/sig — the exact path that silently rejected valid tokens before
+#      the server_url/audience + cold-start-retry fixes landed.
 _S2S_SCRIPT = """
-import os, json, urllib.request, urllib.parse
+import os, json, urllib.request, urllib.parse, urllib.error
 ep = os.environ["GATEKEEPER_TOKEN_ENDPOINT"]
 cid = os.environ["GATEKEEPER_CLIENT_ID"]; sec = os.environ["GATEKEEPER_CLIENT_SECRET"]
 orders = os.environ["INTERNAL_SERVICE_URL_ORDERS"]
+items = orders + "/api/v1/items"
+
+def status_for(headers):
+    req = urllib.request.Request(items, headers=headers)
+    try:
+        return urllib.request.urlopen(req, timeout=10).status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+# 1) the verifier is engaged: a malformed bearer must be rejected.
+bad = status_for({"Authorization": "Bearer not.a.jwt"})
+assert bad in (401, 403), "verifier accepted a malformed token: %s" % bad
+
+# 2) mint a real S2S token from the synthesized registry secret.
 body = urllib.parse.urlencode({
     "grant_type": "client_credentials", "client_id": cid, "client_secret": sec,
     "audience": "svc-orders", "scope": "orders:read",
@@ -152,9 +176,10 @@ body = urllib.parse.urlencode({
 req = urllib.request.Request(ep, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"})
 tok = json.load(urllib.request.urlopen(req, timeout=10))["access_token"]
 assert tok.count(".") == 2, "minted token is not a JWT"
-req2 = urllib.request.Request(orders + "/api/v1/health/live", headers={"Authorization": "Bearer " + tok})
-r2 = urllib.request.urlopen(req2, timeout=10)
-assert r2.status == 200, "downstream rejected the S2S token"
+
+# 3) the SAME protected route now ACCEPTS the gatekeeper token.
+ok = status_for({"Authorization": "Bearer " + tok})
+assert ok == 200, "downstream rejected a valid gatekeeper token: %s" % ok
 print("S2S_OK")
 """
 
