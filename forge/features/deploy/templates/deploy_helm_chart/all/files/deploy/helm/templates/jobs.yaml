@@ -25,8 +25,19 @@ metadata:
     {{- include "app.labels" $ | nindent 4 }}
     app.kubernetes.io/name: {{ $name }}-migrate
   annotations:
+    {{- /* ORDERING vs in-cluster Postgres: the in-cluster Postgres StatefulSet
+           is a NON-hook resource created only in the main install phase, AFTER
+           pre-install hooks. So when infra.inCluster=true the migrate hook must
+           run POST-install (once Postgres + its per-backend databases exist) and
+           wait for readiness; for an EXTERNAL DB the DB already exists, so run
+           pre-install as before. */ -}}
+    {{- if $.Values.infra.inCluster }}
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    {{- else }}
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
+    {{- end }}
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
@@ -39,6 +50,17 @@ spec:
       restartPolicy: Never
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- if $.Values.infra.inCluster }}
+      initContainers:
+        # Block until the in-cluster Postgres accepts connections so the migrate
+        # never races the StatefulSet (and its per-backend CREATE DATABASE init).
+        - name: wait-for-postgres
+          image: {{ $.Values.infra.postgres.image | quote }}
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432; do echo "waiting for postgres"; sleep 2; done
+      {{- end }}
       containers:
         - name: migrate
           image: "{{ $w.image.repository }}:{{ $w.image.tag }}"

@@ -213,3 +213,119 @@ def test_non_keycloak_helm_workload_env_has_no_auth():
     assert "APP__SECURITY__AUTH__ENABLED" not in env
     assert "GATEKEEPER_ISSUER" not in env
     assert "SERVICE_AUDIENCE" not in env
+
+
+def _multi_db_k8s_config() -> ProjectConfig:
+    # Two backends whose db_names differ (and one with a '-' that normalizes to
+    # '_'), so the per-backend DB provisioning is exercised distinctly.
+    return ProjectConfig(
+        project_name="Shop",
+        backends=[
+            BackendConfig(name="user-api", language=BackendLanguage.PYTHON, server_port=8001),
+            BackendConfig(name="billing", language=BackendLanguage.NODE, server_port=8002),
+        ],
+        options={"deploy.target": "kubernetes"},
+    )
+
+
+# --- #9: in-cluster Postgres provisions each backend's database ---------------
+
+
+def test_incluster_postgres_provisions_each_backend_db():
+    """The in-cluster Postgres only ships a default ``postgres`` database, but
+    every workload's DB URL points at a per-backend db_name (api, user_api, ...).
+    infra.yaml must CREATE each of those databases (init-db ConfigMap mounted at
+    /docker-entrypoint-initdb.d, driven per-workload by db_name), else the
+    migrate hooks fail "database does not exist"."""
+    root = _gen(_multi_db_k8s_config())
+    infra = _infra_yaml(root)
+
+    # Each workload must expose the db_name its DB URL points at, so the Go
+    # template can CREATE DATABASE per backend at install time.
+    workloads = _values(root)["workloads"]
+    for name, w in workloads.items():
+        url_db = next(iter(w["secretEnv"].values())).rsplit("/", 1)[1]
+        assert w.get("dbName") == url_db, (
+            f"workload {name!r} has no dbName matching its DB URL ({url_db!r})"
+        )
+    assert {w["dbName"] for w in workloads.values()} == {"user_api", "billing"}
+
+    # infra.yaml must issue a per-workload CREATE DATABASE driven by dbName, and
+    # mount that SQL at the Postgres entrypoint init dir so it runs at startup.
+    assert "CREATE DATABASE" in infra, (
+        f"infra.yaml does not provision per-backend databases:\n{infra}"
+    )
+    assert ".dbName" in infra or "$w.dbName" in infra, (
+        "CREATE DATABASE is not driven per-workload by dbName"
+    )
+    assert "/docker-entrypoint-initdb.d" in infra, (
+        "init-db SQL is not mounted at the Postgres entrypoint init dir"
+    )
+
+
+# --- #26: migrate hook waits for / is ordered after in-cluster Postgres -------
+
+
+def test_migrate_job_waits_for_incluster_postgres():
+    """The migrate Job is a pre-install/pre-upgrade hook; the in-cluster Postgres
+    StatefulSet is a NON-hook resource created only in the main install phase
+    (after pre-install hooks). So with infra.inCluster=true the migrate hook has
+    no DB to connect to. The Job must wait for / be ordered after Postgres
+    (initContainer wait-for-postgres, or only-hook-when-external gating)."""
+    root = _gen(_multi_db_k8s_config())
+    jobs = (root / "deploy" / "helm" / "templates" / "jobs.yaml").read_text(encoding="utf-8")
+
+    # Isolate the migrate Job block (the realm-sync block — gated separately — is
+    # appended after a Go-template comment that mentions infra.inCluster, so
+    # truncate there to avoid a false "gated_external" match).
+    migrate_blocks = [b for b in jobs.split("---") if "-migrate" in b and "kind: Job" in b]
+    assert migrate_blocks, "no migrate Job block found in jobs.yaml"
+    migrate = migrate_blocks[0].split("Keycloak realm-sync", 1)[0]
+
+    # Accept any of the correct orderings:
+    #  - an initContainer that waits for postgres to be reachable, OR
+    #  - gating the hook so it only runs against an external DB (not in-cluster).
+    waits = "initContainers" in migrate and (
+        "pg_isready" in migrate or "wait-for-postgres" in migrate or "postgres" in migrate
+    )
+    gated_external = "infra.inCluster" in migrate
+    assert waits or gated_external, (
+        "migrate hook neither waits for in-cluster Postgres nor is gated to "
+        f"external-DB only:\n{migrate}"
+    )
+
+
+# --- #10: externalServices is consumed or absent (no dead config) -------------
+
+
+def test_external_services_postgres_host_is_not_dead_config():
+    """externalServices.postgres.host (+ the values-prod example telling operators
+    to set it) must NOT be a dead key no template consumes. Either it is wired
+    into the host the templates use, or it is removed and the example points at
+    the config that IS consumed (the per-workload DB URL / secretEnv)."""
+    helm = _gen(_multi_db_k8s_config()) / "deploy" / "helm"
+    values = yaml.safe_load((helm / "values.yaml").read_text(encoding="utf-8"))
+    tmpl_dir = helm / "templates"
+    template_text = "\n".join(
+        p.read_text(encoding="utf-8") for p in tmpl_dir.glob("*.yaml")
+    )
+
+    has_host_key = "host" in values.get("externalServices", {}).get("postgres", {})
+    # A template must actually reference externalServices.postgres.host for the
+    # key to be live config.
+    consumed = ".Values.externalServices.postgres.host" in template_text
+
+    assert (not has_host_key) or consumed, (
+        "externalServices.postgres.host is present in values.yaml but no template "
+        "consumes it — dead config / docs trap"
+    )
+
+    # The values-prod example must not instruct operators to set a dead key.
+    example = (helm / "values-prod.yaml.example").read_text(encoding="utf-8")
+    if "externalServices" in example and "postgres" in example:
+        # If the example still mentions externalServices.postgres, the key must be
+        # consumed by a template (not a docs trap).
+        assert consumed, (
+            "values-prod.yaml.example still tells operators to set "
+            "externalServices.postgres but no template consumes it"
+        )
