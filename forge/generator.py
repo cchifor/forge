@@ -1387,8 +1387,10 @@ def _generate_frontend(
     # (Vue/Svelte + most plugin templates); templates without it own the
     # inner directory name (Flutter's ``{{project_slug}}/``) and need
     # dst_path set to the parent.
-    if frontend_uses_subdirectory(fw):
-        dst = project_root / "apps" / config.frontend_slug
+    uses_subdir = frontend_uses_subdirectory(fw)
+    app_dir = project_root / "apps" / config.frontend_slug
+    if uses_subdir:
+        dst = app_dir
     else:
         dst = project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
@@ -1400,7 +1402,17 @@ def _generate_frontend(
         # Phase-0 PoC. Self-contained variants (base_dir == "") skip this.
         _run_copier(TEMPLATES_DIR / base_dir, dst, ctx, quiet, skip_tasks=True, dry_run=dry_run)
     _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet, dry_run=dry_run)
-    return project_root / "apps" / config.frontend_slug
+    if not uses_subdir:
+        # The template owns its inner ``{{project_slug}}/`` directory, so it
+        # renders under ``apps/`` and ``_run_copier`` stamped
+        # ``.copier-answers.yml`` at that parent. Relocate it into the
+        # rendered app (``apps/<slug>/``) so the frontend update task-builder
+        # — which only scans ``apps/<slug>/`` — finds it; otherwise
+        # ``forge --update`` silently no-ops the re-render.
+        parent_answers = dst / ".copier-answers.yml"
+        if parent_answers.is_file() and app_dir.is_dir():
+            parent_answers.replace(app_dir / ".copier-answers.yml")
+    return app_dir
 
 
 def _run_backend_cmd(
