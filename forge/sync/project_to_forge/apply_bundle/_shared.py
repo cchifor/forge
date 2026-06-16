@@ -405,16 +405,11 @@ def _detect_indent_for_kwarg(source: str, kwarg_open_idx: int) -> str:
 def _repr_str(s: str) -> str:
     """Render ``s`` as a Python string literal.
 
-    Uses double quotes when the string contains no double quotes, else
-    falls back to single quotes — mirrors the convention forge's own
-    fragments.py modules use (most strings double-quoted; specs that
-    embed quotes single-quoted).
+    Delegates to :func:`repr`, which always emits a literal that
+    ``ast.parse``-es and round-trips via ``ast.literal_eval`` — backslashes
+    (e.g. ``C:\\Users\\app``) and control chars (newline, tab) are escaped
+    correctly. The rendered fragments.py is re-read with ``ast.parse``/import,
+    so hand-rolled quoting that skips escaping would break or silently
+    corrupt the file.
     """
-    if '"' not in s:
-        return f'"{s}"'
-    if "'" not in s:
-        return f"'{s}'"
-    # Both quote chars appear — fall back to double-quoting with
-    # escapes. Rare in practice.
-    escaped = s.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    return repr(s)

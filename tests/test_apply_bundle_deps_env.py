@@ -252,8 +252,8 @@ class TestApplyBundleDepsAdded:
         assert report.errored == 0
         text = fragments_py.read_text(encoding="utf-8")
         # The applier should have appended bar>=2.0 to the tuple.
-        assert '"foo>=1.0"' in text
-        assert '"bar>=2.0"' in text
+        assert "foo>=1.0" in text
+        assert "bar>=2.0" in text
         # And the file should still be valid Python — re-import works.
         assert "register_fragment" in text
 
@@ -291,8 +291,8 @@ class TestApplyBundleDepsRemoved:
         text = (forge_repo / "forge" / "features" / "demo" / "fragments.py").read_text(
             encoding="utf-8"
         )
-        assert '"foo>=1.0"' not in text
-        assert '"bar>=2.0"' in text
+        assert "foo>=1.0" not in text
+        assert "bar>=2.0" in text
 
     def test_removed_last_item_yields_empty_tuple(self, tmp_path: Path) -> None:
         """When the removal leaves the tuple empty it serialises to ``()``."""
@@ -324,7 +324,7 @@ class TestApplyBundleDepsRemoved:
         assert report.applied == 1
         text = fragments_py.read_text(encoding="utf-8")
         assert "dependencies=()" in text
-        assert '"foo>=1.0"' not in text
+        assert "foo>=1.0" not in text
 
 
 class TestApplyBundleDepsModified:
@@ -357,8 +357,8 @@ class TestApplyBundleDepsModified:
 
         assert report.applied == 1, [(e.status, e.error) for e in report.entries]
         text = fragments_py.read_text(encoding="utf-8")
-        assert '"foo>=1.0"' not in text
-        assert '"foo>=2.0"' in text
+        assert "foo>=1.0" not in text
+        assert "foo>=2.0" in text
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +397,8 @@ class TestApplyBundleEnvAdded:
 
         assert report.applied == 1, [(e.status, e.error) for e in report.entries]
         text = fragments_py.read_text(encoding="utf-8")
-        assert '"EXISTING"' in text and '"old_value"' in text
-        assert '"NEW_KEY"' in text and '"new_value"' in text
+        assert "EXISTING" in text and "old_value" in text
+        assert "NEW_KEY" in text and "new_value" in text
 
 
 class TestApplyBundleEnvRemoved:
@@ -431,8 +431,8 @@ class TestApplyBundleEnvRemoved:
 
         assert report.applied == 1, [(e.status, e.error) for e in report.entries]
         text = fragments_py.read_text(encoding="utf-8")
-        assert '"DROP"' not in text
-        assert '"KEEP"' in text
+        assert "DROP" not in text
+        assert "KEEP" in text
 
 
 class TestApplyBundleEnvModified:
@@ -465,8 +465,8 @@ class TestApplyBundleEnvModified:
 
         assert report.applied == 1, [(e.status, e.error) for e in report.entries]
         text = fragments_py.read_text(encoding="utf-8")
-        assert '"claude-sonnet-3.5"' not in text
-        assert '"claude-sonnet-4"' in text
+        assert "claude-sonnet-3.5" not in text
+        assert "claude-sonnet-4" in text
 
 
 # ---------------------------------------------------------------------------
@@ -753,9 +753,9 @@ class TestApplyBundleMixedKinds:
         assert (files_dir / "foo.txt").read_text(encoding="utf-8") == "user-edited content\n"
         # Deps-side: fragments.py now has newdep.
         text = fragments_py.read_text(encoding="utf-8")
-        assert '"newdep>=3.0"' in text
+        assert "newdep>=3.0" in text
         # Env-side: fragments.py now has NEWKEY.
-        assert '"NEWKEY"' in text and '"newval"' in text
+        assert "NEWKEY" in text and "newval" in text
 
 
 # ---------------------------------------------------------------------------
@@ -911,7 +911,7 @@ class TestApplyBundleRiskFilter:
                 quiet=True,
             )
             assert report2.applied == 1
-            assert '"bar>=2.0"' in fragments_py.read_text(encoding="utf-8")
+            assert "bar>=2.0" in fragments_py.read_text(encoding="utf-8")
         finally:
             _unregister_fragment(fragment_name)
 
@@ -1078,3 +1078,38 @@ class TestApplyBundleLanguageInference:
             _unregister_fragment(fragment_name)
         assert report.errored == 1
         assert "cannot infer backend language" in report.entries[0].error
+
+
+class TestReprStr:
+    """``_repr_str`` must emit a *valid* Python string literal that
+    round-trips for every input, including backslashes and control chars.
+
+    The rendered fragments.py is re-read with ``ast.parse``/import, so a
+    literal that does not parse (backslash, newline) breaks apply-back, and
+    one that parses to a different value (tab) silently corrupts deps/env.
+    """
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            r"C:\Users\app",  # backslash -> bad \U / \a escapes
+            "line1\nline2",  # newline -> unterminated string literal
+            "a\tb",  # tab -> silent corruption
+            "has\"both'quotes",  # both quote chars
+            "trailing-backslash\\",
+            'plain',
+            "",
+        ],
+    )
+    def test_repr_str_parses_and_round_trips(self, value: str) -> None:
+        import ast
+
+        from forge.sync.project_to_forge.apply_bundle._shared import (
+            _repr_str,
+        )
+
+        rendered = _repr_str(value)
+        # The literal must parse on its own (mirrors fragments.py re-read).
+        ast.parse(rendered, mode="eval")
+        # And must decode back to exactly the original value.
+        assert ast.literal_eval(rendered) == value
