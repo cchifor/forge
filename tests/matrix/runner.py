@@ -493,7 +493,16 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
         # _inject_weld_stubs docstring for the rationale.
         _inject_weld_stubs(project_root)
 
+        # Initiative #6: a ``skip`` :class:`Check` (e.g. ``uv`` / ``cargo`` /
+        # ``npx`` not on PATH) used to be dropped from BOTH ``failures`` and
+        # ``skipped_subchecks``, so a lane where EVERY backend check skipped
+        # reported ``ok`` while running nothing — masking a CI image
+        # regression that stripped the toolchain. Surface skips here, and
+        # track whether any real (ok/warn/fail) check ran so an all-skip
+        # lane reports ``skip`` rather than a vacuous green ``ok``.
+        skipped_subchecks: list[str] = []
         failures: list[str] = []
+        ran_backend_check = False
         for bc in project_config.backends:
             spec = BACKEND_REGISTRY[bc.language]
             backend_dir = project_root / "services" / bc.name
@@ -506,13 +515,19 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
             for check in checks:
                 if check.status == "fail":
                     failures.append(f"{bc.name}:{check.name}")
+                    ran_backend_check = True
+                elif check.status == "skip":
+                    reason = f": {check.details}" if check.details else ""
+                    skipped_subchecks.append(f"{bc.name}:{check.name} skipped{reason}")
+                else:
+                    # ``ok`` / ``warn`` — a real check actually executed.
+                    ran_backend_check = True
 
         # Frontend build check — catches vue-tsc / svelte-check / vite build
         # regressions on PR rather than waiting for nightly compose-up (lane
         # C). ``frontend_mode`` is the project-level option discriminator
         # (``options["frontend.mode"]``); ``_validate_frontend_mode_coherence``
         # already keeps it in lock-step with ``FrontendConfig.framework``.
-        skipped_subchecks: list[str] = []
         if project_config.frontend is not None and project_config.frontend_mode != "none":
             fe_dir = project_root / "apps" / "frontend"
             fe_outcome = _verify_frontend(project_config.frontend, fe_dir)
@@ -530,6 +545,20 @@ def run_lane_verify(scenario: Scenario) -> LaneResult:
                 status="fail",
                 duration_ms=int((perf_counter() - start) * 1000),
                 details="toolchain checks failed: " + "; ".join(failures),
+                skipped_subchecks=skipped_subchecks,
+            )
+        # Initiative #6: verify is a required lane. If the scenario had
+        # backends but NONE of their checks actually ran (every one
+        # skipped because the toolchain CLI was missing), the lane
+        # verified nothing — report ``skip`` so it can't masquerade as a
+        # green that exercised the toolchain.
+        if project_config.backends and not ran_backend_check:
+            return LaneResult(
+                scenario=scenario.name,
+                lane="verify",
+                status="skip",
+                duration_ms=int((perf_counter() - start) * 1000),
+                details="all backend toolchain checks skipped (no toolchain CLI on PATH)",
                 skipped_subchecks=skipped_subchecks,
             )
         return LaneResult(
