@@ -1401,8 +1401,8 @@
       "sha256": "22237aeddb41cfae"
     },
     "docker-compose.yml": {
-      "size": 12339,
-      "sha256": "021622c48beac1f0"
+      "size": 12685,
+      "sha256": "99c2ca21ee9e01d1"
     },
     "forge.toml": {
       "size": 155038,
@@ -2129,8 +2129,8 @@
       "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api/src/app/middleware/rate_limit.py": {
-      "size": 4087,
-      "sha256": "11586ed8a5771823"
+      "size": 5300,
+      "sha256": "019e1aa33f277e91"
     },
     "services/api/src/app/middleware/security_headers.py": {
       "size": 2305,

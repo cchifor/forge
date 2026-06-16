@@ -161,8 +161,8 @@
       "sha256": "d40a7818e499170e"
     },
     "services/api/src/middleware/rate_limit.rs": {
-      "size": 5911,
-      "sha256": "1ac4f7e8acc8b032"
+      "size": 7548,
+      "sha256": "317e23d5e3737fe2"
     },
     "services/api/src/middleware/security_headers.rs": {
       "size": 2002,
