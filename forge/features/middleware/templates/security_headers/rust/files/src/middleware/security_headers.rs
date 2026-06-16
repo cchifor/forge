@@ -3,7 +3,9 @@
 //! Injects a conservative set of response headers on every response. Matches
 //! the Python fragment's defaults: nosniff, frame DENY, strict referrer,
 //! restrictive CSP, restrictive Permissions-Policy, and HSTS when served over
-//! TLS (HSTS is omitted from plain-HTTP responses — browsers ignore it anyway).
+//! TLS — either directly or via a TLS-terminating proxy that sets
+//! x-forwarded-proto: https (HSTS is omitted from plain-HTTP responses, which
+//! browsers ignore anyway).
 
 use axum::body::Body;
 use axum::http::{HeaderName, HeaderValue, Request};
@@ -25,7 +27,14 @@ const HEADERS: &[(&str, &str)] = &[
 ];
 
 pub async fn security_headers_middleware(req: Request<Body>, next: Next) -> Response {
-    let is_https = req.uri().scheme_str() == Some("https");
+    // Behind a TLS-terminating proxy (the documented Traefik deploy) the app
+    // sees plain http; honor x-forwarded-proto so HSTS is still sent.
+    let forwarded_https = req
+        .headers()
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        == Some("https");
+    let is_https = req.uri().scheme_str() == Some("https") || forwarded_https;
     let mut response = next.run(req).await;
     let headers = response.headers_mut();
     for (name, value) in HEADERS {

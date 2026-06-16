@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -13,6 +13,12 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
+
+# Cap on the number of distinct client buckets kept in memory. Once exceeded,
+# the least-recently-used bucket is evicted. Without this, a flood of unique
+# clients (each a fresh X-Forwarded-For address) would grow the map without
+# bound — a memory-exhaustion vector.
+_MAX_BUCKETS = 4096
 
 
 @dataclass
@@ -33,8 +39,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._rate = requests_per_minute / 60.0
         self._capacity = float(burst or requests_per_minute)
-        self._buckets: dict[str, _Bucket] = defaultdict(lambda: _Bucket(tokens=self._capacity))
+        # LRU-ordered so we can evict the least-recently-used idle bucket once
+        # the map is full, keeping the limiter's memory bounded.
+        self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
         self._skip_paths = set(skip_paths or [])
+
+    def _get_bucket(self, key: str) -> _Bucket:
+        bucket = self._buckets.get(key)
+        if bucket is None:
+            # Evict the oldest (least-recently-used) bucket(s) before inserting
+            # so the map can never exceed the cap.
+            while len(self._buckets) >= _MAX_BUCKETS:
+                self._buckets.popitem(last=False)
+            bucket = _Bucket(tokens=self._capacity)
+            self._buckets[key] = bucket
+        else:
+            # Mark as most-recently-used.
+            self._buckets.move_to_end(key)
+        return bucket
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -43,7 +65,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         key = self._resolve_key(request)
-        bucket = self._buckets[key]
+        bucket = self._get_bucket(key)
         now = time.monotonic()
 
         elapsed = now - bucket.last_refill
@@ -69,6 +91,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             customer_id = getattr(user, "customer_id", None)
             if customer_id:
                 return f"tenant:{customer_id}"
+        # Behind a reverse proxy / load balancer, ``request.client.host`` is the
+        # proxy's address, shared by every anonymous client — keying on it would
+        # collapse them all into one bucket. Prefer the left-most (originating)
+        # address from X-Forwarded-For when present. NOTE: only trust XFF when
+        # the app sits behind a trusted proxy that sets it; if clients can reach
+        # the app directly, strip/override XFF at the proxy.
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",", 1)[0].strip()
+            if client_ip:
+                return f"ip:{client_ip}"
         if request.client:
             return f"ip:{request.client.host}"
         return "anonymous"
