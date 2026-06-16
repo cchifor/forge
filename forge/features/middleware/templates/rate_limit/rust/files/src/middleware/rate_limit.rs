@@ -18,7 +18,38 @@ use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+/// Whether `ip` is an in-cluster / proxy peer we trust to have set
+/// `X-Forwarded-For` honestly.
+///
+/// Heuristic: trust loopback, RFC1918 private, and link-local addresses — the
+/// documented Traefik topology terminates external traffic at an in-cluster
+/// reverse proxy whose peer address is private. A public transport peer means
+/// the request reached us directly (or via an XFF-appending hop), so a
+/// client-supplied XFF can't be trusted. A stricter explicit CIDR allowlist
+/// can be layered on top of this later.
+fn is_trusted_peer(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => {
+            // `is_unique_local` / `is_unicast_link_local` are unstable on stable
+            // Rust, so match the ULA (fc00::/7) and link-local (fe80::/10)
+            // prefixes by hand; loopback (::1) has a stable helper.
+            v6.is_loopback() || is_unique_local_v6(v6) || is_link_local_v6(v6)
+        }
+    }
+}
+
+/// ULA range fc00::/7 (the first 7 bits are 1111110).
+fn is_unique_local_v6(v6: Ipv6Addr) -> bool {
+    (v6.segments()[0] & 0xfe00) == 0xfc00
+}
+
+/// Link-local range fe80::/10 (the first 10 bits are 1111111010).
+fn is_link_local_v6(v6: Ipv6Addr) -> bool {
+    (v6.segments()[0] & 0xffc0) == 0xfe80
+}
 
 const REQUESTS_PER_MINUTE: f64 = 120.0;
 const BURST: f64 = 120.0;
@@ -112,31 +143,36 @@ pub async fn rate_limit_middleware(req: Request<Body>, next: Next) -> Response {
         return next.run(req).await;
     }
 
+    // The ConnectInfo extension (set by axum::serve with_connect_info) is the
+    // immediate transport peer.
+    let peer_ip = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(addr)| addr.ip());
+
     // Behind a reverse proxy / load balancer the ConnectInfo peer is the
     // proxy's address, shared by every anonymous client — keying on it would
     // collapse them all into one bucket. Prefer the left-most (originating)
     // address from X-Forwarded-For when present.
     //
-    // NOTE: only trust X-Forwarded-For when the app sits behind a trusted proxy
-    // that sets it; if clients can reach the app directly, strip/override the
-    // header at the proxy so it can't be spoofed.
-    let forwarded_ip = req
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .map(str::trim)
-        .filter(|ip| !ip.is_empty())
-        .map(str::to_string);
+    // SECURITY: only trust X-Forwarded-For when the immediate transport peer is
+    // itself a trusted in-cluster proxy (private / loopback / link-local — the
+    // documented Traefik topology). If the peer is public the request reached
+    // us directly (internet-facing) or via an XFF-appending hop, and a
+    // client-supplied XFF could be used to spoof / evade its rate-limit bucket
+    // — so we ignore it and key on the peer.
+    let forwarded_ip = peer_ip.filter(|ip| is_trusted_peer(*ip)).and_then(|_| {
+        req.headers()
+            .get("x-forwarded-for")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(',').next())
+            .map(str::trim)
+            .filter(|ip| !ip.is_empty())
+            .map(str::to_string)
+    });
 
     let key = forwarded_ip
-        .or_else(|| {
-            // Fall back to the ConnectInfo extension (set by axum::serve
-            // with_connect_info) when there's no trusted forwarded header.
-            req.extensions()
-                .get::<ConnectInfo<SocketAddr>>()
-                .map(|ConnectInfo(addr)| addr.ip().to_string())
-        })
+        .or_else(|| peer_ip.map(|ip| ip.to_string()))
         .unwrap_or_else(|| "anonymous".to_string());
 
     // Use a per-process singleton limiter so state persists across requests.

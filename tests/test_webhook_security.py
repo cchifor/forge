@@ -228,6 +228,24 @@ class TestNodeDeliveryHardening:
         # fetch must not auto-follow 3xx to an internal host.
         assert ('redirect: "manual"' in body) or ('redirect: "error"' in body)
 
+    def test_imports_dns_promises(self):
+        # DNS-resolution SSRF: the delivery path must resolve names, not just
+        # check literals. Node 18+ has dns/promises built in (no new dep).
+        src = self._src()
+        assert ("node:dns/promises" in src) or ("node:dns" in src and "promises" in src)
+
+    def test_deliver_resolves_host_before_fetch(self):
+        # Before fetching, deliver must resolve the URL host via dns lookup
+        # (all addresses) and validate every resolved IP against the existing
+        # block predicate, closing the static-DNS-to-private-IP hole.
+        src = self._src()
+        body = src.split("export async function deliver")[1]
+        # Resolve all addresses for the host.
+        assert "lookup(" in body
+        assert "all: true" in body
+        # Validate each RESOLVED address with the existing block predicate.
+        assert ("isBlockedIp" in body) or ("isBlockedHost" in body)
+
 
 class TestRustDeliveryHardening:
     """The Rust delivery path must reach SSRF/open-redirect parity with Python:
@@ -264,3 +282,18 @@ class TestRustDeliveryHardening:
         src = self._src()
         assert "use url::" not in src
         assert "use addr::" not in src
+
+    def test_resolves_host_via_to_socket_addrs(self):
+        # DNS-resolution SSRF: deliver must resolve the host (std only) and
+        # reject if any resolved IpAddr is internal — not just literal hosts.
+        src = self._src()
+        assert "to_socket_addrs" in src
+        # The std resolver trait must be in scope.
+        assert "ToSocketAddrs" in src
+
+    def test_deliver_validates_resolved_ipaddr(self):
+        # Each resolved address must be checked as an IpAddr against the
+        # existing block logic (is_blocked_ipv4 / is_blocked_host).
+        src = self._src()
+        assert "IpAddr" in src
+        assert ("is_blocked_ipv4" in src) or ("is_blocked_ip" in src)

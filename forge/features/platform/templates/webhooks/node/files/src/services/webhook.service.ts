@@ -8,6 +8,7 @@
  */
 
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { lookup } from "node:dns/promises";
 
 export interface Webhook {
 	id: string;
@@ -44,10 +45,11 @@ export class WebhookUrlError extends Error {}
  * a non-http(s) scheme. Mirrors the Python feature's `validate_outbound_url`.
  *
  * Host literals in loopback / link-local (incl. the 169.254.169.254 cloud
- * metadata endpoint) / RFC1918 private ranges are blocked. DNS names are not
- * resolved here (no sync resolver in the fetch path); pair this pre-flight
- * check with `redirect: "manual"` below so a 3xx to an internal host cannot
- * slip past it.
+ * metadata endpoint) / RFC1918 private ranges are blocked. This is a fast
+ * literal-only pre-check; `deliver` additionally resolves the host via
+ * `dns.lookup` and rejects any RESOLVED internal address (closing the
+ * DNS-to-private-IP hole). Pair both with `redirect: "manual"` below so a 3xx
+ * to an internal host cannot slip past either check.
  */
 function validateOutboundUrl(rawUrl: string): void {
 	let parsed: URL;
@@ -85,6 +87,18 @@ function isBlockedHost(host: string): boolean {
 	}
 	if (isBlockedIPv4(host)) return true;
 	return false;
+}
+
+/**
+ * Block predicate for an already-resolved IP literal (v4 or v6) as returned by
+ * `dns.lookup`. Strips any IPv6 zone id (`fe80::1%eth0`) then reuses the same
+ * `isBlockedHost` ranges. Loopback / RFC1918 private / link-local (incl. the
+ * 169.254.169.254 metadata endpoint) / unique-local / unspecified /
+ * IPv4-mapped-loopback all resolve to `true`.
+ */
+function isBlockedIp(ip: string): boolean {
+	const bare = ip.split("%", 1)[0].toLowerCase();
+	return isBlockedHost(bare);
 }
 
 function isBlockedIPv4(host: string): boolean {
@@ -176,6 +190,30 @@ export async function deliver(
 	// `redirect: "manual"` below so a 3xx to an internal host can't bypass it.
 	try {
 		validateOutboundUrl(webhook.url);
+	} catch (err: any) {
+		return {
+			webhook_id: webhook.id,
+			status_code: null,
+			ok: false,
+			error: `refused: ${String(err?.message ?? err)}`,
+			duration_ms: Math.round(performance.now() - start),
+		};
+	}
+
+	// DNS-resolution SSRF guard: a public-looking name can still resolve to a
+	// private/loopback/link-local/metadata IP. Resolve ALL addresses and reject
+	// if any is internal. NOTE: this leaves a residual TOCTOU window (the name
+	// could re-resolve to a different IP at fetch time); closing the static
+	// DNS-to-private-IP hole is the goal here — a connect-time pin would close
+	// the TOCTOU but Node's fetch exposes no per-connection address hook.
+	try {
+		const host = new URL(webhook.url).hostname.toLowerCase();
+		const resolved = await lookup(host, { all: true });
+		if (resolved.some((r) => isBlockedIp(r.address))) {
+			throw new WebhookUrlError(
+				`${host} resolves to a non-public address; refused`,
+			);
+		}
 	} catch (err: any) {
 		return {
 			webhook_id: webhook.id,

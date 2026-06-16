@@ -315,6 +315,47 @@ def test_rust_sdk_s2s_client_coerces_nonpositive_expires_in() -> None:
     )
 
 
+def test_rust_sdk_s2s_client_coerces_negative_expires_in() -> None:
+    """A *negative* ``expires_in`` must deserialize and coerce to 300.
+
+    Python (``s2s_client.py``) coerces ``expires_in <= 0`` to 300; Node
+    (``S2SClient.ts``) does ``rawExpiresIn > 0 ? rawExpiresIn : 300``.
+    Both languages happily parse a negative JSON value and then clamp it.
+
+    The Rust port declared ``expires_in: Option<u64>`` — an unsigned
+    type that *cannot represent a negative number*. A token response with
+    ``{"expires_in": -1}`` therefore failed serde deserialization outright
+    (``token endpoint returned non-JSON response``) instead of falling
+    through to the 300 default, breaking cross-language parity for that
+    edge case. The ``Some(n) if n > 0`` match arm only ever saw ``0`` as
+    its non-positive case because ``u64`` can't hold anything below it.
+
+    The field must be a *signed* ``Option<i64>`` so a negative value
+    deserializes, then the match coerces the positive arm back to ``u64``.
+    """
+    text = (_sdk_root() / "src" / "s2s_client.rs").read_text(encoding="utf-8")
+    # The field must accept negative values: signed i64, not unsigned u64.
+    assert "expires_in: Option<i64>" in text, (
+        "TokenResponse.expires_in must be `Option<i64>` so a negative JSON "
+        "`expires_in` deserializes (then coerces to 300) instead of failing "
+        "serde deserialization. `Option<u64>` cannot represent a negative "
+        "value, breaking parity with Python (`expires_in <= 0`) and Node "
+        "(`rawExpiresIn > 0 ? rawExpiresIn : 300`)."
+    )
+    # The bare unsigned field declaration must be gone.
+    assert "expires_in: Option<u64>" not in text, (
+        "TokenResponse still declares `expires_in: Option<u64>`, which cannot "
+        "deserialize a negative `expires_in`. Use `Option<i64>` + `as u64` "
+        "coercion in the match arm."
+    )
+    # The positive arm coerces the signed value back to u64 for the TTL math.
+    assert "Some(n) if n > 0 => n as u64" in text, (
+        "s2s_client.rs must coerce the positive expires_in arm with "
+        "`Some(n) if n > 0 => n as u64` so the signed wire value feeds the "
+        "u64 TTL arithmetic; non-positive values fall through to 300."
+    )
+
+
 def test_rust_sdk_testing_module_gated_behind_feature() -> None:
     """testing.rs must be gated behind a feature flag.
 

@@ -200,11 +200,18 @@ def test_keycloak_helm_workload_env_carries_auth():
     root = _gen(_keycloak_k8s_config())
     env = _values(root)["workloads"]["api"]["env"]
     assert env["APP__SECURITY__AUTH__ENABLED"] == "true"
-    assert env["APP__SECURITY__AUTH__SERVER_URL"] == "http://keycloak:8080"
+    # Gatekeeper sole-issuer model: the backend validates gatekeeper's internal
+    # JWT, so server_url (JWKS source + trusted issuer) and the expected audience
+    # must point at gatekeeper, not Keycloak.
+    assert env["APP__SECURITY__AUTH__SERVER_URL"] == "http://gatekeeper:5000"
+    assert env["APP__SECURITY__AUTH__AUDIENCE"] == "forge-services"
+    # JWKS_URI must be pinned to gatekeeper's /auth/jwks: forge_core otherwise
+    # derives the Keycloak /realms/<realm>/.../certs path, which gatekeeper does
+    # not serve — so without the pin every token verification 404s.
+    assert env["APP__SECURITY__AUTH__JWKS_URI"] == "http://gatekeeper:5000/auth/jwks"
     assert "APP__SECURITY__AUTH__REALM" in env
     assert "APP__SECURITY__AUTH__CLIENT_ID" in env
     assert env["GATEKEEPER_ISSUER"] == "http://gatekeeper:5000"
-    assert env["SERVICE_AUDIENCE"] == "forge-services"
 
 
 def test_non_keycloak_helm_workload_env_has_no_auth():
@@ -213,6 +220,27 @@ def test_non_keycloak_helm_workload_env_has_no_auth():
     assert "APP__SECURITY__AUTH__ENABLED" not in env
     assert "GATEKEEPER_ISSUER" not in env
     assert "SERVICE_AUDIENCE" not in env
+
+
+# --- gatekeeper S2S registry placeholder is a valid ServiceRegistry --------
+
+
+def test_gatekeeper_registry_placeholder_services_is_a_list():
+    """The gatekeeper S2S service-registry placeholder rendered into infra.yaml
+    must declare ``services`` as a LIST (``services: []``), not a MAPPING
+    (``services: {}``). The gatekeeper ServiceRegistry pydantic model defines
+    ``services: list[ServiceClient]`` (empty default ``{"services": []}``), so a
+    mapping placeholder fails schema validation at gatekeeper boot.
+
+    infra.yaml is a verbatim Go-template, so assert over the file text."""
+    infra = _infra_yaml(_gen(_keycloak_k8s_config()))
+    assert "services: []" in infra, (
+        "gatekeeper registry placeholder must render `services: []` (a list)"
+    )
+    assert "services: {}" not in infra, (
+        "gatekeeper registry placeholder renders `services: {}` (a mapping), "
+        "which fails ServiceRegistry schema validation"
+    )
 
 
 def _multi_db_k8s_config() -> ProjectConfig:

@@ -468,21 +468,29 @@ def _load_python_memory_adapter():
     # Stub ``app.ports.cache`` — the adapter only needs the symbol to
     # exist; the runtime ``Protocol`` check is structural so any class
     # with the right methods satisfies it.
-    if "app" not in sys.modules:
-        import types
+    #
+    # Backfill each module *individually* rather than gating all three on
+    # ``"app" not in sys.modules``: under ``pytest -n auto`` a sibling test
+    # on the same worker may have already inserted a bare ``app`` package
+    # (without ``app.ports``), and a skip-if-present guard would then leave
+    # ``app.ports`` unstubbed → ``ModuleNotFoundError`` at import.
+    import types
 
+    if "app" not in sys.modules:
         app_mod = types.ModuleType("app")
         app_mod.__path__ = []  # mark as package
+        sys.modules["app"] = app_mod
+    if "app.ports" not in sys.modules:
         ports_mod = types.ModuleType("app.ports")
         ports_mod.__path__ = []
+        sys.modules["app.ports"] = ports_mod
+    if "app.ports.cache" not in sys.modules:
         cache_proto_mod = types.ModuleType("app.ports.cache")
 
         class _StubCachePort:  # noqa: D401 — stub for Protocol surface
             pass
 
         cache_proto_mod.CachePort = _StubCachePort
-        sys.modules["app"] = app_mod
-        sys.modules["app.ports"] = ports_mod
         sys.modules["app.ports.cache"] = cache_proto_mod
 
     src = (

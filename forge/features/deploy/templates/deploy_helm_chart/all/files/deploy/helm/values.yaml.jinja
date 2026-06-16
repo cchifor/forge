@@ -71,12 +71,19 @@ workloads:
 {%- endif %}
 {%- if topology.include_keycloak %}
       # Auth env mirrors docker-compose: the backend default is auth-OFF, so a
-      # keycloak project MUST carry these to deploy with authentication ON. The
-      # server_url/issuer point at the IN-CLUSTER keycloak + gatekeeper Services
-      # (templates/infra.yaml, infra.inCluster=true). For an EXTERNAL/managed
-      # keycloak, override these via values-prod.yaml.
+      # keycloak project MUST carry these to deploy with authentication ON. In
+      # the gatekeeper sole-issuer model the backend validates gatekeeper's
+      # internal JWT (iss=gatekeeper, JWKS at <server_url>/auth/jwks), so
+      # server_url + audience point at the IN-CLUSTER gatekeeper Service, not
+      # Keycloak. For an EXTERNAL/managed gatekeeper, override via values-prod.yaml.
       APP__SECURITY__AUTH__ENABLED: "true"
-      APP__SECURITY__AUTH__SERVER_URL: "http://keycloak:8080"
+      APP__SECURITY__AUTH__SERVER_URL: "http://gatekeeper:5000"
+      APP__SECURITY__AUTH__AUDIENCE: "forge-services"
+      # forge_core derives the JWKS URI from server_url + realm as the
+      # Keycloak-style /realms/<realm>/protocol/openid-connect/certs path unless
+      # pinned. Gatekeeper serves JWKS at /auth/jwks, so this pin is REQUIRED or
+      # the backend 404s on every verification and rejects all gatekeeper tokens.
+      APP__SECURITY__AUTH__JWKS_URI: "http://gatekeeper:5000/auth/jwks"
       APP__SECURITY__AUTH__REALM: "{{ topology.keycloak_realm }}"
       APP__SECURITY__AUTH__CLIENT_ID: "{{ topology.keycloak_client_id }}"
       GATEKEEPER_ISSUER: "http://gatekeeper:5000"

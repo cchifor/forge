@@ -14,6 +14,7 @@
 //! timestamps (> ~5 min) and previously-seen nonces.
 
 use std::collections::HashMap;
+use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -91,10 +92,12 @@ fn generate_secret() -> String {
 /// Host/scheme are parsed manually (no `url` crate) so the webhooks feature
 /// pulls in no new dependency. Loopback / link-local (incl. the
 /// 169.254.169.254 cloud-metadata endpoint) / RFC1918 private ranges are
-/// blocked as literals; DNS names are not resolved here, so this pre-flight is
-/// paired with `redirect::Policy::none()` on the client so a 3xx to an internal
-/// host cannot bypass it.
-fn validate_outbound_url(raw_url: &str) -> Result<(), String> {
+/// blocked as literals. On success the parsed `(host, port)` is returned so
+/// the caller can additionally resolve the name (see `deliver`) — this literal
+/// pre-check is paired with DNS-resolution validation and
+/// `redirect::Policy::none()` on the client so a 3xx to an internal host cannot
+/// bypass it.
+fn validate_outbound_url(raw_url: &str) -> Result<(String, u16), String> {
     let (scheme, rest) = raw_url
         .split_once("://")
         .ok_or_else(|| format!("invalid webhook URL: {}", raw_url))?;
@@ -106,14 +109,20 @@ fn validate_outbound_url(raw_url: &str) -> Result<(), String> {
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
     // Strip any userinfo ("user:pass@host").
     let hostport = authority.rsplit('@').next().unwrap_or(authority);
-    // Pull the host out of host[:port], handling bracketed IPv6 literals.
-    let host = if let Some(after) = hostport.strip_prefix('[') {
-        after.split(']').next().unwrap_or("")
+    // Pull the host (and optional port) out of host[:port], handling bracketed
+    // IPv6 literals.
+    let (host, port_str) = if let Some(after) = hostport.strip_prefix('[') {
+        let host = after.split(']').next().unwrap_or("");
+        let port = after
+            .split_once("]:")
+            .map(|(_, p)| p)
+            .filter(|p| !p.is_empty());
+        (host, port)
     } else {
-        hostport
-            .rsplit_once(':')
-            .map(|(h, _)| h)
-            .unwrap_or(hostport)
+        match hostport.rsplit_once(':') {
+            Some((h, p)) if !p.is_empty() => (h, Some(p)),
+            _ => (hostport, None),
+        }
     };
     let host = host.trim().to_ascii_lowercase();
     if host.is_empty() {
@@ -121,6 +130,76 @@ fn validate_outbound_url(raw_url: &str) -> Result<(), String> {
     }
     if is_blocked_host(&host) {
         return Err(format!("{} is a non-public address; refused", host));
+    }
+    let port = match port_str {
+        Some(p) => p
+            .parse::<u16>()
+            .map_err(|_| format!("invalid port in webhook URL: {}", p))?,
+        None => {
+            if scheme == "https" {
+                443
+            } else {
+                80
+            }
+        }
+    };
+    Ok((host, port))
+}
+
+/// Block any resolved address that could reach internal infrastructure:
+/// loopback, RFC1918 / unique-local private ranges, link-local (incl. the
+/// 169.254.169.254 cloud-metadata endpoint) and the unspecified address.
+/// IPv4-mapped IPv6 is unwrapped first so `::ffff:127.0.0.1` can't sneak past.
+fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+        }
+        IpAddr::V6(v6) => {
+            // Unwrap IPv4-mapped (::ffff:a.b.c.d) and re-check as IPv4.
+            if let Some(mapped) = v6.to_ipv4_mapped() {
+                return is_blocked_ip(IpAddr::V4(mapped));
+            }
+            if v6.is_loopback() || v6.is_unspecified() {
+                return true;
+            }
+            let seg0 = v6.segments()[0];
+            // link-local fe80::/10 and unique-local fc00::/7 (is_unicast_link_local
+            // / is_unique_local are unstable on std, so test the prefixes here).
+            (seg0 & 0xffc0) == 0xfe80 || (seg0 & 0xfe00) == 0xfc00
+        }
+    }
+}
+
+/// Resolve `host:port` and reject if ANY resolved address is internal. A literal
+/// IP is checked directly (still goes through `to_socket_addrs`, which parses it
+/// without a DNS lookup). Closes the DNS-resolution SSRF hole a literal-only
+/// pre-check leaves open.
+///
+/// NOTE: a residual TOCTOU window remains (the name could re-resolve to a
+/// different IP between this check and the actual connect); closing the static
+/// DNS-to-private-IP hole is the goal here, and `reqwest` exposes no per-request
+/// resolved-IP pin to close the TOCTOU without a new dependency.
+fn resolve_and_validate(host: &str, port: u16) -> Result<(), String> {
+    let addrs = (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("could not resolve webhook host {}: {}", host, e))?;
+    let mut saw_any = false;
+    for addr in addrs {
+        saw_any = true;
+        if is_blocked_ip(addr.ip()) {
+            return Err(format!(
+                "webhook host {} resolves to a non-public address ({}); refused",
+                host,
+                addr.ip()
+            ));
+        }
+    }
+    if !saw_any {
+        return Err(format!(
+            "webhook host {} resolved to no usable address",
+            host
+        ));
     }
     Ok(())
 }
@@ -230,7 +309,23 @@ pub async fn deliver(webhook: &Webhook, event: &str, payload: &Value) -> Deliver
 
     // Fast pre-flight SSRF reject (scheme + host literal). Paired with the
     // no-redirect client policy below so a 3xx to an internal host can't bypass it.
-    if let Err(e) = validate_outbound_url(&webhook.url) {
+    let (host, port) = match validate_outbound_url(&webhook.url) {
+        Ok(hp) => hp,
+        Err(e) => {
+            return DeliveryResult {
+                webhook_id: webhook.id,
+                status_code: None,
+                ok: false,
+                error: Some(format!("refused: {}", e)),
+                duration_ms: start.elapsed().as_millis() as u64,
+            };
+        }
+    };
+
+    // DNS-resolution SSRF guard: a public-looking name can still resolve to a
+    // private/loopback/link-local/metadata IP. Resolve and reject if any
+    // resolved IpAddr is internal (closes the static DNS-to-private-IP hole).
+    if let Err(e) = resolve_and_validate(&host, port) {
         return DeliveryResult {
             webhook_id: webhook.id,
             status_code: None,

@@ -105,6 +105,29 @@ def test_validate_rejects_unsupported_layout():
         cfg.validate()
 
 
+def test_validate_rejects_unsupported_layout_when_no_supported_variants():
+    # A framework whose ONLY registered variant is supported=False has an
+    # empty available_layouts(). Supplying that unsupported slug via --layout
+    # must STILL be rejected — the empty-avail short-circuit used to skip the
+    # whole check and let the explicitly-unsupported slug pass validation.
+    from forge.config import register_frontend_framework
+
+    fw = register_frontend_framework("nolayoutfw")
+    lv.register_layout_variant(
+        lv.LayoutVariant(
+            fw,
+            "demolayout4",
+            "apps/nolayoutfw-frontend-template-demolayout4",
+            "Unsupported",
+            supported=False,
+        )
+    )
+    assert lv.available_layouts(fw) == ()
+    cfg = FrontendConfig(framework=fw, project_name="t", layout="demolayout4", include_auth=False)
+    with pytest.raises(ValueError, match="[Ll]ayout 'demolayout4' is not"):
+        cfg.validate()
+
+
 def test_validate_layout_is_framework_scoped():
     # A layout registered only for Vue must not validate for Svelte.
     lv.register_layout_variant(

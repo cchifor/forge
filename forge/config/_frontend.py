@@ -276,7 +276,13 @@ class FrontendConfig:
         # template path.
         avail = available_layouts(self.framework)
         variant = get_layout_variant(self.framework, self.layout)
-        if avail and (variant is None or not variant.supported):
+        # Reject an explicitly-registered-but-unsupported variant regardless of
+        # ``avail``: a framework whose only variants are supported=False has an
+        # empty ``avail``, so gating solely on ``avail`` would let the
+        # explicitly-unsupported slug slip through. The unknown-slug case still
+        # only fires when a layout system exists (``avail``) so the "Choose
+        # from:" listing stays meaningful.
+        if (variant is not None and not variant.supported) or (avail and variant is None):
             raise ValueError(
                 f"Layout '{self.layout}' is not available for {self.framework.value}. "
                 f"Choose from: {', '.join(avail)}"

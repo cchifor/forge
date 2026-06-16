@@ -273,3 +273,120 @@ def test_rust_strictly_bounds_bucket_map_under_active_flood() -> None:
         "expected a second MAX_BUCKETS guard after the idle retain to force a "
         "hard-cap LRU eviction when all buckets are active"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Python: trusted-proxy gating of X-Forwarded-For                              #
+# --------------------------------------------------------------------------- #
+def test_python_trusts_xff_only_from_private_peer() -> None:
+    """When the transport peer is a PRIVATE/loopback address (the in-cluster
+    reverse-proxy topology), the left-most X-Forwarded-For entry drives the
+    key — existing trusted-proxy behaviour."""
+    module = _load_rate_limit_module()
+    mw = module.RateLimitMiddleware(app=None, requests_per_minute=120)
+
+    # Peer 10.0.0.1 is the in-cluster Traefik proxy → XFF is trusted.
+    req = _FakeRequest(peer_host="10.0.0.1", xff="203.0.113.7")
+    key = mw._resolve_key(req)
+    assert "203.0.113.7" in key, (
+        f"behind a private (trusted) proxy peer, the XFF originating address "
+        f"must drive the key, got {key!r}"
+    )
+
+
+def test_python_ignores_xff_from_public_peer() -> None:
+    """When the transport peer is PUBLIC (the app is internet-facing, or sits
+    behind a proxy that APPENDS rather than overrides XFF), a client-supplied
+    X-Forwarded-For must NOT be trusted — the key falls back to the transport
+    peer so the XFF can't be used to spoof / evade the bucket."""
+    module = _load_rate_limit_module()
+    mw = module.RateLimitMiddleware(app=None, requests_per_minute=120)
+
+    # Two requests from the SAME public peer, each spoofing a different XFF.
+    req_a = _FakeRequest(peer_host="8.8.8.8", xff="203.0.113.7")
+    req_b = _FakeRequest(peer_host="8.8.8.8", xff="198.51.100.42")
+
+    key_a = mw._resolve_key(req_a)
+    key_b = mw._resolve_key(req_b)
+
+    assert key_a == key_b, (
+        "two requests from the same public peer with different spoofed XFF "
+        f"headers got distinct keys ({key_a!r} vs {key_b!r}); an untrusted "
+        "(public) peer must not be able to spoof its rate-limit bucket via XFF"
+    )
+    assert "8.8.8.8" in key_a, (
+        f"untrusted public peer must key on its own transport address, got {key_a!r}"
+    )
+    assert "203.0.113.7" not in key_a, (
+        "client-supplied XFF from a public peer must be ignored"
+    )
+
+
+def test_python_spoofed_xff_from_public_peer_shares_one_bucket() -> None:
+    """End-to-end: a public peer rotating its X-Forwarded-For on every request
+    must NOT get a fresh budget each time — all spoofed requests from one
+    public peer share a single bucket."""
+    import asyncio
+
+    module = _load_rate_limit_module()
+    # burst=2 → the shared bucket allows 2 requests, then 429s.
+    mw = module.RateLimitMiddleware(app=None, requests_per_minute=120, burst=2)
+
+    async def _ok(_request):
+        return "OK"
+
+    async def _run() -> None:
+        # Same public peer, fresh spoofed XFF on each request.
+        assert await mw.dispatch(
+            _FakeRequest(peer_host="1.1.1.1", xff="203.0.113.1"), _ok
+        ) == "OK"
+        assert await mw.dispatch(
+            _FakeRequest(peer_host="1.1.1.1", xff="203.0.113.2"), _ok
+        ) == "OK"
+        third = await mw.dispatch(
+            _FakeRequest(peer_host="1.1.1.1", xff="203.0.113.3"), _ok
+        )
+        assert getattr(third, "status_code", None) == 429, (
+            "a public peer rotating its XFF got a fresh budget each request — "
+            "spoofed XFF from an untrusted peer must be ignored so all its "
+            "requests share one bucket"
+        )
+
+    asyncio.run(_run())
+
+
+def test_python_is_trusted_peer_classification() -> None:
+    """The is_trusted_peer helper classifies private/loopback/link-local as
+    trusted and public addresses as untrusted."""
+    module = _load_rate_limit_module()
+    is_trusted = module.is_trusted_peer
+    for ip in ("10.0.0.1", "192.168.1.1", "172.16.0.1", "127.0.0.1", "::1",
+               "169.254.1.1", "fe80::1", "fc00::1"):
+        assert is_trusted(ip) is True, f"{ip} should be trusted"
+    # NB: TEST-NET ranges (203.0.113.0/24 etc.) are classified private/reserved
+    # by the stdlib, so use genuinely globally-routable addresses here.
+    for ip in ("8.8.8.8", "1.1.1.1", "2001:4860:4860::8888"):
+        assert is_trusted(ip) is False, f"{ip} should be untrusted"
+    # Garbage / unparseable input is never trusted.
+    assert is_trusted("not-an-ip") is False
+    assert is_trusted("") is False
+
+
+# --------------------------------------------------------------------------- #
+# Rust: structural parity for the trusted-proxy gate                           #
+# --------------------------------------------------------------------------- #
+def test_rust_gates_xff_on_trusted_peer() -> None:
+    text = _RUST_PATH.read_text(encoding="utf-8")
+    assert "is_trusted_peer" in text, (
+        "rust rate limiter must gate X-Forwarded-For on a trusted transport "
+        "peer via an is_trusted_peer(ip) helper so an untrusted (public) peer "
+        "can't spoof its rate-limit key"
+    )
+    # The helper must classify private / loopback / link-local addresses.
+    lowered = text.lower()
+    assert "is_loopback" in lowered, (
+        "is_trusted_peer must treat loopback addresses as trusted"
+    )
+    assert "is_private" in lowered or "is_link_local" in lowered, (
+        "is_trusted_peer must treat private / link-local addresses as trusted"
+    )
