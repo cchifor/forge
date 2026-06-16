@@ -101,3 +101,14 @@ class TestBuildEntityYaml:
         parsed = yaml.safe_load(body)
         field_names = [f["name"] for f in parsed["fields"]]
         assert len(field_names) == len(set(field_names))
+
+    def test_duplicate_user_fields_raise(self) -> None:
+        """Two user fields sharing a name must be rejected.
+
+        Otherwise build_entity_yaml emits two columns with the same name,
+        producing an invalid alembic op.create_table.
+        """
+        from forge.errors import GeneratorError
+
+        with pytest.raises(GeneratorError, match="name"):
+            build_entity_yaml("Order", "name:string,name:integer")

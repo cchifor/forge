@@ -319,3 +319,37 @@ class TestPydanticFieldDefault:
     def test_output_remains_valid_python(self) -> None:
         body = emit_pydantic(self._spec())
         ast.parse(body)
+
+    def test_string_default_with_quote_is_escaped(self) -> None:
+        """A default containing a quote/backslash/newline must emit a
+        valid, fully-escaped Python literal (repr-safe), not a naively
+        double-quoted string that breaks the module."""
+        from forge.domain import EntityField, FieldType
+
+        spec = EntitySpec(
+            name="Quoted",
+            plural="quoteds",
+            description="",
+            fields=(
+                EntityField(name="id", type=FieldType.UUID, primary_key=True),
+                EntityField(
+                    name="name",
+                    type=FieldType.STRING,
+                    default="O'Brien \"the\" \\hacker\nx",
+                ),
+            ),
+        )
+        body = emit_pydantic(spec)
+        # The whole module must parse — a naive f'"{value}"' breaks here.
+        module = ast.parse(body)
+        # The emitted default literal must evaluate back to the original
+        # string, proving the escaping is correct rather than merely parseable.
+        assignments = {
+            stmt.target.id: stmt.value
+            for klass in module.body
+            if isinstance(klass, ast.ClassDef)
+            for stmt in klass.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }
+        assert "name" in assignments
+        assert ast.literal_eval(assignments["name"]) == "O'Brien \"the\" \\hacker\nx"

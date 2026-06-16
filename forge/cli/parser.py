@@ -812,6 +812,9 @@ _SUBFLAG_PARENTS: dict[str, frozenset[str]] = {
             "plan_update",
             "remove_fragment",
             "reapply_baseline",
+            "accept_harvested",
+            "new_entity_name",
+            "add_backend_language",
         }
     ),
     # --resolve family

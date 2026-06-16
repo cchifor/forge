@@ -70,6 +70,20 @@ class TestInjectSnippet:
         text = file.read_text(encoding="utf-8")
         assert "  line1\n  line2\n" in text
 
+    def test_after_marker_on_last_line_no_trailing_newline(self, tmp_path) -> None:
+        """When the marker is the file's LAST line with NO trailing newline,
+        an ``after`` injection must not fuse the BEGIN sentinel onto the
+        marker line. A separating newline is inserted before the block.
+        """
+        file = self._write(tmp_path, "foo\n# FORGE:X")  # no trailing newline
+        _inject_snippet(file, "feat_a", "FORGE:X", "mid", "after")
+        text = file.read_text(encoding="utf-8")
+        # The marker line and the BEGIN sentinel must be on separate lines.
+        assert "# FORGE:X# FORGE:BEGIN" not in text
+        lines = text.splitlines()
+        marker_idx = next(i for i, ln in enumerate(lines) if ln == "# FORGE:X")
+        assert lines[marker_idx + 1].startswith("# FORGE:BEGIN feat_a:X")
+
     def test_missing_marker_raises(self, tmp_path) -> None:
         file = self._write(tmp_path, "nothing here\n")
         with pytest.raises(GeneratorError, match="not found"):

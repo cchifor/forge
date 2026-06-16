@@ -183,6 +183,46 @@ class TestOrphanSubflags:
         ns = _build_parser().parse_args(["--update"])
         assert _orphan_subflags(ns) == []
 
+    def test_accept_harvested_with_project_path_not_orphan(self):
+        # --accept-harvested legitimately reads --project-path (main.py:
+        # project_path=getattr(args, "project_path", ".")).
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(
+            ["--accept-harvested", "bundle", "--project-path", "/tmp/x"]
+        )
+        assert _orphan_subflags(ns) == []
+
+    def test_new_entity_with_project_path_not_orphan(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(
+            [
+                "--new-entity-name",
+                "Foo",
+                "--new-entity-fields",
+                "name:string",
+                "--project-path",
+                "/tmp/x",
+            ]
+        )
+        assert _orphan_subflags(ns) == []
+
+    def test_add_backend_with_project_path_not_orphan(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(
+            [
+                "--add-backend-language",
+                "python",
+                "--add-backend-name",
+                "svc",
+                "--project-path",
+                "/tmp/x",
+            ]
+        )
+        assert _orphan_subflags(ns) == []
+
     def test_plain_generation_flags_are_not_orphans(self):
         from forge.cli.parser import _build_parser, _orphan_subflags
 

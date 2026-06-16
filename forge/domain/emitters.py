@@ -181,8 +181,21 @@ def _pydantic_default_literal(f: EntityField) -> str | None:
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, str):
-        return f'"{value}"'
+        return _python_str_literal(value)
     return None
+
+
+def _python_str_literal(value: str) -> str:
+    """Render ``value`` as a valid, fully-escaped Python string literal.
+
+    Simple strings (no quote/backslash/control chars) keep the familiar
+    double-quoted form for readability and parity with prior output; any
+    string that the naive ``"..."`` form cannot hold safely falls back to
+    ``repr`` so quotes, backslashes, and newlines are escaped correctly.
+    """
+    if '"' not in value and "\\" not in value and value.isprintable():
+        return f'"{value}"'
+    return repr(value)
 
 
 def _pydantic_type(f: EntityField) -> str:

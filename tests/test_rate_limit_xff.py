@@ -243,3 +243,33 @@ def test_rust_bounds_bucket_map() -> None:
         "rust rate limiter must bound/evict its bucket HashMap (retain/remove/"
         "cap) — an ever-growing map is a memory-exhaustion vector"
     )
+
+
+def test_rust_strictly_bounds_bucket_map_under_active_flood() -> None:
+    """The idle-retain alone leaves the map unbounded when EVERY client is
+    active (no bucket has fully refilled, so ``retain`` removes nothing and the
+    new key is inserted anyway). Mirroring Python's hard cap, the Rust limiter
+    must, after the idle-retain, evict the least-recently-used bucket (smallest
+    ``last_refill``) whenever the map is STILL at/over the cap before inserting.
+    """
+    text = _RUST_PATH.read_text(encoding="utf-8")
+    # LRU eviction by oldest last_refill, performed via min_by + remove. This is
+    # strictly stronger than the idle-only retain, which can't bound an
+    # all-active flood.
+    assert "min_by" in text, (
+        "rust rate limiter must pick the least-recently-used bucket "
+        "(min_by over last_refill) to evict when at capacity"
+    )
+    assert "last_refill" in text, "LRU eviction must key on the last_refill Instant"
+    assert "remove(" in text, (
+        "rust rate limiter must remove() the LRU bucket so the map is strictly "
+        "bounded even when every client is active — the idle retain alone is "
+        "not a hard cap"
+    )
+    # The eviction must be conditioned on the map still being full AFTER the
+    # idle retain (a second len()>=MAX_BUCKETS guard), not the single pre-retain
+    # check — otherwise an all-active flood grows the map past MAX_BUCKETS.
+    assert text.count("MAX_BUCKETS") >= 3, (
+        "expected a second MAX_BUCKETS guard after the idle retain to force a "
+        "hard-cap LRU eviction when all buckets are active"
+    )

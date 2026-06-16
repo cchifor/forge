@@ -67,6 +67,21 @@ impl RateLimiter {
                 // ones that have fully refilled and are effectively idle.
                 refilled < capacity
             });
+            // If every bucket is still active (the idle retain freed nothing),
+            // the map is still at the cap. Hard-bound it by evicting the
+            // least-recently-used bucket (smallest last_refill) before inserting,
+            // mirroring the Python limiter's OrderedDict.popitem hard cap. Without
+            // this, a flood of unique active clients would grow the map without
+            // limit.
+            if buckets.len() >= MAX_BUCKETS {
+                if let Some(lru_key) = buckets
+                    .iter()
+                    .min_by(|a, b| a.1.last_refill.cmp(&b.1.last_refill))
+                    .map(|(k, _)| k.clone())
+                {
+                    buckets.remove(&lru_key);
+                }
+            }
         }
 
         let bucket = buckets.entry(key.to_string()).or_insert_with(|| Bucket {

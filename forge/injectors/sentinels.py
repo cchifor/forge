@@ -267,5 +267,12 @@ def _inject_snippet(
     block = _render_block(indent, prefix, tag, snippet)
 
     insert_at = marker_idx + 1 if position == "after" else marker_idx
+    # If the preceding line lacks a trailing newline (e.g. the marker is the
+    # file's last line without a final \n and position=="after"), the spliced
+    # block would fuse onto it. Guarantee a separating newline first. Mirrors
+    # forge/injectors/python_ast.py::_ensure_trailing_newline.
+    prev = insert_at - 1
+    if 0 <= prev < len(lines) and not lines[prev].endswith("\n"):
+        lines[prev] = lines[prev] + "\n"
     lines = lines[:insert_at] + [block] + lines[insert_at:]
     file.write_text("".join(lines), encoding="utf-8")
