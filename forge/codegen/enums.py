@@ -122,6 +122,14 @@ def _check_member_collisions(spec: EnumSpec, *, source: str | None = None) -> No
     share, rather than shipping broken codegen.
     """
     prefix = f"{source}: " if source else ""
+    # Identical wire values emit the same member twice in every target — a
+    # malformed enum, caught before the mangle-collision check below (which
+    # only compares *distinct* values).
+    seen_values: set[str] = set()
+    for v in spec.values:
+        if v.value in seen_values:
+            raise GeneratorError(f"{prefix}enum {spec.name!r}: duplicate value {v.value!r}")
+        seen_values.add(v.value)
     for label, mangler in (
         ("Python", _py_member),
         ("Rust", _rust_variant),

@@ -98,6 +98,14 @@ class TestLoadEnumYaml:
         with pytest.raises(GeneratorError, match="read-only.*read_only|read_only.*read-only"):
             load_enum_yaml(bad)
 
+    def test_rejects_exact_duplicate_values(self, tmp_path: Path) -> None:
+        """Two identical wire values emit the same member twice (uncompilable
+        in every target); ``load_enum_yaml`` must reject the duplicate."""
+        bad = tmp_path / "dup.yaml"
+        bad.write_text("name: Status\nvalues:\n  - active\n  - active\n")
+        with pytest.raises(GeneratorError, match="duplicate value 'active'"):
+            load_enum_yaml(bad)
+
 
 class TestEmitPython:
     def test_produces_str_enum(self, item_status: EnumSpec) -> None:
