@@ -1093,6 +1093,20 @@ def _write_forge_toml(
             template_versions[fw.value] = _resolve_template_version_for(template_dir, spec_default)
 
     options: dict[str, Any] = dict(plan.option_values) if plan is not None else dict(config.options)
+    # #260 hardening — don't persist mode-inapplicable layer sub-fields.
+    # The option registry stamps blanket ``database.engine`` /
+    # ``frontend.api_target.*`` defaults regardless of mode, but those
+    # fields exist only on the generate/external typed-config variants;
+    # ``DatabaseNone`` / ``FrontendNone`` forbid them. Persisting them
+    # produces a forge.toml that crashes ``forge update`` (see
+    # ``from_legacy_options``). Drop them when the layer mode can't accept
+    # them — generate/external manifests are untouched. Done before the
+    # origins map below so no orphaned origin entry survives.
+    if options.get("database.mode") == "none":
+        options.pop("database.engine", None)
+    if options.get("frontend.mode") == "none":
+        options.pop("frontend.api_target.type", None)
+        options.pop("frontend.api_target.url", None)
     # Origins: every path the caller supplied in ``config.options`` is
     # "user"; everything the resolver filled in (defaults) is "default".
     # This is the v3 schema's contract — Stage B (WS2b) of the per-

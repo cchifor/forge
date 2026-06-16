@@ -225,6 +225,103 @@ class TestStatelessPiiRedactionSurvivesStrip:
         )
 
 
+# -- Manifest stamping (#260 generator hardening) ----------------------------
+
+
+class TestStatelessManifestStamping:
+    """#260 Part 2 — the generator must not persist mode-inapplicable layer
+    sub-fields into ``forge.toml``.
+
+    The option registry stamps blanket ``database.engine`` /
+    ``frontend.api_target.*`` defaults regardless of mode, and the
+    generator wrote the fully-defaulted option set into the manifest. That
+    produced a ``database.mode=none`` manifest carrying
+    ``database.engine=postgres`` — which the strict typed config rejects on
+    ``forge update`` (see ``from_legacy_options`` / issue #260). Drop dead
+    layer fields at stamp time so new manifests are honest and update-safe.
+    """
+
+    def test_stateless_manifest_omits_engine(self, tmp_path):
+        from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
+
+        bc = BackendConfig(
+            name="api",
+            project_name="StatelessManifest",
+            features=["items"],
+            server_port=5000,
+        )
+        config = ProjectConfig(
+            project_name="StatelessManifest",
+            backends=[bc],
+            options={"database.mode": "none"},
+            output_dir=str(tmp_path),
+        )
+        config.validate()
+
+        project_root = generate(config, quiet=True, dry_run=True)
+        data = read_forge_toml(project_root / "forge.toml")
+
+        assert data.options.get("database.mode") == "none"
+        # The dead engine field must not be persisted...
+        assert "database.engine" not in data.options
+        # ...and it must not leave an orphaned origin entry behind.
+        assert "database.engine" not in data.option_origins
+
+    def test_headless_manifest_omits_api_target(self, tmp_path):
+        from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
+
+        bc = BackendConfig(
+            name="api",
+            project_name="HeadlessManifest",
+            features=["items"],
+            server_port=5000,
+        )
+        config = ProjectConfig(
+            project_name="HeadlessManifest",
+            backends=[bc],
+            options={"frontend.mode": "none"},
+            output_dir=str(tmp_path),
+        )
+        config.validate()
+
+        project_root = generate(config, quiet=True, dry_run=True)
+        data = read_forge_toml(project_root / "forge.toml")
+
+        assert data.options.get("frontend.mode") == "none"
+        assert "frontend.api_target.type" not in data.options
+        assert "frontend.api_target.url" not in data.options
+        assert "frontend.api_target.type" not in data.option_origins
+        assert "frontend.api_target.url" not in data.option_origins
+
+    def test_generate_mode_manifest_retains_engine(self, tmp_path):
+        """Regression guard: the pop must NEVER touch generate/external
+        modes — a default (``database.mode=generate``) project keeps its
+        ``database.engine=postgres`` in the manifest."""
+        from forge.generator import generate
+        from forge.sync.manifest import read_forge_toml
+
+        bc = BackendConfig(
+            name="api",
+            project_name="GenerateManifest",
+            features=["items"],
+            server_port=5000,
+        )
+        config = ProjectConfig(
+            project_name="GenerateManifest",
+            backends=[bc],
+            output_dir=str(tmp_path),
+        )
+        config.validate()
+
+        project_root = generate(config, quiet=True, dry_run=True)
+        data = read_forge_toml(project_root / "forge.toml")
+
+        assert data.options.get("database.mode") == "generate"
+        assert data.options.get("database.engine") == "postgres"
+
+
 # -- Compose rendering -------------------------------------------------------
 
 

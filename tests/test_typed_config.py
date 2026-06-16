@@ -254,6 +254,38 @@ class TestFromLegacyOptions:
         assert isinstance(cfg.frontend, FrontendGenerate)
         assert cfg.frontend.api_target_url == "https://api.example.com"
 
+    def test_database_mode_none_drops_persisted_engine_default(self):
+        """Regression (#260): a ``database.mode=none`` manifest also carries
+        the registry's blanket ``database.engine=postgres`` default. The
+        forward converter must drop the mode-inapplicable ``engine`` (it
+        only exists on ``DatabaseGenerate``) instead of forwarding it into
+        ``DatabaseNone``, whose ``extra="forbid"`` rejects it.
+
+        Mirrors ``to_legacy_options``, which already omits ``engine`` for
+        the none variant.
+        """
+        cfg = from_legacy_options(
+            {"database.mode": "none", "database.engine": "postgres"}
+        )
+        assert isinstance(cfg.database, DatabaseNone)
+        assert cfg.database.mode == "none"
+
+    def test_frontend_mode_none_drops_persisted_api_target_defaults(self):
+        """Sibling of #260: a ``frontend.mode=none`` manifest carries the
+        registry's blanket ``frontend.api_target.*`` defaults. They live
+        only on the generate/external variants; the converter must drop
+        them rather than trip ``FrontendNone``'s ``extra="forbid"``.
+        """
+        cfg = from_legacy_options(
+            {
+                "frontend.mode": "none",
+                "frontend.api_target.type": "local",
+                "frontend.api_target.url": "",
+            }
+        )
+        assert isinstance(cfg.frontend, FrontendNone)
+        assert cfg.frontend.mode == "none"
+
 
 # -- to_legacy_options round-trip ---------------------------------------------
 
