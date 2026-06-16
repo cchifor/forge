@@ -202,7 +202,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
     rememberEventId(n.event_id)
 
-    const existingIdx = items.value.findIndex((x) => x.seq === n.seq)
+    const existingIdx = items.value.findIndex((x) => x.id === n.id)
     if (existingIdx >= 0) {
       items.value[existingIdx] = n
     } else {

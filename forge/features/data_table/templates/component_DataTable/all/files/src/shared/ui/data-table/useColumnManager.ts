@@ -77,6 +77,14 @@ export interface ColumnManager {
    * do not light this flag.
    */
   hasUserHiddenColumns: ComputedRef<boolean>
+  /**
+   * Container-aware base (no-override) visibility for a single column,
+   * bound to the manager's measured container width. Shared with the
+   * effective ``columnVisibility`` derivation so callers reconstructing
+   * the baseline (diff-writing change handlers) never diverge from the
+   * effective state.
+   */
+  baseVisibilityFor: (col: DataTableColumnDef<unknown>) => boolean
   enableRowSelection: boolean
   toggleColumn: (id: string, visible: boolean) => void
   setColumnOrder: (ids: string[]) => void
@@ -185,6 +193,7 @@ export function useColumnManager<T>(
     userPinning: pinning.userPinning,
     hasOverrides,
     hasUserHiddenColumns: visibility.hasUserHiddenColumns,
+    baseVisibilityFor: visibility.baseVisibilityFor,
     enableRowSelection,
     toggleColumn: visibility.toggleColumn,
     setColumnOrder: order.setColumnOrder,

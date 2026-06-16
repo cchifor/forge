@@ -16,6 +16,36 @@ import {
   type TailwindBreakpoint,
 } from './breakpoints'
 
+/**
+ * Container-aware *base* visibility for a single column — i.e. whether
+ * the column is shown when the user has expressed no explicit override.
+ *
+ * This is the canonical predicate the effective ``columnVisibility``
+ * derivation uses for its no-override branch, exported so callers that
+ * need to reconstruct the baseline (e.g. ``useDataTable``'s
+ * ``onColumnVisibilityChange``, which writes only *diffs* from the
+ * baseline) share one source of truth instead of re-deriving it from
+ * the viewport breakpoint. Re-deriving from the viewport diverges
+ * whenever the measured container width disagrees with the viewport
+ * (a chat-panel-narrowed table), corrupting persisted overrides.
+ *
+ *   - ``cardSubtitle`` columns are shown only in the list tier.
+ *   - ``responsiveHidden`` columns are hidden below their container
+ *     breakpoint.
+ *   - everything else is shown.
+ */
+export function baseVisibilityFor<T>(
+  col: DataTableColumnDef<T>,
+  predicates: {
+    isListTier: () => boolean
+    isResponsivelyHidden: (threshold: TailwindBreakpoint) => boolean
+  },
+): boolean {
+  if (col.meta?.cardSubtitle && !predicates.isListTier()) return false
+  const below = col.meta?.responsiveHidden?.below
+  return !(below && predicates.isResponsivelyHidden(below))
+}
+
 export interface ColumnVisibility {
   /** Persisted intent map. ``true`` = explicitly shown, ``false`` = explicitly hidden, absent = default. */
   userVisibility: Ref<Record<string, boolean>>
@@ -31,6 +61,14 @@ export interface ColumnVisibility {
   hasUserHiddenColumns: ComputedRef<boolean>
   /** ``true`` iff any user value (true or false) exists. Drives the menu's "Reset" button. */
   hasOverrides: ComputedRef<boolean>
+  /**
+   * Container-aware base (no-override) visibility for a single column —
+   * the canonical predicate the effective state uses for its no-override
+   * branch. Bound to this composable's measured container width so
+   * callers reconstructing the baseline (e.g. diff-writing change
+   * handlers) stay consistent with the effective state.
+   */
+  baseVisibilityFor: (col: DataTableColumnDef<unknown>) => boolean
   toggleColumn: (id: string, visible: boolean) => void
   reset: () => void
 }
@@ -99,6 +137,12 @@ export function useColumnVisibility<T>(
     return out
   })
 
+  // Container-aware base predicate bound to this composable's measured
+  // width. Shared between the effective-state derivation below and any
+  // caller reconstructing the baseline, so the two never diverge.
+  const boundBaseVisibility = (col: DataTableColumnDef<unknown>): boolean =>
+    baseVisibilityFor(col, { isListTier, isResponsivelyHidden })
+
   const columnVisibility = computed<VisibilityState>(() => {
     const state: VisibilityState = {}
     const cols = toValue(augmentedColumns) as DataTableColumnDef<unknown>[]
@@ -108,11 +152,12 @@ export function useColumnVisibility<T>(
       if (!id) continue
       // ``cardSubtitle`` columns are list-tier-only — they contribute
       // the subtitle line in the card layout and would be a meaningless
-      // empty column on the wide / compact tiers. Auto-hide whenever
-      // we're NOT in the list tier; user toggles can't override (the
-      // column has no header so there's nothing sensible to choose).
-      if (col.meta?.cardSubtitle && !isListTier()) {
-        state[id] = false
+      // empty column on the wide / compact tiers. The shared base
+      // predicate hides them outside the list tier; user toggles can't
+      // override (the column has no header so there's nothing sensible
+      // to choose), so the base wins outright for those.
+      if (col.meta?.cardSubtitle) {
+        state[id] = boundBaseVisibility(col)
         continue
       }
       const userSet = userVisibility.value[id]
@@ -120,8 +165,7 @@ export function useColumnVisibility<T>(
         state[id] = userSet
         continue
       }
-      const below = col.meta?.responsiveHidden?.below
-      state[id] = !(below && isResponsivelyHidden(below))
+      state[id] = boundBaseVisibility(col)
     }
     return state
   })
@@ -148,6 +192,7 @@ export function useColumnVisibility<T>(
     columnVisibility,
     hasUserHiddenColumns,
     hasOverrides,
+    baseVisibilityFor: boundBaseVisibility,
     toggleColumn,
     reset,
   }
