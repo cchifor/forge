@@ -12,13 +12,16 @@ listener**:
    sync engine) installs a ``"begin"`` listener that, on every transaction
    begin, reads :data:`current_tenant_var` and issues::
 
-       SET LOCAL "app.current_tenant" = '<tenant>'
+       SELECT set_config('app.current_tenant', '<tenant>', true)
 
-   ``SET LOCAL`` scopes the GUC to the current transaction, so it auto-resets
-   when the transaction ends — a pooled connection never carries one tenant's
-   binding into the next request. When the ContextVar is unset the listener
-   binds nothing, so ``current_setting(..., true)`` returns NULL and RLS fails
-   closed (zero rows).
+   ``set_config(..., true)`` is the parameter-safe, transaction-local way to
+   bind a GUC — the third ``true`` argument scopes it to the current
+   transaction (a Postgres ``SET``-statement cannot take bind parameters, so a
+   parameterized utility statement would render ``$1`` and raise a syntax error
+   under asyncpg). The GUC auto-resets when the transaction ends — a pooled
+   connection never carries one tenant's binding into the next request. When
+   the ContextVar is unset the listener binds nothing, so
+   ``current_setting(..., true)`` returns NULL and RLS fails closed (zero rows).
 
 The GUC name is the module constant :data:`TENANT_GUC` and MUST match the RLS
 policy migration (``alembic/versions/0002_enable_rls.py``).
@@ -49,11 +52,6 @@ TENANT_GUC = "app.current_tenant"
 current_tenant_var: ContextVar[str | None] = ContextVar("current_tenant", default=None)
 
 
-def _quote_guc(guc: str) -> str:
-    """Double-quote the GUC name for the SET statement (defends the dotted name)."""
-    return '"' + guc.replace('"', '""') + '"'
-
-
 def register_rls_listener(engine: Any, settings: TenancySettings | None = None) -> bool:
     """Attach the tenant-GUC ``begin`` listener to ``engine`` (idempotent).
 
@@ -68,18 +66,24 @@ def register_rls_listener(engine: Any, settings: TenancySettings | None = None) 
         logger.debug("tenant_rls_listener_skip_non_postgres")
         return False
 
-    from sqlalchemy import event  # noqa: PLC0415 — generated-project runtime dep
+    from sqlalchemy import event, text  # noqa: PLC0415 — generated-project runtime dep
 
-    guc_sql = _quote_guc(cfg.guc)
+    guc = cfg.guc
 
     @event.listens_for(sync_engine, "begin")
     def _set_tenant_on_begin(conn: Any) -> None:  # pragma: no cover - exercised at runtime
         # Fires on every transaction begin against this engine. Reads the
         # request's tenant ContextVar and binds it LOCAL to the transaction.
+        # set_config(..., true) is the parameter-safe, transaction-local form —
+        # a Postgres SET-statement rejects bind params (asyncpg would render $1
+        # and raise SQLSTATE 42601 at every BEGIN).
         tenant = current_tenant_var.get()
         if tenant is None:
             return
-        conn.exec_driver_sql(f"SET LOCAL {guc_sql} = %s", (str(tenant),))
+        conn.execute(
+            text("SELECT set_config(:guc, :tenant, true)"),
+            {"guc": guc, "tenant": str(tenant)},
+        )
 
     return True
 

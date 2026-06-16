@@ -29,7 +29,7 @@ from forge.config._frontend import FRONTEND_RESERVED, FrontendConfig, FrontendFr
 if TYPE_CHECKING:
     from forge.options import Option
 from forge.config._validators import (
-    TRAEFIK_DASHBOARD_PORT,
+    infra_host_port_reservations,
     validate_port,
     validate_slug,
 )
@@ -838,25 +838,34 @@ class ProjectConfig:
             if p in ports:
                 raise ValueError(f"Port {p} is used by both frontend and {ports[p]}.")
             ports[p] = "frontend"
-        db_port = 5432
-        if db_port in ports:
-            raise ValueError(f"Port {db_port} (PostgreSQL) conflicts with {ports[db_port]}.")
-        ports[db_port] = "postgres"
+        # Reserve the host ports the compose template publishes for infra
+        # services (Traefik dashboard always; Postgres/pgAdmin when Postgres
+        # renders; Redis/Gatekeeper/Keycloak under Keycloak). Derived from the
+        # template's actual host binds so we neither reject a free port nor
+        # admit a real `docker compose up` collision.
+        from forge.config._topology import compute_render_postgres  # noqa: PLC0415
+
+        render_postgres = compute_render_postgres(
+            has_backends=bool(self.backends),
+            database_mode=self.database_mode,
+            include_keycloak=self.include_keycloak,
+        )
+        for port, label in infra_host_port_reservations(
+            render_postgres=render_postgres,
+            include_keycloak=self.include_keycloak,
+            keycloak_port=self.keycloak_port,
+        ).items():
+            if port in ports:
+                raise ValueError(f"Port {port} ({label}) conflicts with {ports[port]}.")
+            ports[port] = label
         return ports
 
     def _validate_keycloak_ports(self, ports: dict[int, str]) -> None:
+        # Host-port reservations for the Keycloak stack (Keycloak / Gatekeeper /
+        # Redis) are handled in ``_validate_ports`` via
+        # ``infra_host_port_reservations``; here we only range-check the
+        # configured Keycloak port.
         validate_port(self.keycloak_port, "Keycloak port")
-        if TRAEFIK_DASHBOARD_PORT in ports:
-            raise ValueError(
-                f"Port {TRAEFIK_DASHBOARD_PORT} (Traefik dashboard) "
-                f"conflicts with {ports[TRAEFIK_DASHBOARD_PORT]}."
-            )
-        ports[TRAEFIK_DASHBOARD_PORT] = "Traefik dashboard"
-        if self.keycloak_port in ports:
-            raise ValueError(
-                f"Port {self.keycloak_port} (Keycloak) conflicts with {ports[self.keycloak_port]}."
-            )
-        ports[self.keycloak_port] = "Keycloak"
 
     @property
     def all_features(self) -> list[str]:

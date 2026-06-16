@@ -246,3 +246,32 @@ class TestCheckTsMorphToolchain:
         assert result.status == "ok"
         # Reachable but opt-in not set: hint for setting the env var.
         assert "FORGE_TS_AST" in result.detail
+
+    def test_warn_when_helper_does_not_parse(self, monkeypatch) -> None:
+        # Node + ts-morph reachable, but the helper itself is not valid JS
+        # (`node --check` exits non-zero). doctor must NOT report "ok" — a
+        # broken helper means every AST injection silently degrades to regex.
+        from forge.doctor import subprocess as doctor_subprocess
+        from forge.injectors import ts_morph_sidecar
+
+        class _RequireOk:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        class _CheckFails:
+            returncode = 1
+            stdout = ""
+            stderr = "SyntaxError: Missing } in template expression"
+
+        monkeypatch.setenv("FORGE_TS_AST", "1")
+        with patch.object(ts_morph_sidecar, "_HELPER_PATH") as mock_path:
+            mock_path.is_file.return_value = True
+            with patch("forge.doctor.shutil.which", return_value="/usr/bin/node"):
+                # First call = require('ts-morph') probe (ok); second = node --check (fails).
+                with patch.object(
+                    doctor_subprocess, "run", side_effect=[_RequireOk(), _CheckFails()]
+                ):
+                    result = check_ts_morph_toolchain()
+        assert result.status == "warn"
+        assert "parse" in result.detail.lower() or "syntax" in result.detail.lower()

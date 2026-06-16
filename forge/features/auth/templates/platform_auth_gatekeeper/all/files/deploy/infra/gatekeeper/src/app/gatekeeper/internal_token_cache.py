@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 
 CACHE_KEY_PREFIX = "gk:internal_jwt"
 
+# Mirror of ``internal_token.TENANT_ID_CLAIM`` — the identity-bound claim a
+# cache hit must agree with the request on (kept local to avoid coupling to
+# the mint module's import surface).
+_TENANT_ID_CLAIM = "https://forge/tenant_id"
+
 
 class InternalTokenCache:
     """Cache + mint orchestrator.
@@ -64,6 +69,18 @@ class InternalTokenCache:
 
     def _cache_key(self, keycloak_jti: str) -> str:
         return f"{self._key_prefix}:{keycloak_jti}"
+
+    @staticmethod
+    def _identity_matches(
+        decoded: dict[str, Any], keycloak_payload: JWTPayload | dict[str, Any]
+    ) -> bool:
+        """Defense-in-depth: a cache hit must carry the same identity as the
+        request (``sub`` + tenant). Guards against any residual jti collision
+        serving one caller's internal JWT to another (cross-sub / cross-tenant).
+        """
+        return decoded.get("sub") == keycloak_payload.get("sub") and decoded.get(
+            _TENANT_ID_CLAIM
+        ) == keycloak_payload.get(_TENANT_ID_CLAIM)
 
     # ── Verification ───────────────────────────────────────────────────
 
@@ -133,14 +150,15 @@ class InternalTokenCache:
 
         if cached:
             decoded = self._verify_cached_token(cached)
-            if decoded is not None:
+            if decoded is not None and self._identity_matches(decoded, keycloak_payload):
                 logger.debug(
                     "internal_token_cache.hit",
                     extra={"keycloak_jti": kc_jti, "exp": decoded.get("exp")},
                 )
                 return cached, int(decoded["exp"])
-            # Hit but verification failed — likely stale-key or poisoning
-            # attempt. Fall through to mint a fresh one and overwrite.
+            # Hit but verification failed OR the cached identity does not
+            # match the request (stale key, poisoning, or jti collision).
+            # Fall through to mint a fresh one and overwrite.
             logger.info(
                 "internal_token_cache.invalid_cached_token",
                 extra={"keycloak_jti": kc_jti},

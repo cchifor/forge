@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from forge import feature_loader, plugins
+from forge.errors import FragmentError
 from forge.feature_manifest import (
     FeatureManifest,
     parse_feature_manifest,
@@ -242,3 +243,50 @@ class TestCrossFeatureDeps:
 
         rag_pipeline = FRAGMENT_REGISTRY["rag_pipeline"]
         assert "conversation_persistence" in rag_pipeline.depends_on
+
+
+class TestFreezeAuditIsFatal:
+    def test_load_all_propagates_freeze_audit_failure(self, monkeypatch) -> None:
+        """A FragmentError from freeze() (the orphan/cycle audit gate) must
+        HARD-FAIL load_all(), not be swallowed.
+
+        The audit gate guards against orphan depends_on / dependency cycles in
+        the frozen registry. If freeze() raises, the registry is left UNFROZEN
+        and generation would proceed against an audit-failed registry. load_all()
+        must re-raise instead of appending to FAILED_PLUGINS and returning.
+
+        ``freeze`` is patched (monkeypatch auto-reverts) so the audit failure is
+        simulated only within this test; the autouse ``_reset`` fixture restores
+        the shared global FRAGMENT_REGISTRY afterwards.
+        """
+
+        def _boom() -> None:
+            raise FragmentError(
+                "Fragment 'x' depends_on unknown fragment(s): ['ghost'].",
+                context={"fragment": "x", "missing": ["ghost"]},
+            )
+
+        # ``_reset`` already thawed FRAGMENT_REGISTRY, so load_all() will reach
+        # the freeze() call (guarded by ``not FRAGMENT_REGISTRY.frozen``).
+        monkeypatch.setattr(FRAGMENT_REGISTRY, "freeze", _boom)
+
+        with pytest.raises(FragmentError):
+            feature_loader.load_all()
+
+    def test_freeze_audit_failure_not_swallowed_into_failed_plugins(
+        self, monkeypatch,
+    ) -> None:
+        """The freeze/audit failure must surface as an exception, not be demoted
+        to a tolerated FAILED_PLUGINS warning like a plugin-load failure."""
+
+        def _boom() -> None:
+            raise FragmentError("registry cycle detected")
+
+        monkeypatch.setattr(FRAGMENT_REGISTRY, "freeze", _boom)
+
+        with pytest.raises(FragmentError):
+            feature_loader.load_all()
+
+        assert not any(
+            name == "<registry audit>" for name, _ in plugins.FAILED_PLUGINS
+        ), "audit failure must not be demoted to a tolerated FAILED_PLUGINS entry"

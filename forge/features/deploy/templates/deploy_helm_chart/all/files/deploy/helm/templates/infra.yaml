@@ -10,12 +10,15 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" }}
+  # Stable literal name: values.yaml has no access to .Release.Name, so the DB
+  # host baked into every workload's secretEnv ("postgres") only resolves if the
+  # Service/StatefulSet are named literally. Selectors below stay instance-scoped.
+  name: postgres
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: postgres
 spec:
-  serviceName: {{ printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" }}
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
@@ -55,7 +58,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: postgres
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: postgres
@@ -73,7 +76,9 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ printf "%s-redis" .Release.Name | trunc 63 | trimSuffix "-" }}
+  # Stable literal name so the in-cluster DNS host ("redis") resolves; selectors
+  # below stay instance-scoped.
+  name: redis
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: redis
@@ -99,7 +104,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-redis" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: redis
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: redis
@@ -117,7 +122,9 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ printf "%s-keycloak" .Release.Name | trunc 63 | trimSuffix "-" }}
+  # Stable literal name so the in-cluster DNS host ("keycloak") resolves;
+  # selectors below stay instance-scoped.
+  name: keycloak
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: keycloak
@@ -149,7 +156,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-keycloak" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: keycloak
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: keycloak
@@ -181,7 +188,9 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ printf "%s-gatekeeper" .Release.Name | trunc 63 | trimSuffix "-" }}
+  # Stable literal name so the in-cluster DNS host ("gatekeeper", the issuer that
+  # workloads validate tokens against) resolves; selectors stay instance-scoped.
+  name: gatekeeper
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: gatekeeper
@@ -223,15 +232,15 @@ spec:
             - name: ENV
               value: development
             - name: KEYCLOAK_BASE_URL
-              value: http://{{ printf "%s-keycloak" .Release.Name }}:8080/realms
+              value: http://keycloak:8080/realms
             - name: GATEKEEPER_CLIENT_ID
               value: gatekeeper
             - name: GATEKEEPER_CLIENT_SECRET
               value: {{ .Values.infra.gatekeeper.clientSecret | quote }}
             - name: REDIS_URL
-              value: redis://{{ printf "%s-redis" .Release.Name }}:6379
+              value: redis://redis:6379
             - name: GATEKEEPER_ISSUER
-              value: http://{{ printf "%s-gatekeeper" .Release.Name }}:5000
+              value: http://gatekeeper:5000
             - name: SIGNING_KEY_DIR
               value: /run/secrets/gatekeeper-signing
             - name: KEY_BACKEND
@@ -263,7 +272,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ printf "%s-gatekeeper" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: gatekeeper
   labels:
     {{- include "app.labels" . | nindent 4 }}
     app.kubernetes.io/name: gatekeeper

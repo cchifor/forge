@@ -161,9 +161,15 @@ ChatStateSnapshot reduce(ChatStateSnapshot snapshot, AgUiEvent event) {
     case CustomEvent(name: final name, value: final value):
       if (name == 'deepagent.state_snapshot' &&
           value is Map<String, dynamic>) {
+        // The deepagent shape nests the snapshot under `value.state`;
+        // fall back to `value` for older/flat producers. Mirrors
+        // Vue/Svelte's `value['state'] ?? value` so STATE_DELTA
+        // JSON-Patch ops target the same root across all three stacks.
+        final stateRaw = value['state'];
+        final raw = stateRaw is Map<String, dynamic> ? stateRaw : value;
         return snapshot.copyWith(
-          agentState: AgentState.fromMap(value),
-          rawAgentMap: Map<String, dynamic>.from(value),
+          agentState: AgentState.fromMap(raw),
+          rawAgentMap: Map<String, dynamic>.from(raw),
         );
       }
       if (name == 'deepagent.user_prompt' && value is Map<String, dynamic>) {

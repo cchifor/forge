@@ -22,6 +22,7 @@ from forge.config import (
     FrontendFramework,
     ProjectConfig,
 )
+from forge.config._validators import TRAEFIK_DASHBOARD_PORT
 
 # -- _normalize_features ------------------------------------------------------
 
@@ -306,12 +307,51 @@ class TestValidateSplits:
         with pytest.raises(ValueError, match="Port 5000"):
             config.validate()
 
-    def test_postgres_port_collision_caught(self) -> None:
+    def test_postgres_host_port_collision_caught(self) -> None:
+        # Postgres is published on host 15432 (container 5432 only); a backend
+        # on the real host bind must be rejected.
         config = self._make(
-            backends=[BackendConfig(name="a", project_name="P", server_port=5432)],
+            backends=[BackendConfig(name="a", project_name="P", server_port=15432)],
         )
         with pytest.raises(ValueError, match="PostgreSQL"):
             config.validate()
+
+    def test_container_port_5432_is_free_on_host(self) -> None:
+        # 5432 is only the container port — nothing binds host 5432 — so a
+        # backend may legitimately use it.
+        config = self._make(
+            backends=[BackendConfig(name="a", project_name="P", server_port=5432)],
+        )
+        config.validate()  # must not raise
+
+    def test_traefik_dashboard_reserved_without_keycloak(self) -> None:
+        # Traefik renders unconditionally, publishing its dashboard on host
+        # 19090 even when Keycloak is off — so the port must be reserved.
+        config = self._make(
+            backends=[
+                BackendConfig(name="a", project_name="P", server_port=TRAEFIK_DASHBOARD_PORT)
+            ],
+        )
+        with pytest.raises(ValueError, match="Traefik dashboard"):
+            config.validate()
+
+    def test_gatekeeper_port_collision_with_default_backend(self) -> None:
+        # Gatekeeper publishes host 5000 when Keycloak is enabled; a backend on
+        # the default 5000 would fail `docker compose up` ("port allocated").
+        config = self._make(
+            backends=[BackendConfig(name="a", project_name="P", server_port=5000)],
+            include_keycloak=True,
+        )
+        with pytest.raises(ValueError, match="Gatekeeper"):
+            config.validate()
+
+    def test_keycloak_nondefault_backend_port_ok(self) -> None:
+        # A Keycloak project whose backend dodges every infra host port passes.
+        config = self._make(
+            backends=[BackendConfig(name="a", project_name="P", server_port=5010)],
+            include_keycloak=True,
+        )
+        config.validate()  # must not raise
 
 
 # -- _prompt_backend (smoke; relies on questionary mocks) ---------------------

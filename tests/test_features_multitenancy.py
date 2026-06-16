@@ -296,6 +296,22 @@ def test_rls_hook_noop_on_non_postgres() -> None:
     assert "register_rls_listener" in rls
 
 
+def test_rls_begin_listener_binds_via_set_config_not_parameterized_set() -> None:
+    """The begin-listener must bind the tenant GUC via ``set_config(...)`` —
+    Postgres ``SET``/``SET LOCAL`` do NOT accept bind params, so a parameterized
+    ``SET LOCAL ... = %s`` renders ``$1`` under asyncpg and raises SQLSTATE 42601
+    (syntax error) at every BEGIN, disabling the engine entirely. The
+    parameter-safe mechanism is ``SELECT set_config(<guc>, <tenant>, true)``,
+    already used by ``TenantRLSHook.bind``."""
+    rls = (_fragment_root() / "src/app/core/tenancy/rls.py").read_text(encoding="utf-8")
+    # The fail mode: a parameterized SET LOCAL must NOT appear anywhere.
+    assert "SET LOCAL" not in rls, "begin-listener must not use SET LOCAL (no bind params)"
+    assert "%s" not in rls, "no parameterized utility statement (Postgres SET rejects $1)"
+    # The parameter-safe bind: set_config(<guc>, <tenant>, true), transaction-local.
+    assert "set_config" in rls
+    assert "exec_driver_sql" not in rls, "the listener must bind via text()/set_config, not raw SET"
+
+
 def test_resolver_composes_with_claim_mapper() -> None:
     """token_claim resolution reuses the auth ClaimMapper when present."""
     resolver = (_fragment_root() / "src/app/core/tenancy/resolver.py").read_text(encoding="utf-8")

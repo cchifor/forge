@@ -108,3 +108,15 @@ service:
     build:
       context: ./deploy/infra/gatekeeper
       dockerfile: Dockerfile
+    # Define the ``auth`` Traefik ForwardAuth middleware referenced by every
+    # backend router (``middlewares=<be>-rewrite,auth``). Traefik's docker
+    # provider only reads a container's labels when ``traefik.enable=true``,
+    # so it is set here purely to register the middleware (no router is
+    # declared, so gatekeeper itself is not exposed through Traefik). Each
+    # proxied request is sub-requested to ``GET /auth``; on 2xx the identity
+    # headers below — including the minted ``Authorization: Bearer`` — are
+    # copied onto the upstream request, on 401 the client is rejected.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.auth.forwardauth.address=http://gatekeeper:5000/auth"
+      - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=Authorization,X-Gatekeeper-User-Id,X-Gatekeeper-Email,X-Gatekeeper-Tenant,X-Gatekeeper-Roles,X-Gatekeeper-Auth-Method"

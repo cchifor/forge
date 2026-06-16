@@ -341,12 +341,28 @@ def sha256_of(path: Path) -> str:
     """
     h = hashlib.sha256()
     with path.open("rb") as f:
+        # Carry a trailing CR across the chunk boundary: a ``\r\n`` whose CR
+        # is the last byte of chunk N and whose LF is the first byte of chunk
+        # N+1 would otherwise survive a per-chunk replace and leave a stray
+        # CR in the digest — diverging from merge.sha256_of_file's global
+        # normalization. Defer any trailing CR to the next iteration so the
+        # pair is collapsed as a unit.
+        pending_cr = False
         while True:
             chunk = f.read(65536)
             if not chunk:
                 break
+            if pending_cr:
+                chunk = b"\r" + chunk
+                pending_cr = False
+            if chunk.endswith(b"\r"):
+                chunk = chunk[:-1]
+                pending_cr = True
             # Strip CR before LF; leaves lone CRs (rare, legacy Mac) untouched.
             h.update(chunk.replace(b"\r\n", b"\n"))
+        if pending_cr:
+            # File ended on a lone trailing CR — emit it verbatim.
+            h.update(b"\r")
     return h.hexdigest()
 
 

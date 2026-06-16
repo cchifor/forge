@@ -67,7 +67,9 @@ def _python_project(options: dict[str, object] | None = None) -> ProjectConfig:
                 name="svc",
                 project_name="P",
                 language=BackendLanguage.PYTHON,
-                server_port=5000,
+                # 5010, not 5000: a keycloak-enabled stack publishes gatekeeper on
+                # host 5000, which the port validator now (correctly) reserves.
+                server_port=5010,
             )
         ],
         frontend=None,

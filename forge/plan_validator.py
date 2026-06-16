@@ -135,8 +135,9 @@ def _check_inject_yaml(
         # via the literal-string ``in`` checks below (``dict`` is invariant).
         entry = cast(dict[str, Any], raw_entry)
         for required in ("target", "marker", "snippet"):
-            if required not in entry and "anchor" not in entry:
-                # `anchor` is an alias for `marker` in some fragments.
+            if required not in entry:
+                # `anchor` is an alias for `marker` in some fragments; it only
+                # substitutes for `marker`, never for `target` or `snippet`.
                 if required == "marker" and "anchor" in entry:
                     continue
                 yield _Issue(

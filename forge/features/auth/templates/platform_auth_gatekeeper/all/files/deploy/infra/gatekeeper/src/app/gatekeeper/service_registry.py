@@ -34,7 +34,7 @@ import logging
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,24 @@ class ServiceClient(BaseModel):
     (typically ``CN=svc-name,O=...,C=...``). Ignored otherwise."""
     audiences: dict[str, AudienceConfig] = Field(default_factory=dict)
     may_act_for_audiences: list[str] = Field(default_factory=list)
+
+    @field_validator("client_id")
+    @classmethod
+    def _require_svc_prefix(cls, value: str) -> str:
+        """Enforce the ``svc-`` prefix on every service ``client_id``.
+
+        Client-credentials mints set ``azp = client_id``, and the
+        token-exchange guard in :mod:`app.gatekeeper.service_token` rejects
+        service-account ``subject_token``s via ``azp.startswith("svc-")``.
+        That guard is only sound if every registered service client carries
+        the prefix, so we reject unprefixed ids at model-validation time
+        rather than letting a hand-edited registry silently defeat it.
+        """
+        if not value.startswith("svc-"):
+            raise ValueError(
+                f"service client_id must start with 'svc-'; got {value!r}"
+            )
+        return value
 
     def allowed_scopes_for(self, audience: str) -> frozenset[str]:
         """Return the registry-allowed scope set for ``audience`` or empty."""

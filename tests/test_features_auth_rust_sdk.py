@@ -286,6 +286,35 @@ def test_rust_sdk_s2s_client_safety_margin_default() -> None:
     )
 
 
+def test_rust_sdk_s2s_client_coerces_nonpositive_expires_in() -> None:
+    """A non-positive ``expires_in`` must default to 300, matching Python + Node.
+
+    Python (``s2s_client.py``) coerces ``expires_in <= 0`` to the 300
+    default; Node (``S2SClient.ts``) does ``rawExpiresIn > 0 ? rawExpiresIn
+    : 300``. The Rust port used ``payload.expires_in.unwrap_or(300)``,
+    which only substitutes the default when the field is *absent*
+    (``None``) — an explicit ``Some(0)`` stayed 0, yielding a
+    zero-second TTL and a token that's never cached (refetched on every
+    call). Pin the cross-language coercion so a future refactor can't
+    silently regress it.
+    """
+    text = (_sdk_root() / "src" / "s2s_client.rs").read_text(encoding="utf-8")
+    # The bare unwrap_or(300) only handles None — it must be gone.
+    assert "expires_in.unwrap_or(300)" not in text, (
+        "s2s_client.rs uses `expires_in.unwrap_or(300)`, which leaves an "
+        "explicit Some(0) as a zero-second TTL. Coerce non-positive "
+        "expires_in to 300 like Python (`expires_in <= 0`) and Node "
+        "(`rawExpiresIn > 0 ? rawExpiresIn : 300`)."
+    )
+    # The positive-only arm is the load-bearing signal that Some(0) /
+    # non-positive values fall through to the 300 default.
+    assert "Some(n) if n > 0 => n" in text, (
+        "s2s_client.rs must handle `Some(n) if n > 0 => n` so that "
+        "Some(0) (and any non-positive expires_in) defaults to 300, "
+        "matching the Python + Node SDKs."
+    )
+
+
 def test_rust_sdk_testing_module_gated_behind_feature() -> None:
     """testing.rs must be gated behind a feature flag.
 

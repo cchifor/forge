@@ -10,6 +10,7 @@ existing projects are unaffected.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -140,3 +141,75 @@ def test_secret_env_is_placeholder_not_hardcoded():
     api = _values(_gen(_k8s_config()))["workloads"]["api"]
     db_url = api["secretEnv"]["APP__DB__URL"]
     assert "CHANGEME" in db_url
+
+
+def _keycloak_k8s_config() -> ProjectConfig:
+    # Gatekeeper binds host port 5000 when keycloak is enabled, so the backend
+    # must avoid it (the validator reserves 5000). Use 5010.
+    return ProjectConfig(
+        project_name="Deploy KC",
+        backends=[BackendConfig(name="api", language=BackendLanguage.PYTHON, server_port=5010)],
+        frontend=FrontendConfig(framework=FrontendFramework.VUE, project_name="Deploy KC"),
+        include_keycloak=True,
+        keycloak_port=18080,
+        options={"deploy.target": "kubernetes"},
+    )
+
+
+def _infra_yaml(root: Path) -> str:
+    return (root / "deploy" / "helm" / "templates" / "infra.yaml").read_text(encoding="utf-8")
+
+
+# --- E1: in-cluster Service names are stable literals matching the DB host ----
+
+
+def test_postgres_service_name_is_literal_matching_db_host():
+    """The in-cluster Postgres Service must render to the bare literal ``postgres``
+    (values.yaml has no access to .Release.Name), so the migrate hook + pods can
+    resolve the DB host hardcoded in each workload's secretEnv."""
+    root = _gen(_keycloak_k8s_config())
+    infra = _infra_yaml(root)
+
+    # Find the `kind: Service` block whose name label is `postgres`.
+    svc_blocks = [b for b in infra.split("---") if "kind: Service" in b]
+    pg_blocks = [b for b in svc_blocks if "app.kubernetes.io/name: postgres" in b]
+    assert pg_blocks, "no postgres Service block found in infra.yaml"
+    pg = pg_blocks[0]
+
+    m = re.search(r"^metadata:\n  name:\s*(\S+)", pg, re.MULTILINE)
+    assert m, f"could not parse metadata.name from postgres Service block:\n{pg}"
+    pg_svc_name = m.group(1)
+    assert "{{" not in pg_svc_name, (
+        f"postgres Service name is a Helm expr, not a literal: {pg_svc_name!r}"
+    )
+    assert pg_svc_name == "postgres"
+
+    # The literal Service name must match the bare host in a workload's DB URL.
+    api = _values(root)["workloads"]["api"]
+    db_url = api["secretEnv"]["APP__DB__URL"]
+    host = db_url.split("@", 1)[1].split(":", 1)[0]
+    assert host == pg_svc_name == "postgres"
+
+
+# --- E2: keycloak projects carry auth env into the Helm chart -----------------
+
+
+def test_keycloak_helm_workload_env_carries_auth():
+    """A keycloak k8s deploy must turn auth ON in-cluster — the workload env
+    block mirrors the compose auth env (enabled/server/realm/client/issuer/aud)."""
+    root = _gen(_keycloak_k8s_config())
+    env = _values(root)["workloads"]["api"]["env"]
+    assert env["APP__SECURITY__AUTH__ENABLED"] == "true"
+    assert env["APP__SECURITY__AUTH__SERVER_URL"] == "http://keycloak:8080"
+    assert "APP__SECURITY__AUTH__REALM" in env
+    assert "APP__SECURITY__AUTH__CLIENT_ID" in env
+    assert env["GATEKEEPER_ISSUER"] == "http://gatekeeper:5000"
+    assert env["SERVICE_AUDIENCE"] == "forge-services"
+
+
+def test_non_keycloak_helm_workload_env_has_no_auth():
+    """A non-keycloak project must not gain any auth env (byte-identical path)."""
+    env = _values(_gen(_k8s_config()))["workloads"]["api"]["env"]
+    assert "APP__SECURITY__AUTH__ENABLED" not in env
+    assert "GATEKEEPER_ISSUER" not in env
+    assert "SERVICE_AUDIENCE" not in env

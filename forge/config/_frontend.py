@@ -275,7 +275,8 @@ class FrontendConfig:
         # common plugin case) skips validation and uses its layout-agnostic
         # template path.
         avail = available_layouts(self.framework)
-        if avail and get_layout_variant(self.framework, self.layout) is None:
+        variant = get_layout_variant(self.framework, self.layout)
+        if avail and (variant is None or not variant.supported):
             raise ValueError(
                 f"Layout '{self.layout}' is not available for {self.framework.value}. "
                 f"Choose from: {', '.join(avail)}"

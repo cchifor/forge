@@ -38,6 +38,18 @@ class APIKeyRecord:
     owner: str
 
 
+def cache_subject(record: APIKeyRecord) -> str:
+    """Stable per-credential identity for the internal-token cache key.
+
+    Derived from ``(tenant_id, key_id)`` — NOT ``owner`` — so two keys
+    created by the same admin (or two keys that happen to share an
+    ``owner`` value across tenants) never collapse onto one cached
+    internal JWT. Without this, the first key's bearer (its roles and
+    tenant) would be served to every later request under the same owner.
+    """
+    return f"{record.tenant_id}:{record.key_id}"
+
+
 # ── Hashing ─────────────────────────────────────────────────────────────────
 
 

@@ -87,6 +87,24 @@ def test_validate_rejects_unregistered_layout():
         cfg.validate()
 
 
+def test_validate_rejects_unsupported_layout():
+    # A variant registered supported=False is hidden from available_layouts
+    # yet resolvable via get_layout_variant. Supplying it directly via --layout
+    # must still be rejected, with the standard "Choose from:" message.
+    lv.register_layout_variant(
+        lv.LayoutVariant(
+            FrontendFramework.VUE,
+            "demolayout3",
+            "apps/vue-frontend-template-demolayout3",
+            "Unsupported",
+            supported=False,
+        )
+    )
+    cfg = FrontendConfig(framework=FrontendFramework.VUE, project_name="t", layout="demolayout3")
+    with pytest.raises(ValueError, match="[Ll]ayout 'demolayout3' is not available"):
+        cfg.validate()
+
+
 def test_validate_layout_is_framework_scoped():
     # A layout registered only for Vue must not validate for Svelte.
     lv.register_layout_variant(

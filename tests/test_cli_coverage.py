@@ -510,7 +510,7 @@ class TestCollectInputs:
                 "My App",  # project_name
                 "A desc",  # description
                 "backend",  # _prompt_backend: name
-                "5000",  # _prompt_backend: port (via _ask_port)
+                "5010",  # _prompt_backend: port (5010, not 5000: gatekeeper takes 5000)
                 "items",  # _prompt_backend: features (via _ask_features)
                 "Alice",  # author_name
                 "5173",  # frontend port (via _ask_port)

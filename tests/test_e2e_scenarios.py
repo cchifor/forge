@@ -481,7 +481,8 @@ def test_scenario_stateless_with_keycloak(tmp_path: Path, monkeypatch: pytest.Mo
         name="api",
         language=BackendLanguage.PYTHON,
         features=["items"],
-        server_port=5000,
+        # 5010, not 5000: keycloak publishes gatekeeper on host 5000.
+        server_port=5010,
     )
     config = ProjectConfig(
         project_name="kc",

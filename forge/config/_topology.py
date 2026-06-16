@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from forge.config._backend import BackendLanguage
 from forge.config._frontend import FrontendFramework
+from forge.config._validators import DEFAULT_REALM
 
 if TYPE_CHECKING:
     from forge.capability_resolver import ResolvedPlan
@@ -159,6 +160,21 @@ def compute_topology(
         ),
         "include_keycloak": config.include_keycloak,
         "keycloak_port": config.keycloak_port,
+        # Realm + client_id sourced EXACTLY as docker_manager builds the compose
+        # render context, so the Helm auth env (values.yaml.jinja) and compose
+        # agree. Empty/default when not a keycloak project.
+        "keycloak_realm": (
+            config.frontend.keycloak_realm
+            if config.frontend
+            and config.include_keycloak
+            and config.frontend.keycloak_realm != "master"
+            else DEFAULT_REALM
+        ),
+        "keycloak_client_id": (
+            config.frontend.keycloak_client_id
+            if config.frontend and config.include_keycloak
+            else config.frontend_slug
+        ),
         "database_mode": database_mode,
         "render_postgres": render_postgres,
     }

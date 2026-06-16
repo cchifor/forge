@@ -29,6 +29,14 @@ _ENDPOINT = (
     _BASE
     / "forge/features/platform/templates/webhooks/python/files/src/app/api/v1/endpoints/webhooks.py"
 )
+_NODE_SERVICE = (
+    _BASE
+    / "forge/features/platform/templates/webhooks/node/files/src/services/webhook.service.ts"
+)
+_RUST_SERVICE = (
+    _BASE
+    / "forge/features/platform/templates/webhooks/rust/files/src/services/webhooks.rs"
+)
 
 
 def _load_service():
@@ -186,3 +194,73 @@ class TestDeliveryHardening:
         )
         with pytest.raises(svc.WebhookUrlError):
             svc._resolve_and_validate("totally-public.example", 443)
+
+
+class TestNodeDeliveryHardening:
+    """The Node delivery path must reach SSRF/open-redirect parity with Python:
+    a host guard that rejects internal targets AND redirect suppression so a
+    3xx to an internal host cannot bypass the guard."""
+
+    def _src(self) -> str:
+        return _NODE_SERVICE.read_text(encoding="utf-8")
+
+    def test_has_outbound_url_guard(self):
+        src = self._src()
+        assert "validateOutboundUrl" in src
+
+    def test_guard_rejects_internal_and_non_http(self):
+        src = self._src()
+        # Loopback / link-local (cloud metadata) / RFC1918 ranges must be named.
+        assert "127.0.0" in src
+        assert "169.254" in src
+        assert ("10." in src and "192.168" in src and "172." in src)
+        # Non-http(s) schemes must be rejected by the guard.
+        assert "https:" in src and "http:" in src
+
+    def test_deliver_validates_before_fetch(self):
+        src = self._src()
+        body = src.split("export async function deliver")[1]
+        assert "validateOutboundUrl(webhook.url)" in body
+
+    def test_deliver_suppresses_redirects(self):
+        src = self._src()
+        body = src.split("export async function deliver")[1]
+        # fetch must not auto-follow 3xx to an internal host.
+        assert ('redirect: "manual"' in body) or ('redirect: "error"' in body)
+
+
+class TestRustDeliveryHardening:
+    """The Rust delivery path must reach SSRF/open-redirect parity with Python:
+    a host guard that rejects internal targets AND a redirect policy of none()
+    (reqwest follows up to 10 redirects by default)."""
+
+    def _src(self) -> str:
+        return _RUST_SERVICE.read_text(encoding="utf-8")
+
+    def test_has_outbound_url_guard(self):
+        src = self._src()
+        assert "fn validate_outbound_url" in src
+
+    def test_guard_rejects_internal_and_non_http(self):
+        src = self._src()
+        assert "127.0.0" in src
+        assert "169.254" in src
+        assert ("10." in src and "192.168" in src and "172." in src)
+        assert '"https"' in src and '"http"' in src
+
+    def test_deliver_validates_before_post(self):
+        src = self._src()
+        body = src.split("pub async fn deliver")[1]
+        assert "validate_outbound_url(&webhook.url)" in body
+
+    def test_deliver_disables_redirects(self):
+        src = self._src()
+        body = src.split("pub async fn deliver")[1]
+        assert "redirect::Policy::none()" in body
+
+    def test_no_new_crates_added(self):
+        # Host/scheme parsing must be manual (no new crate import) so the
+        # rust deps in fragments.py stay untouched.
+        src = self._src()
+        assert "use url::" not in src
+        assert "use addr::" not in src
