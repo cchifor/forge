@@ -103,17 +103,17 @@ fn validate_outbound_url(raw_url: &str) -> Result<(), String> {
         return Err(format!("unsupported URL scheme {}; use https", scheme));
     }
     // Authority = everything up to the first '/', '?' or '#'.
-    let authority = rest
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or("");
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
     // Strip any userinfo ("user:pass@host").
     let hostport = authority.rsplit('@').next().unwrap_or(authority);
     // Pull the host out of host[:port], handling bracketed IPv6 literals.
     let host = if let Some(after) = hostport.strip_prefix('[') {
         after.split(']').next().unwrap_or("")
     } else {
-        hostport.rsplit_once(':').map(|(h, _)| h).unwrap_or(hostport)
+        hostport
+            .rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(hostport)
     };
     let host = host.trim().to_ascii_lowercase();
     if host.is_empty() {
@@ -152,7 +152,7 @@ fn is_blocked_host(host: &str) -> bool {
         }
         return false;
     }
-    is_blocked_ipv4(&host)
+    is_blocked_ipv4(host)
 }
 
 fn is_blocked_ipv4(host: &str) -> bool {
@@ -169,7 +169,7 @@ fn is_blocked_ipv4(host: &str) -> bool {
         || (a == 192 && b == 168) // RFC1918 192.168.0.0/16
         || (a == 172 && (16..=31).contains(&b)) // RFC1918 172.16.0.0/12
         || (a == 169 && b == 254) // link-local 169.254.0.0/16 (metadata)
-        || a == 0       // 0.0.0.0/8 unspecified
+        || a == 0 // 0.0.0.0/8 unspecified
 }
 
 fn sign(secret: &str, timestamp: &str, nonce: &str, body: &[u8]) -> String {

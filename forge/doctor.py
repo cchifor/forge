@@ -335,9 +335,7 @@ def check_ts_morph_toolchain() -> CheckResult:
     except Exception:  # noqa: BLE001
         check = None
     if check is not None and check.returncode != 0:
-        first_line = next(
-            (ln for ln in check.stderr.splitlines() if ln.strip()), "syntax error"
-        )
+        first_line = next((ln for ln in check.stderr.splitlines() if ln.strip()), "syntax error")
         return CheckResult(
             name="ts-morph:toolchain",
             status="warn",
