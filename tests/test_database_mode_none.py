@@ -71,6 +71,21 @@ class TestDatabaseModeValidation:
         config.validate()
         assert config.database_mode == "generate"
 
+    def test_stateless_frees_postgres_host_port(self):
+        # With database.mode=none and no Keycloak, no Postgres service renders,
+        # so the 15432/5050 host binds are free — a backend may use them.
+        config = _stateless_config()
+        config.backends[0].server_port = 15432
+        config.frontend = None
+        config.validate()  # must not raise
+
+    def test_generate_mode_reserves_postgres_host_port(self):
+        # Sanity: when Postgres DOES render, 15432 is reserved.
+        bc = BackendConfig(project_name="default", name="api", server_port=15432)
+        config = ProjectConfig(project_name="Default", backends=[bc])
+        with pytest.raises(ValueError, match="PostgreSQL"):
+            config.validate()
+
     @pytest.mark.parametrize(
         ("option_key", "option_value", "error_fragment"),
         [
@@ -269,6 +284,7 @@ class TestStatelessKeycloakCoexistence:
 
     def test_postgres_renders_for_keycloak(self, tmp_path):
         config = _stateless_config()
+        config.backends[0].server_port = 5010  # dodge the gatekeeper 5000 host bind
         config.frontend.include_auth = True
         config.frontend.keycloak_client_id = "stateless"
         config.include_keycloak = True
@@ -282,6 +298,7 @@ class TestStatelessKeycloakCoexistence:
         """Even with postgres rendered for keycloak, backends stay
         stateless — no APP__DB__URL / DATABASE_URL env vars."""
         config = _stateless_config()
+        config.backends[0].server_port = 5010  # dodge the gatekeeper 5000 host bind
         config.frontend.include_auth = True
         config.frontend.keycloak_client_id = "stateless"
         config.include_keycloak = True

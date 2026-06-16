@@ -100,3 +100,111 @@ class TestDockerComposeConfig:
             project_root,
             expect_services={"backend", "postgres", "keycloak", "gatekeeper", "redis", "traefik"},
         )
+
+
+import re
+
+
+class TestTraefikMiddlewareInvariant:
+    """Every Traefik middleware a router references must be defined somewhere.
+
+    When ``include_keycloak`` is set, each backend router is labelled
+    ``middlewares=<be>-rewrite,auth`` but the ``auth`` ForwardAuth middleware
+    has to be *defined* by a ``traefik.http.middlewares.auth.forwardauth.*``
+    label. A router referencing an undefined middleware is placed in an error
+    state by Traefik and serves 404 — and, worse, the intended per-request
+    gatekeeper authentication never runs. This guards the reference/definition
+    invariant structurally (no Docker boot required).
+    """
+
+    @staticmethod
+    def _labels(svc: dict) -> list[str]:
+        raw = svc.get("labels") or []
+        if isinstance(raw, dict):
+            return [f"{k}={v}" for k, v in raw.items()]
+        return [str(x) for x in raw]
+
+    def _referenced_and_defined(self, doc: dict) -> tuple[set[str], set[str]]:
+        referenced: set[str] = set()
+        defined: set[str] = set()
+        for svc in (doc.get("services") or {}).values():
+            for label in self._labels(svc):
+                key, _, val = label.partition("=")
+                if re.fullmatch(r"traefik\.http\.routers\.[^.]+\.middlewares", key):
+                    referenced.update(p.strip() for p in val.split(",") if p.strip())
+                m = re.match(r"traefik\.http\.middlewares\.([^.]+)\.", key)
+                if m:
+                    defined.add(m.group(1))
+        return referenced, defined
+
+    def test_every_referenced_middleware_is_defined(self, tmp_path):
+        config = ProjectConfig(
+            project_name="smoke-test",
+            output_dir=str(tmp_path),
+            backends=[BackendConfig(project_name="smoke-test", server_port=5010)],
+            include_keycloak=True,
+            keycloak_port=8080,
+        )
+        project_root = generate(config, quiet=True)
+        doc = yaml.safe_load((project_root / "docker-compose.yml").read_text(encoding="utf-8"))
+        referenced, defined = self._referenced_and_defined(doc)
+        dangling = referenced - defined
+        assert not dangling, (
+            f"router(s) reference undefined Traefik middleware(s): {sorted(dangling)}. "
+            f"defined={sorted(defined)}"
+        )
+
+
+class TestComposeValidatorPortParity:
+    """The port-collision validator's infra reservations must match the host
+    ports the compose template actually publishes — otherwise it rejects free
+    ports or admits real ``docker compose up`` collisions (the two halves of
+    the historical 5432-vs-15432 drift)."""
+
+    @staticmethod
+    def _host_port(entry: str) -> int:
+        # "ip:host:container" | "host:container" | "container"
+        parts = entry.split(":")
+        if len(parts) == 3:
+            return int(parts[1])
+        if len(parts) == 2:
+            return int(parts[0])
+        return int(parts[0])
+
+    def test_reserved_infra_ports_match_published(self, tmp_path):
+        from forge.config._validators import infra_host_port_reservations
+
+        config = ProjectConfig(
+            project_name="smoke-test",
+            output_dir=str(tmp_path),
+            backends=[BackendConfig(project_name="smoke-test", server_port=5010)],
+            frontend=FrontendConfig(
+                framework=FrontendFramework.VUE,
+                project_name="smoke-test",
+                server_port=5173,
+            ),
+            include_keycloak=True,
+            keycloak_port=18080,
+        )
+        config.validate()  # must accept this non-colliding config
+        project_root = generate(config, quiet=True)
+        doc = yaml.safe_load((project_root / "docker-compose.yml").read_text(encoding="utf-8"))
+
+        app_ports = {5010, 5173}
+        published: set[int] = set()
+        for svc in (doc.get("services") or {}).values():
+            for entry in svc.get("ports") or []:
+                published.add(self._host_port(str(entry)))
+        # Only host ports a backend/frontend could legally land on (>= 1024)
+        # and that aren't the app services themselves.
+        infra_published = {p for p in published if p >= 1024} - app_ports
+
+        reserved = set(
+            infra_host_port_reservations(
+                render_postgres=True, include_keycloak=True, keycloak_port=18080
+            )
+        )
+        assert infra_published == reserved, (
+            f"validator reservations {sorted(reserved)} drift from the compose "
+            f"template's published infra host ports {sorted(infra_published)}"
+        )

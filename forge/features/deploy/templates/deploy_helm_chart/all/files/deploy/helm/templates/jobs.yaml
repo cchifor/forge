@@ -100,7 +100,7 @@ spec:
             - name: ENV
               value: development
             - name: KEYCLOAK_BASE_URL
-              value: http://{{ printf "%s-keycloak" .Release.Name }}:8080/realms
+              value: http://keycloak:8080/realms
             - name: KEYCLOAK_ADMIN_REALM
               value: {{ .Values.infra.keycloak.realm | default "app" | quote }}
             - name: REALM_JSON_PATH

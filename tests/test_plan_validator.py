@@ -116,6 +116,39 @@ class TestInjectYamlValidation:
         )
         validate_plan(_plan(frag))
 
+    def test_anchor_substitutes_for_marker_only(self, tmp_path: Path) -> None:
+        frag = _make_fragment(tmp_path, "anchor_ok", "frags/anchor_ok")
+        inject = tmp_path / "frags/anchor_ok/inject.yaml"
+        inject.write_text(
+            yaml.safe_dump([
+                {"target": "src/app.py", "anchor": "FORGE:X", "snippet": "x"},
+            ]),
+            encoding="utf-8",
+        )
+        validate_plan(_plan(frag))
+
+    def test_anchor_missing_target_raises(self, tmp_path: Path) -> None:
+        frag = _make_fragment(tmp_path, "anchor_no_target", "frags/anchor_no_target")
+        inject = tmp_path / "frags/anchor_no_target/inject.yaml"
+        inject.write_text(
+            yaml.safe_dump([{"anchor": "FORGE:X", "snippet": "x"}]),
+            encoding="utf-8",
+        )
+        with pytest.raises(PlanValidationError) as exc:
+            validate_plan(_plan(frag))
+        assert "missing required key 'target'" in str(exc.value)
+
+    def test_anchor_missing_snippet_raises(self, tmp_path: Path) -> None:
+        frag = _make_fragment(tmp_path, "anchor_no_snippet", "frags/anchor_no_snippet")
+        inject = tmp_path / "frags/anchor_no_snippet/inject.yaml"
+        inject.write_text(
+            yaml.safe_dump([{"target": "src/app.py", "anchor": "FORGE:X"}]),
+            encoding="utf-8",
+        )
+        with pytest.raises(PlanValidationError) as exc:
+            validate_plan(_plan(frag))
+        assert "missing required key 'snippet'" in str(exc.value)
+
 
 class TestEnvYamlValidation:
     def test_malformed_env_yaml_raises(self, tmp_path: Path) -> None:

@@ -37,6 +37,73 @@ export interface DeliveryResult {
 
 const registry = new Map<string, Webhook>();
 
+export class WebhookUrlError extends Error {}
+
+/**
+ * Reject webhook targets that point at internal/non-public hosts (SSRF) or use
+ * a non-http(s) scheme. Mirrors the Python feature's `validate_outbound_url`.
+ *
+ * Host literals in loopback / link-local (incl. the 169.254.169.254 cloud
+ * metadata endpoint) / RFC1918 private ranges are blocked. DNS names are not
+ * resolved here (no sync resolver in the fetch path); pair this pre-flight
+ * check with `redirect: "manual"` below so a 3xx to an internal host cannot
+ * slip past it.
+ */
+function validateOutboundUrl(rawUrl: string): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(rawUrl);
+	} catch {
+		throw new WebhookUrlError(`invalid webhook URL: ${rawUrl}`);
+	}
+	const scheme = parsed.protocol.toLowerCase();
+	if (scheme !== "https:" && scheme !== "http:") {
+		throw new WebhookUrlError(`unsupported URL scheme ${scheme}; use https`);
+	}
+	// `hostname` strips brackets from IPv6 literals; lowercase for name checks.
+	const host = parsed.hostname.toLowerCase();
+	if (!host) {
+		throw new WebhookUrlError("webhook URL has no host");
+	}
+	if (isBlockedHost(host)) {
+		throw new WebhookUrlError(`${host} is a non-public address; refused`);
+	}
+}
+
+function isBlockedHost(host: string): boolean {
+	if (host === "localhost" || host.endsWith(".localhost")) return true;
+	// IPv6 literals: loopback (::1), unspecified (::), link-local (fe80::/10),
+	// unique-local (fc00::/7), and IPv4-mapped loopback (::ffff:127.0.0.1).
+	if (host.includes(":")) {
+		if (host === "::1" || host === "::") return true;
+		if (host.startsWith("fe8") || host.startsWith("fe9")) return true;
+		if (host.startsWith("fea") || host.startsWith("feb")) return true;
+		if (host.startsWith("fc") || host.startsWith("fd")) return true;
+		const mapped = host.split(":").pop() ?? "";
+		if (mapped.includes(".")) return isBlockedIPv4(mapped);
+		return false;
+	}
+	if (isBlockedIPv4(host)) return true;
+	return false;
+}
+
+function isBlockedIPv4(host: string): boolean {
+	const parts = host.split(".");
+	if (parts.length !== 4) return false;
+	const octets = parts.map((p) => Number(p));
+	if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+		return false;
+	}
+	const [a, b] = octets;
+	if (a === 127) return true; // loopback 127.0.0.0/8
+	if (a === 10) return true; // RFC1918 10.0.0.0/8
+	if (a === 192 && b === 168) return true; // RFC1918 192.168.0.0/16
+	if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918 172.16.0.0/12
+	if (a === 169 && b === 254) return true; // link-local 169.254.0.0/16 (metadata)
+	if (a === 0) return true; // 0.0.0.0/8 unspecified
+	return false;
+}
+
 function generateSecret(): string {
 	return randomBytes(32).toString("hex");
 }
@@ -104,6 +171,21 @@ export async function deliver(
 	payload: unknown,
 ): Promise<DeliveryResult> {
 	const start = performance.now();
+
+	// Fast pre-flight SSRF reject (scheme + host literal). Paired with
+	// `redirect: "manual"` below so a 3xx to an internal host can't bypass it.
+	try {
+		validateOutboundUrl(webhook.url);
+	} catch (err: any) {
+		return {
+			webhook_id: webhook.id,
+			status_code: null,
+			ok: false,
+			error: `refused: ${String(err?.message ?? err)}`,
+			duration_ms: Math.round(performance.now() - start),
+		};
+	}
+
 	const timestamp = Math.floor(Date.now() / 1000).toString();
 	const nonce = randomUUID().replace(/-/g, "");
 	const body = Buffer.from(
@@ -129,6 +211,9 @@ export async function deliver(
 			method: "POST",
 			headers,
 			body,
+			// Do not auto-follow 3xx: a redirect to an internal host would
+			// bypass the validateOutboundUrl pre-flight check above.
+			redirect: "manual",
 			signal: controller.signal,
 		});
 		return {

@@ -63,7 +63,7 @@ function findAnchorLine(sourceText, markerName) {
     }
   }
   if (hits.length === 0) return -1;
-  if (hits.length > 1) throw new Error(`Anchor ${markerName!r} appears on multiple lines`);
+  if (hits.length > 1) throw new Error(`Anchor ${JSON.stringify(markerName)} appears on multiple lines`);
   return hits[0];
 }
 

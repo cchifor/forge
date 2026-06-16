@@ -264,6 +264,17 @@ def validate_bindings(
                     f"binding {op.name!r}: transform rule {dest!r} has no source path"
                 )
                 continue
+            # A coercion kind must be on the closed whitelist (the same set
+            # _TS_COERCE enforces at emit time) — reject unknown kinds here so
+            # they surface as a FEATURE_CONTRACT_VIOLATION, not a generic
+            # GeneratorError aborting emit.
+            if isinstance(rule, dict):
+                coerce = rule.get("coerce")
+                if coerce is not None and coerce not in _TS_COERCE:
+                    violations.append(
+                        f"binding {op.name!r}: transform rule {dest!r} has unknown coerce "
+                        f"kind {coerce!r}; allowed: {sorted(_TS_COERCE)}"
+                    )
             if _schema_has_path(response_schema, src):
                 valid_dests.add(dest)
             else:

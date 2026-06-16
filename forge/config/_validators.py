@@ -15,8 +15,47 @@ import re
 # Used as both the default user-facing realm name and the template fallback.
 DEFAULT_REALM = "app"
 
-# Traefik dashboard host port. Kept in sync with `deploy/docker-compose.yml.j2`.
+# Host ports the compose template (`deploy/docker-compose.yml.j2`) publishes
+# for infra services. Kept in lockstep with the template so the port-collision
+# validator neither rejects a free host port nor admits a real
+# `docker compose up` collision. Postgres/pgAdmin/Redis bind to non-default
+# host ports on purpose — the conventional 5432/6379 are the *container* ports
+# and never appear on the host.
 TRAEFIK_DASHBOARD_PORT = 19090
+POSTGRES_HOST_PORT = 15432
+PGADMIN_HOST_PORT = 5050
+REDIS_HOST_PORT = 6379
+GATEKEEPER_HOST_PORT = 5000
+
+
+def infra_host_port_reservations(
+    *, render_postgres: bool, include_keycloak: bool, keycloak_port: int
+) -> dict[int, str]:
+    """Host ports the compose stack publishes for infra services.
+
+    Mirrors ``deploy/docker-compose.yml.j2``:
+
+    - Traefik renders unconditionally — its dashboard binds
+      ``TRAEFIK_DASHBOARD_PORT``.
+    - Postgres + pgAdmin render only when ``render_postgres``
+      (see :func:`forge.config._topology.compute_render_postgres`),
+      publishing ``POSTGRES_HOST_PORT`` / ``PGADMIN_HOST_PORT``.
+    - Redis, Gatekeeper and Keycloak render only with ``include_keycloak``.
+
+    The container ports (5432/6379) are deliberately NOT reserved — only the
+    published host binds can collide with a backend/frontend host port. The
+    Traefik web port (80) is below the 1024 floor ``validate_port`` enforces,
+    so a backend/frontend can never land on it.
+    """
+    reserved: dict[int, str] = {TRAEFIK_DASHBOARD_PORT: "Traefik dashboard"}
+    if render_postgres:
+        reserved[POSTGRES_HOST_PORT] = "PostgreSQL"
+        reserved[PGADMIN_HOST_PORT] = "pgAdmin"
+    if include_keycloak:
+        reserved[REDIS_HOST_PORT] = "Redis"
+        reserved[GATEKEEPER_HOST_PORT] = "Gatekeeper"
+        reserved[keycloak_port] = "Keycloak"
+    return reserved
 
 
 def keycloak_client_id_from(project_name: str) -> str:
