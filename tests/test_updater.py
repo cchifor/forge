@@ -153,6 +153,53 @@ class TestUpdateProject:
         with pytest.raises(ValueError, match="legacy"):
             read_forge_toml(manifest)
 
+    def test_update_survives_persisted_engine_on_stateless_manifest(
+        self, fake_project: Path
+    ) -> None:
+        """Regression (#260): a ``database.mode=none`` project's forge.toml
+        also persisted the registry's blanket ``database.engine=postgres``
+        default (the state every pre-fix stateless project on disk is in).
+        ``forge --update`` re-reads the manifest and converts the options to
+        the typed config; the converter must drop the mode-inapplicable
+        ``engine`` rather than crash on ``DatabaseNone``'s ``extra="forbid"``.
+        """
+        write_forge_toml(
+            fake_project / "forge.toml",
+            version="0.1.0",
+            project_name="proj",
+            templates={"python": "services/python-service-template"},
+            options={"database.mode": "none", "database.engine": "postgres"},
+        )
+
+        # Must not raise pydantic ValidationError (database.none.engine).
+        summary = update_project(fake_project, quiet=True)
+        assert summary["backends"] == ["backend"]
+
+    def test_update_survives_persisted_api_target_on_headless_manifest(
+        self, fake_project: Path
+    ) -> None:
+        """Sibling of #260: a ``frontend.mode=none`` project's forge.toml
+        persisted the blanket ``frontend.api_target.*`` defaults, which live
+        only on the generate/external frontend variants. ``forge --update``
+        must drop them instead of tripping ``FrontendNone``'s
+        ``extra="forbid"``.
+        """
+        write_forge_toml(
+            fake_project / "forge.toml",
+            version="0.1.0",
+            project_name="proj",
+            templates={"python": "services/python-service-template"},
+            options={
+                "frontend.mode": "none",
+                "frontend.api_target.type": "local",
+                "frontend.api_target.url": "",
+            },
+        )
+
+        # Must not raise pydantic ValidationError (frontend.none.api_target_*).
+        summary = update_project(fake_project, quiet=True)
+        assert summary["backends"] == ["backend"]
+
 
 class TestIntegrationAgainstGenerator:
     """End-to-end: use the real generator, then run update on the output."""
