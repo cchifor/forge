@@ -133,7 +133,7 @@ def load_entity_yaml(path: Path) -> EntitySpec:
         raise GeneratorError(f"{path}: `fields` must be a non-empty list")
     fields = tuple(_load_field(path, entry) for entry in fields_raw)
 
-    indices_raw = raw.get("indices") or ()
+    indices_raw = raw.get("indices") or []
     if not isinstance(indices_raw, list):
         raise GeneratorError(f"{path}: `indices` must be a list of lists")
     indices: list[tuple[str, ...]] = []
@@ -176,6 +176,17 @@ def _load_field(path: Path, entry: Any) -> EntityField:
         raise GeneratorError(
             f"{path}: field {name!r} is type=relation but missing `target: <Entity>`"
         )
+
+    for bound in ("min_length", "max_length"):
+        value = entry.get(bound)
+        if value is None:
+            continue
+        # bool is a subclass of int; reject it explicitly.
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise GeneratorError(
+                f"{path}: field {name!r} `{bound}` must be a non-negative integer "
+                f"(got {value!r})"
+            )
 
     return EntityField(
         name=name,

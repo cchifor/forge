@@ -68,6 +68,33 @@ class TestLoadEntityYaml:
         with pytest.raises(GeneratorError, match="enum"):
             load_entity_yaml(bad)
 
+    def test_loads_entity_without_indices_block(self, tmp_path: Path) -> None:
+        """An entity YAML with no `indices` key must load (defaulting to empty)."""
+        ok = tmp_path / "ok.yaml"
+        ok.write_text(
+            "name: Foo\nplural: foos\nfields:\n  - name: id\n    type: uuid\n"
+        )
+        spec = load_entity_yaml(ok)
+        assert spec.indices == ()
+
+    def test_rejects_negative_min_length(self, tmp_path: Path) -> None:
+        bad = tmp_path / "bad.yaml"
+        bad.write_text(
+            "name: Foo\nplural: foos\nfields:\n"
+            "  - name: s\n    type: string\n    min_length: -5\n"
+        )
+        with pytest.raises(GeneratorError, match="min_length"):
+            load_entity_yaml(bad)
+
+    def test_rejects_non_int_max_length(self, tmp_path: Path) -> None:
+        bad = tmp_path / "bad.yaml"
+        bad.write_text(
+            "name: Foo\nplural: foos\nfields:\n"
+            "  - name: s\n    type: string\n    max_length: huge\n"
+        )
+        with pytest.raises(GeneratorError, match="max_length"):
+            load_entity_yaml(bad)
+
 
 class TestEmitPydantic:
     def test_emits_basemodel(self, item_spec: EntitySpec) -> None:
