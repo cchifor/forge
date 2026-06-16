@@ -74,7 +74,7 @@
     },
     "apps/frontend/package.json": {
       "size": 2089,
-      "sha256": "0d761229f73bd5ea"
+      "sha256": "abbf678cb30687b4"
     },
     "apps/frontend/public/canvas.manifest.json": {
       "size": 7130,

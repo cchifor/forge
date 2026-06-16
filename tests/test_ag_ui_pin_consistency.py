@@ -38,6 +38,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 VUE_PKG = REPO_ROOT / "packages" / "canvas-vue" / "package.json"
 SVELTE_PKG = REPO_ROOT / "packages" / "canvas-svelte" / "package.json"
+# canvas-core depends on @ag-ui/core only (it's the framework-agnostic base the
+# vue/svelte canvases build on). Not Copier-rendered, so it hardcodes the pin
+# and must be guarded here too — otherwise a future core bump can silently skip
+# it (the exact forgotten-edit class this gate exists to prevent).
+CORE_PKG = REPO_ROOT / "packages" / "canvas-core" / "package.json"
 
 VUE_TPL = (
     REPO_ROOT
@@ -76,6 +81,7 @@ def _dep_version(pkg_json_path: Path, dep_name: str) -> str:
         (VUE_PKG, "@ag-ui/core", AG_UI_CORE_VERSION),
         (SVELTE_PKG, "@ag-ui/client", AG_UI_CLIENT_VERSION),
         (SVELTE_PKG, "@ag-ui/core", AG_UI_CORE_VERSION),
+        (CORE_PKG, "@ag-ui/core", AG_UI_CORE_VERSION),
     ],
 )
 def test_canvas_package_pins_match_constant(
