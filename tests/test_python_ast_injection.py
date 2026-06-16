@@ -183,3 +183,69 @@ class TestInjectPython:
         snapshot = src.read_text(encoding="utf-8")
         inject_python(src, "f", "REG", "call()", "before")
         assert src.read_text(encoding="utf-8") == snapshot
+
+    def test_anchor_on_last_line_no_trailing_newline_does_not_fuse(
+        self, tmp_path: Path
+    ) -> None:
+        """[#23] When the anchor is on the file's last line with NO trailing
+        newline, the injected BEGIN sentinel must not fuse onto the anchor
+        line. A re-run must remain idempotent (no duplicate / corruption)."""
+        src = tmp_path / "main.py"
+        # No trailing newline on the last (anchor) line.
+        src.write_text(
+            "def app():\n"
+            "    pass\n"
+            "# FORGE:TAIL",
+            encoding="utf-8",
+        )
+        inject_python(src, "f", "TAIL", "import a", "after")
+        body = src.read_text(encoding="utf-8")
+        # The anchor line must remain intact on its own line — no fusion.
+        assert "# FORGE:TAIL# FORGE:BEGIN" not in body
+        lines = body.splitlines()
+        assert "# FORGE:TAIL" in lines, f"anchor line corrupted; got: {lines!r}"
+        assert "# FORGE:BEGIN f:TAIL" in body
+        assert "import a" in body
+        # Re-run must stay idempotent (the fused/corrupted anchor would
+        # otherwise be deleted or duplicated).
+        inject_python(src, "f", "TAIL", "import b", "after")
+        final = src.read_text(encoding="utf-8")
+        assert final.count("# FORGE:BEGIN f:TAIL") == 1
+        assert "# FORGE:TAIL" in final.splitlines()
+        assert "import b" in final
+        assert "import a" not in final
+
+    def test_text_fallback_anchor_on_last_line_no_trailing_newline_does_not_fuse(
+        self, tmp_path: Path
+    ) -> None:
+        """[#23] Same no-trailing-newline fusion flaw in the text-fallback path
+        (triggered by an unparseable file)."""
+        src = tmp_path / "broken.py"
+        src.write_text(
+            "def app(\n"  # invalid Python -> text fallback
+            "    pass\n"
+            "# FORGE:TAIL",
+            encoding="utf-8",
+        )
+        inject_python(src, "f", "TAIL", "import a", "after")
+        body = src.read_text(encoding="utf-8")
+        assert "# FORGE:TAIL# FORGE:BEGIN" not in body
+        assert "# FORGE:TAIL" in body.splitlines()
+        assert "# FORGE:BEGIN f:TAIL" in body
+
+    def test_text_fallback_matches_anchor_form_marker(self, tmp_path: Path) -> None:
+        """[#24] When the CST path falls back to text injection, the fallback
+        must match the new `# forge:anchor <name>` marker form, not only the
+        legacy `FORGE:<NAME>` form."""
+        src = tmp_path / "broken.py"
+        # Unparseable -> forces the text fallback; anchor uses the new form.
+        src.write_text(
+            "def app(\n"  # invalid Python
+            "    # forge:anchor middleware.imports\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        inject_python(src, "f", "middleware.imports", "import a", "after")
+        body = src.read_text(encoding="utf-8")
+        assert "# FORGE:BEGIN f:middleware.imports" in body
+        assert "import a" in body

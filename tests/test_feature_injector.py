@@ -19,7 +19,12 @@ from forge.capability_resolver import ResolvedFragment
 from forge.config import BackendConfig, BackendLanguage
 from forge.errors import GeneratorError
 from forge.fragments import Fragment, FragmentImplSpec
-from forge.injectors.sentinels import _block_fingerprint, _inject_snippet
+from forge.injectors.sentinels import (
+    _block_fingerprint,
+    _has_sentinel_block,
+    _inject_snippet,
+    _read_block_body,
+)
 from forge.sync.forge_to_project import apply_features
 
 # -- _inject_snippet ----------------------------------------------------------
@@ -135,6 +140,44 @@ class TestInjectSnippet:
         )
         with pytest.raises(GeneratorError, match="END.*missing"):
             _inject_snippet(file, "feat_a", "FORGE:X", "new", "after")
+
+    # --- Prefix-colliding tags (#33) ----------------------------------------
+
+    def test_prefix_colliding_tag_not_matched_by_has_block(self, tmp_path) -> None:
+        """A tag that is a string-prefix of another must not match the longer
+        block. `feat_a:X` is a prefix of `feat_a:X_PUBLIC`; only the longer
+        block exists, so a query for the shorter tag must report absent.
+        """
+        file = self._write(tmp_path, "pre\n# FORGE:X_PUBLIC\npost\n")
+        _inject_snippet(file, "feat_a", "FORGE:X_PUBLIC", "body", "after")
+        # The longer-tag block exists; the prefix tag does not.
+        assert _has_sentinel_block(file, "feat_a", "FORGE:X_PUBLIC") is True
+        assert _has_sentinel_block(file, "feat_a", "FORGE:X") is False
+
+    def test_prefix_colliding_tag_not_read_by_read_body(self, tmp_path) -> None:
+        """`_read_block_body` for the prefix tag must not return the longer
+        block's body via substring match.
+        """
+        file = self._write(tmp_path, "pre\n# FORGE:X_PUBLIC\npost\n")
+        _inject_snippet(file, "feat_a", "FORGE:X_PUBLIC", "longer_body", "after")
+        assert _read_block_body(file, "feat_a", "FORGE:X_PUBLIC") == "longer_body\n"
+        assert _read_block_body(file, "feat_a", "FORGE:X") is None
+
+    def test_prefix_colliding_tag_does_not_replace_longer_block(self, tmp_path) -> None:
+        """Injecting the prefix tag must create its own block, not hijack /
+        replace the existing longer-tag block (Path 1 substring match bug).
+        """
+        file = self._write(tmp_path, "pre\n# FORGE:X_PUBLIC\n# FORGE:X\npost\n")
+        _inject_snippet(file, "feat_a", "FORGE:X_PUBLIC", "public_body", "after")
+        _inject_snippet(file, "feat_a", "FORGE:X", "plain_body", "after")
+        text = file.read_text(encoding="utf-8")
+        # Both blocks must coexist with their own bodies intact.
+        assert text.count("# FORGE:BEGIN feat_a:X_PUBLIC") == 1
+        assert text.count("# FORGE:END feat_a:X_PUBLIC") == 1
+        assert text.count("# FORGE:BEGIN feat_a:X fp:") == 1
+        assert text.count("# FORGE:END feat_a:X\n") == 1
+        assert "public_body" in text
+        assert "plain_body" in text
 
 
 # -- _add_python_deps ---------------------------------------------------------
