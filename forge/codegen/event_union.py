@@ -76,11 +76,11 @@ SCHEMA_VERSION = 1
 #     fails CI on drift.
 #
 # Bump procedure: change the two constants below, run the consistency
-# test, manually update the 2 in-tree canvas-package ``package.json``
-# files to match. The test will not let CI go green if the four
-# locations disagree.
-AG_UI_CLIENT_VERSION = "0.0.56"
-AG_UI_CORE_VERSION = "0.0.56"
+# test, manually update the 3 in-tree canvas-package ``package.json``
+# files to match (canvas-vue, canvas-svelte, canvas-core). The test will
+# not let CI go green if the locations disagree.
+AG_UI_CLIENT_VERSION = "0.0.57"
+AG_UI_CORE_VERSION = "0.0.57"
 
 
 # -- Slug derivation ---------------------------------------------------------
