@@ -313,15 +313,30 @@ def from_legacy_options(options: dict[str, Any]) -> TypedConfig:
     frontend_kwargs: dict[str, Any] = {}
     if "frontend.mode" in canonical:
         frontend_kwargs["mode"] = canonical["frontend.mode"]
-    if "frontend.api_target.type" in canonical:
-        frontend_kwargs["api_target_type"] = canonical["frontend.api_target.type"]
-    if "frontend.api_target.url" in canonical:
-        frontend_kwargs["api_target_url"] = canonical["frontend.api_target.url"]
+    # ``api_target_*`` live only on the generate / external variants;
+    # ``FrontendNone`` forbids them. The option registry stamps blanket
+    # ``frontend.api_target.*`` defaults into forge.toml regardless of
+    # mode (#260), so forwarding them for ``mode=none`` would trip
+    # ``FrontendNone``'s ``extra="forbid"``. Gate on the effective mode —
+    # a value supplied without a mode still implies generate (preserving
+    # ``test_frontend_url_alone_implies_generate_mode``). Mirrors the
+    # mode-aware asymmetry ``to_legacy_options`` already has.
+    if canonical.get("frontend.mode", "generate") != "none":
+        if "frontend.api_target.type" in canonical:
+            frontend_kwargs["api_target_type"] = canonical["frontend.api_target.type"]
+        if "frontend.api_target.url" in canonical:
+            frontend_kwargs["api_target_url"] = canonical["frontend.api_target.url"]
 
     database_kwargs: dict[str, Any] = {}
     if "database.mode" in canonical:
         database_kwargs["mode"] = canonical["database.mode"]
-    if "database.engine" in canonical:
+    # ``engine`` exists only on ``DatabaseGenerate``; ``DatabaseNone``
+    # forbids it. Same blanket-default leak as the frontend above (#260):
+    # gate ``engine`` on the effective mode so a ``database.mode=none``
+    # manifest's stamped ``database.engine=postgres`` is dropped instead
+    # of crashing ``forge update``. Engine without a mode keeps generate
+    # (preserves ``test_database_engine_alone_implies_generate_mode``).
+    if "database.engine" in canonical and canonical.get("database.mode", "generate") == "generate":
         database_kwargs["engine"] = canonical["database.engine"]
 
     agent_kwargs: dict[str, Any] = {}
