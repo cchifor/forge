@@ -107,6 +107,7 @@ def inject_python(
     indent = _leading_indent(lines[anchor_idx])
     block = _render_block(indent, tag, snippet)
     insert_at = anchor_idx + 1 if position == "after" else anchor_idx
+    _ensure_trailing_newline(lines, insert_at)
     lines = lines[:insert_at] + [block] + lines[insert_at:]
     file.write_text("".join(lines), encoding="utf-8")
 
@@ -171,6 +172,19 @@ def _leading_indent(line: str) -> str:
     return m.group(0) if m else ""
 
 
+def _ensure_trailing_newline(lines: list[str], insert_at: int) -> None:
+    """Guarantee the line *preceding* ``insert_at`` ends with a newline.
+
+    Without this, splicing a block after an anchor that sits on the file's
+    last line (which has no trailing ``\\n``) fuses the BEGIN sentinel onto
+    the anchor line, corrupting it. Appending the missing newline keeps the
+    splice on its own line and preserves idempotency on re-run.
+    """
+    prev = insert_at - 1
+    if 0 <= prev < len(lines) and not lines[prev].endswith("\n"):
+        lines[prev] = lines[prev] + "\n"
+
+
 def _render_block(indent: str, tag: str, snippet: str) -> str:
     """Render the BEGIN / snippet / END sequence with consistent indentation."""
     begin = f"{indent}# FORGE:BEGIN {tag}\n"
@@ -197,23 +211,19 @@ def _text_inject(
         file.write_text("".join(lines), encoding="utf-8")
         return
 
-    # Locate any single line containing `FORGE:<MARKER_NAME>` (not BEGIN/END).
-    hits = [
-        i
-        for i, line in enumerate(lines)
-        if f"FORGE:{marker_name.upper()}" in line
-        and not BEGIN_RE.search(line)
-        and not END_RE.search(line)
-    ]
-    if not hits:
+    # Locate the marker line, accepting both the new `# forge:anchor <name>`
+    # form and the legacy `# FORGE:<NAME>` form (mirrors the CST path's
+    # _find_anchor so anchor-form markers still resolve when we fall back).
+    marker_idx = _find_anchor(lines, marker_name, file)
+    if marker_idx is None:
         raise InjectionError(
             f"Marker FORGE:{marker_name} not found in {file} (text-fallback mode).",
             code=INJECTION_MARKER_MISSING,
             context={"file": str(file), "marker": marker_name},
         )
-    marker_idx = hits[0]
     indent = _leading_indent(lines[marker_idx])
     block = _render_block(indent, tag, snippet)
     insert_at = marker_idx + 1 if position == "after" else marker_idx
+    _ensure_trailing_newline(lines, insert_at)
     lines = lines[:insert_at] + [block] + lines[insert_at:]
     file.write_text("".join(lines), encoding="utf-8")

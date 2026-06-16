@@ -321,6 +321,18 @@ def _dart_for_schema(schema: Schema) -> str:
     if body.get("additionalProperties") is True:
         field_decls.append("  final Map<String, dynamic> extras;")
         ctor_params.append("    this.extras = const {},")
+        # fromJson: collect every key not declared as a property so
+        # unknown keys survive the round-trip (parity with Pydantic's
+        # ConfigDict(extra="allow") and the TS index signature).
+        known_keys = ", ".join(f"'{name}'" for name in props)
+        from_json_parts.append(
+            "      extras: {"
+            f"\n        for (final e in json.entries)"
+            f"\n          if (!const {{{known_keys}}}.contains(e.key)) e.key: e.value,"
+            "\n      },"
+        )
+        # toJson: splat the extras map back so unknown keys are emitted.
+        to_json_parts.append("      ...extras,")
 
     lines: list[str] = []
     if schema.description:

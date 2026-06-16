@@ -29,6 +29,10 @@ class RedisQueueAdapter(QueuePort):
     def _processing_key(topic: str) -> str:
         return f"queue:{topic}:processing"
 
+    @staticmethod
+    def _delayed_key(topic: str) -> str:
+        return f"queue:{topic}:delayed"
+
     async def enqueue(
         self,
         *,
@@ -43,12 +47,28 @@ class RedisQueueAdapter(QueuePort):
             # set that the consumer polls. Real delayed queues (SQS/
             # Hatchet) belong in their own adapters.
             await self._client.zadd(
-                f"{self._key(topic)}:delayed",
+                self._delayed_key(topic),
                 {envelope: (await _now_ms()) + delay_seconds * 1000},
             )
         else:
             await self._client.lpush(self._key(topic), envelope)
         return message_id
+
+    async def _promote_delayed(self, topic: str) -> None:
+        """Move due entries (score <= now) out of the ``:delayed`` ZSET and
+        onto the main list so they become consumable.
+
+        ``ZREM`` claims each envelope before it is pushed, so concurrent
+        consumers never double-deliver: only the consumer that successfully
+        removes the member from the sorted set lpushes it.
+        """
+        delayed_key = self._delayed_key(topic)
+        now = await _now_ms()
+        due = await self._client.zrangebyscore(delayed_key, 0, now)
+        for envelope in due:
+            # Atomically claim: a non-zero zrem means *this* consumer owns it.
+            if await self._client.zrem(delayed_key, envelope):
+                await self._client.lpush(self._key(topic), envelope)
 
     async def consume(
         self,
@@ -57,6 +77,7 @@ class RedisQueueAdapter(QueuePort):
         batch_size: int = 1,
     ) -> AsyncIterator[QueueMessage]:
         while True:
+            await self._promote_delayed(topic)
             raw = await self._client.rpoplpush(self._key(topic), self._processing_key(topic))
             if not raw:
                 await asyncio.sleep(0.5)

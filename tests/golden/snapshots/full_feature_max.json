@@ -1425,8 +1425,8 @@
       "sha256": "f89b9b770112c796"
     },
     "packages/platform-auth/src/platform_auth/auth_guard.py": {
-      "size": 20921,
-      "sha256": "e347b2106ee2bd46"
+      "size": 21876,
+      "sha256": "6929f71141b3dc81"
     },
     "packages/platform-auth/src/platform_auth/exceptions.py": {
       "size": 3572,
@@ -1481,8 +1481,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "packages/platform-auth/tests/unit/test_auth_guard.py": {
-      "size": 28344,
-      "sha256": "603c207b81defbf8"
+      "size": 29458,
+      "sha256": "3fca2d840ccfbbd3"
     },
     "packages/platform-auth/tests/unit/test_exceptions.py": {
       "size": 3263,
@@ -2129,12 +2129,12 @@
       "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api/src/app/middleware/rate_limit.py": {
-      "size": 2443,
-      "sha256": "cf7dd049864a6203"
+      "size": 4087,
+      "sha256": "11586ed8a5771823"
     },
     "services/api/src/app/middleware/security_headers.py": {
-      "size": 1970,
-      "sha256": "73d6af1b448c85e5"
+      "size": 2305,
+      "sha256": "d9d4907bee7b69f2"
     },
     "services/api/src/app/middleware/tenant_context.py": {
       "size": 879,

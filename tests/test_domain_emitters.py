@@ -256,3 +256,100 @@ class TestSqlaPydanticIndependent:
         assert "class Item(BaseModel):" in pyd
         # Different surfaces — they share the entity name but nothing else.
         assert sqla != pyd
+
+
+# ---------------------------------------------------------------------------
+# emit_pydantic renders EntityField.default (parity with SQLA server_default)
+# ---------------------------------------------------------------------------
+
+
+class TestPydanticFieldDefault:
+    """A field carrying a ``default`` must not emit as required.
+
+    The same spec emits a SQLA ``server_default`` for the column; the
+    Pydantic DTO must mirror that so the model is constructible without
+    supplying the defaulted field. A bare ``status: str`` would force the
+    caller to pass the value, diverging from the DB-side default.
+    """
+
+    def _spec(self) -> EntitySpec:
+        from forge.domain import EntityField, FieldType
+
+        return EntitySpec(
+            name="Thing",
+            plural="things",
+            description="",
+            fields=(
+                EntityField(name="id", type=FieldType.UUID, primary_key=True),
+                EntityField(name="status", type=FieldType.STRING, default="active"),
+                EntityField(name="count", type=FieldType.INTEGER, default=0),
+                EntityField(name="active", type=FieldType.BOOLEAN, default=True),
+                EntityField(
+                    name="label",
+                    type=FieldType.STRING,
+                    default="hi",
+                    max_length=10,
+                ),
+            ),
+        )
+
+    def test_string_default_is_rendered(self) -> None:
+        body = emit_pydantic(self._spec())
+        # Must NOT be a bare required field.
+        assert "    status: str\n" not in body
+        assert 'status: str = "active"' in body
+
+    def test_int_default_is_rendered(self) -> None:
+        body = emit_pydantic(self._spec())
+        assert "    count: int\n" not in body
+        assert "count: int = 0" in body
+
+    def test_bool_default_is_rendered(self) -> None:
+        body = emit_pydantic(self._spec())
+        assert "    active: bool\n" not in body
+        assert "active: bool = True" in body
+
+    def test_default_combined_with_constraint(self) -> None:
+        body = emit_pydantic(self._spec())
+        # When constraints force a Field(...), the default rides along.
+        assert "label: str = Field(" in body
+        assert 'default="hi"' in body
+        assert "max_length=10" in body
+
+    def test_output_remains_valid_python(self) -> None:
+        body = emit_pydantic(self._spec())
+        ast.parse(body)
+
+    def test_string_default_with_quote_is_escaped(self) -> None:
+        """A default containing a quote/backslash/newline must emit a
+        valid, fully-escaped Python literal (repr-safe), not a naively
+        double-quoted string that breaks the module."""
+        from forge.domain import EntityField, FieldType
+
+        spec = EntitySpec(
+            name="Quoted",
+            plural="quoteds",
+            description="",
+            fields=(
+                EntityField(name="id", type=FieldType.UUID, primary_key=True),
+                EntityField(
+                    name="name",
+                    type=FieldType.STRING,
+                    default="O'Brien \"the\" \\hacker\nx",
+                ),
+            ),
+        )
+        body = emit_pydantic(spec)
+        # The whole module must parse — a naive f'"{value}"' breaks here.
+        module = ast.parse(body)
+        # The emitted default literal must evaluate back to the original
+        # string, proving the escaping is correct rather than merely parseable.
+        assignments = {
+            stmt.target.id: stmt.value
+            for klass in module.body
+            if isinstance(klass, ast.ClassDef)
+            for stmt in klass.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }
+        assert "name" in assignments
+        assert ast.literal_eval(assignments["name"]) == "O'Brien \"the\" \\hacker\nx"

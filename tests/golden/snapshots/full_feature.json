@@ -1637,12 +1637,12 @@
       "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api/src/app/middleware/rate_limit.py": {
-      "size": 2443,
-      "sha256": "cf7dd049864a6203"
+      "size": 4087,
+      "sha256": "11586ed8a5771823"
     },
     "services/api/src/app/middleware/security_headers.py": {
-      "size": 1970,
-      "sha256": "73d6af1b448c85e5"
+      "size": 2305,
+      "sha256": "d9d4907bee7b69f2"
     },
     "services/api/src/app/ports/error_port.py": {
       "size": 2600,

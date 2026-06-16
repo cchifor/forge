@@ -77,3 +77,38 @@ class TestBuildEntityYaml:
         assert spec.plural == "orders"
         assert spec.field_by_name("status") is not None
         assert spec.field_by_name("status").enum == "OrderStatus"
+
+    @pytest.mark.parametrize(
+        "baseline",
+        ["id", "customer_id", "user_id", "created_at", "updated_at"],
+    )
+    def test_user_field_colliding_with_baseline_raises(self, baseline: str) -> None:
+        """A user field named after a CRUD baseline column must be rejected.
+
+        Otherwise build_entity_yaml emits two columns with the same name,
+        which makes the generated alembic op.create_table fail at runtime.
+        """
+        from forge.errors import GeneratorError
+
+        with pytest.raises(GeneratorError, match=baseline):
+            build_entity_yaml("Order", f"{baseline}:string,qty:integer")
+
+    def test_no_duplicate_columns_for_normal_fields(self) -> None:
+        """Sanity guard: normal fields never produce duplicate columns."""
+        import yaml
+
+        body = build_entity_yaml("Order", "name:string,qty:integer")
+        parsed = yaml.safe_load(body)
+        field_names = [f["name"] for f in parsed["fields"]]
+        assert len(field_names) == len(set(field_names))
+
+    def test_duplicate_user_fields_raise(self) -> None:
+        """Two user fields sharing a name must be rejected.
+
+        Otherwise build_entity_yaml emits two columns with the same name,
+        producing an invalid alembic op.create_table.
+        """
+        from forge.errors import GeneratorError
+
+        with pytest.raises(GeneratorError, match="name"):
+            build_entity_yaml("Order", "name:string,name:integer")

@@ -165,17 +165,26 @@ class FileExtractor:
             )
         )
 
+        # A deleted/missing source file (``current_sha is None``) is the
+        # most destructive harvest outcome: the proposal would remove a
+        # fragment-shipped file. ``reverse_file_three_way_decide`` returns
+        # ``safe-apply`` for it but its docstring mandates the call site
+        # tag the proposal "needs-review" so it never auto-accepts.
         # Explicit CandidateRisk annotation — without it ty falls back
         # to ``str`` for the ternary because ``decision`` is itself a
         # broader str-typed value, and downstream callers lose the
         # Literal narrowing that Initiative #1 sub-task 2 introduced
         # on ``CandidatePatch.risk``.
-        risk: CandidateRisk = "safe-apply" if decision == "safe-apply" else "conflict"
-        rationale = (
-            "user edited fragment file; upstream unchanged"
-            if decision == "safe-apply"
-            else "user and upstream both diverged from baseline"
-        )
+        risk: CandidateRisk
+        if current_sha is None:
+            risk = "needs-review"
+            rationale = "fragment-tracked file deleted on disk; review before removing upstream"
+        elif decision == "safe-apply":
+            risk = "safe-apply"
+            rationale = "user edited fragment file; upstream unchanged"
+        else:
+            risk = "conflict"
+            rationale = "user and upstream both diverged from baseline"
         return CandidatePatch(
             fragment=fragment_name,
             backend=ctx.backend_config.name,

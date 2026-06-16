@@ -100,10 +100,12 @@ def _build_template_update_tasks(
 
         # Resolve the target directory on disk.
         target_dir: Path | None = None
+        matched_backend: BackendConfig | None = None
         if backend_lang is not None:
             # Find the matching backend by language.
             for bc in backends:
                 if bc.language.value == lang:
+                    matched_backend = bc
                     candidate = project_root / "services" / bc.name
                     if candidate.is_dir():
                         target_dir = candidate
@@ -142,6 +144,20 @@ def _build_template_update_tasks(
             # the user removed it.
             continue
 
+        # Two-stage (overlay) layouts: the project's ``.copier-answers.yml``
+        # records only the overlay ``_src_path``, so the default
+        # ``copier.run_update`` re-renders the overlay alone and silently
+        # skips the shared base. Resolve the base template (if this
+        # backend/frontend was generated from a two-stage variant) so
+        # ``run_template_update`` re-renders it first.
+        base_template_src = _resolve_base_template_src(
+            templates_root=templates_root,
+            lang=lang,
+            backend_lang=backend_lang,
+            matched_backend=matched_backend,
+            frontend=data.frontend,
+        )
+
         tasks.append(
             TemplateUpdateTask(
                 language=lang,
@@ -149,6 +165,59 @@ def _build_template_update_tasks(
                 current_version=current_version,
                 target_dir=target_dir,
                 template_src=template_path,
+                base_template_src=base_template_src,
             )
         )
     return tasks
+
+
+def _resolve_base_template_src(
+    *,
+    templates_root: Path,
+    lang: str,
+    backend_lang: Any,
+    matched_backend: BackendConfig | None,
+    frontend: Any,
+) -> Path | None:
+    """Resolve the shared-base template for a two-stage layout, if any.
+
+    A two-stage backend app-template variant or frontend layout variant
+    records a non-empty ``base_template_dir`` in its registry entry. When
+    present, return the absolute path to that base under
+    ``templates_root``; otherwise ``None`` (self-contained single render).
+    """
+    base_dir = ""
+    if backend_lang is not None and matched_backend is not None:
+        # Backend: resolve the app-template variant the backend was
+        # generated from and read its shared-base dir.
+        from forge.backend_app_templates import (  # noqa: PLC0415
+            DEFAULT_BACKEND_TEMPLATE,
+            get_backend_application_template,
+        )
+
+        variant_name = matched_backend.app_template or DEFAULT_BACKEND_TEMPLATE
+        variant = get_backend_application_template(backend_lang, variant_name)
+        if variant is not None:
+            base_dir = variant.base_template_dir
+    elif backend_lang is None:
+        # Frontend: resolve the layout variant from the recorded
+        # (framework, layout) and read its shared-base dir.
+        from forge.config import resolve_frontend_framework  # noqa: PLC0415
+        from forge.layout_variants import DEFAULT_LAYOUT, get_layout_variant  # noqa: PLC0415
+
+        try:
+            framework = resolve_frontend_framework(lang)
+        except ValueError:
+            framework = None  # type: ignore[assignment]
+        if framework is not None:
+            layout_name = getattr(frontend, "layout", "") or DEFAULT_LAYOUT
+            variant = get_layout_variant(framework, layout_name)
+            if variant is not None:
+                base_dir = variant.base_template_dir
+
+    if not base_dir:
+        return None
+    base_path = templates_root / base_dir
+    if not base_path.is_dir():
+        return None
+    return base_path

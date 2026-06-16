@@ -115,6 +115,7 @@ class AuthGuard:
         audiences: tuple[str, ...] | None = None,
         jwks: JWKSCache,
         trust_map: IssuerTrustMap | None = None,
+        strict_trust: bool = False,
         revocation: RevocationStore | None = None,
         may_act: MayActPolicy | None = None,
         algorithms: tuple[str, ...] = DEFAULT_ALGORITHMS,
@@ -151,6 +152,7 @@ class AuthGuard:
 
         self._jwks = jwks
         self._trust_map = trust_map
+        self._strict_trust = strict_trust
         self._revocation = revocation
         self._may_act = may_act
         self._algorithms = tuple(algorithms)
@@ -359,8 +361,23 @@ class AuthGuard:
     async def _enforce_trust(self, tenant_id: UUID, iss: str) -> None:
         assert self._trust_map is not None  # narrowed by caller
         record = await self._trust_map.get(tenant_id)
+        # A missing record means the tenant is unknown to the trust map.
+        #
+        # * Default (``strict_trust=False``): accept it — the permissive
+        #   single-issuer default. Per-tenant issuer binding + suspension only
+        #   apply to tenants explicitly registered in the map. This is what
+        #   lets the ``oidc_generic`` provider ship an *empty* map (the external
+        #   issuer is trusted for every tenant) without rejecting every token.
+        # * Fail-closed (``strict_trust=True``): reject it. Every tenant must be
+        #   registered (hybrid-realm deployments opt into this so an
+        #   unregistered tenant cannot slip through with any registered key).
         if record is None:
-            raise InvalidToken(f"unknown tenant {tenant_id}")
+            if self._strict_trust:
+                raise IssuerNotTrusted(
+                    f"tenant {tenant_id} is not registered in the trust map "
+                    "(strict_trust is enabled)"
+                )
+            return
         if record.expected_issuer != iss:
             raise IssuerNotTrusted(
                 f"tenant {tenant_id} expects issuer {record.expected_issuer!r}, "

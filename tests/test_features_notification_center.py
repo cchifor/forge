@@ -7,8 +7,10 @@ supporting Popover/RelativeTime/formatTime primitives into the Vue app.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+import forge
 from forge.components._registry import COMPONENT_REGISTRY
 from forge.config import (
     BackendConfig,
@@ -90,6 +92,57 @@ def test_composes_popover_primitive_without_collision(tmp_path: Path) -> None:
     both = _gen(tmp_path / "b", ["NotificationCenter", "Popover"])
     assert len(list(both.rglob("shared/ui/popover/PopoverContent.vue"))) == 1
     assert len(list(both.rglob("shared/ui/popover/index.ts"))) == 1
+
+
+def _store_ts_source() -> str:
+    """Read the NotificationCenter store template directly from the package."""
+    pkg = Path(forge.__file__).parent
+    store = (
+        pkg
+        / "features"
+        / "notifications"
+        / "templates"
+        / "component_NotificationCenter"
+        / "all"
+        / "files"
+        / "src"
+        / "features"
+        / "notifications"
+        / "store.ts"
+    )
+    return store.read_text(encoding="utf-8")
+
+
+def test_ingest_dedupes_on_stable_id_not_seq() -> None:
+    """``ingest`` must key the existing-row lookup on the stable ``id``.
+
+    ``seq`` is a client-assigned ordinal that the SSE stream and the server
+    bootstrap independently populate, so a live SSE event's ``seq`` can collide
+    with an unrelated bootstrapped row's ``seq``. If ``ingest`` keys its
+    update/dedup on ``seq`` it overwrites that unrelated row in place. The
+    lookup must instead match on the row identity (``id``).
+    """
+    src = _store_ts_source()
+    # Isolate the ingest function body so a `seq` reference elsewhere (e.g. the
+    # sorted-view comparator) doesn't mask the bug.
+    start = src.index("function ingest(")
+    end = src.index("function ingestToastForNotification(")
+    ingest_body = src[start:end]
+
+    findindex = re.search(
+        r"items\.value\.findIndex\(\s*\(?\w+\)?\s*=>\s*(.+?)\)",
+        ingest_body,
+    )
+    assert findindex is not None, "expected a findIndex existing-row lookup in ingest"
+    predicate = findindex.group(1)
+    assert ".id ===" in predicate, (
+        "ingest existing-row lookup must key on the stable .id, not .seq; "
+        f"found predicate: {predicate!r}"
+    )
+    assert ".seq ===" not in predicate, (
+        "ingest must not dedupe on the client-assigned .seq ordinal "
+        f"(collides across bootstrap/SSE); found predicate: {predicate!r}"
+    )
 
 
 def test_builds_on_useeventstream_and_is_platform_free(tmp_path: Path) -> None:

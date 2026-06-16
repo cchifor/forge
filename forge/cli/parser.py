@@ -790,6 +790,117 @@ _MODE_ONLY_DESTS = frozenset(
 _MISSING = object()
 
 
+# Verb sub-flags: dests that only make sense alongside a parent verb. Each
+# maps to the frozenset of parent-verb dests that legitimise it (any one
+# present is enough — e.g. ``--project-path`` is shared by --update,
+# --migrate, --doctor, --resolve, --verify, --harvest, --plan-update,
+# --remove-fragment, --reapply-baseline). Passed WITHOUT any parent verb a
+# sub-flag is an ORPHAN: it must NOT flip `_is_headless` (which would
+# scaffold a default project into cwd) and `main()` must error exit 2.
+_SUBFLAG_PARENTS: dict[str, frozenset[str]] = {
+    # --update family
+    "update_mode": frozenset({"update"}),
+    "no_template_update": frozenset({"update"}),
+    "project_path": frozenset(
+        {
+            "update",
+            "migrate",
+            "doctor",
+            "resolve",
+            "verify",
+            "harvest",
+            "plan_update",
+            "remove_fragment",
+            "reapply_baseline",
+            "accept_harvested",
+            "new_entity_name",
+            "add_backend_language",
+        }
+    ),
+    # --resolve family
+    "resolve_path": frozenset({"resolve"}),
+    # --reapply-baseline family
+    "reapply_scope": frozenset({"reapply_baseline"}),
+    # --plan family
+    "plan_graph": frozenset({"plan"}),
+    # --verify family
+    "verify_scope": frozenset({"verify"}),
+    "verify_fail_on": frozenset({"verify"}),
+    # --harvest family
+    "harvest_out": frozenset({"harvest"}),
+    "harvest_scope": frozenset({"harvest"}),
+    "harvest_include": frozenset({"harvest"}),
+    "harvest_interactive": frozenset({"harvest"}),
+    # --emit-pr (post-harvest) family
+    "emit_pr": frozenset({"harvest"}),
+    "forge_repo": frozenset({"harvest"}),
+    "pr_title": frozenset({"harvest"}),
+    "pr_body": frozenset({"harvest"}),
+    "emit_pr_risk_filter": frozenset({"harvest"}),
+    # --accept-harvested family
+    "accept_risk_filter": frozenset({"accept_harvested"}),
+    # --plugins family
+    "plugins_name": frozenset({"plugins_subcommand"}),
+    "plugins_backends": frozenset({"plugins_subcommand"}),
+    "plugins_force": frozenset({"plugins_subcommand"}),
+    # --features-cmd family
+    "features_name": frozenset({"features_subcommand"}),
+    # --component-cmd family
+    "component_name": frozenset({"component_subcommand"}),
+    "component_layer": frozenset({"component_subcommand"}),
+    # --canvas family
+    "canvas_payload": frozenset({"canvas_subcommand"}),
+    # --new-entity family
+    "new_entity_fields": frozenset({"new_entity_name"}),
+    # --add-backend family
+    "add_backend_name": frozenset({"add_backend_language"}),
+    # --migrate family
+    "migrate_only": frozenset({"migrate"}),
+    "migrate_skip": frozenset({"migrate"}),
+}
+
+
+def _orphan_subflags(args: argparse.Namespace) -> list[str]:
+    """Return the option-string names of verb sub-flags that were set
+    without their parent verb.
+
+    A sub-flag is "set" when its value deviates from the bare-``forge``
+    baseline; it is an orphan when none of its parent-verb dests are
+    truthy. ``main()`` turns a non-empty result into an exit-2 error, and
+    ``_is_headless`` ignores orphan deviations so they cannot silently
+    trigger default-project scaffolding.
+    """
+    baseline = _headless_baseline()
+    orphans: list[str] = []
+    for dest, parents in _SUBFLAG_PARENTS.items():
+        if any(getattr(args, parent, None) for parent in parents):
+            continue
+        if dest not in baseline:
+            continue
+        value = getattr(args, dest, _MISSING)
+        if value is _MISSING or value == baseline[dest]:
+            continue
+        orphans.append(_dest_to_flag(dest))
+    return orphans
+
+
+@functools.lru_cache(maxsize=1)
+def _dest_to_flag_map() -> dict[str, str]:
+    """Map each argparse dest to its canonical long option string."""
+    mapping: dict[str, str] = {}
+    for action in _build_parser()._actions:
+        if not action.option_strings:
+            continue
+        # Prefer the first long (``--``) option string; fall back to the last.
+        long_opts = [o for o in action.option_strings if o.startswith("--")]
+        mapping[action.dest] = long_opts[0] if long_opts else action.option_strings[-1]
+    return mapping
+
+
+def _dest_to_flag(dest: str) -> str:
+    return _dest_to_flag_map().get(dest, f"--{dest.replace('_', '-')}")
+
+
 @functools.lru_cache(maxsize=1)
 def _headless_baseline() -> dict[str, object]:
     """The parsed namespace of a bare ``forge`` invocation — ground truth
@@ -809,9 +920,17 @@ def _is_headless(args: argparse.Namespace) -> bool:
     baseline means any flag the parser grows is detected automatically.
     Report-only flags are denylisted in ``_MODE_ONLY_DESTS``; attributes
     absent from hand-built namespaces (tests, embedders) are skipped.
+
+    Orphan verb sub-flags (a sub-flag set without its parent verb) are
+    NOT generation flags: they're a usage error that ``main()`` rejects
+    with exit 2. Counting them here would scaffold a default project into
+    the cwd, so their deviations are skipped.
     """
+    orphans = set(_orphan_subflags(args))
     for dest, default in _headless_baseline().items():
         if dest in _MODE_ONLY_DESTS:
+            continue
+        if _dest_to_flag(dest) in orphans:
             continue
         value = getattr(args, dest, _MISSING)
         if value is _MISSING:

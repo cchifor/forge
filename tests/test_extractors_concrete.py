@@ -291,14 +291,16 @@ class TestFileExtractor:
         )
         assert FileExtractor().extract(ctx, plan) == []
 
-    def test_user_deleted_emits_safe_apply(
+    def test_user_deleted_emits_needs_review(
         self,
         tmp_path: Path,
         isolated_fragment_registry: dict[str, Fragment],
     ) -> None:
         # User deleted a fragment-tracked file. The decide function
-        # surfaces this as ``safe-apply`` (with the caller deciding
-        # whether to tag for review) — we follow that contract.
+        # surfaces this as ``safe-apply``, but its docstring mandates
+        # the call site tag the proposal "needs-review" — deleting a
+        # fragment file is the most destructive harvest outcome and
+        # must never auto-accept.
         upstream_body = "alpha\nbeta\n"
         ctx, plan = self._bake(
             tmp_path,
@@ -310,7 +312,7 @@ class TestFileExtractor:
         )
         candidates = FileExtractor().extract(ctx, plan)
         assert len(candidates) == 1
-        assert candidates[0].risk == "safe-apply"
+        assert candidates[0].risk == "needs-review"
         # Empty current → diff removes everything that was upstream.
         assert "-alpha" in candidates[0].diff
 

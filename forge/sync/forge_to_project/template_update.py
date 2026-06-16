@@ -60,6 +60,16 @@ class TemplateUpdateTask:
     is the local path to the template root (``copier.yml``-bearing
     directory). The version fields are kept for diagnostics — the
     actual delta detection happens upstream in the updater.
+
+    ``base_template_src`` is set for *two-stage* (overlay) layouts: the
+    shared base template the generator renders *before* the
+    ``template_src`` overlay. The project's ``.copier-answers.yml``
+    records only the overlay ``_src_path``, so a plain
+    ``copier.run_update(dst_path=...)`` re-renders the overlay alone and
+    silently skips the base. When this field is set,
+    :func:`run_template_update` re-renders the base first, then the
+    overlay. ``None`` ⇒ a self-contained single-render template (the
+    overlay's answers cover the whole subtree).
     """
 
     language: str
@@ -67,6 +77,7 @@ class TemplateUpdateTask:
     current_version: str
     target_dir: Path
     template_src: Path
+    base_template_src: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -129,7 +140,7 @@ def _presurface_user_modified_sidecars(
         if not on_disk.is_file():
             continue
         try:
-            if not str(on_disk.resolve()).startswith(str(target_resolved)):
+            if not on_disk.resolve().is_relative_to(target_resolved):
                 continue
         except OSError:
             continue
@@ -245,6 +256,63 @@ def _collect_rej_files(target_dir: Path) -> tuple[Path, ...]:
     return tuple(sorted(out))
 
 
+# Answers-file name used for the transient base-template re-render of a
+# two-stage layout. Copier resolves the template ``_src_path`` from the
+# answers file under ``dst_path``; this one points at the shared base so
+# ``run_update`` re-renders it before the overlay's default answers file
+# re-renders the overlay on top. Removed after the base render completes.
+_BASE_ANSWERS_RELPATH = ".copier-answers.base.yml"
+
+
+def _write_base_answers_file(target_dir: Path, base_src: Path) -> Path | None:
+    """Stamp a transient base-template answers file under ``target_dir``.
+
+    Two-stage layouts record only the overlay ``_src_path`` in their
+    ``.copier-answers.yml``. To re-render the shared base on update we
+    need an answers file whose ``_src_path`` points at the base while
+    preserving the user's recorded answers. Clone the existing answers
+    file, swap ``_src_path`` (and drop the now-stale ``_commit`` so
+    Copier re-resolves the base's ref), and write it next to the
+    overlay's. Returns the path written, or ``None`` if the source
+    answers file is missing/unreadable (nothing to re-render against).
+    """
+    import yaml
+
+    src_answers = target_dir / ".copier-answers.yml"
+    if not src_answers.is_file():
+        return None
+    try:
+        data = yaml.safe_load(src_answers.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    data = dict(data)
+    data["_src_path"] = str(base_src)
+    # ``_commit`` pinned the overlay's ref; it's meaningless for the base.
+    data.pop("_commit", None)
+    out = target_dir / _BASE_ANSWERS_RELPATH
+    try:
+        out.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    except OSError:
+        return None
+    return out
+
+
+def _cleanup_base_answers_file(target_dir: Path, relpath: str | None) -> None:
+    """Remove the transient base-template answers file, if one was written.
+
+    The base re-render uses a scratch ``.copier-answers.base.yml`` whose
+    only purpose is to point Copier at the shared base. It must never
+    persist in the generated project — the overlay's
+    ``.copier-answers.yml`` remains the single recorded answers file.
+    """
+    if not relpath:
+        return
+    with contextlib.suppress(OSError):
+        (target_dir / relpath).unlink(missing_ok=True)
+
+
 def run_template_update(
     task: TemplateUpdateTask,
     *,
@@ -279,7 +347,30 @@ def run_template_update(
     # sidecar shape. ``defaults=True`` + ``skip_answered=True`` keeps
     # the call non-interactive against the project's
     # ``.copier-answers.yml`` (forge wrote it at generate time).
+    #
+    # Two-stage (overlay) layouts: the project's ``.copier-answers.yml``
+    # records only the overlay ``_src_path``, so a plain ``run_update``
+    # re-renders the overlay alone and skips the shared base. Re-render
+    # the base FIRST (via a transient answers file pointing at it), then
+    # let the overlay re-apply on top — mirroring the generator's render
+    # order so base-template changes are not silently dropped.
+    base_answers_relpath: str | None = None
+    if task.base_template_src is not None:
+        base_answers = _write_base_answers_file(task.target_dir, task.base_template_src)
+        if base_answers is not None:
+            base_answers_relpath = base_answers.name
     try:
+        if base_answers_relpath is not None:
+            copier.run_update(
+                dst_path=str(task.target_dir),
+                answers_file=base_answers_relpath,
+                defaults=True,
+                overwrite=False,
+                skip_answered=True,
+                unsafe=True,
+                quiet=quiet,
+                conflict="rej",
+            )
         copier.run_update(
             dst_path=str(task.target_dir),
             defaults=True,
@@ -290,6 +381,7 @@ def run_template_update(
             conflict="rej",
         )
     except copier.errors.CopierError as exc:
+        _cleanup_base_answers_file(task.target_dir, base_answers_relpath)
         return TemplateUpdateOutcome(
             task=task,
             status="error",
@@ -297,12 +389,14 @@ def run_template_update(
             presurfaced_sidecars=presurfaced,
         )
     except OSError as exc:
+        _cleanup_base_answers_file(task.target_dir, base_answers_relpath)
         return TemplateUpdateOutcome(
             task=task,
             status="error",
             error_message=f"OSError: {exc}",
             presurfaced_sidecars=presurfaced,
         )
+    _cleanup_base_answers_file(task.target_dir, base_answers_relpath)
 
     rej_files = _collect_rej_files(task.target_dir)
     sidecars: list[Path] = []
@@ -356,7 +450,7 @@ def restamp_base_template_provenance(
         if not on_disk.is_file():
             continue
         try:
-            if not str(on_disk.resolve()).startswith(str(target_resolved)):
+            if not on_disk.resolve().is_relative_to(target_resolved):
                 continue
         except OSError:
             continue
