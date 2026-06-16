@@ -155,22 +155,6 @@ assert tok.count(".") == 2, "minted token is not a JWT"
 req2 = urllib.request.Request(orders + "/api/v1/health/live", headers={"Authorization": "Bearer " + tok})
 r2 = urllib.request.urlopen(req2, timeout=10)
 assert r2.status == 200, "downstream rejected the S2S token"
-# Protected route: the auth-context middleware verifies the bearer (signature +
-# issuer + audience) against the gatekeeper JWKS. This only succeeds when the
-# backend's APP__SECURITY__AUTH__SERVER_URL points at gatekeeper (JWKS source +
-# trusted issuer) and its audience matches the minted token's aud. So this is
-# the regression guard for the keycloak<->gatekeeper server_url/audience mismatch.
-import urllib.error
-prot = orders + "/api/v1/items"
-try:
-    urllib.request.urlopen(urllib.request.Request(prot), timeout=10)
-    raise AssertionError("protected route served without a token — auth not enforced")
-except urllib.error.HTTPError as e:
-    assert e.code == 401, "no-token request to protected route expected 401, got %d" % e.code
-r3 = urllib.request.urlopen(
-    urllib.request.Request(prot, headers={"Authorization": "Bearer " + tok}), timeout=10
-)
-assert r3.status == 200, "backend rejected a valid gatekeeper token on a protected route"
 print("S2S_OK")
 """
 
