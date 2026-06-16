@@ -239,3 +239,13 @@ class TestBackendAuthPointsAtGatekeeper:
         assert be["APP__SECURITY__AUTH__SERVER_URL"] == be["GATEKEEPER_ISSUER"]
         # The backend's expected audience must match what gatekeeper mints.
         assert be["APP__SECURITY__AUTH__AUDIENCE"] == gk["INTERNAL_TOKEN_AUDIENCE"]
+        # The backend's forge_core auth setup derives the JWKS URI from
+        # server_url + realm as the Keycloak-style
+        # ``/realms/<realm>/protocol/openid-connect/certs`` path UNLESS JWKS_URI
+        # is pinned. Gatekeeper serves JWKS at ``/auth/jwks``, so without this
+        # pin every token verification 404s on the (non-existent) certs path.
+        assert be["APP__SECURITY__AUTH__JWKS_URI"] == "http://gatekeeper:5000/auth/jwks"
+        assert (
+            be["APP__SECURITY__AUTH__JWKS_URI"]
+            == be["APP__SECURITY__AUTH__SERVER_URL"].rstrip("/") + "/auth/jwks"
+        )

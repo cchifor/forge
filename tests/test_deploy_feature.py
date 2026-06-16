@@ -205,6 +205,10 @@ def test_keycloak_helm_workload_env_carries_auth():
     # must point at gatekeeper, not Keycloak.
     assert env["APP__SECURITY__AUTH__SERVER_URL"] == "http://gatekeeper:5000"
     assert env["APP__SECURITY__AUTH__AUDIENCE"] == "forge-services"
+    # JWKS_URI must be pinned to gatekeeper's /auth/jwks: forge_core otherwise
+    # derives the Keycloak /realms/<realm>/.../certs path, which gatekeeper does
+    # not serve — so without the pin every token verification 404s.
+    assert env["APP__SECURITY__AUTH__JWKS_URI"] == "http://gatekeeper:5000/auth/jwks"
     assert "APP__SECURITY__AUTH__REALM" in env
     assert "APP__SECURITY__AUTH__CLIENT_ID" in env
     assert env["GATEKEEPER_ISSUER"] == "http://gatekeeper:5000"

@@ -79,6 +79,11 @@ workloads:
       APP__SECURITY__AUTH__ENABLED: "true"
       APP__SECURITY__AUTH__SERVER_URL: "http://gatekeeper:5000"
       APP__SECURITY__AUTH__AUDIENCE: "forge-services"
+      # forge_core derives the JWKS URI from server_url + realm as the
+      # Keycloak-style /realms/<realm>/protocol/openid-connect/certs path unless
+      # pinned. Gatekeeper serves JWKS at /auth/jwks, so this pin is REQUIRED or
+      # the backend 404s on every verification and rejects all gatekeeper tokens.
+      APP__SECURITY__AUTH__JWKS_URI: "http://gatekeeper:5000/auth/jwks"
       APP__SECURITY__AUTH__REALM: "{{ topology.keycloak_realm }}"
       APP__SECURITY__AUTH__CLIENT_ID: "{{ topology.keycloak_client_id }}"
       GATEKEEPER_ISSUER: "http://gatekeeper:5000"
