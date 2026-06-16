@@ -29,7 +29,7 @@
     "vue": "^3.4.0"
   },
   "dependencies": {
-    "@ag-ui/client": "^0.0.56",
+    "@ag-ui/client": "^0.0.57",
     "@ag-ui/core": "^0.0.56",
     "@forge/canvas-core": "^1.0.0-alpha.1",
     "marked": "^18.0.4",
