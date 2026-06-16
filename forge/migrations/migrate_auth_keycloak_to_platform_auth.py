@@ -193,15 +193,26 @@ def _detect_legacy(project_root: Path) -> _LegacySignals:
                 break
 
     has_old_env_keys = False
-    for candidate in (project_root / ".env", project_root / ".env.example"):
+    for candidate in (
+        project_root / ".env",
+        project_root / ".env.example",
+        project_root / "docker-compose.yml",
+        project_root / "docker-compose.yaml",
+    ):
         if not candidate.is_file():
             continue
         text = candidate.read_text(encoding="utf-8")
-        if any(re.search(rf"^{re.escape(old)}=", text, re.MULTILINE) for old, _ in ENV_RENAMES):
+        # Legacy keys appear as ``.env`` ``KEY=`` or YAML ``KEY:`` —
+        # accept either separator so compose-only projects are detected.
+        if any(
+            re.search(rf"^\s*{re.escape(old)}\s*(=|:)", text, re.MULTILINE)
+            for old, _ in ENV_RENAMES
+        ):
             has_old_env_keys = True
             break
         if any(
-            re.search(rf"^{re.escape(removed)}=", text, re.MULTILINE) for removed in ENV_REMOVALS
+            re.search(rf"^\s*{re.escape(removed)}\s*(=|:)", text, re.MULTILINE)
+            for removed in ENV_REMOVALS
         ):
             has_old_env_keys = True
             break
@@ -217,6 +228,13 @@ def _detect_legacy(project_root: Path) -> _LegacySignals:
     )
 
 
+# Matches either ``.env`` ``KEY=value`` or YAML ``KEY: value`` (the
+# indented service-environment shape forge writes into
+# docker-compose.yml). Group 1 = leading indent, group 2 = key,
+# group 3 = separator (``=`` or ``:``).
+_ENV_LINE = re.compile(r"^(\s*)([A-Z_][A-Z0-9_]*)(=|:)")
+
+
 def _rewrite_env_file(
     path: Path,
     dry_run: bool,
@@ -224,9 +242,16 @@ def _rewrite_env_file(
 ) -> None:
     """Apply ENV_RENAMES + ENV_REMOVALS + ENV_ADDITIONS to one .env-style file.
 
-    Preserves comments, blank lines, and quoting style. New keys are
-    appended at the end of the file with a single blank-line separator
-    if any keys were added.
+    Also handles the YAML ``KEY: value`` form used by
+    ``docker-compose.yml`` service-environment blocks, so stale
+    Keycloak env doesn't survive in compose after migration.
+
+    Preserves comments, blank lines, indentation, and quoting style.
+    New keys are appended at the end of the file with a single
+    blank-line separator if any keys were added. Additions are only
+    appended for ``.env``-style files (``=`` separator); a YAML compose
+    file is rewritten in place but not grown with bare ``KEY=value``
+    lines, which would corrupt its structure.
     """
     if not path.is_file():
         return
@@ -234,25 +259,30 @@ def _rewrite_env_file(
     original = path.read_text(encoding="utf-8")
     lines = original.splitlines(keepends=False)
 
+    is_compose = path.name in ("docker-compose.yml", "docker-compose.yaml")
+
     # Two-pass: first collect every key the file defines so we can
     # detect the "user already set both old AND new" case regardless
     # of ordering.
     pre_existing_keys: set[str] = set()
     for line in lines:
-        match = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)
+        match = _ENV_LINE.match(line)
         if match:
-            pre_existing_keys.add(match.group(1))
+            pre_existing_keys.add(match.group(2))
 
     new_lines: list[str] = []
     written_keys: set[str] = set()
 
     for line in lines:
         # Capture key names — keep blank/comment lines verbatim.
-        match = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)
+        match = _ENV_LINE.match(line)
         if not match:
             new_lines.append(line)
             continue
-        key = match.group(1)
+        indent, key, sep = match.group(1), match.group(2), match.group(3)
+        # Reconstruct the exact key+separator prefix so renames preserve
+        # the file's native form (``=`` vs ``: ``) and indentation.
+        prefix = f"{indent}{key}{sep}"
 
         # Renames first.
         renamed = False
@@ -262,11 +292,11 @@ def _rewrite_env_file(
                 # file? Drop the alias without overwriting — the user's
                 # explicit canonical wins.
                 if new in pre_existing_keys:
-                    changes.append(f"{path.name}: dropped {old}= (canonical {new}= already set)")
+                    changes.append(f"{path.name}: dropped {old}{sep} (canonical {new}{sep} already set)")
                 else:
-                    new_lines.append(re.sub(rf"^{re.escape(old)}=", f"{new}=", line))
+                    new_lines.append(re.sub(rf"^{re.escape(prefix)}", f"{indent}{new}{sep}", line))
                     written_keys.add(new)
-                    changes.append(f"{path.name}: renamed {old}= → {new}=")
+                    changes.append(f"{path.name}: renamed {old}{sep} → {new}{sep}")
                 renamed = True
                 break
         if renamed:
@@ -274,7 +304,7 @@ def _rewrite_env_file(
 
         # Removals.
         if key in ENV_REMOVALS:
-            changes.append(f"{path.name}: dropped {key}= (no longer applicable)")
+            changes.append(f"{path.name}: dropped {key}{sep} (no longer applicable)")
             continue
 
         new_lines.append(line)
@@ -283,8 +313,11 @@ def _rewrite_env_file(
     # Additions — append unset defaults at the bottom of the file.
     # Use the pre-existing set (what the user originally had) so we
     # don't double-add anything just because a rename produced the key.
+    # Skip for YAML compose files: appending bare ``KEY=value`` lines
+    # would corrupt structure, and the new keys belong in service blocks
+    # the user maintains, not at file scope.
     additions_added: list[str] = []
-    for env_key, default, comment in ENV_ADDITIONS:
+    for env_key, default, comment in () if is_compose else ENV_ADDITIONS:
         if env_key in pre_existing_keys or env_key in written_keys:
             continue
         if not additions_added:
@@ -446,6 +479,8 @@ def run(project_root: Path, dry_run: bool, quiet: bool) -> MigrationReport:
     for env_file in (
         project_root / ".env",
         project_root / ".env.example",
+        project_root / "docker-compose.yml",
+        project_root / "docker-compose.yaml",
     ):
         _rewrite_env_file(env_file, dry_run, changes)
 

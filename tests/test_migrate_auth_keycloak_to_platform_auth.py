@@ -229,6 +229,54 @@ def test_env_rename_skips_when_canonical_already_set(tmp_path: Path) -> None:
     assert drop_msg is not None, "codemod should report dropping the alias when canonical is set"
 
 
+# ------------------------------------------------------------- docker-compose
+
+
+def _legacy_compose_text() -> str:
+    """A docker-compose.yml carrying Keycloak env in YAML ``KEY: value``
+    form — the indented service-environment shape forge generates."""
+    return (
+        "services:\n"
+        "  api:\n"
+        "    image: app\n"
+        "    environment:\n"
+        "      DATABASE_URL: postgres://x\n"
+        "      KEYCLOAK_CLIENT_ID: multi-tenant-gateway\n"
+        "      KEYCLOAK_CLIENT_SECRET: secret-value\n"
+        "      KEYCLOAK_REALM: app\n"
+        "      APP__SECURITY__AUTH__SERVER_URL: http://keycloak:8080\n"
+        "      APP__SECURITY__AUTH__REALM: app\n"
+        "      OTHER_VAR: keep-me\n"
+    )
+
+
+def test_compose_keycloak_env_rewritten(tmp_path: Path) -> None:
+    """The docstring promises the codemod rewrites docker-compose.yml,
+    matching YAML ``KEY: value`` form. Stale Keycloak env must not
+    survive in compose after migration."""
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(_legacy_compose_text(), encoding="utf-8")
+
+    report = run(tmp_path, dry_run=False, quiet=True)
+    assert report.applied
+
+    new_text = compose.read_text(encoding="utf-8")
+    # Renames applied in YAML form.
+    assert "GATEKEEPER_CLIENT_ID: multi-tenant-gateway" in new_text
+    assert "GATEKEEPER_CLIENT_SECRET: secret-value" in new_text
+    assert "GATEKEEPER_ISSUER: http://keycloak:8080" in new_text
+    # Legacy keys gone.
+    assert "KEYCLOAK_CLIENT_ID:" not in new_text
+    assert "KEYCLOAK_CLIENT_SECRET:" not in new_text
+    assert "APP__SECURITY__AUTH__SERVER_URL:" not in new_text
+    # Removals.
+    assert "KEYCLOAK_REALM:" not in new_text
+    assert "APP__SECURITY__AUTH__REALM:" not in new_text
+    # Untouched.
+    assert "DATABASE_URL: postgres://x" in new_text
+    assert "OTHER_VAR: keep-me" in new_text
+
+
 # ---------------------------------------------------------------- python deps
 
 

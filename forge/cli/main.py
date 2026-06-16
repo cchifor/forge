@@ -22,7 +22,7 @@ from forge.cli.commands.schema import _dispatch_schema
 from forge.cli.commands.update import _run_update
 from forge.cli.completion import _print_completion
 from forge.cli.loader import _load_config_file
-from forge.cli.parser import _is_headless, _parse_args
+from forge.cli.parser import _is_headless, _orphan_subflags, _parse_args
 from forge.config import FrontendFramework, ProjectConfig
 from forge.docker_manager import boot
 from forge.errors import (
@@ -173,6 +173,23 @@ def main() -> None:
             level=getattr(args, "log_level", None),
             fmt="json" if getattr(args, "log_json", False) else None,
         )
+
+    # Reject orphan verb sub-flags (e.g. ``--mode`` / ``--project-path`` /
+    # ``--no-template-update`` passed without ``--update`` etc.). Without
+    # this gate they deviate from the bare-``forge`` baseline and — via
+    # ``--yes`` or a TTY confirm — scaffold a default project into the cwd
+    # instead of erroring. Exit 2 (usage error) with a clear message.
+    orphans = _orphan_subflags(args)
+    if orphans:
+        joined = ", ".join(orphans)
+        msg = (
+            f"Sub-flag(s) {joined} require their parent verb (e.g. --update, "
+            "--harvest, --verify) to be present."
+        )
+        if getattr(args, "json_output", False):
+            print(json.dumps({"error": msg, "exit_code": 2}), file=sys.stdout)
+        print(f"  Usage error: {msg}", file=sys.stderr)
+        sys.exit(2)
 
     # Resolve telemetry config (CLI flag > env var > default=off). Installs
     # the module-level singleton; command modules call ``telemetry.emit(...)``

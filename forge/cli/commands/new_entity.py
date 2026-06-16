@@ -72,6 +72,18 @@ def build_entity_yaml(name: str, fields_spec: str) -> str:
     """
     parsed_fields = parse_field_spec(fields_spec)
 
+    # CRUD baseline columns are always injected; a user field that reuses one
+    # of these names would emit duplicate columns and break the generated
+    # alembic ``op.create_table``. Reject the collision up front.
+    baseline_names = {"id", "customer_id", "user_id", "created_at", "updated_at"}
+    for f in parsed_fields:
+        if f["name"] in baseline_names:
+            raise GeneratorError(
+                f"field {f['name']!r} collides with a reserved CRUD baseline "
+                f"column (id, customer_id, user_id, created_at, updated_at); "
+                f"rename it."
+            )
+
     has_name = any(f["name"] == "name" for f in parsed_fields)
 
     fields: list[dict] = []

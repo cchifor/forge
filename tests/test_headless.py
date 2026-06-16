@@ -84,7 +84,7 @@ class TestEveryFlagTriggersHeadless:
         return [flag, "sample"]
 
     def test_every_option_flag_triggers_headless(self):
-        from forge.cli.parser import _MODE_ONLY_DESTS, _build_parser
+        from forge.cli.parser import _MODE_ONLY_DESTS, _SUBFLAG_PARENTS, _build_parser
 
         parser = _build_parser()
         missed: list[str] = []
@@ -96,6 +96,12 @@ class TestEveryFlagTriggersHeadless:
             if type(action).__name__ in ("_HelpAction", "_VersionAction"):
                 continue
             if action.dest in _MODE_ONLY_DESTS:
+                continue
+            # Verb sub-flags passed alone are orphans: they are rejected with
+            # exit 2 by ``main()`` (not silently discarded), so by design they
+            # must NOT flip _is_headless. Their gating is covered by
+            # TestOrphanSubflags below.
+            if action.dest in _SUBFLAG_PARENTS:
                 continue
             argv = self._sample_argv(action)
             if argv is None:
@@ -122,6 +128,67 @@ class TestEveryFlagTriggersHeadless:
 
         ns = _build_parser().parse_args(["--platform", "monolithic"])
         assert _is_headless(ns)
+
+
+class TestOrphanSubflags:
+    """Regression: verb sub-flags (e.g. ``--mode``, ``--project-path``,
+    ``--no-template-update``) passed WITHOUT their parent verb
+    (``--update`` etc.) must NOT be treated as generation flags. Pre-fix
+    they deviated from the bare-``forge`` baseline, flipped ``_is_headless``
+    to True, and — with ``--yes`` or a TTY confirm — scaffolded a default
+    project into the cwd instead of erroring exit 2.
+    """
+
+    def test_orphan_mode_detected(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        # --mode belongs to --update; passed alone it is an orphan.
+        ns = _build_parser().parse_args(["--mode", "overwrite"])
+        assert _orphan_subflags(ns) == ["--mode"]
+
+    def test_orphan_project_path_detected(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(["--project-path", "/tmp/x"])
+        assert _orphan_subflags(ns) == ["--project-path"]
+
+    def test_orphan_no_template_update_detected(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(["--no-template-update"])
+        assert _orphan_subflags(ns) == ["--no-template-update"]
+
+    def test_orphan_subflag_not_headless(self):
+        # The core bug: an orphan sub-flag must not flip _is_headless, which
+        # would otherwise scaffold a default project into cwd.
+        from forge.cli.parser import _build_parser, _is_headless, _orphan_subflags
+
+        ns = _build_parser().parse_args(["--mode", "overwrite"])
+        assert _orphan_subflags(ns), "expected --mode to be reported as orphan"
+        assert not _is_headless(ns), (
+            "orphan sub-flag --mode flipped _is_headless -> would scaffold a "
+            "default project into cwd instead of erroring exit 2"
+        )
+
+    def test_subflag_with_parent_is_not_orphan(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        # With its parent verb present, the sub-flag is legitimate.
+        ns = _build_parser().parse_args(["--update", "--mode", "overwrite"])
+        assert _orphan_subflags(ns) == []
+
+    def test_parent_verb_alone_is_not_orphan(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        ns = _build_parser().parse_args(["--update"])
+        assert _orphan_subflags(ns) == []
+
+    def test_plain_generation_flags_are_not_orphans(self):
+        from forge.cli.parser import _build_parser, _orphan_subflags
+
+        # A real generation flag (not a verb sub-flag) is never an orphan.
+        ns = _build_parser().parse_args(["--project-name", "demo"])
+        assert _orphan_subflags(ns) == []
 
 
 class TestBuildConfig:
