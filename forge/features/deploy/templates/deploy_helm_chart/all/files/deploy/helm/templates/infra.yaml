@@ -214,7 +214,7 @@ stringData:
   service_registry.yaml: |
     # Placeholder S2S registry — override with your real registry (argon2
     # hashes of per-service shared secrets). See docs/DEPLOYMENT.md.
-    services: {}
+    services: []
 ---
 apiVersion: apps/v1
 kind: Deployment

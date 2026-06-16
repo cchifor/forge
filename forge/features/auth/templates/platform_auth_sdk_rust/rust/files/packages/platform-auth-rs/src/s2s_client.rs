@@ -454,9 +454,12 @@ impl S2SClient {
         // default defensively (matching Python `expires_in <= 0` and
         // Node `rawExpiresIn > 0 ? rawExpiresIn : 300`) so a missing or
         // non-positive value yields a usable TTL instead of a token
-        // that's never cached.
+        // that's never cached. The field is deserialized as a signed
+        // `i64` so a negative wire value parses (then falls through to
+        // the 300 default) instead of failing serde outright — `u64`
+        // can't represent it.
         let expires_in = match payload.expires_in {
-            Some(n) if n > 0 => n,
+            Some(n) if n > 0 => n as u64,
             _ => 300,
         };
         let safety = self.config.safety_margin_seconds.min(expires_in);
@@ -472,7 +475,7 @@ impl S2SClient {
 struct TokenResponse {
     access_token: String,
     #[serde(default)]
-    expires_in: Option<u64>,
+    expires_in: Option<i64>,
 }
 
 /// Decode a JWT's `jti` without verifying the signature.
