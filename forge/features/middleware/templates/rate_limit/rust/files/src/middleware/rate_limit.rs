@@ -61,9 +61,8 @@ impl RateLimiter {
             let capacity = self.capacity;
             let rate = self.rate_per_sec;
             buckets.retain(|_, b| {
-                let refilled =
-                    (b.tokens + now.duration_since(b.last_refill).as_secs_f64() * rate)
-                        .min(capacity);
+                let refilled = (b.tokens + now.duration_since(b.last_refill).as_secs_f64() * rate)
+                    .min(capacity);
                 // Keep buckets that still owe tokens (actively limited); drop
                 // ones that have fully refilled and are effectively idle.
                 refilled < capacity

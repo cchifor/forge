@@ -292,7 +292,9 @@ def _rewrite_env_file(
                 # file? Drop the alias without overwriting — the user's
                 # explicit canonical wins.
                 if new in pre_existing_keys:
-                    changes.append(f"{path.name}: dropped {old}{sep} (canonical {new}{sep} already set)")
+                    changes.append(
+                        f"{path.name}: dropped {old}{sep} (canonical {new}{sep} already set)"
+                    )
                 else:
                     new_lines.append(re.sub(rf"^{re.escape(prefix)}", f"{indent}{new}{sep}", line))
                     written_keys.add(new)

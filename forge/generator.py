@@ -1389,10 +1389,7 @@ def _generate_frontend(
     # dst_path set to the parent.
     uses_subdir = frontend_uses_subdirectory(fw)
     app_dir = project_root / "apps" / config.frontend_slug
-    if uses_subdir:
-        dst = app_dir
-    else:
-        dst = project_root / "apps"
+    dst = app_dir if uses_subdir else project_root / "apps"
     dst.mkdir(parents=True, exist_ok=True)
     base_dir = variant.base_template_dir if variant is not None else ""
     if base_dir:

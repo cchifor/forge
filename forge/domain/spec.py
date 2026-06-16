@@ -184,8 +184,7 @@ def _load_field(path: Path, entry: Any) -> EntityField:
         # bool is a subclass of int; reject it explicitly.
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise GeneratorError(
-                f"{path}: field {name!r} `{bound}` must be a non-negative integer "
-                f"(got {value!r})"
+                f"{path}: field {name!r} `{bound}` must be a non-negative integer (got {value!r})"
             )
 
     return EntityField(
