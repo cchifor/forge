@@ -17,11 +17,12 @@ Reach the app at: http(s)://{{ .Values.ingress.host }}/
 {{- if .Values.infra.inCluster }}
 
 NOTE: infra.inCluster=true — in-cluster Postgres/Redis/Keycloak are running.
-These are for dev/demo only. Use managed datastores (externalServices) in prod.
+These are for dev/demo only. Point at managed datastores in prod (override each
+workload's env/secretEnv hosts in values-prod.yaml).
 {{- else }}
 
-Datastores are EXTERNAL: make sure externalServices.* point at your managed
-Postgres/Redis/Keycloak, and that each workload's Secret carries real
+Datastores are EXTERNAL: make sure each workload's env/secretEnv hosts point at
+your managed Postgres/Redis/Keycloak, and that each Secret carries real
 credentials (forge ships placeholders only — see deploy/helm/templates/secret.yaml).
 {{- end }}
 

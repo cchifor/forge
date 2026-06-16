@@ -40,8 +40,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from forge.fragments import FRAGMENT_REGISTRY
-from forge.injectors.sentinels import _read_block_body
+from forge.fragments import FRAGMENT_REGISTRY, MARKER_PREFIX
+from forge.injectors.sentinels import _indent_of, _read_block_body, _sentinel_tag
 from forge.sync.manifest import read_forge_toml, write_forge_toml
 from forge.sync.merge import MergeBlockCollector, sha256_of_file, sha256_of_text
 from forge.sync.project_to_forge.accept._shared import (
@@ -423,7 +423,19 @@ def _accept_block(
             False,
         )
 
-    upstream_sha = sha256_of_text(upstream_snippet)
+    # ``_read_block_body`` returns the body verbatim — i.e. each line still
+    # carries the marker indent ``sentinels._render_block`` stamped on it.
+    # The upstream snippet from ``inject.yaml`` is recorded un-indented, so
+    # we must reindent it to the block's on-disk indent before hashing;
+    # otherwise any block nested below column 0 would never match (the hash
+    # of the indented body vs. the raw snippet) and would be wrongly
+    # classified ``skipped-not-applied`` and never re-stamped. Mirror
+    # ``_render_block``'s body construction exactly.
+    block_indent = _read_block_indent(project_file, feature_key, marker)
+    reindented_upstream = "".join(
+        f"{block_indent}{line}\n" for line in upstream_snippet.splitlines()
+    )
+    upstream_sha = sha256_of_text(reindented_upstream)
     if upstream_sha != current_sha:
         # Upstream still emits the pre-edit body (or a different post-edit
         # body — partial landing). Either way, the round-trip isn't
@@ -832,6 +844,26 @@ def _resolve_upstream_block_snippet(
             if marker_matches and _matches_target_tail(str(rec.target), target_path):
                 return str(rec.snippet)
     return None
+
+
+def _read_block_indent(file: Path, feature_key: str, marker: str) -> str:
+    """Indent ``sentinels._render_block`` stamped on the on-disk block.
+
+    The renderer prefixes every body + sentinel line with the marker's
+    indent, so the BEGIN sentinel line carries it. We read it back to
+    reindent the (un-indented) upstream ``inject.yaml`` snippet before
+    hashing, so an indented block's body and the upstream snippet compare
+    on equal footing. Returns ``""`` when the file / sentinel is missing —
+    the caller's hash compare then degrades to the zero-indent case.
+    """
+    if not file.is_file():
+        return ""
+    tag = _sentinel_tag(feature_key, marker)
+    begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
+    for line in file.read_text(encoding="utf-8").splitlines():
+        if begin_needle in line:
+            return _indent_of(line)
+    return ""
 
 
 def _matches_target_tail(impl_target: str, manifest_target: str) -> bool:

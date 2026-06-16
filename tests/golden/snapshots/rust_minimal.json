@@ -161,12 +161,12 @@
       "sha256": "d40a7818e499170e"
     },
     "services/api/src/middleware/rate_limit.rs": {
-      "size": 2872,
-      "sha256": "4072d322f7b8d402"
+      "size": 5911,
+      "sha256": "1ac4f7e8acc8b032"
     },
     "services/api/src/middleware/security_headers.rs": {
-      "size": 1592,
-      "sha256": "9dbd078cf55ca0ed"
+      "size": 2002,
+      "sha256": "270142ac48f24dbe"
     },
     "services/api/src/models/enums/approval_mode.rs": {
       "size": 349,

@@ -24,6 +24,10 @@ workloads:
       pullPolicy: IfNotPresent
     replicaCount: 2
     containerPort: {{ be.port }}
+    # The Postgres database this backend owns (matches the db_name in the DB URL
+    # below). When infra.inCluster=true, templates/infra.yaml CREATEs each of
+    # these in the in-cluster Postgres before the migrate hook runs.
+    dbName: {{ be.db_name }}
     # A migration runs as a pre-install/pre-upgrade Helm hook Job before the
     # Deployment rolls (see templates/jobs.yaml).
     hasMigrations: {{ "true" if be.has_migrations else "false" }}
@@ -133,21 +137,14 @@ ingress:
       service: {{ be.name }}
 {%- endfor %}
 
-# Datastores. EXTERNAL by default (production posture): point these at your
-# managed Postgres/Redis/Keycloak. Flip infra.inCluster=true to spin up
-# in-cluster stand-ins (kind/minikube only — NOT production-grade).
-externalServices:
-  postgres:
-    host: postgres.example.com
-    port: 5432
-{%- if topology.include_keycloak %}
-  redis:
-    host: redis.example.com
-    port: 6379
-  keycloak:
-    url: https://keycloak.example.com
-    realm: forge
-{%- endif %}
+# Datastores. EXTERNAL by default (production posture). There is no separate
+# "externalServices" host knob: each workload reaches its datastores through the
+# hosts baked into its env/secretEnv above (the DB URL host, AUTH server_url,
+# REDIS/GATEKEEPER URLs). To point at managed Postgres/Redis/Keycloak, override
+# those per-workload values in values-prod.yaml — e.g. set each workload's
+# secretEnv.APP__DB__URL (or DATABASE_URL) to your managed Postgres DSN. Flip
+# infra.inCluster=true to spin up in-cluster stand-ins (kind/minikube only —
+# NOT production-grade), which the baked-in hosts already resolve.
 
 infra:
   inCluster: false

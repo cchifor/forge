@@ -257,55 +257,46 @@ class TestCorpusCovers:
         )
 
 
-class TestExtrasGapIsAcknowledged:
-    """Pin the known ``additionalProperties: true`` gap so a fix gets
-    noticed.
+class TestExtrasRoundTrips:
+    """The ``additionalProperties: true`` gap is now CLOSED.
 
     The AG-UI ``AgentState`` schema allows ``additionalProperties:
     true`` (callers can attach arbitrary state). Pydantic with
-    ``ConfigDict(extra="allow")`` round-trips extras correctly; the
-    generated Dart class has an ``extras`` field but ``fromJson``
-    doesn't fill it and ``toJson`` doesn't emit it (see
-    ``packages/forge-canvas-dart/lib/src/generated/events.dart`` —
-    ``class AgentState``). The CORPUS deliberately omits extras so
-    the cross-runtime byte-equality contract test isn't asserting an
-    asymmetry that lives in Init #8's codegen surface.
-
-    This pin documents the gap in code so a future Dart codegen fix
-    (the right place: ``forge/codegen/event_union.py:emit_dart``)
-    causes this test to fail with a "remove the gap pin" message,
-    forcing the contract corpus to grow an extras case at the same
-    time.
+    ``ConfigDict(extra="allow")`` round-trips extras correctly. The
+    generated Dart class declares an ``extras`` map; this test pins
+    that the Dart codegen now also *reads* unknown keys into ``extras``
+    in ``fromJson`` and *writes* them back in ``toJson`` so unknown
+    keys survive a Dart round-trip (#34).
     """
 
-    def test_dart_agent_state_tojson_does_not_emit_extras(self) -> None:
-        """The shipped Dart ``AgentState.toJson`` must NOT yet round-
-        trip extras. Codex review flagged the asymmetry; we acknowledge
-        it as a known gap rather than silently mask it. Init #8 owns
-        the canvas-decoder codegen and would fix this in
-        ``emit_dart``.
+    def test_dart_agent_state_round_trips_extras(self) -> None:
+        """The generated Dart ``AgentState.fromJson``/``toJson`` must
+        read and write ``extras`` for an ``additionalProperties: true``
+        schema, so unknown keys are not dropped on round-trip.
         """
-        dart_src = (
+        from forge.codegen.ui_protocol import _dart_for_schema, load_schema
+
+        schema = load_schema(
             Path(__file__).resolve().parent.parent
-            / "packages"
-            / "forge-canvas-dart"
-            / "lib"
-            / "src"
-            / "generated"
-            / "events.dart"
-        ).read_text(encoding="utf-8")
-        # Pinned by source-level inspection: the AgentState toJson
-        # block must contain the declared fields and NOT include
-        # ``extras``. The day Init #8 lands a fix, the assertion
-        # below flips and this test fails with "extras now round-
-        # trips — extend CORPUS to cover the case and delete this
-        # pin".
-        assert "'todos': todos" in dart_src, "AgentState.toJson surface drifted"
-        assert "'extras'" not in dart_src, (
-            "AgentState.toJson now emits 'extras' — the Init #8 codegen "
-            "fix landed. Extend tests/test_canvas_decoder_contract.py "
-            "CORPUS['agent-state'] to include extras and delete this "
-            "guard."
+            / "forge"
+            / "templates"
+            / "_shared"
+            / "ui-protocol"
+            / "agent_state.schema.json"
+        )
+        dart_src = _dart_for_schema(schema)
+
+        # toJson must splat the extras map back into the output so
+        # unknown keys survive serialisation.
+        assert "...extras" in dart_src, (
+            "AgentState.toJson does not write extras — unknown keys are "
+            "dropped on round-trip (#34)."
+        )
+        # fromJson must collect the unknown keys into extras. The known
+        # declared keys are excluded; everything else lands in extras.
+        assert "extras:" in dart_src, (
+            "AgentState.fromJson does not populate extras — unknown keys "
+            "are dropped on round-trip (#34)."
         )
 
 

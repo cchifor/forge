@@ -272,11 +272,33 @@ class TestClaimValidation:
 
 
 class TestTrustMap:
-    async def test_unknown_tenant_rejected(self, auth_env: TestAuthEnvironment):
+    async def test_unknown_tenant_accepted_by_default(self, auth_env: TestAuthEnvironment):
+        """Default ``strict_trust=False`` is permissive on an unregistered
+        tenant — the single-issuer default. This is what lets a guard built
+        over an *empty* trust map (e.g. the ``oidc_generic`` provider, which
+        trusts one external issuer for every tenant) still accept valid tokens.
+        Per-tenant issuer binding + suspension apply only to registered tenants.
+        """
         unknown_tenant = UUID("99999999-9999-9999-9999-999999999999")
         token = auth_env.token(tenant_id=unknown_tenant)
-        with pytest.raises(InvalidToken, match="unknown tenant"):
-            await auth_env.auth_guard.verify(token)
+        identity = await auth_env.auth_guard.verify(token)
+        assert identity.tenant_id == unknown_tenant
+
+    async def test_unknown_tenant_rejected_under_strict_trust(
+        self, auth_env: TestAuthEnvironment
+    ):
+        """Fail-closed is opt-in: a guard built with ``strict_trust=True``
+        rejects any tenant absent from the trust map (hybrid-realm posture)."""
+        strict_guard = AuthGuard(
+            audience=auth_env.audience,
+            jwks=auth_env.jwks_cache,
+            trust_map=auth_env.trust_map,
+            strict_trust=True,
+        )
+        unknown_tenant = UUID("99999999-9999-9999-9999-999999999999")
+        token = auth_env.token(tenant_id=unknown_tenant)
+        with pytest.raises(IssuerNotTrusted, match="not registered"):
+            await strict_guard.verify(token)
 
     async def test_mismatched_issuer_raises_issuer_not_trusted(self, auth_env: TestAuthEnvironment):
         # Tenant A is registered with default issuer; mint a token claiming

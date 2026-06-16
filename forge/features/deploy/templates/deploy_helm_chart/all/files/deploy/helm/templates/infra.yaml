@@ -1,11 +1,34 @@
 {{- /* In-cluster datastores — DEV/DEMO ONLY (kind, minikube).
 
        Disabled by default (infra.inCluster=false): the production posture is
-       managed/external Postgres, Redis, and Keycloak referenced via
-       externalServices. Flip infra.inCluster=true to get throwaway in-cluster
-       stand-ins. These are intentionally minimal and NOT production-grade. */ -}}
+       managed/external Postgres, Redis, and Keycloak reached through the hosts
+       baked into each workload's env/secretEnv (override in values-prod.yaml).
+       Flip infra.inCluster=true to get throwaway in-cluster stand-ins. These are
+       intentionally minimal and NOT production-grade. */ -}}
 {{- if .Values.infra.inCluster }}
 {{- if .Values.infra.postgres }}
+---
+# Per-backend database bootstrap. The Postgres image only creates a single
+# default database (POSTGRES_DB, here "postgres"), but every workload's DB URL
+# points at its own db_name. This init script — mounted at the image's
+# /docker-entrypoint-initdb.d hook — CREATEs each backend's database on first
+# boot, so the migrate hook never hits "database does not exist".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: postgres
+data:
+  10-create-databases.sql: |
+    -- Created from .Values.workloads[*].dbName (one DATABASE per backend).
+    {{- range $name, $w := .Values.workloads }}
+    {{- if $w.dbName }}
+    SELECT 'CREATE DATABASE "{{ $w.dbName }}"'
+      WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ $w.dbName }}')\gexec
+    {{- end }}
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -46,6 +69,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            # Per-backend CREATE DATABASE runs once, on first init (empty PGDATA).
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: initdb
+          configMap:
+            name: postgres-initdb
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -148,16 +148,54 @@ def _pydantic_field(f: EntityField) -> str:
     py_type = _pydantic_type(f)
     suffix = " | None" if f.optional else ""
     constraints = _pydantic_constraints(f)
-    if f.optional and not constraints:
-        default = " = None"
-    elif constraints:
+    has_default = f.default is not None and not f.primary_key
+    default_literal = _pydantic_default_literal(f) if has_default else None
+    if constraints:
         args = constraints.copy()
-        if f.optional:
+        if default_literal is not None:
+            args.insert(0, f"default={default_literal}")
+        elif f.optional:
             args.insert(0, "None")
         default = f" = Field({', '.join(args)})"
+    elif default_literal is not None:
+        default = f" = {default_literal}"
+    elif f.optional:
+        default = " = None"
     else:
         default = ""
     return f"    {f.name}: {py_type}{suffix}{default}"
+
+
+def _pydantic_default_literal(f: EntityField) -> str | None:
+    """Render ``f.default`` as a Python literal for the Pydantic model.
+
+    Mirrors the SQLA emitter's ``server_default`` parity: enum defaults
+    reference the enum member name; bool/int/float/str render as their
+    Python ``repr``.
+    """
+    value = f.default
+    if f.type is FieldType.ENUM and f.enum:
+        return f"{f.enum}.{value}"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return _python_str_literal(value)
+    return None
+
+
+def _python_str_literal(value: str) -> str:
+    """Render ``value`` as a valid, fully-escaped Python string literal.
+
+    Simple strings (no quote/backslash/control chars) keep the familiar
+    double-quoted form for readability and parity with prior output; any
+    string that the naive ``"..."`` form cannot hold safely falls back to
+    ``repr`` so quotes, backslashes, and newlines are escaped correctly.
+    """
+    if '"' not in value and "\\" not in value and value.isprintable():
+        return f'"{value}"'
+    return repr(value)
 
 
 def _pydantic_type(f: EntityField) -> str:

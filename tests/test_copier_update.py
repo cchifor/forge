@@ -359,6 +359,53 @@ class TestProvenanceRestamp:
         assert provenance["services/backend/frag.py"]["sha256"] == "stale_frag_sha"
         assert provenance["services/backend/frag.py"]["fragment_version"] == "0.1.0"
 
+    def test_sibling_prefix_dir_not_restamped(self, tmp_path: Path) -> None:
+        """Sibling backend whose path is a string-prefix of the target is NOT contained.
+
+        ``services/api-gateway`` must not be treated as inside
+        ``services/api``: a component-boundary-blind ``startswith`` check
+        wrongly restamps the sibling's provenance, corrupting cross-backend
+        provenance on re-render.
+        """
+        from forge.sync.merge import sha256_of_file
+
+        services = tmp_path / "services"
+        target_dir = services / "api"
+        target_dir.mkdir(parents=True)
+        sibling_dir = services / "api-gateway"
+        sibling_dir.mkdir(parents=True)
+
+        in_file = target_dir / "main.py"
+        in_file.write_text("in content\n", encoding="utf-8")
+        sibling_file = sibling_dir / "main.py"
+        sibling_file.write_text("sibling content\n", encoding="utf-8")
+
+        provenance: dict[str, dict[str, Any]] = {
+            "services/api/main.py": {
+                "origin": "base-template",
+                "sha256": "stale_in_sha",
+                "template_version": "0.1.0",
+            },
+            "services/api-gateway/main.py": {
+                "origin": "base-template",
+                "sha256": "stale_sibling_sha",
+                "template_version": "0.1.0",
+            },
+        }
+        mutated = restamp_base_template_provenance(
+            tmp_path,
+            provenance=provenance,
+            language="python",
+            target_dir=target_dir,
+            new_version="2.0.0",
+        )
+        # Only the file genuinely inside services/api is restamped.
+        assert mutated == 1
+        assert provenance["services/api/main.py"]["template_version"] == "2.0.0"
+        # The sibling is outside the target subtree and must be untouched.
+        assert provenance["services/api-gateway/main.py"]["sha256"] == "stale_sibling_sha"
+        assert provenance["services/api-gateway/main.py"]["template_version"] == "0.1.0"
+
     def test_idempotent_when_sha_already_matches(self, tmp_path: Path) -> None:
         """Re-running restamp on unchanged content returns mutated=0."""
         from forge.sync.merge import sha256_of_file
@@ -384,6 +431,45 @@ class TestProvenanceRestamp:
             new_version="2.0.0",
         )
         assert mutated == 0
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight sidecar path containment
+# ---------------------------------------------------------------------------
+
+
+class TestPresurfacePathContainment:
+    def test_sibling_prefix_dir_not_presurfaced(self, tmp_path: Path) -> None:
+        """A base-template file in a sibling prefix dir gets no pre-flight sidecar.
+
+        ``services/api-gateway`` is not inside ``services/api``; the
+        pre-flight must skip its files so we don't write edit-trail
+        sidecars into a backend the current Copier call never touches.
+        """
+        from forge.sync.forge_to_project.template_update import (
+            _presurface_user_modified_sidecars,
+        )
+
+        services = tmp_path / "services"
+        target_dir = services / "api"
+        target_dir.mkdir(parents=True)
+        sibling_dir = services / "api-gateway"
+        sibling_dir.mkdir(parents=True)
+
+        (target_dir / "main.py").write_text("in content\n", encoding="utf-8")
+        (sibling_dir / "main.py").write_text("sibling content\n", encoding="utf-8")
+
+        written = _presurface_user_modified_sidecars(
+            target_dir,
+            ("services/api/main.py", "services/api-gateway/main.py"),
+            tmp_path,
+        )
+        names = {p.name for p in written}
+        # The in-target file is surfaced; the sibling-prefix one is not.
+        assert (target_dir / "main.py.forge-merge") in written
+        assert not (sibling_dir / "main.py.forge-merge").exists()
+        assert "main.py.forge-merge" in names
+        assert len(written) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -498,3 +584,110 @@ class TestEndToEndAgainstGenerator:
             update_project(project_root, quiet=True)
         assert mock_run.call_count == 0
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Two-stage (overlay) layouts — base template must also be re-rendered
+# ---------------------------------------------------------------------------
+
+
+class TestTwoStageBaseUpdate:
+    """A two-stage layout records only the overlay ``_src_path`` in its
+    ``.copier-answers.yml``; ``copier.run_update(dst_path=...)`` therefore
+    re-renders only the overlay and silently skips the shared base. The
+    updater must drive Copier against the *base* first, then the overlay,
+    so base-template changes are not lost on ``forge --update``.
+    """
+
+    def _resolve_src_path(self, call_kwargs: dict[str, Any], dst: Path) -> str:
+        """Read the effective ``_src_path`` a ``run_update`` call targets.
+
+        Copier resolves the template source from the answers file under
+        ``dst_path`` (the default ``.copier-answers.yml`` or whatever
+        ``answers_file`` overrides it with). Mirror that resolution so the
+        test can assert *which* template each Copier invocation updates.
+        """
+        import yaml
+
+        answers_rel = call_kwargs.get("answers_file") or ".copier-answers.yml"
+        answers_path = Path(call_kwargs["dst_path"]) / answers_rel
+        data = yaml.safe_load(answers_path.read_text(encoding="utf-8"))
+        return str(data["_src_path"])
+
+    def test_base_then_overlay_both_updated(self, tmp_path: Path) -> None:
+        """run_template_update re-renders the base *and* the overlay.
+
+        RED: today only one ``copier.run_update`` call fires, and it
+        targets the overlay ``_src_path`` recorded in
+        ``.copier-answers.yml`` — the shared base is never updated.
+        """
+        target = tmp_path / "apps" / "frontend"
+        target.mkdir(parents=True)
+        base_src = tmp_path / "templates" / "apps" / "vue-frontend-template"
+        overlay_src = tmp_path / "templates" / "layouts" / "vue" / "docs"
+        base_src.mkdir(parents=True)
+        overlay_src.mkdir(parents=True)
+
+        # The on-disk answers file records ONLY the overlay src (this is
+        # exactly what the two-stage generator stamps).
+        (target / ".copier-answers.yml").write_text(
+            f"_src_path: {overlay_src}\nproject_name: x\n",
+            encoding="utf-8",
+        )
+
+        task = TemplateUpdateTask(
+            language="vue",
+            project_version="0.5.0",
+            current_version="1.0.0",
+            target_dir=target,
+            template_src=overlay_src,
+            base_template_src=base_src,
+        )
+
+        seen: list[str] = []
+
+        def _record(**kwargs: Any) -> None:
+            seen.append(self._resolve_src_path(kwargs, target))
+
+        with patch(
+            "forge.sync.forge_to_project.template_update.copier.run_update",
+            side_effect=_record,
+        ):
+            outcome = run_template_update(task, project_root=tmp_path)
+
+        # Both the base and the overlay were re-rendered.
+        assert str(base_src) in seen, (
+            f"base template was never re-rendered; Copier only saw {seen}"
+        )
+        assert str(overlay_src) in seen
+        # Base must be updated before the overlay re-applies on top.
+        assert seen.index(str(base_src)) < seen.index(str(overlay_src))
+        assert outcome.status == "applied"
+        # The on-disk answers file is left recording the overlay src (the
+        # base-update scaffolding must not corrupt the persisted answers).
+        import yaml
+
+        persisted = yaml.safe_load(
+            (target / ".copier-answers.yml").read_text(encoding="utf-8")
+        )
+        assert persisted["_src_path"] == str(overlay_src)
+
+    def test_single_stage_unchanged(self, tmp_path: Path) -> None:
+        """A self-contained (single-render) task still fires exactly once."""
+        target = tmp_path / "backend"
+        target.mkdir()
+        (target / ".copier-answers.yml").write_text(
+            "_src_path: /tmpl\nproject_name: x\n", encoding="utf-8"
+        )
+        task = TemplateUpdateTask(
+            language="python",
+            project_version="0.5.0",
+            current_version="1.0.0",
+            target_dir=target,
+            template_src=tmp_path / "template",
+        )
+        with patch(
+            "forge.sync.forge_to_project.template_update.copier.run_update"
+        ) as mock_run:
+            run_template_update(task, project_root=tmp_path)
+        assert mock_run.call_count == 1

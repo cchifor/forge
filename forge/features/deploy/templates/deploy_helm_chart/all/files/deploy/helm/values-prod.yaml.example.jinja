@@ -11,19 +11,19 @@ ingress:
   host: {{ topology.project_slug | replace("_", "-") }}.your-domain.com
   className: nginx
 
-# Point at your managed datastores (the default posture is external/managed):
-externalServices:
-  postgres:
-    host: your-postgres-host
-    port: 5432
-
-# Per-workload image tags + scaling (uncomment and set real values):
+# Point at your managed datastores (the default posture is external/managed) and
+# set real image tags + scaling per workload. Each backend reaches Postgres
+# through the DB URL in its secretEnv, so a managed DB is wired by overriding
+# that URL (host + credentials) here — NOT via a separate host knob.
 # workloads:
 #   <backend-name>:
 #     image:
 #       repository: ghcr.io/your-org/{{ topology.project_slug | replace("_", "-") }}-<backend-name>
 #       tag: "v1.2.3"
 #     replicaCount: 3
+#     secretEnv:
+#       # Real managed-Postgres DSN (driver prefix matches the backend language):
+#       APP__DB__URL: "postgresql+asyncpg://USER:PASS@your-postgres-host:5432/<db>"
 
 # For demos only — spin up in-cluster Postgres/Redis instead of managed ones:
 # infra:

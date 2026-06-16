@@ -485,6 +485,117 @@ class TestAcceptHarvestedBlockHappyPath:
         assert data.frontend.framework == "flutter"
         assert data.frontend.layout == "threepane"
 
+    def test_indented_block_restamps_when_upstream_matches(self, tmp_path: Path) -> None:
+        """Indented merge-blocks must round-trip, not only zero-indent ones.
+
+        Regression (#4): ``sentinels._render_block`` stamps every body
+        line with the marker's indent, so ``_read_block_body`` returns an
+        INDENTED body. The upstream ``inject.yaml`` snippet is recorded
+        un-indented. Comparing the indented on-disk body's hash against
+        the raw upstream hash never matched for any indented block, so the
+        accept step wrongly classified it ``skipped-not-applied`` and never
+        re-stamped — only zero-indent blocks round-tripped.
+
+        Here the on-disk body (indented via the real renderer) equals the
+        upstream snippet reindented to the block indent, so the round-trip
+        is complete and the manifest must be re-stamped.
+        """
+        from forge.injectors.sentinels import _render_block, _sentinel_tag
+
+        fragment_name = "test_block_indented"
+        marker_bare = "DEMO_MARKER"
+        marker = f"{MARKER_PREFIX}{marker_bare}"
+        indent = "    "  # 4 spaces — the block lives inside a function body
+
+        # The raw upstream snippet (as it would appear in inject.yaml),
+        # un-indented. This is what the fragment ships.
+        raw_snippet = "x = 1\ny = 2"
+
+        # Lay the block down on disk exactly as the injector would: the
+        # renderer stamps every line (sentinels + body) with the indent.
+        backend_dir = tmp_path / "services" / "api"
+        src = backend_dir / "src" / "app"
+        src.mkdir(parents=True)
+        main_py = src / "main.py"
+        tag = _sentinel_tag(fragment_name, marker)
+        rendered = _render_block(indent, "#", tag, raw_snippet)
+        main_py.write_text(f"def configure():\n{rendered}    return None\n")
+        (backend_dir / "pyproject.toml").write_text(
+            '[project]\nname = "api"\nversion = "0.0.0"\n'
+        )
+
+        # On-disk body is INDENTED; that hash is what the manifest must end
+        # up recording after a successful restamp.
+        indented_body = "".join(f"{indent}{line}\n" for line in raw_snippet.splitlines())
+        on_disk_sha = sha256_of_text(indented_body)
+
+        rel_path_in_project = "services/api/src/app/main.py"
+        block_key = MergeBlockCollector.key_for(rel_path_in_project, fragment_name, marker_bare)
+        baseline_sha = sha256_of_text("# placeholder original body\n")
+        write_forge_toml(
+            tmp_path / "forge.toml",
+            version="1.2.0",
+            project_name="demo",
+            templates={"python": "services/python-service-template"},
+            options={},
+            merge_blocks={
+                block_key: {
+                    "sha256": baseline_sha,
+                    "fragment_name": fragment_name,
+                    "fragment_version": "1.0.0",
+                }
+            },
+        )
+
+        # The fragment ships the RAW (un-indented) snippet upstream.
+        fragment_dir = _make_fragment_dir_with_block(
+            tmp_path,
+            fragment_name=fragment_name,
+            target_relpath="src/app/main.py",
+            marker_bare=marker_bare,
+            snippet=raw_snippet,
+        )
+        _register_fragment(fragment_name, fragment_dir)
+        try:
+            bundle = tmp_path / "_bundle"
+            _write_bundle_manifest(
+                bundle,
+                {
+                    "bundle_id": "harvest-indented",
+                    "project_root": str(tmp_path),
+                    "forge_version": "1.2.0-test",
+                    "candidates": [
+                        {
+                            "fragment": fragment_name,
+                            "backend": "api",
+                            "kind": "block",
+                            "rel_path": rel_path_in_project,
+                            "target_path": rel_path_in_project,
+                            "diff": "@@ -1 +1 @@\n-old\n+new\n",
+                            "baseline_sha": baseline_sha,
+                            "current_sha": on_disk_sha,
+                            "risk": "safe-apply",
+                            "rationale": "test edit",
+                            "current_body": indented_body,
+                            "feature_key": fragment_name,
+                            "marker": marker,
+                        }
+                    ],
+                },
+            )
+            report = accept_harvested(project_root=tmp_path, bundle_path=bundle, quiet=True)
+        finally:
+            _unregister_fragment(fragment_name)
+
+        assert report.errors == ()
+        # The indented block's body matches the reindented upstream snippet,
+        # so the round-trip is complete and the manifest must be re-stamped.
+        entry = next(e for e in report.entries if e.kind == "block")
+        assert entry.action == "restamped-baseline", entry.reason
+        assert report.restamped == 1
+        data = read_forge_toml(tmp_path / "forge.toml")
+        assert data.merge_blocks[block_key]["sha256"] == on_disk_sha
+
 
 class TestAcceptHarvestedBlockSkipNotApplied:
     def test_block_skipped_when_upstream_still_emits_old_body(self, tmp_path: Path) -> None:

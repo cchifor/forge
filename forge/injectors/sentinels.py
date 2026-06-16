@@ -101,13 +101,37 @@ def _indent_of(line: str) -> str:
     return m.group(0) if m else ""
 
 
-def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: str) -> int | None:
-    """Return the unique line index containing ``substring`` or None.
+def _tag_in_line(needle: str, line: str) -> bool:
+    """True when ``line`` contains the sentinel ``needle`` as a *whole* tag.
 
-    Raises if the substring appears more than once — ambiguous sentinels
-    would silently corrupt re-injection.
+    ``needle`` is a ``FORGE:BEGIN <tag>`` / ``FORGE:END <tag>`` string. A plain
+    substring test would let a tag that is a string-prefix of another match the
+    wrong block (e.g. ``FORGE:BEGIN feat:ROUTER_REGISTRATION`` matching a
+    ``FORGE:BEGIN feat:ROUTER_REGISTRATION_PUBLIC`` line). Anchor the match so
+    the tag must be followed by a boundary — whitespace (the ``fp:<hex>``
+    suffix is space-separated), end-of-line, or end-of-string — never a tag
+    continuation character.
     """
-    hits = [i for i, line in enumerate(lines) if substring in line]
+    start = 0
+    n = len(needle)
+    while True:
+        idx = line.find(needle, start)
+        if idx == -1:
+            return False
+        after = idx + n
+        if after >= len(line) or line[after] in " \t\r\n":
+            return True
+        start = idx + 1
+
+
+def _find_unique_line(lines: list[str], substring: str, file: Path, *, needle: str) -> int | None:
+    """Return the unique line index whose sentinel matches ``substring`` or None.
+
+    Raises if the tag appears on more than one line — ambiguous sentinels
+    would silently corrupt re-injection. The match is anchored on a full-tag
+    boundary so a prefix-colliding tag never selects a longer block.
+    """
+    hits = [i for i, line in enumerate(lines) if _tag_in_line(substring, line)]
     if not hits:
         return None
     if len(hits) > 1:
@@ -129,9 +153,11 @@ def _render_block(indent: str, prefix: str, tag: str, snippet: str) -> str:
     matches the v1 grammar so legacy parsers keep working.
 
     Matchers in this module (``_has_sentinel_block``, ``_read_block_body``,
-    ``_inject_snippet``) use prefix-style substring matching on the
-    canonical tag, so the trailing fingerprint is naturally tolerated
-    and v1-shape sentinels without a fingerprint are still recognized.
+    ``_inject_snippet``) match the canonical tag anchored on a trailing
+    boundary (whitespace / EOL — see ``_tag_in_line``), so the trailing
+    ``fp:`` fingerprint is naturally tolerated, v1-shape sentinels without a
+    fingerprint are still recognized, and a tag that is a string-prefix of
+    another never matches the longer block.
     """
     fp = _block_fingerprint(snippet)
     begin = f"{indent}{prefix} {MARKER_PREFIX}BEGIN {tag} fp:{fp}\n"
@@ -147,8 +173,10 @@ def _has_sentinel_block(file: Path, feature_key: str, marker: str) -> bool:
     tag = _sentinel_tag(feature_key, marker)
     begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
     end_needle = f"{MARKER_PREFIX}END {tag}"
-    text = file.read_text(encoding="utf-8")
-    return begin_needle in text and end_needle in text
+    lines = file.read_text(encoding="utf-8").splitlines()
+    return any(_tag_in_line(begin_needle, line) for line in lines) and any(
+        _tag_in_line(end_needle, line) for line in lines
+    )
 
 
 def _read_block_body(file: Path, feature_key: str, marker: str) -> str | None:
@@ -159,11 +187,9 @@ def _read_block_body(file: Path, feature_key: str, marker: str) -> str | None:
     begin_needle = f"{MARKER_PREFIX}BEGIN {tag}"
     end_needle = f"{MARKER_PREFIX}END {tag}"
     text = file.read_text(encoding="utf-8")
-    if begin_needle not in text or end_needle not in text:
-        return None
     lines = text.splitlines(keepends=True)
-    begin_idx = next((i for i, line in enumerate(lines) if begin_needle in line), None)
-    end_idx = next((i for i, line in enumerate(lines) if end_needle in line), None)
+    begin_idx = next((i for i, line in enumerate(lines) if _tag_in_line(begin_needle, line)), None)
+    end_idx = next((i for i, line in enumerate(lines) if _tag_in_line(end_needle, line)), None)
     if begin_idx is None or end_idx is None or end_idx <= begin_idx:
         return None
     return "".join(lines[begin_idx + 1 : end_idx])
@@ -241,5 +267,12 @@ def _inject_snippet(
     block = _render_block(indent, prefix, tag, snippet)
 
     insert_at = marker_idx + 1 if position == "after" else marker_idx
+    # If the preceding line lacks a trailing newline (e.g. the marker is the
+    # file's last line without a final \n and position=="after"), the spliced
+    # block would fuse onto it. Guarantee a separating newline first. Mirrors
+    # forge/injectors/python_ast.py::_ensure_trailing_newline.
+    prev = insert_at - 1
+    if 0 <= prev < len(lines) and not lines[prev].endswith("\n"):
+        lines[prev] = lines[prev] + "\n"
     lines = lines[:insert_at] + [block] + lines[insert_at:]
     file.write_text("".join(lines), encoding="utf-8")

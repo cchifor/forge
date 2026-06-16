@@ -79,6 +79,62 @@ def test_emitted_when_selected(tmp_path: Path) -> None:
         _one(root, rel)
 
 
+_TEMPLATE_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "forge"
+    / "features"
+    / "data_table"
+    / "templates"
+    / "component_DataTable"
+    / "all"
+    / "files"
+    / "src"
+    / "shared"
+    / "ui"
+    / "data-table"
+)
+
+
+def test_column_visibility_change_uses_shared_container_predicate() -> None:
+    """``onColumnVisibilityChange`` must reconstruct the base-visibility
+    baseline with the same container-width-aware predicate that
+    ``useColumnVisibility`` uses to derive effective visibility.
+
+    Regression: the handler computed ``hintHides`` via a viewport-only
+    ``twBelow(tw.value, ...)`` check, diverging from the canonical
+    container predicate (``isResponsivelyHidden`` keys off the measured
+    container width). When viewport != container, this corrupts the
+    persisted ``userVisibility`` overrides on round-trip.
+    """
+    use_visibility = (_TEMPLATE_DIR / "useColumnVisibility.ts").read_text(
+        encoding="utf-8"
+    )
+    use_dt = (_TEMPLATE_DIR / "useDataTable.ts").read_text(encoding="utf-8")
+
+    # The container-aware base-visibility predicate is exported so the
+    # change handler can share it (single source of truth).
+    assert "export function baseVisibilityFor" in use_visibility, (
+        "useColumnVisibility must export a shared container-aware "
+        "base-visibility predicate (baseVisibilityFor)"
+    )
+
+    # The handler reconstructs the baseline through the shared predicate.
+    assert "baseVisibilityFor" in use_dt, (
+        "onColumnVisibilityChange must use the shared baseVisibilityFor "
+        "predicate, not a divergent local re-implementation"
+    )
+
+    # And it must NOT derive the baseline from the viewport breakpoint
+    # (twBelow(tw.value, ...)) inside the change handler — that's the bug.
+    handler_start = use_dt.index("onColumnVisibilityChange:")
+    handler_end = use_dt.index("onColumnOrderChange:")
+    handler = use_dt[handler_start:handler_end]
+    assert "twBelow(tw.value" not in handler, (
+        "onColumnVisibilityChange must not reconstruct base visibility "
+        "via the viewport twBelow(tw.value, ...) check"
+    )
+
+
 def test_emitted_files_are_platform_free(tmp_path: Path) -> None:
     root = _gen(tmp_path, ["DataTable"])
     dt = _one(root, "shared/ui/data-table/DataTable.vue").parent

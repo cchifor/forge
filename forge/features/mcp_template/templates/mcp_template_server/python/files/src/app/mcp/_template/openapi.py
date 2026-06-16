@@ -27,6 +27,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from string import Template
 from typing import Any, Literal
+from urllib.parse import quote
 
 import httpx
 import yaml
@@ -159,7 +160,10 @@ def _render_path(path_template: str, args: dict) -> str:
     for key, value in list(args.items()):
         placeholder = "{" + key + "}"
         if placeholder in out:
-            out = out.replace(placeholder, str(value))
+            # Percent-encode the value (safe="") so a value containing path
+            # delimiters (``/ ? #`` etc.) can't inject extra segments or a
+            # query/fragment into the generated request URL.
+            out = out.replace(placeholder, quote(str(value), safe=""))
             args.pop(key)
     return out
 

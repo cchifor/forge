@@ -19,8 +19,9 @@ _DEFAULT_HEADERS: dict[str, str] = {
     "Permissions-Policy": "accelerometer=(), camera=(), geolocation=(), microphone=()",
     # CSP restricted to same-origin by default. Relax for HTML/asset-serving services.
     "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
-    # HSTS: send only when the request arrived over TLS. Browsers ignore HSTS
-    # over plain HTTP anyway, but we avoid noise in the header set.
+    # HSTS: send when the request arrived over TLS — either directly
+    # (request.url.scheme == https) or via a TLS-terminating proxy that sets
+    # x-forwarded-proto: https. Browsers ignore HSTS over plain HTTP anyway.
 }
 
 
@@ -46,7 +47,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         for name, value in self._headers.items():
             response.headers.setdefault(name, value)
-        if request.url.scheme == "https":
+        # Behind a TLS-terminating proxy (the documented Traefik deploy) the
+        # app sees plain http; honor x-forwarded-proto so HSTS is still sent.
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        if request.url.scheme == "https" or forwarded_proto == "https":
             response.headers.setdefault(
                 "Strict-Transport-Security",
                 f"max-age={self._hsts_max_age}; includeSubDomains",

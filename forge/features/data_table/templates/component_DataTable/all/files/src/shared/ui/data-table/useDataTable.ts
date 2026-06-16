@@ -19,7 +19,6 @@ import {
   type SortingState,
 } from '@tanstack/vue-table'
 import { Checkbox } from './checkbox'
-import { useTwBreakpoint } from './breakpoints'
 import type { DataTableColumnDef } from './types'
 import {
   useColumnManager,
@@ -115,11 +114,6 @@ const CANONICAL_SELECT_COLUMN = {
 } as unknown as ColumnDef<unknown, unknown>
 
 export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
-  // Capture the breakpoint reactive once at setup so the
-  // onColumnVisibilityChange handler can read it without re-instantiating
-  // the composable on every TanStack-driven update.
-  const { tw } = useTwBreakpoint()
-
   const rowsGetter = () => toValue(inputs.rows)
 
   const sorting = ref<SortingState>(inputs.initialSorting ?? [])
@@ -223,10 +217,13 @@ export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
           (col as { accessorKey?: string }).accessorKey) as string
         if (!id) continue
         const baselineVisible = next[id] !== false
-        const hintHides =
-          col.meta?.responsiveHidden &&
-          twBelow(tw.value, col.meta.responsiveHidden.below)
-        const baseWithoutOverride = !hintHides
+        // Reconstruct the baseline through the manager's shared
+        // container-aware predicate — the same one the effective
+        // ``columnVisibility`` derives from. Re-deriving it here from the
+        // viewport breakpoint would diverge whenever the container width
+        // disagrees with the viewport, corrupting the persisted override
+        // on round-trip.
+        const baseWithoutOverride = manager.baseVisibilityFor(col)
         if (baselineVisible === baseWithoutOverride) delete overrides[id]
         else overrides[id] = baselineVisible
       }

@@ -713,6 +713,118 @@ def test_smoke_compose_up_uses_build(tmp_path, monkeypatch):
     assert "--build" in up_cmds[0], f"smoke compose-up must include --build: {up_cmds[0]}"
 
 
+class TestLaneVerifyAllSkip:
+    """Initiative #6 — Lane B must NOT report vacuous-green when every
+    backend toolchain check SKIPPED.
+
+    Pre-fix contract: ``run_lane_verify`` only collected
+    ``check.status == "fail"`` from each backend's ``toolchain.verify()``.
+    When ``uv`` / ``cargo`` / ``npx`` is missing from the runner image,
+    those checks come back ``status="skip"`` (prerequisite tool not on
+    PATH). The skip checks were dropped from BOTH ``failures`` AND
+    ``skipped_subchecks``, so an all-skip lane returned ``status="ok"``
+    with an empty ``skipped_subchecks`` — a GREEN lane that actually ran
+    NOTHING, masking a CI image regression that stripped the toolchain.
+
+    Post-fix contract: backend skips are surfaced in
+    ``skipped_subchecks`` (so ``_emit_github_annotations`` warns), and an
+    all-skip verify lane is NOT silently ``ok`` — verify is required, so
+    a lane where every backend check skipped reports ``skip`` rather than
+    ``ok``.
+    """
+
+    def _scenario(self) -> Scenario:
+        return Scenario(
+            name="allskip_verify",
+            description="lane B all-skip regression",
+            lanes=("verify",),
+            port_base=9988,
+            expected_files=(),
+            config={"project_name": "All Skip Verify"},
+        )
+
+    def _patch_lane(self, monkeypatch, *, check_status: str):
+        """Stub the lane's generate/config/registry surface so
+        ``run_lane_verify`` runs without a real generate, and each
+        backend's ``toolchain.verify()`` returns a single check with
+        the requested status (``skip`` or ``fail``)."""
+        from types import SimpleNamespace
+
+        from forge.toolchains import Check
+
+        # One backend named "api" / language "python".
+        backend = SimpleNamespace(name="api", language="python")
+        fake_config = SimpleNamespace(
+            backends=[backend],
+            frontend=None,
+            frontend_mode="none",
+            validate=lambda: None,
+        )
+
+        monkeypatch.setattr(
+            "tests.matrix.runner._project_config_from_dict",
+            lambda cfg: fake_config,
+        )
+        monkeypatch.setattr(
+            "forge.generator.generate",
+            lambda *a, **k: Path("/nonexistent-project-root"),
+        )
+        monkeypatch.setattr(
+            "tests.matrix.runner._inject_weld_stubs",
+            lambda root: None,
+        )
+
+        toolchain = SimpleNamespace(
+            install=lambda backend_dir, quiet=True: None,
+            verify=lambda backend_dir, quiet=True: [
+                Check(name="ruff check", status=check_status, details="uv not on PATH")
+            ],
+        )
+        spec = SimpleNamespace(toolchain=toolchain)
+        monkeypatch.setattr(
+            "forge.config.BACKEND_REGISTRY",
+            {"python": spec},
+        )
+
+    def test_all_skip_backend_checks_not_silently_green(self, monkeypatch):
+        """All-skip backend checks → lane must NOT be a silent green ``ok``.
+
+        RED (pre-fix): the lane returns ``status="ok"`` with empty
+        ``skipped_subchecks`` because skip checks are dropped entirely.
+        """
+        from tests.matrix.runner import run_lane_verify
+
+        self._patch_lane(monkeypatch, check_status="skip")
+        result = run_lane_verify(self._scenario())
+
+        # The skip MUST be surfaced so the annotation emitter warns.
+        assert result.skipped_subchecks, (
+            "backend toolchain skips were dropped — an all-skip lane B "
+            f"surfaces nothing (status={result.status}, "
+            f"skipped_subchecks={result.skipped_subchecks})"
+        )
+        assert any("api" in s for s in result.skipped_subchecks), (
+            f"skip label should name the backend; got {result.skipped_subchecks}"
+        )
+        # An all-skip verify lane ran NOTHING — it must not be a green ``ok``.
+        assert result.status != "ok", (
+            "an all-skip verify lane reported ok — verify is required; "
+            "a lane that ran no real checks must report skip, not ok"
+        )
+
+    def test_failing_backend_check_still_fails(self, monkeypatch):
+        """Regression guard — a real ``fail`` check still produces a
+        FAIL lane (the fix must not swallow failures into skips)."""
+        from tests.matrix.runner import run_lane_verify
+
+        self._patch_lane(monkeypatch, check_status="fail")
+        result = run_lane_verify(self._scenario())
+        assert result.status == "fail", (
+            f"a failing backend check must fail the lane; got {result.status}"
+        )
+        assert "api:ruff check" in result.details
+
+
 def test_compose_up_failure_writes_full_output(tmp_path, monkeypatch):
     """A compose up/build failure must persist the FULL build output to the
     artifact dir — when the image build fails no container starts, so
