@@ -105,7 +105,12 @@ services:
 {% endif %}
 {% if include_keycloak %}
       APP__SECURITY__AUTH__ENABLED: "true"
-      APP__SECURITY__AUTH__SERVER_URL: "http://keycloak:8080"
+      # In the gatekeeper sole-issuer model the backend validates the internal
+      # ES256 JWT that gatekeeper mints (iss=gatekeeper, JWKS at
+      # <server_url>/auth/jwks). So server_url + audience must point at
+      # gatekeeper, not Keycloak (Keycloak is gatekeeper's upstream IdP).
+      APP__SECURITY__AUTH__SERVER_URL: "http://gatekeeper:5000"
+      APP__SECURITY__AUTH__AUDIENCE: "forge-services"
       APP__SECURITY__AUTH__REALM: "{{ keycloak_realm }}"
       APP__SECURITY__AUTH__CLIENT_ID: "{{ keycloak_client_id }}"
       GATEKEEPER_ISSUER: "http://gatekeeper:5000"
