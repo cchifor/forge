@@ -43,7 +43,10 @@ def _gen_flutter_chat(*, include_auth: bool) -> Path:
     cfg = ProjectConfig(project_name="ChatAuth", backends=[bc], frontend=fc)
     cfg.validate()
     root = Path(generate(cfg, quiet=True, dry_run=True))
-    return next(root.rglob("features/chat/presentation"))
+    # Locate the file directly rather than rglob-ing the directory name: a
+    # `test/src/features/chat/presentation/` dir also exists, and rglob order
+    # is filesystem-dependent (it picked the wrong one on Windows).
+    return next(root.rglob("chat_providers.dart")).parent
 
 
 def test_chat_token_wired_when_auth_enabled() -> None:
