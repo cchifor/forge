@@ -77,6 +77,12 @@ def test_generated_chart_lints_and_validates(name: str, kw: dict, in_cluster: bo
     assert tmpl.returncode == 0, f"helm template failed:\n{tmpl.stderr}"
     # Sanity: at least one Deployment per backend rendered.
     assert tmpl.stdout.count("kind: Deployment") >= len(kw["backends"])
+    # #258 — one HPA per backend (autoscaling defaults on per workload), not a
+    # single `app-REPLACE_WITH_BACKEND` placeholder needing a manual edit.
+    assert tmpl.stdout.count("kind: HorizontalPodAutoscaler") == len(kw["backends"]), (
+        "expected one HorizontalPodAutoscaler per backend"
+    )
+    assert "REPLACE_WITH_BACKEND" not in tmpl.stdout
 
     if _KUBECONFORM:
         kc = subprocess.run(
