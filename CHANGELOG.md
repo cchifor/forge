@@ -62,6 +62,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   and RFC-003 marked superseded.
 
 ### Security & regression fixes (wave 3)
+- **`forge --update` works on stateless/headless projects** (#274, fixes #260). Forge crashed when updating projects with `database.mode=none` or `frontend.mode=none` because `from_legacy_options` forwarded mode-inapplicable layer sub-fields (e.g. `database.engine` when `database.mode=none`, or `frontend.api_target.*` when `frontend.mode=none`) into the typed config, where `DatabaseNone`/`FrontendNone` declare `extra="forbid"`. The converter (`forge/config/typed_config.py`) now gates those fields on the effective mode, and the generator (`forge/generator.py`) drops the dead defaults before persisting, so newly generated `forge.toml` files stay honest and update-safe.
+
 
 - **Two-stage application-template variants render a non-empty `app.title`.**
   A variant overlay (e.g. `tenant-management-service`) ships its own
@@ -206,6 +208,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   from the platform line, including `Checkbox`/`Popover` UI components.
 
 ### Added
+
+- **Read-only verb manifest cache-scope (#275).** Manifest reads on `--verify`, `--resolve`, `--accept-harvested`, and `--reapply-baseline` now install the same `manifest_cache_scope` (from `forge.sync._manifest_cache`) already used by `--update` and `--harvest`, so repeated `forge.toml` parses within a single invocation (especially in `--accept-harvested`'s per-block-candidate baseline lookups) pay once. Performance win on large, multi-backend projects. (`forge/cli/commands/{verify,resolve,accept_harvested,reapply_baseline}.py`.)
+
+- **Platform preset fuzzer (#275).** New `tests/fuzz/test_preset_combinations.py` deterministically resolves every shipped `--platform` preset (a fast smoke that fails the moment a preset stops building a consistent plan) and fuzzes each one under hypothesis-perturbed bool/enum options, asserting the resolver always reaches a consistent plan or fails validation cleanly — so a broken preset can't ship unnoticed. Runs in the `fuzz` quality-gate lane (`pytest -m fuzz`).
+
+- **Nightly-failure scenario naming in the GitHub issue (#275).** The auto-filed `nightly-failure` issue now splices a `Failing scenarios` table (scenario / lane / detail) into the body, naming each failing scenario instead of leaving only the per-lane pass/fail grid — unblocking root-cause investigation. Powered by a new stdlib-only script at `scripts/ci/nightly_failure_summary.py` (wired into `matrix-nightly.yml`).
+
+- **Doc-truth CI gate (#275).** New `tests/test_doc_truth.py` validates mechanical doc claims — README version/Python/registry (backends/frontends/options) badges, relative-link resolution, and that documented `forge` CLI flags actually exist in the parser. Wired into the `lint` job in `ci.yml`. It caught and fixed real drift: `forge --plan-migrate`, `forge migrate --only`, and `forge migrate --skip` referenced in `UPGRADING.md` and `docs/OPERATIONAL_RUNBOOK.md` were never valid flags (canonical is `forge --migrate [--migrate-only NAMES] [--migrate-skip NAMES]`). Also adds `tests/mutmut_known_survivors.md`, the survivor log referenced by `docs/mutation-testing.md`.
+
+- **Generated service runbooks (OPERATIONS.md + OBSERVABILITY.md) (#276).** Every generated Python/Node/Rust backend now ships two template files under `forge/templates/services/*-service-template/template/`: `OPERATIONS.md` (config precedence/load order, database migrations — with the Postgres advisory-lock boot pattern on Python/Node and the explicit-`sqlx::migrate!` note for Rust — graceful shutdown choreography, and the `/api/v1/health/{live,ready}` endpoint contract) and `OBSERVABILITY.md` (OTLP env vars such as `OTEL_EXPORTER_OTLP_ENDPOINT`, RED metric definitions, Prometheus/Grafana dashboard setup, and structured-logging conventions). Operators now have canonical per-backend reference material instead of ad-hoc docs (previously only `tenant-management-service` shipped a `HARDENING.md`). A regression-guard test (`tests/test_generated_ops_docs.py`) asserts each base template emits both files with non-stub content and no unrendered Jinja.
+
+- **Rust observability.otel real OTLP implementation (#279).** The `observability_otel` fragment on Rust backends now ships a genuine OTLP/HTTP tracing layer (opentelemetry 0.27 + tracing-opentelemetry 0.28) instead of the legacy no-op stub. The base `main.rs` builds an open, boxed tracing-layer set (`Vec<Box<dyn Layer<Registry> + Send + Sync>>`) so the otel fragment can push its layer at the `FORGE:TRACING_LAYERS` anchor without the base template depending on otel crates; the fragment adds the opentelemetry deps at the existing `FORGE:CARGO_DEPENDENCIES` marker and exports spans over OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (no-op otherwise — the layer builder returns `None` and the service runs without a collector). `OTEL_SERVICE_NAME` sets the resource service name.
+
+- **Flutter native chat authenticates with bearer token (#278).** The `chatAuthTokenProvider` in the Flutter frontend template did not surface an access token, so native (mobile/desktop) Flutter chat never attached an `Authorization: Bearer` header even when `include_auth=true`. The provider now returns the access token from `authRepositoryProvider` (when auth is enabled), and `chat_input_bar` threads it into `sendMessage` via `bearerToken`. Web Flutter continues to receive `null` (Gatekeeper HttpOnly cookies handle auth there, so the bearer is omitted). No-auth projects (`include_auth=false`) keep the `null` no-op path with no auth import. Complementary fix to the existing cookie-based BFF auth for web clients.
 
 - **`GET /mcp/audit?limit=N` — read-side audit endpoint (Pillar F.5).**
   Adds a read endpoint to the MCP server router in generated Python

@@ -21,7 +21,7 @@ When enabled, the service initializes OTLP export and reads:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | to export | OTLP endpoint, e.g. `http://alloy:4318`. Unset = traces stay local (stdout only). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | to export | OTLP endpoint, e.g. `http://alloy:4318`. **Unset = no OTLP layer is registered** — spans are not exported. The tracing subscriber still logs structured events to stdout. |
 | `OTEL_SERVICE_NAME` | optional | Service name on spans. |
 
 The bundled `docker-compose` fragment points `OTEL_EXPORTER_OTLP_ENDPOINT` at an
