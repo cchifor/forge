@@ -336,6 +336,13 @@ def _run_generation_phases(
         registry_path = render_service_registry(config, synthesis, project_root)
         if registry_path is not None:
             collector.record(registry_path, origin="base-template")
+    # Per-backend toolchain (install/verify/post_generate) — deferred to HERE,
+    # after _apply_project_scope, so project-scoped workspace members (the
+    # ``platform_auth_sdk_*`` SDKs under ``packages/``) and the workspace-root
+    # ``package.json`` are on disk before ``npm install`` resolves the service's
+    # ``file:`` workspace dependency. Kept before _finalize so produced
+    # lockfiles are still captured by the finalize git commit.
+    _run_backend_toolchains(config, project_root, quiet=quiet, dry_run=dry_run, report=report)
     # Renumber each Python backend's alembic migrations into a valid linear
     # chain BEFORE provenance is stamped (so forge.toml records the rewritten
     # content): fragments ship colliding/gapped revision numbers that alembic
@@ -530,12 +537,38 @@ def _generate_backends(
                 option_values=plan.option_values,
                 project_root=project_root,
             )
-        # Toolchain dispatch: install() runs whenever we're writing to
-        # disk (it's the step that produces lockfiles Docker needs),
-        # verify() runs only in interactive mode (not quiet, not dry-run)
-        # because it invokes lint + test suites that the headless path
-        # shouldn't spend time on. Both are plugin-overridable via
-        # ``BackendSpec.toolchain`` — see forge.toolchains.
+        # NB: the per-backend toolchain step (install/verify/post_generate)
+        # is NOT run here. It is deferred to ``_run_backend_toolchains``,
+        # invoked AFTER ``_apply_project_scope`` so project-scoped workspace
+        # members (e.g. the ``platform_auth_sdk_node`` SDK at
+        # ``packages/platform-auth-node/``) and the workspace-root
+        # ``package.json`` already exist when ``npm install`` resolves the
+        # service's ``file:`` workspace dependency. Running it inside this
+        # loop made node+auth generation abort with ``npm ERR! enoent``.
+
+
+def _run_backend_toolchains(
+    config: ProjectConfig,
+    project_root: Path,
+    *,
+    quiet: bool,
+    dry_run: bool,
+    report: GenerationReport | None,
+) -> None:
+    """Run each backend's ``toolchain`` install()/verify()/post_generate().
+
+    Split out of ``_generate_backends`` and ordered (by the caller) AFTER
+    ``_apply_project_scope`` + the workspace-root render, so every
+    project-scoped workspace member the install must resolve is already on
+    disk. ``install()`` runs whenever we're writing to disk (it produces the
+    lockfiles Docker needs); ``verify()`` + ``post_generate()`` run only in
+    interactive mode (not quiet, not dry-run) because they invoke lint + test
+    suites the headless path shouldn't spend time on. Both are
+    plugin-overridable via ``BackendSpec.toolchain`` — see forge.toolchains.
+    """
+    for bc in config.backends:
+        spec = BACKEND_REGISTRY[bc.language]
+        backend_dir = project_root / "services" / bc.name
         if not dry_run:
             with phase_timer(
                 _logger,
