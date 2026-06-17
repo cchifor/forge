@@ -394,15 +394,19 @@ DEPENDENCY: none (stdlib + forge_core correlation).
 
 _OpenTelemetry traces + metrics via OTLP exporter (agent.run, tool.call spans)._
 
-Emits ``app/core/otel.py`` wiring FastAPI + HTTPX instrumentations and an
-OTLP exporter to whatever ``OTEL_EXPORTER_OTLP_ENDPOINT`` points at.
-Spans of interest for agentic workloads: ``agent.run`` (per agent
-invocation), ``tool.call`` (per tool invocation). Token / cost counters
-from AG-UI RUN_FINISHED are attached as span attributes.
+OpenTelemetry traces (plus Python RED metrics) exported over OTLP, gated on
+``OTEL_EXPORTER_OTLP_ENDPOINT`` (unset = a clean no-op: no exporter is wired
+and the service runs without a collector). Python emits ``app/core/otel.py``
+(FastAPI + HTTPX instrumentation + a ``MeterProvider`` for RED metrics, gRPC
+OTLP exporter); Node emits ``src/lib/otel.ts`` (NodeSDK +
+``@opentelemetry/auto-instrumentations-node``, gRPC OTLP exporter); Rust emits
+``src/otel.rs`` (a ``tracing-opentelemetry`` layer exporting over OTLP
+HTTP/protobuf). Spans of interest for agentic workloads: ``agent.run`` (per
+agent invocation), ``tool.call`` (per tool invocation).
 
-BACKENDS: python
-DEPENDENCIES: opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi / instrumentation-httpx
-ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES.
+BACKENDS: python, node, rust
+DEPENDENCIES: python — opentelemetry-api / sdk / exporter-otlp / instrumentation-fastapi / instrumentation-httpx; node — @opentelemetry/sdk-node / exporter-trace-otlp-grpc / auto-instrumentations-node; rust — opentelemetry / opentelemetry_sdk / opentelemetry-otlp / tracing-opentelemetry
+ENV: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME (Python also reads OTEL_RESOURCE_ATTRIBUTES).
 
 **Enables fragments:**
 - on `true` → `observability_otel`, `observability_metrics_middleware`

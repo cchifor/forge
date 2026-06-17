@@ -168,7 +168,7 @@ On `forge --update`, the updater:
 4. Injections run through zone semantics.
 5. The `[forge.provenance]` + `[forge.merge_blocks]` tables are re-stamped.
 
-Pre-1.1 projects with empty `[forge.provenance]` can adopt their current tree as the baseline via `forge --migrate-only adopt-baseline` — the codemod stamps every file under `services/` / `apps/` / `tests/` with `origin="base-template"` so future merges have something to compare against.
+Pre-1.1 projects with empty `[forge.provenance]` can adopt their current tree as the baseline via `forge --migrate --migrate-only adopt-baseline` — the codemod stamps every file under `services/` / `apps/` / `tests/` with `origin="base-template"` so future merges have something to compare against.
 
 ## Codegen layer
 

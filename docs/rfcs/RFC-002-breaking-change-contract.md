@@ -67,10 +67,10 @@ def run(project_root: Path, *, dry_run: bool = False, quiet: bool = False) -> Mi
 A `forge migrate` umbrella command runs all applicable migrations in dependency order:
 
 ```bash
-forge migrate                    # runs all pending migrations in order
-forge migrate --dry-run          # preview
-forge migrate --only entities    # run only `forge migrate-entities`
-forge migrate --skip ui-protocol # run everything except this one
+forge --migrate                             # runs all pending migrations in order
+forge --migrate --dry-run                   # preview
+forge --migrate --migrate-only entities     # run only `forge migrate-entities`
+forge --migrate --migrate-skip ui-protocol  # run everything except this one
 ```
 
 The umbrella reads `forge.toml`'s `forge.version` field, consults a hard-coded migration table (ordered list of `(from_version, to_version, migrator)` tuples), and applies each applicable one.
