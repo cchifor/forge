@@ -40,4 +40,21 @@ impl IdentityContext {
             actor: None,
         }
     }
+
+    /// The canonical dev/no-auth identity bound to every request when the
+    /// platform-auth middleware is NOT wired (`auth.mode=none`). Mirrors the
+    /// Python and Node dev passthroughs: a fixed local tenant + user so the
+    /// tenant-scoped repositories have an identity to scope on. The UUID
+    /// (`00000000-0000-0000-0000-000000000001`) matches the other languages.
+    #[must_use]
+    pub fn dev() -> Self {
+        Self {
+            tenant_id: Uuid::from_u128(1),
+            tenant_slug: None,
+            subject: "00000000-0000-0000-0000-000000000001".to_string(),
+            scopes: Vec::new(),
+            roles: vec!["admin".to_string(), "user".to_string()],
+            actor: None,
+        }
+    }
 }

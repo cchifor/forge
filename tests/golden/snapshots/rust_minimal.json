@@ -105,8 +105,8 @@
       "sha256": "a81ece8acc52f40f"
     },
     "services/api/src/app.rs": {
-      "size": 1688,
-      "sha256": "d012850af7a49ffc"
+      "size": 2138,
+      "sha256": "49a3b92f42610235"
     },
     "services/api/src/bin/migrate.rs": {
       "size": 511,
@@ -149,8 +149,8 @@
       "sha256": "bbb3e7e29255f01d"
     },
     "services/api/src/identity.rs": {
-      "size": 1510,
-      "sha256": "aa8431689a7e3f4e"
+      "size": 2237,
+      "sha256": "2c313c0d5e86dac0"
     },
     "services/api/src/lib.rs": {
       "size": 1619,

@@ -6,6 +6,9 @@ import { itemRoutes } from "./routes/items.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { correlationHook } from "./middleware/correlation.js";
 import { requestLogger } from "./middleware/logging.js";
+{%- if not (include_platform_auth | default(false)) %}
+import { registerDevIdentity } from "./middleware/dev-identity.js";
+{%- endif %}
 // FORGE:MIDDLEWARE_IMPORTS
 
 export async function buildApp() {
@@ -16,6 +19,13 @@ export async function buildApp() {
 	app.addHook("onRequest", correlationHook);
 	app.addHook("onResponse", requestLogger);
 	app.setErrorHandler(errorHandler);
+{%- if not (include_platform_auth | default(false)) %}
+	// Dev-mode identity fallback (auth.mode=none): bind a fixed local
+	// identity so tenant-scoped repositories have a tenant/user to scope on.
+	// Mirrors the Python dev passthrough. NEVER registered when the real
+	// platform-auth plugin is wired (it owns identity + rejects anon requests).
+	registerDevIdentity(app);
+{%- endif %}
 	// FORGE:MIDDLEWARE_REGISTRATION
 
 	// Public routes — skip-listed by the platform-auth plugin, no
