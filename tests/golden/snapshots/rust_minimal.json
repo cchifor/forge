@@ -53,8 +53,8 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 873,
-      "sha256": "d44b683e20b96de5"
+      "size": 900,
+      "sha256": "c0894954713a652d"
     },
     "services/api/Dockerfile": {
       "size": 4226,
@@ -149,8 +149,8 @@
       "sha256": "4007d90545bcff2f"
     },
     "services/api/src/main.rs": {
-      "size": 3662,
-      "sha256": "8d8890bbdcf5a90e"
+      "size": 4234,
+      "sha256": "4623f33eb571bc41"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
