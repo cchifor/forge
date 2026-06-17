@@ -690,7 +690,13 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
         sub_skips: list[str] = []
         for bc in project_config.backends:
             base_url = f"http://localhost:{bc.server_port}"
-            result = assert_contract(base_url, scenario.name, bc.name)
+            # Pass the backend's CRUD entities so the contract exercises the
+            # data path (GET list + POST create) and a 5xx there — e.g. a
+            # no-auth backend that never binds a request identity — is caught
+            # instead of slipping through on a green health + OpenAPI check.
+            result = assert_contract(
+                base_url, scenario.name, bc.name, crud_entities=list(bc.features)
+            )
             if not result.passed:
                 violations.extend(f"{bc.name}:{v.endpoint}: {v.reason}" for v in result.violations)
             # Initiative #9 — propagate per-backend endpoint skips to the
