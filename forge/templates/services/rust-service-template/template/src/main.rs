@@ -14,12 +14,16 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::derivable_impls)]
+// The tracing layer set below is `mut` so optional fragments (e.g.
+// observability_otel) can push their own layer; with no such fragment the
+// base never mutates it.
+#![allow(unused_mut)]
 
 use dotenvy::dotenv;
 use std::net::SocketAddr;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{EnvFilter, Layer, fmt};
 
 mod app;
 mod config;
@@ -38,11 +42,14 @@ async fn main() {
     dotenv().ok();
 
     let env_filter = EnvFilter::from_default_env().add_directive("info".parse().unwrap());
-    let registry = tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer().json());
+    // Open layer set: optional fragments (e.g. observability_otel) push their
+    // own tracing layer here without the base template depending on their
+    // crates. Each layer carries its own filter so they compose on the bare
+    // registry (avoids the `Layered<...>` subscriber-type churn).
+    let mut layers: Vec<Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync>> =
+        vec![fmt::layer().json().with_filter(env_filter).boxed()];
     // FORGE:TRACING_LAYERS
-    registry.init();
+    tracing_subscriber::registry().with(layers).init();
 
     // Load + validate config at startup so the fail-closed auth guard
     // (config::AppConfig::validate) actually runs: it rejects a production-like
