@@ -438,6 +438,39 @@ SCENARIOS: tuple[Scenario, ...] = (
         },
         expected=ExpectedOutcome(error="tenant_suspended"),
     ),
+    Scenario(
+        name="accept_unregistered_tenant_when_trust_map_present",
+        description=(
+            "Verifier has a NON-EMPTY TrustMap, but the token's tenant is "
+            "not registered in it (the map holds a different tenant). The "
+            "permissive single-issuer default (strict_trust=False) accepts "
+            "the token — per-tenant issuer binding + suspension only "
+            "constrain tenants explicitly registered in the map. This is "
+            "the partial/empty-map install path the gatekeeper + "
+            "oidc_generic providers ship (bootstrapAuth / init_auth wire "
+            "an empty InMemoryIssuerTrustMap): an unregistered tenant must "
+            "NOT be rejected, or the guard authenticates nobody. Python is "
+            "already permissive; this pins Node + Rust to the same parity "
+            "(both previously fail-closed with `unknown tenant`)."
+        ),
+        # Map holds a DIFFERENT tenant; the token's canonical TENANT_ID is
+        # absent → the verifier sees a missing trust record.
+        trust_map_overrides={
+            "33333333-3333-4333-8333-333333333333": {
+                "expected_issuer": ISSUER,
+                "suspended": False,
+            },
+        },
+        expected=ExpectedOutcome(
+            identity={
+                "tenant_id": TENANT_ID,
+                "subject": SUBJECT,
+                "roles": [],
+                "scopes": [],
+                "actor": None,
+            }
+        ),
+    ),
     # ----------------------------------------------------------- tenant claim
     Scenario(
         name="reject_missing_tenant_claim",
