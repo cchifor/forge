@@ -53,6 +53,12 @@ const EXCLUDED_PATHS: &[&str] = &[
     "/api/v1/openapi.json",
     "/api/schema",
     "/api/openapi.json",
+    // Public service-info routes (home::routes() merged under /api/v1): the
+    // welcome ("/") + "/info" endpoints expose only app title/version and are
+    // documented as unauthenticated. Mirrors Python's public home.
+    "/api/v1",
+    "/api/v1/",
+    "/api/v1/info",
 ];
 
 /// Process-wide AuthGuard. Initialized once from `init_auth()` before
