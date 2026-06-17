@@ -236,7 +236,7 @@ uv tool upgrade forge
 
 # 2. Plan the migration — dry run, no writes.
 cd <generated-project>
-forge --plan-migrate auth-keycloak-to-platform-auth
+forge --migrate --migrate-only auth-keycloak-to-platform-auth --dry-run
 
 # Reports:
 #   - Files to add (sdks/platform-auth/, sdks/platform-auth-node/,

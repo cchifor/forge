@@ -58,12 +58,16 @@ def _run_reapply_baseline(args: argparse.Namespace) -> int:
     else:
         scope = ("files", "blocks")
 
-    report = reapply_baseline(
-        project_root,
-        scope=scope,
-        dry_run=dry_run,
-        quiet=quiet,
-    )
+    # Initiative #6 (caching): parse forge.toml once per invocation.
+    from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
+
+    with manifest_cache_scope():
+        report = reapply_baseline(
+            project_root,
+            scope=scope,
+            dry_run=dry_run,
+            quiet=quiet,
+        )
 
     if json_output:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")

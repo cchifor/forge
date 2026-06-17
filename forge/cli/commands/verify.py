@@ -48,8 +48,14 @@ def _run_verify(args: argparse.Namespace) -> int:
     fail_on: VerifyFailOn = getattr(args, "verify_fail_on", "drift")
     json_output = bool(getattr(args, "json_output", False))
 
+    # Initiative #6 (caching): parse forge.toml once per invocation —
+    # verify walks every provenance record, each of which may re-read
+    # the manifest. Mirrors update/harvest.
+    from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
+
     try:
-        report = verify_project(project_root, scope=scope, fail_on=fail_on)
+        with manifest_cache_scope():
+            report = verify_project(project_root, scope=scope, fail_on=fail_on)
     except FileNotFoundError:
         # No forge.toml at project root. Surface a structured error so
         # JSON consumers can branch on a known shape, then exit with the

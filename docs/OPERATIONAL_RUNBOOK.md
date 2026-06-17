@@ -184,13 +184,13 @@ The `forge.toml` manifest at a generated project's root tracks every file's prov
 13. Run it explicitly:
     ```bash
     # Preview (no writes):
-    forge migrate --only provenance-v2 --dry-run
+    forge --migrate --migrate-only provenance-v2 --dry-run
 
     # Apply:
-    forge migrate --only provenance-v2
+    forge --migrate --migrate-only provenance-v2
 
     # JSON output for scripting:
-    forge migrate --only provenance-v2 --json
+    forge --migrate --migrate-only provenance-v2 --json
     ```
 
 14. The migration is idempotent -- running it on a v2+ manifest skips with `"forge.toml is already schema vN"`.
@@ -211,9 +211,9 @@ The `forge.toml` manifest at a generated project's root tracks every file's prov
 
 17. Run all applicable migrations at once:
     ```bash
-    forge migrate --dry-run        # preview all
-    forge migrate                  # apply all
-    forge migrate --skip adapters  # skip one
+    forge --migrate --dry-run                 # preview all
+    forge --migrate                           # apply all
+    forge --migrate --migrate-skip adapters   # skip one
     ```
 
 ### 3.5 Stale `.forge/lock` files

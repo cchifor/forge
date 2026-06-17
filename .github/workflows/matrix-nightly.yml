@@ -424,6 +424,15 @@ jobs:
     permissions:
       issues: write
     steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      # Pull the per-scenario status artifacts so the issue body can name the
+      # specific failing scenario(s) instead of a generic per-lane table (#258).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          path: matrix-status-raw
+          pattern: matrix-status-*
+          merge-multiple: true
       - name: Open or update the nightly-failure tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -438,26 +447,31 @@ jobs:
           # Idempotent: the label may not exist yet on a fresh repo.
           gh label create nightly-failure --color B60205 \
             --description "An automated nightly workflow failed" 2>/dev/null || true
-          body=$(printf '%s\n' \
-            "The scheduled \`matrix-nightly\` workflow failed on $(date -u +%Y-%m-%dT%H:%MZ)." \
-            "" \
-            "| lane | result |" \
-            "| --- | --- |" \
-            "| smoke | ${R_SMOKE} |" \
-            "| roundtrip | ${R_ROUND} |" \
-            "| update | ${R_UPDATE} |" \
-            "| dashboard | ${R_DASH} |" \
-            "" \
-            "Run: ${RUN_URL}" \
-            "" \
-            "See the run's job summary + the \`matrix-status-grid\` artifact for the scenario × lane grid.")
+          # Build the issue body, splicing in a per-scenario failure section
+          # (stdlib-only script — no deps, runs on the runner's python3).
+          {
+            echo "The scheduled \`matrix-nightly\` workflow failed on $(date -u +%Y-%m-%dT%H:%MZ)."
+            echo
+            echo "| lane | result |"
+            echo "| --- | --- |"
+            echo "| smoke | ${R_SMOKE} |"
+            echo "| roundtrip | ${R_ROUND} |"
+            echo "| update | ${R_UPDATE} |"
+            echo "| dashboard | ${R_DASH} |"
+            echo
+            python3 scripts/ci/nightly_failure_summary.py matrix-status-raw
+            echo
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "See the run's job summary + the \`matrix-status-grid\` artifact for the scenario × lane grid."
+          } > nightly-issue-body.md
           # Comment on an existing open tracking issue if present; else open one.
           existing=$(gh issue list --state open --label nightly-failure \
             --search "Nightly CI failed in:title" \
             --json number --jq '.[0].number // empty' 2>/dev/null || true)
           if [ -n "${existing}" ]; then
-            gh issue comment "${existing}" --body "${body}"
+            gh issue comment "${existing}" --body-file nightly-issue-body.md
           else
             gh issue create --title "Nightly CI failed" \
-              --label nightly-failure --body "${body}"
+              --label nightly-failure --body-file nightly-issue-body.md
           fi

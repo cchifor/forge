@@ -74,12 +74,17 @@ def _run_accept_harvested(args: argparse.Namespace) -> int:
         else ("safe-apply",)
     )
 
-    report = accept_harvested(
-        project_root=project_root,
-        bundle_path=bundle_path,
-        risk_filter=risk_filter,
-        quiet=quiet,
-    )
+    # Initiative #6 (caching): accept does multi-reads per block
+    # candidate — parse forge.toml once for the whole run.
+    from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
+
+    with manifest_cache_scope():
+        report = accept_harvested(
+            project_root=project_root,
+            bundle_path=bundle_path,
+            risk_filter=risk_filter,
+            quiet=quiet,
+        )
 
     if json_output:
         sys.stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
