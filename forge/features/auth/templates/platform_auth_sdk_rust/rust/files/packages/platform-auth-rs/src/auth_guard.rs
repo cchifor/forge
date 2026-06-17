@@ -61,6 +61,15 @@ pub struct AuthGuardConfig {
     pub jwks: Arc<JwksCache>,
     /// Optional: per-tenant issuer trust map.
     pub trust_map: Option<Arc<dyn IssuerTrustMap>>,
+    /// When `true`, a token whose tenant has no record in `trust_map` is
+    /// rejected with `IssuerNotTrusted`. Default `false` — the permissive
+    /// single-issuer default mirroring Python's
+    /// `AuthGuard(strict_trust=False)`: per-tenant issuer binding +
+    /// suspension only constrain tenants explicitly registered in the map,
+    /// so a gatekeeper / oidc_generic deployment can ship an *empty* trust
+    /// map without rejecting every token. Set `true` for hybrid-realm
+    /// deployments where every tenant must be registered.
+    pub strict_trust: bool,
     /// Optional: revoked-jti store.
     pub revocation: Option<Arc<dyn RevocationStore>>,
     /// Optional: RFC 8693 act-chain authorization policy.
@@ -95,6 +104,7 @@ impl AuthGuardConfig {
             audiences: vec![audience.into()],
             jwks,
             trust_map: None,
+            strict_trust: false,
             revocation: None,
             may_act: None,
             algorithms: default_algorithms(),
@@ -369,10 +379,24 @@ impl AuthGuard {
         tenant_id: &Uuid,
         iss: &str,
     ) -> Result<(), AuthError> {
-        let record = trust_map
-            .get(&tenant_id.to_string())
-            .await
-            .ok_or_else(|| AuthError::InvalidToken(format!("unknown tenant {}", tenant_id)))?;
+        // A missing record means the tenant is unknown to the trust map.
+        // Default (strict_trust=false): accept — the permissive single-issuer
+        // default. Per-tenant issuer binding + suspension only apply to
+        // tenants explicitly registered. This is what lets the gatekeeper /
+        // oidc_generic providers ship an empty map without rejecting every
+        // token. Matches Python's AuthGuard._enforce_trust.
+        let record = match trust_map.get(&tenant_id.to_string()).await {
+            Some(record) => record,
+            None => {
+                if self.config.strict_trust {
+                    return Err(AuthError::IssuerNotTrusted(format!(
+                        "tenant {} is not registered in the trust map (strict_trust is enabled)",
+                        tenant_id
+                    )));
+                }
+                return Ok(());
+            }
+        };
         if record.expected_issuer != iss {
             return Err(AuthError::IssuerNotTrusted(format!(
                 "tenant {} expects issuer {:?}, token presents {:?}",

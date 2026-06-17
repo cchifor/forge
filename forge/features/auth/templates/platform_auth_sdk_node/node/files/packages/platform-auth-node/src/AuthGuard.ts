@@ -97,6 +97,17 @@ export interface AuthGuardConfig {
 
   /** Optional: per-tenant issuer trust map. */
   trustMap?: IssuerTrustMap;
+  /**
+   * When ``true``, a token whose tenant has no record in ``trustMap`` is
+   * rejected with ``IssuerNotTrusted``. Default ``false`` — the permissive
+   * single-issuer default that mirrors Python's
+   * ``AuthGuard(strict_trust=False)``: per-tenant issuer binding +
+   * suspension only constrain tenants explicitly registered in the map, so
+   * a gatekeeper / oidc_generic deployment can ship an *empty* trust map
+   * without rejecting every token. Set ``true`` for hybrid-realm
+   * deployments where every tenant must be registered.
+   */
+  strictTrust?: boolean;
   /** Optional: revoked-jti store. */
   revocation?: RevocationStore;
   /** Optional: RFC 8693 act-chain authorization policy. */
@@ -137,6 +148,7 @@ export class AuthGuard {
   private readonly _scopeClaim: string;
   private readonly _jwks: JWKSCache;
   private readonly _trustMap: IssuerTrustMap | undefined;
+  private readonly _strictTrust: boolean;
   private readonly _revocation: RevocationStore | undefined;
   private readonly _mayAct: MayActPolicy | undefined;
   private readonly _audit: AuthAuditCallback | undefined;
@@ -178,6 +190,7 @@ export class AuthGuard {
 
     this._jwks = config.jwks;
     this._trustMap = config.trustMap;
+    this._strictTrust = config.strictTrust ?? false;
     this._revocation = config.revocation;
     this._mayAct = config.mayAct;
     this._algorithms = [...algs];
@@ -370,8 +383,19 @@ export class AuthGuard {
 
   private async _enforceTrust(tenantId: string, iss: string): Promise<void> {
     const record = await this._trustMap!.get(tenantId);
+    // A missing record means the tenant is unknown to the trust map.
+    // Default (strictTrust=false): accept — the permissive single-issuer
+    // default. Per-tenant issuer binding + suspension only apply to tenants
+    // explicitly registered. This is what lets the gatekeeper / oidc_generic
+    // providers ship an empty map without rejecting every token. Matches
+    // Python's AuthGuard._enforce_trust.
     if (record === null) {
-      throw new InvalidToken(`unknown tenant ${tenantId}`);
+      if (this._strictTrust) {
+        throw new IssuerNotTrusted(
+          `tenant ${tenantId} is not registered in the trust map (strictTrust is enabled)`,
+        );
+      }
+      return;
     }
     if (record.expectedIssuer !== iss) {
       throw new IssuerNotTrusted(
