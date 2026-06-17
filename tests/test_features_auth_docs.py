@@ -143,7 +143,7 @@ def test_upgrading_md_has_1_2_section() -> None:
     assert "auth-keycloak-to-platform-auth" in text, (
         "UPGRADING.md must reference the codemod by its `--migrate <name>` value"
     )
-    assert "forge --plan-migrate" in text, (
+    assert "--dry-run" in text, (
         "UPGRADING.md must document the dry-run path so users plan before applying"
     )
 

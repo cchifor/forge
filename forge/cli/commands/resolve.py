@@ -95,8 +95,12 @@ def _run_resolve(args: argparse.Namespace) -> int:
                 sys.stderr.write(f"forge --resolve: {msg}\n")
             return _EXIT_RESOLVE_FAILURE
 
+    # Initiative #6 (caching): parse forge.toml once per invocation.
+    from forge.sync._manifest_cache import manifest_cache_scope  # noqa: PLC0415
+
     try:
-        report = resolve_sidecars(project_root, quiet=quiet)
+        with manifest_cache_scope():
+            report = resolve_sidecars(project_root, quiet=quiet)
     except FileNotFoundError as exc:
         # Project root missing — surface a structured error so JSON
         # consumers can branch on a known shape, then exit with the

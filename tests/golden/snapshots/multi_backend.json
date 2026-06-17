@@ -41,7 +41,7 @@
       "sha256": "9a94950eef4a8084"
     },
     "forge.toml": {
-      "size": 65070,
+      "size": 66144,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -63,6 +63,14 @@
     "services/api-node/Dockerfile": {
       "size": 3756,
       "sha256": "7674b35229db8f85"
+    },
+    "services/api-node/OBSERVABILITY.md": {
+      "size": 2091,
+      "sha256": "7f012119b420390b"
+    },
+    "services/api-node/OPERATIONS.md": {
+      "size": 2070,
+      "sha256": "3edf1f3627fa2dd7"
     },
     "services/api-node/README.md": {
       "size": 1412,
@@ -291,6 +299,14 @@
     "services/api-py/Dockerfile": {
       "size": 3091,
       "sha256": "d62acada673764f8"
+    },
+    "services/api-py/OBSERVABILITY.md": {
+      "size": 2870,
+      "sha256": "88eb592be6414cd8"
+    },
+    "services/api-py/OPERATIONS.md": {
+      "size": 2644,
+      "sha256": "adb3e5aea64be980"
     },
     "services/api-py/README.md": {
       "size": 33689,
