@@ -1,8 +1,18 @@
 # observability_otel — Rust.
 #
-# Registers the `otel` module and calls `configure_otel` before the
-# tracing subscriber layers are assembled so traces flow through the
-# bridge on every subsequent log line.
+# Adds the OpenTelemetry OTLP dependencies, registers the `otel` module, and
+# pushes an OTLP tracing layer onto the base template's layer set so spans
+# from every `tracing` event export to the configured collector.
+
+- target: Cargo.toml
+  marker: FORGE:CARGO_DEPENDENCIES
+  position: after
+  zone: generated
+  snippet: |-
+    opentelemetry = "0.27"
+    opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+    opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
+    tracing-opentelemetry = "0.28"
 
 - target: src/lib.rs
   marker: FORGE:LIB_MOD_REGISTRATION
@@ -23,4 +33,6 @@
   snippet: |-
     let service_name =
         std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "forge-service".to_string());
-    let _ = otel::configure_otel(&service_name);
+    if let Some(otel_layer) = otel::otel_layer(&service_name) {
+        layers.push(otel_layer);
+    }
