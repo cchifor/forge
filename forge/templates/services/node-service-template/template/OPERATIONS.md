@@ -1,0 +1,52 @@
+# Operations runbook
+
+Operator-facing notes for running this Node/Fastify service in production.
+See `OBSERVABILITY.md` for tracing, metrics, and logging.
+
+## Configuration order
+
+Settings load lowest-to-highest priority (later wins):
+
+1. Zod schema defaults (in code).
+2. `config/defaults.yaml`.
+3. `config/{ENV}.yaml` — selected by `ENV` (or `NODE_ENV`), default `development`.
+4. `.secrets.yaml` — gitignored local overrides.
+5. `APP__*` environment variables — nested with `__`, e.g.
+   `APP__DB__URL`, `APP__SERVER__PORT`. Values are coerced (`"true"` → boolean,
+   `"123"` → number) before Zod validation.
+
+**Env vars always win.** Config is validated by Zod at startup; a malformed
+value fails fast with the offending path.
+
+### Production auth guard
+
+If `security.auth.enabled=true` in a production-like environment (anything other
+than `development`/`test`/`local`), the loader **throws at startup** unless
+`GATEKEEPER_ISSUER` and `SERVICE_AUDIENCE` are both set. This prevents shipping
+an auth-on service with no issuer configured.
+
+## Database migrations
+
+Migrations run automatically on container start via `entrypoint.sh`:
+
+```sh
+npx prisma migrate deploy   # then: node dist/index.js
+```
+
+`prisma migrate deploy` is idempotent and safe under concurrent replica boots —
+replicas that lose the race apply nothing. To run out-of-band, execute the same
+command against the target `DATABASE_URL` before starting the app.
+
+## Graceful shutdown
+
+`SIGTERM` (rollout) and `SIGINT` (Ctrl-C) trigger a guarded shutdown: the
+handler calls `app.close()`, so Fastify stops accepting new connections, drains
+in-flight requests, and runs `onClose` hooks before the process exits. A
+`shuttingDown` flag makes a second signal a no-op. Set the container termination
+grace period to comfortably exceed your slowest request.
+
+## Health checks
+
+The service exposes liveness/readiness endpoints under `/api/v1/health/`
+(`/live`, `/ready`). Wire `/live` to the liveness probe and `/ready` to the
+readiness probe so traffic only routes once dependencies are reachable.

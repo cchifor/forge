@@ -37,7 +37,7 @@
       "sha256": "6b2aa6e589fd88e2"
     },
     "forge.toml": {
-      "size": 20367,
+      "size": 20894,
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
@@ -59,6 +59,14 @@
     "services/api/Dockerfile": {
       "size": 4226,
       "sha256": "f6878f7b5ce0a950"
+    },
+    "services/api/OBSERVABILITY.md": {
+      "size": 1943,
+      "sha256": "ca55d40a86725f18"
+    },
+    "services/api/OPERATIONS.md": {
+      "size": 1991,
+      "sha256": "807ae8caa61f0aec"
     },
     "services/api/README.md": {
       "size": 1281,
