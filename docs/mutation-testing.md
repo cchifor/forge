@@ -57,4 +57,4 @@ When extending the critical path (e.g., adding a new zone to `_apply_zoned_injec
 
 ## Known survivors
 
-Any mutation that only affects logging messages, docstrings, or error text is expected to survive — our tests don't match on log / error *text*, only on *occurrence* and *exit code*. These are documented in `tests/mutmut_known_survivors.md` when encountered so the reviewer doesn't re-investigate the same mutants across alphas.
+Any mutation that only affects logging messages, docstrings, or error text is expected to survive — our tests don't match on log / error *text*, only on *occurrence* and *exit code*. These are documented in [`tests/mutmut_known_survivors.md`](../tests/mutmut_known_survivors.md) when encountered so the reviewer doesn't re-investigate the same mutants across alphas.
