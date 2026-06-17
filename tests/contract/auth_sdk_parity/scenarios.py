@@ -357,6 +357,23 @@ SCENARIOS: tuple[Scenario, ...] = (
         expires_at=-1800,
         expected=ExpectedOutcome(error="token_expired"),
     ),
+    Scenario(
+        name="reject_token_not_yet_valid",
+        description=(
+            "Token carries an `nbf` (not-before) far in the future, so it is "
+            "not yet valid. All three verifiers must reject with the "
+            "`invalid_token` slug (PyJWT ImmatureSignatureError, jose nbf "
+            "check, jsonwebtoken ImmatureSignature all map to InvalidToken). "
+            "Pins the Rust outlier: jsonwebtoken's Validation defaults "
+            "validate_nbf=false, so without an explicit opt-in Rust silently "
+            "ACCEPTED a future-nbf token while Python + Node rejected it. The "
+            "nbf is a fixed far-future absolute timestamp (extra_claims) so it "
+            "is unambiguously in the future regardless of when the runner "
+            "executes; exp stays valid (ttl_seconds) so only nbf trips."
+        ),
+        extra_claims={"nbf": 9999999999},  # year 2286 — always in the future
+        expected=ExpectedOutcome(error="invalid_token"),
+    ),
     # ----------------------------------------------------------- audience
     Scenario(
         name="reject_wrong_audience",
