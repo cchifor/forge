@@ -11,6 +11,9 @@ import '../data/agent_state_reducer.dart';
 import '../domain/chat_message.dart';
 import '../domain/user_prompt_payload.dart';
 import '../domain/workspace_activity.dart';
+{%- if include_auth %}
+import '../../auth/data/auth_repository.dart';
+{%- endif %}
 
 const _modelKey = 'chat:model';
 const _approvalKey = 'chat:approval';
@@ -86,9 +89,17 @@ final chatApprovalProvider =
 
 /// Optional auth-token getter — chat works in no-auth projects too.
 final chatAuthTokenProvider = FutureProvider<String?>((ref) async {
-  // Auth feature isn't always present (include_auth=false). Resolve dynamically
-  // to avoid a hard import; widgets pass the token explicitly to the notifier.
+{%- if include_auth %}
+  // Auth is enabled: surface the current access token so native (mobile /
+  // desktop) chat sends `Authorization: Bearer <token>` to the agent. On web,
+  // Gatekeeper HttpOnly cookies carry auth, so accessToken is null there and
+  // the bearer is simply omitted.
+  return ref.read(authRepositoryProvider).accessToken;
+{%- else %}
+  // No auth feature in this project (include_auth=false) — nothing to send;
+  // widgets pass any token explicitly to the notifier.
   return null;
+{%- endif %}
 });
 
 /// Holder for the chat thread. Owns messages, agent state, tool calls, and
