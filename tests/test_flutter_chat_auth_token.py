@@ -58,7 +58,7 @@ def test_chat_token_wired_when_auth_enabled() -> None:
 
     # Input bar reads it and threads it into sendMessage.
     assert "ref.watch(chatAuthTokenProvider)" in input_bar
-    assert "bearerToken: ref.read(chatAuthTokenProvider).valueOrNull" in input_bar
+    assert "bearerToken: ref.read(chatAuthTokenProvider).value" in input_bar
 
 
 def test_chat_token_is_null_noop_without_auth() -> None:

@@ -61,7 +61,7 @@ class ChatInputBar extends HookConsumerWidget {
       ref.read(chatProvider.notifier).sendMessage(
             text,
 {%- if include_auth %}
-            bearerToken: ref.read(chatAuthTokenProvider).valueOrNull,
+            bearerToken: ref.read(chatAuthTokenProvider).value,
 {%- endif %}
             attachmentIds: ids,
           );
