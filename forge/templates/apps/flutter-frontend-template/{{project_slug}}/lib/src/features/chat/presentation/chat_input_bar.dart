@@ -20,6 +20,12 @@ class ChatInputBar extends HookConsumerWidget {
     final isGenerating = ref.watch(chatIsRunningProvider);
     final attachmentsState = ref.watch(chatAttachmentsProvider);
     final attachmentsCtrl = ref.read(chatAttachmentsProvider.notifier);
+{%- if include_auth %}
+    // Eagerly resolve the auth token so it's available synchronously at send
+    // time (the provider wraps a sync accessToken getter). Null on web, where
+    // Gatekeeper HttpOnly cookies carry auth instead of a bearer.
+    ref.watch(chatAuthTokenProvider);
+{%- endif %}
 
     Future<void> pickFiles() async {
       try {
@@ -54,6 +60,9 @@ class ChatInputBar extends HookConsumerWidget {
       if ((text.isEmpty && ids.isEmpty) || isGenerating) return;
       ref.read(chatProvider.notifier).sendMessage(
             text,
+{%- if include_auth %}
+            bearerToken: ref.read(chatAuthTokenProvider).valueOrNull,
+{%- endif %}
             attachmentIds: ids,
           );
       controller.clear();
