@@ -243,6 +243,12 @@ impl AuthGuard {
         validation.set_required_spec_claims(REQUIRED_CLAIMS);
         validation.leeway = self.config.clock_skew_seconds;
         validation.algorithms = self.config.algorithms.clone();
+        // jsonwebtoken's Validation defaults validate_nbf=false, so a future
+        // `nbf` would otherwise be ignored. Python (PyJWT) and Node (jose)
+        // both reject not-yet-valid tokens; enable nbf validation for parity
+        // (the ImmatureSignature -> InvalidToken mapping in errors.rs is what
+        // surfaces the `invalid_token` "token not yet valid" rejection).
+        validation.validate_nbf = true;
 
         let token_data = decode::<Value>(token, &key, &validation).map_err(AuthError::from)?;
         let claims = token_data.claims;
