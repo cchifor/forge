@@ -42,7 +42,7 @@ _RUST_APP = (
     / "rust-service-template"
     / "template"
     / "src"
-    / "app.rs"
+    / "app.rs.jinja"
 )
 
 

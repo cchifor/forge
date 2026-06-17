@@ -33,5 +33,13 @@ pub fn create_app(pool: PgPool) -> Router {
         .layer(axum::middleware::from_fn(security_headers_middleware))
         // FORGE:END security_headers:MIDDLEWARE_REGISTRATION
         // FORGE:MIDDLEWARE_REGISTRATION
+{%- if not (include_platform_auth | default(false)) %}
+        // Dev-mode identity fallback (auth.mode=none): inject a fixed local
+        // IdentityContext so tenant-scoped handlers (which extract
+        // ``Extension<IdentityContext>``) have an identity to scope on.
+        // Mirrors the Python/Node dev passthroughs. NEVER added when the real
+        // platform-auth middleware is wired (it owns identity + rejects anon).
+        .layer(axum::Extension(crate::identity::IdentityContext::dev()))
+{%- endif %}
         .layer(DefaultBodyLimit::max(1_048_576))
 }

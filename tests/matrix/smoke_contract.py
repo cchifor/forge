@@ -32,8 +32,14 @@ import json
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+
+# Fixed UUID the CRUD probe sends for owner fields. No-auth backends ignore it
+# (they scope on the bound dev identity); auth-on backends overwrite it from the
+# verified token. Either way the value just has to parse as a UUID.
+_SMOKE_OWNER_UUID = "00000000-0000-0000-0000-000000000001"
 
 
 @dataclass(frozen=True)
@@ -349,6 +355,97 @@ def _wait_for_ready(base_url: str, max_wait_s: int) -> None:
             delay = min(delay * 1.5, 4.0)
 
 
+def _check_crud(
+    base_url: str,
+    entities: Sequence[str],
+    timeout_s: int,
+    violations: list[ContractViolation],
+    skipped: list[str],
+) -> None:
+    """Exercise the data path (GET list + POST create) for each entity.
+
+    A **5xx** on either endpoint is a contract violation: the data path is
+    broken — exactly the signature of a generated backend that never binds a
+    request identity (the Node/Rust no-auth ``scopeWhere``/``Extension``
+    500s). A **4xx** create is *tolerated* (recorded as a skip): the generic
+    body below may not match this entity's required fields, and asserting the
+    full happy path would need per-fragment field knowledge. A collection that
+    404s is skipped — the entity isn't exposed at the conventional path.
+
+    This is the CRUD portion the contract previously deferred; it is the only
+    check that catches a backend whose health + OpenAPI are fine but whose
+    actual records endpoints throw.
+    """
+    for entity in entities:
+        coll = f"/api/v1/{entity}"
+        url = base_url.rstrip("/") + coll
+
+        # GET list — must not 5xx (and must exist).
+        try:
+            status, body = _urlopen_with_retry(url, timeout_s)
+        except urllib.error.HTTPError as exc:
+            status, body = exc.code, exc.read() or b""
+        except Exception as exc:  # noqa: BLE001
+            violations.append(
+                ContractViolation(
+                    endpoint=f"GET {coll}",
+                    reason=f"list endpoint unreachable ({type(exc).__name__}): {exc}",
+                )
+            )
+            continue
+        if status == 404:
+            skipped.append(f"crud: {coll} not exposed (404)")
+            continue
+        if status >= 500:
+            violations.append(
+                ContractViolation(
+                    endpoint=f"GET {coll}",
+                    reason="list endpoint 5xx — data path broken (e.g. unbound request identity)",
+                    status=status,
+                    body=body.decode("utf-8", "replace")[:200],
+                )
+            )
+            continue
+
+        # POST create — must not 5xx; a 4xx (schema mismatch) is tolerated.
+        payload = json.dumps(
+            {
+                "name": f"smoke-{entity}",
+                "customer_id": _SMOKE_OWNER_UUID,
+                "user_id": _SMOKE_OWNER_UUID,
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                post_status, post_body = resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            post_status, post_body = exc.code, exc.read() or b""
+        except Exception as exc:  # noqa: BLE001
+            violations.append(
+                ContractViolation(
+                    endpoint=f"POST {coll}",
+                    reason=f"create endpoint unreachable ({type(exc).__name__}): {exc}",
+                )
+            )
+            continue
+        if post_status >= 500:
+            violations.append(
+                ContractViolation(
+                    endpoint=f"POST {coll}",
+                    reason="create endpoint 5xx — data path broken (e.g. unbound request identity)",
+                    status=post_status,
+                    body=post_body.decode("utf-8", "replace")[:200],
+                )
+            )
+        elif post_status not in (200, 201):
+            skipped.append(
+                f"crud: POST {coll} returned {post_status} (generic body unmatched; create not asserted)"
+            )
+
+
 def assert_contract(
     base_url: str,
     scenario: str,
@@ -356,6 +453,7 @@ def assert_contract(
     *,
     timeout_s: int = 10,
     readiness_wait_s: int = 60,
+    crud_entities: Sequence[str] = (),
 ) -> ContractResult:
     """Run the RFC-006 HTTP contract against a live backend.
 
@@ -365,11 +463,12 @@ def assert_contract(
     grid. ``readiness_wait_s`` caps how long :func:`_wait_for_ready`
     will block before running the per-endpoint checks.
 
-    The CRUD portion of the contract (``POST``/``GET``/``PATCH``/
-    ``DELETE`` cycle against a seed entity) is a sprint-2 follow-on
-    — asserting it here would require knowing the entity's required
-    fields ahead of time, which varies per fragment. Tracked in
-    RFC-006's open questions.
+    ``crud_entities`` are the backend's CRUD entity names (the runner passes
+    each backend's ``features``). For each, :func:`_check_crud` exercises the
+    GET-list + POST-create data path and flags a 5xx — which is how a backend
+    that boots and answers health/OpenAPI but throws on every record endpoint
+    (an unbound request identity) gets caught instead of passing silently.
+    Empty (the default) skips the CRUD cycle for backwards compatibility.
     """
     _wait_for_ready(base_url, readiness_wait_s)
     violations: list[ContractViolation] = []
@@ -377,6 +476,7 @@ def assert_contract(
     _check_health_live(base_url, timeout_s, violations)
     _check_health_ready(base_url, timeout_s, violations)
     _check_openapi(base_url, timeout_s, violations, skipped)
+    _check_crud(base_url, crud_entities, timeout_s, violations, skipped)
     return ContractResult(
         scenario=scenario,
         backend_name=backend_name,
