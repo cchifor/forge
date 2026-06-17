@@ -1405,7 +1405,7 @@
       "sha256": "e772952c9b65e934"
     },
     "forge.toml": {
-      "size": 155038,
+      "size": 155569,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -1547,6 +1547,14 @@
     "services/api/Dockerfile": {
       "size": 3637,
       "sha256": "705cbbb1c3522151"
+    },
+    "services/api/OBSERVABILITY.md": {
+      "size": 2870,
+      "sha256": "88eb592be6414cd8"
+    },
+    "services/api/OPERATIONS.md": {
+      "size": 2644,
+      "sha256": "adb3e5aea64be980"
     },
     "services/api/README.md": {
       "size": 33686,
