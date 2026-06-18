@@ -35,7 +35,10 @@ def _generate(language: BackendLanguage) -> Path:
     cfg = ProjectConfig(
         project_name="OpsDocs",
         backends=[bc],
-        options={"database.mode": "none"},
+        # NB: default (DB-backed) mode — database.mode=none is Python-only now
+        # (a Node/Rust stateless stack has no stripper), and this test only
+        # cares that operator docs ship for every language.
+        options={},
     )
     cfg.validate()
     return Path(generate(cfg, quiet=True, dry_run=True)) / "services" / "api"

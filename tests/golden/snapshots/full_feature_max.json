@@ -1277,8 +1277,8 @@
       "sha256": "7b3deae1cb54bd9e"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/oidc.py": {
-      "size": 3801,
-      "sha256": "c90fe005c73617ce"
+      "size": 4359,
+      "sha256": "e5153f781070d1a1"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/oidc_pkce.py": {
       "size": 4901,
@@ -1297,8 +1297,8 @@
       "sha256": "bebbec570db9b36e"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 39082,
-      "sha256": "aa84b3c93024245b"
+      "size": 39338,
+      "sha256": "499c629dd4fa962c"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
