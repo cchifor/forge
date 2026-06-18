@@ -555,6 +555,12 @@ def _update_locked(
         )
 
     from forge.config._topology import compute_topology  # noqa: PLC0415
+    from forge.synthesis import compute_platform_synthesis  # noqa: PLC0415
+
+    # Compute multi-service synthesis so the Helm chart keeps per-backend S2S env
+    # (GATEKEEPER_CLIENT_*, INTERNAL_SERVICE_URL_*, BUS_URL) current on --update,
+    # matching the generate path (and docker-compose). (audit #5)
+    _synthesis = compute_platform_synthesis(config, plan)
 
     apply_project_features(
         project_root,
@@ -580,7 +586,7 @@ def _update_locked(
         # residual single-port ``{{ server_port }}`` usage (the updater used to
         # pass None here, pinning the chart to the proxy default port).
         primary_server_port=(config.backend.server_port if config.backend else None),
-        topology=compute_topology(config, plan),
+        topology=compute_topology(config, plan, synthesis=_synthesis),
     )
 
     # Re-run schema-driven codegen so template/codegen changes reach existing

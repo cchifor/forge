@@ -323,7 +323,9 @@ def _run_generation_phases(
     synthesis = _synthesize_platform(config, plan, project_root, quiet=quiet)
     _render_docker_stack(config, plan, project_root, quiet=quiet, synthesis=synthesis)
     _generate_frontend_extras(config, project_root, quiet=quiet)
-    _apply_project_scope(config, plan, project_root, collector, quiet=quiet, report=report)
+    _apply_project_scope(
+        config, plan, project_root, collector, quiet=quiet, report=report, synthesis=synthesis
+    )
     # Phase 4: render the synthesized gatekeeper S2S service registry. This runs
     # AFTER _apply_project_scope because the gatekeeper fragment (project-scoped)
     # ships its baseline service_registry.yaml there and refuses to overwrite an
@@ -782,6 +784,7 @@ def _apply_project_scope(
     *,
     quiet: bool,
     report: GenerationReport | None = None,
+    synthesis: PlatformSynthesis | None = None,
 ) -> None:
     """Catch-all provenance sweep, project-scope features, shared files, codegen."""
     # Record any non-backend base-template writes (frontend, e2e, infra) so
@@ -828,7 +831,10 @@ def _apply_project_scope(
             # render {{ server_port }} pick up the primary backend's port.
             primary_server_port=(config.backend.server_port if config.backend else None),
             # Deployment topology for the topology-aware Helm chart fragment.
-            topology=compute_topology(config, plan),
+            # Forward ``synthesis`` so per-backend S2S env (GATEKEEPER_CLIENT_*,
+            # INTERNAL_SERVICE_URL_*, APP__EVENTS__BUS_URL) lands in the Helm
+            # values too — not just docker-compose. (audit #5)
+            topology=compute_topology(config, plan, synthesis=synthesis),
         )
 
     # Bundle the Keycloak realm into the Helm chart's files/ so the in-cluster
