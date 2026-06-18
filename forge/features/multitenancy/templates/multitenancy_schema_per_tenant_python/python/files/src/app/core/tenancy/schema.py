@@ -154,10 +154,19 @@ def register_search_path_listener(engine: Any, settings: TenancySettings | None 
             conn.exec_driver_sql("SET LOCAL search_path TO ''")
             return
         schema = schema_name_for(tenant, prefix)
-        # ``, public`` keeps shared types/extensions resolvable. An UN-provisioned
-        # tenant (whose schema lacks a table) would still fall THROUGH to
-        # public.<table>, so provisioning MUST run before a tenant is served and
-        # ``public`` must hold no tenant rows. See SCHEMA_PER_TENANT.md.
+        # Provision-before-serve fail-closed (audit #29): if the tenant schema is
+        # not provisioned, do NOT bind ``, public`` — an unqualified app table
+        # (``items``) would otherwise fall THROUGH to ``public.items`` and an
+        # unprovisioned tenant would read/write shared rows cross-tenant. Bind an
+        # empty search_path so the query errors instead, matching the no-tenant
+        # fail-closed posture above. ``, public`` is kept only for a provisioned
+        # tenant (shared types/extensions resolvable).
+        provisioned = conn.exec_driver_sql(
+            f"SELECT to_regnamespace('{schema}') IS NOT NULL"
+        ).scalar()
+        if not provisioned:
+            conn.exec_driver_sql("SET LOCAL search_path TO ''")
+            return
         conn.exec_driver_sql(f"SET LOCAL search_path TO {_quote_ident(schema)}, public")
 
     return True
@@ -239,9 +248,18 @@ class TenantSchemaHook:
         # must still be a double-quoted identifier: a search_path list element
         # like a hyphenated UUID schema (tenant_<uuid>) is not a legal *unquoted*
         # identifier, so we quote it (schema_name_for already validated it).
+        # Provision-before-serve fail-closed (audit #29): only bind ``, public``
+        # when the tenant schema exists, else an unprovisioned tenant falls
+        # through to shared ``public`` tables. Empty search_path otherwise.
+        provisioned = (
+            await session.execute(
+                text("SELECT to_regnamespace(:s) IS NOT NULL"), {"s": schema}
+            )
+        ).scalar()
+        sp = f"{_quote_ident(schema)}, public" if provisioned else ""
         await session.execute(
             text("SELECT set_config('search_path', :sp, true)"),
-            {"sp": f"{_quote_ident(schema)}, public"},
+            {"sp": sp},
         )
 
     async def clear(self, session: Any) -> None:
@@ -293,9 +311,18 @@ async def bind_tenant_search_path(session: Any, account: Any | None) -> None:
     from sqlalchemy import text  # noqa: PLC0415
 
     schema = schema_name_for(tenant, get_tenancy_settings().schema_prefix)
+    # Provision-before-serve fail-closed (audit #29): only bind ``, public`` when
+    # the authenticated tenant's schema exists; otherwise empty search_path so an
+    # unprovisioned tenant can't read/write shared ``public`` tables.
+    provisioned = (
+        await session.execute(
+            text("SELECT to_regnamespace(:s) IS NOT NULL"), {"s": schema}
+        )
+    ).scalar()
+    sp = f"{_quote_ident(schema)}, public" if provisioned else ""
     await session.execute(
         text("SELECT set_config('search_path', :sp, true)"),
-        {"sp": f"{_quote_ident(schema)}, public"},
+        {"sp": sp},
     )
 
 
