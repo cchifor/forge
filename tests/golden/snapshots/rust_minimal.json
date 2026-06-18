@@ -121,16 +121,16 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8347,
-      "sha256": "844c5eb33e3791a6"
+      "size": 8809,
+      "sha256": "5369479a690f3d44"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
       "sha256": "30a4ddc7e465cb8b"
     },
     "services/api/src/db.rs": {
-      "size": 316,
-      "sha256": "ee6eb1c43b3187f0"
+      "size": 696,
+      "sha256": "b720fb47040c747e"
     },
     "services/api/src/db_pool.rs": {
       "size": 1278,
@@ -157,8 +157,8 @@
       "sha256": "4007d90545bcff2f"
     },
     "services/api/src/main.rs": {
-      "size": 4234,
-      "sha256": "4623f33eb571bc41"
+      "size": 4632,
+      "sha256": "a664888914e3754a"
     },
     "services/api/src/middleware/correlation.rs": {
       "size": 795,
