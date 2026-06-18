@@ -59,6 +59,7 @@ EXPECTED_FILES = (
     "src/app/core/tenancy/rls.py",
     "src/app/middleware/tenant_rls.py",
     "alembic/versions/0002_enable_rls.py",
+    "alembic/versions/0099_enable_rls_feature_tables.py",
     "tests/unit/test_tenancy.py",
 )
 

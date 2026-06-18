@@ -20,7 +20,11 @@
 
 	const rows = $derived.by<Array<Record<string, unknown>>>(() => {
 		const raw = activity.content.rows;
-		if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+		// Filter null / non-object rows so a heterogeneous payload (e.g.
+		// [{a:1}, null]) doesn't throw on cell access during render. (audit #25)
+		if (Array.isArray(raw)) {
+			return raw.filter((r) => r && typeof r === 'object') as Array<Record<string, unknown>>;
+		}
 		return [];
 	});
 
@@ -51,7 +55,7 @@
 						<tr class="border-t border-border">
 							{#each columns as col (col.key)}
 								<td class="px-3 py-2 align-top">
-									{format(row[col.key])}
+									{format(row?.[col.key])}
 								</td>
 							{/each}
 						</tr>

@@ -8,6 +8,16 @@ metadata:
   labels:
     {{- include "app.labels" $ | nindent 4 }}
     app.kubernetes.io/name: {{ $name }}
+  annotations:
+    # Pre-install/pre-upgrade hook at weight -10 (BEFORE the migrate Job at -5)
+    # so the pre-install migrate Job's non-optional envFrom resolves it on a
+    # FIRST install — otherwise this main-phase resource doesn't exist yet and
+    # the Job pod CreateContainerConfigErrors. before-hook-creation (NOT
+    # hook-succeeded) keeps it for the main-phase Deployments that envFrom it.
+    # (audit #6)
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
 data:
   {{- range $k, $v := $w.env }}
   {{ $k }}: {{ $v | quote }}

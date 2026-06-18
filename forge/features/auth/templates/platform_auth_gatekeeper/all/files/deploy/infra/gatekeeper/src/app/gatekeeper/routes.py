@@ -41,6 +41,10 @@ from app.gatekeeper.helpers import (
 from app.gatekeeper.jwks import verify_token
 from app.gatekeeper.metrics import RATE_LIMIT_REJECTIONS, AuthMetricsRecorder
 from app.gatekeeper.oidc import exchange_code, refresh_tokens
+# _pop_auth_state logs session_fp(state) on its corrupt/expired-envelope reject
+# branches; without this import those branches raise NameError -> a 500 instead
+# of the intended graceful 400. (audit #28)
+from app.middleware.log_redaction import session_fp
 from app.gatekeeper.oidc_pkce import (
     envelope_code_verifier,
     envelope_nonce,

@@ -29,7 +29,23 @@
 		</div>
 		<div class="flex-1 overflow-y-auto">
 			{#if Comp}
-				<Comp {activity} />
+				<!-- Contain a throwing canvas component (e.g. a malformed
+				     data_table payload) so it degrades to a fallback instead of
+				     tearing down the whole canvas pane. Mirrors Vue's CanvasError
+				     boundary. (audit #25) -->
+				<svelte:boundary>
+					<Comp {activity} />
+					{#snippet failed(error)}
+						<div
+							class="p-4 text-sm text-muted-foreground"
+							data-testid="canvas-error"
+							role="alert"
+						>
+							This view couldn't be displayed.
+							<span class="block text-xs opacity-70">{(error as Error)?.message ?? ''}</span>
+						</div>
+					{/snippet}
+				</svelte:boundary>
 			{/if}
 		</div>
 	</section>

@@ -190,6 +190,10 @@ def test_python_only_when_active_table_shape() -> None:
         "rag.backend",
         "platform.mcp",
         "object_store.backend",
+        # agent.mode joined the Python-only set (audit #16): its
+        # llm_only/tool_calling bundles fan out to Python-only fragments, so on
+        # a Node/Rust-only project they'd silently resolve to just llm_port.
+        "agent.mode",
     }
     for langs in _PYTHON_ONLY_WHEN_ACTIVE.values():
         assert langs == frozenset({BackendLanguage.PYTHON})

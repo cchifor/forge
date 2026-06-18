@@ -81,10 +81,18 @@ async fn main() {
     // Graceful shutdown: a rollout sends SIGTERM; with_graceful_shutdown stops
     // accepting new connections and lets in-flight requests finish before the
     // process exits, instead of dropping them mid-response.
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .unwrap();
+    // ``into_make_service_with_connect_info`` populates the per-connection
+    // ConnectInfo<SocketAddr> extension. Without it the rate-limit middleware's
+    // peer-IP lookup is always None and every client shares one "anonymous"
+    // token bucket (a global DoS vector). Harmless when rate-limit isn't
+    // enabled. (audit #8)
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .unwrap();
 }
 
 /// Resolve when the process receives SIGTERM (rollout) or Ctrl-C (SIGINT).

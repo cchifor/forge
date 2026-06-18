@@ -16,4 +16,13 @@
         timeWindow: "1 minute",
         allowList: (req) =>
             req.url.startsWith("/health") || req.url.startsWith("/metrics"),
+        // Key authenticated traffic per-tenant (mirrors the Python limiter's
+        // tenant:{customer_id} key) and everything else per client IP. req.ip
+        // reflects the real client when behind the trusted proxy (Fastify
+        // trustProxy is set in app.ts), instead of collapsing every client
+        // onto the proxy address and sharing one bucket. (audit #14)
+        keyGenerator: (req) => {
+            const tenantId = (req as { identity?: { tenantId?: string } }).identity?.tenantId;
+            return tenantId ? `tenant:${tenantId}` : req.ip;
+        },
     });

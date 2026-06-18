@@ -115,6 +115,11 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
   String? _lastBearerToken;
   Map<String, dynamic> _lastForwardedProps = const {};
   bool _hasRun = false;
+  // Stale-run guard (mirrors Vue/Svelte). Each run captures the current
+  // generation; resetThread bumps it so a still-arriving stream from a
+  // superseded run can't repopulate the cleared state (ghost messages) or
+  // flip isRunning after the user moved on. (audit #7)
+  int _runGeneration = 0;
 
   @override
   ChatStateSnapshot build() {
@@ -180,6 +185,9 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
   /// Reset the thread (new ID, empty state).
   void resetThread() {
     _threadId = _newId();
+    // Supersede any in-flight run so its late events can't repopulate the
+    // freshly-cleared thread. (audit #7)
+    _runGeneration += 1;
     state = ChatStateSnapshot.empty;
     _lastBearerToken = null;
     _lastForwardedProps = const {};
@@ -273,6 +281,7 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
     _lastBearerToken = bearerToken;
     _lastForwardedProps = Map<String, dynamic>.from(mergedProps);
     _hasRun = true;
+    final myGeneration = ++_runGeneration;
 
     state = state.copyWith(isRunning: true, clearError: true);
 
@@ -286,12 +295,17 @@ class ChatNotifier extends Notifier<ChatStateSnapshot> {
         bearerToken: bearerToken,
       );
       await for (final event in stream) {
+        // Drop events from a run the user superseded (reset) — they would
+        // otherwise re-add ghost messages into the cleared state. Returning
+        // from the await-for also cancels the stream subscription. (audit #7)
+        if (myGeneration != _runGeneration) return;
         state = reduce(state, event);
       }
     } catch (e) {
+      if (myGeneration != _runGeneration) return;
       state = state.copyWith(isRunning: false, error: e.toString());
     } finally {
-      if (state.isRunning) {
+      if (myGeneration == _runGeneration && state.isRunning) {
         state = state.copyWith(isRunning: false);
       }
     }
