@@ -18,9 +18,17 @@ let currentThreadId = crypto.randomUUID();
 let lastRunOptions: ChatRunOptions | undefined = undefined;
 let hasRun = false;
 
+// Stale-run guard (mirrors Vue's useAgentClient). Each run captures the current
+// generation; resetThread/editAndResend bump it so a still-arriving stream from
+// a superseded run can't mutate the cleared snapshot (ghost messages) or flip
+// isRunning after the user moved on. (audit #7)
+let runGeneration = 0;
+
 async function runAgent(options?: ChatRunOptions) {
 	lastRunOptions = options;
 	hasRun = true;
+	const myGeneration = ++runGeneration;
+	const isCurrent = () => myGeneration === runGeneration;
 
 	const token = await getOptionalAuthToken();
 	const headers: Record<string, string> = {};
@@ -62,6 +70,9 @@ async function runAgent(options?: ChatRunOptions) {
 		url,
 		parser: (frame) => parseEvent(frame),
 		onEvent: (event) => {
+			// Drop events from a run the user has superseded (reset/edit) — they
+			// would otherwise re-add ghost messages into the cleared snapshot.
+			if (!isCurrent()) return;
 			snapshot = reduce(snapshot, event);
 		},
 		headers
@@ -70,8 +81,10 @@ async function runAgent(options?: ChatRunOptions) {
 	try {
 		await client.runAgent(payload);
 		// Server closed cleanly; force-stop if reducer didn't see RUN_FINISHED.
+		if (!isCurrent()) return;
 		snapshot = { ...snapshot, isRunning: false };
 	} catch (e) {
+		if (!isCurrent()) return;
 		snapshot = {
 			...snapshot,
 			isRunning: false,
@@ -106,6 +119,8 @@ function editAndResend(messageId: string, newContent: string, options?: ChatRunO
 	if (idx === -1) return;
 	const kept = snapshot.messages.slice(0, idx);
 	currentThreadId = crypto.randomUUID();
+	// Supersede any in-flight run before clearing the snapshot. (audit #7)
+	runGeneration += 1;
 	snapshot = { ...resetSnapshot(), messages: kept };
 	addUserMessage(newContent);
 	void runAgent(options);
@@ -123,6 +138,9 @@ function regenerate(messageId: string) {
 
 function resetThread() {
 	currentThreadId = crypto.randomUUID();
+	// Supersede any in-flight run so its late events can't repopulate the
+	// freshly-cleared thread. (audit #7)
+	runGeneration += 1;
 	snapshot = resetSnapshot();
 	lastRunOptions = undefined;
 	hasRun = false;

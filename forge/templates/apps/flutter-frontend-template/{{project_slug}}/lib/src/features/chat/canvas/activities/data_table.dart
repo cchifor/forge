@@ -40,6 +40,12 @@ class DataTableActivity extends StatelessWidget {
     if (rows.isEmpty) {
       return const Center(child: Text('No rows.'));
     }
+    // Rows present but no derivable columns (e.g. rows=[{}]): Material's
+    // DataTable asserts columns.isNotEmpty and would throw in debug/profile
+    // builds. Degrade to a placeholder instead. (audit #27)
+    if (cols.isEmpty) {
+      return const Center(child: Text('No columns.'));
+    }
     return SingleChildScrollView(
       key: const ValueKey('canvas-data-table'),
       scrollDirection: Axis.horizontal,
