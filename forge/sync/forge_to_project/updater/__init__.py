@@ -158,6 +158,10 @@ def _update_locked(
 ) -> dict[str, object]:
     """Main update body, called with the .forge/lock held."""
     data = read_forge_toml(manifest)
+    # Sidecars already on disk before this run (stale/unresolved from prior
+    # runs). Excluded from the conflict count so file_conflicts reflects only
+    # the NEW conflicts this run produced. (audit #12)
+    pre_existing_sidecars = _sidecar_paths(project_root)
     try:
         current_version = metadata.version("forge")
     except metadata.PackageNotFoundError:
@@ -561,6 +565,16 @@ def _update_locked(
         collector=collector,
         option_values=plan.option_values,
         frontend_framework=frontend_framework,
+        # Route component_<Name> fragments into the frontend app dir on update,
+        # exactly like generate (generator.py). Without this the updater passed
+        # frontend_dir=None and every component fragment's files/src/... tree was
+        # orphaned at the project root instead of apps/<slug>/, so component
+        # fixes never reached the running app.
+        frontend_dir=(
+            project_root / "apps" / config.frontend_slug
+            if frontend_framework != FrontendFramework.NONE
+            else None
+        ),
         # Keep the topology-aware Helm chart current on --update: per-backend
         # ports flow through ``topology``; ``primary_server_port`` covers any
         # residual single-port ``{{ server_port }}`` usage (the updater used to
@@ -622,7 +636,17 @@ def _update_locked(
     # rather than thread a counter through the appliers — sidecars on
     # disk are the source of truth, and the count survives across CLI
     # process boundaries (preview tools, tests inspecting state).
-    file_conflicts = _count_file_sidecars(project_root)
+    # Real new conflicts only: exclude stale (pre-existing) sidecars and the
+    # presurface edit-trail sidecars (clean base-template merges), both of
+    # which the raw sidecar glob over-counted as conflicts. (audit #12)
+    presurfaced_sidecars: set[Path] = set()
+    for entry in template_update_outcomes:
+        ps = entry.get("presurfaced_sidecars")
+        if isinstance(ps, list):
+            presurfaced_sidecars.update(Path(str(p)) for p in ps)
+    file_conflicts = _count_new_file_conflicts(
+        project_root, pre_existing_sidecars, presurfaced_sidecars
+    )
     if file_conflicts and not quiet:
         print(
             f"  [update] {file_conflicts} file conflict(s) — see .forge-merge "
@@ -706,23 +730,37 @@ def _update_locked(
     }
 
 
-def _count_file_sidecars(project_root: Path) -> int:
-    """Count ``.forge-merge`` (text) and ``.forge-merge.bin`` sidecars under root.
-
-    Walks the project tree once. Skips ``.forge/`` (forge-internal
-    state) and dot-prefixed subtrees that aren't part of generated
-    output. Used by the update summary to surface conflict counts.
-    """
+def _sidecar_paths(project_root: Path) -> set[Path]:
+    """Every ``.forge-merge`` / ``.forge-merge.bin`` sidecar path under root."""
     if not project_root.is_dir():
-        return 0
-    count = 0
-    for path in project_root.rglob("*.forge-merge*"):
-        if not path.is_file():
-            continue
-        # Only the two sidecar suffixes; ignore arbitrary user files.
-        if path.name.endswith(".forge-merge") or path.name.endswith(".forge-merge.bin"):
-            count += 1
-    return count
+        return set()
+    return {
+        path
+        for path in project_root.rglob("*.forge-merge*")
+        if path.is_file()
+        and (path.name.endswith(".forge-merge") or path.name.endswith(".forge-merge.bin"))
+    }
+
+
+def _count_new_file_conflicts(
+    project_root: Path,
+    pre_existing: set[Path],
+    presurfaced: set[Path],
+) -> int:
+    """Count sidecars created by THIS run that are real merge conflicts.
+
+    Excludes ``pre_existing`` (stale/unresolved sidecars from prior runs)
+    and ``presurfaced`` (presurface edit-trail sidecars written for
+    cleanly-merged base-template files) — both of which the raw sidecar
+    glob wrongly counted as conflicts, so ``file_conflicts`` could be
+    >0 on a run that produced zero new conflicts. (audit #12)
+    """
+    return len(_sidecar_paths(project_root) - pre_existing - presurfaced)
+
+
+def _count_file_sidecars(project_root: Path) -> int:
+    """Total ``.forge-merge`` sidecar count under root (all populations)."""
+    return len(_sidecar_paths(project_root))
 
 
 def _collect_injection_targets(
