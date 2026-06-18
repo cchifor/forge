@@ -89,6 +89,17 @@ workloads:
       GATEKEEPER_ISSUER: "http://gatekeeper:5000"
       SERVICE_AUDIENCE: "forge-services"
 {%- endif %}
+{%- if be.synthesis_env %}
+      # Inter-service (S2S) synthesis env — mirrors docker-compose.yml.j2's
+      # synthesis_env loop so a multi-service Helm deployment can mint S2S
+      # tokens + reach sibling services. Without this, Helm-deployed backends
+      # have no GATEKEEPER_CLIENT_*/INTERNAL_SERVICE_URL_*/BUS_URL and fail
+      # inter-service auth at runtime. Credentials here are placeholders;
+      # override the secret values via values-prod.yaml / an ExternalSecret.
+{%- for k, v in be.synthesis_env.items() %}
+      {{ k }}: "{{ v }}"
+{%- endfor %}
+{%- endif %}
     # Secret env -> Secret (templates/secret.yaml). Placeholders only: forge
     # NEVER bakes a real credential into the chart. Override via values-prod.yaml
     # or wire an ExternalSecret (see templates/secret.yaml).
