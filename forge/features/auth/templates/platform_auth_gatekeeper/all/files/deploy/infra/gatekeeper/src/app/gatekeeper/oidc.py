@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from app.gatekeeper.config import get_settings
-from app.gatekeeper.http_client import get_http_client, with_retry
+from app.gatekeeper.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,11 @@ def _token_endpoint(tenant: str, *, issuer_url: str | None = None) -> str:
     return f"{base_url}/protocol/openid-connect/token"
 
 
-@with_retry()
+# NO @with_retry: the OAuth2 authorization_code grant is SINGLE-USE. If the POST
+# reaches Keycloak and tokens are issued but the response read times out, a retry
+# re-POSTs the same code, which Keycloak rejects with invalid_grant (400) — the
+# original tokens are lost and the user can't log in. Non-idempotent token
+# exchanges must not be retried. (audit #10)
 async def exchange_code(
     tenant: str,
     code: str,
@@ -83,7 +87,9 @@ async def exchange_code(
     return resp.json()
 
 
-@with_retry()
+# NO @with_retry: refresh-token rotation makes this effectively single-use too —
+# a retry after a read-timeout can present an already-rotated (now-invalid)
+# refresh token. Don't retry non-idempotent token operations. (audit #10)
 async def refresh_tokens(
     tenant: str,
     refresh_token: str,

@@ -12,7 +12,13 @@ import { registerDevIdentity } from "./middleware/dev-identity.js";
 // FORGE:MIDDLEWARE_IMPORTS
 
 export async function buildApp() {
-	const app = Fastify({ logger: true, bodyLimit: 1_048_576 });
+	// ``trustProxy: "uniquelocal"`` derives req.ip from X-Forwarded-For only
+	// when the immediate peer is in a private/loopback range (the documented
+	// Traefik front sits on the compose network), so rate-limit + logs see the
+	// real client IP instead of collapsing every client onto the proxy address.
+	// Public peers can't spoof XFF. Mirrors Python/Rust trusted-proxy keying.
+	// (audit #14)
+	const app = Fastify({ logger: true, bodyLimit: 1_048_576, trustProxy: "uniquelocal" });
 
 	await app.register(cors);
 

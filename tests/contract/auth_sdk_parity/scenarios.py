@@ -357,6 +357,23 @@ SCENARIOS: tuple[Scenario, ...] = (
         expires_at=-1800,
         expected=ExpectedOutcome(error="token_expired"),
     ),
+    Scenario(
+        name="reject_token_not_yet_valid",
+        description=(
+            "Token carries an `nbf` (not-before) far in the future, so it is "
+            "not yet valid. All three verifiers must reject with the "
+            "`invalid_token` slug (PyJWT ImmatureSignatureError, jose nbf "
+            "check, jsonwebtoken ImmatureSignature all map to InvalidToken). "
+            "Pins the Rust outlier: jsonwebtoken's Validation defaults "
+            "validate_nbf=false, so without an explicit opt-in Rust silently "
+            "ACCEPTED a future-nbf token while Python + Node rejected it. The "
+            "nbf is a fixed far-future absolute timestamp (extra_claims) so it "
+            "is unambiguously in the future regardless of when the runner "
+            "executes; exp stays valid (ttl_seconds) so only nbf trips."
+        ),
+        extra_claims={"nbf": 9999999999},  # year 2286 — always in the future
+        expected=ExpectedOutcome(error="invalid_token"),
+    ),
     # ----------------------------------------------------------- audience
     Scenario(
         name="reject_wrong_audience",
@@ -437,6 +454,39 @@ SCENARIOS: tuple[Scenario, ...] = (
             TENANT_ID: {"expected_issuer": ISSUER, "suspended": True},
         },
         expected=ExpectedOutcome(error="tenant_suspended"),
+    ),
+    Scenario(
+        name="accept_unregistered_tenant_when_trust_map_present",
+        description=(
+            "Verifier has a NON-EMPTY TrustMap, but the token's tenant is "
+            "not registered in it (the map holds a different tenant). The "
+            "permissive single-issuer default (strict_trust=False) accepts "
+            "the token — per-tenant issuer binding + suspension only "
+            "constrain tenants explicitly registered in the map. This is "
+            "the partial/empty-map install path the gatekeeper + "
+            "oidc_generic providers ship (bootstrapAuth / init_auth wire "
+            "an empty InMemoryIssuerTrustMap): an unregistered tenant must "
+            "NOT be rejected, or the guard authenticates nobody. Python is "
+            "already permissive; this pins Node + Rust to the same parity "
+            "(both previously fail-closed with `unknown tenant`)."
+        ),
+        # Map holds a DIFFERENT tenant; the token's canonical TENANT_ID is
+        # absent → the verifier sees a missing trust record.
+        trust_map_overrides={
+            "33333333-3333-4333-8333-333333333333": {
+                "expected_issuer": ISSUER,
+                "suspended": False,
+            },
+        },
+        expected=ExpectedOutcome(
+            identity={
+                "tenant_id": TENANT_ID,
+                "subject": SUBJECT,
+                "roles": [],
+                "scopes": [],
+                "actor": None,
+            }
+        ),
     ),
     # ----------------------------------------------------------- tenant claim
     Scenario(

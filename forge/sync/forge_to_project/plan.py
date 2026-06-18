@@ -19,14 +19,21 @@ preview is enough to surface the merge-mode UX.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from forge.appliers.files import (
+    _JINJA_SUFFIX,
+    _build_render_context,
+    _is_ephemeral_path,
+    _render_or_read,
+)
 from forge.appliers.plan import FragmentPlan
 from forge.capability_resolver import resolve
-from forge.config import BackendConfig, ProjectConfig
+from forge.config import BackendConfig, BackendLanguage, ProjectConfig
 from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
-from forge.fragment_context import UpdateMode
+from forge.fragment_context import FragmentContext, UpdateMode
 from forge.sync.forge_to_project.uninstaller import disabled_fragments
 from forge.sync.forge_to_project.updater import _infer_backends
 from forge.sync.manifest import read_forge_toml
@@ -157,6 +164,8 @@ def plan_update(
                     plan.option_values,
                     file_baselines,
                     update_mode,
+                    config,
+                    backend,
                 )
             )
 
@@ -199,6 +208,53 @@ def _backend_dir_and_label(
     return None, str(backend)
 
 
+def _safe_render_context(
+    config: ProjectConfig,
+    backend_label: str,
+    backend_language: BackendLanguage,
+    backend_dir: Path,
+    project_root: Path,
+    option_values: dict,
+    impl,
+) -> dict | None:
+    """Build the Jinja render context the apply path uses, for .jinja files.
+
+    Mirrors :class:`FragmentContext` construction in the updater's merge
+    driver: a synthetic ``project`` proxy for project-scope fragments (the
+    same ``project_name=""`` proxy the generate + update paths render with) and
+    the matching :class:`BackendConfig` for backend-scope ones. Returns ``None``
+    on any failure so the caller falls back to the raw-template hash.
+    """
+    try:
+        if getattr(impl, "scope", "") == "project":
+            bc = BackendConfig(
+                name="project",
+                project_name="",
+                language=backend_language,
+                server_port=5000,
+            )
+        else:
+            bc = next(
+                (b for b in config.backends if b.name == backend_label), None
+            ) or BackendConfig(
+                name=backend_label or "backend",
+                project_name=config.project_name,
+                language=backend_language,
+                server_port=5000,
+            )
+        ctx = FragmentContext.filtered(
+            backend_config=bc,
+            backend_dir=backend_dir,
+            project_root=project_root,
+            option_values=option_values,
+            reads_options=getattr(impl, "reads_options", ()),
+            provenance=None,
+        )
+        return _build_render_context(ctx)
+    except Exception:  # noqa: BLE001 — preview is best-effort; raw-hash fallback.
+        return None
+
+
 def _decide_for_fragment(
     fragment_name: str,
     backend_label: str,
@@ -208,6 +264,8 @@ def _decide_for_fragment(
     option_values: dict,
     baselines: dict[str, str],
     update_mode: UpdateMode,
+    config: ProjectConfig,
+    backend_language: BackendLanguage,
 ) -> list[FilePlanEntry]:
     """Produce file-level decisions for one fragment × one backend."""
     try:
@@ -221,11 +279,29 @@ def _decide_for_fragment(
     if fp.files_dir is None:
         return []
 
+    # Mirror the real applier (appliers/files.py::copy_files): ``*.jinja``
+    # sources render to the suffix-stripped path, and the three-way runs against
+    # the rendered body. Build the same render context the apply path uses so the
+    # preview points at the real on-disk file and hashes match the recorded
+    # baseline (best-effort — falls back to the raw template hash on any error).
+    render_context = _safe_render_context(
+        config, backend_label, backend_language, backend_dir, project_root, option_values, impl
+    )
+
     out: list[FilePlanEntry] = []
     for src_path in fp.files_dir.rglob("*"):
         if not src_path.is_file():
             continue
         rel = src_path.relative_to(fp.files_dir)
+        # Skip ephemeral build artefacts (``__pycache__``, caches) the applier
+        # never copies — otherwise they surface as phantom ``new`` entries.
+        if _is_ephemeral_path(rel):
+            continue
+        # ``.py.jinja`` -> ``.py``: the real file on disk is the rendered,
+        # suffix-stripped path, not the raw template.
+        is_jinja = src_path.name.endswith(_JINJA_SUFFIX)
+        if is_jinja:
+            rel = rel.with_name(rel.name[: -len(_JINJA_SUFFIX)])
         dst = backend_dir / rel
         try:
             rel_key = dst.relative_to(project_root).as_posix()
@@ -285,7 +361,15 @@ def _decide_for_fragment(
 
         # update_mode == "merge"
         baseline_sha = baselines.get(rel_key)
-        new_sha = sha256_of_file(src_path)
+        if is_jinja and render_context is not None:
+            rendered = _render_or_read(src_path, render_context)
+            new_sha = (
+                hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+                if rendered is not None
+                else sha256_of_file(src_path)
+            )
+        else:
+            new_sha = sha256_of_file(src_path)
         current_sha = sha256_of_file(dst)
         decision = file_three_way_decide(
             baseline_sha=baseline_sha,

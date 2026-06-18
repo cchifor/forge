@@ -334,6 +334,14 @@ _VALUE_REQUIRES_BACKEND: dict[tuple[str, object], frozenset[BackendLanguage]] = 
 _PYTHON_ONLY_WHEN_ACTIVE: dict[str, frozenset[BackendLanguage]] = {
     "rag.backend": frozenset({BackendLanguage.PYTHON}),
     "platform.mcp": frozenset({BackendLanguage.PYTHON}),
+    # agent.mode (llm_only/tool_calling/multi_agent) fans out almost entirely to
+    # Python-only fragments (agent, agent_streaming, agent_tools,
+    # conversation_persistence, mcp_server, mcp_ui) plus the tri-language
+    # llm_port. On a Node/Rust-only project it would silently resolve to just
+    # llm_port — the requested agent capability missing, and a frontend chat
+    # base-url pointing at an endpoint never generated. 'none' is inactive via
+    # _INACTIVE_VALUES. (audit #16)
+    "agent.mode": frozenset({BackendLanguage.PYTHON}),
     # object_store ships only Python port + adapters today; selecting it on a
     # Node/Rust-only project would otherwise resolve to ZERO fragments (a
     # complete silent no-op).

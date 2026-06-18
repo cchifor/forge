@@ -697,6 +697,23 @@ class ProjectConfig:
         """
         if self.database_mode != "none":
             return
+        # Stateless mode is Python-only today: only strip_python_database exists,
+        # so a Node/Rust backend would ship a fully-wired DB stack (Prisma /
+        # sqlx) with no DATABASE_URL and no Postgres — Rust panics at boot,
+        # Node 500s on every CRUD call. Reject the combo up front. (audit #4)
+        non_python = sorted(
+            {
+                bc.language.value
+                for bc in self.backends
+                if str(bc.language.value).lower() != "python"
+            }
+        )
+        if non_python:
+            raise ValueError(
+                "database.mode=none is currently Python-only; the following "
+                f"backend language(s) cannot be stateless: {', '.join(non_python)}. "
+                "Use a Python backend for stateless mode, or set database.mode=generate."
+            )
         conflicts = self._collect_db_conflicts()
         if conflicts:
             raise ValueError(
@@ -799,10 +816,41 @@ class ProjectConfig:
             # path handles them uniformly with the other validations above.
             raise ValueError(str(e)) from e
 
+    # Fixed compose/infra service keys a backend name must not collide with —
+    # the compose template emits each backend as a top-level ``{{ be.name }}:``
+    # (and ``{{ be.name }}-migrate:``) service, so a backend named after an
+    # infra service produces duplicate YAML keys (last-wins / parse error).
+    _RESERVED_SERVICE_NAMES = frozenset(
+        {"postgres", "redis", "keycloak", "gatekeeper", "traefik", "frontend", "pgadmin", "e2e"}
+    )
+
     def _validate_backend_uniqueness(self) -> None:
         names = [bc.name for bc in self.backends]
         if len(names) != len(set(names)):
             raise ValueError("Backend names must be unique.")
+        # Reserved infra-service collision (audit #19).
+        for bc in self.backends:
+            base = bc.name
+            if base in self._RESERVED_SERVICE_NAMES or base.endswith("-migrate"):
+                raise ValueError(
+                    f"Backend name '{base}' is reserved — it collides with a fixed "
+                    f"docker-compose infra/service key ({sorted(self._RESERVED_SERVICE_NAMES)} "
+                    "or a '*-migrate' sidecar). Choose a different backend name."
+                )
+        # Derived database-name collision (audit #20): db_name is
+        # ``name.replace('-', '_')`` in both the topology entry and init-db, so
+        # distinct names that normalize to the same db_name (e.g. ``my-svc`` and
+        # ``my_svc``) would silently share one Postgres database.
+        db_names: dict[str, str] = {}
+        for bc in self.backends:
+            db_name = bc.name.replace("-", "_")
+            if db_name in db_names:
+                raise ValueError(
+                    f"Backends '{db_names[db_name]}' and '{bc.name}' derive the same "
+                    f"database name '{db_name}' (hyphens normalize to underscores); "
+                    "they would silently share one Postgres database. Rename one."
+                )
+            db_names[db_name] = bc.name
 
     def _validate_features_against_reserved(self) -> None:
         """Backend feature names must not collide with frontend's reserved page names."""

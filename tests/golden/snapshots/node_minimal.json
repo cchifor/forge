@@ -125,8 +125,8 @@
       "sha256": "857326de88674ea5"
     },
     "services/api/src/app.ts": {
-      "size": 2940,
-      "sha256": "c9d28d6f540ab27b"
+      "size": 3915,
+      "sha256": "a1b238b9875f5ac1"
     },
     "services/api/src/config/index.ts": {
       "size": 356,

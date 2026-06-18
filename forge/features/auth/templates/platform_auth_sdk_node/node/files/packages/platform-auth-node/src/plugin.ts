@@ -40,6 +40,12 @@ export const DEFAULT_EXCLUDED_PATHS: readonly string[] = [
   "/api/v1/openapi.json",
   "/api/schema",
   "/api/openapi.json",
+  // Public service-info routes (homeRoutes mounted under /api/v1): the
+  // welcome ("/") + "/info" endpoints expose only app title/version and
+  // are documented as unauthenticated. Mirrors Python's public home.
+  "/api/v1",
+  "/api/v1/",
+  "/api/v1/info",
 ];
 
 export interface PlatformAuthPluginOptions {

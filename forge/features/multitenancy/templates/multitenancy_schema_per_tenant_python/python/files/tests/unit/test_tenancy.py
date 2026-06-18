@@ -141,12 +141,17 @@ def test_resolve_token_claim_builtin_dotpath() -> None:
 
 
 class _FakeSession:
-    def __init__(self, dialect: str) -> None:
+    # ``provisioned`` drives the to_regnamespace existence probe the binders run
+    # before binding ', public' (fail-closed when the tenant schema is absent).
+    def __init__(self, dialect: str, *, provisioned: bool = True) -> None:
         self.bind = SimpleNamespace(dialect=SimpleNamespace(name=dialect))
         self.executed: list = []
+        self._provisioned = provisioned
 
     async def execute(self, stmt, params=None):
         self.executed.append((stmt, params))
+        # Result-like: the existence probe calls .scalar(); set_config ignores it.
+        return SimpleNamespace(scalar=lambda: self._provisioned)
 
 
 @pytest.mark.asyncio
@@ -163,11 +168,23 @@ async def test_hook_binds_search_path_on_postgres() -> None:
     hook = TenantSchemaHook(TenancySettings())
     session = _FakeSession("postgresql")
     await hook.bind(session, "acme")
-    assert len(session.executed) == 1
-    _, params = session.executed[0]
+    # Two statements: the to_regnamespace existence probe, then set_config.
+    assert len(session.executed) == 2
+    _, params = session.executed[-1]
     # The schema name inside the search_path value is double-quoted (a
     # hyphenated UUID schema would be an illegal unquoted identifier).
     assert params == {"sp": '"tenant_acme", public'}
+
+
+@pytest.mark.asyncio
+async def test_hook_fails_closed_when_schema_unprovisioned() -> None:
+    """An authenticated tenant whose schema is NOT yet provisioned must NOT bind
+    ', public' (which would fall through to shared tables) — it gets an empty
+    search_path so unqualified app tables error instead. (audit #29)"""
+    hook = TenantSchemaHook(TenancySettings())
+    session = _FakeSession("postgresql", provisioned=False)
+    await hook.bind(session, "acme")
+    assert session.executed[-1][1] == {"sp": ""}
 
 
 @pytest.mark.asyncio
@@ -205,7 +222,7 @@ async def test_binder_from_account_token_claim() -> None:
     try:
         session = _FakeSession("postgresql")
         await bind_tenant_search_path(session, _Account("acme"))
-        assert session.executed[0][1] == {"sp": '"tenant_acme", public'}
+        assert session.executed[-1][1] == {"sp": '"tenant_acme", public'}
     finally:
         current_tenant_var.reset(token)
 
@@ -218,7 +235,7 @@ async def test_binder_account_authoritative_over_edge() -> None:
     try:
         session = _FakeSession("postgresql")
         await bind_tenant_search_path(session, _Account("acme"))
-        assert session.executed[0][1] == {"sp": '"tenant_acme", public'}
+        assert session.executed[-1][1] == {"sp": '"tenant_acme", public'}
     finally:
         current_tenant_var.reset(token)
 

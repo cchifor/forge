@@ -26,7 +26,6 @@ primitives shared by forge → project (updater) and project → forge
 from __future__ import annotations
 
 import datetime
-import hashlib
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -331,39 +330,26 @@ def _utc_now_iso() -> str:
 
 
 def sha256_of(path: Path) -> str:
-    """SHA-256 of a file's content with line endings normalized to LF.
+    """SHA-256 of a file's content, binary-aware.
 
-    Text files written on Windows contain CRLF; the same file inspected
-    under Git or on Linux contains LF. We hash the LF-normalized content
-    so the integrity check isn't tripped by a platform-driven line-ending
-    flip. Binary files (uncommon for forge outputs) are unaffected when
-    they contain no CR bytes.
+    Delegates to :func:`forge.sync.merge.sha256_of_file` so the record-side
+    baseline and the update-side three-way merge hash a file IDENTICALLY:
+
+    * Text files get LF normalization (CRLF -> LF) so a platform-driven
+      line-ending flip doesn't trip the integrity check.
+    * Binary files (null byte in the head sample, or non-UTF-8) hash their
+      raw bytes — CRLF normalization would corrupt them.
+
+    Previously this function CRLF-normalized unconditionally (no binary
+    detection), so a binary asset containing the bytes ``0x0D 0x0A`` recorded a
+    different digest than the merge side computed, producing a spurious
+    ``.forge-merge.bin`` conflict on an untouched binary. (audit #22)
     """
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        # Carry a trailing CR across the chunk boundary: a ``\r\n`` whose CR
-        # is the last byte of chunk N and whose LF is the first byte of chunk
-        # N+1 would otherwise survive a per-chunk replace and leave a stray
-        # CR in the digest — diverging from merge.sha256_of_file's global
-        # normalization. Defer any trailing CR to the next iteration so the
-        # pair is collapsed as a unit.
-        pending_cr = False
-        while True:
-            chunk = f.read(65536)
-            if not chunk:
-                break
-            if pending_cr:
-                chunk = b"\r" + chunk
-                pending_cr = False
-            if chunk.endswith(b"\r"):
-                chunk = chunk[:-1]
-                pending_cr = True
-            # Strip CR before LF; leaves lone CRs (rare, legacy Mac) untouched.
-            h.update(chunk.replace(b"\r\n", b"\n"))
-        if pending_cr:
-            # File ended on a lone trailing CR — emit it verbatim.
-            h.update(b"\r")
-    return h.hexdigest()
+    # Local import avoids any module-load import cycle between the two
+    # sibling sync modules.
+    from forge.sync.merge import sha256_of_file  # noqa: PLC0415
+
+    return sha256_of_file(path)
 
 
 FileState = Literal["unchanged", "user-modified", "missing"]

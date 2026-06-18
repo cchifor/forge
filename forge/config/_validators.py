@@ -54,6 +54,16 @@ def infra_host_port_reservations(
     if include_keycloak:
         reserved[REDIS_HOST_PORT] = "Redis"
         reserved[GATEKEEPER_HOST_PORT] = "Gatekeeper"
+        # Detect a collision on insert rather than silently overwriting another
+        # infra service's reservation: a user-chosen keycloak_port equal to a
+        # fixed infra host bind (e.g. Gatekeeper 5000) would otherwise be lost
+        # here, pass _validate_ports, then fail `docker compose up` with
+        # "port is already allocated". (audit #21)
+        if keycloak_port in reserved:
+            raise ValueError(
+                f"Keycloak port {keycloak_port} collides with the "
+                f"{reserved[keycloak_port]} host port. Choose a different keycloak_port."
+            )
         reserved[keycloak_port] = "Keycloak"
     return reserved
 

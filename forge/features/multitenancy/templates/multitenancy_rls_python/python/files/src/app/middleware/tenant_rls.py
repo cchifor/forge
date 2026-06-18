@@ -14,10 +14,16 @@ bound on the exact connection the request queries through, scoped to that
 transaction, via the engine listener. The ContextVar is reset in a ``finally``
 so a worker reusing the same task/thread never inherits a stale tenant.
 
-Ordering: it must run AFTER the platform-auth middleware (which binds
-``request.state.identity``) so ``token_claim`` resolution can read the verified
-claims. ``database.multitenancy=shared_rls`` registers it after the auth
-middleware at the ``FORGE:MIDDLEWARE_REGISTRATION`` marker.
+Ordering / token_claim: ``header`` and ``subdomain`` strategies read the
+request edge directly, so this middleware resolves them fully. ``token_claim``
+is different: in the generate-mode default, auth runs as a FastAPI *route
+dependency* (forge_core ``get_current_user``), NOT an outer middleware — so
+``request.state.identity`` is not yet bound when this middleware runs (it
+precedes route dependencies). The resolver therefore falls back to forge_core's
+``customer_id_context`` ContextVar (the authoritative post-verification tenant).
+Either way, the row-isolation backstop is independent: ``AsyncUnitOfWork`` binds
+the account-scoped ``app.current_tenant`` GUC on every transaction, so RLS holds
+even when this middleware resolves ``None``.
 """
 
 from __future__ import annotations
