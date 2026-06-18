@@ -27,6 +27,12 @@ DEPENDENCY: none (vendored; uses pydantic + httpx + sqlalchemy from the
 base; boto3 / asyncpg optional for the s3 / postgres backends)""",
             category=FeatureCategory.KNOWLEDGE,
             enables={True: ("connectors_registry",)},
+            # The vendored framework imports sqlalchemy from the base and
+            # connectors_registry injects into ioc/infra.py — both removed by the
+            # database.mode=none stripper, so generation would otherwise crash on
+            # the missing FORGE:IOC_INFRA anchors. Reject the stateless combo up
+            # front with the standard friendly message instead. (audit #9)
+            requires_database=True,
         )
     )
 
