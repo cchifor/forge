@@ -71,7 +71,16 @@ impl ItemRepository for PgItemRepository {
         params: ListParams,
     ) -> Result<PaginatedResponse<Item>, AppError> {
         let skip = params.skip.unwrap_or(0);
-        let limit = params.limit.unwrap_or(20).min(100);
+        let limit = params.limit.unwrap_or(20);
+        // Reject out-of-range pagination with a 422 instead of binding a
+        // negative LIMIT/OFFSET into SQL (Postgres errors -> HTTP 500). Matches
+        // Python's Query(ge=1) 422 and Node's z.min(1) 400. (audit #13)
+        if skip < 0 || limit < 1 {
+            return Err(AppError::Validation(
+                "pagination out of range: 'limit' must be >= 1 and 'skip' must be >= 0".to_string(),
+            ));
+        }
+        let limit = limit.min(100);
 
         let mut conditions = vec!["customer_id = $1".to_string()];
         let mut bind_idx = 1u32;
