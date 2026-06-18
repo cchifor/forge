@@ -1,11 +1,14 @@
 # multitenancy_rls_python: wire shared-RLS tenant isolation. Three seams:
 #
 #   1. Register TenantRLSMiddleware on the app at the MIDDLEWARE markers in
-#      main.py. Starlette applies add_middleware in REVERSE order (last added
-#      = outermost), so registering tenant-RLS at the MIDDLEWARE_REGISTRATION
-#      marker (which the auth middleware also targets, auth injected later =
-#      added later = outermost) keeps auth OUTSIDE tenant-RLS: the identity is
-#      bound before the resolver reads request.state.identity.
+#      main.py. It resolves header/subdomain strategies at the request edge.
+#      For token_claim, note that generate-mode auth runs as a FastAPI ROUTE
+#      DEPENDENCY (forge_core get_current_user), NOT an outer middleware — so
+#      request.state.identity is not bound when this middleware runs (it
+#      precedes route dependencies). The resolver falls back to forge_core's
+#      customer_id_context ContextVar (the authoritative post-verification
+#      tenant); the row-isolation backstop is the account-scoped GUC the
+#      AsyncUnitOfWork binds per transaction, independent of this middleware.
 #
 #   2. Install the engine "begin" listener at startup (LIFESPAN_STARTUP), after
 #      the session factory is published. It reads the request's tenant ContextVar

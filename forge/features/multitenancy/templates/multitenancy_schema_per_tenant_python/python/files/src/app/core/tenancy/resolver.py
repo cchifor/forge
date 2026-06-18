@@ -33,7 +33,24 @@ from typing import Any
 
 from app.core.tenancy.config import TenancySettings, get_tenancy_settings
 
+try:  # forge_core is always present under shared_rls; guard keeps the import safe.
+    from forge_core.domain.context import customer_id_context as _customer_id_var
+except Exception:  # pragma: no cover - defensive
+    _customer_id_var = None  # type: ignore[assignment]
+
 _UNSET = object()
+
+
+def _customer_id_from_context() -> Any:
+    """The authoritative tenant id the auth layer binds post-verification.
+
+    forge_core's ``customer_id_context`` ContextVar carries the verified
+    account's tenant id once authentication has run (route dependency or
+    AuthContextMiddleware). Returns ``None`` when unbound.
+    """
+    if _customer_id_var is None:
+        return None
+    return _customer_id_var.get(None)
 
 
 def _dot_path(claims: Mapping[str, Any], path: str) -> Any:
@@ -92,24 +109,34 @@ class TenantResolver:
 
     def _from_token_claim(self, request: Any) -> str | None:
         identity = getattr(getattr(request, "state", None), "identity", None)
-        if identity is None:
-            return None
-        claims = self._raw_claims(identity)
-        if claims is not None:
-            # Apply the configured claim path to the verified JWT claims,
-            # reusing the provider's ClaimMapper when present (oidc/in_memory).
-            mapper = self._claim_mapper(request)
-            value = (
-                mapper.extract(claims, path=self._settings.claim_path)
-                if mapper is not None
-                else _dot_path(claims, self._settings.claim_path)
-            )
-            if value is not None:
-                return str(value)
-        # No raw claims (e.g. gatekeeper binds an IdentityContext) or the claim
-        # path missed — fall back to the identity's authoritative tenant id.
-        tenant_id = getattr(identity, "tenant_id", None)
-        return str(tenant_id) if tenant_id is not None else None
+        if identity is not None:
+            claims = self._raw_claims(identity)
+            if claims is not None:
+                # Apply the configured claim path to the verified JWT claims,
+                # reusing the provider's ClaimMapper when present (oidc/in_memory).
+                mapper = self._claim_mapper(request)
+                value = (
+                    mapper.extract(claims, path=self._settings.claim_path)
+                    if mapper is not None
+                    else _dot_path(claims, self._settings.claim_path)
+                )
+                if value is not None:
+                    return str(value)
+            # No raw claims (e.g. gatekeeper binds an IdentityContext) or the
+            # claim path missed — fall back to the identity's tenant id.
+            tenant_id = getattr(identity, "tenant_id", None)
+            if tenant_id is not None:
+                return str(tenant_id)
+        # ``request.state.identity`` is unset when auth runs as a FastAPI route
+        # dependency (the generate-mode default: forge_core ``get_current_user``)
+        # rather than an outer middleware — and this resolver runs before route
+        # dependencies. Fall back to the authoritative tenant the auth layer
+        # binds post-verification on forge_core's customer-id ContextVar, so
+        # token_claim resolution is correct wherever the verified tenant is in
+        # scope (the row-isolation backstop is the account-scoped GUC the
+        # AsyncUnitOfWork binds independently).
+        cid = _customer_id_from_context()
+        return str(cid) if cid is not None else None
 
     # -- request introspection ----------------------------------------------
 
