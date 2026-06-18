@@ -259,3 +259,11 @@ code defect). Probing the booted API directly (bypassing traefik): `GET /api/v1/
 (DB UP), `GET /api/v1/items` → **200**, `POST /api/v1/items` → **201**. So the generated Node stack
 builds, boots (with #14's `trustProxy`), and serves CRUD end-to-end. Rust runtime is cargo-verified
 (verify lane green); a full multi-stack smoke is blocked by the host `:80` conflict.
+
+**CI follow-up (PR #282):** the first CI run was green except `matrix-verify(py_schema_token_claim)` —
+the #29 fail-closed change adds a `to_regnamespace` existence probe before each search_path bind, which
+the generated `tests/unit/test_tenancy.py` mock session didn't model (its `execute` returned `None` →
+`None.scalar()`, and the binders now emit two statements). Fixed the shipped test mock + assertions +
+added an unprovisioned-tenant fail-closed test (commit `aa97cd06`); the verify lane passes locally
+(`[OK] py_schema_token_claim verify`). This generated test isn't collected by forge's own pytest, so
+the verify lane is what caught it.
