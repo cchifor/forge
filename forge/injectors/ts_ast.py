@@ -33,6 +33,19 @@ BEGIN_RE = re.compile(r"//\s*FORGE:BEGIN\s+(\S+)")
 END_RE = re.compile(r"//\s*FORGE:END\s+(\S+)")
 
 
+def _ensure_trailing_newline(lines: list[str], insert_at: int) -> None:
+    """Guarantee the line *preceding* ``insert_at`` ends with a newline.
+
+    Without this, splicing a block after an anchor on the file's last line
+    (no trailing ``\\n``) fuses the BEGIN sentinel onto the anchor line,
+    corrupting it (and ``_find_anchor`` then skips the fused line on re-run).
+    Mirrors ``python_ast._ensure_trailing_newline``. (audit #26)
+    """
+    prev = insert_at - 1
+    if 0 <= prev < len(lines) and not lines[prev].endswith("\n"):
+        lines[prev] = lines[prev] + "\n"
+
+
 def inject_ts(
     file: Path,
     feature_key: str,
@@ -87,6 +100,7 @@ def inject_ts(
     indent = _leading_indent(lines[anchor_idx])
     block = _render_block(indent, tag, snippet)
     insert_at = anchor_idx + 1 if position == "after" else anchor_idx
+    _ensure_trailing_newline(lines, insert_at)
     lines = lines[:insert_at] + [block] + lines[insert_at:]
     file.write_text("".join(lines), encoding="utf-8")
 
