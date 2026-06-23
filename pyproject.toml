@@ -60,7 +60,7 @@ dev = [
     # upgrade dance.
     "ty==0.0.49",
     "pre-commit>=4.6.0",
-    "hypothesis>=6.155.3",
+    "hypothesis>=6.155.7",
     "pytest-xdist>=3.8.0",
     # Test-only: the api-gateway template's rendered s2s_client/downstreams
     # modules import httpx at runtime. tests/test_gateway_runtime.py imports
