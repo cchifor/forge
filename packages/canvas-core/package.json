@@ -30,7 +30,7 @@
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
     "jsdom": "^29.1.1",
-    "@types/node": "^25.9.1"
+    "@types/node": "^26.0.1"
   },
   "publishConfig": {
     "access": "public"
