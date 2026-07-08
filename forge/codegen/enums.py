@@ -98,10 +98,10 @@ def load_enum_yaml(path: Path) -> EnumSpec:
         if isinstance(entry, str):
             values.append(EnumValue(value=entry))
         elif isinstance(entry, dict):
-            v = entry.get("value")  # ty:ignore[invalid-argument-type]
+            v = entry.get("value")
             if not isinstance(v, str) or not v:
                 raise GeneratorError(f"{path}.values[{i}]: `value` must be a non-empty string")
-            label = entry.get("label")  # ty:ignore[invalid-argument-type]
+            label = entry.get("label")
             values.append(EnumValue(value=v, label=str(label) if label else None))
         else:
             raise GeneratorError(f"{path}.values[{i}]: must be a string or mapping")
