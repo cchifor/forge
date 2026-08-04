@@ -21,7 +21,7 @@ dependencies = [
     "jinja2>=3.1.6,<4",
     "pyyaml>=6.0.3,<7",
     "tomlkit>=0.15.0,<1",
-    "libcst>=1.8.6,<2",
+    "libcst>=1.9.0,<2",
     # Theme 5 — typed orchestration boundary. Pydantic v2 was previously
     # transitively present via copier; declaring it explicitly so the
     # typed_config module's dependency surface is honest.
