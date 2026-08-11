@@ -36,7 +36,7 @@ dependencies = [
     # `[feature.component.children]` version specs. Previously transitively
     # present via copier; declared explicitly so the dependency surface is
     # honest (mirrors the pydantic note above).
-    "packaging>=26.2",
+    "packaging>=26.3",
     # Phase 4 (P4.2) — multi-service platform synthesis hashes the
     # deterministic dev S2S secrets into argon2id digests for the
     # gatekeeper service registry. Lazily imported inside
