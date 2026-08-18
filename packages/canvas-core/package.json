@@ -22,7 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ag-ui/core": "^0.0.57",
+    "@ag-ui/core": "^0.0.58",
     "fast-json-patch": "^3.1.1"
   },
   "devDependencies": {
