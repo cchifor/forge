@@ -27,7 +27,7 @@ def native_lines(report: Path, source_root: Path, root: Path) -> dict[str, dict[
     result: dict[str, dict[int, int]] = {}
     if report.suffix in {".info", ".lcov"}:
         current: dict[int, int] | None = None
-        for line in report.read_text().splitlines():
+        for line in report.read_text(encoding="utf-8").splitlines():
             if line.startswith("SF:"):
                 current = result.setdefault(_relative(line[3:], source_root, root), {})
             elif line.startswith("DA:") and current is not None:
@@ -39,7 +39,7 @@ def native_lines(report: Path, source_root: Path, root: Path) -> dict[str, dict[
             elif line == "end_of_record":
                 current = None
     else:
-        data = json.loads(report.read_text())
+        data = json.loads(report.read_text(encoding="utf-8"))
         if "files" in data and "meta" in data:  # coverage.py
             for name, entry in data["files"].items():
                 lines = dict.fromkeys(entry["missing_lines"], 0)
@@ -84,40 +84,50 @@ def changed_lines(root: Path, base_ref: str) -> dict[str, set[int]]:
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout.strip()
-    diff = subprocess.run(
-        ["git", "diff", "--no-ext-diff", "--unified=0", base, "--"],
+    names = subprocess.run(
+        ["git", "diff", "--no-ext-diff", "--name-only", "-z", base, "--"],
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     result: dict[str, set[int]] = {}
-    path: str | None = None
-    for line in diff.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[6:]
-            result.setdefault(path, set())
-        elif line.startswith("+++ "):
-            path = None
-        elif path is not None and (
-            match := re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
-        ):
-            start, count = int(match[1]), int(match[2] or 1)
-            result[path].update(range(start, start + count))
+    # Git quotes non-ASCII and control characters in diff headers. Obtain paths
+    # through its NUL-delimited protocol so such files cannot escape the gate.
+    for name in filter(None, names.split("\0")):
+        path = project_path(root, name)
+        if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
+            continue
+        diff = subprocess.run(
+            ["git", "diff", "--no-ext-diff", "--no-textconv", "--unified=0", base, "--", name],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        ).stdout
+        result[name] = set()
+        for line in diff.splitlines():
+            if match := re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line):
+                start, count = int(match[1]), int(match[2] or 1)
+                result[name].update(range(start, start + count))
     # Untracked application files are new code too, including local use before commit.
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "-z"],
         cwd=root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
     for name in filter(None, untracked.split("\0")):
         path_obj = project_path(root, name)
         if path_obj.is_file() and path_obj.suffix in SOURCE_SUFFIXES:
-            result[name] = set(range(1, len(path_obj.read_text().splitlines()) + 1))
+            result[name] = set(range(1, len(path_obj.read_text(encoding="utf-8").splitlines()) + 1))
     return result
 
 
@@ -252,7 +262,7 @@ def evaluate(
                     number = int(raw_number)
                     if (
                         number < 1
-                        or number > len(path.read_text().splitlines())
+                        or number > len(path.read_text(encoding="utf-8").splitlines())
                         or type(hits) is not int
                         or hits < 0
                     ):

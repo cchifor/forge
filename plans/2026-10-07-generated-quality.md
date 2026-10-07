@@ -39,10 +39,10 @@ maintenance operation; its verified mirror and mapping must exist first.
 
 ## Validation (2026-10-08)
 
-The focused final check passed 141 tests with 93.40% coverage of the new quality,
-recommendation and quality-CLI modules. Packaging and documentation checks pass.
-The full `make check` regression passed 5,109 tests (39 skipped), with 85.61%
-overall coverage.
+Focused acceptance tests cover native execution, provenance, upgrades and
+recommendations. Packaging and documentation checks pass. The full `make check`
+regression before the final Windows encoding fix passed 5,110 tests (39 skipped),
+with 85.62% overall coverage; the PR records subsequent focused and CI results.
 Six generation snapshots were deliberately refreshed and verified. Root lint,
 format and type checks pass; native Rust formatting/Clippy and Node/Python build
 checks pass. The Node reference runtime dependency audit reports no vulnerabilities
@@ -76,6 +76,10 @@ The wheel includes the TypeScript injector helper, and a packaging regression
 test verifies that installed and checkout generator fingerprints match. The
 tenant-service lifecycle accepts custom providers and uses string trust-map keys.
 Rust authentication middleware passes Clippy on Rust 1.99.
+Quality files and subprocess output explicitly use UTF-8. Coverage uses Git's
+NUL-delimited filenames so accented or quoted paths cannot escape changed-line
+checks. The required policy lane runs on both Linux and Windows, with a local
+regression fixture that simulates a legacy Windows default encoding.
 
 ## Rollout limits and remaining maintenance
 

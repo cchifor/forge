@@ -85,7 +85,7 @@ def boundary_violations(root: Path, records: dict) -> list[str]:
                 )
         # Reject assignment through an imported generated module (monkey patch).
         if policy != "generated" and path.suffix == ".py":
-            tree = ast.parse(path.read_text())
+            tree = ast.parse(path.read_text(encoding="utf-8"))
             aliases = {
                 a.asname or a.name.split(".")[0]
                 for n in ast.walk(tree)
@@ -139,7 +139,7 @@ def boundary_violations(root: Path, records: dict) -> list[str]:
             ".vue",
             ".svelte",
         }:
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             for match in re.finditer(r"\bimport\s+(.+?)\s+from\s*['\"]([^'\"]+)['\"]", text):
                 clause, dependency = match.groups()
                 if not any(

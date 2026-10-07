@@ -46,7 +46,7 @@ def run_quality(args: argparse.Namespace) -> int:
             from forge.quality.model import read_recipe, subjects
 
             reports = [
-                json.loads(path.read_text())
+                json.loads(path.read_text(encoding="utf-8"))
                 for path in sorted((root / ".forge/coverage").glob("*/*.json"))
             ]
             result = evaluate(

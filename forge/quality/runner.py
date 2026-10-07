@@ -148,7 +148,7 @@ def run_native(root: Path, item: dict, suite: str) -> str:
                 raise ValueError(f"{item['name']}: no integration test binaries")
             selector = [arg for name in tests for arg in ("--test", name)]
         log = output / f"{suite}.log"
-        with log.open("w") as stream:
+        with log.open("w", encoding="utf-8") as stream:
             proc = subprocess.run(
                 [
                     "cargo",
@@ -167,7 +167,7 @@ def run_native(root: Path, item: dict, suite: str) -> str:
                 stdout=stream,
                 stderr=sys.stderr,
             )
-        text = log.read_text()
+        text = log.read_text(encoding="utf-8")
         sys.stderr.write(text)
         if proc.returncode:
             raise ValueError(f"{item['name']}/{suite}: cargo tests failed")
@@ -177,7 +177,7 @@ def run_native(root: Path, item: dict, suite: str) -> str:
         if tests_run <= 0:
             raise ValueError(f"{item['name']}/{suite}: no tests executed")
         report = make_report(root, item["name"], suite, native, service, tests=tests_run)
-        result_path.write_text(json.dumps(report, indent=2) + "\n")
+        result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return str(result_path.relative_to(root))
     elif language == "flutter":
         testdir = (
@@ -191,7 +191,7 @@ def run_native(root: Path, item: dict, suite: str) -> str:
             raise ValueError(f"{item['name']}: required {testdir} directory missing")
         native = output / f"{suite}.lcov"
         log = output / f"{suite}.machine.jsonl"
-        with log.open("w") as stream:
+        with log.open("w", encoding="utf-8") as stream:
             subprocess.run(
                 [
                     *(
@@ -213,18 +213,22 @@ def run_native(root: Path, item: dict, suite: str) -> str:
                 stderr=sys.stderr,
                 check=True,
             )
-        events = [json.loads(line) for line in log.read_text().splitlines() if line.startswith("{")]
+        events = [
+            json.loads(line)
+            for line in log.read_text(encoding="utf-8").splitlines()
+            if line.startswith("{")
+        ]
         count = sum(
             e.get("type") == "testDone" and e.get("result") == "success" and not e.get("skipped")
             for e in events
         )
         report = make_report(root, item["name"], suite, native, service, tests=count)
-        result_path.write_text(json.dumps(report, indent=2) + "\n")
+        result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return str(result_path.relative_to(root))
     else:
         raise ValueError(f"No coverage adapter for {language}")
     report = make_report(root, item["name"], suite, native, service, tests=_test_count(junit))
-    result_path.write_text(json.dumps(report, indent=2) + "\n")
+    result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return str(result_path.relative_to(root))
 
 
@@ -237,7 +241,7 @@ def run_browser(root: Path, item: dict, output: Path, env: dict[str, str]) -> st
     shutil.rmtree(directory, ignore_errors=True)
     env["FORGE_BROWSER_COVERAGE"] = str(directory)
     execution = output / "e2e.execution"
-    with execution.open("w") as stream:
+    with execution.open("w", encoding="utf-8") as stream:
         subprocess.run(
             [
                 "npx",
@@ -253,7 +257,7 @@ def run_browser(root: Path, item: dict, output: Path, env: dict[str, str]) -> st
             stdout=stream,
             stderr=sys.stderr,
         )
-    statistics = json.loads(execution.read_text())["stats"]
+    statistics = json.loads(execution.read_text(encoding="utf-8"))["stats"]
     if (
         statistics.get("unexpected", 0)
         or statistics.get("flaky", 0)
@@ -264,5 +268,5 @@ def run_browser(root: Path, item: dict, output: Path, env: dict[str, str]) -> st
     _execute(["node", "scripts/remap-browser.mjs", str(directory), str(native)], service, env)
     result = make_report(root, item["name"], "e2e", native, service, tests=statistics["expected"])
     path = output / "e2e.json"
-    path.write_text(json.dumps(result, indent=2) + "\n")
+    path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return str(path.relative_to(root))

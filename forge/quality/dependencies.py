@@ -30,7 +30,9 @@ def dependencies(root: Path, *, lock: bool = False) -> dict:
             import json
 
             workspace = (
-                json.loads((root / "package.json").read_text()).get("workspaces", [])
+                json.loads((root / "package.json").read_text(encoding="utf-8")).get(
+                    "workspaces", []
+                )
                 if (root / "package.json").exists()
                 else []
             )
