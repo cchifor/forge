@@ -73,7 +73,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Validate scenarios.yaml schema
         # Front-load schema validation so malformed YAML fails the gate
         # with the schema test's error message instead of a buried
@@ -160,7 +160,7 @@ jobs:
           git config --global user.email "ci@forge.local"
           git config --global user.name "Forge CI"
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
       # logs + ps to a known directory BEFORE it tears the stack down
       # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
@@ -237,7 +237,7 @@ jobs:
           git config --global user.email "ci@forge.local"
           git config --global user.name "Forge CI"
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Run lane D (roundtrip) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane roundtrip
       - name: Upload per-scenario JSON status artifact
@@ -297,7 +297,7 @@ jobs:
           git config --global user.email "ci@forge.local"
           git config --global user.name "Forge CI"
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Run lane E (update + harvest) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane update
       - name: Upload per-scenario JSON status artifact
@@ -337,7 +337,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: matrix-status-raw

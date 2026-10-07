@@ -65,7 +65,7 @@ jobs:
       - name: Set Python 3.13
         run: uv python install 3.13
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Install reference plugins into the same venv
         # Editable installs so a plugin-side bug surfaces against the
         # branch's plugin source, not a published package. Both depend on

@@ -1,0 +1,9 @@
+# Changes that define or can weaken generated-code gates require owner review.
+/forge/quality/ @cchifor
+/forge/recommend.py @cchifor
+/forge/templates/_common/quality.yml @cchifor
+/forge/templates/_common/skills/ @cchifor
+/.github/workflows/ @cchifor
+/.github/CODEOWNERS @cchifor
+/scripts/check_attribution.py @cchifor
+/scripts/prepare_attribution_cleanup.py @cchifor

@@ -96,7 +96,7 @@ class TestPythonToolchain:
         descriptions = [call.args[2] for call in mock_cmd.call_args_list]
         assert descriptions == [
             "Install dependencies",
-            "Lint fix",
+            "Lint check",
             "Format",
             "Type check",
             "Tests",

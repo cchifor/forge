@@ -1,9 +1,9 @@
 import logging
 import logging.config
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 
-from dishka import AsyncContainer, make_async_container
+from dishka import AsyncContainer, Provider, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 
@@ -22,16 +22,19 @@ class AppLifecycle:
     """
 
     @classmethod
-    def bootstrap(cls, app: FastAPI, config: Settings) -> None:
-        """PHASE 1: BUILD-TIME CONFIGURATION"""
+    def bootstrap(
+        cls, app: FastAPI, config: Settings, *, providers: Iterable[Provider] = ()
+    ) -> None:
+        """Configure runtime infrastructure and explicitly supplied application providers."""
 
         # 1. Configure Logging
         cls._setup_logging(config)
         logger.info(f"Bootstrapping {config.app.title} v{config.app.version}...")
 
         # 2. Setup Dependency Injection (Dishka)
-        providers = [P() for P in ALL_PROVIDERS]
-        container = make_async_container(*providers, context={Settings: config})
+        container = make_async_container(
+            *(P() for P in ALL_PROVIDERS), *providers, context={Settings: config}
+        )
         setup_dishka(container, app)
 
         # 3. Setup Authentication.

@@ -8,7 +8,7 @@ member's ``prepare`` hook runs — that's how the in-tree SDKs (e.g.
 ``packages/platform-auth-node``) get their ``dist/`` artifacts built before
 the consumer's ``tsc --noEmit`` resolves their type declarations.
 
-Verify mirrors the pre-Epic-S flow: ``biome check --write`` +
+Verify is read-only: ``biome lint`` +
 ``tsc --noEmit`` + ``vitest run``, run inside the service dir.
 """
 
@@ -101,27 +101,19 @@ class NodeToolchain:
             )
 
     def verify(self, backend_dir: Path, *, quiet: bool = False) -> list[Check]:
-        # ``biome check --write`` mirrors the python toolchain's ``ruff check
-        # --fix`` — fix what biome can fix (organize imports, formatting,
-        # safe lint suggestions), surface the rest as errors. Without
-        # ``--write`` every newly-emitted file fails CI on import-order
-        # diff alone, which is mechanical noise.
+        # Verification must not rewrite generic code or update markers.
         return [
             run_backend_cmd(
                 backend_dir,
-                ["npx", "biome", "check", "--write", "src/"],
+                ["npx", "biome", "lint", "src/"],
                 "Lint check",
                 quiet=quiet,
             ),
             run_backend_cmd(backend_dir, ["npx", "tsc", "--noEmit"], "Type check", quiet=quiet),
-            # ``--passWithNoTests`` keeps the lane green on fresh-from-template
-            # services that haven't authored any *.test.ts files yet. Vitest
-            # 4.x exits 1 on an empty suite by default; the matrix verify lane
-            # is checking that the toolchain itself works, not that tests
-            # exist (the e2e + nightly smoke lanes assert real behavior).
+            # Empty suites must fail rather than silently pass verification.
             run_backend_cmd(
                 backend_dir,
-                ["npx", "vitest", "run", "--passWithNoTests"],
+                ["npx", "vitest", "run"],
                 "Tests",
                 quiet=quiet,
             ),

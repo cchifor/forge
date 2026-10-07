@@ -272,6 +272,9 @@ class ProvenanceCollector:
         out: dict[str, dict[str, Any]] = {}
         for key, rec in sorted(self.records.items()):
             entry: dict[str, Any] = {"origin": rec.origin, "sha256": rec.sha256}
+            from forge.quality.model import ownership
+
+            entry["ownership"] = ownership(key, rec.origin, rec.template_name)
             if rec.fragment_name:
                 entry["fragment_name"] = rec.fragment_name
             if rec.fragment_version:

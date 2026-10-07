@@ -336,8 +336,9 @@ class TestEmitterIsolation:
         _register_plugin_emitter("plugin_broken", "broken_target", broken)
         _register_plugin_emitter("plugin_healthy", "healthy_target", healthy)
 
-        # Must not raise.
-        run_codegen(config, project_root)
+        # Siblings run, but required output failure must fail generation.
+        with pytest.raises(RuntimeError, match="Required plugin emitters failed"):
+            run_codegen(config, project_root)
         assert fired == ["healthy"]
 
     def test_broken_emitter_logs_warning(
@@ -352,7 +353,8 @@ class TestEmitterIsolation:
         _register_plugin_emitter("plugin_broken", "broken_target", broken)
 
         with caplog.at_level(logging.WARNING, logger="forge"):
-            run_codegen(config, project_root)
+            with pytest.raises(RuntimeError, match="plugin_broken/broken_target"):
+                run_codegen(config, project_root)
 
         failures = [
             r

@@ -5,63 +5,33 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-
+permissions:
+  contents: read
 jobs:
-  lint-build-test:
+  lint-and-test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: ["20", "22"]
-
+        include: __FORGE_SERVICE_MATRIX__
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-
-      # Installs every workspace (services/*, sdks/*, apps/*). The in-tree
-      # SDKs build first via their own ``prepare`` scripts. ``npm ci``
-      # installs exactly what the committed lockfile pins — so a stale
-      # lockfile fails HERE (matching the prod Docker ``npm ci``) instead
-      # of slipping through CI on a silent ``npm install`` re-resolve.
-      # Falls back to ``npm install`` when no lockfile is committed.
-      - name: Install dependencies
+          node-version: ${{ matrix.runtime }}
+      - name: Install locked workspace
+        working-directory: .
+        run: npm ci
+      - name: Generate database client
+        run: npm run generate --if-present
+      - name: Lint, build and unit tests
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-
-      # Prisma needs no database for ``generate`` — the client is built from
-      # the committed schema. ``--if-present`` skips workspaces (e.g. a
-      # stateless service) that ship no ``generate`` script.
-      - name: Generate Prisma client(s)
-        run: npm run generate --workspaces --if-present
-
-      - name: Lint (biome)
-        run: npm run lint
-
-      - name: Build (tsc)
-        run: npm run build
-
-      - name: Test (vitest)
-        run: npm test
-
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      # ``--package-lock-only`` resolves the tree without installing so audit
-      # has a lockfile to scan even before one is committed.
-      - name: Resolve lockfile
-        run: npm install --package-lock-only
-      - name: npm audit
-        run: npm audit --audit-level=high || true  # warn-only in alpha
+          npm run lint
+          npm run build
+          npm test
+      - name: Audit runtime dependencies
+        working-directory: .
+        run: npm audit --omit=dev --audit-level=high

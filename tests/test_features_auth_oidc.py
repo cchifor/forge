@@ -393,7 +393,7 @@ def test_oidc_render_lands_modules_and_no_infra(tmp_path: Path) -> None:
     main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
     assert "install_oidc_auth(app, settings)" in main_py
     install_idx = main_py.index("install_oidc_auth(app, settings)")
-    bootstrap_idx = main_py.index("AppLifecycle.bootstrap(app, settings)")
+    bootstrap_idx = main_py.index("AppLifecycle.bootstrap(app, settings")
     assert install_idx < bootstrap_idx, (
         "install_oidc_auth must run BEFORE AppLifecycle.bootstrap so it can "
         "rebind build_auth_guard before the guard is built"

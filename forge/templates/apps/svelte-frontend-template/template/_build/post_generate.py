@@ -563,6 +563,10 @@ def main():
     remove_optional_files()
     print()
 
+    if os.environ.get("FORGE_RENDER_ONLY") == "1":
+        remove_path(PROJECT_DIR / "_build")
+        return
+
     # 3. Install dependencies
     print("> Building project")
     pm = shutil.which(PACKAGE_MANAGER)

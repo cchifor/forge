@@ -325,7 +325,7 @@ def test_in_memory_render_lands_issuer_and_route(tmp_path: Path) -> None:
     main_py = (backend / "src/app/main.py").read_text(encoding="utf-8")
     assert "install_in_memory_auth(app, settings)" in main_py
     install_idx = main_py.index("install_in_memory_auth(app, settings)")
-    bootstrap_idx = main_py.index("AppLifecycle.bootstrap(app, settings)")
+    bootstrap_idx = main_py.index("AppLifecycle.bootstrap(app, settings")
     assert install_idx < bootstrap_idx, (
         "install_in_memory_auth must run BEFORE AppLifecycle.bootstrap so it can "
         "redirect build_auth_guard before the guard is built"

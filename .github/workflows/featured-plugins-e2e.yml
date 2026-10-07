@@ -77,7 +77,7 @@ jobs:
         run: uv python install 3.13
       - name: Install forge from working tree
         if: matrix.plugin.enabled
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Checkout featured plugin
         if: matrix.plugin.enabled
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
