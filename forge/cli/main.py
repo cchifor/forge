@@ -199,6 +199,15 @@ def main() -> None:
 
     _telemetry.configure(_telemetry.load_config(args))
 
+    if getattr(args, "quality", None):
+        from forge.cli.commands.quality import run_quality
+
+        sys.exit(run_quality(args))
+    if getattr(args, "recommend", None):
+        from forge.cli.commands.quality import run_recommend
+
+        sys.exit(run_recommend(args))
+
     if getattr(args, "telemetry_export", False):
         _telemetry.export_local(sys.stdout)
         sys.exit(0)

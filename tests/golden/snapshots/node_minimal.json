@@ -1,28 +1,56 @@
 {
   "files": {
+    ".agents/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".agents/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
+    ".claude/settings.json": {
+      "size": 69,
+      "sha256": "062d78308067ddd1"
+    },
+    ".claude/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".claude/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
     ".editorconfig": {
       "size": 580,
       "sha256": "2ac15b8600196a9b"
     },
+    ".forge/quality.json": {
+      "size": 723,
+      "sha256": "5fe751c875dca7a7"
+    },
     ".github/workflows/ci.yml": {
-      "size": 2001,
-      "sha256": "86b50773713cc8f7"
+      "size": 1025,
+      "sha256": "212af1e4b3d7bc9c"
+    },
+    ".github/workflows/quality.yml": {
+      "size": 3120,
+      "sha256": "c58a7bcb559942e4"
     },
     ".gitignore": {
-      "size": 491,
-      "sha256": "3f1ced030f22fea7"
+      "size": 523,
+      "sha256": "99517caa29227052"
     },
     ".pre-commit-config.yaml": {
       "size": 471,
       "sha256": "52e8e600cab57fa5"
     },
     "AGENTS.md": {
-      "size": 2577,
-      "sha256": "27cb9957eec7caf9"
+      "size": 1814,
+      "sha256": "9d1d4cc2595631d1"
     },
     "CLAUDE.md": {
-      "size": 1912,
-      "sha256": "ae83d48b4638adaf"
+      "size": 100,
+      "sha256": "77ac9733140f48bb"
     },
     "deploy/infra/nginx-csp.conf": {
       "size": 1661,
@@ -33,15 +61,15 @@
       "sha256": "6a5b8740cc1c34fe"
     },
     "forge.toml": {
-      "size": 23874,
+      "size": 28427,
       "sha256": "<version-dependent>"
     },
     "package.json": {
-      "size": 498,
-      "sha256": "87cb099d9bd5fb20"
+      "size": 570,
+      "sha256": "5aa56d9d753a6712"
     },
     "services/api/.copier-answers.yml": {
-      "size": 527,
+      "size": 534,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -101,8 +129,8 @@
       "sha256": "fc0726a647a0700c"
     },
     "services/api/package.json": {
-      "size": 1154,
-      "sha256": "2b3ce4451c2f8284"
+      "size": 1363,
+      "sha256": "c94f6681aa63c5ba"
     },
     "services/api/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -169,8 +197,8 @@
       "sha256": "648c5e000d6764c1"
     },
     "services/api/src/lib/prisma.ts": {
-      "size": 599,
-      "sha256": "090fa12890818552"
+      "size": 799,
+      "sha256": "7d7efa1b613c545b"
     },
     "services/api/src/middleware/correlation.ts": {
       "size": 394,
@@ -232,6 +260,14 @@
       "size": 2366,
       "sha256": "13617898a495428a"
     },
+    "services/api/tests/e2e/network.test.ts": {
+      "size": 550,
+      "sha256": "6e3ee5363f14ef93"
+    },
+    "services/api/tests/integration/database.test.ts": {
+      "size": 569,
+      "sha256": "a95f55a654cab2c1"
+    },
     "services/api/tests/integration/error-handler.test.ts": {
       "size": 4498,
       "sha256": "a315048dec5845c0"
@@ -241,8 +277,8 @@
       "sha256": "ba1123115bb6f211"
     },
     "services/api/tests/integration/items.test.ts": {
-      "size": 5681,
-      "sha256": "3d5280fbad0efb06"
+      "size": 6065,
+      "sha256": "0a83bcb729b32e2f"
     },
     "services/api/tests/setup.ts": {
       "size": 339,
@@ -259,6 +295,10 @@
     "services/api/tests/unit/item.service.test.ts": {
       "size": 5295,
       "sha256": "98c0beedb49d6d7b"
+    },
+    "services/api/tests/unit/prisma-pool.test.ts": {
+      "size": 1416,
+      "sha256": "8e0776f5c089421a"
     },
     "services/api/tests/unit/repositories.test.ts": {
       "size": 2775,
@@ -277,8 +317,16 @@
       "sha256": "7aed9f41bf232c59"
     },
     "services/api/vitest.config.ts": {
-      "size": 697,
-      "sha256": "d9a9fd079970435c"
+      "size": 982,
+      "sha256": "aba39920c3521b92"
+    },
+    "services/api/vitest.e2e.config.ts": {
+      "size": 413,
+      "sha256": "045cfed396d05d8b"
+    },
+    "services/api/vitest.integration.config.ts": {
+      "size": 567,
+      "sha256": "2849d98820cb0d33"
     }
   }
 }

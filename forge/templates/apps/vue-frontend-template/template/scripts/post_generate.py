@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -488,6 +489,11 @@ def main() -> None:
     print("\n> Updating README")
     patch_readme(features)
     print("  [ok] README.md updated")
+
+    if os.environ.get("FORGE_RENDER_ONLY") == "1":
+        delete_file(PROJECT_DIR / "scripts" / "answers.json")
+        delete_file(PROJECT_DIR / "scripts" / "feature_templates.py")
+        return
 
     pm = PACKAGE_MANAGER
     print(f"\n> Installing project")

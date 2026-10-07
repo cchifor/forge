@@ -1,10 +1,7 @@
 """Python / FastAPI backend toolchain.
 
-Mirrors the pre-Epic-S ``generator._setup_backend`` behavior byte-for-
-byte: ``uv sync`` + ``ruff --fix`` + ``ruff format`` + ``ty check`` +
-``pytest``. The split between :meth:`install` (no-op) and :meth:`verify`
-(everything) preserves how the generator drove it — everything ran
-only when ``not quiet and not dry_run``.
+Verify dependencies, lint, formatting, types and tests. Generation canonicalizes
+Python before recording ownership; verification must not mutate protected code.
 """
 
 from __future__ import annotations
@@ -31,13 +28,13 @@ class PythonToolchain:
             run_backend_cmd(backend_dir, ["uv", "sync"], "Install dependencies", quiet=quiet),
             run_backend_cmd(
                 backend_dir,
-                ["uv", "run", "ruff", "check", "--fix", "src/", "tests/"],
-                "Lint fix",
+                ["uv", "run", "ruff", "check", "src/", "tests/"],
+                "Lint check",
                 quiet=quiet,
             ),
             run_backend_cmd(
                 backend_dir,
-                ["uv", "run", "ruff", "format", "src/", "tests/"],
+                ["uv", "run", "ruff", "format", "--check", "src/", "tests/"],
                 "Format",
                 quiet=quiet,
             ),

@@ -40,3 +40,6 @@ postgres-data/
 
 # --- Forge ---
 .forge-merge/
+
+.forge/coverage/
+*.forge-merge

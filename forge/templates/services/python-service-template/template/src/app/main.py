@@ -1,5 +1,7 @@
 import logging
+from collections.abc import Iterable
 
+from dishka import Provider
 from fastapi import FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -65,8 +67,8 @@ def _configure_exceptions(app: FastAPI) -> None:
     # FORGE:EXCEPTION_HANDLERS
 
 
-def create_app() -> FastAPI:
-    """Application Factory."""
+def create_app(*, providers: Iterable[Provider] = ()) -> FastAPI:
+    """Compose the application with additional public dependency providers."""
     app = FastAPI(
         **settings.app.model_dump(),
         lifespan=AppLifecycle.lifespan,
@@ -88,7 +90,7 @@ def create_app() -> FastAPI:
     _configure_exceptions(app)
     _configure_routers(app)
     # FORGE:APP_POST_CONFIGURE
-    AppLifecycle.bootstrap(app, settings)
+    AppLifecycle.bootstrap(app, settings, providers=providers)
 
     logger.info("Application factory completed successfully.")
     return app

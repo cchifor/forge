@@ -77,6 +77,7 @@ describe('useAuth – dev mode (VITE_AUTH_DISABLED=true)', () => {
   })
 })
 
+{% if include_auth %}
 describe('useAuth – Gatekeeper mode', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -168,6 +169,7 @@ describe('useAuth – Gatekeeper mode', () => {
       new Proxy(window.location, {
         get(target, prop) {
           if (prop === 'href') return 'http://app.localhost/'
+          if (prop === 'origin') return 'http://app.localhost'
           return Reflect.get(target, prop)
         },
         set(_target, prop, value) {
@@ -179,7 +181,7 @@ describe('useAuth – Gatekeeper mode', () => {
 
     auth.login('http://app.localhost/dashboard')
     expect(hrefSetter).toHaveBeenCalledWith(
-      '/auth/login?redirect_uri=http%3A%2F%2Fapp.localhost%2Fdashboard',
+      '/auth/login?redirect_uri=%2Fdashboard',
     )
 
     locationHref.mockRestore()
@@ -208,3 +210,5 @@ describe('useAuth – Gatekeeper mode', () => {
     expect(hrefSetter).toHaveBeenCalledWith('/logout')
   })
 })
+
+{% endif %}

@@ -1,144 +1,148 @@
+use {{ project_name | replace('-', '_') }}::app::create_app;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
+use serde_json::{Value, json};
 use tower::ServiceExt;
 
-// Integration test stubs for CRUD endpoints.
-//
-// These tests validate the request/response contract without a live database.
-// They use a standalone Axum router with mock handlers that return the expected
-// shapes. Full integration tests require a running PostgreSQL instance.
+const ENTITY_PATH: &str = "/api/v1/{{ entity_plural }}";
 
-fn mock_item() -> serde_json::Value {
-    serde_json::json!({
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "name": "Test Item",
-        "description": null,
-        "tags": [],
-        "status": "DRAFT",
-        "customer_id": "550e8400-e29b-41d4-a716-446655440001",
-        "user_id": "550e8400-e29b-41d4-a716-446655440002",
-        "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
-    })
-}
-
-fn build_mock_router() -> axum::Router {
-    use axum::Json;
-    use axum::routing::get;
-
-    axum::Router::new()
-        .route(
-            "/api/v1/{{ entity_plural }}",
-            get(|| async {
-                Json(serde_json::json!({
-                    "items": [mock_item()],
-                    "total": 1,
-                    "skip": 0,
-                    "limit": 20
+async fn request(
+    app: axum::Router,
+    method: &str,
+    url: &str,
+    payload: Value,
+) -> (StatusCode, Value) {
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(url)
+                .header("content-type", "application/json")
+                .body(Body::from(if payload.is_null() {
+                    String::new()
+                } else {
+                    payload.to_string()
                 }))
-            })
-            .post(|| async { (StatusCode::CREATED, Json(mock_item())) }),
+                .unwrap(),
         )
-        .route(
-            "/api/v1/{{ entity_plural }}/{id}",
-            get(|| async { Json(mock_item()) })
-                .patch(|| async { Json(mock_item()) })
-                .delete(|| async { StatusCode::NO_CONTENT }),
-        )
-}
-
-#[tokio::test]
-async fn list_items_returns_paginated() {
-    let app = build_mock_router();
-
-    let request = Request::builder()
-        .uri("/api/v1/{{ entity_plural }}")
-        .body(Body::empty())
+        .await
         .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(json["items"].is_array());
-    assert_eq!(json["total"], 1);
-    assert_eq!(json["skip"], 0);
-    assert_eq!(json["limit"], 20);
+    let status = response.status();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        if bytes.is_empty() {
+            Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap()
+        },
+    )
 }
 
 #[tokio::test]
-async fn create_item_returns_201() {
-    let app = build_mock_router();
-
-    // customer_id and user_id are no longer in the request body —
-    // they are injected from the verified IdentityContext (tenant_id +
-    // subject) bound by the platform-auth middleware.
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/v1/{{ entity_plural }}")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            serde_json::json!({
-                "name": "Test Item"
+async fn item_lifecycle_uses_real_router_and_postgres() {
+    let url = std::env::var("DATABASE_URL").expect("Integration tests require DATABASE_URL");
+    let admin = sqlx::PgPool::connect(&url).await.unwrap();
+    let schema = format!("forge_test_{}", uuid::Uuid::new_v4().simple());
+    sqlx::query(&format!("CREATE SCHEMA {schema}"))
+        .execute(&admin)
+        .await
+        .unwrap();
+    let path = schema.clone();
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .after_connect(move |connection, _| {
+            let path = path.clone();
+            Box::pin(async move {
+                sqlx::query(&format!("SET search_path TO {path}"))
+                    .execute(connection)
+                    .await?;
+                Ok(())
             })
-            .to_string(),
-        ))
+        })
+        .connect(&url)
+        .await
         .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["name"], "Test Item");
-}
-
-#[tokio::test]
-async fn get_item_by_id() {
-    let app = build_mock_router();
-
-    let request = Request::builder()
-        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
-        .body(Body::empty())
+    sqlx::raw_sql(include_str!("../migrations/0001_initial.sql"))
+        .execute(&pool)
+        .await
         .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["id"], "550e8400-e29b-41d4-a716-446655440000");
-}
-
-#[tokio::test]
-async fn update_item_returns_updated() {
-    let app = build_mock_router();
-
-    let request = Request::builder()
-        .method("PATCH")
-        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            serde_json::json!({ "name": "Updated" }).to_string(),
-        ))
+    let app = create_app(pool.clone());
+    let (status, item) = request(
+        app.clone(),
+        "POST",
+        ENTITY_PATH,
+        json!({"name": "Lifecycle", "description": "test", "tags": ["test"]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{item}");
+    let id = item["id"].as_str().unwrap();
+    let endpoint = format!("{ENTITY_PATH}/{id}");
+    assert_eq!(
+        request(app.clone(), "GET", &endpoint, Value::Null).await.1["name"],
+        "Lifecycle"
+    );
+    assert_eq!(
+        request(
+            app.clone(),
+            "POST",
+            ENTITY_PATH,
+            json!({"name":"Lifecycle"})
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    let (status, updated) = request(app.clone(), "PATCH", &endpoint, json!({"name": "Updated", "status": "ACTIVE", "tags": ["updated"], "description": "changed"})).await;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["name"], "Updated");
+    let (status, page) = request(
+        app.clone(),
+        "GET",
+        &format!("{ENTITY_PATH}?search=Updated&status=ACTIVE&limit=10&skip=0"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(page["total"], 1);
+    assert_eq!(
+        request(
+            app.clone(),
+            "GET",
+            &format!("{ENTITY_PATH}?limit=0"),
+            Value::Null
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(
+        request(app.clone(), "DELETE", &endpoint, Value::Null)
+            .await
+            .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(app.clone(), "GET", &endpoint, Value::Null).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(app.clone(), "DELETE", &endpoint, Value::Null)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(app, "PATCH", &endpoint, json!({"name":"gone"}))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    pool.close().await;
+    sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
+        .execute(&admin)
+        .await
         .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn delete_item_returns_204() {
-    let app = build_mock_router();
-
-    let request = Request::builder()
-        .method("DELETE")
-        .uri("/api/v1/{{ entity_plural }}/550e8400-e29b-41d4-a716-446655440000")
-        .body(Body::empty())
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    admin.close().await;
 }

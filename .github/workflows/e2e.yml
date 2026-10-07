@@ -224,7 +224,7 @@ jobs:
       # because that dep is unpublished and only resolves through the
       # workspace symlink that the root-level install creates.
       - name: workspace install (root)
-        run: npm install --no-fund --no-audit
+        run: npm ci --no-fund --no-audit
 
       - name: canvas-core — build (workspace dep of the canvas-* packages)
         run: npm run --workspace=@forge/canvas-core build

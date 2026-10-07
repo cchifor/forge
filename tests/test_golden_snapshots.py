@@ -124,6 +124,14 @@ def _snapshot_for(tmp_path: Path, project_root: Path) -> dict:
         ):
             continue
         data = p.read_bytes().replace(b"\r\n", b"\n")
+        if rel == ".forge/quality.json":
+            recipe = json.loads(data)
+            # Check the portable recipe shape, without embedding the current
+            # source/commit fingerprint into a self-referential golden file.
+            for key in ("generator_sha256", "generator_requirement", "generator_version"):
+                if key in recipe:
+                    recipe[key] = "<generator-version>"
+            data = json.dumps(recipe, sort_keys=True).encode()
         files[rel] = {
             "size": len(data),
             "sha256": (

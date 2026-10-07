@@ -82,7 +82,7 @@ def _run_update(args: argparse.Namespace) -> None:
         print("Update complete.")
 
     _emit_update_telemetry(project_path, summary)
-    sys.exit(0)
+    sys.exit(12 if summary.get("passed") is False else 0)
 
 
 def _emit_update_telemetry(project_path: Path, summary: dict) -> None:

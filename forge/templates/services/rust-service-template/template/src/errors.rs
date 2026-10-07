@@ -168,6 +168,14 @@ impl AppError {
         }
     }
 
+    pub fn public_message(&self) -> String {
+        if matches!(self, Self::Internal(_)) {
+            "Internal server error".to_string()
+        } else {
+            self.to_string()
+        }
+    }
+
     pub fn code(&self) -> ErrorCode {
         match self {
             Self::NotFound { .. } => ErrorCode::NotFound,
@@ -255,7 +263,7 @@ impl IntoResponse for AppError {
         let body = ErrorEnvelope {
             error: ErrorBody {
                 code: code.as_str(),
-                message: self.to_string(),
+                message: self.public_message(),
                 type_name: self.type_name(),
                 context: self.context(),
                 correlation_id: String::new(),

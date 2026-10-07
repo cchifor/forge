@@ -41,6 +41,11 @@ pytestmark = pytest.mark.package_integrity
 # than the most-exercised path. Update only when a fragment is renamed
 # or removed intentionally — a failure here is usually a MANIFEST.in bug.
 SENTINEL_TEMPLATE_FILES: tuple[str, ...] = (
+    "forge/templates/_common/quality.yml",
+    "forge/templates/_common/skills/forge-platform/SKILL.md",
+    "forge/templates/_common/skills/forge-platform/references/workloads.md",
+    "forge/quality/architecture.py",
+    "forge/quality/coverage.py",
     # Python service template
     "forge/templates/services/python-service-template/template/pyproject.toml.jinja",
     "forge/templates/services/python-service-template/template/src/app/main.py",

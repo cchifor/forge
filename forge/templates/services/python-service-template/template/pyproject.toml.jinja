@@ -59,9 +59,9 @@ dependencies = [
 # forge-core ships inside this backend (base template) at ``sdks/forge-core``,
 # so its path-dep is backend-relative — unlike the platform-auth SDK which
 # lives at the project-root ``packages/`` tree (``../../packages/...``).
-forge-core = { path = "sdks/forge-core" }
+forge-core = { path = "sdks/forge-core", editable = true }
 {%- if include_platform_auth | default(false) %}
-platform-auth = { path = "../../packages/platform-auth" }
+platform-auth = { path = "../../packages/platform-auth", editable = true }
 {%- endif %}
 
 [dependency-groups]
@@ -148,10 +148,10 @@ omit = [
 ]
 
 [tool.coverage.report]
-# 60% accommodates fragment-injected code (RAG, conversation persistence,
-# auth middleware, etc.) which adds ~500 LoC without proportionate
-# tests in the base template. Bump back to 75% once you've added project-
-# specific tests covering the active fragments.
+include_namespace_packages = true
+# Preserve the existing per-suite floor. Native suite reports are also
+# combined by forge --quality coverage, requiring
+# strictly greater than 80% on new executable lines for each service.
 fail_under = 60
 show_missing = true
 exclude_lines = [

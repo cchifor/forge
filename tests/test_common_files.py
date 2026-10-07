@@ -92,7 +92,7 @@ class TestApplyCommonFiles:
         ci = workflows / "ci.yml"
         ci_node = workflows / "ci-node.yml"
         assert ci.is_file()
-        assert "python service" in ci.read_text(encoding="utf-8")
+        assert "Python service" in ci.read_text(encoding="utf-8")
         assert ci_node.is_file()
         assert "node service" in ci_node.read_text(encoding="utf-8")
 

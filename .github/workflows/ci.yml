@@ -22,7 +22,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: ruff check
         run: uv run ruff check forge/
       - name: ruff format --check
@@ -44,7 +44,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Install helm + kubeconform
         run: |
           curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar xz
@@ -69,7 +69,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: ty check forge/
         run: uv run ty check forge/
 
@@ -81,7 +81,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: ty canary (detect upstream ty regressions)
         run: uv run pytest tests/test_ty_canary.py -v --no-cov
 
@@ -103,7 +103,7 @@ jobs:
       - name: Set Python ${{ matrix.python }}
         run: uv python install ${{ matrix.python }}
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: pytest
         # Epic DD carves package_integrity into its own job below; exclude it
         # from the main matrix so the wall-clock stays flat.
@@ -141,7 +141,7 @@ jobs:
       - name: Set Python 3.13
         run: uv python install 3.13
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: pytest --cov --cov-report=xml,json
         # `-n auto` parallelises within the coverage cell. pytest-cov
         # is xdist-aware so per-worker reports merge cleanly into one
@@ -191,7 +191,7 @@ jobs:
       - name: Set Python 3.13
         run: uv python install 3.13
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: pytest -m package_integrity
         run: uv run pytest -m package_integrity -v --no-cov
 
@@ -210,7 +210,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Validate scenarios.yaml schema
         # Front-load schema validation so malformed YAML fails this step
         # with a useful diagnostic rather than the inline-Python emit
@@ -245,7 +245,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Run lane A (generate) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane generate
 
@@ -282,7 +282,7 @@ jobs:
           git config --global user.email "ci@forge.local"
           git config --global user.name "Forge CI"
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       - name: Run lane B (verify) for ${{ matrix.scenario }}
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane verify
 
@@ -304,7 +304,7 @@ jobs:
           enable-cache: true
 
       - name: Install project deps
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
 
       - name: pip-audit (Python)
         run: |
@@ -370,7 +370,7 @@ jobs:
           git config --global user.email "ci@forge.local"
           git config --global user.name "Forge CI"
       - name: Install forge
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
       # FORGE_MATRIX_LOG_DIR opts the smoke runner into writing compose
       # logs + ps to a known directory BEFORE it tears the stack down
       # (see tests/matrix/runner.py::_dump_compose_diagnostics). Without
@@ -415,7 +415,7 @@ jobs:
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned stable
 
       - name: Install forge + parity deps
-        run: uv sync --all-extras --dev
+        run: uv sync --locked --all-extras --dev
 
       - name: Auth-SDK cross-language parity contract
         run: uv run pytest tests/contract/auth_sdk_parity -q --no-cov -p no:cacheprovider
