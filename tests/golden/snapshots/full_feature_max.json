@@ -126,7 +126,7 @@
     },
     "apps/frontend/scripts/remap-browser.mjs": {
       "size": 778,
-      "sha256": "0c9ad004cb97befc"
+      "sha256": "078da64f2ee555a7"
     },
     "apps/frontend/src/app/App.vue": {
       "size": 702,
