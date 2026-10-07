@@ -41,6 +41,7 @@ pytestmark = pytest.mark.package_integrity
 # than the most-exercised path. Update only when a fragment is renamed
 # or removed intentionally — a failure here is usually a MANIFEST.in bug.
 SENTINEL_TEMPLATE_FILES: tuple[str, ...] = (
+    "forge/injectors/ts-morph-helper.mjs",
     "forge/templates/_common/quality.yml",
     "forge/templates/_common/skills/forge-platform/SKILL.md",
     "forge/templates/_common/skills/forge-platform/references/workloads.md",
@@ -159,6 +160,17 @@ def _sdist_relative(member: str, prefix: str) -> str:
 def artefacts(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     """Build + cache the sdist and wheel for every test in this module."""
     return _build_artefacts(tmp_path_factory.mktemp("package-integrity"))
+
+
+def test_installed_generator_fingerprint_matches_checkout(artefacts, tmp_path, monkeypatch):
+    """A recipe generated from Git must survive installation of that same commit."""
+    from forge.quality import model
+
+    expected = model.source_fingerprint()
+    with zipfile.ZipFile(artefacts[1]) as wheel:
+        wheel.extractall(tmp_path)
+    monkeypatch.setattr(model, "__file__", str(tmp_path / "forge/quality/model.py"))
+    assert model.source_fingerprint() == expected
 
 
 class TestSdist:

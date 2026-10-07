@@ -60,6 +60,8 @@ export default [
     plugins: { '@typescript-eslint': tsPlugin },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      // TypeScript checks names, including DOM-only types such as RequestInit.
+      'no-undef': 'off',
       // Defer unused-var checking to @typescript-eslint (it understands types,
       // enums and overloads) and let ``_``-prefixed bindings opt out. The base
       // ``no-unused-vars`` from js.configs.recommended would otherwise error on

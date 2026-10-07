@@ -83,6 +83,7 @@ where = ["."]
 include = ["forge*"]
 
 [tool.setuptools.package-data]
+"forge.injectors" = ["*.mjs"]
 "forge.templates" = ["**/*"]
 # Built-in feature subpackages (forge/features/<name>/) colocate template
 # trees alongside their Python registration modules — same convention
