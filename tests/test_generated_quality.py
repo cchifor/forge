@@ -32,7 +32,7 @@ def project():
 def test_real_generation_integrity_and_hash_tampering(project):
     assert verify_architecture(project)["passed"]
     protected = next((project / "services/api/sdks/forge-core/src").rglob("*.py"))
-    protected.write_text(protected.read_text() + "\n# modified\n")
+    protected.write_text(protected.read_text(encoding="utf-8") + "\n# modified\n", encoding="utf-8")
     # Updating a local SHA does not authorize replacement of generic code.
     manifest = project / "forge.toml"
     from forge.sync.manifest import read_forge_toml
@@ -40,7 +40,9 @@ def test_real_generation_integrity_and_hash_tampering(project):
     previous = read_forge_toml(manifest).provenance[protected.relative_to(project).as_posix()][
         "sha256"
     ]
-    manifest.write_text(manifest.read_text().replace(previous, digest(protected)))
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace(previous, digest(protected)), encoding="utf-8"
+    )
     report = verify_architecture(project)
     assert not report["passed"]
     assert any("differs from regeneration" in message for message in report["violations"])
@@ -48,26 +50,26 @@ def test_real_generation_integrity_and_hash_tampering(project):
 
 def test_added_shadow_source_rejected(project):
     shadow = project / "services/api/src/forge_core.py"
-    shadow.write_text("pass\n")
+    shadow.write_text("pass\n", encoding="utf-8")
     assert any("unregistered" in p for p in verify_architecture(project)["violations"])
 
 
 def test_custom_extension_survives_update_and_dry_run(project):
     extension = project / "services/api/src/app/custom/example.py"
     extension.parent.mkdir()
-    extension.write_text("def business_rule():\n    return 42\n")
+    extension.write_text("def business_rule():\n    return 42\n", encoding="utf-8")
     before = (project / "forge.toml").read_bytes()
     report = update_owned_project(project, dry_run=True)
     assert report["passed"]
     assert (project / "forge.toml").read_bytes() == before
     assert update_owned_project(project)["passed"]
-    assert "return 42" in extension.read_text()
+    assert "return 42" in extension.read_text(encoding="utf-8")
     assert verify_architecture(project)["passed"]
 
 
 def test_modified_protected_file_stops_update(project):
     path = next((project / "services/api/sdks/forge-core/src").rglob("*.py"))
-    path.write_text("# application-specific override\n")
+    path.write_text("# application-specific override\n", encoding="utf-8")
     before = (project / "forge.toml").read_bytes()
     with pytest.raises(ValueError, match="Protected file edited"):
         update_owned_project(project)
@@ -83,12 +85,12 @@ def test_missing_protected_file_regenerated(project):
 
 
 def test_recipe_pin_and_shared_inventory(project):
-    recipe = json.loads((project / ".forge/quality.json").read_text())
+    recipe = json.loads((project / ".forge/quality.json").read_text(encoding="utf-8"))
     assert recipe["generator_requirement"].startswith("forge-cli")
     targets = subjects(read_recipe(project), project)
     assert any(item.get("shared") and item["language"] == "python" for item in targets)
     recipe["generator_sha256"] = "edited"
-    (project / ".forge/quality.json").write_text(json.dumps(recipe))
+    (project / ".forge/quality.json").write_text(json.dumps(recipe), encoding="utf-8")
     with pytest.raises(ValueError, match="Generator differs"):
         read_recipe(project)
     assert read_recipe(project, check_generator=False).project_name == "gate-test"
@@ -123,7 +125,7 @@ def test_transaction_rollback(tmp_path, monkeypatch):
 
 
 def test_transaction_delete_and_create(tmp_path):
-    (tmp_path / "old").write_text("old")
+    (tmp_path / "old").write_text("old", encoding="utf-8")
     apply_transaction(tmp_path, {"old": None, "new/nested": b"new"})
     assert not (tmp_path / "old").exists()
     assert (tmp_path / "new/nested").read_bytes() == b"new"
@@ -152,14 +154,15 @@ def test_ownership_policy():
 def test_dependency_boundaries_and_monkey_patch(tmp_path):
     path = tmp_path / "custom.py"
     path.write_text(
-        "import forge_core.secret as core\nfrom forge_core._private import key\ncore.method = None\n"
+        "import forge_core.secret as core\nfrom forge_core._private import key\ncore.method = None\n",
+        encoding="utf-8",
     )
     problems = boundary_violations(tmp_path, {})
     assert any("private" in p for p in problems)
     assert any("replace generated" in p for p in problems)
-    path.write_text("from app.custom import rules\n")
+    path.write_text("from app.custom import rules\n", encoding="utf-8")
     assert boundary_violations(tmp_path, {"custom.py": {"ownership": "generated"}})
-    path.write_text("from app.ports import Store\n")
+    path.write_text("from app.ports import Store\n", encoding="utf-8")
     assert not boundary_violations(tmp_path, {})
 
 
@@ -176,13 +179,14 @@ def test_dependency_boundaries_and_monkey_patch(tmp_path):
     ],
 )
 def test_import_aliases_cannot_patch_generic_runtime(tmp_path, filename, source):
-    (tmp_path / filename).write_text(source)
+    (tmp_path / filename).write_text(source, encoding="utf-8")
     assert boundary_violations(tmp_path, {})
 
 
 def test_local_rebinding_and_public_port_composition_are_allowed(tmp_path):
     (tmp_path / "custom.py").write_text(
-        "from forge_core import transport\ntransport = None\nfrom app.ports import Store\n"
+        "from forge_core import transport\ntransport = None\nfrom app.ports import Store\n",
+        encoding="utf-8",
     )
     assert boundary_violations(tmp_path, {}) == []
 
@@ -202,7 +206,7 @@ def test_local_rebinding_and_public_port_composition_are_allowed(tmp_path):
 )
 def test_import_extraction(tmp_path, filename, body, expected):
     path = tmp_path / filename
-    path.write_text(body)
+    path.write_text(body, encoding="utf-8")
     assert expected in imports(path)
 
 
@@ -210,7 +214,7 @@ def test_import_extraction(tmp_path, filename, body, expected):
 def sources(tmp_path):
     source = tmp_path / "services/api/src/work.py"
     source.parent.mkdir(parents=True)
-    source.write_text("\n".join(f"value{i} = {i}" for i in range(10)) + "\n")
+    source.write_text("\n".join(f"value{i} = {i}" for i in range(10)) + "\n", encoding="utf-8")
     return tmp_path, source
 
 
@@ -263,10 +267,10 @@ def test_missing_empty_duplicate_stale_and_omitted_reports_fail(sources):
     assert not evaluate(root, [*reports, reports[0]], TARGETS)["passed"]
     reports[0]["tests"] = 0
     assert not evaluate(root, reports, TARGETS)["passed"]
-    source.write_text(source.read_text() + "# change\n")
+    source.write_text(source.read_text(encoding="utf-8") + "# change\n", encoding="utf-8")
     assert not evaluate(root, reports, TARGETS)["passed"]
     reports = reports_for(root, source)
-    (source.parent / "untested.py").write_text("value = 1\n")
+    (source.parent / "untested.py").write_text("value = 1\n", encoding="utf-8")
     assert not evaluate(root, reports, TARGETS)["passed"]
 
 
@@ -280,7 +284,7 @@ def test_report_escape_and_invalid_counter_fail(sources):
 
 def git(root, *args):
     return subprocess.run(
-        ["git", *args], cwd=root, check=True, text=True, capture_output=True
+        ["git", *args], cwd=root, check=True, text=True, encoding="utf-8", capture_output=True
     ).stdout.strip()
 
 
@@ -299,14 +303,16 @@ def test_diff_coverage_and_missing_base(sources):
         "baseline",
     )
     base = git(root, "rev-parse", "HEAD")
-    source.write_text(source.read_text().replace("value9 = 9", "value9 = 99"))
+    source.write_text(
+        source.read_text(encoding="utf-8").replace("value9 = 9", "value9 = 99"), encoding="utf-8"
+    )
     assert changed_lines(root, base)[source.relative_to(root).as_posix()] == {10}
     result = evaluate(root, reports_for(root, source, 9), TARGETS, base_ref=base)
     assert not result["passed"]
     assert result["subjects"][0]["new_total"] == 1
     with pytest.raises(subprocess.CalledProcessError):
         changed_lines(root, "nonexistent-base")
-    (source.parent / "new.py").write_text("new = 1\n")
+    (source.parent / "new.py").write_text("new = 1\n", encoding="utf-8")
     assert "services/api/src/new.py" in changed_lines(root, base)
 
 
@@ -329,6 +335,33 @@ def test_no_executable_changes_is_explicit_na(sources):
     assert result["subjects"][0]["new_total"] == 0
 
 
+@pytest.mark.parametrize("name", ["café.py", "source with spaces.py"])
+def test_diff_coverage_includes_quoted_paths(sources, name):
+    root, source = sources
+    source = source.rename(source.with_name(name))
+    git(root, "init")
+    git(root, "config", "core.quotepath", "true")
+    git(root, "add", ".")
+    git(
+        root,
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-m",
+        "baseline",
+    )
+    source.write_text(
+        source.read_text(encoding="utf-8").replace("value9 = 9", "value9 = 99"),
+        encoding="utf-8",
+    )
+    assert changed_lines(root, "HEAD")[source.relative_to(root).as_posix()] == {10}
+    result = evaluate(root, reports_for(root, source, 9), TARGETS, base_ref="HEAD")
+    assert not result["passed"]
+    assert result["subjects"][0]["new_total"] == 1
+
+
 @pytest.mark.parametrize("format", ["python", "istanbul", "lcov"])
 def test_native_reports(sources, format):
     root, source = sources
@@ -338,7 +371,8 @@ def test_native_reports(sources, format):
         native.write_text(
             json.dumps(
                 {"meta": {}, "files": {name: {"executed_lines": [1, 2], "missing_lines": [3]}}}
-            )
+            ),
+            encoding="utf-8",
         )
     elif format == "istanbul":
         native.write_text(
@@ -350,10 +384,11 @@ def test_native_reports(sources, format):
                         "s": {"0": 1},
                     }
                 }
-            )
+            ),
+            encoding="utf-8",
         )
     else:
-        native.write_text(f"SF:{name}\nDA:1,1\nDA:2,0\nend_of_record\n")
+        native.write_text(f"SF:{name}\nDA:1,1\nDA:2,0\nend_of_record\n", encoding="utf-8")
     result = make_report(root, "api", "unit", native, source.parent, tests=1)
     assert result["files"][source.relative_to(root).as_posix()]["lines"][1] == 1
     with pytest.raises(ValueError):
@@ -362,7 +397,7 @@ def test_native_reports(sources, format):
 
 def test_empty_native_rejected(tmp_path):
     path = tmp_path / "empty.json"
-    path.write_text("{}")
+    path.write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError):
         native_lines(path, tmp_path, tmp_path)
 
@@ -371,7 +406,7 @@ def test_shared_runtime_has_its_own_gate(sources):
     root, source = sources
     shared = root / "sdks/core/src/lib.py"
     shared.parent.mkdir(parents=True)
-    shared.write_text("first = 1\nsecond = 2\n")
+    shared.write_text("first = 1\nsecond = 2\n", encoding="utf-8")
     reports = reports_for(root, source, 10)
     for report in reports:
         report["files"][shared.relative_to(root).as_posix()] = {
@@ -386,7 +421,7 @@ def test_shared_runtime_has_its_own_gate(sources):
 
 def test_migration_never_adopts_modified_source(project):
     source = next((project / "services/api/sdks/forge-core/src").rglob("*.py"))
-    source.write_text("# customized\n")
+    source.write_text("# customized\n", encoding="utf-8")
     proposal = migration_report(project)
     record = next(
         item for item in proposal["files"] if item["path"] == source.relative_to(project).as_posix()

@@ -25,11 +25,11 @@ def canonicalize(config: ProjectConfig, root: Path, collector: ProvenanceCollect
         if not targets:
             continue
         for path in (directory / "src").rglob("*.py"):
-            content = path.read_text()
+            content = path.read_text(encoding="utf-8")
             if "FORGE:BEGIN" in content and "# isort: skip_file" not in content:
                 # Import sorters move sentinel comments independently of their
                 # imports, corrupting the existing fragment update protocol.
-                path.write_text("# isort: skip_file\n" + content)
+                path.write_text("# isort: skip_file\n" + content, encoding="utf-8")
         for argv in (["check", "--select", "I,F401", "--fix"], ["format"]):
             subprocess.run(
                 [sys.executable, "-m", "ruff", *argv, *targets],
@@ -37,6 +37,7 @@ def canonicalize(config: ProjectConfig, root: Path, collector: ProvenanceCollect
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
             )
     # Preserve ownership/origin while refreshing content changed by canonicalization.
     for relative, record in collector.records.items():

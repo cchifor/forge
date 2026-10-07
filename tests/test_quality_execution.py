@@ -24,9 +24,27 @@ from tests.test_generated_quality import project as _project_fixture
 project = _project_fixture
 
 
+@pytest.fixture
+def legacy_text_encoding(project, monkeypatch):
+    """Exercise Windows' pre-UTF-8 default even on UTF-8 Linux workers."""
+    original_read = Path.read_text
+    original_write = Path.write_text
+
+    def read_text(path, encoding=None, errors=None, **kwargs):
+        return original_read(path, encoding=encoding or "cp1252", errors=errors, **kwargs)
+
+    def write_text(path, data, encoding=None, errors=None, **kwargs):
+        return original_write(path, data, encoding=encoding or "cp1252", errors=errors, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(Path, "write_text", write_text)
+
+
 def junit(path, tests=1):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("<testsuite>" + '<testcase name="executed"/>' * tests + "</testsuite>")
+    path.write_text(
+        "<testsuite>" + '<testcase name="executed"/>' * tests + "</testsuite>", encoding="utf-8"
+    )
 
 
 @pytest.fixture
@@ -35,7 +53,7 @@ def service(tmp_path):
     directory = root / "services/api"
     (directory / "src").mkdir(parents=True)
     source = directory / "src/work.py"
-    source.write_text("first = 1\nsecond = 2\n")
+    source.write_text("first = 1\nsecond = 2\n", encoding="utf-8")
     for suite in ("unit", "integration", "e2e"):
         (directory / "tests" / suite).mkdir(parents=True)
     for name in ("vitest.config.ts", "vitest.integration.config.ts", "vitest.e2e.config.ts"):
@@ -73,7 +91,7 @@ def test_native_collection_binds_report_to_executed_source(service, monkeypatch,
             native = Path(
                 next(a.split("json:", 1)[1] for a in argv if a.startswith("--cov-report=json:"))
             )
-            native.write_text(json.dumps(coverage_json(source)))
+            native.write_text(json.dumps(coverage_json(source)), encoding="utf-8")
             assert "--locked" in argv and "--cov=src" in argv
         else:
             junit(Path(next(a.split("=", 1)[1] for a in argv if a.startswith("--outputFile="))))
@@ -92,7 +110,8 @@ def test_native_collection_binds_report_to_executed_source(service, monkeypatch,
                             "s": {"0": 1},
                         }
                     }
-                )
+                ),
+                encoding="utf-8",
             )
             assert "--no-install" in argv
 
@@ -100,7 +119,7 @@ def test_native_collection_binds_report_to_executed_source(service, monkeypatch,
     relative = run_native(
         root, {"name": "api", "path": "services/api", "language": language}, suite
     )
-    result = json.loads((root / relative).read_text())
+    result = json.loads((root / relative).read_text(encoding="utf-8"))
     assert result["tests"] == 1 and result["suite"] == suite
     assert result["files"]["services/api/src/work.py"]["sha256"]
     assert len(commands) == 1
@@ -109,7 +128,7 @@ def test_native_collection_binds_report_to_executed_source(service, monkeypatch,
 @pytest.mark.parametrize("language", ["rust", "flutter"])
 def test_lcov_adapters_require_successful_native_tests(service, monkeypatch, language):
     root, directory, source = service
-    (directory / "tests/contract.rs").write_text("// test binary")
+    (directory / "tests/contract.rs").write_text("// test binary", encoding="utf-8")
     (directory / "test/src").mkdir(parents=True)
 
     def execute(argv, **kwargs):
@@ -121,7 +140,7 @@ def test_lcov_adapters_require_successful_native_tests(service, monkeypatch, lan
                 next(a.split("=", 1)[1] for a in argv if a.startswith("--coverage-path="))
             )
             kwargs["stdout"].write(json.dumps({"type": "testDone", "result": "success"}) + "\n")
-        target.write_text(f"SF:{source}\nDA:1,1\nDA:2,0\nend_of_record\n")
+        target.write_text(f"SF:{source}\nDA:1,1\nDA:2,0\nend_of_record\n", encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr("forge.quality.runner.subprocess.run", execute)
@@ -130,7 +149,7 @@ def test_lcov_adapters_require_successful_native_tests(service, monkeypatch, lan
         output = run_native(
             root, {"name": "api", "path": "services/api", "language": language}, suite
         )
-        assert json.loads((root / output).read_text())["tests"] > 0
+        assert json.loads((root / output).read_text(encoding="utf-8"))["tests"] > 0
 
 
 def test_browser_remaps_original_sources(service, monkeypatch):
@@ -142,32 +161,33 @@ def test_browser_remaps_original_sources(service, monkeypatch):
 
     def remap(argv, cwd, env):
         assert argv[:2] == ["node", "scripts/remap-browser.mjs"]
-        Path(argv[-1]).write_text(json.dumps(coverage_json(source)))
+        Path(argv[-1]).write_text(json.dumps(coverage_json(source)), encoding="utf-8")
 
     monkeypatch.setattr("forge.quality.runner.subprocess.run", playwright)
     monkeypatch.setattr("forge.quality.runner._execute", remap)
     output = run_native(root, {"name": "api", "path": "services/api", "language": "vue"}, "e2e")
-    assert json.loads((root / output).read_text())["tests"] == 2
+    assert json.loads((root / output).read_text(encoding="utf-8"))["tests"] == 2
 
 
 def test_rust_path_dependency_coverage_uses_the_same_execution(service, monkeypatch):
     root, directory, source = service
     package = root / "packages/auth"
     (package / "src").mkdir(parents=True)
-    (package / "Cargo.toml").write_text('[package]\nname = "auth"\n')
+    (package / "Cargo.toml").write_text('[package]\nname = "auth"\n', encoding="utf-8")
     shared_source = package / "src/lib.rs"
-    shared_source.write_text("pub fn valid() -> bool { true }\n")
+    shared_source.write_text("pub fn valid() -> bool { true }\n", encoding="utf-8")
 
     def cargo(argv, **kwargs):
         Path(argv[argv.index("--output-path") + 1]).write_text(
-            f"SF:{source}\nDA:1,1\nend_of_record\nSF:{shared_source}\nDA:1,1\nend_of_record\n"
+            f"SF:{source}\nDA:1,1\nend_of_record\nSF:{shared_source}\nDA:1,1\nend_of_record\n",
+            encoding="utf-8",
         )
         kwargs["stdout"].write("test result: ok. 2 passed; 0 failed;\n")
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr("forge.quality.runner.subprocess.run", cargo)
     output = run_native(root, {"name": "api", "path": "services/api", "language": "rust"}, "unit")
-    report = json.loads((root / output).read_text())
+    report = json.loads((root / output).read_text(encoding="utf-8"))
     assert report["tests"] == 2
     assert report["files"]["packages/auth/src/lib.rs"]["lines"] == {"1": 1}
 
@@ -176,7 +196,7 @@ def test_failed_run_removes_previous_green_report(service, monkeypatch):
     root, _, _ = service
     previous = root / ".forge/coverage/api/unit.json"
     previous.parent.mkdir(parents=True)
-    previous.write_text('{"passed":true}')
+    previous.write_text('{"passed":true}', encoding="utf-8")
     monkeypatch.setattr(
         "forge.quality.runner._execute",
         Mock(side_effect=subprocess.CalledProcessError(1, ["pytest"])),
@@ -197,7 +217,7 @@ def test_failed_run_removes_previous_green_report(service, monkeypatch):
 )
 def test_no_execution_or_failed_execution_cannot_pass(tmp_path, xml):
     path = tmp_path / "junit.xml"
-    path.write_text(xml)
+    path.write_text(xml, encoding="utf-8")
     with pytest.raises(ValueError):
         _test_count(path)
 
@@ -242,7 +262,9 @@ def test_workspace_dependencies_are_explicit_and_frozen(tmp_path, monkeypatch, l
         ),
     )
     write_recipe(tmp_path, config)
-    (tmp_path / "package.json").write_text('{"workspaces":["services/node","apps/*"]}')
+    (tmp_path / "package.json").write_text(
+        '{"workspaces":["services/node","apps/*"]}', encoding="utf-8"
+    )
     (tmp_path / "Cargo.toml").touch()
     calls = []
     monkeypatch.setattr(
@@ -297,7 +319,8 @@ def test_quality_cli_reports_missing_recipe(tmp_path, capsys):
 def test_recommend_cli_emits_loadable_config(tmp_path, capsys):
     request = tmp_path / "requirements.json"
     request.write_text(
-        json.dumps({"project_name": "demo", "services": [{"name": "ai", "workload": "ai"}]})
+        json.dumps({"project_name": "demo", "services": [{"name": "ai", "workload": "ai"}]}),
+        encoding="utf-8",
     )
     assert run_recommend(argparse.Namespace(recommend=str(request))) == 0
     result = json.loads(capsys.readouterr().out)
@@ -312,12 +335,14 @@ def test_recommend_cli_emits_loadable_config(tmp_path, capsys):
 
 def test_recommend_cli_rejects_unknown_fields(tmp_path, capsys):
     request = tmp_path / "requirements.json"
-    request.write_text('{"services":[], "invented":true}')
+    request.write_text('{"services":[], "invented":true}', encoding="utf-8")
     assert run_recommend(argparse.Namespace(recommend=str(request))) == 2
     assert json.loads(capsys.readouterr().out)["error"]
 
 
-def test_scaffold_conflict_resolution_preserves_manual_merge(project, monkeypatch, tmp_path):
+def test_scaffold_conflict_resolution_preserves_manual_merge(
+    project, monkeypatch, tmp_path, legacy_text_encoding
+):
     import tomlkit
 
     from forge.quality.model import digest
@@ -325,9 +350,9 @@ def test_scaffold_conflict_resolution_preserves_manual_merge(project, monkeypatc
 
     relative = "services/api/src/app/services/item_service.py"
     source = project / relative
-    upstream = source.read_text() + "\n# upstream evolution\n"
-    local = source.read_text() + "\n# local business logic\n"
-    source.write_text(local)
+    upstream = source.read_text(encoding="utf-8") + "\n# upstream evolution\n"
+    local = source.read_text(encoding="utf-8") + "\n# local business logic\n"
+    source.write_text(local, encoding="utf-8")
     original_manifest = (project / "forge.toml").read_bytes()
     sequence = 0
 
@@ -338,10 +363,10 @@ def test_scaffold_conflict_resolution_preserves_manual_merge(project, monkeypatc
         import shutil
 
         shutil.copytree(project, target)
-        (target / relative).write_text(upstream)
-        manifest = tomlkit.parse((target / "forge.toml").read_text())
+        (target / relative).write_text(upstream, encoding="utf-8")
+        manifest = tomlkit.parse((target / "forge.toml").read_text(encoding="utf-8"))
         manifest["forge"]["provenance"][relative]["sha256"] = digest(target / relative)
-        (target / "forge.toml").write_text(tomlkit.dumps(manifest))
+        (target / "forge.toml").write_text(tomlkit.dumps(manifest), encoding="utf-8")
         return target
 
     monkeypatch.setattr("forge.generator.generate", candidate)
@@ -350,23 +375,23 @@ def test_scaffold_conflict_resolution_preserves_manual_merge(project, monkeypatc
     result = update_owned_project(project)
     assert result["conflicts"] == [relative]
     assert (project / "forge.toml").read_bytes() == original_manifest
-    assert source.read_text() == local
-    assert (project / (relative + ".forge-merge")).read_text() == upstream
+    assert source.read_text(encoding="utf-8") == local
+    assert (project / (relative + ".forge-merge")).read_text(encoding="utf-8") == upstream
     with pytest.raises(ValueError, match="existing update conflict"):
         update_owned_project(project)
     assert resolve_owned_conflict(project, relative, resolution="keep")["passed"]
     assert update_owned_project(project)["passed"]
-    assert source.read_text() == local
+    assert source.read_text(encoding="utf-8") == local
 
 
-def test_conflict_replace_and_protected_refusal(project):
+def test_conflict_replace_and_protected_refusal(project, legacy_text_encoding):
     from forge.quality.update import resolve_owned_conflict
 
     relative = "services/api/src/app/services/item_service.py"
     sidecar = project / (relative + ".forge-merge")
-    sidecar.write_text("# accepted upstream\n")
+    sidecar.write_text("# accepted upstream\n", encoding="utf-8")
     assert resolve_owned_conflict(project, relative, resolution="replace")["passed"]
-    assert (project / relative).read_text() == "# accepted upstream\n"
+    assert (project / relative).read_text(encoding="utf-8") == "# accepted upstream\n"
     assert not sidecar.exists()
     with pytest.raises(ValueError):
         resolve_owned_conflict(project, relative, resolution="invalid")
@@ -380,11 +405,11 @@ def test_rust_declarations_have_no_denominator(tmp_path):
     from forge.quality.coverage import has_executable_source
 
     source = tmp_path / "models.rs"
-    source.write_text("pub struct Model { pub value: i32 }\npub mod handlers;")
+    source.write_text("pub struct Model { pub value: i32 }\npub mod handlers;", encoding="utf-8")
     assert not has_executable_source(source)
-    source.write_text("fn work() -> i32 { 42 }")
+    source.write_text("fn work() -> i32 { 42 }", encoding="utf-8")
     assert has_executable_source(source)
-    source.write_text("fn broken(")
+    source.write_text("fn broken(", encoding="utf-8")
     assert has_executable_source(source)
 
 

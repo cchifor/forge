@@ -150,7 +150,9 @@ def write_recipe(root: Path, config: ProjectConfig) -> None:
     }
     path = root / RECIPE
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, default=_json_value, indent=2, sort_keys=True) + "\n")
+    path.write_text(
+        json.dumps(payload, default=_json_value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def plugin_requirements() -> list[str]:
@@ -175,6 +177,7 @@ def generator_requirement() -> str:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         ).stdout.strip()
         return f"forge-cli @ git+https://github.com/cchifor/forge@{commit}"
     from importlib.metadata import distribution
@@ -189,7 +192,7 @@ def generator_requirement() -> str:
 
 
 def read_recipe(root: Path, *, check_generator: bool = True) -> ProjectConfig:
-    data = json.loads(project_path(root, RECIPE).read_text())
+    data = json.loads(project_path(root, RECIPE).read_text(encoding="utf-8"))
     if data.get("schema_version") != 1:
         raise ValueError("Unsupported quality recipe version")
     if check_generator and data.get("generator_sha256") != source_fingerprint():

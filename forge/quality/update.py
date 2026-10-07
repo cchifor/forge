@@ -83,7 +83,7 @@ def update_owned_project(root: Path, *, dry_run: bool = False) -> dict:
             for rel, record in old.provenance.items():
                 if record.get("origin") == "user" and rel not in new.provenance:
                     new.provenance[rel] = record
-            manifest = tomlkit.parse((candidate / "forge.toml").read_text())
+            manifest = tomlkit.parse((candidate / "forge.toml").read_text(encoding="utf-8"))
             manifest["forge"]["provenance"] = new.provenance
             writes["forge.toml"] = tomlkit.dumps(manifest).encode()
             writes[RECIPE] = (candidate / RECIPE).read_bytes()
@@ -126,7 +126,7 @@ def resolve_owned_conflict(root: Path, relative: str, *, resolution: str) -> dic
         )
     path = project_path(root, relative)
     sidecar = project_path(root, relative + ".forge-merge")
-    manifest = tomlkit.parse((root / "forge.toml").read_text())
+    manifest = tomlkit.parse((root / "forge.toml").read_text(encoding="utf-8"))
     record = manifest["forge"]["provenance"][relative]
     if record.get("ownership") == "generated":
         raise ValueError("Protected runtime cannot be resolved to custom code")
