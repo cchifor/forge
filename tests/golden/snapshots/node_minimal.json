@@ -65,8 +65,8 @@
       "sha256": "<version-dependent>"
     },
     "package.json": {
-      "size": 570,
-      "sha256": "5aa56d9d753a6712"
+      "size": 594,
+      "sha256": "59dcd1502bc7a091"
     },
     "services/api/.copier-answers.yml": {
       "size": 534,
@@ -129,8 +129,8 @@
       "sha256": "fc0726a647a0700c"
     },
     "services/api/package.json": {
-      "size": 1363,
-      "sha256": "c94f6681aa63c5ba"
+      "size": 1387,
+      "sha256": "7c2d7e3578c5343a"
     },
     "services/api/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,

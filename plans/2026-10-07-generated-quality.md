@@ -58,19 +58,23 @@ listening services for E2E tests:
 | Python shared SDK | Measured independently from consumer suites | 1109 / 1198 = 92.57% |
 | Node application | 37 / 18 / 1 | 232 / 284 = 81.69% |
 | Rust application | 5 / 4 / 3 | 659 / 762 = 86.48% |
+| Vue frontend | 160 / 7 / 2 | 1045 / 1280 = 81.64% |
+| Svelte frontend | 100 / 2 / 2 | 648 / 779 = 83.18% |
 
 The generated applications pass independent architecture/regeneration checks.
 Real cargo-llvm-cov execution also confirmed that local path-dependency coverage
 is retained for the shared-package gate. Three authentication SDK Rust contract
 tests and six Helm/kubeconform deployment checks pass.
 
+Browser coverage exercises real Chromium navigation, responsive layouts and
+generated CRUD against stateful HTTP fixtures. Regression tests exposed and
+fixed missing Svelte backend routing/navigation, dropped Vue mutation bodies on
+session retry, and confirmation cancellation races. Fresh Node 22 installs pass
+with the Vitest peer override; the locked Python dependency audit is clean.
+The stateless Python variant passes native lint, type and unit checks.
+
 ## Rollout limits and remaining maintenance
 
-- Existing Vue and Svelte template code has uncovered test debt. Their native
-  unit, integration and Chromium E2E suites run, but a fresh-project coverage
-  check correctly fails at 47.34% (Vue) and 36.84% (Svelte). The implementation
-  does not hide these lines, lower the threshold, or count skipped tests as success.
-  Additional UI/domain tests are needed before these fresh frontends can pass.
 - Flutter adapter execution is covered by runner contract tests, but this worker
   has no Flutter SDK/device. Its emitted workflow installs Flutter and desktop
   dependencies; native Flutter validation remains necessary before rollout.

@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python, node, rust]
+        language: [python, node, rust, vue, svelte]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
