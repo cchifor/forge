@@ -6,8 +6,6 @@ let onUnauthorized: (() => void) | null = null
 
 let refreshInFlight: Promise<boolean> | null = null
 
-const bodiesForRetry = new WeakMap<Request, ArrayBuffer>()
-
 async function silentRefresh(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight
   refreshInFlight = (async () => {
@@ -61,10 +59,6 @@ export function getApiClient(): KyInstance {
               request.headers.set('Authorization', `Bearer ${token}`)
             }
           }
-          const body = await captureBody(request)
-          if (body !== undefined) {
-            bodiesForRetry.set(request, body)
-          }
         },
       ],
       afterResponse: [
@@ -78,7 +72,10 @@ export function getApiClient(): KyInstance {
           }
 
           try {
-            const body = bodiesForRetry.get(request)
+            // Ky passes a retained Request clone to afterResponse. Object
+            // identity differs from beforeRequest, so read this clone directly.
+            const body = await captureBody(request)
+            if (request.body && body === undefined) return response
             const retryResp = await fetch(request.url, {
               method: request.method,
               headers: request.headers,

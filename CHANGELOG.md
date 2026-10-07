@@ -21,6 +21,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   generated wire-contract tests. Redact Rust internal errors in public responses.
   Wire Node pool settings into Prisma; use Vitest 4 and a patched Prisma
   configuration dependency (GHSA-ggr8-5vv4-36mx).
+- Exercise generated Vue/Svelte CRUD, shared UI and responsive layouts in native
+  suites. Preserve Svelte backend routing and navigation without authentication;
+  preserve Vue request bodies during session refresh and confirmation results.
+  Keep generation-time checks independent of integration database fixtures.
+  Resolve npm 10's Vitest optional-peer conflict and update vulnerable Python locks.
 - Ship one shared `forge-platform` skill for Claude and Codex, and a deterministic
   workload recommender constrained by the live capability registry.
 - Disable Claude co-author trailers, reject new trailers in CI, and provide a

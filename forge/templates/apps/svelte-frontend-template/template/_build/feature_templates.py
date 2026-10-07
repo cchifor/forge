@@ -1010,7 +1010,7 @@ NO_AUTH_APP_HOME = """\
 NO_AUTH_APP_SIDEBAR = """\
 <script lang="ts">
 \timport { page } from '$app/stores';
-\timport { Home, Settings } from 'lucide-svelte';
+\timport { Home, Settings, FolderOpen } from 'lucide-svelte';
 \timport { getUiStore } from '$lib/features/shell';
 
 \tlet { forceCollapsed = false }: { forceCollapsed?: boolean } = $props();

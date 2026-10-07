@@ -163,6 +163,11 @@ def generate_feature(ctx: dict[str, str]) -> None:
     write_file(base / "ui" / f"{ctx['Plural']}ListPage.vue", LIST_PAGE_TEMPLATE.format(**ctx))
     write_file(base / "ui" / f"{ctx['Singular']}CreatePage.vue", CREATE_PAGE_TEMPLATE.format(**ctx))
     write_file(base / "ui" / f"{ctx['Singular']}DetailPage.vue", DETAIL_PAGE_TEMPLATE.format(**ctx))
+    write_file(
+        PROJECT_DIR / "tests" / "e2e" / f"{ctx['plural']}.spec.ts",
+        "import { testCrud } from './crud';\n"
+        f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r});\n",
+    )
 
 
 def generate_msw_handlers(ctx: dict[str, str]) -> None:

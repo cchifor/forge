@@ -41,15 +41,11 @@ class PythonToolchain:
             run_backend_cmd(
                 backend_dir, ["uv", "run", "ty", "check", "src/"], "Type check", quiet=quiet
             ),
-            # Skip ``-m docker`` — those tests use testcontainers to spin up
-            # postgres / redis / etc. and need a vector-aware image plus
-            # ``CREATE EXTENSION`` migrations. Matrix CI doesn't pre-pull
-            # those images and the conftest's session-scoped fixtures fail
-            # cascade-style. Docker-tagged tests run in the dedicated
-            # nightly compose-up lane (``matrix-nightly.yml``) instead.
+            # Generation verifies unit tests without external services. The
+            # native quality gate runs integration and E2E with their fixtures.
             run_backend_cmd(
                 backend_dir,
-                ["uv", "run", "pytest", "-v", "-m", "not docker"],
+                ["uv", "run", "pytest", "tests/unit", "-v", "-m", "not docker"],
                 "Tests",
                 quiet=quiet,
             ),

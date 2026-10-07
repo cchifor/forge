@@ -29,6 +29,7 @@
     "lru-cache": "^11.0.2",
     "fastify-plugin": "^5.0.1"
   },
+  "overrides": { "vitest": "4.1.11" },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.10.0",

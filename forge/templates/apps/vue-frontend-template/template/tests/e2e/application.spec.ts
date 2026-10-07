@@ -1,3 +1,4 @@
+import { mockHealth, expectHealthyDashboard } from './health';
 import { expect, test } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -13,7 +14,9 @@ test.afterEach(async ({ page }, testInfo) => {
 test('application boots and navigates preferences in a real browser', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
+    await mockHealth(page);
     await page.goto('/');
+    await expectHealthyDashboard(page);
     await expect(page.locator('body')).not.toBeEmpty();
     await expect(page.locator('body')).not.toHaveText(/Internal Error|500 Internal/);
     await page.locator('a[href="/settings"]').first().click();
