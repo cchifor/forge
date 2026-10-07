@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import process from 'node:process';
 import coverage from 'istanbul-lib-coverage';
 import sourceMaps from 'istanbul-lib-source-maps';
 

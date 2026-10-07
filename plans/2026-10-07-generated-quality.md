@@ -72,6 +72,10 @@ fixed missing Svelte backend routing/navigation, dropped Vue mutation bodies on
 session retry, and confirmation cancellation races. Fresh Node 22 installs pass
 with the Vitest peer override; the locked Python dependency audit is clean.
 The stateless Python variant passes native lint, type and unit checks.
+The wheel includes the TypeScript injector helper, and a packaging regression
+test verifies that installed and checkout generator fingerprints match. The
+tenant-service lifecycle accepts custom providers and uses string trust-map keys.
+Rust authentication middleware passes Clippy on Rust 1.99.
 
 ## Rollout limits and remaining maintenance
 
@@ -88,6 +92,7 @@ The stateless Python variant passes native lint, type and unit checks.
   IDs change. Main maps from `387a22b23ee0540b23cbb31d678becc3839dcd05` to
   `b0e8d3cd4f0f83b0de81b773efe1346496963ae0`, with an unchanged tree. Publishing
   this rewrite remains a separate, coordinated maintenance operation.
-- A workflow only becomes a mandatory GitHub gate when repository protection
-  requires its status. Generated downstream repositories must configure this
-  themselves; recipe and workflow upgrades should receive owner review.
+- Main now requires the successful `generated-quality` GitHub Actions status,
+  with strict branch checks and administrator enforcement. Generated downstream
+  repositories must configure protection themselves; recipe and workflow
+  upgrades should receive owner review.

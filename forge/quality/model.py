@@ -115,7 +115,12 @@ def source_fingerprint() -> str:
     result = hashlib.sha256()
     for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
         rel = path.relative_to(root)
-        if not path.is_file() or set(rel.parts) & IGNORED or path.suffix in {".pyc", ".pyo"}:
+        if (
+            not path.is_file()
+            or rel.parts[0] == "plans"  # Development notes are not installed runtime inputs.
+            or set(rel.parts) & IGNORED
+            or path.suffix in {".pyc", ".pyo"}
+        ):
             continue
         result.update(rel.as_posix().encode())
         result.update(bytes.fromhex(digest(path)))
