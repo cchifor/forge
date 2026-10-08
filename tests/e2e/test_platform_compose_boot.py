@@ -40,6 +40,7 @@ _BUILD_TIMEOUT = 1500
 _UP_TIMEOUT = 360
 _EXEC_TIMEOUT = 45
 _HEALTH_WAIT = 180
+_PORT_OVERRIDE = "compose.forge-e2e-ports.yaml"
 
 
 def _forge_generate(preset: str, name: str, out_dir: Path) -> Path:
@@ -72,8 +73,19 @@ def _forge_generate(preset: str, name: str, out_dir: Path) -> Path:
 def _compose(
     root: Path, *args: str, timeout: int = 60, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
+    files = ["-f", "docker-compose.yml"]
+    # Preserve project overrides and apply the test-only port reset last.
+    for name in (
+        "compose.override.yaml",
+        "compose.override.yml",
+        "docker-compose.override.yml",
+        "docker-compose.override.yaml",
+        _PORT_OVERRIDE,
+    ):
+        if (root / name).is_file():
+            files.extend(["-f", name])
     proc = subprocess.run(
-        ["docker", "compose", *args],
+        ["docker", "compose", *files, *args],
         cwd=root,
         capture_output=True,
         text=True,
@@ -99,7 +111,7 @@ def _boot(root: Path) -> None:
     # databases or applications already published on a developer's machine.
     # This test-only override requires Compose with !reset support (2.24+).
     override = "services:\n" + "".join(f"  {name}:\n    ports: !reset []\n" for name in services)
-    (root / "docker-compose.override.yml").write_text(override, encoding="utf-8")
+    (root / _PORT_OVERRIDE).write_text(override, encoding="utf-8")
     _compose(root, "up", "-d", "--build", *services, timeout=_BUILD_TIMEOUT + _UP_TIMEOUT)
 
 
@@ -227,7 +239,7 @@ token, _ = mint_internal_token(
     key_ring=ring, issuer=os.environ["GATEKEEPER_ISSUER"],
     audience=os.environ["INTERNAL_TOKEN_AUDIENCE"], ttl_seconds=300,
 )
-base = "http://orders:5020/api/v1/items"
+base = "{base_url}/api/v1/items"
 
 def call(url=base, method="GET", body=None, bearer=token):
     headers = {"Content-Type": "application/json"}
@@ -281,7 +293,8 @@ def test_headless_api_platform_direct_authenticated_api(
         _boot(root)
         _wait_healthy(root, ["keycloak", "gatekeeper", "orders"])
         assert "HEALTH_OK" in _exec_py(root, "orders", _HEALTH_SCRIPT.format(port=5020))
-        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", _DIRECT_API_SCRIPT)
+        script = _DIRECT_API_SCRIPT.replace("{base_url}", "http://orders:5020")
+        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", script)
     finally:
         _teardown(root)
 
@@ -294,7 +307,8 @@ def test_microservices_platform_s2s_round_trip(tmp_path: Path, require_docker: N
         assert "gateway" not in _services(root)
         _wait_healthy(root, ["keycloak", "gatekeeper", "orders", "inventory"])
         assert "S2S_OK" in _exec_py(root, "orders", _S2S_SCRIPT)
-        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", _DIRECT_API_SCRIPT)
+        script = _DIRECT_API_SCRIPT.replace("{base_url}", "http://orders:5020")
+        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", script)
     finally:
         _teardown(root)
 
