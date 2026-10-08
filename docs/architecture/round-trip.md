@@ -182,7 +182,7 @@ The lane is excluded from PR CI; it runs nightly via
 * :class:`forge.sync.project_to_forge.HarvestBundle` —
   in-memory bundle the harvester returns.
 * :func:`forge.sync.project_to_forge.apply_bundle_to_fragments` —
-  applies a bundle back to the fragment tree (Phase 5: files-only).
+  applies supported file and literal-block candidates back to the fragment tree.
 * :class:`forge.extractors.CandidatePatch` — per-edit harvest output.
 * :class:`forge.sync.merge.reverse_three_way_decide` /
   :class:`forge.sync.merge.reverse_file_three_way_decide` — the
