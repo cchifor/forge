@@ -52,9 +52,12 @@ beforeEach(() => {
 
 describe("Item CRUD endpoints", () => {
 	describe("authentication", () => {
-		it("returns 401 without tenant headers", async () => {
-			const res = await app.inject({ method: "GET", url: "/api/v1/{{ entity_plural }}" });
-			expect(res.statusCode).toBe(401);
+		it("uses fixed dev identity and ignores spoofed tenant headers", async () => {
+            vi.mocked(prisma.item.findMany).mockResolvedValue([]);
+            vi.mocked(prisma.item.count).mockResolvedValue(0);
+			const res = await app.inject({ method: "GET", url: "/api/v1/{{ entity_plural }}", headers: { "x-gatekeeper-user-id": "attacker" } });
+			expect(res.statusCode).toBe(200);
+            expect(prisma.item.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ customer_id: "00000000-0000-0000-0000-000000000001" }) }));
 		});
 	});
 

@@ -5,6 +5,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Generated code quality
+
+- Record reproducible generation recipes and generated/scaffold/user ownership.
+  Regeneration checks protect generic runtime and schema output independently
+  of editable local hashes; import and mutation checks enforce extension boundaries.
+- Add transactional ownership-aware updates, conflict proposals and explicit
+  headless conflict resolution. Legacy projects receive a migration proposal.
+- Add native Python, Node, Rust, Vue, Svelte and Flutter coverage adapters.
+  Require passing unit, integration and E2E evidence and strictly greater than
+  80% changed-line coverage independently for services, frontends and shared packages.
+- Repair generated service CI paths, frozen installs, Node test discovery and
+  required codegen failures; canonicalize Python before recording provenance.
+  Add real backend lifecycle/database tests, browser preference journeys and
+  generated wire-contract tests. Redact Rust internal errors in public responses.
+  Wire Node pool settings into Prisma; use Vitest 4 and a patched Prisma
+  configuration dependency (GHSA-ggr8-5vv4-36mx).
+- Exercise generated Vue/Svelte CRUD, shared UI and responsive layouts in native
+  suites. Preserve Svelte backend routing and navigation without authentication;
+  preserve Vue request bodies during session refresh and confirmation results.
+  Keep generation-time checks independent of integration database fixtures.
+  Resolve npm 10's Vitest optional-peer conflict and update vulnerable Python locks.
+- Ship one shared `forge-platform` skill for Claude and Codex, and a deterministic
+  workload recommender constrained by the live capability registry.
+- Disable Claude co-author trailers, reject new trailers in CI, and provide a
+  backup-first, tree-verified history cleanup command. Historical publication
+  remains a separate maintenance operation.
+
 ### Deployment
 
 - **Topology-aware Helm chart that stays current on `forge --update`.**

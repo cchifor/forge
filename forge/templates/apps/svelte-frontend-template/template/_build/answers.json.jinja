@@ -13,6 +13,9 @@
   "api_base_url": "{{ api_base_url | default('http://localhost:5000') }}",
   "api_proxy_target": "{{ api_proxy_target | default('http://localhost:5000') }}",
   "server_port": {{ server_port | default(5173) }},
+  "backend_features": {{ backend_features | default('{}') | tojson }},
+  "proxy_targets": {{ proxy_targets | default('[]') | tojson }},
+  "vite_proxy_config": {{ vite_proxy_config | default('') | tojson }},
   "keycloak_url": "{{ keycloak_url | default('http://localhost:8080') }}",
   "default_color_scheme": "{{ default_color_scheme | default('blue') }}"
 }

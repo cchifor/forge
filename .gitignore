@@ -13,7 +13,6 @@ htmlcov/
 coverage.json
 coverage.xml
 node_modules/
-package-lock.json
 
 # Rust build artifacts from SDK fragments (cargo emits these when tests
 # run inside the templated rust/ subtree; uv build picks them up and
@@ -25,3 +24,5 @@ tmp-forge-debug-py/
 
 # Claude Code / codex local worktree scratch (transient, never committed)
 .claude/worktrees/
+
+.artifacts/

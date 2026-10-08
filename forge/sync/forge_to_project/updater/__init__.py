@@ -157,6 +157,19 @@ def _update_locked(
     no_template_update: bool = False,
 ) -> dict[str, object]:
     """Main update body, called with the .forge/lock held."""
+    from forge.quality.model import RECIPE
+
+    if (project_root / RECIPE).is_file():
+        from forge.quality.update import update_owned_project
+
+        try:
+            if update_mode != "merge" or no_template_update:
+                raise ValueError(
+                    "Ownership-managed projects require a complete merge update; partial or overwrite modes would invalidate the regeneration recipe."
+                )
+            return update_owned_project(project_root)
+        except ValueError as exc:
+            raise ProvenanceError(str(exc)) from exc
     data = read_forge_toml(manifest)
     # Sidecars already on disk before this run (stale/unresolved from prior
     # runs). Excluded from the conflict count so file_conflicts reflects only

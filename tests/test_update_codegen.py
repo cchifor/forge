@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from forge.config import BackendConfig, FrontendConfig, FrontendFramework, ProjectConfig
-from forge.generator import generate
+from tests._legacy_generation import generate
 from forge.sync.forge_to_project.updater import update_project
 
 _GEN_REL = Path("apps/frontend/src/features/ai_chat/ui_protocol.gen.ts")

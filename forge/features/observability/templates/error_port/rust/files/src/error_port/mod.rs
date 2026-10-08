@@ -71,3 +71,7 @@ pub struct ErrorEnvelope {
 pub trait ErrorPort: Send + Sync {
     fn serialize(&self, exc: &(dyn std::error::Error + 'static)) -> ErrorEnvelope;
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/error_port.rs"]
+mod tests;

@@ -13,7 +13,14 @@ const open = computed(() => pending.value !== null)
 function onUpdateOpen(value: boolean) {
   // Radix closes the dialog on cancel / overlay-dismiss / Escape — treat any
   // close-without-confirm as a cancellation.
-  if (!value) resolve(false)
+  if (!value) {
+    // Radix can emit close before the action's click handler emits confirm.
+    // Let that handler resolve first, without cancelling a subsequent request.
+    const request = pending.value
+    queueMicrotask(() => {
+      if (pending.value === request) resolve(false)
+    })
+  }
 }
 
 function onConfirm() {

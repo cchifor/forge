@@ -16,6 +16,8 @@ authors = [{ name = "forge contributors" }]
 keywords = ["codegen", "scaffolding", "fastapi", "vue", "svelte", "flutter", "polyglot"]
 requires-python = ">=3.13"
 dependencies = [
+    # Deterministic rendered Python formatting is part of generation/integrity.
+    "ruff==0.16.10",
     "copier>=9.16.0,<10",
     "questionary>=2.1.1,<3",
     "jinja2>=3.1.6,<4",
@@ -81,6 +83,7 @@ where = ["."]
 include = ["forge*"]
 
 [tool.setuptools.package-data]
+"forge.injectors" = ["*.mjs"]
 "forge.templates" = ["**/*"]
 # Built-in feature subpackages (forge/features/<name>/) colocate template
 # trees alongside their Python registration modules — same convention

@@ -2,7 +2,8 @@
 
 Mirrors the pre-Epic-S ``generator._setup_rust_backend`` flow: ``cargo
 build`` + ``cargo fmt --check`` + ``cargo clippy -D warnings`` +
-``cargo test``. Install is a no-op because cargo resolves dependencies
+``cargo test --lib``. Native integration/E2E run through the quality gate with
+their required database fixtures. Install is a no-op because cargo resolves dependencies
 during ``build``; there's no separate lockfile-only step needed.
 """
 
@@ -30,7 +31,7 @@ class RustToolchain:
                 "Lint",
                 quiet=quiet,
             ),
-            run_backend_cmd(backend_dir, ["cargo", "test"], "Tests", quiet=quiet),
+            run_backend_cmd(backend_dir, ["cargo", "test", "--lib"], "Tests", quiet=quiet),
         ]
 
     def post_generate(self, backend_dir: Path, *, quiet: bool = False) -> None:

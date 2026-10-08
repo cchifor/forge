@@ -38,7 +38,7 @@ def register_all(api: ForgeAPI) -> None:
                     fragment_dir=_impl("mcp_template_server", "python"),
                     # Vendored template — only the official mcp library is
                     # a real extra; starlette + httpx ship in the base.
-                    dependencies=("mcp>=1.0.0",),
+                    dependencies=("mcp>=1.0.0,<2",),
                 ),
             },
         )

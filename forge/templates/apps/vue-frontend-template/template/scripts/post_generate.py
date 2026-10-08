@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -162,6 +163,11 @@ def generate_feature(ctx: dict[str, str]) -> None:
     write_file(base / "ui" / f"{ctx['Plural']}ListPage.vue", LIST_PAGE_TEMPLATE.format(**ctx))
     write_file(base / "ui" / f"{ctx['Singular']}CreatePage.vue", CREATE_PAGE_TEMPLATE.format(**ctx))
     write_file(base / "ui" / f"{ctx['Singular']}DetailPage.vue", DETAIL_PAGE_TEMPLATE.format(**ctx))
+    write_file(
+        PROJECT_DIR / "tests" / "e2e" / f"{ctx['plural']}.spec.ts",
+        "import { testCrud } from './crud';\n"
+        f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r});\n",
+    )
 
 
 def generate_msw_handlers(ctx: dict[str, str]) -> None:
@@ -488,6 +494,11 @@ def main() -> None:
     print("\n> Updating README")
     patch_readme(features)
     print("  [ok] README.md updated")
+
+    if os.environ.get("FORGE_RENDER_ONLY") == "1":
+        delete_file(PROJECT_DIR / "scripts" / "answers.json")
+        delete_file(PROJECT_DIR / "scripts" / "feature_templates.py")
+        return
 
     pm = PACKAGE_MANAGER
     print(f"\n> Installing project")

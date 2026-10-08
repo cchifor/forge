@@ -231,6 +231,12 @@ def generate_features():
 
     for feature_name in features:
         ctx = make_feature_context(feature_name)
+        write_file(
+            PROJECT_DIR / "tests" / "e2e" / f"{ctx['plural']}.spec.ts",
+            "import { testCrud } from './crud';\n"
+            f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, "
+            f"{FEATURE_TO_BACKEND.get(feature_name, DEFAULT_BACKEND)!r});\n",
+        )
         print("  [+] %s" % feature_name)
 
         feat_base = PROJECT_DIR / "src" / "lib" / "features" / ctx["plural"]
@@ -546,6 +552,10 @@ def main():
     print("=" * 60)
     print()
 
+    # Select shell variants before injecting feature navigation into them.
+    # Replacing the no-auth sidebar afterwards discarded every feature link.
+    remove_optional_files()
+
     # 1. Generate features
     print("> Generating features")
     features = generate_features()
@@ -560,8 +570,11 @@ def main():
     print("> Configuring project")
     patch_config_files()
     generate_readme(features)
-    remove_optional_files()
     print()
+
+    if os.environ.get("FORGE_RENDER_ONLY") == "1":
+        remove_path(PROJECT_DIR / "_build")
+        return
 
     # 3. Install dependencies
     print("> Building project")
