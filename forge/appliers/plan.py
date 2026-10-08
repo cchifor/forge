@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
@@ -187,8 +187,8 @@ def _load_injections(
                 target=target,
                 marker=marker,
                 snippet=snippet,
-                position=cast(InjectionPosition, position_raw),
-                zone=cast(InjectionZone, zone_raw),
+                position=position_raw,
+                zone=zone_raw,
             )
         )
     return out

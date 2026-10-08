@@ -132,7 +132,7 @@ def test_frontend_template_uses_jinja_var_not_hardcoded(
 
 
 def test_constants_match_each_other() -> None:
-    """Today client+core ship aligned 0.0.x versions; assert this until upstream diverges.
+    """Client and core ship aligned versions; assert this until upstream diverges.
 
     If AG-UI ever publishes different majors for client vs core, delete
     this test — it's a soft invariant, not a hard contract.

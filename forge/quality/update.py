@@ -94,7 +94,7 @@ def update_owned_project(root: Path, *, dry_run: bool = False) -> dict:
             "passed": not conflicts,
             "backends": [b.name for b in config.backends],
             "fragments_applied": sorted(
-                {r.get("fragment_name") for r in new.provenance.values() if r.get("fragment_name")}
+                {name for r in new.provenance.values() if (name := r.get("fragment_name"))}
             ),
             "forge_version_before": old.version,
             "forge_version_after": new.version,

@@ -30,6 +30,9 @@ on:
       - "forge/sync/provenance.py"
       - "forge/sync/forge_to_project/**"
       - "forge/injectors/**"
+      - "packages/canvas-*/**"
+      - "package.json"
+      - "package-lock.json"
       - "tests/e2e/**"
       - ".github/workflows/e2e.yml"
 
@@ -206,7 +209,7 @@ jobs:
         run: uv run pytest -m e2e -v -rs --no-cov
 
   e2e-canvas-packages:
-    name: canvas packages build + typecheck
+    name: canvas packages build + typecheck + test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -237,7 +240,10 @@ jobs:
 
       - name: canvas-svelte — build
         working-directory: packages/canvas-svelte
-        run: npx vite build
+        run: npm run build
+
+      - name: canvas workspaces — runtime tests
+        run: npm test --workspaces
 
       - name: Install Flutter for forge_canvas
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
