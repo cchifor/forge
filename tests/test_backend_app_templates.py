@@ -70,6 +70,7 @@ def test_available_backend_templates_per_language():
     assert bat.available_backend_templates(BackendLanguage.PYTHON) == (
         "api-gateway",
         "crud-service",
+        "service-proxy",
         "tenant-management-service",
         "worker",
     )
@@ -81,6 +82,7 @@ def test_all_backend_template_names():
     assert bat.all_backend_template_names() == (
         "api-gateway",
         "crud-service",
+        "service-proxy",
         "tenant-management-service",
         "worker",
     )

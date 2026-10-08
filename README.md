@@ -76,8 +76,9 @@ use the same composition pipeline. See [generator internals](docs/architecture/g
 
 ### Generated runtime
 
-This example shows a Gatekeeper-backed service topology. Components are included
-according to configuration; a minimal application can omit auth, AI, and other
+The default topology routes requests from the edge directly to application
+services. This example includes Gatekeeper authentication and shows a service
+proxy as an explicit opt-in. A minimal application can omit auth, AI, and other
 optional services.
 
 ```mermaid
@@ -87,15 +88,21 @@ flowchart TB
     Edge -->|ForwardAuth| GK[Gatekeeper]
     GK --> IdP[Keycloak / configured identity provider]
     GK --> Redis[Redis sessions and tenant routes]
-    Edge -->|internal ES256 token| API[API / gateway]
-    API -->|declared service dependencies| Services[Application services]
-    API --> DB[(PostgreSQL)]
-    Services --> DB
+    Edge -->|URL routing and internal ES256 token| Services[Application APIs / services]
+    Edge -.-> Proxy["Service proxy (opt-in)"]
+    Proxy -->|declared dependency and S2S token| Services
+    Services --> DB[(PostgreSQL)]
     Services --> Ports[Public application ports]
     Ports --> AI[LLM / retrieval / MCP]
     Ports --> Jobs[Queues / workers / notifications]
     Ports --> Storage[Object storage / external services]
 ```
+
+Traefik routes `/api/<service>/...` directly to each backend. URL routing alone
+needs no intermediary application service. An optional `service-proxy` template
+adds forwarding with service-to-service token acquisition and caching. A backend
+for frontend (BFF) adapts or combines APIs for a particular client; that behavior
+requires custom application code. See [routing responsibilities](docs/architecture/overview.md#direct-routing-and-optional-composition).
 
 Gatekeeper manages browser sessions and issues internal tokens; backends verify
 those tokens. Service-to-service grants follow declared dependencies. In the
@@ -184,13 +191,18 @@ and [customization](docs/guides/customization.md).
 | Preset | Generated shape |
 | --- | --- |
 | `monolithic` | One Python CRUD service and Vue, without the auth-server stack |
-| `microservices` | API gateway, orders and inventory services, Vue, shared auth, and an event bus |
-| `headless-api` | API gateway and orders service with shared auth; no frontend |
+| `microservices` | Directly routed orders and inventory services, Vue, shared auth, S2S grants, and an event bus |
+| `headless-api` | One directly routed orders API with edge authentication; no frontend |
 | `multitenant-saas` | Tenant-management control plane, RLS-isolated application service, Vue, and shared auth |
 
 ```bash
 forge --platform microservices --project-name commerce --output-dir ./projects --yes --no-docker
 ```
+
+No built-in preset inserts a service proxy or BFF by default. Select
+`app_template: service-proxy` explicitly when forwarding with S2S credentials is
+needed; the former `api-gateway` name remains compatible. See
+[opting into a service proxy](docs/guides/platforms.md#opting-into-a-service-proxy).
 
 Built-in platform presets use Python application templates. The generator also
 supports mixed-language backends, subject to compatible templates and features.

@@ -1,26 +1,15 @@
 # Platform preset — discovered by forge.platform_templates.
 #
-# `headless-api` is the no-frontend variant of the microservices platform: an
-# API gateway fronting a single orders CRUD service, with synthesized S2S auth
-# but NO event bus and NO frontend (the [platform.frontend] table is omitted,
-# so the project is backend-only). Service discovery requires the gatekeeper
-# stack, so include_keycloak is true and auth.mode / auth.provider stay at
-# their gatekeeper defaults.
+# A single orders API behind edge authentication, with no intermediary,
+# event bus, or frontend. S2S discovery is unnecessary with one backend.
 [platform]
 name = "headless-api"
 display_label = "Headless API platform"
-description = "An API gateway fronting backend services with S2S auth, no frontend."
+description = "A directly routed orders API with edge authentication, no frontend."
 include_keycloak = true
 
 [platform.options]
-"auth.service_discovery" = true
-
-[[platform.backends]]
-name = "gateway"
-language = "python"
-app_template = "api-gateway"
-server_port = 5010
-depends_on = ["orders"]
+"auth.service_discovery" = false
 
 [[platform.backends]]
 name = "orders"

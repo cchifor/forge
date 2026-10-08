@@ -1,8 +1,9 @@
 # Platform generator guide (`--platform`)
 
 Most forge invocations scaffold one backend (and maybe a frontend). The
-**platform presets** scaffold a *system*: several services wired together with
-shared auth, service-to-service (S2S) trust, an optional event bus, and — for
+**platform presets** scaffold a *system*: domain services routed directly from
+the edge, optional shared auth and service-to-service (S2S) trust, an event bus
+where selected, and — for
 the SaaS preset — per-tenant data isolation. One flag stands the whole topology
 up:
 
@@ -28,26 +29,93 @@ multi-service auth and multitenancy actually work, and — importantly — the
 | Preset | Shape | Keycloak | S2S auth | Multitenancy | Use it when |
 | --- | --- | --- | --- | --- | --- |
 | **`monolithic`** | 1 Python CRUD backend + Vue (sidebar) | no | no | no | You want the classic single-service app with a UI and no auth-server overhead. |
-| **`microservices`** | API `gateway` + `orders` + `inventory` CRUD services + Vue, with an event bus | yes | yes | no | You have several services that must call each other and emit events. |
-| **`headless-api`** | API `gateway` + `orders` CRUD service, **no frontend** | yes | yes | no | You want the S2S service stack as a pure API (mobile/3rd-party clients). |
-| **`multitenant-saas`** | `tms` control plane + RLS-isolated `app` CRUD service + Vue, behind the Gatekeeper | yes | yes | **shared-RLS** | You're building multi-tenant SaaS and need per-tenant row isolation + tenant provisioning. |
+| **`microservices`** | Directly routed `orders` + `inventory` CRUD services + Vue, with an event bus; `orders` declares `inventory` as a dependency | yes | yes | no | You have services that call each other and emit events. |
+| **`headless-api`** | One directly routed `orders` API with edge authentication, **no frontend** | yes | no | no | You want an authenticated API for mobile or third-party clients. |
+| **`multitenant-saas`** | `tms` control plane + RLS-isolated `app` CRUD service + Vue, behind the Gatekeeper | yes | no | **shared-RLS** | You're building multi-tenant SaaS and need per-tenant row isolation + tenant provisioning. |
 
 Everything except `monolithic` brings up Keycloak + the Gatekeeper edge-auth
 stack + Redis — a substantial stack. Start with `monolithic` if you don't yet
 need cross-service auth.
+
+No built-in preset inserts a service proxy or BFF. URL routing is handled by
+Traefik; each application service owns its business logic and authorization.
+The microservices preset still synthesizes S2S grants for `orders → inventory`.
+This declares a callable dependency; the CRUD scaffold does not automatically
+implement an ordering workflow. The headless preset has one backend, so S2S
+discovery is disabled while edge authentication remains enabled.
+The multitenant SaaS preset also leaves S2S discovery disabled: shared edge
+authentication and tenant isolation do not imply synthesized service grants.
+
+### Running the built-in microservices preset
 
 A worked invocation:
 
 ```bash
 forge --platform microservices --project-name shop --output-dir . --yes --no-docker
 cd shop
-docker compose up --build         # gateway:5010, orders:5020, inventory:5030,
+docker compose up --build         # orders:5020, inventory:5030,
                                   # keycloak, gatekeeper, redis, postgres, vue
 ```
 
 The generated `docker-compose.yml` is a flat monorepo (`services/`, `apps/`,
-`sdks/`). Each backend gets its own image; the gateway `depends_on` its
-downstreams so it boots last.
+`sdks/`). Each backend gets its own image. The orders service declares inventory
+as an allowed S2S target. Traefik routes `/api/orders/...` and
+`/api/inventory/...` directly to the corresponding backend, with the configured
+authentication middleware.
+
+### Opting into a service proxy
+
+Use a proxy when requests need forwarding with service credentials. A backend
+for frontend (BFF) goes further: it adapts or combines domain APIs for a specific
+client. Forge's proxy template does not generate that client-specific behavior;
+implement it in custom application modules if required. See
+[routing responsibilities](../architecture/overview.md#direct-routing-and-optional-composition).
+
+To add the optional Python service proxy, declare it explicitly in a complete
+backend list. Save this example as `proxy.yaml`:
+
+```yaml
+project_name: proxy-example
+include_keycloak: true
+options:
+  auth.service_discovery: true
+backends:
+  - name: proxy
+    language: python
+    app_template: service-proxy
+    server_port: 5010
+    depends_on: [orders]
+  - name: orders
+    language: python
+    app_template: crud-service
+    server_port: 5020
+```
+
+```bash
+forge --config proxy.yaml --plan --json
+forge --config proxy.yaml --yes --no-docker
+```
+
+An explicit `backends` list replaces the preset's entire list. Include every
+service you want to keep and its actual dependencies. The legacy
+`app_template: api-gateway` identifier remains supported and renders the same
+proxy. Both names retain the existing `app.gateway` modules and `/gateway`
+endpoint paths for compatibility.
+
+The generated proxy obtains and caches S2S tokens when credentials are
+configured. Those client-credentials tokens represent the proxy service.
+Direct user requests can have different authorization semantics; downstream
+services must validate accepted tokens and enforce domain permissions.
+
+Projects with a `.forge/quality.json` recipe retain its recorded backend list
+when using `forge --update`. A preset name alone does not freeze that list:
+regeneration from a preset-only configuration uses the installed defaults.
+For legacy projects without a recipe, explicitly record the original backends
+and dependencies before regenerating. Adopting the new defaults is a topology
+change: review client URLs, ingress auth, service grants, deployment resources,
+and the persisted generation config.
+Follow [customization](customization.md) and [upgrade notes](../../UPGRADING.md#direct-routing-defaults)
+to migrate safely.
 
 ## How multi-service auth works (synthesis)
 
@@ -55,7 +123,7 @@ When a preset sets `auth.service_discovery=true` and the project has more than
 one backend, forge **synthesizes** an S2S trust mesh
 (`forge/synthesis/platform.py`). Two things are generated:
 
-1. **A service registry** (`infra/gatekeeper/secrets/service_registry.yaml`) —
+1. **A service registry** (`deploy/infra/gatekeeper/secrets/service_registry.yaml`) —
    one entry per backend with a `client_id` (`svc-<name>`), a client secret,
    and the set of audiences (callee → scopes) it may request. Those audience
    grants are derived directly from each backend's `depends_on` edges, so a
@@ -121,7 +189,7 @@ manual secret setup, which means it ships well-known default credentials. Before
 any non-local deployment, rotate every item below. The relevant files are
 `forge/templates/deploy/docker-compose.yml.j2`, the Gatekeeper provider compose
 (`forge/features/auth/templates/platform_auth_gatekeeper/`), and the generated
-`infra/gatekeeper/secrets/service_registry.yaml`.
+`deploy/infra/gatekeeper/secrets/service_registry.yaml`.
 
 - **Keycloak admin password** and **Postgres credentials** — shipped as
   `admin` / `postgres`. Replace with managed secrets; don't reuse the same

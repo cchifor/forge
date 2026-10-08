@@ -1,0 +1,39 @@
+# Platform preset — discovered by forge.platform_templates.
+#
+# `microservices` stands up a full service-to-service platform: a Python
+# API gateway fronting two CRUD services (orders, inventory), wired with
+# synthesized S2S auth (auth.service_discovery) and a postgres_notify event
+# bus. Service discovery requires the gatekeeper stack, so include_keycloak
+# is true and auth.mode / auth.provider stay at their gatekeeper defaults.
+[platform]
+name = "microservices"
+display_label = "Microservices platform"
+description = "An API gateway fronting independent CRUD services, with S2S auth and an event bus."
+include_keycloak = true
+
+[platform.options]
+"auth.service_discovery" = true
+"infrastructure.event_bus" = "postgres_notify"
+
+[[platform.backends]]
+name = "gateway"
+language = "python"
+app_template = "api-gateway"
+server_port = 5010
+depends_on = ["orders", "inventory"]
+
+[[platform.backends]]
+name = "orders"
+language = "python"
+app_template = "crud-service"
+server_port = 5020
+
+[[platform.backends]]
+name = "inventory"
+language = "python"
+app_template = "crud-service"
+server_port = 5030
+
+[platform.frontend]
+framework = "vue"
+layout = "sidebar"

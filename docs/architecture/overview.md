@@ -47,8 +47,10 @@ features and is a separate concern from using a coding agent to operate Forge.
 
 ## Generated runtime
 
-This diagram shows the Gatekeeper-backed multi-service shape. A minimal project
-omits components it did not select; a headless project has no frontend.
+This diagram shows a Gatekeeper-backed multi-service shape. The default path
+runs directly from the edge to application services. The dotted path is an
+explicitly selected service proxy. A minimal project omits components it did
+not select; a headless project has no frontend.
 
 ```mermaid
 flowchart TB
@@ -57,10 +59,10 @@ flowchart TB
     Edge -->|ForwardAuth| GK[Gatekeeper]
     GK --> IdP[Keycloak or configured identity provider]
     GK --> Redis[Redis sessions and tenant routes]
-    Edge -->|verified internal token| API[API or gateway]
-    API -->|declared service dependency| Service[Application service]
-    API --> PG[(PostgreSQL)]
-    Service --> PG
+    Edge -->|URL routing and verified internal token| Service[Application APIs / services]
+    Edge -.-> Proxy["Service proxy (opt-in)"]
+    Proxy -->|declared dependency and S2S token| Service
+    Service --> PG[(PostgreSQL)]
     Service --> Ports[Public application ports]
     Ports --> LLM[LLM provider]
     Ports --> Vector[Vector store]
@@ -78,6 +80,49 @@ The built-in multi-service presets use Python application templates. The core
 generator also supports mixed-language backends; changing a preset's language
 requires a compatible application template and options. A language badge is not
 a guarantee that every specialized template has an equivalent implementation.
+
+## Direct routing and optional composition
+
+An intermediary application service is optional. Traefik or Nginx can route
+requests to services by URL. Forge's Compose template already emits a Traefik
+route for each backend: `/api/orders/v1/items`, for example, reaches the orders
+service as `/api/v1/items`. The built-in presets use this direct path by default.
+Per-service edge routes also remain present when a proxy is explicitly selected;
+adding a proxy does not make it the exclusive entry point to the domain services.
+
+| Component | Responsibility |
+| --- | --- |
+| Edge proxy / ingress (Traefik or Nginx) | Route HTTP by host/path, serve or route the frontend, and terminate TLS when configured. In the Gatekeeper topology, Traefik also performs the ForwardAuth check. |
+| Gatekeeper | Manage authentication sessions and issue internal tokens. |
+| Application API / domain service | Validate requests, enforce authorization, execute business logic, and own domain data. |
+| Optional service proxy | Forward requests to configured services and authenticate its downstream calls. |
+| Optional backend for frontend (BFF) | Adapt or combine domain APIs for a particular client. Implement this application behavior when a frontend needs it. |
+
+The Python `service-proxy` application template provides a downstream registry,
+HTTP forwarding, and acquisition/caching of service-to-service tokens when
+credentials are configured. Calls have timeouts and map upstream failures to
+HTTP errors. The older `api-gateway` identifier is a compatible name for the
+same implementation; its emitted `app.gateway` modules and `/gateway` routes
+remain unchanged. The template supplies no response aggregation or business
+workflow orchestration, so it is not a complete BFF. Those responsibilities
+belong in custom application modules if needed.
+
+For URL routing alone, the direct path avoids an extra network hop and service
+to operate. A BFF becomes useful when a request must combine several domain
+responses or present a client-specific API. An optional service proxy can be
+useful when downstream calls need its service credentials. Its client-credentials
+flow represents the proxy service; preserving an end user's identity through
+delegated calls needs explicit integration.
+
+Directly routed services still verify their accepted token issuer/audience and
+enforce scopes, tenant isolation, and domain authorization as applicable. Retain
+the edge's auth middleware for authenticated routes. Removing a proxy's token
+exchange can change the caller's identity, so validate the direct user-to-service
+journey when migrating an existing project.
+
+See [platform shapes and explicit opt-in](../guides/platforms.md#opting-into-a-service-proxy).
+A single-service application can use
+`browser → edge proxy → application API → database`.
 
 ## Browser request and authentication flow
 

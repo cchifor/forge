@@ -10,6 +10,35 @@ dependency DAG, May 2026). The Python service template now imports
 weld-* SDKs directly instead of vendoring the duplicate `src/service/`
 shim that shipped through 1.0/1.1.
 
+### Direct routing defaults
+
+These defaults are part of the unreleased changes targeting 1.2.0.
+
+New `microservices` projects contain `orders` and `inventory` behind the edge,
+with `orders → inventory` S2S grants. New `headless-api` projects contain one
+`orders` API behind edge authentication, with S2S discovery disabled. Neither
+preset inserts a forwarding service.
+
+The preferred optional template name is `service-proxy`. The old `api-gateway`
+name remains supported and emits the same modules and endpoint paths. A BFF
+that adapts APIs for a particular frontend remains custom application code.
+
+For projects with a `.forge/quality.json` recipe, `forge --update` retains its
+recorded backend list, including `api-gateway` services. An explicit `backends`
+list in generation configuration also overrides the new preset defaults.
+The `platform_template` name in `forge.toml` alone is not a frozen topology.
+Regenerating from a preset-only configuration uses the currently installed
+preset and can omit the old gateway. For legacy projects without a recipe,
+recover and explicitly record the original backends and dependencies before
+regeneration; follow the [ownership migration guide](docs/operations/generated-code-quality.md).
+
+To adopt direct routing, prepare a candidate configuration without the
+proxy, update callers to `/api/<service>/...`, and review the generated service
+grants and deployment resources through the [customization workflow](docs/guides/customization.md).
+Preserve edge authentication and verify user identity, audience, scopes, and
+tenant authorization at each directly exposed service before retiring the old
+proxy. For a single remaining backend, set `auth.service_discovery: false`.
+
 ### 1.2.0-alpha.1 — weld-* SDKs
 
 #### Breaking changes
