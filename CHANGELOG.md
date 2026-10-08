@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Platform routing
+
+- Route new `microservices` and `headless-api` projects directly from the edge
+  to domain services; remove the intermediary gateway from their defaults.
+  Microservices retains `orders → inventory` S2S grants; headless API retains
+  edge authentication with one orders backend and no S2S discovery.
+- Add the opt-in Python `service-proxy` template name, keeping `api-gateway`
+  compatible. Distinguish URL routing, service-token forwarding, and custom
+  backends for frontends in the architecture diagrams and platform guide.
+- Preserve explicitly recorded service lists during upgrades; document migration
+  to direct routing in [UPGRADING.md](UPGRADING.md#direct-routing-defaults).
+
 ### Generated code quality
 
 - Record reproducible generation recipes and generated/scaffold/user ownership.

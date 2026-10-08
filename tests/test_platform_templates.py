@@ -19,6 +19,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import pytest
+import yaml
 
 from forge.cli.builder import _build_config
 from forge.generator import generate
@@ -73,13 +74,13 @@ class TestMonolithicStructure:
 
 
 class TestMicroservicesStructure:
-    def test_three_backends_gateway_and_crud(self) -> None:
+    def test_direct_domain_services_with_s2s_dependency(self) -> None:
         p = get_platform_template("microservices")
         assert p is not None
-        assert len(p.backends) == 3
+        assert len(p.backends) == 2
         by_name = {b["name"]: b for b in p.backends}
-        assert by_name["gateway"]["app_template"] == "api-gateway"
-        assert by_name["gateway"]["depends_on"] == ["orders", "inventory"]
+        assert set(by_name) == {"orders", "inventory"}
+        assert by_name["orders"]["depends_on"] == ["inventory"]
         assert by_name["orders"]["app_template"] == "crud-service"
         assert by_name["inventory"]["app_template"] == "crud-service"
 
@@ -99,18 +100,17 @@ class TestMicroservicesStructure:
 
 
 class TestHeadlessApiStructure:
-    def test_two_backends_no_frontend_no_event_bus(self) -> None:
+    def test_single_authenticated_api_without_frontend_or_s2s(self) -> None:
         p = get_platform_template("headless-api")
         assert p is not None
-        assert len(p.backends) == 2
+        assert len(p.backends) == 1
         by_name = {b["name"]: b for b in p.backends}
-        assert by_name["gateway"]["app_template"] == "api-gateway"
-        assert by_name["gateway"]["depends_on"] == ["orders"]
+        assert set(by_name) == {"orders"}
         assert by_name["orders"]["app_template"] == "crud-service"
         # No frontend block at all (headless).
         assert p.frontend is None
-        # Service discovery on, but NO event bus.
-        assert p.options["auth.service_discovery"] is True
+        # One API needs edge authentication, but no S2S discovery or event bus.
+        assert p.options["auth.service_discovery"] is False
         assert "infrastructure.event_bus" not in p.options
         assert p.include_keycloak is True
 
@@ -123,7 +123,7 @@ class TestAsConfigDictRoundTrip:
         assert cfg["include_keycloak"] is True
         assert cfg["options"]["auth.service_discovery"] is True
         assert cfg["options"]["infrastructure.event_bus"] == "postgres_notify"
-        assert [b["name"] for b in cfg["backends"]] == ["gateway", "orders", "inventory"]
+        assert [b["name"] for b in cfg["backends"]] == ["orders", "inventory"]
         assert cfg["frontend"]["framework"] == "vue"
 
     def test_headless_omits_frontend_key(self) -> None:
@@ -143,7 +143,7 @@ class TestAsConfigDictRoundTrip:
         cfg["backends"].append({"name": "extra"})
         # The frozen preset is untouched.
         assert p.options["auth.service_discovery"] is True
-        assert len(p.backends) == 3
+        assert len(p.backends) == 2
 
     def test_database_mode_rides_in_options(self) -> None:
         """A preset's database_mode override surfaces under options.database.mode."""
@@ -211,11 +211,11 @@ class TestMicroservicesIntegration:
 
         assert config.platform_template == "microservices"
         assert config.include_keycloak is True
-        assert len(config.backends) == 3
+        assert len(config.backends) == 2
 
         by_name = {b.name: b for b in config.backends}
-        assert by_name["gateway"].app_template == "api-gateway"
-        assert by_name["gateway"].depends_on == ["orders", "inventory"]
+        assert set(by_name) == {"orders", "inventory"}
+        assert by_name["orders"].depends_on == ["inventory"]
 
         assert config.options["auth.service_discovery"] is True
         assert config.options["infrastructure.event_bus"] == "postgres_notify"
@@ -228,11 +228,23 @@ class TestMicroservicesIntegration:
         registry = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
         assert registry.is_file()
         registry_text = registry.read_text(encoding="utf-8")
-        for client_id in ("svc-gateway", "svc-orders", "svc-inventory"):
+        for client_id in ("svc-orders", "svc-inventory"):
             assert client_id in registry_text
 
         compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
-        assert "INTERNAL_SERVICE_URL_" in compose
+        services = yaml.safe_load(compose)["services"]
+        assert "gateway" not in services
+        assert "gateway-migrate" not in services
+        assert "svc-gateway" not in registry_text
+        assert "INTERNAL_SERVICE_URL_INVENTORY" in services["orders"]["environment"]
+        for name in ("orders", "inventory"):
+            labels = services[name]["labels"]
+            assert any(f"PathPrefix(`/api/{name}`)" in label for label in labels)
+            assert f"traefik.http.routers.{name}.middlewares={name}-rewrite,auth" in labels
+            assert not (root / "services" / name / "src/app/gateway").exists()
+        registry_data = yaml.safe_load(registry_text)["services"]
+        orders = next(entry for entry in registry_data if entry["client_id"] == "svc-orders")
+        assert set(orders["audiences"]) == {"svc-inventory"}
 
         # The platform preset is persisted to forge.toml.
         forge_toml = (root / "forge.toml").read_text(encoding="utf-8")
@@ -251,10 +263,10 @@ class TestHeadlessApiIntegration:
         assert config.platform_template == "headless-api"
         assert config.frontend is None
         assert config.include_keycloak is True
-        assert config.options["auth.service_discovery"] is True
+        assert config.options["auth.service_discovery"] is False
         assert "infrastructure.event_bus" not in config.options
 
-    def test_dry_run_registry_present_no_events_db(self) -> None:
+    def test_dry_run_direct_api_without_synthesized_s2s_or_events(self) -> None:
         config = _build_config(_args(platform="headless-api"), {"project_name": "Acme HL"})
         config.validate()
         root = generate(config, quiet=True, dry_run=True)
@@ -262,8 +274,19 @@ class TestHeadlessApiIntegration:
         registry = root / "deploy" / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
         assert registry.is_file()
         registry_text = registry.read_text(encoding="utf-8")
-        assert "svc-gateway" in registry_text
-        assert "svc-orders" in registry_text
+        # Gatekeeper's default registry exists, but no S2S clients are synthesized.
+        assert "svc-gateway" not in registry_text
+        assert "svc-orders" not in registry_text
+        services = yaml.safe_load((root / "docker-compose.yml").read_text())["services"]
+        assert "gateway" not in services
+        assert "gateway-migrate" not in services
+        assert "GATEKEEPER_CLIENT_ID" not in services["orders"]["environment"]
+        assert (
+            "traefik.http.routers.orders.middlewares=orders-rewrite,auth"
+            in services["orders"]["labels"]
+        )
+        assert any("PathPrefix(`/api/orders`)" in label for label in services["orders"]["labels"])
+        assert not (root / "services/orders/src/app/gateway").exists()
 
         # No event bus ⇒ no `events` database line in init-db.sh. Match the
         # exact createdb token so the literal word in comments can't false-trip.
@@ -433,3 +456,35 @@ def test_golden_preset_dir_layout() -> None:
     root = Path(__file__).resolve().parent.parent / "forge" / "templates" / "platforms"
     for name in ("monolithic", "microservices", "headless-api", "multitenant-saas"):
         assert (root / name / "platform.toml").is_file()
+
+
+@pytest.mark.parametrize("preset", available_platform_templates())
+def test_no_builtin_preset_requires_an_intermediary(preset):
+    config = _build_config(_args(platform=preset), {})
+    config.validate()
+    assert all(be.app_template not in {"api-gateway", "service-proxy"} for be in config.backends)
+    assert all(be.name not in {"gateway", "proxy", "bff"} for be in config.backends)
+
+
+@pytest.mark.parametrize("variant", ["api-gateway", "service-proxy"])
+def test_explicit_proxy_survives_changed_preset_defaults(variant):
+    config = _build_config(
+        _args(),
+        {
+            "platform_template": "microservices",
+            "backends": [
+                {
+                    "name": "gateway",
+                    "language": "python",
+                    "app_template": variant,
+                    "server_port": 5010,
+                    "depends_on": ["orders"],
+                },
+                {"name": "orders", "language": "python", "server_port": 5020},
+            ],
+        },
+    )
+    config.validate()
+    assert [b.name for b in config.backends] == ["gateway", "orders"]
+    assert config.backends[0].app_template == variant
+    assert config.backends[0].depends_on == ["orders"]

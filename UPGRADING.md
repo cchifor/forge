@@ -2,6 +2,27 @@
 
 This document lists breaking changes per version and the migration steps for each.
 
+## Direct routing defaults
+
+New `microservices` projects contain `orders` and `inventory` behind the edge,
+with `orders → inventory` S2S grants. New `headless-api` projects contain one
+`orders` API behind edge authentication, with S2S discovery disabled. Neither
+preset inserts a forwarding service.
+
+The preferred optional template name is `service-proxy`. The old `api-gateway`
+name remains supported and emits the same modules and endpoint paths. A BFF
+that adapts APIs for a particular frontend remains custom application code.
+
+Existing generated projects retain the backend list recorded in their manifest
+and quality recipe, including explicitly recorded `api-gateway` services. A
+Forge upgrade does not silently remove that service or rewrite clients to direct
+routes. To adopt direct routing, prepare a candidate configuration without the
+proxy, update callers to `/api/<service>/...`, and review the generated service
+grants and deployment resources through the [customization workflow](docs/guides/customization.md).
+Preserve edge authentication and verify user identity, audience, scopes, and
+tenant authorization at each directly exposed service before retiring the old
+proxy. For a single remaining backend, set `auth.service_discovery: false`.
+
 ## 1.1 → 1.2
 
 The 1.2 series aligns forge templates with the platform's **10-SDK

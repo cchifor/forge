@@ -38,8 +38,8 @@ def _run[T](coro: Awaitable[T]) -> T:
 # --- render the real api-gateway variant once for the whole module ---------
 
 
-@pytest.fixture(scope="module")
-def gateway_src(tmp_path_factory: pytest.TempPathFactory) -> Path:
+@pytest.fixture(scope="module", params=["service-proxy", "api-gateway"])
+def gateway_src(tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest) -> Path:
     """Render the api-gateway variant and return ``<svc>/src`` (on sys.path)."""
     out = tmp_path_factory.mktemp("gw_runtime")
     cfg = ProjectConfig(
@@ -50,7 +50,7 @@ def gateway_src(tmp_path_factory: pytest.TempPathFactory) -> Path:
                 name="gw",
                 project_name="gw_rt",
                 language=BackendLanguage.PYTHON,
-                app_template="api-gateway",
+                app_template=request.param,
                 features=["items"],
             )
         ],
