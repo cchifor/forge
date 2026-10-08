@@ -43,7 +43,8 @@ def test_all_actions_pinned_to_sha():
 def test_dependabot_covers_polyglot_ecosystems():
     doc = yaml.safe_load(_DEPENDABOT.read_text(encoding="utf-8"))
     ecos = {u["package-ecosystem"] for u in doc["updates"]}
-    for required in ("pip", "github-actions", "npm", "cargo", "pub"):
+    # uv updates the committed lockfile as well as pyproject.toml.
+    for required in ("uv", "github-actions", "npm", "cargo", "pub"):
         assert required in ecos, f"dependabot missing ecosystem: {required}"
 
 

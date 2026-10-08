@@ -12,8 +12,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Include the Svelte canvas build and runtime tests in workspace commands;
   run all canvas tests, including a real AG-UI streaming fixture, in CI
   and dependency upgrade probes.
-- Upgrade the development type checker to ty 0.0.75 after its canary passes;
+- Upgrade the development type checker to ty 0.0.84 after its canary passes;
   model renderer metadata as read-only and narrow optional fragment names.
+- Use the supported `shutil.rmtree(onexc=...)` callback for read-only cleanup.
+- Raise the Copier and Hypothesis minimum versions to 9.18.2 and 6.168.4,
+  respectively, and keep their lockfile requirements synchronized.
+- Use Dependabot's uv ecosystem so Python updates include `uv.lock`.
+- Refresh the pinned setup-uv, setup-go, Codecov, and release actions;
+  preserve CI cache pruning and build releases with a fresh dependency cache.
+- Enable the documented Codecov OIDC flow so same-repository uploads authenticate.
+- Smoke-test release preparation in CI and build the SBOM from Forge's locked
+  environment instead of the isolated SBOM tool environment.
+- Compare nightly round-trip recipes independently of the sandbox generator
+  identity while retaining checks for configuration, version, and plugin drift.
+- Make nightly update checks enforce the rejection of partial/overwrite modes
+  for ownership-managed projects and verify that rejected updates change no files.
 
 ### Platform routing
 

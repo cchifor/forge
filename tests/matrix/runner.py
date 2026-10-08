@@ -1306,6 +1306,9 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
       rendered snippet; project_a has the OLD fingerprint (user only
       edited the body), project_b has the NEW one (regenerate
       re-stamps).
+    * Generator requirement and source fingerprint in ``.forge/quality.json``
+      — project_b uses the edited sandbox, not the original git checkout.
+      Recipe configuration, versions, and plugin requirements still compare.
 
     LF/CRLF normalization is applied to every text file so the
     comparison is platform-tolerant.
@@ -1334,6 +1337,28 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
 
     def normalize(rel: str, text: str) -> str:
         out = text
+        if rel == ".forge/quality.json":
+            try:
+                recipe = json.loads(out)
+            except json.JSONDecodeError:
+                return out
+            if isinstance(recipe, dict):
+                # Retain absent/invalid identity fields so they still differ.
+                fingerprint = recipe.get("generator_sha256")
+                if isinstance(fingerprint, str) and re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+                    recipe["generator_sha256"] = "<NORM>"
+                requirement = recipe.get("generator_requirement")
+                version = recipe.get("generator_version")
+                release_pin = isinstance(version, str) and bool(version) and requirement == f"forge-cli=={version}"
+                # These are the two forms produced by this checkout/sandbox
+                # harness. Preserve other remotes, invalid refs and versions.
+                checkout_pin = isinstance(requirement, str) and re.fullmatch(
+                    r"forge-cli @ git\+https://github\.com/cchifor/forge@[0-9a-f]{40}(?:[0-9a-f]{24})?",
+                    requirement,
+                )
+                if release_pin or checkout_pin:
+                    recipe["generator_requirement"] = "<NORM>"
+                out = json.dumps(recipe, sort_keys=True)
         if rel.endswith("forge.toml"):
             out = re.sub(r'emitted_at\s*=\s*"[^"]*"', 'emitted_at = "<NORM>"', out)
             out = re.sub(r'sha256\s*=\s*"[0-9a-f]+"', 'sha256 = "<NORM>"', out)

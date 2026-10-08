@@ -251,12 +251,12 @@ def generate(
                 staging_dir,
             )
         else:
-            shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
         raise
 
     # Success — promote staging dir contents to the final location.
     shutil.move(str(project_root), str(final_root))
-    shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+    shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
 
     # Re-populate the report with the final path (not the staging path).
     if report is not None:
@@ -1586,7 +1586,7 @@ def _run_backend_cmd(
     return False
 
 
-def _force_remove_readonly(func, path, _exc_info):
+def _force_remove_readonly(func, path, _exception):
     """Error handler for shutil.rmtree to clear read-only flags on Windows."""
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -1596,7 +1596,7 @@ def _cleanup_sub_git_repos(project_root: Path) -> None:
     """Remove .git directories from generated subdirectories (recursive)."""
     for git_dir in project_root.rglob(".git"):
         if git_dir.is_dir() and git_dir.parent != project_root:
-            shutil.rmtree(git_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(git_dir, onexc=_force_remove_readonly)
 
 
 def _git_init(project_root: Path) -> None:

@@ -1,6 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # Update pyproject.toml and uv.lock together; pip leaves the lock stale.
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: weekly

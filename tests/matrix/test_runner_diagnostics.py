@@ -265,6 +265,48 @@ class TestDiffProjectTreesNormalizedExclusions:
             f"real.py difference must surface, but got: {diff}"
         )
 
+    @pytest.mark.parametrize("change", [
+        "identity", "config", "plugins", "version", "missing", "invalid",
+        "empty_requirement", "invalid_vcs", "mismatched_version", "other_remote",
+    ])
+    def test_quality_recipe_only_normalizes_generator_identity(self, tmp_path: Path, change: str):
+        import json
+        from tests.matrix.runner import _diff_project_trees_normalized
+
+        a, b = tmp_path / "a", tmp_path / "b"
+        recipe = {
+            "generator_requirement": "forge-cli @ git+https://github.com/cchifor/forge@" + "a" * 40,
+            "generator_sha256": "a" * 64,
+            "generator_version": "1.2.0",
+            "plugin_requirements": [],
+            "config": {"project_name": "Roundtrip", "include_keycloak": True},
+        }
+        for root in (a, b):
+            (root / ".forge").mkdir(parents=True)
+        (a / ".forge/quality.json").write_text(json.dumps(recipe))
+        recipe.update(generator_requirement="forge-cli==1.2.0", generator_sha256="b" * 64)
+        if change == "config":
+            recipe["config"]["include_keycloak"] = False
+        elif change == "plugins":
+            recipe["plugin_requirements"] = ["other-plugin==1.0"]
+        elif change == "version":
+            recipe["generator_version"] = "2.0.0"
+        elif change == "missing":
+            del recipe["generator_sha256"]
+        elif change == "invalid":
+            recipe["generator_sha256"] = "invalid"
+        elif change == "empty_requirement":
+            recipe["generator_requirement"] = "forge-cli=="
+        elif change == "invalid_vcs":
+            recipe["generator_requirement"] = "forge-cli @ git+"
+        elif change == "mismatched_version":
+            recipe["generator_requirement"] = "forge-cli==2.0.0"
+        elif change == "other_remote":
+            recipe["generator_requirement"] = "forge-cli @ git+https://example.com/forge@" + "a" * 40
+        (b / ".forge/quality.json").write_text(json.dumps(recipe))
+        expected = [] if change == "identity" else [".forge/quality.json"]
+        assert _diff_project_trees_normalized(a, b) == expected
+
 
 class TestLaneDEmptyCandidateGate:
     """Initiative #9 — Lane D must NOT report vacuous-green when a

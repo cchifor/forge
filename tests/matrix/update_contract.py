@@ -30,6 +30,11 @@ by:
 5. Re-running ``--update`` with the same mode — must exit 0
    (idempotency probe).
 
+Ownership-managed projects only support complete merge updates. For those
+projects, skip/overwrite must return the ownership-mode error without changing
+any project file, including on a repeated invocation. Legacy projects retain
+the three per-mode contracts above.
+
 Finally runs ``python -m forge --harvest --harvest-out=- --project-path
 <merge-project>`` once and asserts:
 
@@ -189,6 +194,8 @@ def _drive_mode(
     inject_stubs(project_root)
 
     edited = _stage_edit(project_root)
+    if mode != "merge" and (project_root / ".forge/quality.json").is_file():
+        return _drive_rejected_owned_mode(project_root, mode), project_root
     if edited is None:
         # No fragment-authored file in the generated project — the
         # ``--mode`` matrix has no surface to exercise here (purely
@@ -227,6 +234,26 @@ def _drive_mode(
             project_root,
         )
     return None, project_root
+
+
+def _drive_rejected_owned_mode(project_root: Path, mode: Mode) -> str | None:
+    """Require unsupported owned-project modes to fail without changing files."""
+    def snapshot() -> dict[str, bytes]:
+        return {
+            path.relative_to(project_root).as_posix(): path.read_bytes()
+            for path in project_root.rglob("*")
+            if path.is_file()
+        }
+
+    before = snapshot()
+    for _ in range(2):
+        result = _run_forge(["--update", "--mode", mode, "--project-path", str(project_root)])
+        message = "Ownership-managed projects require a complete merge update"
+        if result.returncode != 2 or message not in (result.stdout + result.stderr):
+            return f"expected ownership-mode rejection for {mode}, got exit {result.returncode}: {_tail(result)}"
+        if snapshot() != before:
+            return f"rejected {mode} update changed project files"
+    return None
 
 
 def _assert_mode_contract(

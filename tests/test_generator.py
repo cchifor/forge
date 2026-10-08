@@ -112,7 +112,7 @@ class TestForceRemoveReadonly:
         f.write_text("data")
         f.chmod(stat.S_IREAD)
 
-        _force_remove_readonly(os.remove, str(f), None)
+        _force_remove_readonly(os.remove, str(f), PermissionError("read-only file"))
         assert not f.exists()
 
 
@@ -126,6 +126,8 @@ class TestCleanupSubGitRepos:
         child_a.mkdir()
         (child_a / ".git").mkdir()
         (child_a / ".git" / "HEAD").write_text("ref: refs/heads/main")
+        # Exercise rmtree's read-only recovery callback on Windows.
+        (child_a / ".git" / "HEAD").chmod(stat.S_IREAD)
 
         child_b = tmp_path / "frontend"
         child_b.mkdir()
