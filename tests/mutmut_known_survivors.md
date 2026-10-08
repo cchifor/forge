@@ -1,7 +1,7 @@
 # Known mutation survivors
 
 Structured log of mutmut survivors that are **expected** and need no further
-investigation. Referenced by [`docs/mutation-testing.md`](../docs/mutation-testing.md#known-survivors).
+investigation. Referenced by [`docs/operations/mutation-testing.md`](../docs/operations/mutation-testing.md#known-survivors).
 
 A survivor is *expected* when the mutated code has no behavioural contract our
 tests assert. The suite matches on **occurrence** and **exit code**, never on

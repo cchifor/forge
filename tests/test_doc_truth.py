@@ -16,8 +16,6 @@ import tomllib
 from pathlib import Path
 from urllib.parse import unquote
 
-import pytest
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Repo-root markdown + everything under docs/. Used by the link checker.
@@ -42,8 +40,10 @@ _ALL_DOCS: list[Path] = [
 _USER_FACING_DOCS: list[Path] = [
     _REPO_ROOT / "README.md",
     _REPO_ROOT / "UPGRADING.md",
-    _REPO_ROOT / "docs" / "OPERATIONAL_RUNBOOK.md",
-    _REPO_ROOT / "docs" / "GETTING_STARTED.md",
+    _REPO_ROOT / "docs" / "operations" / "maintainer-runbook.md",
+    *sorted((_REPO_ROOT / "docs" / "guides").glob("*.md")),
+    _REPO_ROOT / "docs" / "operations" / "generated-code-quality.md",
+    _REPO_ROOT / "docs" / "reference" / "cli.md",
 ]
 
 
@@ -92,8 +92,7 @@ class TestRegistryCountTruth:
         # The badge counts real frameworks; ``none`` is the absence of one.
         real = [f for f in available_frontend_frameworks() if f != "none"]
         assert int(_badge("frontends")) == len(real), (
-            f"README frontends badge {_badge('frontends')} != "
-            f"{len(real)} real frameworks {real}."
+            f"README frontends badge {_badge('frontends')} != {len(real)} real frameworks {real}."
         )
 
     def test_options_badge_matches_registry(self) -> None:
@@ -134,12 +133,7 @@ class TestDocumentedCliFlagsExist:
     def _parser_flags(self) -> set[str]:
         from forge.cli.parser import _build_parser
 
-        return {
-            s
-            for a in _build_parser()._actions
-            for s in a.option_strings
-            if s.startswith("--")
-        }
+        return {s for a in _build_parser()._actions for s in a.option_strings if s.startswith("--")}
 
     def test_user_facing_forge_invocations_use_real_flags(self) -> None:
         parser_flags = self._parser_flags()
@@ -161,6 +155,5 @@ class TestDocumentedCliFlagsExist:
                                 f"(in `forge {m.group(1).strip()}`)"
                             )
         assert not missing, (
-            "Docs reference forge CLI flags that do not exist in the parser:\n"
-            + "\n".join(missing)
+            "Docs reference forge CLI flags that do not exist in the parser:\n" + "\n".join(missing)
         )

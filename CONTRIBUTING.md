@@ -40,14 +40,14 @@ make test        # pytest (excludes -m e2e)
 make e2e         # full e2e suite (slow — needs uv, npm, cargo, git)
 ```
 
-CI runs `make check` on Linux + Windows for Python 3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
+CI runs generator checks on Linux, macOS, and Windows for Python 3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
 
 ## Adding a new feature
 
-- **New backend language**: see [docs/adding-a-backend.md](docs/adding-a-backend.md). The `BACKEND_REGISTRY` is the single source of truth.
-- **New CLI flag**: add to `_parse_args` in `forge/cli.py` and read via `_get(args, "flag", cfg, "block", "key", default=...)` in `_build_config`.
-- **Template change**: bump nothing — versioning is by git commit (recorded in `forge.toml` of generated projects via the `_commit:` Copier directive). Add an e2e case if behaviour changes.
-- **New error path**: raise `GeneratorError` from `forge.errors`; `cli.main()` already routes it to JSON envelope or stderr+exit(2).
+- **New backend language**: see [backend authoring guide](docs/guides/adding-a-backend.md). The `BACKEND_REGISTRY` is the single source of truth.
+- **New CLI flag**: add to `_build_parser` in `forge/cli/parser.py`, then use the configuration resolver/builders in `forge/cli/builder.py` and loading helpers in `forge/cli/loader.py`. Preserve documented precedence and structured errors.
+- **Template change**: review the generated ownership and update impact, exact generator pin/fingerprint, and rendered native behavior. Adjust template version metadata where appropriate and test the emitted application; see [generated-code quality](docs/operations/generated-code-quality.md).
+- **New error path**: use the appropriate `ForgeError` subclass from `forge.errors` and preserve the command's structured output/status contract. See [CLI exit statuses](docs/reference/cli.md#exit-status).
 
 ## Architectural decisions vs forge RFCs
 

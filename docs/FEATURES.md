@@ -34,7 +34,7 @@ view is plugin-aware; this document covers built-ins only).
 
 ```
 ┌───────────────────────────────────────────────┐
-│  Option (user-facing)                         │  forge/options.py
+│  Option (user-facing)                         │  forge/options/
 │    path: "rag.backend"                        │
 │    type: ENUM, default: "none"                │
 │    options: ("none", "pgvector", "qdrant", …) │
@@ -66,7 +66,7 @@ Options enumerate fragments. Fragments never surface to the user.
 
 ## What an Option is
 
-An `Option` (in `forge/options.py`) describes one configurable knob.
+An `Option` (in `forge/options/`) describes one configurable knob.
 It declares:
 
 - A unique dotted `path` (e.g. `"rag.backend"`, `"middleware.rate_limit"`).
@@ -190,7 +190,7 @@ fragment.
 
 ## Adding an option + fragment in seven steps
 
-1. **Register the Option** in `forge/options.py`. Pick a dotted path
+1. **Register the Option** in `forge/options/`. Pick a dotted path
    under the right namespace (`middleware.*`, `observability.*`,
    `async.*`, `conversation.*`, `agent.*`, `chat.*`, `rag.*`,
    `platform.*`), a type, a default, summary / description,

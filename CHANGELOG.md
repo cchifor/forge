@@ -242,7 +242,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 - **Nightly-failure scenario naming in the GitHub issue (#275).** The auto-filed `nightly-failure` issue now splices a `Failing scenarios` table (scenario / lane / detail) into the body, naming each failing scenario instead of leaving only the per-lane pass/fail grid — unblocking root-cause investigation. Powered by a new stdlib-only script at `scripts/ci/nightly_failure_summary.py` (wired into `matrix-nightly.yml`).
 
-- **Doc-truth CI gate (#275).** New `tests/test_doc_truth.py` validates mechanical doc claims — README version/Python/registry (backends/frontends/options) badges, relative-link resolution, and that documented `forge` CLI flags actually exist in the parser. Wired into the `lint` job in `ci.yml`. It caught and fixed real drift: `forge --plan-migrate`, `forge migrate --only`, and `forge migrate --skip` referenced in `UPGRADING.md` and `docs/OPERATIONAL_RUNBOOK.md` were never valid flags (canonical is `forge --migrate [--migrate-only NAMES] [--migrate-skip NAMES]`). Also adds `tests/mutmut_known_survivors.md`, the survivor log referenced by `docs/mutation-testing.md`.
+- **Doc-truth CI gate (#275).** New `tests/test_doc_truth.py` validates mechanical doc claims — README version/Python/registry (backends/frontends/options) badges, relative-link resolution, and that documented `forge` CLI flags actually exist in the parser. Wired into the `lint` job in `ci.yml`. It caught and fixed real drift: `forge --plan-migrate`, `forge migrate --only`, and `forge migrate --skip` referenced in `UPGRADING.md` and `docs/operations/maintainer-runbook.md` were never valid flags (canonical is `forge --migrate [--migrate-only NAMES] [--migrate-skip NAMES]`). Also adds `tests/mutmut_known_survivors.md`, the survivor log referenced by `docs/operations/mutation-testing.md`.
 
 - **Generated service runbooks (OPERATIONS.md + OBSERVABILITY.md) (#276).** Every generated Python/Node/Rust backend now ships two template files under `forge/templates/services/*-service-template/template/`: `OPERATIONS.md` (config precedence/load order, database migrations — with the Postgres advisory-lock boot pattern on Python/Node and the explicit-`sqlx::migrate!` note for Rust — graceful shutdown choreography, and the `/api/v1/health/{live,ready}` endpoint contract) and `OBSERVABILITY.md` (OTLP env vars such as `OTEL_EXPORTER_OTLP_ENDPOINT`, RED metric definitions, Prometheus/Grafana dashboard setup, and structured-logging conventions). Operators now have canonical per-backend reference material instead of ad-hoc docs (previously only `tenant-management-service` shipped a `HARDENING.md`). A regression-guard test (`tests/test_generated_ops_docs.py`) asserts each base template emits both files with non-stub content and no unrendered Jinja.
 
@@ -322,7 +322,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `llm_ollama`, and `llm_bedrock` stay Python-only / tier-3 in 1.x;
   their SDK ecosystems aren't mature enough on Node/Rust to justify
   in-tree adapters, and plugin authors carry that gap (Featured
-  Plugin tier — see `docs/known-issues.md`). The Pillar A.4
+  Plugin tier — see `docs/reference/limitations.md`). The Pillar A.4
   `PortSpec` infra is intentionally **not** consumed here: the
   current production fragment-apply path (the `_apply_fragment`
   shim in `forge/sync/`) only forwards `middlewares`, not arbitrary
@@ -931,7 +931,7 @@ specific operator / plugin-author pain point.
 - **`forge --plan --graph`** — emits a Mermaid `graph TD` diagram showing every option that contributed to the resolved plan (with the chosen value), every fragment with its target backends, the option-→-fragment edges (`enables`), and the fragment-→-fragment depends_on edges (dotted-line variant). Pipe to `mermaid-cli`, paste into a GitHub Markdown ` ```mermaid ` fence, or render at mermaid.live. Closes the "why is fragment X applied?" support loop. 4 new tests in `tests/test_plan_and_dryrun.py` cover the wire format, option-node inclusion, depends_on-edge inclusion, empty-plan handling.
 - **`forge --log-json` + `--log-level`** — top-level CLI overrides for `FORGE_LOG_FORMAT` / `FORGE_LOG_LEVEL`. `--log-json` emits NDJSON to stderr (one JSON object per line, complete with `ts` / `level` / `logger` / `event` / structured fields); `--log-level={DEBUG,INFO,WARNING,ERROR}` overrides the env-var default. A pre-parse scan of `sys.argv` ensures even plugin-load events captured before the full argparse pass honour the flags. 3 new tests in `tests/test_forge_logging.py` cover explicit-fmt-overrides-env, explicit-level-overrides-env, NDJSON line-shape contract.
 - **ADR / RFC distinction documented in `CONTRIBUTING.md`** — clarifies that `docs/architecture-decisions/` covers decisions about the *shape forge generates* while `docs/rfcs/` covers decisions about *forge itself*. Two doc trees on purpose; the README in each was previously the only signal of the split.
-- **Plugin author quickstart** in `docs/plugin-development.md` — 10-minute scaffold pointing at `examples/forge-plugin-example/` plus a "common gotchas the P0.2 CI gate catches" list. Each gotcha references the specific drift mode (Fragment-without-category, relative fragment_dir, files/-not-mirroring-backend-root, compose.yaml-location, missing-package-data) so the next plugin author hits zero of them.
+- **Plugin author quickstart** in `docs/guides/plugins.md` — 10-minute scaffold pointing at `examples/forge-plugin-example/` plus a "common gotchas the P0.2 CI gate catches" list. Each gotcha references the specific drift mode (Fragment-without-category, relative fragment_dir, files/-not-mirroring-backend-root, compose.yaml-location, missing-package-data) so the next plugin author hits zero of them.
 - **Performance regression bench tests** at `tests/test_perf_merge_hot_paths.py`, `bench` pytest marker. Lightweight `time.perf_counter`-based budgets for the merge-mode hot paths — `file_three_way_decide` (~0.1 µs/op, budget 10 µs), `sha256_of_file` (~75 µs/op for 1 KiB, budget 5 ms), `is_binary_file` (~80 µs/op, budget 1 ms), `plan_update` walk (budget 30 s). No new dependencies (no `pytest-benchmark`); opt-in via `pytest -m bench`. Establishes a measurement floor; CI gating is a future ratchet move once historical data stabilises across machines.
 - **Long / deep-path robustness tests** at `tests/test_long_path_update.py` exercise the merge-mode hot paths over a 6-level nested directory tree under `tmp_path`. Catches general path-handling bugs across platforms; an opt-in stress test (skipped by default) deliberately crosses Windows' 260-char `MAX_PATH` for verifying long-path support on machines with `LongPathsEnabled=1`. 5 active tests + 1 opt-in.
 - **Canvas-contract test depth** — 18 new tests in `tests/test_canvas_contract.py` cover the previously-uncovered branches in `forge.codegen.canvas_contract`: missing/non-string `component_name`, missing/non-dict `props`, every `_check_type` branch (string / integer-rejects-bool / integer-rejects-string / number-rejects-bool / number-accepts-int+float / boolean / object-rejects-array / object-accepts-dict / enum-mismatch / enum-listed), and the `cli_lint` CLI handler (clean / dirty / unparseable JSON exit codes 0 / 1 / 2). `forge/codegen/canvas_contract.py` coverage 71.6% → 98%.
@@ -948,7 +948,7 @@ specific operator / plugin-author pain point.
 ### Added — P1.4 (ts-morph default instrumentation)
 
 - **`forge.doctor.check_ts_morph_toolchain`** — surfaces whether `FORGE_TS_AST=1` AST-based TypeScript injection is reachable. Probes Node on PATH, executes `node -e "require('ts-morph')"` to verify the npm package resolves, checks the bundled helper script, and reports the env-var state. Status is `ok` when reachable (showing whether the env var is currently active), `warn` with an actionable fix otherwise. Wired into `forge --doctor` as the `ts-morph:toolchain` row.
-- **`docs/troubleshooting.md`** — new section "TypeScript injection: regex anchors vs ts-morph AST" documenting the opt-in path, the toolchain requirements, the doctor surface, and the planned default flip.
+- **`docs/operations/troubleshooting.md`** — new section "TypeScript injection: regex anchors vs ts-morph AST" documenting the opt-in path, the toolchain requirements, the doctor surface, and the planned default flip.
 - **5 new tests** in `tests/test_doctor.py` cover Node-missing, helper-missing, ts-morph-not-reachable, and reachable-with-/-without-env-var paths.
 - **No code change** to the regex/ts-morph dispatch yet — instrumentation only this quarter, per the plan; the default flip is a stable-1.x conversation gated on telemetry.
 
@@ -972,7 +972,7 @@ specific operator / plugin-author pain point.
 - **`tests/test_plugin_e2e.py`** + **`plugin_e2e` pytest marker** — 11 tests covering the discovery → registration → CLI introspection (`--plugins list` text + JSON, `--list --format json`, `--schema`) → generation (fragment files land + injection applies + provenance recorded) → update (idempotent re-apply) flow. Skips cleanly on environments where the example plugin isn't installed.
 - **`forge/api.py`** — explicit "Stable Public API" annotation block in the module docstring with a per-symbol Since / Compatibility table. `add_option` / `add_fragment` / `add_backend` / `add_frontend` / `add_command` / `add_service` / `PluginRegistration` are stable; `add_emitter` is provisional.
 - **Reference plugin fixed** — `examples/forge-plugin-example/` had three pre-P0.2 drift bugs the new gate caught: (1) `Fragment(category=...)` and `Fragment(summary=...)` kwargs no longer exist; (2) `inject.yaml` referenced the non-existent `FORGE:STARTUP_HOOKS` marker on `src/app/main.py`, should have been `FORGE:LIFECYCLE_STARTUP` on `src/app/core/lifecycle.py`; (3) the fragment file was at `files/hello.py` (lands at backend root, not importable) instead of `files/src/app/hello.py` (lands at `src/app/hello.py`, importable as `app.hello`). All fixed; `pyproject.toml` now declares `package-data` so wheel installs ship the fragment tree.
-- **`docs/plugin-development.md`** — new "Stable API surface" section pointing at `forge/api.py`'s table + the CI gate, plus an updated Project structure layout reflecting the corrected fragment file paths and the absolute-vs-relative `fragment_dir` rule for plugins.
+- **`docs/guides/plugins.md`** — new "Stable API surface" section pointing at `forge/api.py`'s table + the CI gate, plus an updated Project structure layout reflecting the corrected fragment file paths and the absolute-vs-relative `fragment_dir` rule for plugins.
 
 ### Added — P0.1 (file-level three-way merge + Epic A finish)
 
@@ -1013,8 +1013,8 @@ specific operator / plugin-author pain point.
 
 ### Added — Epic CC (troubleshooting + known-issues docs)
 
-- **`docs/troubleshooting.md`** — 12 entries covering install/CLI (uv PATH setup, ty alpha quirks), generation (Windows long paths, Flutter SDK, Keycloak ports, hung prompts), `forge --update` (Epic H lock + sentinel audit errors, Epic G alias deprecation warnings), Docker + runtime, and packaging + release (Epic DD contaminants, Epic Z release-dryrun gate).
-- **`docs/known-issues.md`** — tracked limitations grouped by template/platform/polyglot/tooling. Each row has impact + workaround + tracking reference so contributors stop rediscovering the same gotchas.
+- **`docs/operations/troubleshooting.md`** — 12 entries covering install/CLI (uv PATH setup, ty alpha quirks), generation (Windows long paths, Flutter SDK, Keycloak ports, hung prompts), `forge --update` (Epic H lock + sentinel audit errors, Epic G alias deprecation warnings), Docker + runtime, and packaging + release (Epic DD contaminants, Epic Z release-dryrun gate).
+- **`docs/reference/limitations.md`** — tracked limitations grouped by template/platform/polyglot/tooling. Each row has impact + workaround + tracking reference so contributors stop rediscovering the same gotchas.
 - **README's Support section links both docs** so they're discoverable from the project front page.
 
 ### Added — Epic RFC-Q (polyglot ports roadmap — design only)
@@ -1210,7 +1210,7 @@ Unblocks Epic L's `forge migrate-auth-provider` codemod, which will rename exist
 
 - **Expanded CI matrix** (`.github/workflows/e2e.yml`): forge's own tests run on Python 3.11 / 3.12 / 3.13; generated-project suites (python-vue, node-svelte, rust-none, multi-backend-keycloak) run on every template-touching PR; canvas-packages build + typecheck for `@forge/canvas-vue`, `@forge/canvas-svelte`, `forge_canvas` on every commit.
 - **`docs/ARCHITECTURE.md`** — rewritten to document the post-1.0 design: registry triad, generation pipeline, injector backends, provenance + merge blocks, codegen layer, canvas packages, plugin architecture, testing surface.
-- **`docs/GETTING_STARTED.md`** — 10-minute tour from install to a running project, including headless YAML invocation, incremental-change verbs, codemods, and agent-friendly stdin/json patterns.
+- **`docs/guides/getting-started.md`** — 10-minute tour from install to a running project, including headless YAML invocation, incremental-change verbs, codemods, and agent-friendly stdin/json patterns.
 - **`docs/rfcs/RFC-004-release-rehearsal.md`** — pre-1.0 rehearsal policy, dry-run mechanics, lockstep version check, rollback asymmetries per registry.
 - **`release.yml` dry-run trigger** — `workflow_dispatch` inputs `dry_run` (default true) and `target` so maintainers can rehearse the full PyPI + npm + pub.dev pipeline without tagging.
 
@@ -1237,7 +1237,7 @@ Unblocks Epic L's `forge migrate-auth-provider` codemod, which will rename exist
   - `WorkflowDiagram` — DAG layout with topological-depth row assignment, status badges (pending/running/completed/error/skipped), straight-line edge routing.
 - **Golden-snapshot presets** extended from 1 to 4: `python_minimal`, `node_minimal`, `rust_minimal`, `multi_backend`. Regenerate with `UPDATE_GOLDEN=1`.
 - **OpenAPI contract tests** (`tests/test_openapi_contract.py`): every entity's emitted OpenAPI has typed properties, correct required-vs-optional split, format declarations for uuid/date-time, `$ref` for enums. 13 tests.
-- **Mutation testing configuration** — `[tool.mutmut]` in pyproject.toml scoped to `feature_injector`, `merge`, `provenance`, `injectors/*`, `updater`. New `docs/mutation-testing.md` documents the kill-rate baseline + the "run locally on breaking-change PRs" policy.
+- **Mutation testing configuration** — `[tool.mutmut]` in pyproject.toml scoped to `feature_injector`, `merge`, `provenance`, `injectors/*`, `updater`. New `docs/operations/mutation-testing.md` documents the kill-rate baseline + the "run locally on breaking-change PRs" policy.
 - **Vue / Svelte dependencies** — `highlight.js@^11.10.0` for CodeViewer.
 - **Dart dependencies** — `flutter_highlight@^0.7.0` for CodeViewer, `http@^1.2.0` for MCP client.
 
@@ -1373,14 +1373,14 @@ Unblocks Epic L's `forge migrate-auth-provider` codemod, which will rename exist
 - Three-zone merge — `generated`, `user`, and `merge` semantics on every `inject.yaml` entry.
 - Reference port+adapter pair: `vector_store_port` + `vector_store_qdrant` (rest of RAG refactor: 1.0.0a2).
 - `docs/architecture-decisions/ADR-001-pragmatic-hexagonal.md`, `ADR-002-ports-and-adapters.md`.
-- `docs/plugin-development.md` + `examples/forge-plugin-example/` reference plugin.
+- `docs/guides/plugins.md` + `examples/forge-plugin-example/` reference plugin.
 
 **Phase 3 — agentic UI:**
 - Published package scaffolds: `@forge/canvas-vue`, `@forge/canvas-svelte`, `forge_canvas` (pub.dev), each with Vite library build / tsconfig / svelte.config / analysis_options so they can actually `npm publish` / `flutter pub publish`.
 - Dart `AgUiClient` — exponential-backoff reconnect + `Last-Event-ID` resume + SSE chunk parsing.
 - `ForgeTheme` — shadcn-flavored Material 3 matching the web design language.
 - MCP scaffolds: `mcp_server` (FastAPI router for `/mcp/tools` + `/mcp/invoke`) + `mcp_ui` (Vue ToolRegistry + ApprovalDialog).
-- `docs/mcp.md` + `mcp.config.example.json` + JSON Schema at `forge/templates/_shared/mcp/mcp_config_schema.json`.
+- `docs/reference/mcp.md` + `mcp.config.example.json` + JSON Schema at `forge/templates/_shared/mcp/mcp_config_schema.json`.
 
 **Phase 4 — production polish:**
 - Reliability fragments across **Python / Node / Rust**: `reliability_connection_pool`, `reliability_circuit_breaker`, with auto-wire injections.
@@ -1429,12 +1429,12 @@ Unblocks Epic L's `forge migrate-auth-provider` codemod, which will rename exist
 - `ruff` + `ty` strict-ish config, `.pre-commit-config.yaml`, `.github/workflows/ci.yml` matrix (Linux + Windows × Python 3.11/3.12/3.13). Coverage floor raised to 75%.
 - **`GeneratorError`** propagates clean error messages through `--json` (single-line envelope, exit 2) and stderr (`Generation failed: ...`, exit 2). `_run_backend_cmd(..., required=True)` raises on failure; `_git_init` checks every step.
 - **End-to-end harness** (`tests/e2e/test_full_generation.py`): scaffolds python+vue, node+svelte, rust+none, and the multi-backend python+node+rust+vue+keycloak case, then runs the generated scaffold's native test suite. Marked `@pytest.mark.e2e`; nightly workflow at `.github/workflows/e2e.yml`.
-- **`BACKEND_REGISTRY`** in `forge/config.py` drives language dispatch (CLI prompts, generator, variable mapper). Adding a 4th backend is now a one-day task — see [docs/adding-a-backend.md](docs/adding-a-backend.md).
+- **`BACKEND_REGISTRY`** in `forge/config.py` drives language dispatch (CLI prompts, generator, variable mapper). Adding a 4th backend is now a one-day task — see [docs/adding-a-backend.md](docs/guides/adding-a-backend.md).
 - **`forge.toml`** stamped into every generated project (forge version + per-language template paths) so projects can be re-rendered with `copier update`.
 - **Keycloak realm validation**: `render_keycloak_realm` parses the rendered JSON and asserts essential top-level keys before writing. Jinja typos fail generation immediately rather than at Keycloak boot.
 - **`--verbose`** flag overrides `--quiet` for full Copier + subprocess output (works in JSON mode too — diagnostic output goes to stderr).
 - **`forge --completion bash|zsh|fish`** prints a shell completion script.
-- **Documentation**: `docs/architecture.md` (Mermaid diagram), `docs/adding-a-backend.md`, `CONTRIBUTING.md`, this changelog.
+- **Documentation**: `docs/architecture/generator.md` (Mermaid diagram), `docs/guides/adding-a-backend.md`, `CONTRIBUTING.md`, this changelog.
 
 ### Changed
 

@@ -206,7 +206,7 @@ Rejected because:
 - **Easy to accidentally diverge.** Vue gets a feature; nobody adds
   it to Svelte or Flutter. Mitigated by golden snapshot tests per
   stack and an explicit "feature parity matrix" tracked in
-  `docs/matrix-status.md`.
+  `docs/operations/validation-matrix.md`.
 - **Discoverability cost.** A user comparing the three has to read
   three READMEs. We accept this; the alternative (one README that
   papers over the differences) hides decisions the user needs to see.
@@ -224,7 +224,7 @@ Rejected because:
   three trees this ADR is about.
 - `packages/canvas-core/` (TypeScript), `packages/forge-canvas-core-dart/`
   (Dart) — the protocol-layer sharing this ADR endorses.
-- `docs/adding-a-frontend.md` — the contributor guide that implicitly
+- `docs/guides/adding-a-frontend.md` — the contributor guide that implicitly
   encodes this decision; new stacks get their own tree.
 - 1.2.0-targeted Pillar B work (canvas-core / forge_canvas_core split)
   in `CHANGELOG.md` — the canonical example of "share at the protocol

@@ -9,7 +9,7 @@ Procedures for forge maintainers. Each section is self-contained: context paragr
 forge is distributed **GitHub-only** — `release.yml` publishes to no registry
 (no PyPI/npm/pub.dev). A tag push runs a single `github-release` job that builds
 the sdist+wheel, generates a CycloneDX SBOM, and cuts a GitHub Release from the
-`[Unreleased]` CHANGELOG section, gated by the tag\u2194version check.
+`[Unreleased]` CHANGELOG section, gated by the tag/version check.
 
 ### 1.1 If the `github-release` job fails
 
@@ -19,15 +19,18 @@ the sdist+wheel, generates a CycloneDX SBOM, and cuts a GitHub Release from the
    - **Extract changelog section** — the `[Unreleased]` section is empty/missing.
      Add notes, recommit, retag.
    - **Build / SBOM** — a packaging error; reproduce locally with `uv build`.
-2. The job is idempotent — re-running it (or re-pushing the tag) recreates the
-   GitHub Release. Nothing was published to a registry, so there is **no
-   partial-publish state** to reconcile.
+2. Inspect whether release assets were uploaded before the failure. Re-run the
+   failed job after correcting its cause; verify the tag, source revision, and
+   resulting assets agree. Nothing is published to a package registry by this
+   workflow, but a partially populated GitHub Release can still need repair.
 
 ### 1.2 Rolling back a release
 
-Delete the GitHub Release and the tag (`git push --delete origin vX.Y.Z`).
-Because nothing is published to a registry, no version is "stuck" downstream —
-users install from source via `./install`, so a bad tag simply isn't installed.
+Prefer a corrective release and a clear advisory for consumers. Existing
+installations and generated recipes can pin a tag or commit, so deleting a
+GitHub Release does not undo downstream use. If a release must be withdrawn,
+follow the repository release policy, preserve the source/artifact audit trail,
+and coordinate any tag removal instead of silently moving a published tag.
 
 ## 2. Debugging a plugin that modifies generated output
 
@@ -48,7 +51,10 @@ Plugins register via the `forge.plugins` entry-point group (defined in each plug
    ```bash
    forge --plugins list
    ```
-   Each loaded plugin shows its registered fragments. Match `fragment_name` to the plugin's `fragments_added` list.
+   The listing shows plugin module/version metadata and registration counts;
+   `fragments_added` is an integer, not a list of names. Inspect each relevant
+   plugin's fragment definitions/registration source to map `fragment_name` to
+   its owning package. The query below narrows the roster, not the exact owner.
 
 3. For JSON-parseable output:
    ```bash
@@ -61,7 +67,7 @@ Plugins register via the `forge.plugins` entry-point group (defined in each plug
    ```bash
    # Create a clean venv with only forge (no plugin packages):
    uv venv /tmp/forge-clean
-   uv pip install --python /tmp/forge-clean/bin/python forge
+   uv pip install --python /tmp/forge-clean/bin/python git+https://github.com/cchifor/forge.git
    /tmp/forge-clean/bin/forge <your-args> --output-dir /tmp/output-no-plugins
    ```
 
@@ -116,116 +122,66 @@ Plugins register via the `forge.plugins` entry-point group (defined in each plug
 
 ---
 
-## 3. Recovering from corrupt forge.toml
+## 3. Recovering a corrupt manifest or recipe
 
-The `forge.toml` manifest at a generated project's root tracks every file's provenance (origin, SHA-256 baseline, fragment/template metadata) and merge-block records. Corruption -- from merge conflicts, hand-edits, or interrupted writes -- breaks `forge --update`, `forge --verify`, and `forge --harvest`.
+`forge.toml` and `.forge/quality.json` jointly describe an ownership-managed
+project. A syntax repair must preserve the correct source baseline and generator
+identity; choosing whichever hash matches today's edited file can bless an
+unreviewed override.
 
-### 3.1 Handling merge conflicts in forge.toml
+### 3.1 Preserve evidence and restore a known-good pair
 
-1. After a `git merge` or `git rebase` that conflicts in `forge.toml`, resolve manually:
+1. Preserve the complete working tree, including untracked custom files and any
+   `.forge-merge` proposals. Inspect `git status` and identify the last successful
+   generation/update commit.
+2. Recover the manifest and recipe from that same known-good commit. Use the
+   corresponding generator/plugin versions to inspect the project. Do not delete
+   the manifest, relabel ownership, or replace hashes with current edited bytes.
+3. Review application changes against the restored baseline. Move generic runtime
+   edits into public extensions or an upstream generator fix.
+4. Validate and preview before updating:
+
    ```bash
-   # See the conflict markers:
-   grep -n '<<<<<<\|======\|>>>>>>' forge.toml
+   forge --quality architecture --project-path .
+   forge --plan-update --project-path . --json
    ```
 
-2. For `[forge.provenance]` entries, keep the **newer** side (the branch with more recent generation). For `[forge.merge_blocks]` entries, keep the side whose `sha256` matches the current on-disk file content.
+A legitimate new generator version may fail the old recipe's fingerprint check;
+install the recorded version to inspect the old state, then perform the explicit
+[upgrade transaction](../guides/customization.md#upgrade-flow).
 
-3. Validate the result parses as TOML:
-   ```bash
-   python -c "import tomlkit; tomlkit.parse(open('forge.toml').read()); print('OK')"
-   ```
+### 3.2 When there is no usable baseline
 
-4. Run the doctor check to verify structural integrity:
-   ```bash
-   forge doctor
-   ```
+Regenerate the original configuration with the matching generator and plugins in
+**a separate directory**. Compare the two trees, preserve custom modules, and
+review ownership before adopting a coherent candidate manifest/recipe. There is
+no standalone command that can reconstruct lost provenance reliably from edited
+files. Generation into the damaged project is not a recovery procedure.
 
-### 3.2 Regenerating forge.toml from scratch
+For a legacy project without a quality recipe, first inspect the migration
+proposal:
 
-5. There is no standalone "regenerate forge.toml" command. The manifest is written during `forge new` (initial generation) and updated during `forge --update`. To regenerate from scratch:
-   ```bash
-   # Back up the current project state
-   git stash   # or commit your work
+```bash
+forge --quality migrate --project-path .
+```
 
-   # Delete the old manifest
-   rm forge.toml
+This is read-only. Follow its regeneration/adoption instructions rather than
+stamping all current files as trusted generated output. Missing owned files can
+be restored by the updater; removing their provenance entries prevents that
+safety mechanism and is not the recommended fix.
 
-   # Re-run generation with the same config into the existing project dir.
-   # Use --dry-run first to preview:
-   forge <original-config-args> --dry-run
+### 3.3 Legacy schema migrations
 
-   # Then for real (this overwrites forge.toml but NOT user-edited files
-   # when using merge mode):
-   forge <original-config-args> --output-dir . --update --mode merge
-   ```
+Older manifest/schema migrations remain separate from ownership adoption:
 
-6. After regeneration, diff to verify nothing unexpected changed:
-   ```bash
-   git diff forge.toml
-   git diff   # check all files
-   ```
+```bash
+forge --migrate --project-path . --migrate-only provenance-v2 --dry-run
+forge --migrate --project-path . --dry-run
+```
 
-### 3.3 When it is safe to delete sections
-
-7. **`[forge.provenance."<path>"]`** -- safe to delete an entry if the corresponding file no longer exists in the project. The next `forge --update` will re-record any files it emits.
-
-8. **`[forge.merge_blocks."<key>"]`** -- safe to delete an entry if the corresponding BEGIN/END sentinel block has been removed from the target file. Deleting the entry while the block still exists means `forge --update` will treat that block as new on the next run.
-
-9. **`[forge.template_versions]`** -- do not delete. If missing, `forge --update` loses track of which template versions were last applied. If corrupted, set values to `"unknown"` and let the next update re-stamp them.
-
-10. **`[forge.frontend]`** -- do not delete unless the project genuinely has no frontend. Missing frontend metadata causes `forge --update` to skip frontend template re-rendering.
-
-11. **`schema_version`** under `[forge]` -- never delete. If missing, forge treats the manifest as v1 and the provenance-v2 migration will attempt to upgrade it.
-
-### 3.4 The provenance v2 migration
-
-12. The `provenance-v2` migration (`forge/migrations/migrate_provenance_v2.py`) upgrades pre-1.2 manifests to schema v2. It enriches entries with `fragment_version`, `fragment_name`, `template_versions`, and adds `fp:<hex8>` fingerprints to BEGIN sentinels in source files.
-
-13. Run it explicitly:
-    ```bash
-    # Preview (no writes):
-    forge --migrate --migrate-only provenance-v2 --dry-run
-
-    # Apply:
-    forge --migrate --migrate-only provenance-v2
-
-    # JSON output for scripting:
-    forge --migrate --migrate-only provenance-v2 --json
-    ```
-
-14. The migration is idempotent -- running it on a v2+ manifest skips with `"forge.toml is already schema vN"`.
-
-15. If a fragment referenced in the manifest is no longer in the registry (plugin uninstalled, fragment renamed), the migration logs a warning and leaves `fragment_version` absent. The harvester tolerates this.
-
-16. All available migrations, in application order:
-    ```
-    ui-protocol          1.0.x -> 1.1.0
-    entities             1.0.x -> 1.1.0
-    adapters             1.0.x -> 1.1.0
-    rename-options       1.0.x -> 1.1.0
-    layer-modes          1.0.x -> 1.1.0
-    adopt-baseline       1.0.x -> 1.1.0
-    provenance-v2        1.1.x -> 1.2.0
-    auth-keycloak-to-platform-auth  1.1.x -> 1.2.0
-    ```
-
-17. Run all applicable migrations at once:
-    ```bash
-    forge --migrate --dry-run                 # preview all
-    forge --migrate                           # apply all
-    forge --migrate --migrate-skip adapters   # skip one
-    ```
-
-### 3.5 Stale `.forge/lock` files
-
-18. If `forge --update` fails with `"Another forge --update is running"` but no other process is active, the lock file is stale (crashed previous run):
-    ```bash
-    cat .forge/lock   # shows {"pid": ..., "started": "..."}
-    # Verify the PID is dead:
-    ps -p <pid> || echo "dead"
-    rm .forge/lock
-    ```
-    Note: forge automatically reclaims stale locks when the owning PID is no longer alive. Manual removal is only needed if PID liveness detection fails (e.g., the PID was recycled).
+Review applicable migration output and [upgrade notes](../../UPGRADING.md), then
+apply the intended migration without `--dry-run`. A schema-version migration is
+not proof that a project's custom runtime is safe to protect or regenerate.
 
 ---
 
@@ -257,7 +213,7 @@ The PR/push pipeline runs these jobs. A failure in one does not cancel the other
    ```
    If the canary alone fails, the fix is bumping the `ty` pin in `pyproject.toml` via the `ty-upgrade` workflow.
 
-4. **`test`** -- pytest on ubuntu + windows, Python 3.13. Excludes `e2e`, `package_integrity`, `fuzz`, and `golden_snapshot` markers:
+4. **`test`** -- pytest on Ubuntu, macOS, and Windows, Python 3.13. Excludes `e2e`, `package_integrity`, `fuzz`, and `golden_snapshot` markers:
    ```bash
    uv run pytest -m "not e2e and not package_integrity and not fuzz and not golden_snapshot" -n auto
    ```
@@ -306,7 +262,7 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
     uv run python tests/matrix/runner.py --scenario <name> --lane roundtrip
     ```
 
-12. **Lane E (update)** -- `forge --update` + `forge --harvest` end-to-end. Tests all three update modes (`merge`, `skip`, `overwrite`) against an edited fragment-authored file. ~2-4 min/scenario:
+12. **Lane E (update)** -- `forge --update` + `forge --harvest` end-to-end. Tests legacy update modes (`merge`, `skip`, `overwrite`) against an edited fragment-authored file. Ownership-managed projects reject overwrite/partial modes and have separate generated-quality acceptance tests. ~2-4 min/scenario:
     ```bash
     uv run python tests/matrix/runner.py --scenario <name> --lane update
     ```
@@ -340,3 +296,13 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
 23. **`Extract changelog section` fails in `release.yml`** -- the `[Unreleased]` section in `CHANGELOG.md` is empty or missing. Add release notes under `[Unreleased]` and retag.
 
 24. **Nightly `publish-dashboard` shows "no lanes ran"** -- the `gate` job filtered everything out. Check whether `scenarios.yaml` has scenarios with the expected `lanes` entries, or whether a label-triggered run used the wrong label.
+
+
+## Generated quality failures
+
+The `generated-quality` workflow has policy checks on Windows/Linux and selected
+Python/Node/Rust/Vue/Svelte native rendered lanes. Read the failing subject and
+suite, its native report, and its source hashes before changing code. Missing or
+stale reports require rerunning the suite; coverage failures require behavior
+coverage. Do not weaken exclusions, ownership, or thresholds to make a run green.
+The [quality guide](generated-code-quality.md) defines what each check establishes.

@@ -37,7 +37,7 @@ the `ValueError` from `register_injector` into `PluginError(code=PLUGIN_COLLISIO
 — matches the pattern from `add_option` / `add_service`.
 
 ### 6. Documentation example (ACCEPT)
-8-line example in `docs/plugin-development.md` is accurate + compiles.
+8-line example in `docs/guides/plugins.md` is accurate + compiles.
 
 ### 7. `docs/SDK_CHANGELOG.md` 1.2 section (ACCEPT — marked provisional)
 Codex notes A.2 + A.3 landing will require aggregating their additions

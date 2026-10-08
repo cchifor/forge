@@ -18,7 +18,7 @@
 
 > **What's new?**
 >
-> - **Generated-code quality gates** — protected generic runtime and schema output, safe ownership-aware updates, native unit/integration/E2E coverage strictly greater than 80% on changed code, and a shared Claude/Codex platform skill. `forge --recommend requirements.yaml --json` recommends supported service technologies from workloads and team constraints. See [the quality and migration guide](docs/generated-quality.md).
+> - **Generated-code quality gates** — protected generic runtime and schema output, safe ownership-aware updates, native unit/integration/E2E coverage strictly greater than 80% on changed code, and a shared Claude/Codex platform skill. `forge --recommend requirements.yaml --json` recommends supported service technologies from workloads and team constraints. See [the quality and migration guide](docs/operations/generated-code-quality.md).
 > - **Unreleased (1.2.0 draft) — layered component model (Vue 3)** — a composable three-layer component system layered on top of the option/fragment generator. **Layer-1** basic components (`EntityList` — a data-bound list; `StatCard` — a pure-UI KPI card), **Layer-2** composition, and **Layer-3** app templates (`Console` — left-nav + dashboard; `ChatFirst` — results surface above a docked agent chat). Components reach backend data only through a **data contract** that serves both greenfield (forge emits the backend slice) and brownfield (bind to an existing OpenAPI backend via `frontend.openapi_spec_url` + a non-Turing-complete transform DSL). Components compile to project-scoped, `target_frontends`-gated fragments through the existing appliers — no second generator. New CLI surface: `--component-cmd {list,scaffold}` (with `--component-name` / `--component-layer`) and `--template-cmd list`. Emitted contract types are gated by a real `vue-tsc` zero-error check, and `forge --update` re-runs frontend codegen into `apps/<frontend>/`. See [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md) (and [`ADR-009`](docs/architecture-decisions/ADR-009-component-layer-vs-parity-tier.md) on why `component_layer` is orthogonal to RFC-006 `parity_tier`).
 > - **Unreleased (1.2.0 draft) — bidirectional sync** — `forge --update` (forge → project) is now paired with `forge --harvest` (project → forge), so user edits to fragment-emitted blocks round-trip back as candidate patches against the live forge tree. Closes the FR1 / FR2 / RF1 round-trip invariants with a matrix nightly lane D gate. New CLI surface: `--harvest`, `--verify`, `--accept-harvested`, `--reapply-baseline`, `--emit-pr={github,branch}`, `--resolve` (interactive `.forge-merge` resolver). Tier-1 fragments emit cross-language parity suggestions on harvest; literal-only edits surface an `Option(...)` promotion suggestion via libcst AST analysis. Opt-in telemetry (`--telemetry={local,remote}`) writes JSONL events for verify / harvest / update / resolve. `forge --update` now also re-renders base templates when `_forge_template.toml` version differs (opt out with `--no-template-update`). See [`CHANGELOG.md`](CHANGELOG.md) for the per-verb breakdown.
 > - **Unreleased (1.2.0 draft)** — auth-stack rebuild: Gatekeeper as sole token authority (mints ES256 internal JWTs); per-language `platform-auth` SDKs for Python / Node / Rust with cross-SDK parity gate; BFF Redis sessions with two-key TTL atomicity; inactivity-driven session timeout (Vue / Svelte / Flutter composables); RFC 8693 token-exchange for on-behalf-of S2S delegation. See [`docs/auth-architecture.md`](docs/auth-architecture.md) for the model and [`UPGRADING.md`](UPGRADING.md#11--12--auth-stack-rebuild-unreleased) for the migration playbook.
@@ -32,11 +32,13 @@
 
 ---
 
+**[Documentation home](docs/README.md)** · [Platform overview](docs/architecture/overview.md) · [Getting started](docs/guides/getting-started.md) · [Agent workflow](docs/guides/agentic-usage.md)
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User([Human / AI agent]) -->|forge new<br/>or forge.yaml| CLI[forge CLI]
+    User([Human / AI agent]) -->|forge CLI<br/>or config file| CLI[forge CLI]
 
     subgraph Gen[Generation]
         CLI --> Resolver[Option → Fragment<br/>plan resolver]
@@ -73,9 +75,9 @@ flowchart LR
     Project ==>|docker compose up| Proj
 ```
 
-Generate a whole multi-service **system** in one command with the platform presets — `forge --platform {monolithic,microservices,headless-api,multitenant-saas}` assembles several services behind a shared auth/gateway stack (with S2S trust and, for the SaaS preset, per-tenant RLS isolation). See [`docs/platform-generator-guide.md`](docs/platform-generator-guide.md).
+Generate a whole multi-service **system** in one command with the platform presets — `forge --platform {monolithic,microservices,headless-api,multitenant-saas}` assembles several services behind a shared auth/gateway stack (with S2S trust and, for the SaaS preset, per-tenant RLS isolation). See [`docs/guides/platforms.md`](docs/guides/platforms.md).
 
-See [`docs/architecture.md`](docs/architecture.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/plugin-development.md`](docs/plugin-development.md)). The layered component model ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)) resolves selected components into the same fragment plan, so component outputs flow through this exact resolver → injector → codegen path rather than a parallel pipeline.
+See [`docs/architecture/generator.md`](docs/architecture/generator.md) for the internals (registries, injector backends, provenance, codegen). See [`docs/guides/getting-started.md`](docs/guides/getting-started.md) for the 10-minute tour. Built-in features live under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout — see [`docs/guides/plugins.md`](docs/guides/plugins.md)). The layered component model ([`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md)) resolves selected components into the same fragment plan, so component outputs flow through this exact resolver → injector → codegen path rather than a parallel pipeline.
 
 ---
 
@@ -119,7 +121,7 @@ The generated frontend's **app-shell layout** is selectable with `--layout` (or 
 forge --project-name shop --backend-language python --features products --frontend vue --layout topnav --yes
 ```
 
-Layouts are template variants composed over a shared base via a two-stage render; `sidebar` is the byte-identical baseline. Adding a layout is a drop-in (a `layout.toml` manifest + a thin overlay template) — see [`docs/frontend-layouts.md`](docs/frontend-layouts.md).
+Layouts are template variants composed over a shared base via a two-stage render; `sidebar` is the byte-identical baseline. Adding a layout is a drop-in (a `layout.toml` manifest + a thin overlay template) — see [`docs/guides/frontend-layouts.md`](docs/guides/frontend-layouts.md).
 
 ---
 
@@ -140,7 +142,7 @@ Everything configurable is an `Option` with a dotted path, a type (`bool` / `enu
 | Enterprise auth | all | [Keycloak](https://www.keycloak.org/) realm JSON validated at generate-time, [Gatekeeper](https://gatekeeper.readthedocs.io/) OIDC ForwardAuth, Traefik forward-auth middleware. |
 | `forge.toml` stamping | all | Project records forge version + template paths + fully-resolved option map; machine-readable for `forge --update`. |
 
-### Optional features — 31 options across six categories
+### Optional feature areas
 
 | Category | Options | Highlights |
 |---|---|---|
@@ -163,7 +165,7 @@ These options orchestrate generation rather than enabling a fragment bundle. Doc
 | `database.mode` / `database.engine` | enum / enum | `generate` / `postgres` | Provisions Postgres + alembic + SQLAlchemy session by default; `none` skips the DB stack for stateless services. |
 | `frontend.mode` | enum | `generate` | `generate` / `external` / `none` — orchestrates the per-framework Copier render. |
 | `frontend.api_target.type` / `frontend.api_target.url` | enum / str | `local` / `""` | Pair drives whether the Vite proxy hits a Docker-internal backend or an external API base URL. |
-| `agent.mode` | enum | `none` | Phase C placeholder for the agentic-stack discriminator; mirrors the other layer modes' shape. |
+| `agent.mode` | enum | `none` | Select `none`, `llm_only`, or `tool_calling` with supported backend capabilities; `multi_agent` is registered but unimplemented. |
 
 Introspect the **live** registry anytime with `forge --list` (plugin-aware), `forge --describe <path>`, or `forge --schema` (JSON Schema 2020-12) — these include any third-party plugin options that the bundled `docs/FEATURES.md` doesn't.
 
@@ -172,7 +174,7 @@ Introspect the **live** registry anytime with `forge --list` (plugin-aware), `fo
 ## Prerequisites
 
 - **[uv](https://docs.astral.sh/uv/)** (latest) — forge ships as a uv tool. The installer bootstraps it if missing.
-- **Python ≥ 3.11** — only if you want to regenerate or contribute. End users never need Python directly.
+- **Python ≥ 3.13** — only if you want to regenerate or contribute. End users never need Python directly.
 - **[Git](https://git-scm.com/)** — forge initialises a git repo in every generated project.
 - **[Docker](https://www.docker.com/) + Compose v2** — required to run the generated stack.
 - **Conditional toolchains for the backend / frontend you pick:** [Node.js](https://nodejs.org/) ≥ 22, [Rust](https://rustup.rs/) stable, [Flutter](https://docs.flutter.dev/get-started/install) ≥ 3.19.
@@ -205,7 +207,7 @@ Three commands. Zero assumptions about prior toolchain install — the installer
 
 Your services now answer on `http://app.localhost`, Keycloak on `http://localhost:18080`, and the [Traefik](https://traefik.io/) dashboard on `http://localhost:19090`. Everything is wired.
 
-Stuck on install or generation? See [`docs/troubleshooting.md`](docs/troubleshooting.md) for common gotchas with copy-paste fixes, or run `forge --doctor` to introspect the live environment.
+Stuck on install or generation? See [`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md) for common gotchas with copy-paste fixes, or run `forge --doctor` to introspect the live environment.
 
 ---
 
@@ -293,16 +295,15 @@ options:
 forge --config stack.yaml --yes --no-docker --json
 ```
 
-Expected output on stdout (progress goes to stderr):
+Selected fields from the final JSON envelope (Copier/native progress may precede it on stdout; other report fields are omitted here):
 
 ```json forge-json-success
 {
   "project_root": "/home/ada/my-shop",
   "backends": [
-    {"name": "backend", "dir": "/home/ada/my-shop/backend", "language": "python", "port": 5000}
+    {"name": "backend", "language": "python", "port": 5000}
   ],
-  "backend_dir": "/home/ada/my-shop/backend",
-  "frontend_dir": "/home/ada/my-shop/frontend",
+  "frontend_dir": "/home/ada/my-shop/apps/frontend",
   "framework": "vue",
   "features": ["products", "orders", "customers"]
 }
@@ -310,7 +311,7 @@ Expected output on stdout (progress goes to stderr):
 
 ### AI-agent / stdin pathway
 
-forge's CLI is designed so an autonomous coding agent can generate a project without touching the filesystem first. Pipe a JSON or YAML spec straight in and parse the JSON envelope that comes back.
+Pipe YAML or JSON configuration on stdin for headless generation. Use the shared [Codex/Claude workflow](docs/guides/agentic-usage.md); generation subprocess logs may precede the final JSON envelope, so retain the log and process exit status instead of parsing the entire stdout stream as one JSON document.
 
 ```bash forge-stdin-pipe-ai-agent
 echo '{
@@ -321,13 +322,12 @@ echo '{
 }' | forge --config - --yes --no-docker --json
 ```
 
-Exit codes are strict and machine-friendly:
+Commands report process status and structured results. See the [CLI reference](docs/reference/cli.md#exit-status) for command-specific error statuses; quality failures use code 12. Common generation outcomes:
 
 | Code | Meaning |
 |---|---|
 | `0` | Project generated successfully. stdout contains the success envelope. |
-| `1` | User aborted at a prompt (only reachable without `--yes`). |
-| `2` | Config, validation, or generation error. stdout is the error envelope; stderr has the human message. |
+| `2` | Config, validation, or generation error. inspect the error envelope and logs; some error classes use codes 3–8. |
 
 On failure you'll see:
 
@@ -525,46 +525,45 @@ forge --plugins list
 #       adds: 1 option(s), 1 fragment(s)
 ```
 
-The plugin's options now show up in `forge --list` / `--describe` / `--schema` and are settable via `--set` or `options:` in your YAML config exactly like built-ins. See [`docs/plugin-development.md`](docs/plugin-development.md) and [`examples/forge-plugin-example/`](examples/forge-plugin-example/) to author one.
+The plugin's options now show up in `forge --list` / `--describe` / `--schema` and are settable via `--set` or `options:` in your YAML config exactly like built-ins. See [`docs/guides/plugins.md`](docs/guides/plugins.md) and [`examples/forge-plugin-example/`](examples/forge-plugin-example/) to author one.
 
 ### Upgrading forge itself
 
 Forge ships as a `uv` tool, so `uv tool upgrade` is the canonical path:
 
 ```bash forge-tool-upgrade
-uv tool upgrade forge
+uv tool upgrade forge-cli
 ```
 
 Existing generated projects are unaffected until you opt in via `forge --update` (next section). The forge version that originally generated each project is recorded in `forge.toml`, so a future `forge --update` knows which migrations to run.
 
 ### Regenerating later (including new features)
 
-forge stamps every generated project with `forge.toml` (forge version, per-template paths, fully-resolved `[forge.options]` map, per-file `[forge.provenance]` SHA baselines, per-block `[forge.merge_blocks]` records) and writes a `.copier-answers.yml` inside every rendered subtree — enough to reconstruct the original generation intent. Upgrading an existing project is one command:
+New projects record provenance and file ownership in `forge.toml`, with a portable
+generator/plugin recipe in `.forge/quality.json`. After reviewing the intended
+Forge upgrade, preview and apply the same ownership-aware transaction:
 
 ```bash forge-update
 cd my_platform
-forge --update        # default: --mode merge — three-way decide vs the manifest baseline
+forge --plan-update --project-path . --json
+forge --update --project-path . --json
 ```
 
-**`forge --update` is idempotent and merge-aware.** Every snippet it injects is wrapped in `# FORGE:BEGIN <fragment>:<marker>` / `# FORGE:END` sentinels, so injection-block re-runs are either a no-op (nothing changed upstream), a clean replacement (the fragment moved), or a `.forge-merge` sidecar (you edited the block + the fragment moved). At the **file** level, P0.1 (1.1.0-alpha.2) extended the same three-way decision to whole files copied verbatim from a fragment's `files/` tree: a clean upstream change applies; a user-edited-and-then-fragment-moved file emits a `<target>.forge-merge` sidecar (or `.forge-merge.bin` for binary assets) and leaves the target untouched for you to resolve.
+Protected runtime edits and user-file collisions stop the update. Untouched
+scaffolds may receive improvements; customized scaffolds can produce
+`.forge-merge` proposals without advancing the generation baseline. Review each
+proposal, merge it if needed, acknowledge `keep` or `replace` with
+`forge --quality resolve`, then rerun the update and quality suites.
 
-Three update modes via `--mode`:
-
-```bash forge-update-modes
-forge --update                   # default: --mode merge (three-way decide; sidecars on conflict)
-forge --update --mode skip       # pre-1.1 behaviour: preserve any pre-existing destination
-forge --update --mode overwrite  # the escape hatch: fragment content wins
-```
-
-Preview before committing — `forge --plan-update` walks the same logic without writing, returning a per-file decision report (also `--json` and `--graph`-aware). Surgically remove a fragment with `forge --remove-fragment NAME` (flips its enabling option to default and runs the provenance-driven uninstaller). Schema-breaking upgrades across forge minors are handled by the registered codemods at `forge --migrate` (`rename-options`, `layer-modes`, `ui-protocol`, `entities`, `adapters`, plus `adopt-baseline` for projects from before SHA tracking).
-
-Conflict review — `forge --resolve` walks every `.forge-merge` sidecar interactively (`accept` / `reject` / `edit` via `$EDITOR` with diff3 markers / `skip` / `quit` per sidecar). Re-stamps `forge.toml`'s `[forge.merge_blocks]` / `[forge.provenance]` for each resolution.
-
-Template-level changes (base-template Jinja rewrites rather than fragment updates) now flow through `forge --update` automatically. Each built-in template ships `_forge_template.toml` with a `[template].version`; when the project's recorded version differs from the live template, the updater invokes `copier.run_update` per affected backend / frontend, then re-applies fragments on top. Copier-emitted `.rej` files are converted to `.forge-merge` sidecars so `forge --resolve` covers them too. Opt out with `forge --update --no-template-update` to preserve pre-1.2 fragment-only behavior.
+Legacy projects without a quality recipe keep their older file/zone merge modes.
+Ownership-managed projects reject overwrite and partial-template modes. Use the
+[customization and migration guide](docs/guides/customization.md) for public
+extension points, conflict resolution, and reviewed topology changes. Do not
+edit ownership or provenance hashes to approve a generic-runtime override.
 
 ### Harvesting user edits back into forge
 
-`forge --update` keeps a project on the **latest** forge templates. The reverse direction — propagating a user's edits to fragment-emitted blocks back into forge's source tree — is `forge --harvest`. It walks `forge.toml`'s `[forge.provenance]` and `[forge.merge_blocks]`, three-way-decides each block against its recorded baseline + the upstream template, and emits a bundle of candidate patches (`bundle.json` + per-candidate diff files under `.forge-bundle/`):
+`forge --update` moves a project to the deliberately selected generator version. Harvest does not permit local overrides of protected runtime. The reverse direction — propagating a user's edits to fragment-emitted blocks back into forge's source tree — is `forge --harvest`. It walks `forge.toml`'s `[forge.provenance]` and `[forge.merge_blocks]`, three-way-decides each block against its recorded baseline + the upstream template, and emits a bundle of candidate patches (`bundle.json` + per-candidate diff files under `.forge-bundle/`):
 
 ```bash forge-harvest
 cd my_platform
@@ -592,25 +591,34 @@ Looking for more sophisticated examples? See [`examples/`](examples/) for curate
 
 ## Documentation
 
+Start at the [documentation home](docs/README.md) for task-based navigation and the documentation structure. Current guides are separate from preserved ADRs, RFCs, and dated implementation plans.
+
 | Topic | File |
 |---|---|
-| 10-minute tour from install to running stack | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
+| Platform functionality, technologies, and runtime flows | [Platform overview](docs/architecture/overview.md) |
+| Workload-based language choices | [Technology selection](docs/guides/technology-selection.md) |
+| Codex and Claude workflows | [Agent usage](docs/guides/agentic-usage.md) |
+| Public extensions and safe upgrades | [Customization](docs/guides/customization.md) |
+| Architecture and unit/integration/E2E coverage gates | [Generated-code quality](docs/operations/generated-code-quality.md) |
+| CLI commands and status handling | [CLI reference](docs/reference/cli.md) |
+| Plans and design history | [Plan index](docs/plans/README.md) |
+| First application from install to running stack | [`docs/guides/getting-started.md`](docs/guides/getting-started.md) |
 | **Canonical option catalog** (per-option reference, auto-generated from `OPTION_REGISTRY`) | [`docs/FEATURES.md`](docs/FEATURES.md) |
-| Internal architecture (registries, injectors, codegen, provenance) | [`docs/architecture.md`](docs/architecture.md) |
+| Internal architecture (registries, injectors, codegen, provenance) | [`docs/architecture/generator.md`](docs/architecture/generator.md) |
 | Layered component model (three layers + data contracts, Vue 3) | [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md) |
-| Authoring a third-party plugin | [`docs/plugin-development.md`](docs/plugin-development.md) |
-| Adding a backend language | [`docs/adding-a-backend.md`](docs/adding-a-backend.md) |
-| Adding a frontend framework | [`docs/adding-a-frontend.md`](docs/adding-a-frontend.md) |
-| Common install / update gotchas | [`docs/troubleshooting.md`](docs/troubleshooting.md) |
-| Tracked limitations + workarounds | [`docs/known-issues.md`](docs/known-issues.md) |
-| MCP support | [`docs/mcp.md`](docs/mcp.md) |
-| Testing generated backends | [`docs/testing-generated-backends.md`](docs/testing-generated-backends.md) |
-| Windows-specific dev notes | [`docs/WINDOWS_DEV.md`](docs/WINDOWS_DEV.md) |
-| Maintainer onboarding (deeper internals) | [`docs/MAINTAINER_ONBOARDING.md`](docs/MAINTAINER_ONBOARDING.md) |
+| Authoring a third-party plugin | [`docs/guides/plugins.md`](docs/guides/plugins.md) |
+| Adding a backend language | [`docs/guides/adding-a-backend.md`](docs/guides/adding-a-backend.md) |
+| Adding a frontend framework | [`docs/guides/adding-a-frontend.md`](docs/guides/adding-a-frontend.md) |
+| Common install / update gotchas | [`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md) |
+| Tracked limitations + workarounds | [`docs/reference/limitations.md`](docs/reference/limitations.md) |
+| MCP support | [`docs/reference/mcp.md`](docs/reference/mcp.md) |
+| Testing generated backends | [`docs/guides/testing-backends.md`](docs/guides/testing-backends.md) |
+| Windows-specific dev notes | [`docs/guides/windows.md`](docs/guides/windows.md) |
+| Maintainer onboarding (deeper internals) | [`docs/guides/maintainer-onboarding.md`](docs/guides/maintainer-onboarding.md) |
 | Plugin SDK changelog | [`docs/SDK_CHANGELOG.md`](docs/SDK_CHANGELOG.md) |
 | Coverage policy + per-module floors | [`docs/coverage-policy.md`](docs/coverage-policy.md) |
-| Tier 1/2/3 backend parity status | [`docs/matrix-status.md`](docs/matrix-status.md) |
-| Telemetry privacy contract + event schema | [`docs/telemetry.md`](docs/telemetry.md) |
+| Tier 1/2/3 backend parity status | [`docs/operations/validation-matrix.md`](docs/operations/validation-matrix.md) |
+| Telemetry privacy contract + event schema | [`docs/reference/telemetry.md`](docs/reference/telemetry.md) |
 
 ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/architecture-decisions/); RFCs under [`docs/rfcs/`](docs/rfcs/).
 
@@ -620,8 +628,8 @@ ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/a
 
 - **Issue tracker:** [github.com/cchifor/forge/issues](https://github.com/cchifor/forge/issues) — bug reports, feature requests, roadmap suggestions.
 - **Discussions:** [github.com/cchifor/forge/discussions](https://github.com/cchifor/forge/discussions) — questions, show-and-tell, architectural back-and-forth.
-- **Troubleshooting:** [`docs/troubleshooting.md`](docs/troubleshooting.md) — common install / generation / update / packaging gotchas with step-by-step fixes.
-- **Known issues:** [`docs/known-issues.md`](docs/known-issues.md) — tracked limitations with workarounds.
+- **Troubleshooting:** [`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md) — common install / generation / update / packaging gotchas with step-by-step fixes.
+- **Known issues:** [`docs/reference/limitations.md`](docs/reference/limitations.md) — tracked limitations with workarounds.
 - **Changelog:** release-to-release deltas live in [`CHANGELOG.md`](CHANGELOG.md).
 - **Security reports:** please open a private advisory via [GitHub Security Advisories](https://github.com/cchifor/forge/security/advisories/new) — don't file vulnerabilities as public issues.
 
@@ -644,11 +652,11 @@ ADRs (architecture decisions) live under [`docs/architecture-decisions/`](docs/a
 | **Considered** | Template render cache | Memoise repeated `_common/` template renders across multi-backend projects to cut wall-clock on big stacks. |
 | **Shipped** | Layered component model (Vue 3) | Composable three-layer system (Layer-1 basic / Layer-2 composed / Layer-3 templates) on top of option→fragment generation. Components consume a data contract — greenfield (forge emits the backend slice) or brownfield (bind an existing OpenAPI backend via `frontend.openapi_spec_url` + a non-Turing-complete transform DSL) — and compile to project-scoped, `target_frontends`-gated fragments through the existing appliers. Seeds: `EntityList` + `StatCard` (L1), `Console` + `ChatFirst` (L3). CLI: `--component-cmd {list,scaffold}`, `--template-cmd list`. Emitted contract types gated by a real `vue-tsc` zero-error check; `forge --update` re-runs frontend codegen into `apps/<frontend>/`. See [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md). (1.2.0 unreleased) |
 | **Shipped** | Bidirectional sync — `forge --harvest` / `--verify` / `--resolve` / `--emit-pr` | Reverse-direction sync: user edits to fragment-emitted blocks round-trip back as candidate patches against the live forge tree. Three-way merge with symbolic outcomes; `.forge-merge` sidecars on conflict; interactive resolver TUI. Cross-language harvest parity emits sibling-impl suggestions for tier-1 fragments. AST-level literal detection (libcst) flags pure literal swaps as Option-promotion candidates with proposed `Option(...)` declarations. Round-trip invariants FR1 / FR2 / RF1 codified as pytest tests + matrix lane D nightly gate. Six new CLI verbs (`--harvest`, `--verify`, `--accept-harvested`, `--reapply-baseline`, `--emit-pr`, `--resolve`). (1.2.0 unreleased) |
-| **Shipped** | Copier base-template re-renders in `forge --update` | Each built-in template now ships `_forge_template.toml` with a `[template].version`. `forge --update` detects version drift and invokes `copier.run_update` per affected backend / frontend, converting Copier `.rej` output to `.forge-merge` sidecars consumable by `forge --resolve`. Opt out with `--no-template-update`. Closes the last "out of scope" item that left users running `cd backend && copier update` manually. (1.2.0 unreleased) |
-| **Shipped** | Opt-in telemetry | `--telemetry={off,local,remote}` activates per-verb event emission (verify / harvest / update / accept-harvested / reapply-baseline / emit-pr / resolve). Local sink writes `~/.forge/telemetry.jsonl`; remote POSTs to `$FORGE_TELEMETRY_ENDPOINT` (2s timeout, fire-and-forget). `--telemetry-fields={minimal,full}` filters PII-bearing fields for remote sinks. Schema documented in [`docs/telemetry.md`](docs/telemetry.md). Default OFF. (1.2.0 unreleased) |
+| **Shipped** | Legacy Copier base-template re-renders in `forge --update` | For projects without a quality recipe, each built-in template now ships `_forge_template.toml` with a `[template].version`. `forge --update` detects version drift and invokes `copier.run_update` per affected backend / frontend, converting Copier `.rej` output to `.forge-merge` sidecars consumable by `forge --resolve`. Opt out with `--no-template-update`. Closes the last "out of scope" item that left users running `cd backend && copier update` manually. (1.2.0 unreleased) |
+| **Shipped** | Opt-in telemetry | `--telemetry={off,local,remote}` activates per-verb event emission (verify / harvest / update / accept-harvested / reapply-baseline / emit-pr / resolve). Local sink writes `~/.forge/telemetry.jsonl`; remote POSTs to `$FORGE_TELEMETRY_ENDPOINT` (2s timeout, fire-and-forget). `--telemetry-fields={minimal,full}` filters PII-bearing fields for remote sinks. Schema documented in [`docs/reference/telemetry.md`](docs/reference/telemetry.md). Default OFF. (1.2.0 unreleased) |
 | **Shipped** | Auth-stack rebuild — `platform-auth` model | Gatekeeper as sole token authority (mints ES256 internal JWTs, ``/auth/jwks`` endpoint, BFF Redis sessions with two-key TTL, `/auth/token` for client_credentials + RFC 8693 token-exchange). Per-language verifier SDKs — Python (`platform-auth`), Node (`@forge/platform-auth-node`), Rust (`platform-auth`) — each with `AuthGuard`, multi-issuer `JWKSCache` with stale-serve, scope matching with wildcards, `MayActPolicy`, `IssuerTrustMap`, per-decision audit callback (cross-language record shape pinned), test-token minter. Backend service-template middleware fragments wire each SDK into FastAPI / Fastify / Axum. Frontend session-timeout composables for Vue / Svelte / Flutter implement the BFF + inactivity-timeout SPA pattern (drift-immune countdown, BroadcastChannel cross-tab dedup, visibility gating, 30s activity debounce). Frontend fragments framework-gated via the new `Fragment.target_frontends` field — no orphan files in non-matching projects. Cross-language correctness gated by 21-scenario shared parity spec at `forge/tests/contract/auth_sdk_parity/`. See [`docs/auth-architecture.md`](docs/auth-architecture.md). (1.2.0 unreleased) |
 | **Shipped** | Cross-SDK parity contract | Single canonical scenario spec (`forge/tests/contract/auth_sdk_parity/scenarios.py`) — 21 frozen-dataclass scenarios covering happy paths, alg/kid rejection, expiry, audience mismatch, multi-audience accept, issuer trust + tenant suspension, missing/non-UUID tenant claim, jti revocation, RFC 8693 act-chain (one-hop / unauthorized actor / too-deep), custom-claim-name configurability, claim-name-mismatch rejection, optional tenant-slug extraction. Per-language runners (Python / Node / Rust) consume the spec and assert their SDK matches; the Rust orchestrator also drives a Tower-stack integration test (`integration_axum.rs`) and an audit-callback test (`audit_callback.rs`, 5 cases including tenant-slug propagation) for layer-composition + record-shape coverage the bare verifier can't exercise. Caught: cross-SDK `StaticMayActPolicy` keying drift (Node + Rust rekeyed to Python's `audience → actors`); three testing-helper drifts (Rust `role_claim` → `roles_claim`, Node `roleClaim` → `rolesClaim`, Python missing configurability — all aligned to plural). (1.2.0 unreleased) |
-| **Shipped** | File-level three-way merge for `--update` | `forge.merge.file_three_way_decide` extends the merge-zone semantics to whole `files/` trees; `.forge-merge` sidecars on conflict; `--mode={merge,skip,overwrite}` opt-out. (1.1.0-alpha.2) |
+| **Shipped** | Legacy file-level three-way merge for `--update` | `forge.sync.merge.file_three_way_decide` extends the merge-zone semantics to whole `files/` trees; `.forge-merge` sidecars on conflict; `--mode={merge,skip,overwrite}` opt-out. (1.1.0-alpha.2) |
 | **Shipped** | `forge --plan-update` + `forge --remove-fragment` | Dry-run preview of the next `--update` (per-file decisions, uninstall set) and a thin wrapper that disables a fragment by flipping its enabling option to default. (1.1.0-alpha.2) |
 | **Shipped** | Declarative `compose.yaml` snippets in fragments | `forge.services.fragment_compose` parses per-fragment YAML into the existing `SERVICE_REGISTRY`; additive to the imperative compose template. (1.1.0-alpha.2) |
 | **Shipped** | `forge --plan --graph` Mermaid plan renderer | Option → fragment edges + depends_on edges as a Mermaid `graph TD`; closes the "why is fragment X applied?" loop. (1.1.0-alpha.2) |
@@ -693,7 +701,7 @@ make check      # ruff lint + ruff format --check + ty typecheck + pytest (~10s)
 - **Typechecker:** `uv run ty check forge/` (forge's typechecker of choice — not mypy).
 - **Test runner:** `uv run pytest -m "not e2e"` must be green. Full e2e with `make e2e` (requires `uv`, `npm`, `cargo`, `git` on PATH). Generated projects ship a [Playwright](https://playwright.dev/) suite; forge itself has no browser tests.
 - **Commit style:** [Conventional Commits](https://www.conventionalcommits.org/), imperative mood, subject line ≤ 50 chars, no AI co-author trailer. One logical change per PR.
-- **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md). Pick (or create) a feature namespace under `forge/features/<ns>/`, register the `Option` in its `options.py`, register the matching `Fragment` in its `fragments.py` (with its `FragmentImplSpec` pointing at `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`), drop files under `forge/features/<ns>/templates/<name>/<backend>/`, extend the registry invariants test in `tests/test_options.py`, and regenerate the option catalog with `uv run python tools/gen_features_doc.py` (the `tests/test_features_doc_in_sync.py` gate fails the build if you forget). Built-in features follow the same on-disk layout third-party plugins use — see [`docs/plugin-development.md`](docs/plugin-development.md).
+- **Adding an option + fragment:** follow the author guide at [`docs/FEATURES.md`](docs/FEATURES.md). Pick (or create) a feature namespace under `forge/features/<ns>/`, register the `Option` in its `options.py`, register the matching `Fragment` in its `fragments.py` (with its `FragmentImplSpec` pointing at `Path(__file__).resolve().parent / "templates" / "<name>" / "<backend>"`), drop files under `forge/features/<ns>/templates/<name>/<backend>/`, extend the registry invariants test in `tests/test_options.py`, and regenerate the option catalog with `uv run python tools/gen_features_doc.py` (the `tests/test_features_doc_in_sync.py` gate fails the build if you forget). Built-in features follow the same on-disk layout third-party plugins use — see [`docs/guides/plugins.md`](docs/guides/plugins.md).
 
 CI runs the full matrix — Ubuntu + Windows, Python 3.13 — on every push and PR. Nightly e2e runs on Ubuntu against Python 3.13.
 
@@ -717,11 +725,11 @@ MIT — see [`LICENSE`](LICENSE).
 
 Active development, weekly cadence.
 
-- **Today:** 63 Options registered across product categories (Observability / Reliability / Async Work / Conversational AI / Knowledge / Platform) plus a Layer-composition mode set + the new `auth.mode` discriminator, backed by **107 template fragments** including 11 in the new `auth/` namespace (Python / Node / Rust SDK ports, Gatekeeper as token authority + signing-key init service, per-language service middleware wirings, Vue / Svelte / Flutter session-timeout composables) — broken down by RFC-006 parity tier as **24 tier-1 cross-backend** (Python + Node + Rust), **8 tier-2 best-effort**, and **75 tier-3 Python-only** (pydantic-ai / LLM SDK / vector-store ecosystem; SDK-port ports). `forge --list` shows each option's tier so operators picking Node or Rust see upfront which knobs apply. Built-in features are colocated under `forge/features/<ns>/` (one directory per namespace, mirroring the third-party plugin layout). **1500+ tests passing**, including a 20-scenario cross-SDK parity gate (`forge/tests/contract/auth_sdk_parity/`) that runs Python / Node / Rust SDKs against the same JWT inputs and asserts matching outcomes. CI green on Linux + Windows against Python 3.13. Critical-path coverage gates enforce per-module floors (`forge/merge.py` 92%, `forge/updater.py` 83%, `forge/capability_resolver.py` 96%, plus six others — see [`docs/coverage-policy.md`](docs/coverage-policy.md)).
+- **Current surface:** Python, Node, and Rust backends; Vue, Svelte, and Flutter frontends; registered platform/auth/AI capabilities with backend-specific support. Inspect `forge --list --format json` and the [option catalog](docs/FEATURES.md) for the live registry. Generator tests run on Linux, macOS, and Windows; rendered applications, platform boot, and cross-SDK parity are covered by separate CI lanes. Read [capability limits](docs/reference/limitations.md) and current workflow results rather than treating historical counts as validation.
 - **API stability:** 1.1.x adds merge-mode `forge --update` plus the plugin-SDK e2e gate. The `forge.api` plugin-registration surface carries a stable-API "Since" / "Compatibility" table per symbol; breaking changes between minors are still possible and called out in [`CHANGELOG.md`](CHANGELOG.md).
 - **Production-ready today:** the Foundation, Observability (`observability.tracing` + `observability.otel`), and Reliability categories (`middleware.correlation_id` / `middleware.rate_limit` / `middleware.security_headers` / `middleware.pii_redaction` / `reliability.connection_pool`); Async Work task queue + `queue.backend` port; most of the Platform category (`platform.admin`, `platform.webhooks`, `platform.cli_extensions`, `platform.agents_md`, `security.csp`); the Layer-composition discriminators (`backend.mode`, `frontend.mode`, `database.mode`).
 - **`auth.mode` (1.2.0 unreleased):** the Gatekeeper-as-sole-token-authority model — Python / Node / Rust verifier SDKs with cross-SDK parity gate; BFF Redis sessions with two-key TTL atomicity; ES256 algorithm-pinned JWT verification; RFC 8693 token-exchange S2S; inactivity-driven session timeout (Vue / Svelte / Flutter SPA composables). Structurally complete and parity-verified; the cutover from forge's pre-1.2 Keycloak-direct stack ships via `forge --migrate auth-keycloak-to-platform-auth`. See [`docs/auth-architecture.md`](docs/auth-architecture.md) and the [`UPGRADING.md`](UPGRADING.md#11--12--auth-stack-rebuild-unreleased) migration playbook.
 - **Layered components (1.2.0 unreleased):** a composable three-layer component model (Vue 3) sits atop the option/fragment generator — Layer-1 basic components (`EntityList`, `StatCard`), Layer-3 app templates (`Console`, `ChatFirst`), and a data-contract seam serving greenfield + brownfield (OpenAPI-bound) projects. `--component-cmd` / `--template-cmd` manage them; emitted contract types are gated by a real `vue-tsc` check and re-rendered by `forge --update`. See [`ADR-010`](docs/architecture-decisions/ADR-010-layered-component-model.md).
 - **Use with awareness:** Conversational AI (agent platform) and Knowledge (RAG) are marked `experimental` — the interfaces work, but expect minor adjustments as pydantic-ai and the vector-store clients evolve.
-- **Upgrade pathway:** `forge --update` defaults to `--mode merge` — file-copy collisions go through three-way decide vs the manifest baseline, conflicts emit `.forge-merge` sidecars. `forge --plan-update` previews the decisions before committing; `forge --remove-fragment NAME` runs the provenance-driven uninstaller; `forge --migrate` carries projects across schema-breaking minor bumps. `.copier-answers.yml` remains per-subtree for `copier update`.
-- **v1.0 gates — all shipped:** documented extension API for third-party fragments (`forge.api` + `docs/plugin-development.md` + the P0.2 e2e gate); `Option.aliases` for safe path renames (Epic G + `migrate-rename-options` codemod); per-file SHA provenance + Epic-F uninstaller for file-level uninstall on update; curated `examples/` directory (see [`examples/forge-plugin-example/`](examples/forge-plugin-example/)).
+- **Upgrade pathway:** projects with `.forge/quality.json` use the ownership-aware `--plan-update` / `--update` transaction and explicit conflict resolution. Protected edits and collisions stop the operation. Older projects retain legacy merge modes until reviewed migration; see [customization](docs/guides/customization.md).
+- **v1.0 gates — all shipped:** documented extension API for third-party fragments (`forge.api` + `docs/guides/plugins.md` + the P0.2 e2e gate); `Option.aliases` for safe path renames (Epic G + `migrate-rename-options` codemod); per-file SHA provenance + Epic-F uninstaller for file-level uninstall on update; curated `examples/` directory (see [`examples/forge-plugin-example/`](examples/forge-plugin-example/)).

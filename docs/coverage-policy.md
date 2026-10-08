@@ -1,6 +1,10 @@
 # Coverage Policy
 
-Forge uses two layers of coverage gates:
+This policy covers the **Forge generator repository**. Generated applications
+have a separate [unit/integration/E2E coverage gate](operations/generated-code-quality.md#coverage-gate)
+requiring strictly greater than 80% on new lines per subject.
+
+Forge itself uses two layers of coverage gates:
 
 1. **Project-wide floor** — configured in `pyproject.toml` as `fail_under`.
    Catches outright regressions across the whole package.

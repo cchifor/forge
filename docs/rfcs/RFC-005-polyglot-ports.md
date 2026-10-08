@@ -189,7 +189,7 @@ Each adapter needs:
 ## Recommendation
 
 **Option C.** Accept that 1.0 overclaimed parity; document the gap
-honestly (done — `docs/known-issues.md` has a row); ship the Python
+honestly (done — `docs/reference/limitations.md` has a row); ship the Python
 depth + ops parity that's genuinely close; revisit polyglot ports in
 2.x when the port shapes are settled by 12+ months of Python
 production use.
