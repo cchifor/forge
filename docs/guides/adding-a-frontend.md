@@ -2,7 +2,7 @@
 
 This guide covers the steps to register a new frontend framework in forge,
 either as a core-shipped framework or as a plugin. It mirrors
-`docs/adding-a-backend.md` but focuses on the quirks specific to frontends
+`docs/guides/adding-a-backend.md` but focuses on the quirks specific to frontends
 (the `_subdirectory` contract, the `FrontendLayout` for codegen, and the
 generator's frontend dispatch).
 
@@ -31,7 +31,7 @@ A frontend is fully described by three pieces of metadata:
 3. **A `FrontendLayout`** (only if the framework participates in
    schema-first codegen) — the paths where generated UI-protocol types,
    canvas manifest, and shared enums land. See `forge/frontends.py` and
-   `docs/architecture.md` for the codegen pipeline that consumes these.
+   `docs/architecture/generator.md` for the codegen pipeline that consumes these.
 
 Core frontends (Vue, Svelte, Flutter) short-circuit the spec registry
 and use `TEMPLATE_DIRS` in `forge/generator.py`, but they still appear
@@ -118,7 +118,7 @@ custom doctor check).
 
 ## See also
 
-- `forge/config.py` — `FrontendSpec`, `frontend_uses_subdirectory`,
+- `forge/config/_frontend.py` — `FrontendSpec`, `frontend_uses_subdirectory`,
   `FRONTEND_SPECS`, `resolve_frontend_framework`.
 - `forge/frontends.py` — `FrontendLayout`, `FRONTEND_LAYOUTS`,
   `register_frontend_layout`.

@@ -83,7 +83,7 @@ neither Vue nor Svelte mirror.
    call. Today the asymmetry is undocumented and fragment authors
    discover it only when their frontend addition fails on Flutter.
    Concrete change: a new section in
-   `docs/plugin-development.md` titled "Frontend extensions" with a
+   `docs/guides/plugins.md` titled "Frontend extensions" with a
    minimal three-frontend example.
 
 The first reduces a real friction (RFC-007 alignment) without

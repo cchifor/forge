@@ -8,7 +8,7 @@
 ## Resolution
 
 - **Parallel migrate-Job safety (important)** — ADDRESSED. `jobs.yaml` and
-  `docs/DEPLOYMENT.md` now document that the shared hook-weight runs migrate Jobs
+  `docs/operations/deployment.md` now document that the shared hook-weight runs migrate Jobs
   in parallel, which is safe because each backend owns its own database, with
   guidance to use ascending weights for a shared DB.
 - **keycloak_port unused / zero-path Ingress (nits)** — no action: codex itself

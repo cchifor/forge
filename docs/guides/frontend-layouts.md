@@ -4,7 +4,7 @@ A generated frontend's **app-shell layout** — the arrangement of navigation,
 content, and panels — is selectable with `--layout` (CLI), `frontend.layout`
 (YAML), or the interactive prompt. Every layout is fully responsive
 (desktop / tablet / mobile) and is built by composing forge's reusable
-Layer-1/Layer-2 components (see [Layered components](../README.md#layered-components-vue-3)).
+Layer-1/Layer-2 components (see [Layered components](../../README.md#layered-components-vue-3)).
 
 > **Scope.** All six layouts ship for **Vue 3, Svelte 5, and Flutter**, and every
 > `(framework, layout)` builds in its generated container — Vue/Svelte via
@@ -56,7 +56,7 @@ forge --config forge.yaml --yes
 ```
 
 The choice is persisted in the project's `forge.toml` (`[forge.frontend].layout`)
-so `forge update` and harvest round-trips preserve it.
+so `forge --update` and harvest round-trips preserve it.
 
 ## Architecture
 
@@ -124,5 +124,5 @@ def register(api):
 
 ## See also
 
-- [Layered components (Vue 3)](../README.md#layered-components-vue-3)
+- [Layered components (Vue 3)](../../README.md#layered-components-vue-3)
 - [Adding a frontend](adding-a-frontend.md)

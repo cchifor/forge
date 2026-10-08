@@ -39,7 +39,7 @@ need cross-service auth.
 A worked invocation:
 
 ```bash
-forge --platform microservices --project-name shop --output-dir ./shop
+forge --platform microservices --project-name shop --output-dir . --yes --no-docker
 cd shop
 docker compose up --build         # gateway:5010, orders:5020, inventory:5030,
                                   # keycloak, gatekeeper, redis, postgres, vue
@@ -70,7 +70,7 @@ endpoint for a short-lived (≈5 min) ES256 JWT scoped to the audience
 `forge-services`; the callee verifies that JWT against the Gatekeeper's JWKS
 endpoint before trusting the request. The Gatekeeper — not Keycloak — is the
 sole internal issuer; Keycloak is the upstream identity provider for *end
-users*. See [`docs/auth-architecture.md`](auth-architecture.md) for the full
+users*. See [`docs/auth-architecture.md`](../auth-architecture.md) for the full
 token/JWKS/BFF-session design.
 
 > The synthesized service secrets are **deterministic** (derived from the
@@ -103,7 +103,8 @@ returns zero rows rather than leaking across tenants.
 ## Auth providers
 
 `auth.provider` (meaningful when `auth.mode=generate`) selects the token
-authority. No preset overrides it, so all four default to `gatekeeper`; change
+authority. No preset overrides it, so its registry default is `gatekeeper`; actual auth-stack emission also
+depends on the project/preset and auth selection. Change
 it with `--set auth.provider=<value>`:
 
 | Provider | What it generates | For |
@@ -129,8 +130,9 @@ any non-local deployment, rotate every item below. The relevant files are
   — regenerate; do not ship the in-tree example values.
 - **Synthesized S2S secrets** in `service_registry.yaml` — deterministic in dev;
   replace with unpredictable values (the file documents the re-hash flow).
-- **Signing keys** — the keygen sidecar writes an ECDSA P-256 keypair to a
-  named volume on first boot; rotate by deleting the volume and re-running.
+- **Signing keys** — the keygen sidecar writes an ECDSA P-256 keypair on first
+  development boot. For production rotation, use the active/pending/retiring key
+  lifecycle in the [deployment guide](../operations/deployment.md#signing-keys-es256-jwts); deleting a signing-key volume invalidates existing trust.
 - **`ENV`** — flip from `development` to `production` to activate the
   fail-closed guards.
 
@@ -147,13 +149,13 @@ Keycloak, and Traefik (`:80`) are host-exposed for the dev/test stack. In a real
 deployment, front the stack with Traefik (or your ingress) and do not publish
 the datastore or admin ports.
 
-See [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) for the production checklist and
-[`docs/OPERATIONAL_RUNBOOK.md`](OPERATIONAL_RUNBOOK.md) for operator workflows.
+See [`docs/operations/deployment.md`](../operations/deployment.md) for the production checklist and
+[`docs/operations/maintainer-runbook.md`](../operations/maintainer-runbook.md) for operator workflows.
 
 ## Where to go next
 
-- [`docs/auth-architecture.md`](auth-architecture.md) — the full auth stack
+- [`docs/auth-architecture.md`](../auth-architecture.md) — the full auth stack
   (Keycloak IdP, Gatekeeper authority, JWT/JWKS, BFF sessions, tenant claims).
-- [`docs/FEATURES.md`](FEATURES.md) — the option registry: every knob a preset
+- [`docs/FEATURES.md`](../FEATURES.md) — the option registry: every knob a preset
   sets (`auth.*`, `database.*`, `infrastructure.*`) with its type and default.
-- [`docs/GETTING_STARTED.md`](GETTING_STARTED.md) — first-project walkthrough.
+- [`docs/guides/getting-started.md`](getting-started.md) — first-project walkthrough.

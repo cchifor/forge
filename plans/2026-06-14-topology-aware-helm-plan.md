@@ -187,7 +187,7 @@ deploy/helm/
   (+ new `deploy_k8s` preset), `tests/matrix/scenarios.yaml` (+ `py_vue_k8s`),
   `.github/workflows/ci.yml` (+ `deploy-helm-lint` job), `tests/golden/snapshots/full_feature_max.json`
   (Wave-2 re-baseline).
-- **Docs:** `docs/DEPLOYMENT.md` (k8s/Helm section), `README.md` (folder tree + roadmap).
+- **Docs:** `docs/operations/deployment.md` (k8s/Helm section), `README.md` (folder tree + roadmap).
 
 ## Phasing (each wave independently green; never leaves generation red)
 
@@ -196,7 +196,7 @@ deploy/helm/
   k8s/hpa fragments; `init-db.sh`→`deploy/compose/`; new `deploy_k8s` golden preset (zero existing
   snapshots enable deploy, so no existing-snapshot churn); add `helm lint` + `helm template |
   kubeconform` CI job + `py_vue_k8s` scenario; Makefile + `deploy/k8s` derived target;
-  `docs/DEPLOYMENT.md`. **This is the user's actual ask.**
+  `docs/operations/deployment.md`. **This is the user's actual ask.**
 - **Wave 2 — `sdks/`→`packages/` (HIGH risk, atomic, isolated commit).** Keep the Docker build-context
   identifier literally `sdks` (only its host source dir → `./packages`) to slash blast radius; move
   the 77 fragment `files/sdks/` trees, deps resolver, compose context, matrix fixtures, and

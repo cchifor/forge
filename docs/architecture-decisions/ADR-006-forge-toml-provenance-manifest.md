@@ -208,7 +208,7 @@ Rejected because:
 - **Users must commit it.** A `.gitignore` that excludes `forge.toml`
   silently disables round-trip for that user's collaborators. We add a
   `.gitignore`-pattern check to `forge doctor` and document the
-  requirement prominently in `docs/round-trip.md`.
+  requirement prominently in `docs/architecture/round-trip.md`.
 - **Manifest format is a stability contract.** A breaking change to
   the schema requires an RFC (per the "RFC-cattle" policy
   in `CONTRIBUTING.md`). We've absorbed one bump (v1 → v2 in 1.2.0)
@@ -237,7 +237,7 @@ Rejected because:
 - `forge/sync/provenance.py` — the recording + classification
   primitives. Read the module docstring for the canonical statement of
   this design.
-- `docs/round-trip.md` — the user-facing invariants of bidirectional
+- `docs/architecture/round-trip.md` — the user-facing invariants of bidirectional
   sync.
 - `tests/test_harvest_invariants.py` — FR1-FR4 invariants that exist
   *because* of the manifest.
