@@ -15,6 +15,7 @@ Three layers:
 
 from __future__ import annotations
 
+import tomllib
 from argparse import Namespace
 from pathlib import Path
 
@@ -494,3 +495,40 @@ def test_explicit_proxy_survives_changed_preset_defaults(variant):
     assert [b.name for b in config.backends] == ["gateway", "orders"]
     assert config.backends[0].app_template == variant
     assert config.backends[0].depends_on == ["orders"]
+
+
+@pytest.mark.parametrize("preset", ["microservices", "headless-api"])
+def test_recorded_old_preset_preserves_gateway_on_update(preset, monkeypatch):
+    """Exercise persisted generation state, not just explicit config precedence."""
+    from forge.quality.model import read_recipe
+    from forge.sync.forge_to_project.updater import update_project
+    from forge.sync.manifest import read_forge_toml
+
+    # These manifests are verbatim from 18e748e, before direct-routing defaults.
+    fixture = Path(__file__).parent / "fixtures/platforms/before-direct-routing" / f"{preset}.toml"
+    raw = tomllib.loads(fixture.read_text(encoding="utf-8"))["platform"]
+    raw["backends"] = tuple(raw["backends"])
+    with monkeypatch.context() as old_presets:
+        old_presets.setitem(PLATFORM_TEMPLATES, preset, PlatformTemplate(**raw))
+        config = _build_config(_args(platform=preset), {"project_name": "existing-platform"})
+        config.validate()
+        root = generate(config, quiet=True, dry_run=True)
+
+    recorded = read_recipe(root)
+    expected = (
+        ["gateway", "orders", "inventory"] if preset == "microservices" else ["gateway", "orders"]
+    )
+    assert [be.name for be in recorded.backends] == expected
+    assert recorded.backends[0].app_template == "api-gateway"
+    assert read_forge_toml(root / "forge.toml").platform_template == preset
+    assert all(be.name != "gateway" for be in _build_config(_args(platform=preset), {}).backends)
+
+    result = update_project(root, quiet=True)
+    assert result["passed"], result
+    assert result["backends"] == expected
+    updated = read_recipe(root)
+    assert updated.backends == recorded.backends
+    assert updated.options["auth.service_discovery"] is True
+    services = yaml.safe_load((root / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    assert "gateway" in services
+    assert (root / "services/gateway/src/app/gateway/s2s_client.py").is_file()

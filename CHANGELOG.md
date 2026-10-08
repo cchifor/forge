@@ -14,8 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Add the opt-in Python `service-proxy` template name, keeping `api-gateway`
   compatible. Distinguish URL routing, service-token forwarding, and custom
   backends for frontends in the architecture diagrams and platform guide.
-- Preserve explicitly recorded service lists during upgrades; document migration
-  to direct routing in [UPGRADING.md](UPGRADING.md#direct-routing-defaults).
+- Preserve service lists recorded in quality recipes during `forge --update`;
+  explicit backend lists also override preset defaults during generation.
+  Preset-only configurations use the installed defaults when regenerated; see
+  [migration guidance](UPGRADING.md#direct-routing-defaults) for legacy projects.
 
 ### Generated code quality
 

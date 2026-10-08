@@ -107,11 +107,15 @@ configured. Those client-credentials tokens represent the proxy service.
 Direct user requests can have different authorization semantics; downstream
 services must validate accepted tokens and enforce domain permissions.
 
-Existing generated projects retain their recorded backend lists. Adopting the
-new defaults is an explicit topology change: review client URLs, ingress auth,
-service grants, deployment resources, and the persisted generation config.
+Projects with a `.forge/quality.json` recipe retain its recorded backend list
+when using `forge --update`. A preset name alone does not freeze that list:
+regeneration from a preset-only configuration uses the installed defaults.
+For legacy projects without a recipe, explicitly record the original backends
+and dependencies before regenerating. Adopting the new defaults is a topology
+change: review client URLs, ingress auth, service grants, deployment resources,
+and the persisted generation config.
 Follow [customization](customization.md) and [upgrade notes](../../UPGRADING.md#direct-routing-defaults)
-to migrate; upgrading Forge alone does not remove a recorded gateway.
+to migrate safely.
 
 ## How multi-service auth works (synthesis)
 
