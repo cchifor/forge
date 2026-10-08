@@ -78,7 +78,7 @@ def s2s_mod(gateway_src: Path):
     """Import the rendered ``app.gateway.s2s_client`` module fresh per test."""
     sys.modules.pop("app.gateway.s2s_client", None)
     module = importlib.import_module("app.gateway.s2s_client")
-    assert Path(module.__file__).resolve() == gateway_src / "app/gateway/s2s_client.py"
+    assert Path(module.__file__).resolve() == (gateway_src / "app/gateway/s2s_client.py").resolve()
     return module
 
 
@@ -87,7 +87,7 @@ def downstreams_mod(gateway_src: Path):
     """Import the rendered ``app.gateway.downstreams`` module fresh per test."""
     sys.modules.pop("app.gateway.downstreams", None)
     module = importlib.import_module("app.gateway.downstreams")
-    assert Path(module.__file__).resolve() == gateway_src / "app/gateway/downstreams.py"
+    assert Path(module.__file__).resolve() == (gateway_src / "app/gateway/downstreams.py").resolve()
     return module
 
 
