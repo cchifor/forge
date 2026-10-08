@@ -53,9 +53,20 @@ class FragmentRenderer(Protocol):
     static type checkers can flag drift in renderer implementations.
     """
 
-    name: str
-    backend: BackendLanguage
-    attach_zone: InjectionZone
+    @property
+    def name(self) -> str:
+        """Read the immutable spec's fragment identifier."""
+        ...
+
+    @property
+    def backend(self) -> BackendLanguage:
+        """Read the backend targeted by this renderer."""
+        ...
+
+    @property
+    def attach_zone(self) -> InjectionZone:
+        """Read the renderer's zone without requiring mutable spec metadata."""
+        ...
 
     def render(
         self,

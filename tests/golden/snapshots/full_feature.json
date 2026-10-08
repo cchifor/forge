@@ -105,8 +105,8 @@
       "sha256": "d2d885f0408dc4b5"
     },
     "apps/frontend/package.json": {
-      "size": 2284,
-      "sha256": "6b161e821a23d7dc"
+      "size": 2282,
+      "sha256": "2b5d85f6dabf6200"
     },
     "apps/frontend/playwright.quality.config.ts": {
       "size": 385,

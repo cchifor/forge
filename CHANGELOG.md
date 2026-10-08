@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased] — targeting 1.2.0
 
+### Dependency compatibility
+
+- Align AG-UI client and core at 1.0.2 across the generator, canvas packages,
+  and npm lockfile; group their future Dependabot updates together.
+- Include the Svelte canvas build and runtime tests in workspace commands;
+  run all canvas tests, including a real AG-UI streaming fixture, in CI
+  and dependency upgrade probes.
+- Upgrade the development type checker to ty 0.0.75 after its canary passes;
+  model renderer metadata as read-only and narrow optional fragment names.
+
 ### Platform routing
 
 - Route new `microservices` and `headless-api` projects directly from the edge

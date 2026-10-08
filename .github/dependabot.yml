@@ -33,6 +33,10 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    groups:
+      ag-ui:
+        patterns:
+          - "@ag-ui/*"
 
   - package-ecosystem: cargo
     directory: "/"
