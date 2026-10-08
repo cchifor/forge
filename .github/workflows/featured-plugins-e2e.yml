@@ -66,10 +66,10 @@ jobs:
     steps:
       - name: Checkout forge
         if: matrix.plugin.enabled
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup uv
         if: matrix.plugin.enabled
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
       - name: Install Python 3.13
@@ -80,7 +80,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
       - name: Checkout featured plugin
         if: matrix.plugin.enabled
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ matrix.plugin.repo }}
           ref: ${{ matrix.plugin.ref }}
