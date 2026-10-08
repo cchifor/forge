@@ -9,7 +9,17 @@ mkdir -p "$artifact_dir"
 package_version="$(uv run --locked python -c 'import forge; print(forge.__version__)')"
 bash .github/scripts/check-tag-version.sh "v$package_version"
 bash .github/scripts/detect-prerelease.sh "v$package_version"
-bash .github/scripts/extract-changelog.sh Unreleased CHANGELOG.md > "$artifact_dir/release-notes.md"
+# Routine CI must also pass immediately after a release empties Unreleased.
+# Exercise extraction with a fixture; release.yml still checks real notes.
+cat > "$smoke_dir/CHANGELOG.md" <<'CHANGELOG'
+# Changelog
+
+## [Unreleased]
+
+### Fixed
+- Release preparation smoke fixture.
+CHANGELOG
+bash .github/scripts/extract-changelog.sh Unreleased "$smoke_dir/CHANGELOG.md" > "$artifact_dir/release-notes.md"
 uv build --out-dir "$artifact_dir"
 UV_PROJECT_ENVIRONMENT="$smoke_dir/runtime" \
   uv sync --locked --all-extras --no-dev --no-editable
