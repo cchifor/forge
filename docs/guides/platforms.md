@@ -31,7 +31,7 @@ multi-service auth and multitenancy actually work, and — importantly — the
 | **`monolithic`** | 1 Python CRUD backend + Vue (sidebar) | no | no | no | You want the classic single-service app with a UI and no auth-server overhead. |
 | **`microservices`** | Directly routed `orders` + `inventory` CRUD services + Vue, with an event bus; `orders` declares `inventory` as a dependency | yes | yes | no | You have services that call each other and emit events. |
 | **`headless-api`** | One directly routed `orders` API with edge authentication, **no frontend** | yes | no | no | You want an authenticated API for mobile or third-party clients. |
-| **`multitenant-saas`** | `tms` control plane + RLS-isolated `app` CRUD service + Vue, behind the Gatekeeper | yes | yes | **shared-RLS** | You're building multi-tenant SaaS and need per-tenant row isolation + tenant provisioning. |
+| **`multitenant-saas`** | `tms` control plane + RLS-isolated `app` CRUD service + Vue, behind the Gatekeeper | yes | no | **shared-RLS** | You're building multi-tenant SaaS and need per-tenant row isolation + tenant provisioning. |
 
 Everything except `monolithic` brings up Keycloak + the Gatekeeper edge-auth
 stack + Redis — a substantial stack. Start with `monolithic` if you don't yet
@@ -43,6 +43,8 @@ The microservices preset still synthesizes S2S grants for `orders → inventory`
 This declares a callable dependency; the CRUD scaffold does not automatically
 implement an ordering workflow. The headless preset has one backend, so S2S
 discovery is disabled while edge authentication remains enabled.
+The multitenant SaaS preset also leaves S2S discovery disabled: shared edge
+authentication and tenant isolation do not imply synthesized service grants.
 
 ### Running the built-in microservices preset
 

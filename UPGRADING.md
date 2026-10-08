@@ -2,7 +2,17 @@
 
 This document lists breaking changes per version and the migration steps for each.
 
-## Direct routing defaults
+## 1.1 → 1.2
+
+The 1.2 series aligns forge templates with the platform's **10-SDK
+restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
+dependency DAG, May 2026). The Python service template now imports
+weld-* SDKs directly instead of vendoring the duplicate `src/service/`
+shim that shipped through 1.0/1.1.
+
+### Direct routing defaults
+
+These defaults are part of the unreleased changes targeting 1.2.0.
 
 New `microservices` projects contain `orders` and `inventory` behind the edge,
 with `orders → inventory` S2S grants. New `headless-api` projects contain one
@@ -22,14 +32,6 @@ grants and deployment resources through the [customization workflow](docs/guides
 Preserve edge authentication and verify user identity, audience, scopes, and
 tenant authorization at each directly exposed service before retiring the old
 proxy. For a single remaining backend, set `auth.service_discovery: false`.
-
-## 1.1 → 1.2
-
-The 1.2 series aligns forge templates with the platform's **10-SDK
-restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
-dependency DAG, May 2026). The Python service template now imports
-weld-* SDKs directly instead of vendoring the duplicate `src/service/`
-shim that shipped through 1.0/1.1.
 
 ### 1.2.0-alpha.1 — weld-* SDKs
 

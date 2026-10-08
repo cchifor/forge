@@ -12,7 +12,9 @@ Heavy + opt-in: marked ``e2e`` (excluded from the default ``pytest`` run) and
 skipped unless Docker is available. On a shared host the ingress ``traefik``
 service is intentionally NOT started (it binds host :80, which often collides);
 all assertions run *in-network* via ``docker compose exec`` so no host ports are
-needed. Every test tears its stack down (``down -v``) in a ``finally``.
+needed. The port-reset override uses Compose's ``!reset`` YAML tag; use Docker
+Compose 2.24 or newer for this suite. Every test tears its stack down
+(``down -v``) in a ``finally``.
 
 Run explicitly::
 
@@ -95,6 +97,7 @@ def _boot(root: Path) -> None:
     services = [s for s in _services(root) if s != "traefik"]
     # Every assertion runs on the Compose network. Avoid conflicting with
     # databases or applications already published on a developer's machine.
+    # This test-only override requires Compose with !reset support (2.24+).
     override = "services:\n" + "".join(f"  {name}:\n    ports: !reset []\n" for name in services)
     (root / "docker-compose.override.yml").write_text(override, encoding="utf-8")
     _compose(root, "up", "-d", "--build", *services, timeout=_BUILD_TIMEOUT + _UP_TIMEOUT)
@@ -205,6 +208,10 @@ print("S2S_OK")
 
 # A fixture identity issued with Gatekeeper's real key, exercised against the
 # domain API. This validates issuer/JWKS verification and CRUD, not OIDC login.
+# Intentional internal test contract: FileKeyRing reads SIGNING_KEY_DIR and
+# mint_internal_token signs the fixture with the configured issuer/audience.
+# Keep these imports and arguments in sync with Gatekeeper's implementation;
+# this fixture does not expose a development-only token endpoint in the service.
 _DIRECT_API_SCRIPT = """
 import json, os, time, urllib.request, urllib.error
 from pathlib import Path
@@ -297,8 +304,9 @@ def test_multitenant_saas_platform_boots_and_serves(tmp_path: Path, require_dock
     gatekeeper + the TMS control plane + the RLS-isolated app service — boots and
     both backend tiers serve their health surface in-network.
 
-    (No S2S round-trip here: this preset does not enable service discovery,
-    so the `_S2S_SCRIPT` env contract is not present.)
+    (No S2S round-trip here: this preset leaves service discovery disabled,
+    as documented in the platform guide, so `_S2S_SCRIPT`'s synthesized
+    client-credential and downstream-URL env contract is not present.)
     """
     root = _forge_generate("multitenant-saas", "mtsaasboot", tmp_path)
     try:

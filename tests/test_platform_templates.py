@@ -377,6 +377,12 @@ class TestMultitenantSaasIntegration:
         compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
         for svc in ("keycloak", "redis", "gatekeeper", "tms", "app"):
             assert f"{svc}:" in compose, f"compose missing service: {svc}"
+        # Shared edge auth does not opt this preset into synthesized S2S grants.
+        services = yaml.safe_load(compose)["services"]
+        for name in ("tms", "app"):
+            env = services[name]["environment"]
+            assert "GATEKEEPER_CLIENT_ID" not in env
+            assert not any(key.startswith("INTERNAL_SERVICE_URL_") for key in env)
 
     def test_persisted_in_forge_toml(self) -> None:
         config = _build_config(_args(platform="multitenant-saas"), {"project_name": "Acme SaaS"})
