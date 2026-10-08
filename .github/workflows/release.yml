@@ -58,7 +58,7 @@ jobs:
       # as a downloadable supply-chain artifact.
       - name: Generate CycloneDX SBOM
         run: |
-          uv sync --locked --all-extras --dev
+          uv sync --locked --all-extras --no-dev --no-editable
           uvx --from cyclonedx-bom cyclonedx-py environment .venv/bin/python \
             --output-format json --output-file forge-sbom.cdx.json
 

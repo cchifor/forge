@@ -21,8 +21,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Refresh the pinned setup-uv, setup-go, Codecov, and release actions;
   preserve CI cache pruning and build releases with a fresh dependency cache.
 - Enable the documented Codecov OIDC flow so same-repository uploads authenticate.
-- Smoke-test release preparation in CI and build the SBOM from Forge's locked
-  environment instead of the isolated SBOM tool environment.
+- Smoke-test release preparation in isolated temporary directories and build
+  the SBOM from Forge's locked runtime environment without development tools.
 - Compare nightly round-trip recipes independently of the sandbox generator
   identity while retaining checks for configuration, version, and plugin drift.
 - Make nightly update checks enforce the rejection of partial/overwrite modes

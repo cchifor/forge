@@ -68,6 +68,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
+from forge.quality.model import RECIPE
+
 # Re-use the runner's record types so the dispatcher and the contract
 # emit/consume the same shape. Lane E imports the runner; runner imports
 # this module lazily inside ``run_lane_update`` to avoid a circular load.
@@ -194,7 +196,7 @@ def _drive_mode(
     inject_stubs(project_root)
 
     edited = _stage_edit(project_root)
-    if mode != "merge" and (project_root / ".forge/quality.json").is_file():
+    if mode != "merge" and (project_root / RECIPE).is_file():
         return _drive_rejected_owned_mode(project_root, mode), project_root
     if edited is None:
         # No fragment-authored file in the generated project — the
