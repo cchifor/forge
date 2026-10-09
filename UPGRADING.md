@@ -127,7 +127,9 @@ API keys now require `auth.api_keys=true` (`API_KEYS_ENABLED=true` in Gatekeeper
 generated Compose sets it). Existing unscoped or non-expiring keys are rejected
 and must be reissued with explicit scopes and an expiry. Creating administrators
 must hold the requested scopes as well as the admin role. Sessions now bind the
-verified tenant ID; sign in again to replace older hostname-based sessions.
+verified tenant ID; older hostname-based sessions are invalidated and their
+cookies cleared. API/session requests return 401 to trigger reauthentication;
+page navigations begin a fresh login.
 Non-default realms also need explicit hostname-to-tenant UUID routing records
 (normally provisioned by TMS). Only the configured default realm falls back to
 `DEFAULT_TENANT_ID`; signing in again does not create missing tenant routes.

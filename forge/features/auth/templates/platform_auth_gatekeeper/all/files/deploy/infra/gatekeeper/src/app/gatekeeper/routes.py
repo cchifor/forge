@@ -280,7 +280,10 @@ async def auth_userinfo(request: Request) -> Response:
     if session is None:
         return Response(status_code=401, content="Not authenticated")
     if session.tenant_id != tc.tenant_id:
-        return Response(status_code=403, content="Tenant mismatch")
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
 
     try:
         payload = await verify_token(
@@ -628,7 +631,10 @@ async def auth(request: Request) -> Response:
 
     # 4. Validate the access token from the session row.
     if session.tenant_id != tc.tenant_id:
-        return Response(status_code=403, content="Tenant mismatch")
+        await server_session.delete(session_id)
+        response = await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        _delete_session_id_cookie(response)
+        return response
     try:
         payload = await verify_token(
             session.access_token,

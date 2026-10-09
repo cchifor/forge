@@ -567,11 +567,59 @@ async def test_shared_realm_session_cannot_cross_tenant_hosts(runtime, method, p
             }
         ),
     )
-    assert (
-        await r.client.request(
-            method, path, headers={"Host": "other.localhost", "Origin": "http://other.localhost"}
-        )
-    ).status_code == 403
+    sid = r.client.cookies["tenant_session_id"]
+    response = await r.client.request(
+        method,
+        path,
+        headers={
+            "Host": "other.localhost",
+            "Origin": "http://other.localhost",
+            "X-Forwarded-Uri": "/api/orders/v1/items",
+        },
+    )
+    assert response.status_code == 401
+    assert "authorization" not in response.headers
+    assert "Max-Age=0" in response.headers["set-cookie"]
+    assert await r.sessions.get(sid) is None
+
+
+@pytest.mark.parametrize(
+    "method,path,uri,expected",
+    [
+        ("GET", "/auth", "/api/orders/v1/items", 401),
+        ("GET", "/auth", "/dashboard", 302),
+        ("GET", "/auth/userinfo", "/", 401),
+        ("GET", "/auth/session", "/", 401),
+        ("POST", "/auth/session", "/", 401),
+    ],
+)
+async def test_legacy_slug_session_triggers_reauthentication(runtime, method, path, uri, expected):
+    r = runtime
+    token = await r.login()
+    legacy = await r.sessions.issue(
+        access_token=token,
+        refresh_token="old-refresh",
+        tenant_id="app",
+        sub="admin",
+        idle_timeout_seconds=600,
+        absolute_timeout_seconds=600,
+    )
+    r.client.cookies.set("tenant_session_id", legacy)
+    response = await r.client.request(
+        method,
+        path,
+        headers={"Origin": "http://app.localhost", "X-Forwarded-Uri": uri},
+    )
+    assert response.status_code == expected
+    assert "authorization" not in response.headers
+    assert "Max-Age=0" in response.headers["set-cookie"]
+    assert await r.sessions.get(legacy) is None
+    if expected == 302:
+        assert response.headers["location"].startswith(ISSUER + "/protocol/openid-connect/auth?")
+        assert "code_challenge=" in response.headers["location"]
+    # A new UUID-bound session recovers immediately, without waiting out the TTL.
+    await r.login()
+    assert (await r.client.get("/auth/userinfo")).status_code == 200
 
 
 @pytest.mark.parametrize("path", ["/auth", "/auth/userinfo"])

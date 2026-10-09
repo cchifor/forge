@@ -1481,16 +1481,16 @@
       "sha256": "bebbec570db9b36e"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 41105,
-      "sha256": "e4e108c52ebb7726"
+      "size": 41357,
+      "sha256": "5de9958fd346872b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
       "sha256": "a291d21841b463ae"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_session.py": {
-      "size": 8836,
-      "sha256": "0f6c9656ba727524"
+      "size": 9103,
+      "sha256": "198b4e60cbf9e241"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/scopes.py": {
       "size": 1718,

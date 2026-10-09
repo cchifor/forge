@@ -37,7 +37,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 from app.gatekeeper.config import get_settings
-from app.gatekeeper.helpers import check_origin, extract_tenant
+from app.gatekeeper.helpers import _delete_session_id_cookie, check_origin, extract_tenant
 from app.gatekeeper.metrics import AuthMetricsRecorder
 from app.gatekeeper.redis import get_redis
 from app.gatekeeper.tenant_config import (
@@ -141,7 +141,10 @@ async def get_session(request: Request) -> Response:
     if session is None:
         return Response(status_code=401, content="Session expired")
     if session.tenant_id != tc.tenant_id:
-        return Response(status_code=403, content="Tenant mismatch")
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
 
     remaining = await server_session.remaining(session_id, now=int(time.time()))
     if remaining is None:
@@ -200,7 +203,10 @@ async def extend_session(request: Request) -> Response:
     if session is None:
         return Response(status_code=401, content="Session expired")
     if session.tenant_id != tc.tenant_id:
-        return Response(status_code=403, content="Tenant mismatch")
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
 
     # Rate limit BEFORE touching so we don't reset the idle TTL on
     # rejected requests. Returns a 429 Response on excess (preserving
