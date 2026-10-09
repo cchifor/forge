@@ -314,6 +314,45 @@ async def test_tenant_routes_expiry_cache_and_legacy_records(runtime):
     assert await apikeys.validate_api_key(key["api_key"]) is None
 
 
+@pytest.mark.parametrize("missing", ["expires_at", "scopes"])
+async def test_legacy_keys_remain_discoverable_and_revocable(runtime, missing):
+    r = runtime
+    key = (await r.create()).json()
+    key_hash = apikeys.hash_api_key(key["api_key"])
+    record = json.loads(await r.redis.get("apikey:" + key_hash))
+    record.pop(missing)
+    record.pop("created_at")
+    await r.redis.set("apikey:" + key_hash, json.dumps(record))
+    assert (await r.client.get("/auth", headers={"X-API-Key": key["api_key"]})).status_code == 401
+    listed = await r.client.get("/api/v1/api-keys")
+    assert listed.status_code == 200, listed.text
+    legacy = listed.json()["keys"][0]
+    assert legacy["status"] == "legacy" and legacy["key_hash"] == key_hash
+    assert not await apikeys.revoke_api_key(key_hash, OTHER)
+    revoked = await r.client.delete(
+        "/api/v1/api-keys/" + key_hash, headers={"Origin": "http://app.localhost"}
+    )
+    assert revoked.status_code == 200 and revoked.json()["revoked"]
+    assert not await r.redis.smembers("apikeys_by_tenant:" + TENANT)
+
+
+async def test_key_listing_cleans_expired_and_missing_index_entries(runtime):
+    r = runtime
+    key = (await r.create()).json()
+    key_hash = apikeys.hash_api_key(key["api_key"])
+    record = json.loads(await r.redis.get("apikey:" + key_hash))
+    record["expires_at"] = int(time.time()) - 1
+    await r.redis.set("apikey:" + key_hash, json.dumps(record))
+    await r.redis.sadd("apikeys_by_tenant:" + TENANT, "missing")
+    # A corrupt index must never allow deleting another tenant's record.
+    await r.redis.set("apikey:other", json.dumps({**record, "tenant_id": OTHER}))
+    await r.redis.sadd("apikeys_by_tenant:" + TENANT, "other")
+    assert (await r.client.get("/api/v1/api-keys")).json()["keys"] == []
+    assert not await r.redis.exists("apikey:" + key_hash)
+    assert await r.redis.smembers("apikeys_by_tenant:" + TENANT) == {"other"}
+    assert await r.redis.exists("apikey:other")
+
+
 async def test_s2s_sdk_uses_generated_registry_and_tenant(runtime):
     # These credentials come from the actual generated Compose, not a fake registry.
     import yaml
@@ -440,6 +479,24 @@ async def test_user_delegation_preserves_scope_expiry_and_grant_binding(runtime)
     assert (await r.client.post("/auth/delegation-exchange", data=exchange)).status_code == 200
     assert (await r.client.request("DELETE", revoke_path, data=fields)).status_code == 204
     assert (await r.client.post("/auth/delegation-exchange", data=exchange)).status_code == 400
+
+    # Pre-upgrade grants have no scope/client/target binding. They cannot be
+    # exchanged or revoked by an arbitrary service, and lookup preserves TTL.
+    store = r.app.state.delegation_grant_store
+    legacy, _ = await store.issue(
+        identity={"sub": "user", "https://forge/tenant_id": TENANT}, ttl_seconds=30
+    )
+    redis_key = "gk:delegation_grant:" + legacy
+    before = await r.redis.get(redis_key)
+    ttl = await r.redis.ttl(redis_key)
+    assert (
+        await r.client.post("/auth/delegation-exchange", data={**exchange, "grant_id": legacy})
+    ).status_code == 403
+    assert (
+        await r.client.request("DELETE", "/auth/delegation-grant/" + legacy, data=fields)
+    ).status_code == 403
+    assert await r.redis.get(redis_key) == before
+    assert 0 < await r.redis.ttl(redis_key) <= ttl
 
 
 @pytest.mark.parametrize(

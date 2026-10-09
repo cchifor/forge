@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 import jwt
 from fastapi import APIRouter, HTTPException, Request
@@ -90,9 +90,10 @@ class KeySummary(BaseModel):
     roles: list[str]
     owner: str
     key_hash: str
-    scopes: list[str]
-    created_at: int
-    expires_at: int
+    scopes: list[str] = Field(default_factory=list)
+    created_at: int | None = None
+    expires_at: int | None = None
+    status: Literal["active", "legacy"]
 
 
 class ListKeysResponse(BaseModel):
@@ -312,7 +313,7 @@ async def create_key(
 async def list_keys(
     request: Request,
 ) -> ListKeysResponse:
-    """List all active API keys for the authenticated tenant (admin only)."""
+    """List active and rejected legacy keys for the tenant (admin only)."""
     session = await _verified_session(request)
     await _require_admin(request, session)
     tenant = session.tenant_id

@@ -217,7 +217,7 @@ async def revoke_api_key(key_hash: str, tenant_id: str) -> bool:
 
 async def list_api_keys(tenant_id: str) -> list[dict]:
     """
-    Return metadata for all active API keys belonging to *tenant_id*.
+    Return active and legacy key metadata belonging to *tenant_id*.
 
     The actual secret is never stored in Redis, so this is safe to expose.
     """
@@ -232,10 +232,26 @@ async def list_api_keys(tenant_id: str) -> list[dict]:
             continue
         try:
             data = json.loads(raw)
-            if data.get("tenant_id") != tenant_id or data.get("expires_at", 0) <= int(
-                time.time()
-            ):
+            if not isinstance(data, dict) or data.get("tenant_id") != tenant_id:
                 continue
+            expires_at = data.get("expires_at")
+            if isinstance(expires_at, int) and expires_at <= int(time.time()):
+                await r.delete(_redis_key(h))
+                await r.srem(f"apikeys_by_tenant:{tenant_id}", h)
+                continue
+            # Legacy records remain discoverable/revocable, but never authenticate.
+            scopes = data.get("scopes")
+            legacy = (
+                not isinstance(expires_at, int)
+                or not isinstance(scopes, list)
+                or not scopes
+                or any(not isinstance(scope, str) for scope in scopes)
+            )
+            data["status"] = "legacy" if legacy else "active"
+            if not isinstance(expires_at, int):
+                data["expires_at"] = None
+            if not isinstance(scopes, list):
+                data["scopes"] = []
             data["key_hash"] = h
             results.append(data)
         except (json.JSONDecodeError, KeyError):

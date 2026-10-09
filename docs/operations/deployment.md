@@ -31,6 +31,23 @@ path. Tenant quotas are generated; per-key quotas require additional policy.
 Validate [S2S](../guides/service-to-service.md) and [API-key](../guides/api-keys.md)
 allowed/denied journeys, including attempts to bypass ingress, before release.
 
+OIDC verification requires the exact issuer advertised by Keycloak. Configure a
+canonical issuer URL reachable by both browsers and Gatekeeper; if setting
+`KC_HOSTNAME`, align the tenant route's `issuer_url` (or the fallback
+`KEYCLOAK_BASE_URL/<realm>`) with its discovery document. Do not disable issuer
+verification to accommodate separate internal/public hostnames. The default
+Compose uses `http://keycloak:8080/realms/app` inside its network; browser-facing
+DNS/ingress and auth/callback routes still require deliberate configuration.
+
+The generated default realm, Gatekeeper `KEYCLOAK_ADMIN_REALM`, and realm-sync
+target are all `app`. Despite its name, Gatekeeper uses this setting for the
+application's self-registration realm, not Keycloak's administrative `master`
+realm. A custom frontend realm does not automatically update those fixed
+deployment values: align Gatekeeper and realm-sync with it and supply explicit
+hostname-to-tenant UUID routes for non-default hosts/realms. Validate an actual
+authorization-code/PKCE login, callback, session and API request after changing
+issuer or realm configuration.
+
 ## Required Environment Variables
 
 Review the generated configuration and `.env.example` for each selected

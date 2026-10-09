@@ -70,11 +70,44 @@ then run architecture and all three native test suites against the candidate.
 Follow the [coordinated upgrade checklist](docs/operations/maintainer-runbook.md#coordinated-dependency-upgrades)
 for locked installs, generated applications, release artifacts and CI sign-off.
 
-The 1.2 series aligns forge templates with the platform's **10-SDK
-restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
-dependency DAG, May 2026). The Python service template now imports
-weld-* SDKs directly instead of vendoring the duplicate `src/service/`
-shim that shipped through 1.0/1.1.
+### Python SDK migration from 1.1 and 1.2 alphas
+
+The early 1.2 alpha replaced the Python `src/service/` shim with `weld-*`
+imports. Its [original migration notes](docs/archive/1.2-alpha-weld-migration.md)
+preserve the import table, copier prompts, optional features, deployment and Vue
+changes for projects built with that version. That SDK layout has since been
+superseded: current Python services ship their own `sdks/forge-core` and use
+`forge_core` imports. Generated authentication additionally supplies `platform_auth`.
+Neither regeneration nor `sdk_consumption=none` preserves the old shim.
+
+For custom code migrating to current Forge, review these public equivalents:
+
+| Previous import family | Current application dependency |
+| --- | --- |
+| `service.db`, `service.repository`, `service.uow`; `weld.core.persistence` | `forge_core.persistence` (`AsyncDatabase`, `AsyncBaseRepository`, `AsyncUnitOfWork`, mixins) |
+| `service.security`; `weld.fastapi.security` | `forge_core.security`; use the optional `platform_auth` public API for its delegation/S2S contracts |
+| `service.core.context`, `service.domain`; `weld.core.context`, `weld.core.domain` | `forge_core.domain` and `forge_core.domain.context` |
+| `service.discovery`; `weld.core.discovery` | `forge_core.discovery` |
+| `service.utils.fastapiutils`; `weld.fastapi.api.errors` | `forge_core.errors` and the application's error port/handlers |
+| `service.api`; `weld.fastapi.api` filtering/pagination | `forge_core.api` |
+| `service.observability`; `weld.observability` | `forge_core.observability` |
+| `service.client`; `weld.http_client` | Explicit application HTTP client; `platform_auth.S2SClient` for authenticated service calls |
+| `service.tasks` | Select a supported queue option and implement the application's job contract |
+
+These are API families, not a mechanical namespace substitution: compare public
+signatures, error envelopes, transactions and identity handling in the rendered
+candidate. Preserve required external SDK dependencies until their consumers are
+migrated. `weld_base_sdks` is no longer a Python copier prompt; `sdk_consumption`
+now controls the sibling Docker SDK build context, while the service-local
+`forge-core` is always shipped. `service_path_prefix` still controls routing.
+Resolve optional features against the current [catalog](docs/FEATURES.md); the
+archived defaults and proposed `auth.mode=weld` are not current promises.
+
+For Vue, preserve custom UI behavior and migrate generated API-client imports to
+`src/custom/api/` as described above. `consumed_services` selects service-specific
+OpenAPI output; run code generation explicitly. Review the candidate's lockfiles,
+Docker build contexts, migrations and entrypoints, then run architecture, unit,
+integration and E2E gates before replacing the old deployment.
 
 ### Direct routing defaults
 
@@ -102,6 +135,11 @@ Non-default realms also need explicit hostname-to-tenant UUID routing records
 User-delegation grants now retain their scope ceiling and bind to their issuing
 client and target. Older grants lacking these fields must be reissued. API-key
 and service-account identities cannot be used as user-delegation subjects.
+Replace/drain every older Gatekeeper instance during rollout: upgraded instances
+reject legacy grant exchange and cannot establish ownership for API revocation.
+Legacy Redis records expire within their original TTL (at most 24 hours); an
+operator can instead purge those `gk:delegation_grant:*` records during a coordinated
+cutover before issuing replacements. Grant lookup does not extend their TTL.
 See [S2S](docs/guides/service-to-service.md) and [API keys](docs/guides/api-keys.md).
 
 ## 1.0 → 1.1

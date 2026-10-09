@@ -1,5 +1,6 @@
 """Optional API keys require a real Gatekeeper and propagate to deployment."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,10 @@ def test_api_key_option_sets_gatekeeper_environment(tmp_path: Path, enabled):
     path = root / "docker-compose.yml"
     env = yaml.safe_load(path.read_text())["services"]["gatekeeper"]["environment"]
     assert env["API_KEYS_ENABLED"] == str(enabled).lower()
+    realm = json.loads((root / "deploy/infra/keycloak-realm.json").read_text())["realm"]
+    services = yaml.safe_load(path.read_text())["services"]
+    assert realm == env["KEYCLOAK_ADMIN_REALM"] == "app"
+    assert services["keycloak-realm-sync"]["environment"]["KEYCLOAK_ADMIN_REALM"] == realm
     labels = yaml.safe_load(path.read_text())["services"]["orders"]["labels"]
     assert any(label.endswith("-rewrite,auth,strip-api-key") for label in labels)
 

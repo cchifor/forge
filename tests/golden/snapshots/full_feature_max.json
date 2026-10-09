@@ -1409,12 +1409,12 @@
       "sha256": "34bcdba3aaf1d37b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 7958,
-      "sha256": "9c7098d947897fff"
+      "size": 8762,
+      "sha256": "b192fd702de61396"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 12513,
-      "sha256": "7041f09a405d6606"
+      "size": 12618,
+      "sha256": "97fff7148e9cbbf9"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/authz.py": {
       "size": 2901,

@@ -94,7 +94,10 @@ replace integration permissions with broader service privileges.
 
 ## List, revoke and rotate
 
-- `GET /api/v1/api-keys` lists active metadata for the verified administrator's tenant.
+- `GET /api/v1/api-keys` lists metadata for the verified administrator's tenant.
+  Records marked `status=legacy` cannot authenticate; revoke them and issue scoped,
+  expiring replacements. Missing/expired records are removed from the tenant index
+  during listing.
 - `DELETE /api/v1/api-keys/{key_hash}` revokes a key using its listed hash. Cross-tenant revocation is denied.
 - Rotate by issuing a replacement, updating the integration, then revoking the old key.
 
