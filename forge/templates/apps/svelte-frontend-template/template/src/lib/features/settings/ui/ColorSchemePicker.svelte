@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Check } from 'lucide-svelte';
-	import type { ColorScheme } from '$lib/shared/lib/color-schemes';
-	import { getSettingsStore } from '$lib/features/settings';
+	import { Check } from '@lucide/svelte';
+	import type { ColorScheme } from '#lib/shared/lib/color-schemes.ts';
+	import { getSettingsStore } from '#lib/features/settings/index.ts';
 
 	let {
 		currentScheme,

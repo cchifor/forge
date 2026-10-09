@@ -86,6 +86,8 @@ CONTAMINANT_SUBSTRINGS: tuple[str, ...] = (
     # MANIFEST.in's recursive-exclude blocks these from sdist/wheel;
     # this assertion enforces the symmetry.
     "/target/",
+    "/.coverage",
+    "/dist/",
     # dist/build in templates would be stray local builds — safe to filter.
     # (We intentionally don't block top-level `build/` since setuptools
     # drops its build dir there; that's outside forge/templates.)

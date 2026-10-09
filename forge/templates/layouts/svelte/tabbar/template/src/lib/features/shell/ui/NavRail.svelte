@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import { page } from '$app/stores';
-	import { Settings, LogOut, UserCircle } from 'lucide-svelte';
+	import { page } from '$app/state';
+	import { Settings, LogOut, UserCircle } from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
-	import { getAuth } from '$lib/core/auth/auth.svelte';
+	import { getAuth } from '#lib/core/auth/auth.svelte.ts';
 
 	interface RailItem {
 		title: string;
@@ -16,8 +16,8 @@
 	const auth = getAuth();
 
 	function isActive(url: string) {
-		if (url === '/') return $page.url.pathname === '/';
-		return $page.url.pathname.startsWith(url);
+		if (url === '/') return page.url.pathname === '/';
+		return page.url.pathname.startsWith(url);
 	}
 
 	const userInitials = $derived(

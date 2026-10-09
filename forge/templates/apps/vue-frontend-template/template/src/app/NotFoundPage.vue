@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FileQuestion } from 'lucide-vue-next'
+import { FileQuestion } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 </script>
 

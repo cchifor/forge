@@ -7,12 +7,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Dependency compatibility
 
+- Coordinate weekly dependency updates in one cross-ecosystem PR, including
+  standalone SDK manifests; refresh the generator and three emitted Python locks.
+- Exercise all authentication parity runners with installed runtime dependencies,
+  repair incomplete negative-token fixtures, and upgrade Rust JWT verification to
+  jsonwebtoken 11.1 with AWS-LC. Malformed optional `nbf` claims are rejected.
+- Migrate generated Node services to Zod 4, Vitest 5 and Prisma 7's PostgreSQL
+  adapter, preserving pool and schema settings. Patch its transitive MySQL tooling.
+  Upgrade Node authentication to JOSE 6 and test the complete SDK in CI.
+- Upgrade generated Rust services to SQLx 0.9, reqwest 0.13, tower-http 0.7 and
+  config 0.15; use parameterized query builders and declare Rust 1.94 minimum.
+- Refresh optional queue, cache, telemetry and AI adapters, including dependency
+  pins in feature registrations. Adapt AI streaming events without duplicating
+  tool-call arguments, and exercise the generated Node/Rust port configurations.
+- Migrate Flutter widgets to Material UI, preserve Markdown theme/localization
+  compatibility, and require actual generated widget tests and analyzer success.
+  Repair missing mock fallbacks and keep environment tests runnable without auth.
+- Add Svelte canvas type checks and checkbox submission tests. Use recorded
+  pre-format snippet fingerprints to avoid spurious harvest conflicts while
+  preserving conflicts for genuine upstream changes. Exclude local SDK coverage
+  and compilation artifacts from generation and distribution.
+- Upgrade web frontends to Vite 8, SvelteKit 3, Vue Router 5 and TanStack Table 9.
+  Validate real TypeScript projects, generated OpenAPI clients and table behavior.
+  Instrument browser coverage using the compiler's source maps while retaining
+  strict coverage checks. Preserve column preferences and streamed tool arguments.
+
 - Align AG-UI client and core at 1.0.2 across the generator, canvas packages,
   and npm lockfile; group their future Dependabot updates together.
 - Include the Svelte canvas build and runtime tests in workspace commands;
   run all canvas tests, including a real AG-UI streaming fixture, in CI
   and dependency upgrade probes.
-- Upgrade the development type checker to ty 0.0.84 after its canary passes;
+- Upgrade the development type checker to ty 0.0.85 after its canary passes;
   model renderer metadata as read-only and narrow optional fragment names.
 - Use the supported `shutil.rmtree(onexc=...)` callback for read-only cleanup.
 - Raise the Copier and Hypothesis minimum versions to 9.18.2 and 6.168.4,
@@ -56,7 +81,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   required codegen failures; canonicalize Python before recording provenance.
   Add real backend lifecycle/database tests, browser preference journeys and
   generated wire-contract tests. Redact Rust internal errors in public responses.
-  Wire Node pool settings into Prisma; use Vitest 4 and a patched Prisma
+  Wire Node pool settings into Prisma; use Vitest 5 and a patched Prisma
   configuration dependency (GHSA-ggr8-5vv4-36mx).
 - Exercise generated Vue/Svelte CRUD, shared UI and responsive layouts in native
   suites. Preserve Svelte backend routing and navigation without authentication;

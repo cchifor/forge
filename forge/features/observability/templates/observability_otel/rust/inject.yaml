@@ -9,10 +9,10 @@
   position: after
   zone: generated
   snippet: |-
-    opentelemetry = "0.27"
-    opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-    opentelemetry-otlp = { version = "0.27", features = ["http-proto", "reqwest-client"] }
-    tracing-opentelemetry = "0.28"
+    opentelemetry = "0.33.0"
+    opentelemetry_sdk = { version = "0.33.0", features = ["rt-tokio"] }
+    opentelemetry-otlp = { version = "0.33.0", features = ["http-proto", "reqwest-blocking-client"] }
+    tracing-opentelemetry = "0.34.0"
 
 - target: src/lib.rs
   marker: FORGE:LIB_MOD_REGISTRATION

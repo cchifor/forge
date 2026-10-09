@@ -5,23 +5,27 @@ vi.stubGlobal('crypto', {
 });
 
 // Stub the canvas-core AgUiClient so the test never makes a real HTTP request.
+let capturedOnEvent: ((event: ReturnType<typeof parseEvent>) => void) | undefined;
 const mockRunAgent = vi.fn().mockResolvedValue(undefined);
-vi.mock('@forge/canvas-core', async () => {
-	const actual = await vi.importActual('@forge/canvas-core');
+vi.mock('#canvas-core', async () => {
+	const actual = await vi.importActual('#canvas-core');
 	return {
 		...actual,
-		AgUiClient: vi.fn().mockImplementation(() => ({
-			runAgent: mockRunAgent
-		}))
+		AgUiClient: vi.fn().mockImplementation(function (options: { onEvent: typeof capturedOnEvent }) {
+			capturedOnEvent = options.onEvent;
+			return { runAgent: mockRunAgent };
+		})
 	};
 });
 
 // Auth is a soft dep — return no token so the chat works in any auth mode.
-vi.mock('$lib/core/auth/auth.svelte', () => ({
+vi.mock('#lib/core/auth/auth.svelte.ts', () => ({
 	getAuth: () => ({ getToken: async () => null })
 }));
 
-const { getChatStore } = await import('$lib/features/chat/model/chat.svelte');
+import { parseEvent } from '#canvas-core';
+
+const { getChatStore } = await import('#lib/features/chat/model/chat.svelte.ts');
 
 describe('getChatStore (AG-UI agent client)', () => {
 	let store: ReturnType<typeof getChatStore>;
@@ -29,10 +33,11 @@ describe('getChatStore (AG-UI agent client)', () => {
 	beforeEach(() => {
 		store = getChatStore();
 		store.clearMessages();
-		mockRunAgent.mockClear();
+		mockRunAgent.mockReset().mockResolvedValue(undefined);
 	});
 
 	afterEach(() => {
+		store.clearMessages();
 		vi.useRealTimers();
 	});
 
@@ -60,12 +65,12 @@ describe('getChatStore (AG-UI agent client)', () => {
 		expect(store.isGenerating).toBe(false);
 	});
 
-	it('addUserMessage appends a user message and triggers an agent run', () => {
+	it('addUserMessage appends a user message and triggers an agent run', async () => {
 		store.addUserMessage('Hello');
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
 		expect(store.messages[0].content).toBe('Hello');
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));
 	});
 
 	it('ignores empty/whitespace-only input', () => {
@@ -100,13 +105,14 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.setModel('gpt-4.1');
 		store.setApprovalMode('bypass');
 		store.addUserMessage('Hello');
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));
 		const firstThreadId = mockRunAgent.mock.calls[0][0].threadId;
 		const firstProps = mockRunAgent.mock.calls[0][0].forwardedProps;
 
+		await vi.waitFor(() => expect(store.isGenerating).toBe(false));
 		store.retryLastRun();
 		// retryLastRun fires a fresh runAgent invocation
-		expect(mockRunAgent).toHaveBeenCalledTimes(2);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(2));
 
 		// Thread ID is preserved — retry MUST stay on the same conversation.
 		const retryThreadId = mockRunAgent.mock.calls[1][0].threadId;
@@ -132,11 +138,11 @@ describe('getChatStore (AG-UI agent client)', () => {
 		);
 		store.addUserMessage('Hello');
 		await Promise.resolve();  // let isRunning flip
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));
 		store.retryLastRun();
 		store.retryLastRun();
 		store.retryLastRun();
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);  // still 1
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));  // still 1
 		resolveRun();
 	});
 
@@ -155,17 +161,16 @@ describe('getChatStore (AG-UI agent client)', () => {
 	// Helper: drive an assistant reply through the AG-UI event subscriber
 	// so we get a real assistant message without mutating module state.
 	async function seedAssistantReply(asstId: string, asstContent: string) {
-		mockRunAgent.mockImplementationOnce(async (_p: unknown, sub: any) => {
-			await sub.onTextMessageStartEvent({
-				event: { messageId: asstId, role: 'assistant' }
-			});
-			await sub.onTextMessageContentEvent({ event: { delta: asstContent } });
-			await sub.onRunFinishedEvent({ event: {} });
+		mockRunAgent.mockImplementationOnce(async () => {
+			capturedOnEvent!(parseEvent({ type: 'TEXT_MESSAGE_START', messageId: asstId, role: 'assistant' }));
+			capturedOnEvent!(parseEvent({ type: 'TEXT_MESSAGE_CONTENT', messageId: asstId, delta: asstContent }));
+			capturedOnEvent!(parseEvent({ type: 'RUN_FINISHED', threadId: 'test', runId: 'test' }));
 		});
 		store.addUserMessage('hi');
-		// Wait for the addUserMessage-triggered runAgent to complete.
-		await Promise.resolve();
-		await Promise.resolve();
+		await vi.waitFor(() => {
+			expect(store.messages).toHaveLength(2);
+			expect(store.isGenerating).toBe(false);
+		});
 	}
 
 	it('regenerate truncates from messageId and preserves threadId', async () => {
@@ -181,7 +186,7 @@ describe('getChatStore (AG-UI agent client)', () => {
 
 		expect(store.messages).toHaveLength(1);
 		expect(store.messages[0].role).toBe('user');
-		expect(mockRunAgent).toHaveBeenCalledTimes(2);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(2));
 		// ── Load-bearing: regenerate keeps the thread. ──
 		expect(mockRunAgent.mock.calls[1][0].threadId).toBe(firstThreadId);
 	});
@@ -196,17 +201,18 @@ describe('getChatStore (AG-UI agent client)', () => {
 		store.regenerate('asst-2');
 		await Promise.resolve();
 
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(2));
 		expect(mockRunAgent.mock.calls[1][0].forwardedProps).toEqual(firstProps);
 	});
 
 	it('regenerate is a no-op for unknown messageId', async () => {
 		await seedAssistantReply('asst-3', 'reply');
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));
 
 		store.regenerate('does-not-exist');
 		await Promise.resolve();
 
-		expect(mockRunAgent).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(1));
 		expect(store.messages).toHaveLength(2);
 	});
 
@@ -227,13 +233,13 @@ describe('getChatStore (AG-UI agent client)', () => {
 		);
 		store.addUserMessage('follow up');
 		await Promise.resolve();
-		expect(mockRunAgent).toHaveBeenCalledTimes(2);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(2));
 
 		store.regenerate('asst-4');
 		store.regenerate('asst-4');
 
 		// Still 2 — both regens no-op'd while isRunning=true.
-		expect(mockRunAgent).toHaveBeenCalledTimes(2);
+		await vi.waitFor(() => expect(mockRunAgent).toHaveBeenCalledTimes(2));
 
 		resolveRun();
 	});

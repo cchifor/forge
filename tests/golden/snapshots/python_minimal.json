@@ -29,12 +29,12 @@
       "sha256": "750efea627473756"
     },
     ".github/workflows/ci.yml": {
-      "size": 1042,
-      "sha256": "22bd2b28afff128a"
+      "size": 1089,
+      "sha256": "3a519b182478cbdf"
     },
     ".github/workflows/quality.yml": {
-      "size": 3120,
-      "sha256": "c58a7bcb559942e4"
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
       "size": 523,
@@ -65,7 +65,7 @@
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
-      "size": 540,
+      "size": 546,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -569,8 +569,8 @@
       "sha256": "42883eed7a0d73f4"
     },
     "services/api/tests/unit/test_app_main.py": {
-      "size": 1789,
-      "sha256": "6cdbf5de2c4a8be6"
+      "size": 1925,
+      "sha256": "1b1774d8770720db"
     },
     "services/api/tests/unit/test_config.py": {
       "size": 1494,
@@ -629,8 +629,8 @@
       "sha256": "3e7454fc99b0eed2"
     },
     "services/api/uv.lock": {
-      "size": 201791,
-      "sha256": "56f7ae592dc80128"
+      "size": 296595,
+      "sha256": "937e435e82b75f33"
     }
   }
 }

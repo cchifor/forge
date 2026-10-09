@@ -1,3 +1,4 @@
+import type { DataTableFeatures } from './features'
 import type { ColumnDef } from '@tanstack/vue-table'
 import type { InjectionKey } from 'vue'
 import type { TailwindBreakpoint } from './breakpoints'
@@ -74,7 +75,7 @@ export interface DataTableColumnMeta {
   identifier?: boolean
 }
 
-export type DataTableColumnDef<T> = ColumnDef<T, unknown> & {
+export type DataTableColumnDef<T extends object> = ColumnDef<DataTableFeatures, T, unknown> & {
   meta?: DataTableColumnMeta
 }
 

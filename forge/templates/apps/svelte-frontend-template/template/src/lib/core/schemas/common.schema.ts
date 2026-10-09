@@ -13,7 +13,7 @@ export function paginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
 export const apiErrorSchema = z.object({
 	message: z.string(),
 	type: z.string(),
-	detail: z.record(z.unknown()).nullable().optional()
+	detail: z.record(z.string(), z.unknown()).nullable().optional()
 });
 
 export type ApiErrorParsed = z.infer<typeof apiErrorSchema>;

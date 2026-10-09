@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-vue-next'
+import { TrendingUp, TrendingDown, Minus } from '@lucide/vue'
 import { marked } from 'marked'
 import type { WorkspaceActivity, AgentState } from '../types'
 

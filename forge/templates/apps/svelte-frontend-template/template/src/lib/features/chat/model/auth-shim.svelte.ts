@@ -1,5 +1,5 @@
 /**
- * Soft dependency on `$lib/core/auth/auth.svelte` so the chat module compiles
+ * Soft dependency on `#lib/core/auth/auth.svelte` so the chat module compiles
  * even when the project was scaffolded with `include_auth=false` (post_generate.py
  * removes the auth directory in that case). Returns a no-op `getToken` when auth
  * isn't present — the agent service in dev/no-auth setups doesn't require a Bearer
@@ -18,7 +18,7 @@ async function resolveAuth(): Promise<AuthLike> {
 	if (attempted) return { getToken: async () => null };
 	attempted = true;
 	try {
-		const mod = (await import('$lib/core/auth/auth.svelte')) as unknown as {
+		const mod = (await import('#lib/core/auth/auth.svelte.ts')) as unknown as {
 			getAuth: () => AuthLike;
 		};
 		resolved = mod.getAuth();

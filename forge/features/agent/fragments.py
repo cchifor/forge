@@ -141,11 +141,11 @@ def register_all(api: ForgeAPI) -> None:
                     # already in the base template but the rest are
                     # declared here so the port is self-sufficient.
                     dependencies=(
-                        'async-trait = "0.1"',
-                        'futures = "0.3"',
-                        'serde = { version = "1", features = ["derive"] }',
-                        'serde_json = "1"',
-                        'thiserror = "1"',
+                        'async-trait = "0.1.92"',
+                        'futures = "0.3.34"',
+                        'serde = { version = "1.0.229", features = ["derive"] }',
+                        'serde_json = "1.0.151"',
+                        'thiserror = "2.0.21"',
                     ),
                 ),
             },
@@ -183,7 +183,7 @@ def register_all(api: ForgeAPI) -> None:
                     # surfaces text-delta + tool-call-delta + finish events,
                     # which the adapter translates to ``LlmChunk``. Pinning
                     # at >=4.0 keeps us on the post-v4 ``CoreMessage`` API.
-                    dependencies=("ai@^4.0.0", "@ai-sdk/openai@^1.0.0"),
+                    dependencies=("ai@7.0.136", "@ai-sdk/openai@4.0.91"),
                     env_vars=(
                         ("OPENAI_API_KEY", ""),
                         ("OPENAI_BASE_URL", ""),
@@ -191,13 +191,11 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("llm_openai", "rust"),
-                    # ``async-openai`` covers chat + embeddings + streaming
-                    # in one crate. Pin at ^0.27 (the current stable
-                    # OpenAI tools-API era) — earlier versions used a
-                    # different request-builder shape. ``reqwest`` is
-                    # already in the base template; the adapter consumes
-                    # ``async-openai``'s default reqwest backend.
-                    dependencies=('async-openai = "0.27"',),
+                    # API groups are opt-in in async-openai 0.42. Keep both
+                    # chat streaming and embeddings available to LlmPort.
+                    dependencies=(
+                        'async-openai = { version = "0.42.1", features = ["chat-completion", "embedding"] }',
+                    ),
                     env_vars=(
                         ("OPENAI_API_KEY", ""),
                         ("OPENAI_BASE_URL", ""),

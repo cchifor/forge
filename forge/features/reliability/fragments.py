@@ -71,7 +71,7 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("reliability_circuit_breaker", "node"),
-                    dependencies=("opossum@9.0.0",),
+                    dependencies=("opossum@10.0.0",),
                     env_vars=(
                         ("CIRCUIT_BREAKER_TIMEOUT_MS", "10000"),
                         ("CIRCUIT_BREAKER_ERROR_THRESHOLD_PCT", "50"),
@@ -133,9 +133,9 @@ def register_all(api: ForgeAPI) -> None:
                     # + thiserror; landing the port without these deps would
                     # fail ``cargo check`` even before an adapter wires in.
                     dependencies=(
-                        'async-trait = "0.1"',
-                        'serde_json = "1"',
-                        'thiserror = "1"',
+                        'async-trait = "0.1.92"',
+                        'serde_json = "1.0.151"',
+                        'thiserror = "2.0.21"',
                     ),
                 ),
             },
@@ -158,8 +158,8 @@ def register_all(api: ForgeAPI) -> None:
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("cache_memory", "rust"),
                     dependencies=(
-                        'lru = "0.12"',
-                        'tokio = { version = "1", features = ["sync"] }',
+                        'lru = "0.18.5"',
+                        'tokio = { version = "1.53.2", features = ["sync"] }',
                     ),
                     env_vars=(("CACHE_MEMORY_MAX_ENTRIES", "1024"),),
                 ),
@@ -180,14 +180,14 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("cache_redis", "node"),
-                    dependencies=("ioredis@5.4.1",),
+                    dependencies=("ioredis@6.0.0",),
                     env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
                 ),
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("cache_redis", "rust"),
                     dependencies=(
-                        'redis = { version = "0.27", features = ["tokio-comp"] }',
-                        'tokio = { version = "1", features = ["sync"] }',
+                        'redis = { version = "1.7.1", features = ["tokio-comp"] }',
+                        'tokio = { version = "1.53.2", features = ["sync"] }',
                     ),
                     env_vars=(("CACHE_REDIS_URL", "redis://redis:6379/3"),),
                 ),

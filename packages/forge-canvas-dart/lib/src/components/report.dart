@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../generated/props.dart';
 
@@ -18,26 +18,22 @@ class Report extends StatelessWidget {
   final String? title;
   final String markdown;
 
-  const Report({
-    super.key,
-    this.title,
-    required this.markdown,
-  });
+  const Report({super.key, this.title, required this.markdown});
 
   /// Build a [Report] from a typed [ReportProps].
-  factory Report.fromGeneratedProps(ReportProps props) => Report(
-        title: props.title,
-        markdown: props.markdown,
-      );
+  factory Report.fromGeneratedProps(ReportProps props) =>
+      Report(title: props.title, markdown: props.markdown);
 
   /// Backend-driven entry point: parse a raw payload into the
   /// generated [ReportProps] (single source of truth for canvas prop
   /// shapes), then build the widget.
   factory Report.fromProps(Map<String, dynamic> props) =>
-      Report.fromGeneratedProps(ReportProps.fromJson({
-        if (props['title'] != null) 'title': props['title'],
-        'markdown': (props['markdown'] as String?) ?? '',
-      }));
+      Report.fromGeneratedProps(
+        ReportProps.fromJson({
+          if (props['title'] != null) 'title': props['title'],
+          'markdown': (props['markdown'] as String?) ?? '',
+        }),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -52,17 +48,23 @@ class Report extends StatelessWidget {
             if (title != null && title!.isNotEmpty) ...[
               Text(
                 title!,
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 12),
             ],
-            MarkdownBody(
-              data: markdown,
-              selectable: true,
-              styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                codeblockDecoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(6),
+            // Markdown still uses Flutter's legacy Material theme/localizations.
+            // ignore: deprecated_member_use
+            MaterialUiCompatibilityBridge(
+              child: MarkdownBody(
+                data: markdown,
+                selectable: true,
+                styleSheet: MarkdownStyleSheet(
+                  codeblockDecoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
               ),
             ),

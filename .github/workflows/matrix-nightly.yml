@@ -147,7 +147,7 @@ jobs:
         with:
           prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -184,13 +184,13 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane smoke --json > \
             matrix-status/${{ matrix.scenario }}.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: compose-logs-${{ matrix.scenario }}
@@ -228,7 +228,7 @@ jobs:
         with:
           prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -250,7 +250,7 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
             matrix-status/${{ matrix.scenario }}-roundtrip.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
@@ -288,7 +288,7 @@ jobs:
         with:
           prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -311,7 +311,7 @@ jobs:
           uv run python tests/matrix/runner.py \
             --scenario ${{ matrix.scenario }} --lane update --json > \
             matrix-status/${{ matrix.scenario }}-update.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-update-${{ matrix.scenario }}
@@ -343,7 +343,7 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: matrix-status-raw
           pattern: matrix-status-*
@@ -406,7 +406,7 @@ jobs:
                   fh.write("\nSee individual scenario logs above for details.\n")
               Path("matrix-status.md").write_text(grid, encoding="utf-8")
           PY
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: matrix-status-grid
           path: matrix-status.md
@@ -432,7 +432,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pull the per-scenario status artifacts so the issue body can name the
       # specific failing scenario(s) instead of a generic per-lane table (#258).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true
         with:
           path: matrix-status-raw

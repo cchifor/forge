@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import json
 import shutil
 import subprocess
@@ -494,3 +495,19 @@ def test_incompatible_explicit_choice_and_duplicate_names():
                 }
             )
         )
+
+
+def test_generator_fingerprint_ignores_runtime_coverage_files(tmp_path, monkeypatch):
+    from forge.quality import model
+
+    source = tmp_path / "forge"
+    source.mkdir()
+    runtime = source / "runtime.py"
+    runtime.write_text("value = 1\n")
+    monkeypatch.setattr(model, "__file__", str(source / "quality/model.py"))
+    expected = model.source_fingerprint()
+    (source / ".coverage").write_bytes(b"local coverage database")
+    (source / ".coverage.worker.1").write_bytes(b"parallel worker database")
+    assert model.source_fingerprint() == expected
+    runtime.write_text("value = 2\n")
+    assert model.source_fingerprint() != expected

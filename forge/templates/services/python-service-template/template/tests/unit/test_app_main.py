@@ -11,7 +11,9 @@ class TestConfigureRouters:
     def test_adds_api_v1_router(self):
         app = FastAPI()
         _configure_routers(app)
-        paths = [route.path for route in app.routes]
+        # FastAPI may retain included routers lazily. The public OpenAPI
+        # contract resolves them without depending on private route objects.
+        paths = app.openapi()["paths"]
         assert any("/api/v1" in p for p in paths)
 
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import {
 		Home,
 		FolderOpen,
@@ -7,10 +7,10 @@
 		LogOut,
 		CreditCard,
 		UserCircle
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
-	import { getAuth } from '$lib/core/auth/auth.svelte';
-	import { getUiStore } from '$lib/features/shell';
+	import { getAuth } from '#lib/core/auth/auth.svelte.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
 
 	let { forceCollapsed = false }: { forceCollapsed?: boolean } = $props();
 
@@ -25,8 +25,8 @@
 	];
 
 	function isActive(url: string) {
-		if (url === '/') return $page.url.pathname === '/';
-		return $page.url.pathname.startsWith(url);
+		if (url === '/') return page.url.pathname === '/';
+		return page.url.pathname.startsWith(url);
 	}
 
 	function handleBrandClick() {

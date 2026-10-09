@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { Mic, Paperclip, Send, X } from 'lucide-svelte';
-	import { getChatStore } from '$lib/features/chat';
-	import type { ChatAttachment } from '$lib/features/chat/chat.types';
+	import { Mic, Paperclip, Send, X } from '@lucide/svelte';
+	import { getChatStore } from '#lib/features/chat/index.ts';
+	import type { ChatAttachment } from '#lib/features/chat/chat.types.ts';
 	import {
 		ChatAttachmentUploadError,
 		uploadChatAttachment
-	} from '$lib/features/chat/model/chat-attachments';
-	import { cn } from '$lib/shared/lib/utils';
+	} from '#lib/features/chat/model/chat-attachments.ts';
+	import { cn } from '#lib/shared/lib/utils.ts';
 
 	const chat = getChatStore();
 	let inputValue = $state('');

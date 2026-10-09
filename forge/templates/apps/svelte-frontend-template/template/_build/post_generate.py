@@ -265,6 +265,30 @@ def generate_features():
         inject_marker(PROJECT_DIR / "src" / "lib" / "core" / "schemas" / "index.ts", "// --- feature schema exports ---", HUB_SCHEMA_EXPORT.format(**ctx))
         inject_marker(PROJECT_DIR / "src" / "test" / "mocks" / "handlers.ts", "// --- feature mock handlers ---", HUB_MSW_HANDLERS.format(**ctx))
         inject_marker(PROJECT_DIR / "src" / "lib" / "core" / "api" / "generated" / "types.gen.ts", "// --- feature type definitions ---", HUB_TYPES.format(**ctx))
+        snapshot_path = PROJECT_DIR / "openapi-snapshot.json"
+        if INCLUDE_OPENAPI and snapshot_path.is_file():
+            snapshot = _json.loads(snapshot_path.read_text(encoding="utf-8"))
+            schemas = snapshot.setdefault("components", {}).setdefault("schemas", {})
+            status_name = ctx["Singular"] + "Status"
+            schemas[status_name] = {"type": "string", "enum": ["DRAFT", "ACTIVE", "ARCHIVED"]}
+            properties = {
+                "name": {"type": "string"},
+                "description": {"type": ["string", "null"]},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "status": {"$ref": "#/components/schemas/" + status_name},
+            }
+            schemas[ctx["Singular"] + "Create"] = {
+                "type": "object", "required": ["name"], "properties": properties,
+            }
+            schemas[ctx["Singular"] + "Update"] = {
+                "type": "object",
+                "properties": {
+                    name: {"anyOf": [schema, {"type": "null"}]}
+                    for name, schema in properties.items()
+                },
+            }
+            snapshot_path.write_text(_json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+
 
     return features
 
@@ -416,7 +440,7 @@ agent endpoint via `VITE_AGENT_BASE_URL` (defaults to `${origin}/agent/`).
 Add a custom workspace activity:
 
 ```ts
-import { registerWorkspaceComponent } from '$lib/features/chat';
+import { registerWorkspaceComponent } from '#lib/features/chat/index.ts';
 import MyActivity from './MyActivity.svelte';
 
 registerWorkspaceComponent('my_activity_type', {
@@ -497,16 +521,11 @@ def remove_optional_files():
 
     if not INCLUDE_CHAT:
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "chat")
-        # The vendored canvas-core lived under the chat dir just removed, so
-        # drop its svelte.config.js alias line — a mapping at a deleted dir is
-        # dead config. (An empty `alias: {}` left behind is valid SvelteKit.)
-        svelte_config = PROJECT_DIR / "svelte.config.js"
-        if svelte_config.exists():
-            content = svelte_config.read_text(encoding="utf-8")
-            lines = [
-                l for l in content.splitlines(keepends=True) if "@forge/canvas-core" not in l
-            ]
-            svelte_config.write_text("".join(lines), encoding="utf-8")
+        # Remove the package import for the vendored module pruned with chat.
+        package_path = PROJECT_DIR / "package.json"
+        package = _json.loads(package_path.read_text(encoding="utf-8"))
+        package.get("imports", {}).pop("#canvas-core", None)
+        package_path.write_text(_json.dumps(package, indent=2) + "\n", encoding="utf-8")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatDrawer.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatBottomSheet.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "VerticalSplitHandle.svelte")

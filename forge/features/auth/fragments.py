@@ -380,7 +380,7 @@ def register_all(api: ForgeAPI) -> None:
                     # services/ was the project root.
                     dependencies=(
                         'platform-auth = { path = "../../packages/platform-auth-rs" }',
-                        'serde_json = "1"',
+                        'serde_json = "1.0.151"',
                     ),
                 ),
             },

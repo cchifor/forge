@@ -207,15 +207,14 @@ import { Toaster } from 'vue-sonner'
 
 MAIN_LAYOUT_NO_CHAT = """\
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Home, Package, User, Settings } from 'lucide-vue-next'
+import { Home, Package, User, Settings } from '@lucide/vue'
 import AppSidebar from '@/shared/components/AppSidebar.vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
 import { useBreakpoint } from '@/shared/composables/useBreakpoint'
 
 const route = useRoute()
-const { isCompact, isMedium, isExpanded } = useBreakpoint()
+const { isMedium, isExpanded } = useBreakpoint()
 
 const bottomNavItems = [
   { title: 'Home', url: '/', icon: Home },
@@ -475,6 +474,13 @@ def main() -> None:
         inject_feature_into_hubs(ctx)
         print(f"    {ctx['plural']}: 8 files → /api/{ctx['backend_name']}/v1/{ctx['plural']}")
     print(f"  Generated {len(features)} feature(s): {', '.join(features)}")
+    if not features:
+        sidebar = PROJECT_DIR / "src" / "shared" / "components" / "AppSidebar.vue"
+        sidebar.write_text(
+            sidebar.read_text(encoding="utf-8").replace("  Package,\n", ""),
+            encoding="utf-8",
+        )
+
 
     # Patch home page API paths to use the first backend's route prefix
     first_backend = next(iter(feature_backend_map.values()), "backend")

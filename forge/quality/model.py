@@ -120,6 +120,8 @@ def source_fingerprint() -> str:
             or rel.parts[0] == "plans"  # Development notes are not installed runtime inputs.
             or set(rel.parts) & IGNORED
             or path.suffix in {".pyc", ".pyo"}
+            or path.name == ".coverage"
+            or path.name.startswith(".coverage.")
         ):
             continue
         result.update(rel.as_posix().encode())

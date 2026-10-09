@@ -332,6 +332,7 @@ _EPHEMERAL_PATH_SEGMENTS: frozenset[str] = frozenset(
         "node_modules",
         ".venv",
         "htmlcov",
+        "dist",
         ".next",
         ".svelte-kit",
         ".dart_tool",
@@ -343,7 +344,9 @@ _EPHEMERAL_PATH_SEGMENTS: frozenset[str] = frozenset(
 def _is_ephemeral_path(rel: Path) -> bool:
     """True when ``rel`` traverses a build-artefact directory."""
 
-    return any(seg in _EPHEMERAL_PATH_SEGMENTS for seg in rel.parts)
+    return any(seg in _EPHEMERAL_PATH_SEGMENTS for seg in rel.parts) or (
+        rel.name == ".coverage" or rel.name.startswith(".coverage.")
+    )
 
 
 def _write(

@@ -167,7 +167,7 @@ App start → AuthController.build() → AuthRepository.init()
 
 ```
 flutter_frontend/
-├── analysis_options.yaml          # Strict lints + custom_lint + riverpod_lint
+├── analysis_options.yaml          # Strict lints + native riverpod_lint
 ├── build.yaml                     # Code gen config (freezed, riverpod, go_router)
 ├── pubspec.yaml                   # Dependencies
 ├── scripts/
@@ -322,7 +322,7 @@ flutter_frontend/
 | **Auth** | flutter_appauth 8.x | OAuth2 PKCE flow for Keycloak |
 | **Serialization** | freezed 3.x + json_serializable | Immutable models, JSON (de)serialization |
 | **Storage** | shared_preferences, flutter_secure_storage | Settings persistence, token storage |
-| **Linting** | custom_lint + riverpod_lint | Architectural rule enforcement |
+| **Linting** | native riverpod_lint | Architectural rule enforcement |
 | **Testing** | flutter_test + mocktail | Unit, widget, and provider tests |
 | **Code Gen** | build_runner | Generates `.freezed.dart`, `.g.dart`, riverpod/router code |
 
@@ -657,7 +657,7 @@ expect(container.read(authControllerProvider).value, isA<Authenticated>());
 ### Analysis Options (`analysis_options.yaml`)
 
 Extends `package:flutter_lints` with:
-- `custom_lint` plugin for custom rules
+- native `riverpod_lint` analyzer plugin
 - `riverpod_lint` for Riverpod-specific checks
 - Excludes generated files (`*.g.dart`, `*.freezed.dart`)
 - Enforces `prefer_const_constructors`, `avoid_print`, `prefer_single_quotes`, `require_trailing_commas`

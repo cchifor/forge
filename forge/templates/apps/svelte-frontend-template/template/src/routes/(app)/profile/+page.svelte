@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { User, Mail, Shield, Building2, Hash } from 'lucide-svelte';
-	import { getAuth } from '$lib/core';
+	import { User, Mail, Shield, Building2, Hash } from '@lucide/svelte';
+	import { getAuth } from '#lib/core/index.ts';
 
 	const auth = getAuth();
 

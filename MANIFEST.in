@@ -35,4 +35,4 @@ recursive-exclude forge/templates */dist/*
 recursive-exclude forge/templates */build/*
 recursive-exclude forge/features */dist/*
 recursive-exclude forge/features */build/*
-global-exclude *.pyc *.pyo .DS_Store
+global-exclude *.pyc *.pyo .DS_Store .coverage .coverage.*

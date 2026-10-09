@@ -10,9 +10,11 @@ build/
 .mypy_cache/
 htmlcov/
 .coverage
+.coverage.*
 coverage.json
 coverage.xml
 node_modules/
+.dart_tool/
 
 # Rust build artifacts from SDK fragments (cargo emits these when tests
 # run inside the templated rust/ subtree; uv build picks them up and

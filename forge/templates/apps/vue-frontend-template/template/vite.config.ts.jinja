@@ -1,13 +1,13 @@
-import istanbul from 'vite-plugin-istanbul';
+import browserCoverage from './scripts/browser-coverage.ts';
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 
 export default defineConfig({
   plugins: [
-    ...(process.env.FORGE_COVERAGE === 'true' ? [istanbul({ include: 'src/**/*', exclude: ['**/*.test.*', '**/*.spec.*', 'src/test/**'], extension: ['.ts', '.vue', '.svelte'], requireEnv: false, forceBuildInstrument: false })] : []),
+    ...(process.env.FORGE_COVERAGE === 'true' ? [browserCoverage()] : []),
     vue(),
     tailwindcss(),
     AutoImport({
@@ -52,12 +52,14 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 800,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          'vendor-vue': ['vue', 'vue-router', 'pinia'],
-          'vendor-tanstack': ['@tanstack/vue-query'],
-          'vendor-radix': ['radix-vue'],
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-vue', test: /node_modules\/(?:@vue|vue|vue-router|pinia)\// },
+            { name: 'vendor-tanstack', test: /node_modules\/@tanstack\// },
+            { name: 'vendor-radix', test: /node_modules\/radix-vue\// },
+          ],
         },
       },
     },

@@ -37,11 +37,11 @@ def register_all(api: ForgeAPI) -> None:
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("observability", "node"),
                     dependencies=(
-                        "@opentelemetry/sdk-node@0.55.0",
-                        "@opentelemetry/auto-instrumentations-node@0.55.0",
-                        "@opentelemetry/exporter-trace-otlp-http@0.55.0",
-                        "@opentelemetry/resources@1.29.0",
-                        "@opentelemetry/semantic-conventions@1.29.0",
+                        "@opentelemetry/sdk-node@0.223.0",
+                        "@opentelemetry/auto-instrumentations-node@0.81.0",
+                        "@opentelemetry/exporter-trace-otlp-http@0.223.0",
+                        "@opentelemetry/resources@2.12.0",
+                        "@opentelemetry/semantic-conventions@1.43.0",
                     ),
                     env_vars=(
                         ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
@@ -51,21 +51,11 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("observability", "rust"),
-                    # opentelemetry-otlp 0.27's ``grpc-tonic`` feature pulls in
-                    # tonic 0.12 → tower 0.4.13. tower 0.4 writes
-                    # ``IndexMap<K, V>`` in its ready_cache module, relying on
-                    # the ``S = RandomState`` default that only exists when
-                    # indexmap-1's non-default ``std`` feature is on. With
-                    # cargo's resolver=2, no other dep in this graph activates
-                    # std, so tower 0.4 fails to compile under ``cargo clippy``.
-                    # Force-enable here so the upstream API regression doesn't
-                    # surface as a CI failure.
                     dependencies=(
-                        "opentelemetry@0.27",
-                        'opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }',
-                        'opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"] }',
-                        "tracing-opentelemetry@0.28",
-                        'indexmap = { version = "1", features = ["std"] }',
+                        "opentelemetry@0.33.0",
+                        'opentelemetry_sdk = { version = "0.33.0", features = ["rt-tokio"] }',
+                        'opentelemetry-otlp = { version = "0.33.0", features = ["grpc-tonic"] }',
+                        "tracing-opentelemetry@0.34.0",
                     ),
                     env_vars=(
                         ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
@@ -90,7 +80,7 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("enhanced_health", "node"),
-                    dependencies=("redis@4.7.0",),
+                    dependencies=("redis@6.3.0",),
                     env_vars=(
                         ("REDIS_URL", "redis://redis:6379/0"),
                         ("KEYCLOAK_HEALTH_URL", "http://keycloak:9000/health/ready"),
@@ -135,9 +125,9 @@ def register_all(api: ForgeAPI) -> None:
                     # land on a project that doesn't already depend on
                     # them; cargo de-dupes when other fragments overlap.
                     dependencies=(
-                        'serde = { version = "1", features = ["derive"] }',
-                        'serde_json = "1"',
-                        'thiserror = "1"',
+                        'serde = { version = "1.0.229", features = ["derive"] }',
+                        'serde_json = "1.0.151"',
+                        'thiserror = "2.0.21"',
                     ),
                 ),
             },
@@ -166,10 +156,10 @@ def register_all(api: ForgeAPI) -> None:
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("observability_otel", "node"),
                     dependencies=(
-                        "@opentelemetry/sdk-node@^0.55.0",
-                        "@opentelemetry/resources@^1.28.0",
-                        "@opentelemetry/exporter-trace-otlp-grpc@^0.55.0",
-                        "@opentelemetry/auto-instrumentations-node@^0.51.0",
+                        "@opentelemetry/sdk-node@0.223.0",
+                        "@opentelemetry/resources@2.12.0",
+                        "@opentelemetry/exporter-trace-otlp-grpc@0.223.0",
+                        "@opentelemetry/auto-instrumentations-node@0.81.0",
                     ),
                     env_vars=(
                         ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
@@ -181,11 +171,10 @@ def register_all(api: ForgeAPI) -> None:
                     # See the ``observability`` fragment above for why indexmap
                     # is force-enabled — same tower 0.4 ready_cache transitive.
                     dependencies=(
-                        "opentelemetry@0.27",
-                        "opentelemetry_sdk@0.27",
-                        "opentelemetry-otlp@0.27",
-                        "tracing-opentelemetry@0.28",
-                        'indexmap = { version = "1", features = ["std"] }',
+                        "opentelemetry@0.33.0",
+                        "opentelemetry_sdk@0.33.0",
+                        "opentelemetry-otlp@0.33.0",
+                        "tracing-opentelemetry@0.34.0",
                     ),
                     env_vars=(
                         ("OTEL_EXPORTER_OTLP_ENDPOINT", ""),

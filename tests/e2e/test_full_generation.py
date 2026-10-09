@@ -15,9 +15,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import yaml
-
 import pytest
+import yaml
 
 from forge.config import (
     BackendConfig,
@@ -298,7 +297,7 @@ def test_vue_auth_off_typechecks(
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    result = _run(["npm", "run", "type-check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"vue-tsc failed for auth-off project:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
@@ -332,7 +331,7 @@ def test_console_template_greenfield_typechecks(
     assert (frontend_dir / "src" / "shared" / "components" / "StatCard.vue").is_file()
     assert (frontend_dir / "src" / "features" / "console" / "ui" / "DashboardPage.vue").is_file()
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    result = _run(["npm", "run", "type-check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"vue-tsc failed for Console template:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
@@ -344,6 +343,29 @@ def test_console_template_greenfield_typechecks(
 # EntityList.contract.ts (op interfaces), so vue-tsc resolving the import +
 # type-checking the prop is the gate that a contract change can't silently break.
 # -----------------------------------------------------------------------------
+
+
+def test_datatable_component_builds_and_preserves_state(
+    tmp_path: Path, require_npm: None, require_git: None
+) -> None:
+    config = ProjectConfig(
+        project_name="E2E DataTable",
+        output_dir=str(tmp_path),
+        backends=[],
+        frontend=_make_frontend(FrontendFramework.VUE),
+        components=["DataTable"],
+        options={"backend.mode": "none", "frontend.api_target.url": "http://localhost:5000"},
+        include_keycloak=False,
+    )
+    config.validate()
+    project_root = generate(config, quiet=True)
+    frontend_dir = project_root / "apps" / "frontend"
+    build = _run(["npm", "run", "build"], cwd=frontend_dir)
+    assert build.returncode == 0, f"DataTable build failed:\n{build.stdout}\n{build.stderr}"
+    tests = _run(
+        ["npm", "test", "--", "src/shared/ui/data-table/useDataTable.test.ts"], cwd=frontend_dir
+    )
+    assert tests.returncode == 0, f"DataTable runtime tests failed:\n{tests.stdout}\n{tests.stderr}"
 
 
 def test_entitylist_component_contract_types_typecheck(
@@ -366,7 +388,7 @@ def test_entitylist_component_contract_types_typecheck(
     assert (frontend_dir / "src" / "shared" / "components" / "EntityList.vue").is_file()
     assert (frontend_dir / "src" / "shared" / "api" / "EntityList.contract.ts").is_file()
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    result = _run(["npm", "run", "type-check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"vue-tsc failed for EntityList component:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
@@ -449,7 +471,7 @@ def test_entitylist_brownfield_binding_typechecks(
 
     _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    result = _run(["npm", "run", "type-check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"vue-tsc failed for EntityList brownfield binding:\n"
         f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -610,7 +632,7 @@ def test_chatfirst_template_greenfield_typechecks(
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "src" / "features" / "chatfirst" / "ui" / "ResultsPage.vue").is_file()
 
-    result = _run(["npx", "--yes", "vue-tsc", "--noEmit"], cwd=frontend_dir)
+    result = _run(["npm", "run", "type-check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"vue-tsc failed for ChatFirst template:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
@@ -663,14 +685,17 @@ def test_vue_chat_on_typechecks(
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("with_openapi", [False, True])
 def test_svelte_chat_on_typechecks(
-    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+    with_openapi: bool, tmp_path: Path, require_uv: None, require_npm: None, require_git: None
 ) -> None:
     config = ProjectConfig(
         project_name="E2E Svelte Chat",
         output_dir=str(tmp_path),
         backends=[_make_python_backend()],
-        frontend=_make_frontend(FrontendFramework.SVELTE, with_auth=True, with_chat=True),
+        frontend=_make_frontend(
+            FrontendFramework.SVELTE, with_auth=True, with_chat=True, with_openapi=with_openapi
+        ),
         include_keycloak=False,
     )
     config.validate()
@@ -683,7 +708,13 @@ def test_svelte_chat_on_typechecks(
     install = _run(["npm", "install", "--no-audit", "--no-fund"], cwd=frontend_dir)
     assert install.returncode == 0, f"npm install failed:\n{install.stderr}"
 
-    result = _run(["npx", "--yes", "svelte-check", "--output", "human"], cwd=frontend_dir)
+    if with_openapi:
+        codegen = _run(["npm", "run", "codegen"], cwd=frontend_dir)
+        assert codegen.returncode == 0, (
+            f"OpenAPI codegen failed:\n{codegen.stdout}\n{codegen.stderr}"
+        )
+
+    result = _run(["npm", "run", "check"], cwd=frontend_dir)
     assert result.returncode == 0, (
         f"svelte-check failed for chat-on project:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
@@ -722,14 +753,9 @@ def test_flutter_minimal_analyzes(
     assert pub_get.returncode == 0, f"flutter pub get failed:\n{pub_get.stderr}"
 
     result = _run(["flutter", "analyze", "--no-fatal-infos"], cwd=frontend_dir)
-    # `flutter analyze` exits non-zero whenever *any* issue is found — including
-    # `info`-level lints (const-constructor / trailing-comma style nits that
-    # shift with each Flutter release) even with `--no-fatal-infos`. The gate we
-    # actually owe a generated project is "no errors or warnings"; infos are
-    # advisory style. So assert on the severity lines, not the exit code.
-    analyze_out = f"{result.stdout}\n{result.stderr}"
-    severe = [ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln]
-    assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)
+    assert result.returncode == 0, f"flutter analyze failed:\n{result.stdout}\n{result.stderr}"
+    tests = _run(["flutter", "test"], cwd=frontend_dir)
+    assert tests.returncode == 0, f"flutter test failed:\n{tests.stdout}\n{tests.stderr}"
 
 
 # -----------------------------------------------------------------------------
@@ -761,21 +787,8 @@ def test_flutter_full_analyzes(
     pubspec_path = frontend_dir / "pubspec.yaml"
     assert pubspec_path.exists()
 
-    # forge_canvas / forge_canvas_core aren't published to pub.dev yet
-    # (RFC-003). Override with local path: references so flutter pub get
-    # resolves them from the monorepo's packages/ directory.
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    pubspec = yaml.safe_load(pubspec_path.read_text())
-    pubspec["dependency_overrides"] = {
-        "forge_canvas": {
-            "path": str(repo_root / "packages" / "forge-canvas-dart"),
-        },
-        "forge_canvas_core": {
-            "path": str(repo_root / "packages" / "forge-canvas-core-dart"),
-        },
-    }
-    pubspec_path.write_text(yaml.dump(pubspec, sort_keys=False))
-
+    # Exercise the vendored packages shipped to users, including their own
+    # dependency resolution performed by the generation hook.
     pub_get = _run(["flutter", "pub", "get"], cwd=frontend_dir)
     assert pub_get.returncode == 0, f"flutter pub get failed:\n{pub_get.stderr}"
 
@@ -796,11 +809,6 @@ def test_flutter_full_analyzes(
     )
 
     result = _run(["flutter", "analyze", "--no-fatal-infos"], cwd=frontend_dir)
-    # `flutter analyze` exits non-zero whenever *any* issue is found — including
-    # `info`-level lints (const-constructor / trailing-comma style nits that
-    # shift with each Flutter release) even with `--no-fatal-infos`. The gate we
-    # actually owe a generated project is "no errors or warnings"; infos are
-    # advisory style. So assert on the severity lines, not the exit code.
-    analyze_out = f"{result.stdout}\n{result.stderr}"
-    severe = [ln for ln in analyze_out.splitlines() if " error • " in ln or " warning • " in ln]
-    assert not severe, "flutter analyze reported errors/warnings:\n" + "\n".join(severe)
+    assert result.returncode == 0, f"flutter analyze failed:\n{result.stdout}\n{result.stderr}"
+    tests = _run(["flutter", "test"], cwd=frontend_dir)
+    assert tests.returncode == 0, f"flutter test failed:\n{tests.stdout}\n{tests.stderr}"

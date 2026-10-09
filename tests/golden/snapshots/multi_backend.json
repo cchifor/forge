@@ -29,16 +29,16 @@
       "sha256": "3b6dfe42852558a6"
     },
     ".github/workflows/ci-node.yml": {
-      "size": 1035,
-      "sha256": "8072ab11d14058f6"
+      "size": 1053,
+      "sha256": "f44abfc7f043121d"
     },
     ".github/workflows/ci.yml": {
-      "size": 1048,
-      "sha256": "4acc879a76f2ba1d"
+      "size": 1095,
+      "sha256": "a5f851e3d851931f"
     },
     ".github/workflows/quality.yml": {
-      "size": 3120,
-      "sha256": "c58a7bcb559942e4"
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
       "size": 523,
@@ -69,15 +69,15 @@
       "sha256": "9a94950eef4a8084"
     },
     "forge.toml": {
-      "size": 75231,
+      "size": 76137,
       "sha256": "<version-dependent>"
     },
     "package.json": {
-      "size": 596,
-      "sha256": "a6a2563b13602ae1"
+      "size": 694,
+      "sha256": "07715a68b8077b4b"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 555,
+      "size": 561,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -89,8 +89,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api-node/Dockerfile": {
-      "size": 3756,
-      "sha256": "7674b35229db8f85"
+      "size": 3850,
+      "sha256": "8d77a24d4b4dbd7c"
     },
     "services/api-node/OBSERVABILITY.md": {
       "size": 2091,
@@ -137,8 +137,8 @@
       "sha256": "54144a1431680375"
     },
     "services/api-node/package.json": {
-      "size": 1392,
-      "sha256": "e5b2779bbaaf109d"
+      "size": 1425,
+      "sha256": "a46116b2e4380904"
     },
     "services/api-node/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -149,8 +149,12 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api-node/prisma/schema.prisma": {
-      "size": 2518,
-      "sha256": "ec554aa25c6a8ecf"
+      "size": 1774,
+      "sha256": "dfbd84bdbcac5811"
+    },
+    "services/api-node/prisma.config.ts": {
+      "size": 307,
+      "sha256": "f021759e2729468d"
     },
     "services/api-node/src/app/adapters/error-default.ts": {
       "size": 1764,
@@ -173,8 +177,8 @@
       "sha256": "aa221de6e653bb96"
     },
     "services/api-node/src/config/schema.ts": {
-      "size": 2292,
-      "sha256": "7b2b51e61547a7c1"
+      "size": 2298,
+      "sha256": "304657f447fae904"
     },
     "services/api-node/src/data/repositories/base-repository.ts": {
       "size": 1480,
@@ -200,13 +204,17 @@
       "size": 251,
       "sha256": "718c045fccf158dc"
     },
+    "services/api-node/src/lib/prisma-options.ts": {
+      "size": 1010,
+      "sha256": "8645ce593d63c1e3"
+    },
     "services/api-node/src/lib/prisma-pool.ts": {
-      "size": 991,
-      "sha256": "648c5e000d6764c1"
+      "size": 1177,
+      "sha256": "7f06cb519c2cebb9"
     },
     "services/api-node/src/lib/prisma.ts": {
-      "size": 799,
-      "sha256": "7d7efa1b613c545b"
+      "size": 1088,
+      "sha256": "224b2bf64bc42bf9"
     },
     "services/api-node/src/middleware/correlation.ts": {
       "size": 394,
@@ -218,7 +226,7 @@
     },
     "services/api-node/src/middleware/error-handler.ts": {
       "size": 5449,
-      "sha256": "d725afe199bc1319"
+      "sha256": "42f08d8e9eeac96e"
     },
     "services/api-node/src/middleware/logging.ts": {
       "size": 942,
@@ -249,8 +257,8 @@
       "sha256": "d488646da60bba86"
     },
     "services/api-node/src/schemas/health.schema.ts": {
-      "size": 689,
-      "sha256": "113c015e978f84d2"
+      "size": 713,
+      "sha256": "f0f1d76a7ebdd0d8"
     },
     "services/api-node/src/schemas/item.schema.ts": {
       "size": 1121,
@@ -304,9 +312,13 @@
       "size": 5295,
       "sha256": "98c0beedb49d6d7b"
     },
+    "services/api-node/tests/unit/prisma-options.test.ts": {
+      "size": 2110,
+      "sha256": "c100988e3438638c"
+    },
     "services/api-node/tests/unit/prisma-pool.test.ts": {
-      "size": 1416,
-      "sha256": "8e0776f5c089421a"
+      "size": 2382,
+      "sha256": "5d578f6095e45c7f"
     },
     "services/api-node/tests/unit/repositories.test.ts": {
       "size": 2775,
@@ -337,7 +349,7 @@
       "sha256": "2849d98820cb0d33"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 552,
+      "size": 558,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {
@@ -841,8 +853,8 @@
       "sha256": "42883eed7a0d73f4"
     },
     "services/api-py/tests/unit/test_app_main.py": {
-      "size": 1789,
-      "sha256": "6cdbf5de2c4a8be6"
+      "size": 1925,
+      "sha256": "1b1774d8770720db"
     },
     "services/api-py/tests/unit/test_config.py": {
       "size": 1494,
@@ -901,8 +913,8 @@
       "sha256": "3e7454fc99b0eed2"
     },
     "services/api-py/uv.lock": {
-      "size": 201791,
-      "sha256": "56f7ae592dc80128"
+      "size": 296595,
+      "sha256": "937e435e82b75f33"
     }
   }
 }

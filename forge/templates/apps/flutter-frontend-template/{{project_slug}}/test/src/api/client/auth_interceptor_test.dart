@@ -11,7 +11,10 @@ const _retriedFlag = '__authInterceptorRetried';
 
 void main() {
   setUpAll(() {
-    registerFallbackValue(RequestOptions(path: '/'));
+    final request = RequestOptions(path: '/');
+    registerFallbackValue(request);
+    registerFallbackValue(DioException(requestOptions: request));
+    registerFallbackValue(Response<dynamic>(requestOptions: request));
   });
 
   late MockAuthRepository mockAuthRepo;

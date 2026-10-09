@@ -1,14 +1,14 @@
 {% raw %}<script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getAuth } from '$lib/core';
-	import { getUiStore } from '$lib/features/shell';
-	import TopNavBar from '$lib/features/shell/ui/TopNavBar.svelte';
-	import TopNavDrawer from '$lib/features/shell/ui/TopNavDrawer.svelte';
-	import AppFooter from '$lib/features/shell/ui/AppFooter.svelte';{% endraw %}{% if include_chat %}
-	{% raw %}import { AiChat } from '$lib/features/chat';
-	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
-	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';
-	import VerticalSplitHandle from '$lib/features/shell/ui/VerticalSplitHandle.svelte';{% endraw %}{% endif %}{% raw %}
+	import { getAuth } from '#lib/core/index.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
+	import TopNavBar from '#lib/features/shell/ui/TopNavBar.svelte';
+	import TopNavDrawer from '#lib/features/shell/ui/TopNavDrawer.svelte';
+	import AppFooter from '#lib/features/shell/ui/AppFooter.svelte';{% endraw %}{% if include_chat %}
+	{% raw %}import { AiChat } from '#lib/features/chat/index.ts';
+	import ChatDrawer from '#lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '#lib/features/shell/ui/ChatBottomSheet.svelte';
+	import VerticalSplitHandle from '#lib/features/shell/ui/VerticalSplitHandle.svelte';{% endraw %}{% endif %}{% raw %}
 
 	let { children } = $props();
 	const auth = getAuth();

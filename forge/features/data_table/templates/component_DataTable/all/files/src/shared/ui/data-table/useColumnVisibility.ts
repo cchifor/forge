@@ -7,7 +7,7 @@ import {
   type Ref,
 } from 'vue'
 import { useStorage } from '@vueuse/core'
-import type { VisibilityState } from '@tanstack/vue-table'
+import type { ColumnVisibilityState } from '@tanstack/vue-table'
 import type { DataTableColumnDef } from './types'
 import {
   BP_WIDTH,
@@ -34,7 +34,7 @@ import {
  *     breakpoint.
  *   - everything else is shown.
  */
-export function baseVisibilityFor<T>(
+export function baseVisibilityFor<T extends object>(
   col: DataTableColumnDef<T>,
   predicates: {
     isListTier: () => boolean
@@ -56,7 +56,7 @@ export interface ColumnVisibility {
    */
   userVisibilityIntent: ComputedRef<Record<string, boolean>>
   /** Effective state TanStack consumes. User override > responsive hint > shown. */
-  columnVisibility: ComputedRef<VisibilityState>
+  columnVisibility: ComputedRef<ColumnVisibilityState>
   /** ``true`` iff any user-hidden column exists. Drives the trigger-button indicator. */
   hasUserHiddenColumns: ComputedRef<boolean>
   /** ``true`` iff any user value (true or false) exists. Drives the menu's "Reset" button. */
@@ -68,7 +68,7 @@ export interface ColumnVisibility {
    * callers reconstructing the baseline (e.g. diff-writing change
    * handlers) stay consistent with the effective state.
    */
-  baseVisibilityFor: (col: DataTableColumnDef<unknown>) => boolean
+  baseVisibilityFor: (col: DataTableColumnDef<object>) => boolean
   toggleColumn: (id: string, visible: boolean) => void
   reset: () => void
 }
@@ -97,7 +97,7 @@ export interface ColumnVisibility {
  * "uncheck → recheck" would leave the column hidden by the hint and
  * confuse users.
  */
-export function useColumnVisibility<T>(
+export function useColumnVisibility<T extends object>(
   tableId: string,
   augmentedColumns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
   options?: { containerWidth?: Ref<number> },
@@ -126,7 +126,7 @@ export function useColumnVisibility<T>(
 
   const userVisibilityIntent = computed<Record<string, boolean>>(() => {
     const out: Record<string, boolean> = {}
-    const cols = toValue(augmentedColumns) as DataTableColumnDef<unknown>[]
+    const cols = toValue(augmentedColumns) as DataTableColumnDef<object>[]
     for (const col of cols) {
       if (col.meta?.alwaysVisible) continue
       const id = (col.id ??
@@ -140,12 +140,12 @@ export function useColumnVisibility<T>(
   // Container-aware base predicate bound to this composable's measured
   // width. Shared between the effective-state derivation below and any
   // caller reconstructing the baseline, so the two never diverge.
-  const boundBaseVisibility = (col: DataTableColumnDef<unknown>): boolean =>
+  const boundBaseVisibility = (col: DataTableColumnDef<object>): boolean =>
     baseVisibilityFor(col, { isListTier, isResponsivelyHidden })
 
-  const columnVisibility = computed<VisibilityState>(() => {
-    const state: VisibilityState = {}
-    const cols = toValue(augmentedColumns) as DataTableColumnDef<unknown>[]
+  const columnVisibility = computed<ColumnVisibilityState>(() => {
+    const state: ColumnVisibilityState = {}
+    const cols = toValue(augmentedColumns) as DataTableColumnDef<object>[]
     for (const col of cols) {
       const id = (col.id ??
         (col as { accessorKey?: string }).accessorKey) as string

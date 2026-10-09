@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../domain/chat_message.dart';
 import '../../domain/tool_call_info.dart';
@@ -107,15 +107,19 @@ class _ChatMessageBubbleState extends State<ChatMessageBubble> {
               if (_renderedContent.isEmpty && widget.message.isStreaming)
                 _BlinkCursor(color: fg)
               else
-                MarkdownBody(
-                  data: _renderedContent,
-                  selectable: true,
-                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                    p: TextStyle(color: fg, height: 1.4),
-                    code: TextStyle(
-                      color: fg,
-                      backgroundColor: bg.withValues(alpha: 0.1),
-                      fontFamily: 'monospace',
+                // Markdown still uses legacy Material theme/localizations.
+                // ignore: deprecated_member_use
+                MaterialUiCompatibilityBridge(
+                  child: MarkdownBody(
+                    data: _renderedContent,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(color: fg, height: 1.4),
+                      code: TextStyle(
+                        color: fg,
+                        backgroundColor: bg.withValues(alpha: 0.1),
+                        fontFamily: 'monospace',
+                      ),
                     ),
                   ),
                 ),
@@ -168,11 +172,7 @@ class _BlinkCursorState extends State<_BlinkCursor>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(
-        width: 6,
-        height: 14,
-        color: widget.color,
-      ),
+      child: Container(width: 6, height: 14, color: widget.color),
     );
   }
 }

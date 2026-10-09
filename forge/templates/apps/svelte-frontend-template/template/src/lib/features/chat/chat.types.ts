@@ -72,7 +72,7 @@ export interface ToolCallInfo {
 // single source of truth (snake_case `tool_call_id`, matching the ui-protocol
 // wire shape) instead of a divergent local copy — the UI consumes the same
 // shape the reducer emits.
-export type { UserPromptOption, UserPromptPayload } from '@forge/canvas-core';
+export type { UserPromptOption, UserPromptPayload } from '#canvas-core';
 
 // HitlResponse is the WIRE payload forwarded to the backend (as
 // `hitl_response`), so it keeps the snake_case `tool_call_id` the server

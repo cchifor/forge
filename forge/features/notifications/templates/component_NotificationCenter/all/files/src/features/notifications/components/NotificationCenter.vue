@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 
 import RelativeTime from '@/shared/components/RelativeTime.vue'
 

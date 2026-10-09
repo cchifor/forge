@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Package } from 'lucide-svelte';
+	import { Package } from '@lucide/svelte';
 
 	let {
 		message = 'No items found',

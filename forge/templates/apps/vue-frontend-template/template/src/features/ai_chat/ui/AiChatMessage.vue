@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
-import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from 'lucide-vue-next'
+import { Sparkles, Wrench, Copy, Check, Pencil, RefreshCw } from '@lucide/vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { ToolCallInfo } from '../types'

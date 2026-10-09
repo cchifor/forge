@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { Pencil, CheckCircle, Archive } from 'lucide-vue-next'
+import { Pencil, CheckCircle, Archive } from '@lucide/vue'
 
 export type StatusVariant = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 

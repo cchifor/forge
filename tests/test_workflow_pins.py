@@ -48,6 +48,29 @@ def test_dependabot_covers_polyglot_ecosystems():
         assert required in ecos, f"dependabot missing ecosystem: {required}"
 
 
+def test_dependabot_targets_existing_manifests():
+    """A configured ecosystem cannot update a directory with no manifest."""
+    root = _DEPENDABOT.parent.parent
+    manifests = {
+        "uv": "pyproject.toml",
+        "npm": "package.json",
+        "cargo": "Cargo.toml",
+        "pub": "pubspec.yaml",
+        "github-actions": ".github/workflows",
+    }
+    doc = yaml.safe_load(_DEPENDABOT.read_text(encoding="utf-8"))
+    groups = doc["multi-ecosystem-groups"]
+    for update in doc["updates"]:
+        ecosystem = update["package-ecosystem"]
+        directories = update.get("directories", [update.get("directory", "/")])
+        for directory in directories:
+            manifest = root / directory.lstrip("/") / manifests[ecosystem]
+            assert manifest.exists(), f"{ecosystem} has no manifest: {manifest}"
+        group = update["multi-ecosystem-group"]
+        assert group in groups and groups[group]["schedule"]
+        assert update["patterns"], "Multi-ecosystem updates require patterns"
+
+
 def test_ci_wires_the_dormant_quality_gates():
     """WS-9.1: the parity contract, fuzz suite, and codegen-drift check must
     actually run in CI, not just exist in the tree."""

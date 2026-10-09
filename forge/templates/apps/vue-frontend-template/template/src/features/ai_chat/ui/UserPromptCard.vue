@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { HelpCircle, Star, ArrowUp } from 'lucide-vue-next'
+import { HelpCircle, Star, ArrowUp } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import type { UserPromptPayload } from '../types'

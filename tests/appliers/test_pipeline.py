@@ -86,6 +86,20 @@ class TestApplierShortCircuits:
         # No-op on empty files_dir — no files written.
         assert list(tmp_path.iterdir()) == []
 
+    def test_local_sdk_validation_artifacts_are_not_generated(self, tmp_path: Path) -> None:
+        from forge.appliers.files import copy_files
+
+        source = tmp_path / "template"
+        destination = tmp_path / "generated"
+        for relative in ("src/client.ts", "dist/client.js", ".coverage", ".coverage.worker.1"):
+            path = source / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("test content\n")
+        copy_files(source, destination)
+        assert [
+            p.relative_to(destination).as_posix() for p in destination.rglob("*") if p.is_file()
+        ] == ["src/client.ts"]
+
     def test_injection_applier_no_op_on_empty_plan(self, tmp_path: Path) -> None:
         plan = FragmentPlan(
             fragment_dir=tmp_path,

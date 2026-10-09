@@ -52,13 +52,13 @@ async function buildGuard(audit: (record: AuthAuditRecord) => void) {
       return new Set([TEST_ISSUER]);
     },
     keyResolverFor(_iss: string) {
-      return keypair.getKey;
+      return async () => keypair.publicKey;
     },
     // Concrete JWKSCache has more methods, but verify() only touches
     // these two — duck-type to avoid spinning up the full cache.
   };
   const trustMap: IssuerTrustMap = {
-    async resolve(_tenantId: string) {
+    async get(_tenantId: string) {
       return { expectedIssuer: TEST_ISSUER, suspended: false };
     },
   };

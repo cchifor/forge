@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { Sun, Moon, Monitor } from 'lucide-svelte';
+	import { Sun, Moon, Monitor } from '@lucide/svelte';
 	import {
 		getSettingsStore,
 		type ThemeMode,
 		ColorSchemePicker,
 		DarkVariantSelector,
 		TextSizeSelector
-	} from '$lib/features/settings';
-	import { colorSchemes } from '$lib/shared/lib/color-schemes';
+	} from '#lib/features/settings/index.ts';
+	import { colorSchemes } from '#lib/shared/lib/color-schemes.ts';
 
 	const settings = getSettingsStore();
 

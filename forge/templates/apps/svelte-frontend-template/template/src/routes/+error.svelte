@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import { FileQuestion, ShieldAlert, ServerCrash, AlertTriangle } from 'lucide-svelte';
-	import { categorizeError, userFacingMessage } from '$lib/core/errors';
+	import { FileQuestion, ShieldAlert, ServerCrash, AlertTriangle } from '@lucide/svelte';
+	import { categorizeError, userFacingMessage } from '#lib/core/errors.ts';
 
-	const category = $derived(categorizeError($page.status));
-	const message = $derived(userFacingMessage($page.status, $page.error?.message));
+	const category = $derived(categorizeError(page.status));
+	const message = $derived(userFacingMessage(page.status, page.error?.message));
 
 	const Icon = $derived(
 		category === 'not-found'
@@ -20,7 +20,7 @@
 
 <div class="flex min-h-svh flex-col items-center justify-center gap-4 text-center px-4">
 	<Icon class="h-16 w-16 text-muted-foreground" />
-	<h1 class="text-4xl font-bold">{$page.status}</h1>
+	<h1 class="text-4xl font-bold">{page.status}</h1>
 	<p class="text-lg text-muted-foreground max-w-md">{message}</p>
 	<div class="flex gap-2">
 		{#if category === 'server'}

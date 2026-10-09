@@ -1,4 +1,3 @@
-{%- if include_auth %}
 import 'package:{{project_slug}}/src/core/config/env_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,6 +14,7 @@ void main() {
     });
   });
 
+{%- if include_auth %}
   group('EnvConfig computed URLs', () {
     test('keycloakAuthUrl concatenates url, realm, and path', () {
       const config = EnvConfig(
@@ -53,13 +53,16 @@ void main() {
     });
   });
 
+{%- endif %}
   group('isDevelopment', () {
     test('returns true when authDisabled is true', () {
       const config = EnvConfig(
         authDisabled: true,
+{%- if include_auth %}
         keycloakUrl: '',
         keycloakRealm: '',
         keycloakClientId: '',
+{%- endif %}
       );
       expect(config.isDevelopment, isTrue);
     });
@@ -67,14 +70,17 @@ void main() {
     test('returns false when authDisabled is false', () {
       const config = EnvConfig(
         authDisabled: false,
+{%- if include_auth %}
         keycloakUrl: '',
         keycloakRealm: '',
         keycloakClientId: '',
+{%- endif %}
       );
       expect(config.isDevelopment, isFalse);
     });
   });
 
+{%- if include_auth %}
   group('EnvConfig custom values', () {
     test('accepts all custom constructor parameters', () {
       const config = EnvConfig(
@@ -91,5 +97,5 @@ void main() {
       expect(config.keycloakClientId, 'test-client');
     });
   });
-}
 {%- endif %}
+}

@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import DOMPurify from 'dompurify';
 	import { marked } from 'marked';
-	import { Bot, RefreshCw, User } from 'lucide-svelte';
+	import { Bot, RefreshCw, User } from '@lucide/svelte';
 	import type { ToolCallInfo } from '../chat.types';
-	import type { ChatMessage as Message } from '@forge/canvas-core';
-	import { cn } from '$lib/shared/lib/utils';
+	import type { ChatMessage as Message } from '#canvas-core';
+	import { cn } from '#lib/shared/lib/utils.ts';
 	import ToolCallStatus from './ToolCallStatus.svelte';
 
 	let {
@@ -21,10 +22,22 @@
 
 	const isAssistant = $derived(message.role !== 'user');
 
-	const renderedHtml = $derived.by(() => {
-		const raw = message.content || '';
+	function renderMarkdown(raw: string): string {
 		const html = marked.parse(raw, { async: false }) as string;
 		return DOMPurify.sanitize(html);
+	}
+
+	let renderedHtml = $state(renderMarkdown(untrack(() => message.content || '')));
+	$effect(() => {
+		const raw = message.content || '';
+		if (!isStreaming) {
+			renderedHtml = renderMarkdown(raw);
+			return;
+		}
+		// Batch streaming tokens; effect cleanup cancels the previous timer.
+		// Ending the stream takes the immediate path above, preserving its tail.
+		const timer = setTimeout(() => { renderedHtml = renderMarkdown(raw); }, 50);
+		return () => clearTimeout(timer);
 	});
 </script>
 

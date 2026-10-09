@@ -1,10 +1,12 @@
-import istanbul from 'vite-plugin-istanbul';
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import browserCoverage from './scripts/browser-coverage.ts';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [sveltekit(), tailwindcss(), ...(process.env.FORGE_COVERAGE === 'true' ? [istanbul({ include: 'src/**/*', exclude: ['**/*.test.*', '**/*.spec.*', 'src/test/**'], extension: ['.ts', '.vue', '.svelte'], requireEnv: false, forceBuildInstrument: false })] : [])],
+	plugins: [sveltekit({ preprocess: vitePreprocess(), adapter: adapter({ fallback: 'index.html' }) }), tailwindcss(), ...(process.env.FORGE_COVERAGE === 'true' ? [browserCoverage()] : [])],
 	server: {
 		port: 5173,
 		proxy: {

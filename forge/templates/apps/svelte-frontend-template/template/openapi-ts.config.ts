@@ -1,14 +1,10 @@
 import { defineConfig } from '@hey-api/openapi-ts';
 
 export default defineConfig({
-	client: false,
 	input: process.env.OPENAPI_SPEC || './openapi-snapshot.json',
 	output: {
 		path: 'src/lib/core/api/generated',
-		format: 'prettier'
+		postProcess: ['prettier']
 	},
-	types: {
-		enums: 'typescript'
-	},
-	schemas: false
+	plugins: [{ name: '@hey-api/typescript', enums: 'typescript' }]
 });

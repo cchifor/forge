@@ -1,6 +1,6 @@
 /// Canvas registry + AG-UI SSE client + base components for
 /// forge-generated Flutter applications.
-library forge_canvas;
+library;
 
 // Re-export the framework-agnostic protocol surface from
 // `forge_canvas_core` (Pillar B Phase 2B). Existing consumers

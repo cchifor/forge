@@ -15,8 +15,7 @@ use opentelemetry::KeyValue;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::runtime;
-use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::Layer;
 use tracing_subscriber::registry::Registry;
 
@@ -34,18 +33,22 @@ pub fn otel_layer(service_name: &str) -> Option<Box<dyn Layer<Registry> + Send +
         .ok()?;
 
     let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(exporter, runtime::Tokio)
-        .with_resource(Resource::new(vec![KeyValue::new(
-            "service.name",
-            service_name.to_string(),
-        )]))
+        .with_batch_exporter(exporter)
+        .with_resource(
+            Resource::builder()
+                .with_attributes(vec![KeyValue::new(
+                    "service.name",
+                    service_name.to_string(),
+                )])
+                .build(),
+        )
         .build();
 
     let tracer = provider.tracer("forge");
     // Set the global provider so manually-created spans and downstream
     // libraries share the same exporter; the global keeps it alive for the
     // process lifetime.
-    let _ = opentelemetry::global::set_tracer_provider(provider);
+    opentelemetry::global::set_tracer_provider(provider);
 
     Some(tracing_opentelemetry::layer().with_tracer(tracer).boxed())
 }

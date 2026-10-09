@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle, Edit, Archive } from 'lucide-svelte';
+	import { CheckCircle, Edit, Archive } from '@lucide/svelte';
 
 	let { status }: { status: string } = $props();
 

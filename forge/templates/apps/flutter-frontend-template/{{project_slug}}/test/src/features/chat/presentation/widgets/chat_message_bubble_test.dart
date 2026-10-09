@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:{{project_slug}}/src/features/chat/domain/chat_message.dart';
 import 'package:{{project_slug}}/src/features/chat/presentation/widgets/chat_message_bubble.dart';

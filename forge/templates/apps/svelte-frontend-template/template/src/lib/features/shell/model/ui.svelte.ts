@@ -1,5 +1,5 @@
-import { getBreakpointStore, type LayoutBreakpoint } from '$lib/shared/lib/breakpoints.svelte';
-import { DesignTokens } from '$lib/shared/lib/design-tokens';
+import { getBreakpointStore, type LayoutBreakpoint } from '#lib/shared/lib/breakpoints.svelte.ts';
+import { DesignTokens } from '#lib/shared/lib/design-tokens.ts';
 
 let sidebarCollapsed = $state(localStorage.getItem('sidebar-collapsed') === 'true');
 let mobileMenuOpen = $state(false);

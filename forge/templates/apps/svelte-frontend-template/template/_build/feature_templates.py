@@ -43,11 +43,11 @@ export {{ default as {Singular}Card }} from './ui/{Singular}Card.svelte';
 
 FEATURE_API = """\
 import {{ createQuery, createMutation, useQueryClient }} from '@tanstack/svelte-query';
-import {{ derived, writable, type Readable }} from 'svelte/store';
-import {{ getApiClient }} from '$lib/core/api/client';
-import {{ validateResponse }} from '$lib/core/api/validation';
-import {{ paginated{Singular}ResponseSchema, {singular}Schema }} from '$lib/core/schemas';
-import type {{ API }} from '$lib/core/api/namespace';
+import {{ derived, fromStore, type Readable }} from 'svelte/store';
+import {{ getApiClient }} from '#lib/core/api/client.ts';
+import {{ validateResponse }} from '#lib/core/api/validation.ts';
+import {{ paginated{Singular}ResponseSchema, {singular}Schema }} from '#lib/core/schemas/index.ts';
+import type {{ API }} from '#lib/core/api/namespace.ts';
 
 export interface {Plural}QueryParams {{
 \tskip?: number;
@@ -72,7 +72,7 @@ export function create{Plural}ListQuery(paramsStore: Readable<{Plural}QueryParam
 \t\t}}
 \t}}));
 
-\treturn createQuery(options);
+\tconst reactiveOptions = fromStore(options);\n\treturn createQuery(() => reactiveOptions.current);
 }}
 
 export function create{Singular}DetailQuery(idStore: Readable<string>) {{
@@ -87,14 +87,14 @@ export function create{Singular}DetailQuery(idStore: Readable<string>) {{
 \t\tenabled: !!$id
 \t}}));
 
-\treturn createQuery(options);
+\tconst reactiveOptions = fromStore(options);\n\treturn createQuery(() => reactiveOptions.current);
 }}
 
 export function createCreate{Singular}Mutation() {{
 \tconst client = getApiClient();
 \tconst queryClient = useQueryClient();
 
-\treturn createMutation({{
+\treturn createMutation(() => ({{
 \t\tmutationFn: async (data: API.{Singular}Create) => {{
 \t\t\tconst raw = await client.post('api/v1/{plural}', {{ json: data }}).json();
 \t\t\treturn validateResponse({singular}Schema, raw, '{Singular}');
@@ -102,14 +102,14 @@ export function createCreate{Singular}Mutation() {{
 \t\tonSuccess: () => {{
 \t\t\tqueryClient.invalidateQueries({{ queryKey: ['{plural}'] }});
 \t\t}}
-\t}});
+\t}}));
 }}
 
 export function createUpdate{Singular}Mutation() {{
 \tconst client = getApiClient();
 \tconst queryClient = useQueryClient();
 
-\treturn createMutation({{
+\treturn createMutation(() => ({{
 \t\tmutationFn: async ({{ id, data }}: {{ id: string; data: API.{Singular}Update }}) => {{
 \t\t\tconst raw = await client.patch(`api/v1/{plural}/${{id}}`, {{ json: data }}).json();
 \t\t\treturn validateResponse({singular}Schema, raw, '{Singular}');
@@ -118,21 +118,21 @@ export function createUpdate{Singular}Mutation() {{
 \t\t\tqueryClient.invalidateQueries({{ queryKey: ['{plural}'] }});
 \t\t\tqueryClient.invalidateQueries({{ queryKey: ['{plural}', variables.id] }});
 \t\t}}
-\t}});
+\t}}));
 }}
 
 export function createDelete{Singular}Mutation() {{
 \tconst client = getApiClient();
 \tconst queryClient = useQueryClient();
 
-\treturn createMutation({{
+\treturn createMutation(() => ({{
 \t\tmutationFn: async (id: string) => {{
 \t\t\tawait client.delete(`api/v1/{plural}/${{id}}`);
 \t\t}},
 \t\tonSuccess: () => {{
 \t\t\tqueryClient.invalidateQueries({{ queryKey: ['{plural}'] }});
 \t\t}}
-\t}});
+\t}}));
 }}
 """
 
@@ -190,7 +190,7 @@ export function create{Singular}Filters(options?: {{ pageSize?: number }}) {{
 """
 
 FEATURE_FORM = """\
-import type {{ API }} from '$lib/core/api/namespace';
+import type {{ API }} from '#lib/core/api/namespace.ts';
 
 export function create{Singular}Form(initial?: {{
 \tname: string;
@@ -272,8 +272,8 @@ export type Paginated{Singular}ResponseParsed = z.infer<typeof paginated{Singula
 # Card component - this is a .svelte file so no Jinja2 issues
 FEATURE_CARD = """\
 <script lang="ts">
-\timport {{ MoreHorizontal, Eye, Trash2 }} from 'lucide-svelte';
-\timport {{ StatusBadge }} from '$lib/shared';
+\timport {{ MoreHorizontal, Eye, Trash2 }} from '@lucide/svelte';
+\timport {{ StatusBadge }} from '#lib/shared/index.ts';
 
 \tlet {{ item, onview, ondelete }}: {{
 \t\titem: {{ id: string; name: string; description: string | null; tags: string[]; status: string; created_at: string | null }};
@@ -312,8 +312,7 @@ FEATURE_CARD = """\
 \t\t\t\t\t<MoreHorizontal class="h-4 w-4 text-muted-foreground" />
 \t\t\t\t</button>
 \t\t\t\t{{#if menuOpen}}
-\t\t\t\t\t<!-- svelte-ignore a11y_no_static_element_interactions -->
-\t\t\t\t\t<div class="fixed inset-0 z-40" onclick={{() => menuOpen = false}}></div>
+\t\t\t\t\t<button type="button" aria-label="Close actions menu" class="fixed inset-0 z-40" onclick={{() => menuOpen = false}}></button>
 \t\t\t\t\t<div class="absolute right-0 top-full mt-1 z-50 w-32 rounded-md border bg-popover p-1 shadow-md">
 \t\t\t\t\t\t<button class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent" onclick={{() => {{ menuOpen = false; onview?.(); }}}}>
 \t\t\t\t\t\t\t<Eye class="h-4 w-4" /> View
@@ -344,15 +343,15 @@ FEATURE_CARD = """\
 ROUTE_LIST = """\
 <script lang="ts">
 \timport {{ goto }} from '$app/navigation';
-\timport {{ Plus }} from 'lucide-svelte';
+\timport {{ Plus }} from '@lucide/svelte';
 \timport {{ toast }} from 'svelte-sonner';
-\timport {{ ConfirmDialog, EmptyState, SearchField, SegmentedButton }} from '$lib/shared';
+\timport {{ ConfirmDialog, EmptyState, SearchField, SegmentedButton }} from '#lib/shared/index.ts';
 \timport {{
 \t\tcreate{Plural}ListQuery,
 \t\tcreateDelete{Singular}Mutation,
 \t\tcreate{Singular}Filters,
 \t\t{Singular}Card
-\t}} from '$lib/features/{plural}';
+\t}} from '#lib/features/{plural}/index.ts';
 
 \tconst filters = create{Singular}Filters();
 \tconst {plural}Query = create{Plural}ListQuery(filters.paramsStore);
@@ -371,7 +370,7 @@ ROUTE_LIST = """\
 \t\tif (!{singular}ToDelete) return;
 \t\tconst name = {singular}ToDelete.name;
 \t\ttry {{
-\t\t\tawait $deleteMutation.mutateAsync({singular}ToDelete.id);
+\t\t\tawait deleteMutation.mutateAsync({singular}ToDelete.id);
 \t\t\ttoast.success(`{Singular} "${{name}}" deleted`);
 \t\t}} catch {{
 \t\t\t// handled by global mutation onError
@@ -407,19 +406,19 @@ ROUTE_LIST = """\
 \t\t/>
 \t</div>
 
-\t{{#if ${plural}Query.isLoading}}
+\t{{#if {plural}Query.isLoading}}
 \t\t<div class="space-y-3">
 \t\t\t{{#each Array(3) as _}}
 \t\t\t\t<div class="h-24 rounded-lg border animate-pulse bg-muted"></div>
 \t\t\t{{/each}}
 \t\t</div>
-\t{{:else if ${plural}Query.isError}}
+\t{{:else if {plural}Query.isError}}
 \t\t<EmptyState message="Failed to load {plural}. Please try again." />
-\t{{:else if ${plural}Query.data && ${plural}Query.data.items.length === 0}}
+\t{{:else if {plural}Query.data && {plural}Query.data.items.length === 0}}
 \t\t<EmptyState message="No {plural} found" />
-\t{{:else if ${plural}Query.data}}
+\t{{:else if {plural}Query.data}}
 \t\t<div class="space-y-3">
-\t\t\t{{#each ${plural}Query.data.items as {singular} ({singular}.id)}}
+\t\t\t{{#each {plural}Query.data.items as {singular} ({singular}.id)}}
 \t\t\t\t<{Singular}Card
 \t\t\t\t\titem={{{singular}}}
 \t\t\t\t\tonview={{() => goto(`/{plural}/${{{singular}.id}}`)}}
@@ -427,7 +426,7 @@ ROUTE_LIST = """\
 \t\t\t\t/>
 \t\t\t{{/each}}
 \t\t</div>
-\t\t{{#if ${plural}Query.data.has_more}}
+\t\t{{#if {plural}Query.data.has_more}}
 \t\t\t<div class="flex justify-center pt-4">
 \t\t\t\t<button class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => filters.nextPage()}}>
 \t\t\t\t\tLoad More
@@ -448,19 +447,19 @@ ROUTE_LIST = """\
 
 ROUTE_ERROR = """\
 <script lang="ts">
-\timport {{ page }} from '$app/stores';
+\timport {{ page }} from '$app/state';
 \timport {{ invalidateAll }} from '$app/navigation';
-\timport {{ Package }} from 'lucide-svelte';
-\timport {{ userFacingMessage, categorizeError }} from '$lib/core/errors';
+\timport {{ Package }} from '@lucide/svelte';
+\timport {{ userFacingMessage, categorizeError }} from '#lib/core/errors.ts';
 
-\tconst message = $derived(userFacingMessage($page.status, $page.error?.message));
-\tconst category = $derived(categorizeError($page.status));
+\tconst message = $derived(userFacingMessage(page.status, page.error?.message));
+\tconst category = $derived(categorizeError(page.status));
 </script>
 
 <div class="flex flex-col items-center justify-center gap-4 py-16 text-center px-4">
 \t<Package class="h-12 w-12 text-muted-foreground" />
 \t<h2 class="text-2xl font-bold">
-\t\t{{category === 'not-found' ? '{Singular} Not Found' : `Error ${{$page.status}}`}}
+\t\t{{category === 'not-found' ? '{Singular} Not Found' : `Error ${{page.status}}`}}
 \t</h2>
 \t<p class="text-muted-foreground max-w-md">{{message}}</p>
 \t<div class="flex gap-2">
@@ -479,9 +478,9 @@ ROUTE_ERROR = """\
 ROUTE_CREATE = """\
 <script lang="ts">
 \timport {{ goto }} from '$app/navigation';
-\timport {{ ArrowLeft }} from 'lucide-svelte';
+\timport {{ ArrowLeft }} from '@lucide/svelte';
 \timport {{ toast }} from 'svelte-sonner';
-\timport {{ createCreate{Singular}Mutation, create{Singular}Form }} from '$lib/features/{plural}';
+\timport {{ createCreate{Singular}Mutation, create{Singular}Form }} from '#lib/features/{plural}/index.ts';
 
 \tconst createMut = createCreate{Singular}Mutation();
 \tconst form = create{Singular}Form();
@@ -491,7 +490,7 @@ ROUTE_CREATE = """\
 \t\t\ttoast.error('Name is required');
 \t\t\treturn;
 \t\t}}
-\t\t$createMut.mutate(form.toCreatePayload(), {{
+\t\tcreateMut.mutate(form.toCreatePayload(), {{
 \t\t\tonSuccess: ({singular}) => {{
 \t\t\t\ttoast.success(`{Singular} "${{{singular}.name}}" created`);
 \t\t\t\tgoto(`/{plural}/${{{singular}.id}}`);
@@ -542,8 +541,8 @@ ROUTE_CREATE = """\
 \t\t</div>
 \t\t<div class="flex items-center gap-2 p-6 pt-0">
 \t\t\t<button data-testid="{singular}-cancel-btn" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto('/{plural}')}}>Cancel</button>
-\t\t\t<button data-testid="{singular}-submit-btn" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" disabled={{$createMut.isPending}} onclick={{handleSubmit}}>
-\t\t\t\t{{$createMut.isPending ? 'Creating...' : 'Create {Singular}'}}
+\t\t\t<button data-testid="{singular}-submit-btn" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" disabled={{createMut.isPending}} onclick={{handleSubmit}}>
+\t\t\t\t{{createMut.isPending ? 'Creating...' : 'Create {Singular}'}}
 \t\t\t</button>
 \t\t</div>
 \t</div>
@@ -553,14 +552,14 @@ ROUTE_CREATE = """\
 ROUTE_DETAIL = """\
 <script lang="ts">
 \timport {{ goto }} from '$app/navigation';
-\timport {{ page }} from '$app/stores';
-\timport {{ derived }} from 'svelte/store';
-\timport {{ ArrowLeft, Pencil, Trash2, Save, X }} from 'lucide-svelte';
+\timport {{ page }} from '$app/state';
+\timport {{ toStore }} from 'svelte/store';
+\timport {{ ArrowLeft, Pencil, Trash2, Save, X }} from '@lucide/svelte';
 \timport {{ toast }} from 'svelte-sonner';
-\timport {{ ConfirmDialog }} from '$lib/shared';
-\timport {{ create{Singular}DetailQuery, createUpdate{Singular}Mutation, createDelete{Singular}Mutation, create{Singular}Form }} from '$lib/features/{plural}';
+\timport {{ ConfirmDialog }} from '#lib/shared/index.ts';
+\timport {{ create{Singular}DetailQuery, createUpdate{Singular}Mutation, createDelete{Singular}Mutation, create{Singular}Form }} from '#lib/features/{plural}/index.ts';
 
-\tconst idStore = derived(page, ($p) => $p.params.id ?? '');
+\tconst idStore = toStore(() => page.params.id ?? '');
 \tconst {singular}Query = create{Singular}DetailQuery(idStore);
 \tconst updateMut = createUpdate{Singular}Mutation();
 \tconst deleteMut = createDelete{Singular}Mutation();
@@ -570,21 +569,21 @@ ROUTE_DETAIL = """\
 \tlet deleteDialogOpen = $state(false);
 
 \t$effect(() => {{
-\t\tconst data = ${singular}Query.data;
+\t\tconst data = {singular}Query.data;
 \t\tif (data) form.reset(data);
 \t}});
 
 \tfunction saveEdit() {{
 \t\tif (!form.isValid) {{ toast.error('Name is required'); return; }}
-\t\t$updateMut.mutate(
-\t\t\t{{ id: $page.params.id!, data: form.toUpdatePayload() }},
+\t\tupdateMut.mutate(
+\t\t\t{{ id: page.params.id!, data: form.toUpdatePayload() }},
 \t\t\t{{ onSuccess: () => {{ toast.success('{Singular} updated'); editing = false; }} }}
 \t\t);
 \t}}
 
 \tasync function handleDelete() {{
 \t\ttry {{
-\t\t\tawait $deleteMut.mutateAsync($page.params.id!);
+\t\t\tawait deleteMut.mutateAsync(page.params.id!);
 \t\t\ttoast.success('{Singular} deleted');
 \t\t\tgoto('/{plural}');
 \t\t}} catch {{}}
@@ -607,10 +606,10 @@ ROUTE_DETAIL = """\
 \t\t\t<ArrowLeft class="h-4 w-4" />
 \t\t</button>
 \t\t<div class="flex-1">
-\t\t\t<h1 class="text-3xl font-bold tracking-tight">{{${singular}Query.data?.name ?? '{Singular} Detail'}}</h1>
+\t\t\t<h1 class="text-3xl font-bold tracking-tight">{{{singular}Query.data?.name ?? '{Singular} Detail'}}</h1>
 \t\t\t<p class="text-muted-foreground">View and manage details</p>
 \t\t</div>
-\t\t{{#if ${singular}Query.data && !editing}}
+\t\t{{#if {singular}Query.data && !editing}}
 \t\t\t<button data-testid="{singular}-edit-btn" class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => editing = true}}>
 \t\t\t\t<Pencil class="h-4 w-4" /> Edit
 \t\t\t</button>
@@ -620,15 +619,15 @@ ROUTE_DETAIL = """\
 \t\t{{/if}}
 \t</div>
 
-\t{{#if ${singular}Query.isLoading}}
+\t{{#if {singular}Query.isLoading}}
 \t\t<div class="rounded-lg border bg-card shadow-sm"><div class="space-y-4 p-6"><div class="h-8 w-48 animate-pulse rounded bg-muted"></div><div class="h-4 w-full animate-pulse rounded bg-muted"></div></div></div>
-\t{{:else if ${singular}Query.isError}}
+\t{{:else if {singular}Query.isError}}
 \t\t<div class="rounded-lg border bg-card shadow-sm"><div class="p-6 text-center text-muted-foreground">Failed to load. It may have been deleted.</div></div>
-\t{{:else if ${singular}Query.data}}
+\t{{:else if {singular}Query.data}}
 \t\t<div class="max-w-2xl rounded-lg border bg-card shadow-sm">
 \t\t\t<div class="p-6">
 \t\t\t\t<h3 class="text-lg font-semibold">{{editing ? 'Edit {Singular}' : '{Singular} Details'}}</h3>
-\t\t\t\t{{#if !editing}}<p class="mt-1.5 text-sm text-muted-foreground">ID: {{${singular}Query.data.id}}</p>{{/if}}
+\t\t\t\t{{#if !editing}}<p class="mt-1.5 text-sm text-muted-foreground">ID: {{{singular}Query.data.id}}</p>{{/if}}
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
 \t\t\t\t{{#if editing}}
@@ -640,18 +639,18 @@ ROUTE_DETAIL = """\
 \t\t\t\t\t</form>
 \t\t\t\t{{:else}}
 \t\t\t\t\t<dl class="space-y-4">
-\t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Name</dt><dd class="text-sm font-medium">{{${singular}Query.data.name}}</dd></div>
-\t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Description</dt><dd class="text-sm">{{${singular}Query.data.description || 'No description'}}</dd></div>
-\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Status</dt><dd><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {{statusVariant(${singular}Query.data.status)}}">{{${singular}Query.data.status}}</span></dd></div>
-\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Tags</dt><dd class="flex flex-wrap gap-1">{{#each ${singular}Query.data.tags as tag}}<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">{{tag}}</span>{{/each}}{{#if ${singular}Query.data.tags.length === 0}}<span class="text-sm text-muted-foreground">No tags</span>{{/if}}</dd></div>
-\t\t\t\t\t\t<div class="grid grid-cols-2 gap-4"><div><dt class="text-sm text-muted-foreground">Created</dt><dd class="text-sm">{{formatDate(${singular}Query.data.created_at)}}</dd></div><div><dt class="text-sm text-muted-foreground">Updated</dt><dd class="text-sm">{{formatDate(${singular}Query.data.updated_at)}}</dd></div></div>
+\t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Name</dt><dd class="text-sm font-medium">{{{singular}Query.data.name}}</dd></div>
+\t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Description</dt><dd class="text-sm">{{{singular}Query.data.description || 'No description'}}</dd></div>
+\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Status</dt><dd><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {{statusVariant({singular}Query.data.status)}}">{{{singular}Query.data.status}}</span></dd></div>
+\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Tags</dt><dd class="flex flex-wrap gap-1">{{#each {singular}Query.data.tags as tag}}<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">{{tag}}</span>{{/each}}{{#if {singular}Query.data.tags.length === 0}}<span class="text-sm text-muted-foreground">No tags</span>{{/if}}</dd></div>
+\t\t\t\t\t\t<div class="grid grid-cols-2 gap-4"><div><dt class="text-sm text-muted-foreground">Created</dt><dd class="text-sm">{{formatDate({singular}Query.data.created_at)}}</dd></div><div><dt class="text-sm text-muted-foreground">Updated</dt><dd class="text-sm">{{formatDate({singular}Query.data.updated_at)}}</dd></div></div>
 \t\t\t\t\t</dl>
 \t\t\t\t{{/if}}
 \t\t\t</div>
 \t\t\t{{#if editing}}
 \t\t\t\t<div class="flex items-center gap-2 p-6 pt-0">
-\t\t\t\t\t<button class="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent" onclick={{() => {{ if (${singular}Query.data) form.reset(${singular}Query.data); editing = false; }}}}><X class="h-4 w-4" /> Cancel</button>
-\t\t\t\t\t<button data-testid="{singular}-save-btn" class="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={{$updateMut.isPending}} onclick={{saveEdit}}><Save class="h-4 w-4" /> {{$updateMut.isPending ? 'Saving...' : 'Save'}}</button>
+\t\t\t\t\t<button class="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent" onclick={{() => {{ if ({singular}Query.data) form.reset({singular}Query.data); editing = false; }}}}><X class="h-4 w-4" /> Cancel</button>
+\t\t\t\t\t<button data-testid="{singular}-save-btn" class="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={{updateMut.isPending}} onclick={{saveEdit}}><Save class="h-4 w-4" /> {{updateMut.isPending ? 'Saving...' : 'Save'}}</button>
 \t\t\t\t</div>
 \t\t\t{{/if}}
 \t\t</div>
@@ -747,9 +746,9 @@ export interface Paginated{Singular}Response {{
 NO_CHAT_LAYOUT = """\
 <script lang="ts">
 \timport { goto } from '$app/navigation';
-\timport { getAuth } from '$lib/core';
-\timport { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
-\timport BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
+\timport { getAuth } from '#lib/core/index.ts';
+\timport { getUiStore, AppSidebar, AppHeader } from '#lib/features/shell/index.ts';
+\timport BottomNav from '#lib/features/shell/ui/BottomNav.svelte';
 
 \tlet { children } = $props();
 \tconst auth = getAuth();
@@ -797,8 +796,8 @@ NO_CHAT_LAYOUT = """\
 # imports, the reactive login redirect, and the isAuthenticated guard.
 NO_CHAT_LAYOUT_NO_AUTH = """\
 <script lang="ts">
-\timport { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
-\timport BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
+\timport { getUiStore, AppSidebar, AppHeader } from '#lib/features/shell/index.ts';
+\timport BottomNav from '#lib/features/shell/ui/BottomNav.svelte';
 
 \tlet { children } = $props();
 \tconst ui = getUiStore();
@@ -842,9 +841,9 @@ NO_AUTH_ROOT_LAYOUT = """\
 \timport { Tooltip } from 'bits-ui';
 \timport { Toaster } from 'svelte-sonner';
 \timport { onMount } from 'svelte';
-\timport { configureApiClient, createQueryClient } from '$lib/core';
-\timport { enableMockingIfNeeded } from '$lib/core/msw';
-\timport { getSettingsStore } from '$lib/features/settings';
+\timport { configureApiClient, createQueryClient } from '#lib/core/index.ts';
+\timport { enableMockingIfNeeded } from '#lib/core/msw.ts';
+\timport { getSettingsStore } from '#lib/features/settings/index.ts';
 \timport '../app.css';
 
 \tlet { children } = $props();
@@ -894,9 +893,9 @@ NO_AUTH_ROOT_LAYOUT = """\
 # (app)/+page.svelte rewritten without the auth-gated greeting line.
 NO_AUTH_APP_HOME = """\
 <script lang="ts">
-\timport { Activity, Server, Info, Package, Plus } from 'lucide-svelte';
-\timport { HealthIndicator } from '$lib/shared';
-\timport { createServiceInfoQuery, createReadinessQuery } from '$lib/features/dashboard';
+\timport { Activity, Server, Info, Package, Plus } from '@lucide/svelte';
+\timport { HealthIndicator } from '#lib/shared/index.ts';
+\timport { createServiceInfoQuery, createReadinessQuery } from '#lib/features/dashboard/index.ts';
 
 \tconst infoQuery = createServiceInfoQuery();
 \tconst readinessQuery = createReadinessQuery();
@@ -917,12 +916,12 @@ NO_AUTH_APP_HOME = """\
 \t\t\t\t<Info class="h-4 w-4 text-muted-foreground" />
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
-\t\t\t\t{#if $infoQuery.isLoading}
+\t\t\t\t{#if infoQuery.isLoading}
 \t\t\t\t\t<div class="mb-2 h-7 w-40 animate-pulse rounded bg-muted"></div>
 \t\t\t\t\t<div class="h-4 w-24 animate-pulse rounded bg-muted"></div>
-\t\t\t\t{:else if $infoQuery.data}
-\t\t\t\t\t<div class="text-2xl font-bold">{$infoQuery.data.title}</div>
-\t\t\t\t\t<p class="text-xs text-muted-foreground">v{$infoQuery.data.version}</p>
+\t\t\t\t{:else if infoQuery.data}
+\t\t\t\t\t<div class="text-2xl font-bold">{infoQuery.data.title}</div>
+\t\t\t\t\t<p class="text-xs text-muted-foreground">v{infoQuery.data.version}</p>
 \t\t\t\t{/if}
 \t\t\t</div>
 \t\t</div>
@@ -934,15 +933,15 @@ NO_AUTH_APP_HOME = """\
 \t\t\t\t<Activity class="h-4 w-4 text-muted-foreground" />
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
-\t\t\t\t{#if $readinessQuery.isLoading}
+\t\t\t\t{#if readinessQuery.isLoading}
 \t\t\t\t\t<div class="mb-2 h-7 w-20 animate-pulse rounded bg-muted"></div>
 \t\t\t\t\t<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-\t\t\t\t{:else if $readinessQuery.data}
+\t\t\t\t{:else if readinessQuery.data}
 \t\t\t\t\t<div class="mb-1">
-\t\t\t\t\t\t<HealthIndicator status={$readinessQuery.data.status} />
+\t\t\t\t\t\t<HealthIndicator status={readinessQuery.data.status} />
 \t\t\t\t\t</div>
 \t\t\t\t\t<p class="text-xs text-muted-foreground">
-\t\t\t\t\t\t{Object.keys($readinessQuery.data.components).length} component(s) checked
+\t\t\t\t\t\t{Object.keys(readinessQuery.data.components).length} component(s) checked
 \t\t\t\t\t</p>
 \t\t\t\t{/if}
 \t\t\t</div>
@@ -950,7 +949,7 @@ NO_AUTH_APP_HOME = """\
 \t</div>
 
 \t<!-- Health Components -->
-\t{#if $readinessQuery.data?.components}
+\t{#if readinessQuery.data?.components}
 \t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
 \t\t\t<div class="p-6">
 \t\t\t\t<h3 class="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
@@ -963,7 +962,7 @@ NO_AUTH_APP_HOME = """\
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
 \t\t\t\t<div class="space-y-3">
-\t\t\t\t\t{#each Object.entries($readinessQuery.data.components) as [name, component]}
+\t\t\t\t\t{#each Object.entries(readinessQuery.data.components) as [name, component]}
 \t\t\t\t\t\t<div class="flex items-center justify-between rounded-lg border p-3">
 \t\t\t\t\t\t\t<div>
 \t\t\t\t\t\t\t\t<p class="font-medium capitalize">{name}</p>
@@ -982,14 +981,14 @@ NO_AUTH_APP_HOME = """\
 \t{/if}
 
 \t<!-- System Info -->
-\t{#if $readinessQuery.data?.system_info}
+\t{#if readinessQuery.data?.system_info}
 \t\t<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
 \t\t\t<div class="p-6">
 \t\t\t\t<h3 class="text-lg font-semibold leading-none tracking-tight">System Information</h3>
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
 \t\t\t\t<dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-\t\t\t\t\t{#each Object.entries($readinessQuery.data.system_info) as [key, value]}
+\t\t\t\t\t{#each Object.entries(readinessQuery.data.system_info) as [key, value]}
 \t\t\t\t\t\t<div class="flex flex-col rounded-lg border p-3">
 \t\t\t\t\t\t\t<dt class="text-xs capitalize text-muted-foreground">
 \t\t\t\t\t\t\t\t{key.replace(/_/g, ' ')}
@@ -1009,9 +1008,9 @@ NO_AUTH_APP_HOME = """\
 # no profile link (profile/ is deleted in this build). Settings stays visible.
 NO_AUTH_APP_SIDEBAR = """\
 <script lang="ts">
-\timport { page } from '$app/stores';
-\timport { Home, Settings, FolderOpen } from 'lucide-svelte';
-\timport { getUiStore } from '$lib/features/shell';
+\timport { page } from '$app/state';
+\timport { Home, Settings, FolderOpen } from '@lucide/svelte';
+\timport { getUiStore } from '#lib/features/shell/index.ts';
 
 \tlet { forceCollapsed = false }: { forceCollapsed?: boolean } = $props();
 
@@ -1024,8 +1023,8 @@ NO_AUTH_APP_SIDEBAR = """\
 \t];
 
 \tfunction isActive(url: string) {
-\t\tif (url === '/') return $page.url.pathname === '/';
-\t\treturn $page.url.pathname.startsWith(url);
+\t\tif (url === '/') return page.url.pathname === '/';
+\t\treturn page.url.pathname.startsWith(url);
 \t}
 
 \tfunction handleBrandClick() {

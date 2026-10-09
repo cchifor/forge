@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, computed } from 'vue'
-import { Eye, EyeOff } from 'lucide-vue-next'
+import { Eye, EyeOff } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import type { WorkspaceActivity, AgentState, WorkspaceAction } from '../types'
 

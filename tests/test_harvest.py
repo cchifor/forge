@@ -22,6 +22,7 @@ manifest.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from argparse import Namespace
 from pathlib import Path
@@ -100,9 +101,7 @@ def _scaffold_project(
     }
     # Minimal pyproject.toml so _infer_backends detects this as a
     # Python backend.
-    (backend_dir / "pyproject.toml").write_text(
-        "[project]\nname = \"api\"\nversion = \"0.0.0\"\n"
-    )
+    (backend_dir / "pyproject.toml").write_text('[project]\nname = "api"\nversion = "0.0.0"\n')
 
     write_forge_toml(
         tmp_path / "forge.toml",
@@ -187,13 +186,49 @@ class TestInjectionExtractorEmptyPlan:
 
 
 class TestInjectionExtractorSafeApply:
+    @pytest.mark.parametrize(
+        ("snippet_hash", "upstream_changed", "expected_risk"),
+        [(True, False, "safe-apply"), (True, True, "conflict"), (False, False, "conflict")],
+    )
+    def test_formatted_baseline_preserves_real_upstream_conflicts(
+        self, tmp_path: Path, snippet_hash: bool, upstream_changed: bool, expected_risk: str
+    ) -> None:
+        upstream = "from app.pii import install\ninstall()\n"
+        formatted = "from app.pii import install\n\ninstall()\n"
+        meta = _scaffold_project(tmp_path, body=formatted)
+        meta["main_py"].write_text(
+            _block_text("middleware_cors", "MIDDLEWARE_REGISTRATION", formatted + "# user edit\n")
+        )
+        entry = {"sha256": meta["baseline_sha"]}
+        if snippet_hash:
+            entry["snippet_sha256"] = hashlib.sha256(upstream.encode()).hexdigest()
+        ctx = _mk_ctx(tmp_path, merge_block_baselines={meta["block_key"]: entry})
+        plan = ExtractionPlan(
+            fragment_name="middleware_cors",
+            files=(),
+            injections=(
+                _Inj(
+                    feature_key="middleware_cors",
+                    target="src/app/main.py",
+                    marker="FORGE:MIDDLEWARE_REGISTRATION",
+                    snippet=upstream.replace("install()", "install(enabled=True)")
+                    if upstream_changed
+                    else upstream,
+                ),
+            ),
+            dependencies=(),
+            env_vars=(),
+        )
+        patches = InjectionExtractor().extract(ctx, plan)
+        assert len(patches) == 1
+        assert patches[0].risk == expected_risk
+        assert "+# user edit" in patches[0].diff
+
     def test_user_edited_block_produces_safe_apply(self, tmp_path: Path) -> None:
         meta = _scaffold_project(tmp_path)
         # User edits the block body — sentinels stay intact.
         edited = "# block body line 1\n# user added a line\n# block body line 2\n"
-        original = _block_text(
-            "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
-        )
+        original = _block_text("middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"])
         new_block = _block_text("middleware_cors", "MIDDLEWARE_REGISTRATION", edited)
         text = meta["main_py"].read_text().replace(original, new_block)
         meta["main_py"].write_text(text)
@@ -249,15 +284,11 @@ class TestInjectionExtractorJinjaInterpolation:
         rendered_baseline = "rate_limit = 100\n"
         meta = _scaffold_project(tmp_path, body=rendered_baseline)
         edited_body = "rate_limit = 200\n"
-        new_block = _block_text(
-            "middleware_cors", "MIDDLEWARE_REGISTRATION", edited_body
-        )
+        new_block = _block_text("middleware_cors", "MIDDLEWARE_REGISTRATION", edited_body)
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", rendered_baseline
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
 
         ctx = _mk_ctx(
             tmp_path,
@@ -431,9 +462,7 @@ class TestHarvestProjectUserEdit:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
 
         bundle = harvest_project(tmp_path, quiet=True)
         block_candidates = [c for c in bundle.candidates if c.kind == "block"]
@@ -456,9 +485,7 @@ class TestHarvestProjectScopeFilter:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
         # Scope to a different fragment name — no candidates.
         bundle = harvest_project(tmp_path, scope=("some_other_fragment",), quiet=True)
         assert bundle.candidates == []
@@ -470,9 +497,7 @@ class TestHarvestProjectScopeFilter:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
         bundle = harvest_project(tmp_path, scope=("middleware_cors",), quiet=True)
         block_candidates = [c for c in bundle.candidates if c.kind == "block"]
         assert len(block_candidates) == 1
@@ -493,9 +518,7 @@ class TestHarvestProjectIncludeFilter:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
         bundle = harvest_project(tmp_path, include=("blocks",), quiet=True)
         # Every candidate (if any) must be block-kind.
         assert all(c.kind == "block" for c in bundle.candidates)
@@ -516,9 +539,7 @@ class TestHarvestBundleWrite:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
         out_dir = tmp_path / "_harvest"
         bundle = harvest_project(tmp_path, out_dir=out_dir, quiet=True)
 
@@ -629,9 +650,7 @@ class TestHarvestCLIDispatch:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
 
         out_dir = tmp_path / "_harvest"
         ns = _harvest_namespace(
@@ -712,9 +731,7 @@ class TestHarvestCLIDispatch:
         original_block = _block_text(
             "middleware_cors", "MIDDLEWARE_REGISTRATION", meta["block_body"]
         )
-        meta["main_py"].write_text(
-            meta["main_py"].read_text().replace(original_block, new_block)
-        )
+        meta["main_py"].write_text(meta["main_py"].read_text().replace(original_block, new_block))
         ns = _harvest_namespace(
             project_path=str(tmp_path),
             harvest_out=str(tmp_path / "_harvest"),

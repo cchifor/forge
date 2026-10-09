@@ -6,7 +6,11 @@ import {
   type Ref,
 } from 'vue'
 import { useStorage } from '@vueuse/core'
-import type { ColumnPinningState } from '@tanstack/vue-table'
+/** Keep the persisted v8-shaped preference and public left-only manager API. */
+export interface ColumnPinningState {
+  left?: string[]
+  right?: string[]
+}
 import type { DataTableColumnDef } from './types'
 
 export type PinSide = 'left' | false
@@ -37,11 +41,10 @@ export interface ColumnPinning {
  *
  * Right-side pinning was removed end-to-end in PR #88; legacy
  * ``right: [...]`` entries are filtered into ``[]`` on derivation and
- * overwritten on the next pin interaction. TanStack's
- * ``ColumnPinningState`` type still requires both fields, hence the
- * ``right: []`` carrier.
+ * overwritten on the next pin interaction. The table adapter maps this
+ * persisted shape to TanStack v9's logical start/end positions.
  */
-export function useColumnPinning<T>(
+export function useColumnPinning<T extends object>(
   tableId: string,
   augmentedColumns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
 ): ColumnPinning {
@@ -53,7 +56,7 @@ export function useColumnPinning<T>(
   )
 
   const columnPinning = computed<ColumnPinningState>(() => {
-    const cols = toValue(augmentedColumns) as DataTableColumnDef<unknown>[]
+    const cols = toValue(augmentedColumns) as DataTableColumnDef<object>[]
     const declared = new Set(
       cols
         .map(

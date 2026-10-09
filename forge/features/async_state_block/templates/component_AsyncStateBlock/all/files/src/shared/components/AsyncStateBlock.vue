@@ -15,7 +15,7 @@
  *  - default     — the success branch; receives `{ data: T }`.
  */
 import { computed, type Component } from 'vue'
-import { AlertCircle, Inbox } from 'lucide-vue-next'
+import { AlertCircle, Inbox } from '@lucide/vue'
 import FeatureEmptyState from './FeatureEmptyState.vue'
 
 type State = 'loading' | 'error' | 'empty' | 'success'

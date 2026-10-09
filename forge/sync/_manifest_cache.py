@@ -45,7 +45,7 @@ opaquely and historically got a fresh dict per read.)
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -73,7 +73,7 @@ _active_cache: ContextVar[dict[Path, tuple[int, ForgeTomlData]] | None] = Contex
 
 
 @contextmanager
-def manifest_cache_scope() -> Iterator[None]:
+def manifest_cache_scope() -> Generator[None]:
     """Install a fresh per-invocation cache for the duration of the block.
 
     Idempotent / nestable: a nested scope shadows the outer cache for

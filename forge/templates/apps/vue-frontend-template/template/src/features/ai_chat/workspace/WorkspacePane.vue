@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { X, Sparkles } from 'lucide-vue-next'
+import { X, Sparkles } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import { useWorkspace } from '../composables/useWorkspace'
 import { useAiChat } from '../composables/useAiChat'

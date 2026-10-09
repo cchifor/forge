@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { Sun, Moon, Monitor, ChevronRight, Sparkles } from 'lucide-svelte';
+	import { page } from '$app/state';
+	import { Sun, Moon, Monitor, ChevronRight, Sparkles } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
-	import { getSettingsStore } from '$lib/features/settings';
-	import { getUiStore } from '$lib/features/shell';
+	import { getSettingsStore } from '#lib/features/settings/index.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
 
 	const settings = getSettingsStore();
 	const ui = getUiStore();
@@ -18,7 +18,7 @@
 	};
 
 	const breadcrumbs = $derived(() => {
-		const pathname = $page.url.pathname;
+		const pathname = page.url.pathname;
 		const crumbs: { label: string; href?: string }[] = [];
 
 		if (pathname === '/') {
@@ -48,7 +48,7 @@
 	});
 
 	const currentPageTitle = $derived(() => {
-		const pathname = $page.url.pathname;
+		const pathname = page.url.pathname;
 		return routeTitleMap[pathname] ?? 'Detail';
 	});
 

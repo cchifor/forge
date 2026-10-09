@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { Home, FolderOpen, User, Settings } from 'lucide-svelte';
+	import { page } from '$app/state';
+	import { Home, FolderOpen, User, Settings } from '@lucide/svelte';
 
 	const navItems = [
 		{ title: 'Home', url: '/', icon: Home },
@@ -10,8 +10,8 @@
 	];
 
 	function isActive(url: string) {
-		if (url === '/') return $page.url.pathname === '/';
-		return $page.url.pathname.startsWith(url);
+		if (url === '/') return page.url.pathname === '/';
+		return page.url.pathname.startsWith(url);
 	}
 </script>
 

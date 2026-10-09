@@ -5,7 +5,7 @@ import { errorScenarios } from '@/shared/mocks/scenarios'
 
 const server = setupServer(...infoHandlers, ...healthHandlers)
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 

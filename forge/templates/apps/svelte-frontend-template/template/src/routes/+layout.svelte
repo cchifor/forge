@@ -3,9 +3,9 @@
 	import { Tooltip } from 'bits-ui';
 	import { Toaster } from 'svelte-sonner';
 	import { onMount } from 'svelte';
-	import { configureApiClient, createQueryClient, getAuth } from '$lib/core';
-	import { enableMockingIfNeeded } from '$lib/core/msw';
-	import { getSettingsStore } from '$lib/features/settings';
+	import { configureApiClient, createQueryClient, getAuth } from '#lib/core/index.ts';
+	import { enableMockingIfNeeded } from '#lib/core/msw.ts';
+	import { getSettingsStore } from '#lib/features/settings/index.ts';
 	import '../app.css';
 
 	let { children } = $props();

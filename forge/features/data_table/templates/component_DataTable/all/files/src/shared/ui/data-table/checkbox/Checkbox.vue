@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CheckboxRoot, CheckboxIndicator, type CheckboxRootProps } from 'radix-vue'
 import { type HTMLAttributes, computed } from 'vue'
-import { Check } from 'lucide-vue-next'
+import { Check } from '@lucide/vue'
 import { cn } from '@/shared/lib/utils'
 
 // Radix Vue's CheckboxRoot is the underlying primitive; its native

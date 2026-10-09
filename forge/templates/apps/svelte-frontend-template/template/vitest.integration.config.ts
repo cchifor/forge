@@ -1,5 +1,5 @@
 import { mergeConfig } from 'vitest/config';
-import base from './vitest.config';
+import base from './vitest.config.ts';
 const config = mergeConfig(base, {});
 config.resolve = { ...config.resolve, conditions: ['browser'] };
 config.test!.include = ['tests/integration/**/*.test.ts'];

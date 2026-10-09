@@ -121,7 +121,7 @@ svelte_frontend/
 ├── openapi-snapshot.json         # OpenAPI spec snapshot for codegen
 ├── package.json                  # Dependencies and scripts
 ├── playwright.config.ts          # E2E test configuration
-├── svelte.config.js              # SvelteKit: adapter-static, path aliases
+├── vite.config.ts                # SvelteKit 3: adapter-static and preprocessing
 ├── tsconfig.json                 # Strict TypeScript configuration
 ├── vite.config.ts                # Vite: plugins, proxy, test config
 │
@@ -539,7 +539,7 @@ const paginatedItemResponseSchema = paginatedResponseSchema(itemSchema);
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 22.18
 - **npm** >= 9
 - **Backend** (optional): FastAPI service running on port 5000
 
@@ -643,7 +643,7 @@ OPENAPI_SPEC=http://localhost:5000/openapi.json npm run codegen
 
 | Alias | Maps To | Usage |
 |-------|---------|-------|
-| `$lib` | `src/lib/` | Built-in SvelteKit alias |
+| `#lib/*` | `src/lib/*` | Package imports; use explicit file extensions |
 | `$api` | `src/api/` | API client, schemas, generated types |
 | `$components` | `src/components/` | Shared UI components |
 

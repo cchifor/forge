@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// shadcn-flavored theme for forge-generated Flutter applications.
 ///
@@ -9,12 +9,18 @@ import 'package:flutter/material.dart';
 /// extraction PR.
 class ForgeTheme {
   static ThemeData light({Color seed = const Color(0xFF2563EB)}) {
-    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.light,
+    );
     return _build(scheme);
   }
 
   static ThemeData dark({Color seed = const Color(0xFF2563EB)}) {
-    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
     return _build(scheme);
   }
 

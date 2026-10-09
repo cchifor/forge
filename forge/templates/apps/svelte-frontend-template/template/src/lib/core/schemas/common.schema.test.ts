@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { paginatedResponseSchema, apiErrorSchema } from '$lib/core/schemas/common.schema';
+import { paginatedResponseSchema, apiErrorSchema } from '#lib/core/schemas/common.schema.ts';
 
 describe('paginatedResponseSchema', () => {
 	const schema = paginatedResponseSchema(z.object({ id: z.number() }));
