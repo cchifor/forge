@@ -6,7 +6,7 @@ import {
 	clearPendingPromptIfMatches,
 	type AgUiRunPayload,
 	type ChatStateSnapshot
-} from '@forge/canvas-core';
+} from '#canvas-core';
 
 import type { ChatRunOptions, HitlResponse, WorkspaceActivity } from '../chat.types';
 import { getOptionalAuthToken } from './auth-shim.svelte';

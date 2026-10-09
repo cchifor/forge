@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/github.dart';
 
@@ -33,23 +33,25 @@ class CodeViewer extends StatelessWidget {
   /// for fields the schema declares as optional mirror the previous
   /// behaviour (`'plaintext'` language, `showLineNumbers = false`).
   factory CodeViewer.fromGeneratedProps(CodeViewerProps props) => CodeViewer(
-        code: props.code,
-        language: props.language,
-        filename: props.filename,
-        showLineNumbers: props.showLineNumbers ?? false,
-      );
+    code: props.code,
+    language: props.language,
+    filename: props.filename,
+    showLineNumbers: props.showLineNumbers ?? false,
+  );
 
   /// Backend-driven entry point: parse a raw payload into the
   /// generated [CodeViewerProps] (single source of truth for canvas
   /// prop shapes), then build the widget.
   factory CodeViewer.fromProps(Map<String, dynamic> props) =>
-      CodeViewer.fromGeneratedProps(CodeViewerProps.fromJson({
-        'code': (props['code'] as String?) ?? '',
-        'language': (props['language'] as String?) ?? 'plaintext',
-        if (props['filename'] != null) 'filename': props['filename'],
-        if (props['showLineNumbers'] != null)
-          'showLineNumbers': props['showLineNumbers'],
-      }));
+      CodeViewer.fromGeneratedProps(
+        CodeViewerProps.fromJson({
+          'code': (props['code'] as String?) ?? '',
+          'language': (props['language'] as String?) ?? 'plaintext',
+          if (props['filename'] != null) 'filename': props['filename'],
+          if (props['showLineNumbers'] != null)
+            'showLineNumbers': props['showLineNumbers'],
+        }),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -123,10 +125,7 @@ class CodeViewer extends StatelessWidget {
                 ],
               ),
             ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: body,
-          ),
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: body),
         ],
       ),
     );

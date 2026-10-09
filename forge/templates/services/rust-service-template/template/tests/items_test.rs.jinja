@@ -45,8 +45,10 @@ async fn request(
 async fn item_lifecycle_uses_real_router_and_postgres() {
     let url = std::env::var("DATABASE_URL").expect("Integration tests require DATABASE_URL");
     let admin = sqlx::PgPool::connect(&url).await.unwrap();
+    // DDL identifiers cannot be parameters. The fixed prefix + UUID hex are
+    // generated locally and contain only ASCII identifier characters.
     let schema = format!("forge_test_{}", uuid::Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE SCHEMA {schema}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
         .execute(&admin)
         .await
         .unwrap();
@@ -55,7 +57,7 @@ async fn item_lifecycle_uses_real_router_and_postgres() {
         .after_connect(move |connection, _| {
             let path = path.clone();
             Box::pin(async move {
-                sqlx::query(&format!("SET search_path TO {path}"))
+                sqlx::query(sqlx::AssertSqlSafe(format!("SET search_path TO {path}")))
                     .execute(connection)
                     .await?;
                 Ok(())
@@ -140,7 +142,7 @@ async fn item_lifecycle_uses_real_router_and_postgres() {
         StatusCode::NOT_FOUND
     );
     pool.close().await;
-    sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
         .execute(&admin)
         .await
         .unwrap();

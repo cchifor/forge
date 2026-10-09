@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Sparkles } from 'lucide-svelte';
-	import { getUiStore } from '$lib/features/shell/model/ui.svelte';
+	import { Sparkles } from '@lucide/svelte';
+	import { getUiStore } from '#lib/features/shell/model/ui.svelte.ts';
 
 	const ui = getUiStore();
 

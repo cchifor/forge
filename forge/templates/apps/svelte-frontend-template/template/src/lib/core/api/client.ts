@@ -17,11 +17,11 @@ export function getApiClient(): KyInstance {
 	if (clientInstance) return clientInstance;
 
 	clientInstance = ky.create({
-		prefixUrl: import.meta.env.VITE_API_BASE_URL || window.location.origin,
+		prefix: import.meta.env.VITE_API_BASE_URL || window.location.origin,
 		credentials: 'include',
 		hooks: {
 			beforeRequest: [
-				async (request) => {
+				async ({ request }) => {
 					if (tokenGetter) {
 						const token = await tokenGetter();
 						if (token) {
@@ -31,7 +31,7 @@ export function getApiClient(): KyInstance {
 				}
 			],
 			afterResponse: [
-				async (_request, _options, response) => {
+				async ({ response }) => {
 					if (response.status === 401 && unauthorizedHandler) {
 						unauthorizedHandler();
 					}

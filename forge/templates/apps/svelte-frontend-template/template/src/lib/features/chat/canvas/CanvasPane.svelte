@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
-	import { getChatStore } from '$lib/features/chat';
+	import { X } from '@lucide/svelte';
+	import { getChatStore } from '#lib/features/chat/index.ts';
 	import { resolveCanvasComponent } from './registry';
 
 	const chat = getChatStore();

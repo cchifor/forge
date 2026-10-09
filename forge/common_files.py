@@ -91,6 +91,11 @@ def apply_common_files(
     )
     if config.frontend and config.frontend.framework.value in {"vue", "svelte"}:
         _copy_if_absent(
+            COMMON_DIR / "browser-coverage.ts",
+            project_root / "apps" / config.frontend_slug / "scripts/browser-coverage.ts",
+            collector,
+        )
+        _copy_if_absent(
             COMMON_DIR / "remap-browser.mjs",
             project_root / "apps" / config.frontend_slug / "scripts/remap-browser.mjs",
             collector,

@@ -1,4 +1,4 @@
-import { getSchemeByName } from '$lib/shared/lib/color-schemes';
+import { getSchemeByName } from '#lib/shared/lib/color-schemes.ts';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type DarkVariant = 'standard' | 'oled';

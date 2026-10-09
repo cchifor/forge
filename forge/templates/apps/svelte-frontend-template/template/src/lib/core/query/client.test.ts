@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { QueryClient } from '@tanstack/svelte-query';
-import { createQueryClient } from '$lib/core/query/client';
+import { createQueryClient } from '#lib/core/query/client.ts';
 
 vi.mock('svelte-sonner', () => ({
 	toast: { error: vi.fn() }

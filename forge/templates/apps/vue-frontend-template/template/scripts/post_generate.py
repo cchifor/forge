@@ -207,15 +207,14 @@ import { Toaster } from 'vue-sonner'
 
 MAIN_LAYOUT_NO_CHAT = """\
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Home, Package, User, Settings } from 'lucide-vue-next'
+import { Home, Package, User, Settings } from '@lucide/vue'
 import AppSidebar from '@/shared/components/AppSidebar.vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
 import { useBreakpoint } from '@/shared/composables/useBreakpoint'
 
 const route = useRoute()
-const { isCompact, isMedium, isExpanded } = useBreakpoint()
+const { isMedium, isExpanded } = useBreakpoint()
 
 const bottomNavItems = [
   { title: 'Home', url: '/', icon: Home },
@@ -366,10 +365,9 @@ def remove_conditional_files() -> list[str]:
     if not INCLUDE_OPENAPI:
         delete_file(PROJECT_DIR / "openapi-snapshot.json")
         delete_file(PROJECT_DIR / "openapi-ts.config.ts")
-        # namespace.ts re-exports the generated client (src/shared/api/generated),
-        # which is only produced by `npm run codegen` when openapi is enabled.
-        # Without openapi it's orphaned (nothing imports it) and would fail
-        # type-check with TS2307. Nothing else references it, so drop it too.
+        # Snapshot types are owned template source; explicit OpenAPI codegen
+        # writes service-specific output separately under src/custom/api.
+        delete_dir(PROJECT_DIR / "src" / "shared" / "api" / "generated")
         delete_file(PROJECT_DIR / "src" / "shared" / "api" / "namespace.ts")
         removed.append("openapi")
     return removed
@@ -398,7 +396,7 @@ def patch_readme(feature_names: list[str]) -> None:
     scripts_table += f"| `{pm} run lint` | Lint with ESLint |\n"
     scripts_table += f"| `{pm} run type-check` | TypeScript type checking |\n"
     if INCLUDE_OPENAPI:
-        scripts_table += f"| `{pm} run codegen` | Regenerate API types from OpenAPI spec |\n"
+        scripts_table += f"| `{pm} run codegen` | Generate service-specific client in `src/custom/api` |\n"
 
     tech = "- **Framework**: Vue 3 + TypeScript + Vite\n"
     tech += "- **UI**: Shadcn-Vue (Radix Vue + Tailwind CSS 4)\n"
@@ -411,6 +409,16 @@ def patch_readme(feature_names: list[str]) -> None:
 
     content = f"# {APP_TITLE}\n\n{PROJECT_NAME} - a Vue 3 SPA.\n\n"
     content += f"## Tech Stack\n\n{tech}\n"
+    if INCLUDE_OPENAPI:
+        content += (
+            "## OpenAPI clients\n\n"
+            "`npm run dev` uses the shipped generic contracts without changing them. "
+            "Run `npm run codegen` explicitly to generate service-specific output in "
+            "`src/custom/api`; import that client from application code. The default "
+            "input is `openapi-snapshot.json`; set `OPENAPI_SPEC` for a different "
+            "local file or a reachable service URL. Review and test custom clients "
+            "before use; Forge's generic runtime does not import them.\n\n"
+        )
     content += f"## Features\n\n{features_table}\n"
     content += f"## Scripts\n\n{scripts_table}\n"
     content += f"## Getting Started\n\n```bash\ncd {PROJECT_DIR.name}\n{pm} install\n{pm} run dev\n```\n"
@@ -431,8 +439,8 @@ def run_command(label: str, cmd: list[str], timeout: int = 300) -> bool:
             result = subprocess.run(cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True, timeout=timeout)
         success = result.returncode == 0
         spinner.finish(success)
-        if not success and result.stderr:
-            for line in result.stderr.strip().splitlines()[-10:]:
+        if not success:
+            for line in (result.stdout + result.stderr).strip().splitlines()[-20:]:
                 print(f"    {line}")
         return success
     except FileNotFoundError:
@@ -475,6 +483,13 @@ def main() -> None:
         inject_feature_into_hubs(ctx)
         print(f"    {ctx['plural']}: 8 files → /api/{ctx['backend_name']}/v1/{ctx['plural']}")
     print(f"  Generated {len(features)} feature(s): {', '.join(features)}")
+    if not features:
+        sidebar = PROJECT_DIR / "src" / "shared" / "components" / "AppSidebar.vue"
+        sidebar.write_text(
+            sidebar.read_text(encoding="utf-8").replace("  Package,\n", ""),
+            encoding="utf-8",
+        )
+
 
     # Patch home page API paths to use the first backend's route prefix
     first_backend = next(iter(feature_backend_map.values()), "backend")
@@ -503,8 +518,9 @@ def main() -> None:
     pm = PACKAGE_MANAGER
     print(f"\n> Installing project")
     run_command(f"Installing dependencies ({pm} install)", [pm, "install"])
-    run_command("Type checking (vue-tsc)", [pm, "run", "type-check"])
-    run_command("Linting (eslint)", [pm, "run", "lint"])
+    if not _answers.get("forge_orchestrated", False):
+        run_command("Type checking (vue-tsc)", [pm, "run", "type-check"])
+        run_command("Linting (eslint)", [pm, "run", "lint"])
 
     # Clean up build scripts (must happen after all Python work is done)
     # We can't delete ourselves while running, so just remove answers.json

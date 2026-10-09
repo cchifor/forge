@@ -29,12 +29,12 @@
       "sha256": "5fe751c875dca7a7"
     },
     ".github/workflows/ci.yml": {
-      "size": 1025,
-      "sha256": "212af1e4b3d7bc9c"
+      "size": 1043,
+      "sha256": "d361f9a78c897752"
     },
     ".github/workflows/quality.yml": {
-      "size": 3120,
-      "sha256": "c58a7bcb559942e4"
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
       "size": 523,
@@ -61,15 +61,15 @@
       "sha256": "6a5b8740cc1c34fe"
     },
     "forge.toml": {
-      "size": 28427,
+      "size": 29318,
       "sha256": "<version-dependent>"
     },
     "package.json": {
-      "size": 594,
-      "sha256": "59dcd1502bc7a091"
+      "size": 692,
+      "sha256": "2afa1e798ef1f8de"
     },
     "services/api/.copier-answers.yml": {
-      "size": 534,
+      "size": 540,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -81,8 +81,8 @@
       "sha256": "1e5b3e6f3b0203aa"
     },
     "services/api/Dockerfile": {
-      "size": 3711,
-      "sha256": "dd2d20f1c6f1bc9f"
+      "size": 3800,
+      "sha256": "33b24ea634733ff4"
     },
     "services/api/OBSERVABILITY.md": {
       "size": 2091,
@@ -129,8 +129,8 @@
       "sha256": "fc0726a647a0700c"
     },
     "services/api/package.json": {
-      "size": 1387,
-      "sha256": "7c2d7e3578c5343a"
+      "size": 1420,
+      "sha256": "b2852dbd7c1f5d12"
     },
     "services/api/prisma/migrations/0001_initial/migration.sql": {
       "size": 2078,
@@ -141,8 +141,12 @@
       "sha256": "d6bae7899f05da95"
     },
     "services/api/prisma/schema.prisma": {
-      "size": 2518,
-      "sha256": "ec554aa25c6a8ecf"
+      "size": 1774,
+      "sha256": "dfbd84bdbcac5811"
+    },
+    "services/api/prisma.config.ts": {
+      "size": 307,
+      "sha256": "f021759e2729468d"
     },
     "services/api/src/app/adapters/error-default.ts": {
       "size": 1764,
@@ -165,8 +169,8 @@
       "sha256": "aa221de6e653bb96"
     },
     "services/api/src/config/schema.ts": {
-      "size": 2292,
-      "sha256": "7b2b51e61547a7c1"
+      "size": 2298,
+      "sha256": "304657f447fae904"
     },
     "services/api/src/data/repositories/base-repository.ts": {
       "size": 1480,
@@ -192,13 +196,17 @@
       "size": 251,
       "sha256": "718c045fccf158dc"
     },
+    "services/api/src/lib/prisma-options.ts": {
+      "size": 1010,
+      "sha256": "8645ce593d63c1e3"
+    },
     "services/api/src/lib/prisma-pool.ts": {
-      "size": 991,
-      "sha256": "648c5e000d6764c1"
+      "size": 1177,
+      "sha256": "7f06cb519c2cebb9"
     },
     "services/api/src/lib/prisma.ts": {
-      "size": 799,
-      "sha256": "7d7efa1b613c545b"
+      "size": 1088,
+      "sha256": "224b2bf64bc42bf9"
     },
     "services/api/src/middleware/correlation.ts": {
       "size": 394,
@@ -210,7 +218,7 @@
     },
     "services/api/src/middleware/error-handler.ts": {
       "size": 5449,
-      "sha256": "d725afe199bc1319"
+      "sha256": "42f08d8e9eeac96e"
     },
     "services/api/src/middleware/logging.ts": {
       "size": 942,
@@ -241,8 +249,8 @@
       "sha256": "d488646da60bba86"
     },
     "services/api/src/schemas/health.schema.ts": {
-      "size": 689,
-      "sha256": "113c015e978f84d2"
+      "size": 713,
+      "sha256": "f0f1d76a7ebdd0d8"
     },
     "services/api/src/schemas/item.schema.ts": {
       "size": 1121,
@@ -296,9 +304,13 @@
       "size": 5295,
       "sha256": "98c0beedb49d6d7b"
     },
+    "services/api/tests/unit/prisma-options.test.ts": {
+      "size": 2110,
+      "sha256": "c100988e3438638c"
+    },
     "services/api/tests/unit/prisma-pool.test.ts": {
-      "size": 1416,
-      "sha256": "8e0776f5c089421a"
+      "size": 2382,
+      "sha256": "5d578f6095e45c7f"
     },
     "services/api/tests/unit/repositories.test.ts": {
       "size": 2775,

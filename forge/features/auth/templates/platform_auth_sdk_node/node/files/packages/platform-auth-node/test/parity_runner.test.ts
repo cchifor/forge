@@ -394,11 +394,12 @@ async function buildTokenOmittingClaim(
     Buffer.from(payloadB64, "base64url").toString("utf-8"),
   ) as Record<string, unknown>;
   delete payload[claim];
-  // Reuse the helper to sign the modified payload.
-  return buildTestToken({
-    ...fullOpts,
-    extraClaims: { ...fullOpts.extraClaims, ...payload, _omit_marker: undefined },
-  });
+  // Sign the stripped payload directly: buildTestToken supplies defaults for
+  // required claims, which would silently restore the intentionally absent one.
+  const { SignJWT } = await import("jose");
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "ES256", kid: keypair.kid })
+    .sign(keypair.privateKey);
 }
 
 function base64Url(input: string): string {

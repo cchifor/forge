@@ -4,13 +4,13 @@ import type { Component } from 'svelte'
 
 import { lintProps, warnOnLintIssues } from './lint'
 
-export interface CanvasComponent<Props = Record<string, unknown>> {
+export interface CanvasComponent<Props extends object = Record<string, unknown>> {
   name: string
-  component: Component
+  component: Component<Props>
   propsSchema?: Record<string, unknown>
 }
 
-export interface CanvasResolution<Props = Record<string, unknown>> {
+export interface CanvasResolution<Props extends object = Record<string, unknown>> {
   entry: CanvasComponent<Props>
   issues: readonly { field: string; message: string }[]
 }

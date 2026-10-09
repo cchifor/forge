@@ -1,4 +1,5 @@
-<script setup lang="ts" generic="T">
+<script setup lang="ts" generic="T extends object">
+import type { DataTableFeatures } from './features'
 /**
  * Sort selector for the list-tier layout. Headers aren't visible in card
  * mode, so users need a separate affordance to change ordering. The chip
@@ -11,7 +12,7 @@ import {
   ArrowDownUp,
   ArrowUp,
   Check,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { Table } from '@tanstack/vue-table'
 import { Button } from '@/shared/ui/button'
 import {
@@ -24,7 +25,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 
 const props = defineProps<{
-  table: Table<T>
+  table: Table<DataTableFeatures, T>
 }>()
 
 const sortableColumns = computed(() =>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { X, Sparkles } from 'lucide-vue-next'
+import { X, Sparkles } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import CanvasError from './CanvasError.vue'
 import { useCanvas } from '../composables/useCanvas'

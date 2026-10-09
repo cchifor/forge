@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { appPath } from '#lib/shared/lib/paths.ts';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import {
 		Home,
 		FolderOpen,
@@ -7,10 +9,10 @@
 		LogOut,
 		CreditCard,
 		UserCircle
-	} from 'lucide-svelte';
+	} from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
-	import { getAuth } from '$lib/core/auth/auth.svelte';
-	import { getUiStore } from '$lib/features/shell';
+	import { getAuth } from '#lib/core/auth/auth.svelte.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
 
 	let { forceCollapsed = false }: { forceCollapsed?: boolean } = $props();
 
@@ -25,8 +27,9 @@
 	];
 
 	function isActive(url: string) {
-		if (url === '/') return $page.url.pathname === '/';
-		return $page.url.pathname.startsWith(url);
+		const path = resolve(appPath(url));
+		if (url === '/') return page.url.pathname === path;
+		return page.url.pathname === path || page.url.pathname.startsWith(`${path}/`);
 	}
 
 	function handleBrandClick() {
@@ -73,10 +76,10 @@
 	<!-- Middle: Primary Nav -->
 	<nav class="flex-1 overflow-y-auto py-3 px-2">
 		<ul class="space-y-1">
-			{#each navItems as item}
+			{#each navItems as item (item.url)}
 				<li>
 					<a
-						href={item.url}
+						href={resolve(appPath(item.url))}
 						class="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
 							{isActive(item.url) ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
 						title={isCollapsed ? item.title : undefined}
@@ -101,7 +104,7 @@
 	<!-- Bottom: Settings + Profile -->
 	<div class="border-t py-2 px-2 space-y-1">
 		<a
-			href="/settings"
+			href={resolve('settings')}
 			class="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
 				{isActive('/settings') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
 			title={isCollapsed ? 'Settings' : undefined}
@@ -155,7 +158,7 @@
 				</div>
 				<div class="my-1 h-px bg-border"></div>
 				<a
-					href="/settings"
+					href={resolve('settings')}
 					class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
 				>
 					<Settings class="h-4 w-4" />
@@ -169,7 +172,7 @@
 					Billing
 				</button>
 				<a
-					href="/profile"
+					href={resolve('profile')}
 					class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
 				>
 					<UserCircle class="h-4 w-4" />

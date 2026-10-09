@@ -112,7 +112,7 @@ class TestForceRemoveReadonly:
         f.write_text("data")
         f.chmod(stat.S_IREAD)
 
-        _force_remove_readonly(os.remove, str(f), None)
+        _force_remove_readonly(os.remove, str(f), PermissionError("read-only file"))
         assert not f.exists()
 
 
@@ -126,6 +126,8 @@ class TestCleanupSubGitRepos:
         child_a.mkdir()
         (child_a / ".git").mkdir()
         (child_a / ".git" / "HEAD").write_text("ref: refs/heads/main")
+        # Exercise rmtree's read-only recovery callback on Windows.
+        (child_a / ".git" / "HEAD").chmod(stat.S_IREAD)
 
         child_b = tmp_path / "frontend"
         child_b.mkdir()
@@ -171,7 +173,7 @@ class TestGitInit:
         cmds = [call.args[0] for call in mock_run.call_args_list]
         assert cmds[0] == ["git", "init"]
         assert cmds[1] == ["git", "add", "."]
-        assert cmds[2][0:2] == ["git", "commit"]
+        assert cmds[2][-3:] == ["commit", "-m", "Initial commit from forge"]
 
     def test_passes_project_root_as_cwd(self, tmp_path):
         with patch("forge.generator.subprocess.run") as mock_run:

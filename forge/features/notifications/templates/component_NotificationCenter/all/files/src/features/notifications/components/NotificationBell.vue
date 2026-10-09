@@ -7,7 +7,7 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bell } from 'lucide-vue-next'
+import { Bell } from '@lucide/vue'
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { useNotificationStore } from '../store'

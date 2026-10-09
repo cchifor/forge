@@ -274,8 +274,11 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
 14. **`github-release`** is the only job. A tag push builds the sdist+wheel,
     generates a CycloneDX SBOM, and cuts a GitHub Release from the
     `[Unreleased]` CHANGELOG section, attaching `dist/*` + the SBOM. forge
-    publishes to no registry, so there are no publish credentials and no
-    pre-publish dry-run gate — only two fail-closed checks:
+    publishes to no package registry. PR CI also runs
+    `.github/scripts/check-release-artifacts.sh`: it builds the archives in an
+    isolated directory, checks release-note extraction against a fixture, and
+    verifies a CycloneDX SBOM against the locked runtime environment. This
+    smoke check creates no release. The tag-triggered job additionally requires:
     - **Check tag matches package version** — the tag and `forge/__init__.py`
       `__version__` must agree.
     - **Extract changelog section** — `[Unreleased]` must be non-empty.
@@ -297,6 +300,50 @@ Runs at 03:00 UTC. Also triggered by PR labels `ci:matrix-smoke` (full fan-out) 
 
 24. **Nightly `publish-dashboard` shows "no lanes ran"** -- the `gate` job filtered everything out. Check whether `scenarios.yaml` has scenarios with the expected `lanes` entries, or whether a label-triggered run used the wrong label.
 
+
+## Coordinated dependency upgrades
+
+Start from current `main` in an isolated checkout and update the platform as
+one reviewed change. `.github/dependabot.yml` groups weekly version updates
+across uv, npm, GitHub Actions, Cargo and pub. Security alerts remain independent;
+do not wait for the weekly batch to fix an exploitable vulnerability.
+
+1. Inventory both Forge's dependencies and the manifests it emits. Refresh root
+   `uv.lock` and `package-lock.json`, the Gatekeeper/Python authentication SDK
+   locks, and the base Python service lock rendered through Copier. npm's root
+   workspace does not include the separate Node authentication SDK. Template
+   `.jinja` manifests and injected fragment dependencies need a render/resolve
+   check; Dependabot cannot discover all of them from the repository root.
+2. Resolve the latest stable releases together, read upstream migration notes,
+   and adapt source/configuration where APIs change. Update mirrored canvas
+   sources and generated workflow pins together. Keep runtime-specific types
+   aligned with the supported runtime (for example, Node 22 types for Node 22).
+   A compatibility hold must name the affected package, failing behavior, and
+   follow-up issue. A community replacement for an incompatible compiler is a
+   separate technology decision, not an ordinary version bump.
+3. Run locked installs, `make check`, the ty canary, canvas build/type/runtime
+   checks, and authentication parity with `--group auth-parity`. Build and test
+   rendered Python/Node/Rust applications and Vue/Svelte/Flutter frontends.
+   Run native generated-code architecture and unit/integration/E2E coverage
+   gates without changing their thresholds. Inspect actual upload/SBOM output
+   when updating reporting or release tools. The generator coverage job publishes
+   required GitHub artifacts; verify their contents and revision-linked summary.
+   Nightly status artifacts describe the same execution that determines the gate.
+4. Freeze the candidate commit before validation. Run the full nightly smoke,
+   round-trip and update matrix on that same revision, including non-PR setup
+   paths. Regenerate golden snapshots only for reviewed output changes and
+   inspect their diffs. A locally edited template during a round-trip run can
+   legitimately produce differing projects; rerun once the source is fixed.
+5. Open one consolidated PR, address all CI and review feedback, and have the
+   reviewer merge after validation. Close superseded dependency PRs only after
+   their requested upgrades or documented replacements are on validated `main`.
+   Historical failed runs remain part of the audit trail; link the passing
+   replacement rather than claiming the old run became green. Keep unresolved
+   migrations open, such as [stock TypeScript 7 compatibility](https://github.com/cchifor/forge/issues/357).
+
+Before large builds, check disk space. Remove owned temporary environments and
+tear down throwaway Compose stacks with `docker compose down -v`; retain useful
+failure logs and never remove an unrelated running application.
 
 ## Generated quality failures
 

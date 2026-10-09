@@ -30,8 +30,6 @@
 		onreset?.();
 	}
 </script>
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="flex w-2 shrink-0 cursor-col-resize items-center justify-center transition-colors {isDragging
 		? 'bg-primary/30'

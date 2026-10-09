@@ -20,7 +20,7 @@ vi.mock('dompurify', () => ({
 import AiChatMessage from './AiChatMessage.svelte';
 
 function makeMessage(role: 'user' | 'assistant' | 'system', content: string, id = 'msg-1') {
-	return { id, role, content };
+	return { id, role, content, isStreaming: false };
 }
 
 beforeEach(() => {
@@ -35,8 +35,7 @@ describe('AiChatMessage — streaming debounce', () => {
 	it('collapses 10 rapid token updates within 50ms into <= 2 markdown parses', async () => {
 		vi.useFakeTimers();
 		const { rerender } = render(AiChatMessage, {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			props: { message: makeMessage('assistant', 'a'), isStreaming: true } as any
+			props: { message: makeMessage('assistant', 'a'), isStreaming: true }
 		});
 		// Initial mount calls renderMarkdown once for the cached HTML.
 		const initialCalls = parseSpy.mock.calls.length;
@@ -44,10 +43,9 @@ describe('AiChatMessage — streaming debounce', () => {
 		// 10 token deltas at 5ms intervals — all within the 50ms debounce window.
 		for (let i = 0; i < 10; i++) {
 			await rerender({
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				message: makeMessage('assistant', 'a' + 'b'.repeat(i + 1)),
 				isStreaming: true
-			} as any);
+			});
 			vi.advanceTimersByTime(5);
 		}
 
@@ -62,24 +60,21 @@ describe('AiChatMessage — streaming debounce', () => {
 	it('flushes immediately when isStreaming transitions to false', async () => {
 		vi.useFakeTimers();
 		const { rerender, container } = render(AiChatMessage, {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			props: { message: makeMessage('assistant', 'partial'), isStreaming: true } as any
+			props: { message: makeMessage('assistant', 'partial'), isStreaming: true }
 		});
 		const baseline = parseSpy.mock.calls.length;
 
 		// New token arrives but the debounce window has not yet elapsed.
 		await rerender({
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			message: makeMessage('assistant', 'partial + final'),
 			isStreaming: true
-		} as any);
+		});
 
 		// Stream ends — must render the final content within frame, not after 50ms.
 		await rerender({
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			message: makeMessage('assistant', 'partial + final'),
 			isStreaming: false
-		} as any);
+		});
 		await tick();
 
 		expect(parseSpy.mock.calls.length).toBeGreaterThan(baseline);

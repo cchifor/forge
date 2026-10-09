@@ -69,8 +69,9 @@ jobs:
       update_scenarios: ${{ steps.load.outputs.update_scenarios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -142,10 +143,11 @@ jobs:
       # ``$((SECONDS / 60))m`` would always print 0s.
       - name: Capture job start time
         run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -170,25 +172,19 @@ jobs:
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
         env:
           FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
-      - name: Upload per-scenario JSON status artifact
-        # Each smoke job emits a one-row JSON file; the aggregator job
-        # below stitches them into the final dashboard. Using artifacts
-        # avoids a fan-in via git, which would require a serialized
-        # commit step that conflicts across parallel runners.
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane smoke --json > \
-            matrix-status/${{ matrix.scenario }}.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane smoke
+          --json-output matrix-status/${{ matrix.scenario }}.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: compose-logs-${{ matrix.scenario }}
@@ -222,10 +218,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Capture job start time
         run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -239,20 +236,18 @@ jobs:
       - name: Install forge
         run: uv sync --locked --all-extras --dev
       - name: Run lane D (roundtrip) for ${{ matrix.scenario }}
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane roundtrip
-      - name: Upload per-scenario JSON status artifact
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
-            matrix-status/${{ matrix.scenario }}-roundtrip.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane roundtrip
+          --json-output matrix-status/${{ matrix.scenario }}-roundtrip.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Append timing summary
         if: always()
         run: |
@@ -281,10 +276,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Capture job start time
         run: echo "JOB_START_S=$(date +%s)" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -299,20 +295,18 @@ jobs:
       - name: Install forge
         run: uv sync --locked --all-extras --dev
       - name: Run lane E (update + harvest) for ${{ matrix.scenario }}
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane update
-      - name: Upload per-scenario JSON status artifact
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane update --json > \
-            matrix-status/${{ matrix.scenario }}-update.json || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane update
+          --json-output matrix-status/${{ matrix.scenario }}-update.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-update-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Append timing summary
         if: always()
         run: |
@@ -333,12 +327,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: matrix-status-raw
           pattern: matrix-status-*
@@ -401,7 +396,7 @@ jobs:
                   fh.write("\nSee individual scenario logs above for details.\n")
               Path("matrix-status.md").write_text(grid, encoding="utf-8")
           PY
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: matrix-status-grid
           path: matrix-status.md
@@ -427,7 +422,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pull the per-scenario status artifacts so the issue body can name the
       # specific failing scenario(s) instead of a generic per-lane table (#258).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true
         with:
           path: matrix-status-raw

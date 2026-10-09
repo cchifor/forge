@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, Loader2, Clock, XCircle, SkipForward } from 'lucide-vue-next'
+import { Check, Loader2, Clock, XCircle, SkipForward } from '@lucide/vue'
 import type { WorkspaceActivity, AgentState } from '../types'
 
 const props = defineProps<{
@@ -13,7 +13,14 @@ const emit = defineEmits<{
 }>()
 
 const schema = computed(() => props.activity.content.props || props.activity.content)
-const nodes = computed(() => schema.value.nodes || [])
+interface WorkflowNode {
+  id: string
+  label: string
+  status: string
+  detail?: string
+  progress?: number
+}
+const nodes = computed<WorkflowNode[]>(() => Array.isArray(schema.value.nodes) ? schema.value.nodes : [])
 const isHorizontal = computed(() => schema.value.layout !== 'vertical')
 
 const statusConfig: Record<string, { bg: string; border: string; text: string; icon: any }> = {

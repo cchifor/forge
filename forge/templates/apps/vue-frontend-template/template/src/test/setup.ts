@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 import { server } from '@/shared/mocks/node'
 
-beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }))
+beforeAll(() => server.listen({ onUnhandledFrame: 'bypass' }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 

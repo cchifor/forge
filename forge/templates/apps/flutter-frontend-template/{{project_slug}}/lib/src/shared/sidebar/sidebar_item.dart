@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Base sealed class for sidebar items, enabling exhaustive pattern matching.
 sealed class SidebarItem {

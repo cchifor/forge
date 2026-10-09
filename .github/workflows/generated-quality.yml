@@ -24,8 +24,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           python-version: '3.13'
       - run: uv sync --locked --dev
       - name: New attribution policy
@@ -65,22 +66,23 @@ jobs:
       DATABASE_URL: postgres://forge:forge-test@localhost:5432/forge_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           python-version: '3.13'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         if: matrix.language == 'rust'
         with:
           components: llvm-tools-preview
       - if: matrix.language == 'rust'
-        run: cargo install cargo-llvm-cov --locked --version 0.6.21
+        run: cargo install cargo-llvm-cov --locked --version 0.9.1
       - run: uv sync --locked --dev
       - name: Rendered application and shared-runtime gates
         run: uv run --locked python scripts/check_generated_quality.py --language ${{ matrix.language }} --output .artifacts/generated-${{ matrix.language }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: generated-${{ matrix.language }}-coverage

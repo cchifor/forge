@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CheckCircle } from 'lucide-vue-next'
+import { CheckCircle } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import type { WorkspaceActivity, AgentState } from '../types'
 

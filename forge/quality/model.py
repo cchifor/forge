@@ -82,7 +82,10 @@ def ownership(
         "_capabilities",
     }:
         return "generated"
-    if len(p.parts) >= 5 and p.parts[0] == "apps" and p.parts[2:4] == ("src", "shared"):
+    if p.parts[0] == "apps" and (
+        (len(p.parts) >= 5 and p.parts[2:4] == ("src", "shared"))
+        or (len(p.parts) >= 6 and p.parts[2:5] == ("src", "lib", "shared"))
+    ):
         return "generated"
     if len(p.parts) >= 5 and p.parts[0] == "services" and p.parts[2:4] == ("src", "lib"):
         return "generated"
@@ -120,6 +123,8 @@ def source_fingerprint() -> str:
             or rel.parts[0] == "plans"  # Development notes are not installed runtime inputs.
             or set(rel.parts) & IGNORED
             or path.suffix in {".pyc", ".pyo"}
+            or path.name == ".coverage"
+            or path.name.startswith(".coverage.")
         ):
             continue
         result.update(rel.as_posix().encode())

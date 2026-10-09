@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { Activity, Server, Info, Package, Plus, User } from 'lucide-svelte';
-	import { HealthIndicator } from '$lib/shared';
-	import { createServiceInfoQuery, createReadinessQuery } from '$lib/features/dashboard';
-	import { getAuth } from '$lib/core';
+	import { resolve } from '$app/paths';
+	import { Activity, Server, Info, Package, Plus, User } from '@lucide/svelte';
+	import { HealthIndicator } from '#lib/shared/index.ts';
+	import { createServiceInfoQuery, createReadinessQuery } from '#lib/features/dashboard/index.ts';
+	import { getAuth } from '#lib/core/index.ts';
 
 	const auth = getAuth();
 	const infoQuery = createServiceInfoQuery();
@@ -26,12 +27,12 @@
 				<Info class="h-4 w-4 text-muted-foreground" />
 			</div>
 			<div class="p-6 pt-0">
-				{#if $infoQuery.isLoading}
+				{#if infoQuery.isLoading}
 					<div class="mb-2 h-7 w-40 animate-pulse rounded bg-muted"></div>
 					<div class="h-4 w-24 animate-pulse rounded bg-muted"></div>
-				{:else if $infoQuery.data}
-					<div class="text-2xl font-bold">{$infoQuery.data.title}</div>
-					<p class="text-xs text-muted-foreground">v{$infoQuery.data.version}</p>
+				{:else if infoQuery.data}
+					<div class="text-2xl font-bold">{infoQuery.data.title}</div>
+					<p class="text-xs text-muted-foreground">v{infoQuery.data.version}</p>
 				{/if}
 			</div>
 		</div>
@@ -43,15 +44,15 @@
 				<Activity class="h-4 w-4 text-muted-foreground" />
 			</div>
 			<div class="p-6 pt-0">
-				{#if $readinessQuery.isLoading}
+				{#if readinessQuery.isLoading}
 					<div class="mb-2 h-7 w-20 animate-pulse rounded bg-muted"></div>
 					<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-				{:else if $readinessQuery.data}
+				{:else if readinessQuery.data}
 					<div class="mb-1">
-						<HealthIndicator status={$readinessQuery.data.status} />
+						<HealthIndicator status={readinessQuery.data.status} />
 					</div>
 					<p class="text-xs text-muted-foreground">
-						{Object.keys($readinessQuery.data.components).length} component(s) checked
+						{Object.keys(readinessQuery.data.components).length} component(s) checked
 					</p>
 				{/if}
 			</div>
@@ -67,7 +68,7 @@
 				<div class="flex flex-wrap gap-2">
 					<!-- --- feature action chips --- -->
 					<a
-						href="/profile"
+						href={resolve('profile')}
 						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
 					>
 						<User class="h-3.5 w-3.5" /> View Profile
@@ -78,7 +79,7 @@
 	</div>
 
 	<!-- Health Components -->
-	{#if $readinessQuery.data?.components}
+	{#if readinessQuery.data?.components}
 		<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
 			<div class="p-6">
 				<h3 class="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
@@ -91,7 +92,7 @@
 			</div>
 			<div class="p-6 pt-0">
 				<div class="space-y-3">
-					{#each Object.entries($readinessQuery.data.components) as [name, component]}
+					{#each Object.entries(readinessQuery.data.components) as [name, component] (name)}
 						<div class="flex items-center justify-between rounded-lg border p-3">
 							<div>
 								<p class="font-medium capitalize">{name}</p>
@@ -110,14 +111,14 @@
 	{/if}
 
 	<!-- System Info -->
-	{#if $readinessQuery.data?.system_info}
+	{#if readinessQuery.data?.system_info}
 		<div class="rounded-lg border bg-card text-card-foreground shadow-sm">
 			<div class="p-6">
 				<h3 class="text-lg font-semibold leading-none tracking-tight">System Information</h3>
 			</div>
 			<div class="p-6 pt-0">
 				<dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-					{#each Object.entries($readinessQuery.data.system_info) as [key, value]}
+					{#each Object.entries(readinessQuery.data.system_info) as [key, value] (key)}
 						<div class="flex flex-col rounded-lg border p-3">
 							<dt class="text-xs capitalize text-muted-foreground">
 								{key.replace(/_/g, ' ')}

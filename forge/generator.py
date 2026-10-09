@@ -251,12 +251,12 @@ def generate(
                 staging_dir,
             )
         else:
-            shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
         raise
 
     # Success — promote staging dir contents to the final location.
     shutil.move(str(project_root), str(final_root))
-    shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+    shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
 
     # Re-populate the report with the final path (not the staging path).
     if report is not None:
@@ -361,6 +361,7 @@ def _run_generation_phases(
     # freshly generated project passes ``forge --verify`` instead of reporting
     # day-0 drift on its own pyproject.toml / .env.example (exit 10).
     _rerecord_mutated_manifests(config, project_root, collector)
+    _run_frontend_checks(config, project_root, quiet=quiet, dry_run=dry_run)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -1465,6 +1466,10 @@ def _generate_frontend(
         raise GeneratorError(f"No template for framework {fw.value!r} (layout {layout_name!r})")
 
     ctx = variable_mapper.frontend_context(config)
+    if fw in {FrontendFramework.VUE, FrontendFramework.SVELTE}:
+        # Copier still installs dependencies and prepares the template. Checks
+        # need the API clients/protocols emitted by later composition phases.
+        ctx["forge_orchestrated"] = True
 
     # Templates that declare ``_subdirectory:`` render INTO dst_path
     # (Vue/Svelte + most plugin templates); templates without it own the
@@ -1511,6 +1516,31 @@ def _generate_frontend(
         if parent_answers.is_file() and app_dir.is_dir():
             parent_answers.replace(app_dir / ".copier-answers.yml")
     return app_dir
+
+
+def _run_frontend_checks(
+    config: ProjectConfig, project_root: Path, *, quiet: bool, dry_run: bool
+) -> None:
+    """Validate the composed frontend before stamping ownership and committing.
+
+    Copier's setup hook installs dependencies once, but cannot check sources
+    that Forge has not emitted yet. Quiet mode suppresses progress, not checks.
+    """
+    frontend = config.frontend
+    if dry_run or frontend is None:
+        return
+    scripts = {
+        FrontendFramework.VUE: ("lint", "build"),  # build includes vue-tsc
+        FrontendFramework.SVELTE: ("check", "lint", "build"),
+    }.get(frontend.framework, ())
+    for script in scripts:
+        _run_backend_cmd(
+            project_root / "apps" / config.frontend_slug,
+            [frontend.package_manager, "run", script],
+            f"Frontend {frontend.framework.value} {script}",
+            required=True,
+            quiet=quiet,
+        )
 
 
 def _run_backend_cmd(
@@ -1572,21 +1602,24 @@ def _run_backend_cmd(
         return True
     if not quiet:
         print(f"  [!!] {description} failed")
-    stderr_tail = ""
-    if result.stderr:
-        stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
-        if not quiet:
-            for line in stderr_tail.splitlines():
-                print(f"       {line}")
+    # Type checkers commonly print diagnostics to stdout, even on failure.
+    output_tail = "\n".join(
+        "\n".join(part for part in (result.stdout, result.stderr) if part)
+        .strip()
+        .splitlines()[-20:]
+    )
+    if output_tail and not quiet:
+        for line in output_tail.splitlines():
+            print(f"       {line}")
     if required:
-        suffix = f"\n{stderr_tail}" if stderr_tail else ""
+        suffix = f"\n{output_tail}" if output_tail else ""
         raise GeneratorError(
             f"{description} failed (exit {result.returncode}): {' '.join(cmd)}{suffix}"
         )
     return False
 
 
-def _force_remove_readonly(func, path, _exc_info):
+def _force_remove_readonly(func, path, _exception):
     """Error handler for shutil.rmtree to clear read-only flags on Windows."""
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -1596,7 +1629,7 @@ def _cleanup_sub_git_repos(project_root: Path) -> None:
     """Remove .git directories from generated subdirectories (recursive)."""
     for git_dir in project_root.rglob(".git"):
         if git_dir.is_dir() and git_dir.parent != project_root:
-            shutil.rmtree(git_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(git_dir, onexc=_force_remove_readonly)
 
 
 def _git_init(project_root: Path) -> None:
@@ -1613,10 +1646,26 @@ def _git_init(project_root: Path) -> None:
         "GIT_COMMITTER_NAME": "forge",
         "GIT_COMMITTER_EMAIL": "forge@localhost",
     }
+    # Automatic maintenance can otherwise outlive commit and mutate .git after
+    # generation returns. Keep it enabled, but finish it before callers snapshot
+    # or update the project. Set both keys because newer Git prefers maintenance.
     for step, cmd, step_env in (
         ("init", ["git", "init"], None),
         ("add", ["git", "add", "."], None),
-        ("commit", ["git", "commit", "-m", "Initial commit from forge"], env),
+        (
+            "commit",
+            [
+                "git",
+                "-c",
+                "gc.autoDetach=false",
+                "-c",
+                "maintenance.autoDetach=false",
+                "commit",
+                "-m",
+                "Initial commit from forge",
+            ],
+            env,
+        ),
     ):
         try:
             subprocess.run(

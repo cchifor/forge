@@ -57,8 +57,9 @@ jobs:
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -104,28 +105,30 @@ jobs:
           # (static vue-tsc) + brownfield runtime (mock server -> generated
           # adapter): -k entitylist matches all three test_entitylist_* functions.
           - entitylist
+          # Optional DataTable must compile and preserve its interactive state.
+          - datatable-component
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install Python 3.13
         run: uv python install 3.13
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Install Flutter (only for flutter presets)
         if: startsWith(matrix.preset, 'flutter-') || matrix.preset == 'multi-backend-keycloak'
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          # The generated Flutter app targets a modern toolchain (flutter_lints
-          # ^6, riverpod ^3, freezed ^3, go_router ^17 all floor at Dart ^3.8.0).
+          # Material UI and current codegen target Flutter >=3.47 / Dart >=3.13.
           # Track the latest stable so `flutter pub get` can resolve them; the
           # old 3.24.x pin shipped Dart 3.5.4 and failed version solving.
           channel: stable
@@ -176,18 +179,19 @@ jobs:
     needs: e2e-core
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install Python 3.13
         run: uv python install 3.13
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       - name: Install Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
@@ -215,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -238,17 +242,19 @@ jobs:
           npm run typecheck
           npm run build
 
-      - name: canvas-svelte — build
+      - name: canvas-svelte — typecheck + build
         working-directory: packages/canvas-svelte
-        run: npm run build
+        run: |
+          npm run typecheck
+          npm run build
 
       - name: canvas workspaces — runtime tests
         run: npm test --workspaces
 
       - name: Install Flutter for forge_canvas
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
-          flutter-version: "3.24.x"
+          channel: stable
           cache: true
 
       - name: forge_canvas — analyze
@@ -256,6 +262,13 @@ jobs:
         run: |
           flutter pub get
           flutter analyze --no-fatal-infos
+
+      - name: forge_canvas_core — analyze and test
+        working-directory: packages/forge-canvas-core-dart
+        run: |
+          dart pub get
+          dart analyze
+          dart test
 
       - name: forge_canvas — test (if tests exist)
         working-directory: packages/forge-canvas-dart

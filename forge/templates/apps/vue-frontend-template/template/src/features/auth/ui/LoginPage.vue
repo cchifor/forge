@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Sparkles, LogIn, Loader2 } from 'lucide-vue-next'
+import { Sparkles, LogIn, Loader2 } from '@lucide/vue'
 import {
   Card,
   CardHeader,

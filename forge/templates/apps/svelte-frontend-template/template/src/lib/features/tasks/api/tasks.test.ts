@@ -1,66 +1,63 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Mock dependencies
-vi.mock('$lib/core/api/client', () => ({
+vi.mock('#lib/core/api/client.ts', () => ({
 	getApiClient: () => ({
 		get: vi.fn().mockReturnValue({ json: vi.fn() }),
 		post: vi.fn().mockReturnValue({ json: vi.fn() })
 	})
 }));
 
-vi.mock('$lib/core/api/validation', () => ({
+vi.mock('#lib/core/api/validation.ts', () => ({
 	validateResponse: vi.fn((_, raw) => raw)
 }));
 
-vi.mock('$lib/core/schemas', () => ({
+vi.mock('#lib/core/schemas/index.ts', () => ({
 	taskEnqueueResponseSchema: {},
 	taskStatusResponseSchema: {}
 }));
 
-// Mock svelte/store derived
-vi.mock('svelte/store', () => ({
-	derived: vi.fn((_store: unknown, fn: (v: unknown) => unknown) => fn('test-task-id'))
-}));
+import { readable } from 'svelte/store';
 
 vi.mock('@tanstack/svelte-query', () => ({
-	createQuery: vi.fn((opts: unknown) => opts),
-	createMutation: vi.fn((opts: Record<string, unknown>) => opts)
+	createQuery: vi.fn((options: () => unknown) => options()),
+	createMutation: vi.fn((options: () => Record<string, unknown>) => options())
 }));
 
 const { createTaskStatusQuery, createEnqueueTaskMutation } = await import(
-	'$lib/features/tasks/api/tasks'
+	'#lib/features/tasks/api/tasks.ts'
 );
 
 describe('createTaskStatusQuery', () => {
 	it('returns query options derived from taskIdStore', () => {
-		const mockStore = { subscribe: vi.fn() };
+		const mockStore = readable('test-task-id');
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		expect(result).toBeDefined();
 	});
 
 	it('derived options include queryKey with task id', () => {
-		const mockStore = { subscribe: vi.fn() };
-		// The mock derived returns the result of the fn with 'test-task-id'
+		const mockStore = readable('test-task-id');
+		// A real store supplies the reactive query input.
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		expect(result.queryKey).toEqual(['tasks', 'test-task-id']);
 	});
 
 	it('derived options include a queryFn', () => {
-		const mockStore = { subscribe: vi.fn() };
+		const mockStore = readable('test-task-id');
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		expect(result.queryFn).toBeDefined();
 		expect(typeof result.queryFn).toBe('function');
 	});
 
 	it('derived options include dynamic refetchInterval', () => {
-		const mockStore = { subscribe: vi.fn() };
+		const mockStore = readable('test-task-id');
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		expect(result.refetchInterval).toBeDefined();
 		expect(typeof result.refetchInterval).toBe('function');
 	});
 
 	it('refetchInterval returns false for terminal statuses', () => {
-		const mockStore = { subscribe: vi.fn() };
+		const mockStore = readable('test-task-id');
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		const refetchFn = result.refetchInterval as (q: { state: { data?: { status: string } } }) => number | false;
 
@@ -70,7 +67,7 @@ describe('createTaskStatusQuery', () => {
 	});
 
 	it('refetchInterval returns 2000 for active statuses', () => {
-		const mockStore = { subscribe: vi.fn() };
+		const mockStore = readable('test-task-id');
 		const result = createTaskStatusQuery(mockStore) as unknown as Record<string, unknown>;
 		const refetchFn = result.refetchInterval as (q: { state: { data?: { status: string } } }) => number | false;
 

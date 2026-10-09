@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Copy, Check, FileCode, GitCompare } from 'lucide-vue-next'
+import { Copy, Check, FileCode, GitCompare } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import type { WorkspaceActivity, AgentState } from '../types'
 
@@ -14,7 +14,7 @@ defineEmits<{
 }>()
 
 const schema = computed(() => props.activity.content.props || props.activity.content)
-const code = computed(() => schema.value.code || '')
+const code = computed<string>(() => typeof schema.value.code === 'string' ? schema.value.code : '')
 const diff = computed(() => schema.value.diff || null)
 const language = computed(() => schema.value.language || 'text')
 const title = computed(() => schema.value.title || 'Code')

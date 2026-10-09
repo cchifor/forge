@@ -167,7 +167,7 @@ def remove_path(path):
     elif path.is_file():
         path.unlink()
 
-def run_command(cmd, description, timeout=300):
+def run_command(cmd, description, timeout=300, cwd=None):
     spinner = Spinner(description)
     spinner.start()
     # Windows: subprocess.run doesn't walk PATHEXT for bare tool names.
@@ -176,13 +176,13 @@ def run_command(cmd, description, timeout=300):
         cmd = [resolved, *cmd[1:]]
     try:
         result = subprocess.run(
-            cmd, cwd=str(PROJECT_DIR), capture_output=True, text=True,
+            cmd, cwd=str(cwd or PROJECT_DIR), capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=timeout,
         )
         ok = result.returncode == 0
         spinner.stop(success=ok)
-        if not ok and result.stderr:
-            for line in result.stderr.strip().splitlines()[-10:]:
+        if not ok:
+            for line in (result.stdout + "\n" + result.stderr).strip().splitlines()[-20:]:
                 print("    %s" % line)
         return ok
     except FileNotFoundError:
@@ -450,7 +450,7 @@ def _no_auth_mocks(project_slug: str) -> str:
 
 
 _NO_AUTH_HOME_PAGE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/design_tokens.dart';
@@ -767,16 +767,29 @@ def main():
 
     install_ok = run_command([flutter_bin, "pub", "get"], "Installing dependencies (flutter pub get)", timeout=300)
     if not install_ok:
-        return
+        raise SystemExit("Flutter dependency installation failed")
 
-    if dart_bin:
-        run_command([dart_bin, "run", "build_runner", "build", "--delete-conflicting-outputs"],
-                    "Running code generation (build_runner)", timeout=600)
+    # Vendored libraries are independent packages. Their test/dev imports need
+    # their own package resolution before the application's analyzer walks them.
+    for package in ("forge_canvas_core", "forge_canvas"):
+        package_dir = PROJECT_DIR / "packages" / package
+        if (package_dir / "pubspec.yaml").is_file():
+            if not run_command([flutter_bin, "pub", "get"],
+                               "Installing %s dependencies" % package, cwd=package_dir):
+                raise SystemExit("Vendored Flutter package installation failed")
+
+    if not dart_bin or not run_command(
+        [dart_bin, "run", "build_runner", "build", "--delete-conflicting-outputs"],
+        "Running code generation (build_runner)", timeout=600,
+    ):
+        raise SystemExit("Flutter code generation failed")
 
     print()
     print("> Validating project")
-    run_command([flutter_bin, "analyze"], "Running analysis (flutter analyze)")
-    run_command([flutter_bin, "test"], "Running tests (flutter test)")
+    if not run_command([flutter_bin, "analyze", "--no-fatal-infos"], "Running analysis (flutter analyze)"):
+        raise SystemExit("Flutter analysis failed")
+    if not run_command([flutter_bin, "test"], "Running tests (flutter test)"):
+        raise SystemExit("Flutter tests failed")
 
     git_bin = shutil.which("git")
     if git_bin:

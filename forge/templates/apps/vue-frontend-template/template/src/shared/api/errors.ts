@@ -21,7 +21,7 @@ export interface ApiErrorInfo {
 export async function unpackApiError(err: unknown): Promise<ApiErrorInfo> {
   if (err instanceof HTTPError) {
     const status = err.response.status
-    let parsed: Record<string, unknown> | null = null
+    let parsed: Record<string, unknown> | null
     try {
       parsed = (await err.response.clone().json()) as Record<string, unknown>
     } catch {

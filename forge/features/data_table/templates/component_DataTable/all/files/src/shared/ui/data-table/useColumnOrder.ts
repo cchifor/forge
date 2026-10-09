@@ -29,7 +29,7 @@ export interface ColumnOrder {
  * lock, reordering any togglable column would silently move the
  * selection checkbox to the tail (PR #88 regression, pinned by tests).
  */
-export function useColumnOrder<T>(
+export function useColumnOrder<T extends object>(
   tableId: string,
   augmentedColumns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
 ): ColumnOrder {
@@ -41,7 +41,7 @@ export function useColumnOrder<T>(
   )
 
   const columnOrder = computed<ColumnOrderState>(() => {
-    const cols = toValue(augmentedColumns) as DataTableColumnDef<unknown>[]
+    const cols = toValue(augmentedColumns) as DataTableColumnDef<object>[]
     const declared = cols
       .map((c) => (c.id ?? (c as { accessorKey?: string }).accessorKey) as string)
       .filter(Boolean)

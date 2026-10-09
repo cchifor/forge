@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	taskEnqueueResponseSchema,
 	taskStatusResponseSchema
-} from '$lib/core/schemas/task.schema';
+} from '#lib/core/schemas/task.schema.ts';
 
 describe('taskEnqueueResponseSchema', () => {
 	it('parses a valid enqueue response', () => {

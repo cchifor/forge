@@ -349,6 +349,9 @@ export class AuthGuard {
       return new TokenExpired("token expired", { cause: String(err) });
     }
     if (err instanceof joseErrors.JWTClaimValidationFailed) {
+      if (err.claim === "aud") {
+        return new InvalidToken("invalid audience", { claim: err.claim, cause: err.message });
+      }
       return new InvalidToken(err.message, { claim: err.claim });
     }
     if (err instanceof joseErrors.JWSSignatureVerificationFailed) {

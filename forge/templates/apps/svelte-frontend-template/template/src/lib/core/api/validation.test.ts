@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
-import { validateResponse, reportValidationFailure } from '$lib/core/api/validation';
+import { validateResponse, reportValidationFailure } from '#lib/core/api/validation.ts';
 
 vi.mock('svelte-sonner', () => ({
 	toast: { error: vi.fn() }
@@ -43,7 +43,6 @@ describe('reportValidationFailure', () => {
 			{
 				code: 'invalid_type',
 				expected: 'string',
-				received: 'number',
 				path: ['name'],
 				message: 'Expected string, received number'
 			}
@@ -61,7 +60,6 @@ describe('reportValidationFailure', () => {
 			{
 				code: 'invalid_type',
 				expected: 'string',
-				received: 'number',
 				path: ['field'],
 				message: 'Expected string, received number'
 			}
@@ -77,7 +75,6 @@ describe('reportValidationFailure', () => {
 			{
 				code: 'invalid_type',
 				expected: 'number',
-				received: 'string',
 				path: ['data', 'count'],
 				message: 'Expected number, received string'
 			}

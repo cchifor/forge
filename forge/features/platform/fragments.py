@@ -52,7 +52,7 @@ def register_all(api: ForgeAPI) -> None:
                 BackendLanguage.NODE: FragmentImplSpec(fragment_dir=_impl("webhooks", "node")),
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("webhooks", "rust"),
-                    dependencies=("hmac@0.12", "sha2@0.10"),
+                    dependencies=("hmac@0.13.0", "sha2@0.11.0"),
                 ),
             },
         )

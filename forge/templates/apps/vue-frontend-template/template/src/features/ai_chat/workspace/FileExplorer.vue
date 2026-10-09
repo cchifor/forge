@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { File, FileText, FileCode, Image, Film, Music } from 'lucide-vue-next'
+import { File, FileText, FileCode, Image, Film, Music } from '@lucide/vue'
 import type { WorkspaceActivity, AgentState, WorkspaceAction } from '../types'
 
 const props = defineProps<{

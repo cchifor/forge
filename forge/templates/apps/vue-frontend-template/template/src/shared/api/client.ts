@@ -46,13 +46,13 @@ export function getApiClient(): KyInstance {
   if (clientInstance) return clientInstance
 
   clientInstance = ky.create({
-    prefixUrl: import.meta.env.VITE_API_BASE_URL || window.location.origin,
+    prefix: import.meta.env.VITE_API_BASE_URL || window.location.origin,
     credentials: 'include',
     timeout: 30_000,
     retry: { limit: 0 },
     hooks: {
       beforeRequest: [
-        async (request) => {
+        async ({ request }) => {
           if (tokenGetter) {
             const token = await tokenGetter()
             if (token) {
@@ -62,7 +62,7 @@ export function getApiClient(): KyInstance {
         },
       ],
       afterResponse: [
-        async (request, _options, response) => {
+        async ({ request, response }) => {
           if (response.status !== 401) return response
 
           const refreshed = await silentRefresh()

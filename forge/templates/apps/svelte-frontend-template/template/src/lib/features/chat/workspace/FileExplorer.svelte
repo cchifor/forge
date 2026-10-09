@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { File, FileCode, FileText, Film, Image as ImageIcon, Music } from 'lucide-svelte';
+	import { File, FileCode, FileText, Film, Image as ImageIcon, Music } from '@lucide/svelte';
 	import type { WorkspaceAction, WorkspaceActivity } from '../chat.types';
 
 	let {

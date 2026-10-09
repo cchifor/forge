@@ -1,12 +1,13 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { getAuth } from '$lib/core';
-	import { getUiStore, AppSidebar, AppHeader } from '$lib/features/shell';
-	import { AiChat } from '$lib/features/chat';
-	import BottomNav from '$lib/features/shell/ui/BottomNav.svelte';
-	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
-	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';
-	import VerticalSplitHandle from '$lib/features/shell/ui/VerticalSplitHandle.svelte';
+	import { getAuth } from '#lib/core/index.ts';
+	import { getUiStore, AppSidebar, AppHeader } from '#lib/features/shell/index.ts';
+	import { AiChat } from '#lib/features/chat/index.ts';
+	import BottomNav from '#lib/features/shell/ui/BottomNav.svelte';
+	import ChatDrawer from '#lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '#lib/features/shell/ui/ChatBottomSheet.svelte';
+	import VerticalSplitHandle from '#lib/features/shell/ui/VerticalSplitHandle.svelte';
 
 	let { children } = $props();
 	const auth = getAuth();
@@ -14,7 +15,7 @@
 
 	$effect(() => {
 		if (!auth.isLoading && !auth.isAuthenticated) {
-			goto('/login');
+			goto(resolve('login'));
 		}
 	});
 

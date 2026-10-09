@@ -11,7 +11,7 @@ test('application boots in a real browser', async ({ page }, testInfo) => {
     await page.goto('/');
     await expectHealthyDashboard(page);
     // SvelteKit can deliver server-rendered HTML before client hydration.
-    await expect.poll(() => page.evaluate(() => Boolean((window as any).__coverage__))).toBe(true);
+    await expect.poll(() => page.evaluate(() => Boolean((window as Window & { __coverage__?: Record<string, unknown> }).__coverage__))).toBe(true);
     await expect(page.locator('body')).not.toBeEmpty();
     await expect(page.locator('body')).not.toHaveText(/Internal Error|500 Internal/);
     await page.locator('a[href="/settings"]').first().click();
@@ -35,7 +35,7 @@ test('application boots in a real browser', async ({ page }, testInfo) => {
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
-    const coverage = await page.evaluate(() => (window as any).__coverage__);
+    const coverage = await page.evaluate(() => (window as Window & { __coverage__?: Record<string, unknown> }).__coverage__);
     expect(coverage, 'Browser instrumentation must produce real coverage').toBeTruthy();
     const directory = process.env.FORGE_BROWSER_COVERAGE!;
     await mkdir(directory, { recursive: true });

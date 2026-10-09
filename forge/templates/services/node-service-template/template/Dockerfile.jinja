@@ -51,6 +51,7 @@ RUN if [ -f package-lock.json ]; then \
 WORKDIR /workspace/services/{{ project_slug }}
 
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 RUN npx prisma generate
 
 COPY tsconfig.json ./
@@ -86,6 +87,7 @@ COPY --from=builder /workspace/services/{{ project_slug }}/node_modules ./node_m
 COPY --from=builder /workspace/services/{{ project_slug }}/dist ./dist/
 COPY --from=builder /workspace/services/{{ project_slug }}/prisma ./prisma/
 COPY --from=builder /workspace/services/{{ project_slug }}/package.json ./
+COPY --from=builder /workspace/services/{{ project_slug }}/prisma.config.ts ./
 
 COPY config ./config/
 COPY entrypoint.sh ./

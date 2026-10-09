@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   X, Sparkles, Plus, Code2, ArrowUp, SlidersHorizontal, Monitor, ShieldCheck,
   ChevronDown, MessageSquarePlus, Settings, Maximize2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import {
   DropdownMenu,
@@ -18,7 +18,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from '@/shared/ui/tooltip'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle } from '@lucide/vue'
 import { useAiChat } from '../composables/useAiChat'
 import { useChatAttachments } from '../composables/useChatAttachments'
 import AiChatMessage from './AiChatMessage.vue'

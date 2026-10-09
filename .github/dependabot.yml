@@ -1,57 +1,51 @@
 version: 2
-updates:
-  - package-ecosystem: pip
-    directory: "/"
+
+# One coordinated version-update PR, validated across the whole platform.
+# Security alerts remain enabled independently of this weekly batch.
+multi-ecosystem-groups:
+  platform-dependencies:
     schedule:
       interval: weekly
       day: tuesday
-    open-pull-requests-limit: 10
     labels:
       - dependencies
-    groups:
-      dev-dependencies:
-        patterns:
-          - "pytest*"
-          - "ruff"
-          - "mutmut"
-          - "coverage"
+
+updates:
+  # uv updates pyproject.toml and uv.lock together.
+  - package-ecosystem: uv
+    directories:
+      - "/"
+      - "/forge/features/auth/templates/platform_auth_gatekeeper/all/files/deploy/infra/gatekeeper"
+      - "/forge/features/auth/templates/platform_auth_sdk/python/files/packages/platform-auth"
+    patterns: ["*"]
+    multi-ecosystem-group: platform-dependencies
 
   - package-ecosystem: github-actions
     directory: "/"
-    schedule:
-      interval: weekly
-      day: tuesday
-    open-pull-requests-limit: 5
-    labels:
-      - ci
+    patterns: ["*"]
+    multi-ecosystem-group: platform-dependencies
 
   - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: tuesday
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-    groups:
-      ag-ui:
-        patterns:
-          - "@ag-ui/*"
+    directories:
+      - "/"
+      - "/forge/features/auth/templates/platform_auth_sdk_node/node/files/packages/platform-auth-node"
+    patterns: ["*"]
+    multi-ecosystem-group: platform-dependencies
+    ignore:
+      # Stock TypeScript 7 breaks Vue's compiler API; migration tracked in #357.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: cargo
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: tuesday
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
+    directory: "/forge/features/auth/templates/platform_auth_sdk_rust/rust/files/packages/platform-auth-rs"
+    patterns: ["*"]
+    multi-ecosystem-group: platform-dependencies
 
   - package-ecosystem: pub
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: tuesday
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
+    directories:
+      - "/packages/forge-canvas-core-dart"
+      - "/packages/forge-canvas-dart"
+      - "/forge/templates/apps/flutter-frontend-template/{{project_slug}}/packages/forge_canvas_core"
+      - "/forge/templates/apps/flutter-frontend-template/{{project_slug}}/packages/forge_canvas"
+    patterns: ["*"]
+    multi-ecosystem-group: platform-dependencies

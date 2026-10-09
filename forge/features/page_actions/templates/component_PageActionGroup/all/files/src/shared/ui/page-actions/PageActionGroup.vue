@@ -5,7 +5,7 @@
 // Built on the base-template `button` and `dropdown-menu` primitives.
 import { type HTMLAttributes, type FunctionalComponent, computed } from 'vue'
 import type { VariantProps } from 'class-variance-authority'
-import { MoreHorizontal } from 'lucide-vue-next'
+import { MoreHorizontal } from '@lucide/vue'
 import { cn } from '@/shared/lib/utils'
 import { Button, buttonVariants } from '@/shared/ui/button'
 import {
@@ -24,7 +24,7 @@ export interface PageAction {
   onSelect?: () => void
   /** Button variant (primary actions only); ignored in the overflow menu. */
   variant?: ButtonVariant
-  /** Optional leading icon (e.g. a `lucide-vue-next` component). */
+  /** Optional leading icon (e.g. a `@lucide/vue` component). */
   icon?: FunctionalComponent
   disabled?: boolean
 }

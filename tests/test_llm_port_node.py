@@ -232,7 +232,13 @@ def test_adapter_translates_text_delta_and_tool_call_events() -> None:
     no-ops for the cross-language chunk contract — adapter tolerates
     them by ignoring."""
     body = _adapter_body()
-    for event_kind in ('"text-delta"', '"tool-call-delta"', '"finish"'):
+    for event_kind in (
+        '"text-delta"',
+        '"tool-input-start"',
+        '"tool-input-delta"',
+        '"tool-call"',
+        '"finish"',
+    ):
         assert event_kind in body, f"adapter missing AI SDK event handler: {event_kind!r}"
 
 

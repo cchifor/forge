@@ -141,12 +141,12 @@ export function errorHandler(
 	}
 
 	if (error instanceof ZodError) {
-		const message = error.errors
+		const message = error.issues
 			.map((e) => `${e.path.join(".")}: ${e.message}`)
 			.join("; ");
 		return reply.code(422).send(
 			inlineEnvelope(req, "VALIDATION_FAILED", message, "ValidationError", {
-				errors: error.errors.map((e) => ({
+				errors: error.issues.map((e) => ({
 					path: e.path,
 					message: e.message,
 					code: e.code,

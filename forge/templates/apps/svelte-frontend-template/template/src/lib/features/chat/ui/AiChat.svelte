@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { MessageCircle, RefreshCw, X } from 'lucide-svelte';
-	import { getUiStore } from '$lib/features/shell';
-	import { getChatStore } from '$lib/features/chat';
+	import { MessageCircle, RefreshCw, X } from '@lucide/svelte';
+	import { getUiStore } from '#lib/features/shell/index.ts';
+	import { getChatStore } from '#lib/features/chat/index.ts';
 	import { APPROVAL_MODES, AVAILABLE_MODELS } from '../chat.constants';
 	import AgentStatusBar from './AgentStatusBar.svelte';
 	import AiChatInput from './AiChatInput.svelte';
 	import AiChatMessage from './AiChatMessage.svelte';
 	import UserPromptCard from './UserPromptCard.svelte';
-	import type { ChatMode } from '$lib/features/shell';
+	import type { ChatMode } from '#lib/features/shell/index.ts';
 
 	let { mode = 'inline' }: { mode?: ChatMode } = $props();
 

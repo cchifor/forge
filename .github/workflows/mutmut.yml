@@ -99,8 +99,9 @@ jobs:
           # PR events.
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -163,7 +164,7 @@ jobs:
 
       - name: Upload coverage data
         if: steps.compute.outputs.skip != 'true' && steps.compute.outputs.mode == 'nightly'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutmut-coverage
           path: .coverage
@@ -194,8 +195,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -212,7 +214,7 @@ jobs:
         # artifact just means the shard runs without the coverage
         # speedup rather than failing.
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mutmut-coverage
           path: .
@@ -267,7 +269,7 @@ jobs:
 
       - name: Upload shard results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.artname.outputs.name }}
           path: |
@@ -289,8 +291,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -300,7 +303,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Download all shard results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: mutmut-results-shard-*
           path: shard-results
@@ -334,7 +337,7 @@ jobs:
           echo "Aggregated $copied shard HTML directories into mutmut-html/"
 
       - name: Upload aggregated HTML report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutmut-html-report
           path: mutmut-html
@@ -385,8 +388,9 @@ jobs:
           # Need history for ``git diff origin/<base>...HEAD``.
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -437,8 +441,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -520,7 +525,7 @@ jobs:
 
       - name: Upload shard result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.artname.outputs.name }}
           path: pr-gate-results/
@@ -542,8 +547,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Set Python 3.13
@@ -564,7 +570,7 @@ jobs:
 
       - name: Download all shard results
         if: needs.pr_gate_setup.outputs.skip != 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: mutmut-pr-gate-*
           path: pr-gate-results

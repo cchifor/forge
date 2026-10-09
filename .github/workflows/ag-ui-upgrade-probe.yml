@@ -54,8 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Install Python + forge
@@ -63,7 +64,7 @@ jobs:
           uv python install 3.13
           uv sync --all-groups
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -132,10 +133,11 @@ jobs:
           npm run typecheck
           npm run build
 
-      - name: canvas-svelte — build
+      - name: canvas-svelte — typecheck + build
         if: steps.versions.outputs.current != steps.versions.outputs.target
         run: |
           cd packages/canvas-svelte
+          npm run typecheck
           npm run build
 
       - name: canvas workspaces — runtime tests

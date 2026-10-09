@@ -18,7 +18,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" }
+                    "status": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -36,7 +38,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/InfoResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                }
               }
             }
           }
@@ -49,11 +53,39 @@
       "InfoResponse": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "version": { "type": "string" },
-          "description": { "type": "string" }
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
         },
-        "required": ["title", "version", "description"]
+        "required": [
+          "title",
+          "version",
+          "description"
+        ]
+      },
+      "TaskEnqueueRequest": {
+        "type": "object",
+        "required": [
+          "task_type"
+        ],
+        "properties": {
+          "task_type": {
+            "type": "string"
+          },
+          "payload": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+          },
+          "max_retries": {
+            "type": "integer"
+          }
+        }
       }
     }
   }

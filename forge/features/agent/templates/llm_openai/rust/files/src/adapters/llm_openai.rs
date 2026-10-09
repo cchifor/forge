@@ -10,14 +10,15 @@
 //! `dyn LlmPort` (or generic) and never touches `async-openai`
 //! directly.
 
+use async_openai::types::embeddings::CreateEmbeddingRequestArgs;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{
+    types::chat::{
         ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
         ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs,
-        ChatCompletionRequestUserMessageArgs, ChatCompletionToolArgs, ChatCompletionToolType,
-        CreateChatCompletionRequestArgs, CreateEmbeddingRequestArgs, FunctionObjectArgs,
+        ChatCompletionRequestUserMessageArgs, ChatCompletionTool, ChatCompletionTools,
+        CreateChatCompletionRequestArgs, FunctionObjectArgs,
     },
 };
 use async_trait::async_trait;
@@ -154,7 +155,7 @@ impl LlmPort for OpenAiAdapter {
 /// previous implementation kept only the first tool-call which broke
 /// parallel-tool workflows.
 fn explode_choice_to_chunks(
-    resp: async_openai::types::CreateChatCompletionStreamResponse,
+    resp: async_openai::types::chat::CreateChatCompletionStreamResponse,
 ) -> Vec<LlmChunk> {
     let Some(choice) = resp.choices.into_iter().next() else {
         return vec![LlmChunk {
@@ -240,17 +241,14 @@ fn to_openai_message(m: ChatMessage) -> Result<ChatCompletionRequestMessage, Llm
     }
 }
 
-fn to_openai_tool(t: Tool) -> Result<async_openai::types::ChatCompletionTool, LlmError> {
-    ChatCompletionToolArgs::default()
-        .r#type(ChatCompletionToolType::Function)
-        .function(
-            FunctionObjectArgs::default()
-                .name(t.name)
-                .description(t.description)
-                .parameters(t.input_schema)
-                .build()
-                .map_err(|e| LlmError::Serialization(e.to_string()))?,
-        )
+fn to_openai_tool(t: Tool) -> Result<ChatCompletionTools, LlmError> {
+    let function = FunctionObjectArgs::default()
+        .name(t.name)
+        .description(t.description)
+        .parameters(t.input_schema)
         .build()
-        .map_err(|e| LlmError::Serialization(e.to_string()))
+        .map_err(|e| LlmError::Serialization(e.to_string()))?;
+    Ok(ChatCompletionTools::Function(ChatCompletionTool {
+        function,
+    }))
 }

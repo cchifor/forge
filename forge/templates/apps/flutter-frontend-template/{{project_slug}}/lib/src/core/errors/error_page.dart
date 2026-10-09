@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A user-friendly error widget shown when an unhandled Flutter framework
 /// error occurs. Replaces the default grey "Red Screen of Death" in production.

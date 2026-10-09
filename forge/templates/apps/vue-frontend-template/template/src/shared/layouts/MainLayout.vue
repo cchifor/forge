@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Home, Package, User, Settings } from 'lucide-vue-next'
+import { Home, Package, User, Settings } from '@lucide/vue'
 import AppSidebar from '@/shared/components/AppSidebar.vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
 import VerticalSplitter from '@/shared/components/VerticalSplitter.vue'

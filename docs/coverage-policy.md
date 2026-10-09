@@ -16,6 +16,13 @@ Forge itself uses two layers of coverage gates:
 Every PR runs the `coverage` job in `ci.yml` (ubuntu × Python 3.13 only) and
 either passes both gates or blocks the merge.
 
+The job publishes its measured coverage and tested revision in the GitHub run
+summary. Download the `generator-coverage-<revision>` artifact from that run for
+line-by-line HTML coverage, `coverage.xml`, `coverage.json` and the badge metadata.
+Reports are retained for 14 days; missing reports or failed uploads fail the job.
+This reporting needs no external Codecov account. Generated application reports
+remain in the separate `generated-<language>-coverage` artifacts.
+
 ## Why two layers?
 
 The project-wide floor alone is too coarse — adding a large test-free module

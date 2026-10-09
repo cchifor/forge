@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -40,8 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -65,8 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -77,8 +80,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -97,8 +101,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Set Python ${{ matrix.python }}
         run: uv python install ${{ matrix.python }}
@@ -135,8 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Set Python 3.13
         run: uv python install 3.13
@@ -151,6 +157,7 @@ jobs:
             --cov=forge \
             --cov-report=xml:coverage.xml \
             --cov-report=json:coverage.json \
+            --cov-report=html:htmlcov \
             --cov-report=term
       - name: Per-module floor gate
         # Re-runs the gate tests against the fresh coverage.json so the CI
@@ -158,22 +165,44 @@ jobs:
         # low". pytest exits non-zero when any parametrized case fails.
         run: uv run pytest tests/test_coverage_gates.py -v --no-cov
       - name: Refresh coverage badge
+        if: always()
         # Epic S — keeps docs/coverage-policy.md's header and
         # .forge-coverage.json in sync with the actual measured coverage.
         # Stops stale numbers (like the stale "21%" this epic opened with)
         # from lingering in docs after coverage improves.
-        run: uv run python scripts/coverage_badge.py
-      - name: Upload coverage to Codecov
-        # Public repo: Codecov's OIDC flow uploads without a token. If we
-        # switch to a private repo later, set CODECOV_TOKEN in repo secrets
-        # and the same action picks it up automatically. `fail_ci_if_error`
-        # stays false so a Codecov outage doesn't block a PR on the real
-        # pytest + gate signal.
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        env:
+          FORGE_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          rm -f .forge-coverage.json
+          uv run python scripts/coverage_badge.py
+      - name: Validate the complete report bundle
+        if: always()
+        run: |
+          for report in coverage.xml coverage.json htmlcov/index.html .forge-coverage.json; do
+            if [ ! -s "$report" ]; then
+              echo "::error::Missing coverage report: $report"
+              exit 1
+            fi
+          done
+      - name: Retain generator coverage reports
+        id: coverage-artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          files: coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          name: generator-coverage-${{ github.sha }}
+          path: |
+            coverage.xml
+            coverage.json
+            htmlcov/
+            .forge-coverage.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Link coverage reports in the run summary
+        if: always() && steps.coverage-artifact.outcome == 'success'
+        env:
+          COVERAGE_ARTIFACT_URL: ${{ steps.coverage-artifact.outputs.artifact-url }}
+        run: printf '\n[Download coverage reports (HTML, XML and JSON)](%s)\n' "$COVERAGE_ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Epic DD (1.1.0-alpha.1) — package integrity. Build the sdist + wheel
   # via `uv build`, inspect both archives, assert every sentinel template
@@ -185,15 +214,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          enable-cache: true
+          # Exercise the same fresh-cache profile used for release builds.
+          enable-cache: false
       - name: Set Python 3.13
         run: uv python install 3.13
       - name: Install
         run: uv sync --locked --all-extras --dev
       - name: pytest -m package_integrity
         run: uv run pytest -m package_integrity -v --no-cov
+      - name: Smoke release preparation without publishing
+        run: bash .github/scripts/check-release-artifacts.sh
 
   # Epic S (1.1.0-alpha.1) — config-matrix validation (lane A: generate).
   # `matrix-setup` reads tests/matrix/scenarios.yaml and emits the scenario
@@ -206,8 +238,9 @@ jobs:
       scenarios: ${{ steps.load.outputs.scenarios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -241,8 +274,9 @@ jobs:
         scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install
         run: uv sync --locked --all-extras --dev
@@ -261,10 +295,11 @@ jobs:
         scenario: ${{ fromJSON(needs.matrix-setup.outputs.scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install rustup stable
@@ -299,8 +334,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       - name: Install project deps
@@ -311,7 +347,7 @@ jobs:
           uv export --no-hashes --frozen > /tmp/requirements.txt
           uvx pip-audit -r /tmp/requirements.txt
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -354,10 +390,11 @@ jobs:
         scenario: [py_svelte_min, node_svelte_min, py_vue_full]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       # Generated projects' post_generate.py runs `git init && git commit`
@@ -380,7 +417,7 @@ jobs:
         env:
           FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
         run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: compose-logs-${{ matrix.scenario }}
@@ -400,25 +437,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
 
       # Node + Rust toolchains so the cross-language auth-SDK parity contract
       # actually exercises the Node/Rust runners instead of self-skipping when
       # their toolchains are absent.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # pinned stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
       - name: Install forge + parity deps
-        run: uv sync --locked --all-extras --dev
+        run: uv sync --locked --all-extras --dev --group auth-parity
+
+      - name: Build and test Node authentication SDK
+        working-directory: forge/features/auth/templates/platform_auth_sdk_node/node/files/packages/platform-auth-node
+        run: |
+          npm ci
+          npm test
 
       - name: Auth-SDK cross-language parity contract
-        run: uv run pytest tests/contract/auth_sdk_parity -q --no-cov -p no:cacheprovider
+        run: uv run --locked --group auth-parity pytest tests/contract/auth_sdk_parity -q --no-cov -p no:cacheprovider
 
       - name: Fuzz suite
         run: uv run pytest -m fuzz -q --no-cov -p no:cacheprovider

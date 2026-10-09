@@ -1,8 +1,8 @@
 /**
- * Auto-generated types from OpenAPI spec.
+ * Forge-owned generic and configured feature contracts.
  *
- * In production, run `npm run codegen` with the backend running to regenerate.
- * This hand-written placeholder mirrors the FastAPI backend's domain models.
+ * Explicit `npm run codegen` writes service-specific types to src/custom/api
+ * without replacing these contracts. Import external types from custom code.
  */
 
 // --- feature type definitions ---

@@ -48,6 +48,7 @@ vi.mock('./useAgentClient', () => ({
     state: mockState,
     customState: mockCustomState,
     error: mockError,
+    canStartRun: () => !mockIsRunning.value,
     runAgent: mockRunAgent,
     addUserMessage: mockAddUserMessage,
     resetThread: mockResetThread,

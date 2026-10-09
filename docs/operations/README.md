@@ -10,7 +10,7 @@
 ## Forge maintenance
 
 - [Maintainer runbook](maintainer-runbook.md): releases, plugin isolation,
-  provenance recovery, and diagnostics.
+  provenance recovery, diagnostics, and coordinated dependency upgrades.
 - [Validation matrix](validation-matrix.md): what generate, verify, smoke,
   round-trip, and update lanes measure.
 - [Generator coverage policy](../coverage-policy.md): repository test ratchets.

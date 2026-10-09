@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { MessageSquare, LayoutPanelLeft, PanelRightClose } from 'lucide-vue-next'
+import { MessageSquare, LayoutPanelLeft, PanelRightClose } from '@lucide/vue'
 import { AiChat, CanvasPane, useAiChat } from '@/features/ai_chat'
 
 const emit = defineEmits<{ toggle: [] }>()

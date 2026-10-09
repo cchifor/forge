@@ -29,12 +29,12 @@
       "sha256": "e20ed9c8595ac530"
     },
     ".github/workflows/ci.yml": {
-      "size": 873,
-      "sha256": "41a065ec5e48d3d3"
+      "size": 882,
+      "sha256": "88bd7425aa0337b3"
     },
     ".github/workflows/quality.yml": {
-      "size": 3120,
-      "sha256": "c58a7bcb559942e4"
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
       "size": 523,
@@ -54,7 +54,7 @@
     },
     "Cargo.toml": {
       "size": 625,
-      "sha256": "368a99db9db2c35e"
+      "sha256": "4e70974a9fc9f80e"
     },
     "deploy/infra/nginx-csp.conf": {
       "size": 1661,
@@ -69,7 +69,7 @@
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
-      "size": 536,
+      "size": 542,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -81,12 +81,12 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 940,
-      "sha256": "2d154c8bdc9e16c9"
+      "size": 958,
+      "sha256": "0c02c3c815f2a65b"
     },
     "services/api/Dockerfile": {
-      "size": 4226,
-      "sha256": "f6878f7b5ce0a950"
+      "size": 4391,
+      "sha256": "5d0e1b8862f7d0ff"
     },
     "services/api/OBSERVABILITY.md": {
       "size": 2033,
@@ -149,8 +149,8 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8809,
-      "sha256": "5369479a690f3d44"
+      "size": 7930,
+      "sha256": "ecb1d4643edeeb33"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
@@ -257,8 +257,8 @@
       "sha256": "71d76d006a01801c"
     },
     "services/api/tests/items_test.rs": {
-      "size": 4250,
-      "sha256": "02b99f92b05a5157"
+      "size": 4458,
+      "sha256": "0846b53d33bfb374"
     },
     "services/api/tests/pool_test.rs": {
       "size": 402,

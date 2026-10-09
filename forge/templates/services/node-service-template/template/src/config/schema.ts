@@ -18,7 +18,7 @@ export const CorsConfigSchema = z.object({
 export const ServerConfigSchema = z.object({
 	host: z.string().default("0.0.0.0"),
 	port: z.number().int().min(1).max(65535).default(5000),
-	cors: CorsConfigSchema.default({}),
+	cors: CorsConfigSchema.prefault({}),
 });
 
 export const DbConfigSchema = z.object({
@@ -43,7 +43,7 @@ export const AuthConfigSchema = z.object({
 });
 
 export const SecurityConfigSchema = z.object({
-	auth: AuthConfigSchema.default({}),
+	auth: AuthConfigSchema.prefault({}),
 });
 
 export const AppInfoSchema = z.object({
@@ -55,11 +55,11 @@ export const AppInfoSchema = z.object({
 });
 
 export const AppConfigSchema = z.object({
-	app: AppInfoSchema.default({}),
-	server: ServerConfigSchema.default({}),
+	app: AppInfoSchema.prefault({}),
+	server: ServerConfigSchema.prefault({}),
 	db: DbConfigSchema,
-	logging: LoggingConfigSchema.default({}),
-	security: SecurityConfigSchema.default({}),
+	logging: LoggingConfigSchema.prefault({}),
+	security: SecurityConfigSchema.prefault({}),
 });
 
 export type CorsConfig = z.infer<typeof CorsConfigSchema>;

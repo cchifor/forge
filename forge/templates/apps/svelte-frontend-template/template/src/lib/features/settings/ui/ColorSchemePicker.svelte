@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Check } from 'lucide-svelte';
-	import type { ColorScheme } from '$lib/shared/lib/color-schemes';
-	import { getSettingsStore } from '$lib/features/settings';
+	import { Check } from '@lucide/svelte';
+	import type { ColorScheme } from '#lib/shared/lib/color-schemes.ts';
+	import { getSettingsStore } from '#lib/features/settings/index.ts';
 
 	let {
 		currentScheme,
@@ -18,7 +18,7 @@
 </script>
 
 <div class="flex flex-wrap gap-2">
-	{#each schemes as scheme}
+	{#each schemes as scheme (scheme.name)}
 		<button
 			class="relative flex h-10 w-10 items-center justify-center rounded-full transition-shadow {currentScheme ===
 			scheme.name

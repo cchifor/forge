@@ -5,6 +5,7 @@
   "frontend_layout": "{{ frontend_layout | default('sidebar') }}",
   "features": "{{ features }}",
   "version": "{{ version }}",
+  "forge_orchestrated": {{ forge_orchestrated | default(false) | tojson }},
   "package_manager": "{{ package_manager }}",
   "include_auth": {{ include_auth | tojson }},
   "include_chat": {{ include_chat | tojson }},

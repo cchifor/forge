@@ -73,7 +73,7 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("rate_limit", "node"),
-                    dependencies=("@fastify/rate-limit@10.3.0",),
+                    dependencies=("@fastify/rate-limit@11.2.1",),
                 ),
                 BackendLanguage.RUST: FragmentImplSpec(fragment_dir=_impl("rate_limit", "rust")),
             },
@@ -91,7 +91,7 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("security_headers", "node"),
-                    dependencies=("@fastify/helmet@13.0.1",),
+                    dependencies=("@fastify/helmet@13.1.2",),
                 ),
                 BackendLanguage.RUST: FragmentImplSpec(
                     fragment_dir=_impl("security_headers", "rust"),
@@ -151,7 +151,7 @@ def register_all(api: ForgeAPI) -> None:
                 ),
                 BackendLanguage.NODE: FragmentImplSpec(
                     fragment_dir=_impl("response_cache", "node"),
-                    dependencies=("@fastify/caching@9.0.1",),
+                    dependencies=("@fastify/caching@9.0.4",),
                     env_vars=(("RESPONSE_CACHE_URL", "redis://redis:6379/1"),),
                 ),
             },

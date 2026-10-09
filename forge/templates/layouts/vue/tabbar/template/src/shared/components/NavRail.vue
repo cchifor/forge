@@ -7,7 +7,7 @@ import {
   User,
   SlidersHorizontal,
   LogOut,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { Avatar, AvatarFallback } from '@/shared/ui/avatar'
 import {
   DropdownMenu,

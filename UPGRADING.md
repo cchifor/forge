@@ -4,6 +4,72 @@ This document lists breaking changes per version and the migration steps for eac
 
 ## 1.1 → 1.2
 
+### Coordinated dependency refresh (unreleased)
+
+Regenerate a candidate and review its ownership-aware update before adopting
+these template migrations. Keep application-specific behavior in custom modules,
+then run architecture and all three native test suites against the candidate.
+
+- **Node services:** Prisma 7 uses `prisma.config.ts` for CLI connection settings
+  and `@prisma/adapter-pg` at runtime. Include the config in deployment images.
+  Keep `DATABASE_URL` available to migration commands. The adapter preserves
+  `schema`, converts `connection_limit` to PostgreSQL pool `max`, and converts
+  `pool_timeout` seconds to `connectionTimeoutMillis`, including zero to disable
+  the timeout. These URL settings work without enabling the optional pool feature;
+  that feature adds environment-based defaults. Zod 4 uses `.issues` and
+  `.prefault()` where nested defaults must still be parsed. Vitest moves to 5.
+- **Authentication SDKs:** Node uses JOSE 6's Web Crypto keys (`CryptoKey`).
+  Rust uses jsonwebtoken 11 with the explicit AWS-LC backend and rejects malformed
+  optional `nbf` claims. Run the shared parity fixtures when changing token or
+  authorization handling; install the `auth-parity` development group to exercise
+  the Python runner and build the Node SDK before testing it.
+- **Rust services:** SQLx 0.9 raises the generated workspace minimum to Rust 1.94.
+  Dynamic repository queries use `QueryBuilder` with bound values. reqwest 0.13
+  uses the `rustls` feature name; update custom HTTP integrations accordingly.
+  Keep Rust Docker build and runtime stages on the same Debian release; the
+  template pins both to Bookworm so newer libc symbols cannot break startup.
+- **Optional adapters:** OpenTelemetry uses its current resource/provider builders
+  (Node 2 and Rust 0.33). Rust HTTP export uses the blocking client required by
+  the default batch processor. Queue/cache dependencies move to BullMQ 6,
+  ioredis 6, Node Redis 6, Rust Redis 1.7 and Apalis 0.7. AI SDK 7 streams
+  `tool-input-*` events; the adapter preserves Chat Completions routing and
+  assembles each tool's JSON arguments once. Rust's async-openai 0.42 requires
+  explicit chat-completion/embedding features and namespaced request types.
+- **Flutter:** generated apps and the canvas widget package require Flutter 3.47
+  and Dart 3.13. Material widgets now come from `material_ui`; the Markdown
+  renderer uses the official compatibility bridge while its dependency still
+  relies on Flutter's legacy Material theme and localizations. Replace
+  `flutter_markdown` imports with `flutter_markdown_plus`, resolve vendored
+  packages separately, and regenerate Freezed/Riverpod/Retrofit output.
+  Riverpod lint runs through Dart's native analyzer plugin configuration rather
+  than the removed `custom_lint` dependency.
+- **TypeScript:** retain stock TypeScript 6.0.3 until the Vue tooling supports
+  stock TypeScript 7. The compatibility failure is tracked in
+  [issue #357](https://github.com/cchifor/forge/issues/357); a compiler fork is not
+  substituted automatically.
+- **Web frontends:** use Node 22.18 or newer. Vite 8 uses Rolldown build options.
+  SvelteKit 3 puts adapter/preprocessor settings in the Vite plugin and replaces
+  `$app/stores` with `$app/state`. Resolve application paths through
+  `$app/paths.resolve()` so navigation respects the deployment base; runtime
+  redirect destinations must stay within the application. Query 6 uses reactive
+  option functions.
+  Ky 2 hooks receive a state object and use `prefix` rather than `prefixUrl`.
+  Regenerate API clients with OpenAPI TS 0.99 and mock workers with MSW 3.
+  OpenAPI generation is now explicit: `npm run codegen` writes service-specific
+  types (Svelte) or a client SDK (Vue) to `src/custom/api/`. Import them from
+  application code. Starting the dev server no longer regenerates clients or
+  overwrites Forge-owned generic API/feature types. Update custom OpenAPI
+  configuration and imports to use this extension directory.
+  Lucide imports move to `@lucide/vue` and `@lucide/svelte`. Browser coverage uses
+  the shared `scripts/browser-coverage.ts` plugin and the compiler's actual
+  source maps. Keep this file when migrating custom Vite configurations.
+  TanStack Table 9 uses explicit features and reactive state atoms; the generated
+  DataTable preserves existing column preferences and maps public `left`/`right`
+  pinning positions to the new internal `start`/`end` values.
+
+Follow the [coordinated upgrade checklist](docs/operations/maintainer-runbook.md#coordinated-dependency-upgrades)
+for locked installs, generated applications, release artifacts and CI sign-off.
+
 The 1.2 series aligns forge templates with the platform's **10-SDK
 restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
 dependency DAG, May 2026). The Python service template now imports

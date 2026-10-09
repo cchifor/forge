@@ -34,7 +34,7 @@ export function useZodForm<S extends z.ZodType>(
       : JSON.parse(JSON.stringify(options.initialValues))
 
   const initialSnapshot = ref<string>(JSON.stringify(initialFactory()))
-  const values = reactive<Input>(initialFactory() as object) as Input
+  const values = reactive(initialFactory() as object) as Input
 
   const errors = ref<Record<string, string>>({})
   const touched = ref<Record<string, boolean>>({})
@@ -68,7 +68,7 @@ export function useZodForm<S extends z.ZodType>(
 
   function flattenZodErrors(err: z.ZodError): Record<string, string> {
     const out: Record<string, string> = {}
-    for (const issue of err.errors) {
+    for (const issue of err.issues) {
       const path = issue.path.map(String).join('.')
       if (path && !(path in out)) out[path] = issue.message
       else if (!path && !('_' in out)) out['_'] = issue.message

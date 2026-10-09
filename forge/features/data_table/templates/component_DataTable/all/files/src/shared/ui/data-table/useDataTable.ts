@@ -1,3 +1,4 @@
+import { dataTableFeatures, type DataTableFeatures } from './features'
 import {
   computed,
   h,
@@ -8,11 +9,7 @@ import {
 } from 'vue'
 import { refDebounced } from '@vueuse/core'
 import {
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useVueTable,
+  useTable,
   type ColumnDef,
   type FilterFn,
   type RowSelectionState,
@@ -30,7 +27,7 @@ import {
 export { twBelow }
 export type { PinSide, ColumnManager }
 
-export interface UseDataTableInputs<T> {
+export interface UseDataTableInputs<T extends object> {
   /** Column defs (ref / getter / plain). Supports TanStack `ColumnDef` + `meta`. */
   columns: MaybeRefOrGetter<DataTableColumnDef<T>[]>
   /** Row data. */
@@ -61,7 +58,7 @@ export interface UseDataTableInputs<T> {
    * default only when instantiating a manager internally.
    */
   enableRowSelection?: boolean
-  globalFilterFn?: FilterFn<T>
+  globalFilterFn?: FilterFn<DataTableFeatures, T>
   /** Page size for `mode: 'pagination'`. Ignored otherwise. */
   pageSize?: number
 }
@@ -78,42 +75,44 @@ export interface UseDataTableInputs<T> {
  * `mode: 'pagination'` it's the current page. Matches the user's "all
  * visible rows" requirement in both modes.
  */
-const CANONICAL_SELECT_COLUMN = {
-  id: 'select',
-  // 32 px matches the original `useDataSourcesTable` select column. TanStack
-  // uses `column.size` for sticky-left offset math (`column.getStart('left')`
-  // for downstream pinned columns); the rendered TH width is forced to 40 px
-  // by the `w-10` Tailwind class in DataTable.vue. Without `size`, TanStack
-  // defaults to 150 px and the next pinned column's `left:` style would jump
-  // ahead of the actual rendered checkbox cell, leaving a ~110 px gap.
-  size: 32,
-  enableSorting: false,
-  enableResizing: false,
-  enablePinning: false,
-  meta: {
-    alwaysVisible: true,
+function createSelectColumn<T extends object>(): ColumnDef<DataTableFeatures, T, unknown> {
+  return {
+    id: 'select',
+    // 32 px matches the original `useDataSourcesTable` select column. TanStack
+    // uses `column.size` for sticky-left offset math (`column.getStart('start')`
+    // for downstream pinned columns); the rendered TH width is forced to 40 px
+    // by the `w-10` Tailwind class in DataTable.vue. Without `size`, TanStack
+    // defaults to 150 px and the next pinned column's `left:` style would jump
+    // ahead of the actual rendered checkbox cell, leaving a ~110 px gap.
+    size: 32,
+    enableSorting: false,
     enableResizing: false,
     enablePinning: false,
-  },
-  header: ({ table }) =>
-    h(Checkbox, {
-      checked: table.getIsAllPageRowsSelected()
-        ? true
-        : table.getIsSomePageRowsSelected()
-          ? 'indeterminate'
-          : false,
-      'onUpdate:checked': (v: boolean) => table.toggleAllPageRowsSelected(!!v),
-      'aria-label': 'Select all',
-    }),
-  cell: ({ row }) =>
-    h(Checkbox, {
-      checked: row.getIsSelected(),
-      'onUpdate:checked': (v: boolean) => row.toggleSelected(!!v),
-      'aria-label': 'Select row',
-    }),
-} as unknown as ColumnDef<unknown, unknown>
+    meta: {
+      alwaysVisible: true,
+      enableResizing: false,
+      enablePinning: false,
+    },
+    header: ({ table }) =>
+      h(Checkbox, {
+        checked: table.getIsAllPageRowsSelected()
+          ? true
+          : table.getIsSomePageRowsSelected()
+            ? 'indeterminate'
+            : false,
+        'onUpdate:checked': (v: boolean) => table.toggleAllPageRowsSelected(!!v),
+        'aria-label': 'Select all',
+      }),
+    cell: ({ row }) =>
+      h(Checkbox, {
+        checked: row.getIsSelected(),
+        'onUpdate:checked': (v: boolean) => row.toggleSelected(!!v),
+        'aria-label': 'Select row',
+      }),
+  }
+}
 
-export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
+export function useDataTable<T extends object>(inputs: UseDataTableInputs<T>) {
   const rowsGetter = () => toValue(inputs.rows)
 
   const sorting = ref<SortingState>(inputs.initialSorting ?? [])
@@ -137,18 +136,19 @@ export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
   // Substitute the canonical select renderer for the manager's synthetic
   // descriptor (id: 'select' with no header). Caller-supplied 'select'
   // columns already carry header/cell and pass through unchanged.
-  const finalColumns = computed<ColumnDef<T, unknown>[]>(() =>
+  const finalColumns = computed<ColumnDef<DataTableFeatures, T, unknown>[]>(() =>
     manager.augmentedColumns.value.map((c) => {
       const id = (c.id ??
         (c as { accessorKey?: string }).accessorKey) as string
       if (id === 'select' && !c.header) {
-        return CANONICAL_SELECT_COLUMN as ColumnDef<T, unknown>
+        return createSelectColumn<T>()
       }
-      return c as ColumnDef<T, unknown>
+      return c as ColumnDef<DataTableFeatures, T, unknown>
     }),
   )
 
-  const table = useVueTable<T>({
+  const table = useTable<DataTableFeatures, T>({
+    features: dataTableFeatures,
     get data() {
       return rowsGetter()
     },
@@ -179,12 +179,12 @@ export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
         return manager.columnSizing.value
       },
       get columnPinning() {
-        return manager.columnPinning.value
+        return { start: manager.columnPinning.value.left ?? [], end: [] }
       },
     },
     enableRowSelection,
     enableColumnResizing: true,
-    enablePinning: true,
+    enableColumnPinning: true,
     columnResizeMode: 'onEnd',
     onSortingChange: (updater) => {
       sorting.value =
@@ -246,21 +246,16 @@ export function useDataTable<T>(inputs: UseDataTableInputs<T>) {
     onColumnPinningChange: (updater) => {
       const next =
         typeof updater === 'function'
-          ? updater(manager.columnPinning.value)
+          ? updater({ start: manager.columnPinning.value.left ?? [], end: [] })
           : updater
       // Right pinning was removed end-to-end; persist only `left`.
       manager.userPinning.value = {
-        left: [...(next.left ?? [])],
+        left: [...(next.start ?? [])],
         right: [],
       }
     },
-    globalFilterFn: inputs.globalFilterFn,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: inputs.pageSize
-      ? getPaginationRowModel()
-      : undefined,
+    globalFilterFn: inputs.globalFilterFn ?? 'auto',
+    manualPagination: !inputs.pageSize,
     initialState: inputs.pageSize
       ? { pagination: { pageIndex: 0, pageSize: inputs.pageSize } }
       : undefined,

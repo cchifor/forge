@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../generated/props.dart';
 
@@ -25,18 +25,18 @@ class DataTable extends StatefulWidget {
     required this.rows,
     this.pageSize = 25,
   }) : columns = columns
-            .map((raw) => DataTableColumn.fromJson(raw))
-            .toList(growable: false);
+           .map((raw) => DataTableColumn.fromJson(raw))
+           .toList(growable: false);
 
   factory DataTable.fromProps(Map<String, dynamic> props) => DataTable(
-        columns: ((props['columns'] as List?) ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        rows: ((props['rows'] as List?) ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        pageSize: (props['pageSize'] as int?) ?? 25,
-      );
+    columns: ((props['columns'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(),
+    rows: ((props['rows'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(),
+    pageSize: (props['pageSize'] as int?) ?? 25,
+  );
 
   @override
   State<DataTable> createState() => _DataTableState();
@@ -107,7 +107,9 @@ class _DataTableState extends State<DataTable> {
             child: Table(
               defaultVerticalAlignment: TableCellVerticalAlignment.middle,
               border: TableBorder(
-                horizontalInside: BorderSide(color: theme.colorScheme.outlineVariant),
+                horizontalInside: BorderSide(
+                  color: theme.colorScheme.outlineVariant,
+                ),
               ),
               children: [
                 TableRow(
@@ -160,7 +162,9 @@ class _DataTableState extends State<DataTable> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton(
-                    onPressed: _page == 0 ? null : () => setState(() => _page--),
+                    onPressed: _page == 0
+                        ? null
+                        : () => setState(() => _page--),
                     child: const Text('← Prev'),
                   ),
                   Text('Page ${_page + 1} / $_totalPages'),
@@ -200,8 +204,8 @@ class _HeaderCell extends StatelessWidget {
     final indicator = !isSortable
         ? null
         : isActive
-            ? (sortAsc ? '▲' : '▼')
-            : '↕';
+        ? (sortAsc ? '▲' : '▼')
+        : '↕';
     return InkWell(
       onTap: isSortable ? onTap : null,
       child: Padding(
@@ -210,7 +214,9 @@ class _HeaderCell extends StatelessWidget {
           children: [
             Text(
               column.label,
-              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             if (indicator != null) ...[
               const SizedBox(width: 4),

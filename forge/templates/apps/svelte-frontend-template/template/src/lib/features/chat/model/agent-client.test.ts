@@ -4,7 +4,7 @@
  *
  * The agent client owns a module-scoped `$state` array of
  * ``ToolCallInfo``; we drive its subscriber callbacks via a mocked
- * ``HttpAgent.runAgent`` and assert the resulting ``activeToolCalls``
+ * ``AgUiClient.runAgent`` and assert the resulting ``activeToolCalls``
  * shape. Cross-stack consistency with Vue (``useAgentClient.test.ts``)
  * + Flutter (``agent_state_reducer_test.dart``).
  */
@@ -14,25 +14,36 @@ vi.stubGlobal('crypto', {
 	randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2)
 });
 
-// Stub the AG-UI HttpAgent so the test never makes a real HTTP request.
-// `runAgent` is reassigned per test so each test controls which subscriber
-// callbacks fire and in what order.
-const runAgent = vi.fn().mockResolvedValue(undefined);
-vi.mock('@ag-ui/client', () => ({
-	HttpAgent: class {
-		headers: Record<string, string> = {};
-		setMessages = vi.fn();
-		setState = vi.fn();
-		runAgent = runAgent;
-	}
-}));
+type ToolSubscriber = Record<string, (payload: { event: Record<string, unknown> }) => void>;
 
-vi.mock('$lib/core/auth/auth.svelte', () => ({
+// Drive the current canvas-core transport through its parsed event callback.
+const runAgent = vi.fn().mockResolvedValue(undefined);
+vi.mock('#canvas-core', async () => {
+	const actual = await vi.importActual<typeof import('#canvas-core')>('#canvas-core');
+	return {
+		...actual,
+		AgUiClient: class {
+			constructor(private options: { onEvent: (event: ReturnType<typeof actual.parseEvent>) => void }) {}
+			runAgent(payload: unknown) {
+				const emit = (type: string) => ({ event }: { event: Record<string, unknown> }) => {
+					this.options.onEvent(actual.parseEvent({ type, ...event }));
+				};
+				return runAgent(payload, {
+					onToolCallStartEvent: emit('TOOL_CALL_START'),
+					onToolCallArgsEvent: emit('TOOL_CALL_ARGS'),
+					onToolCallEndEvent: emit('TOOL_CALL_END')
+				});
+			}
+		}
+	};
+});
+
+vi.mock('#lib/core/auth/auth.svelte.ts', () => ({
 	getAuth: () => ({ getToken: async () => null })
 }));
 
 const { getAgentClient } = await import(
-	'$lib/features/chat/model/agent-client.svelte'
+	'#lib/features/chat/model/agent-client.svelte.ts'
 );
 
 describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
@@ -49,7 +60,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_START seeds the activeToolCalls list', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-1', toolCallName: 'search' }
 			});
@@ -65,7 +76,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_ARGS accumulates delta into argsBuffer', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-a', toolCallName: 'search' }
 			});
@@ -83,7 +94,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END pretty-prints argsBuffer via JSON.stringify', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-b', toolCallName: 'search' }
 			});
@@ -102,7 +113,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END falls back to raw buffer on JSON parse error', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-c', toolCallName: 'search' }
 			});
@@ -122,7 +133,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('concurrent tool calls keep separate argsBuffers (no cross-contamination)', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-x', toolCallName: 'a' }
 			});
@@ -145,7 +156,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END with no args leaves argsPretty unset', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-empty', toolCallName: 'ping' }
 			});

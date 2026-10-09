@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cn } from '$lib/shared/lib/utils';
+import { cn } from '#lib/shared/lib/utils.ts';
 
 describe('cn', () => {
 	it('merges class names', () => {

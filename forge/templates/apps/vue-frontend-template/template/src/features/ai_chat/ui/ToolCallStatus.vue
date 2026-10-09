@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Loader2, Check, X, Clock } from 'lucide-vue-next'
+import { Loader2, Check, X, Clock } from '@lucide/vue'
 
 const props = defineProps<{
   toolName: string

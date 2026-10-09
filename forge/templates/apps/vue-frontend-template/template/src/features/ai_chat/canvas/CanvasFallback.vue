@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Sparkles } from 'lucide-vue-next'
+import { Sparkles } from '@lucide/vue'
 import type { WorkspaceActivity, AgentState } from '../types'
 
 defineProps<{

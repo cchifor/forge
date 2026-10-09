@@ -215,7 +215,10 @@ void main() {
       final visited = <String>[];
       final wrappedClient = MockClient((req) async {
         visited.add(req.url.toString());
-        return server.client.send(req).then(http.Response.fromStream);
+        final forwarded = http.Request(req.method, req.url)
+          ..headers.addAll(req.headers)
+          ..bodyBytes = req.bodyBytes;
+        return server.client.send(forwarded).then(http.Response.fromStream);
       });
       final client = McpApprovalClient(
         httpClient: wrappedClient,

@@ -121,7 +121,7 @@ svelte_frontend/
 ├── openapi-snapshot.json         # OpenAPI spec snapshot for codegen
 ├── package.json                  # Dependencies and scripts
 ├── playwright.config.ts          # E2E test configuration
-├── svelte.config.js              # SvelteKit: adapter-static, path aliases
+├── vite.config.ts                # SvelteKit 3: adapter-static and preprocessing
 ├── tsconfig.json                 # Strict TypeScript configuration
 ├── vite.config.ts                # Vite: plugins, proxy, test config
 │
@@ -495,7 +495,9 @@ The frontend integrates with a FastAPI backend at `/api/v1`:
 
 ### OpenAPI Code Generation
 
-TypeScript types are generated from the backend's OpenAPI spec:
+`npm run dev` uses the shipped generic/feature contracts without regenerating
+or overwriting them. Generate service-specific types explicitly into
+`src/custom/api` from the backend's OpenAPI spec:
 
 ```bash
 # Generate types from running backend
@@ -505,7 +507,10 @@ OPENAPI_SPEC=http://localhost:5000/openapi.json npm run codegen
 npm run codegen
 ```
 
-Generated types are re-exported under the `API` namespace:
+Import service-specific types from `src/custom/api/types.gen.ts` in application code. Review
+and test that output before use; Forge's generic runtime does not import it.
+The existing `API` namespace continues to expose Forge's generic and configured
+feature contracts, so generating an external client cannot erase feature types:
 
 ```typescript
 import { API } from '$api/namespace';
@@ -539,7 +544,7 @@ const paginatedItemResponseSchema = paginatedResponseSchema(itemSchema);
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 22.18
 - **npm** >= 9
 - **Backend** (optional): FastAPI service running on port 5000
 
@@ -643,7 +648,7 @@ OPENAPI_SPEC=http://localhost:5000/openapi.json npm run codegen
 
 | Alias | Maps To | Usage |
 |-------|---------|-------|
-| `$lib` | `src/lib/` | Built-in SvelteKit alias |
+| `#lib/*` | `src/lib/*` | Package imports; use explicit file extensions |
 | `$api` | `src/api/` | API client, schemas, generated types |
 | `$components` | `src/components/` | Shared UI components |
 

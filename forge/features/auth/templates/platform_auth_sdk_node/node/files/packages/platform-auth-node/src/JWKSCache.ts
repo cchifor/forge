@@ -25,7 +25,6 @@ import {
   type JSONWebKeySet,
   type JWK,
   type JWSHeaderParameters,
-  type KeyLike,
 } from "jose";
 
 import { InvalidToken } from "./exceptions.js";
@@ -39,7 +38,7 @@ export const DEFAULT_HTTP_TIMEOUT_MS = 5_000;
 type KeyResolver = (
   protectedHeader?: JWSHeaderParameters,
   token?: FlattenedJWSInput,
-) => Promise<KeyLike | Uint8Array>;
+) => Promise<CryptoKey | Uint8Array>;
 
 /** Minimal ``fetch`` shape the cache depends on (injectable for tests). */
 export type FetchLike = (
@@ -142,7 +141,7 @@ export class JWKSCache {
    * throws ``InvalidToken`` when the issuer is unregistered or no key
    * matches after a refresh.
    */
-  async getSigningKey(issuer: string, kid: string): Promise<JWK | KeyLike | Uint8Array> {
+  async getSigningKey(issuer: string, kid: string): Promise<JWK | CryptoKey | Uint8Array> {
     try {
       return await this._resolveKey(
         issuer,
@@ -164,7 +163,7 @@ export class JWKSCache {
     issuer: string,
     protectedHeader?: JWSHeaderParameters,
     token?: FlattenedJWSInput,
-  ): Promise<KeyLike | Uint8Array> {
+  ): Promise<CryptoKey | Uint8Array> {
     const entry = this.entries.get(issuer);
     if (entry === undefined) {
       throw new InvalidToken(`issuer not registered: ${JSON.stringify(issuer)}`);
