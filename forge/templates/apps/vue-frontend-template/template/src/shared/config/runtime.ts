@@ -35,6 +35,7 @@ function isMissing(value: unknown): boolean {
 function positiveIntEnv(label: string, fallback: number) {
   return z
     .unknown()
+    .optional()
     .transform((raw, ctx) => {
       if (isMissing(raw)) return fallback
       const n = Number(raw)
@@ -118,7 +119,7 @@ export interface AppConfig {
 export function buildAppConfig(source: Record<string, unknown>): AppConfig {
   const result = schema.safeParse(source)
   if (!result.success) {
-    const lines = result.error.errors.map((e) => {
+    const lines = result.error.issues.map((e) => {
       const path = e.path.join('.') || '<root>'
       return `  - ${path}: ${e.message}`
     })

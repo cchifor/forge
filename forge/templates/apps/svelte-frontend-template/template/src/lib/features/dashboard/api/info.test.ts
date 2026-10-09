@@ -1,25 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Mock the dependencies
-vi.mock('$lib/core/api/client', () => ({
+vi.mock('#lib/core/api/client.ts', () => ({
 	getApiClient: () => ({
 		get: vi.fn().mockReturnValue({ json: vi.fn() })
 	})
 }));
 
-vi.mock('$lib/core/api/validation', () => ({
+vi.mock('#lib/core/api/validation.ts', () => ({
 	validateResponse: vi.fn((_, raw) => raw)
 }));
 
-vi.mock('$lib/core/schemas', () => ({
+vi.mock('#lib/core/schemas/index.ts', () => ({
 	infoResponseSchema: {}
 }));
 
 vi.mock('@tanstack/svelte-query', () => ({
-	createQuery: vi.fn((opts: Record<string, unknown>) => opts)
+	createQuery: vi.fn((options: () => Record<string, unknown>) => options())
 }));
 
-const { createServiceInfoQuery } = await import('$lib/features/dashboard/api/info');
+const { createServiceInfoQuery } = await import('#lib/features/dashboard/api/info.ts');
 
 describe('createServiceInfoQuery', () => {
 	it('returns an object with a queryKey', () => {

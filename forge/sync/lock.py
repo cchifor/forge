@@ -22,7 +22,7 @@ import json
 import os
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -91,7 +91,7 @@ def acquire_lock(
     project_root: Path,
     *,
     no_lock: bool = False,
-) -> Iterator[None]:
+) -> Generator[None]:
     """Acquire ``<project_root>/.forge/lock`` for the duration of the block.
 
     Writes ``{"pid": <os.getpid>, "started": "<iso>"}`` to the lock

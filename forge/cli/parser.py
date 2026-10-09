@@ -30,6 +30,37 @@ def _build_parser() -> argparse.ArgumentParser:
     parsing anything.
     """
     p = argparse.ArgumentParser(prog="forge", description="Project Generator")
+    p.add_argument(
+        "--quality",
+        choices=[
+            "architecture",
+            "coverage",
+            "test",
+            "inventory",
+            "migrate",
+            "lock",
+            "install",
+            "resolve",
+        ],
+        help="Run generated-project architecture/testing/coverage gates (JSON output).",
+    )
+    p.add_argument(
+        "--recommend",
+        metavar="FILE",
+        help="Recommend technologies from workload YAML/JSON; - reads stdin.",
+    )
+    p.add_argument(
+        "--resolution",
+        choices=["keep", "replace"],
+        help="Resolve an ownership-managed update conflict.",
+    )
+    p.add_argument("--suite", choices=["unit", "integration", "e2e", "all"], default="all")
+    p.add_argument(
+        "--subject", help="Run tests for one service or frontend from --quality inventory."
+    )
+    p.add_argument(
+        "--base-ref", help="Git base for changed-line coverage; absent means all source is new."
+    )
 
     # ``forge --version`` — prints the package version and exits 0. The weekly
     # install-test + release-dryrun workflows assert this; argparse's version
@@ -798,11 +829,16 @@ _MISSING = object()
 # sub-flag is an ORPHAN: it must NOT flip `_is_headless` (which would
 # scaffold a default project into cwd) and `main()` must error exit 2.
 _SUBFLAG_PARENTS: dict[str, frozenset[str]] = {
+    "resolution": frozenset({"quality"}),
+    "suite": frozenset({"quality"}),
+    "subject": frozenset({"quality"}),
+    "base_ref": frozenset({"quality"}),
     # --update family
     "update_mode": frozenset({"update"}),
     "no_template_update": frozenset({"update"}),
     "project_path": frozenset(
         {
+            "quality",
             "update",
             "migrate",
             "doctor",

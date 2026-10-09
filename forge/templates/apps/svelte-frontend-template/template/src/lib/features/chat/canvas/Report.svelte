@@ -23,5 +23,6 @@
 	{#if title}
 		<h2>{title}</h2>
 	{/if}
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- HTML is sanitized with DOMPurify above. -->
 	{@html html}
 </article>

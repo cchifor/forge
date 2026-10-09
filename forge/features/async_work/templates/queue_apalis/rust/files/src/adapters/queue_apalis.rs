@@ -7,7 +7,7 @@
 //! ``JsonEnvelope`` and using a per-topic ``RedisStorage``, cached on
 //! the adapter struct.
 //!
-//! Consumption: apalis 0.6 has no public "pull one message" call —
+//! Consumption: apalis has no public "pull one message" call —
 //! ``RedisStorage::fetch_next`` is private and worker-scoped. So
 //! ``consume`` runs a real apalis worker (the public ``WorkerBuilder``
 //! model) whose handler hands each decoded job to the port's stream and

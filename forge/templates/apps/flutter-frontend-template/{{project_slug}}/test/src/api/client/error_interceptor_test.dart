@@ -11,6 +11,12 @@ void main() {
   late ErrorInterceptor interceptor;
   late MockErrorInterceptorHandler mockHandler;
 
+  setUpAll(() {
+    registerFallbackValue(
+      DioException(requestOptions: RequestOptions(path: "/fallback")),
+    );
+  });
+
   setUp(() {
     interceptor = ErrorInterceptor();
     mockHandler = MockErrorInterceptorHandler();
@@ -121,10 +127,7 @@ void main() {
             verify(() => mockHandler.reject(captureAny())).captured.single
                 as DioException;
         expect(captured.error, isA<ServerException>());
-        expect(
-          (captured.error as ServerException).statusCode,
-          500,
-        );
+        expect((captured.error as ServerException).statusCode, 500);
       });
     });
 
@@ -147,9 +150,7 @@ void main() {
       });
 
       test('maps connectionError to NetworkException', () {
-        final err = createDioException(
-          type: DioExceptionType.connectionError,
-        );
+        final err = createDioException(type: DioExceptionType.connectionError);
 
         interceptor.onError(err, mockHandler);
 
@@ -198,10 +199,7 @@ void main() {
             verify(() => mockHandler.reject(captureAny())).captured.single
                 as DioException;
         expect(captured.error, isA<NotFoundException>());
-        expect(
-          (captured.error as NotFoundException).message,
-          'User not found',
-        );
+        expect((captured.error as NotFoundException).message, 'User not found');
       });
     });
 
@@ -266,8 +264,7 @@ void main() {
         );
       });
 
-      test(
-          'falls back to legacy NetworkException when no response body is '
+      test('falls back to legacy NetworkException when no response body is '
           'present', () {
         // Network-level failure (no response) — the envelope-parsing
         // branch never runs because the early ``response == null``

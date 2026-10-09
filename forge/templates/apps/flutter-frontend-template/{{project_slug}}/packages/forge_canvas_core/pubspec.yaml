@@ -1,16 +1,17 @@
 name: forge_canvas_core
+publish_to: none
 description: Framework-agnostic AG-UI reducer, SSE client, and MCP approval/iframe-bridge surface for forge canvas packages. Pure Dart — no Flutter.
 version: 1.0.0-alpha.1
 repository: https://github.com/cchifor/forge
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.8.0 <4.0.0"
 
 dependencies:
-  dio: ^5.7.0
-  http: ^1.2.0
+  dio: ^5.11.1
+  http: ^1.6.0
   json_patch: ^3.0.0
 
 dev_dependencies:
-  lints: ^4.0.0
-  test: ^1.25.0
+  lints: ^6.1.0
+  test: ^1.32.0

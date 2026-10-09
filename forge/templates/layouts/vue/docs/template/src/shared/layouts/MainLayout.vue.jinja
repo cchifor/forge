@@ -19,7 +19,7 @@
 // If a future feature needs a lifecycle hook outside the chat block, move the
 // hook import out of this guard and ensure it is referenced in all variants.
 import { ref{% if include_chat %}, onMounted, onUnmounted{% endif %} } from 'vue'
-import { PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-vue-next'
+import { PanelLeftClose, PanelLeftOpen, Menu } from '@lucide/vue'
 import AppHeader from '@/shared/components/AppHeader.vue'
 import DocTreeNav from '@/shared/components/DocTreeNav.vue'
 import TocPanel from '@/shared/components/TocPanel.vue'

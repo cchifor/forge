@@ -17,7 +17,7 @@ export type ComponentStatus = z.infer<typeof ComponentStatus>;
 
 export const ReadinessResponse = z.object({
 	status: HealthStatus,
-	components: z.record(ComponentStatus),
-	system_info: z.record(z.string()),
+	components: z.record(z.string(), ComponentStatus),
+	system_info: z.record(z.string(), z.string()),
 });
 export type ReadinessResponse = z.infer<typeof ReadinessResponse>;

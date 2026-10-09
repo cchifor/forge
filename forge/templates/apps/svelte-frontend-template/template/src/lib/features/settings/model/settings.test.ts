@@ -35,7 +35,7 @@ vi.stubGlobal('window', {
 });
 
 // Type-only import; the runtime instance is (re)imported per test below.
-import type { getSettingsStore as GetSettingsStore } from '$lib/features/settings/model/settings.svelte';
+import type { getSettingsStore as GetSettingsStore } from '#lib/features/settings/model/settings.svelte.ts';
 
 describe('getSettingsStore', () => {
 	let store: ReturnType<typeof GetSettingsStore>;
@@ -47,7 +47,7 @@ describe('getSettingsStore', () => {
 		// each test re-evaluates it fresh (reading the just-cleared storage) —
 		// otherwise a textSize/theme set in one test leaks into the next.
 		vi.resetModules();
-		const mod = await import('$lib/features/settings/model/settings.svelte');
+		const mod = await import('#lib/features/settings/model/settings.svelte.ts');
 		store = mod.getSettingsStore();
 	});
 

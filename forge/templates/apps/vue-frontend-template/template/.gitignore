@@ -6,7 +6,6 @@ dist/
 dist-ssr/
 
 # Generated files
-src/shared/api/generated/
 src/auto-imports.d.ts
 
 # Editor

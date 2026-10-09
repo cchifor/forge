@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DesignTokens } from '$lib/shared/lib/design-tokens';
+import { DesignTokens } from '#lib/shared/lib/design-tokens.ts';
 
 describe('DesignTokens', () => {
 	it('has positive spacing values in monotonically increasing order', () => {

@@ -7,8 +7,8 @@ template renders one UI shell and a :class:`BackendApplicationTemplate` records
 which template renders one service shape, a :class:`PlatformTemplate` records a
 *whole-project shape*: a bundle of option overrides + per-backend
 ``app_template``/``depends_on`` assignments + an optional frontend that
-together stand up a coherent platform (e.g. an N-service S2S microservices
-platform behind a gateway).
+together stand up a coherent platform (e.g. directly routed domain services
+with S2S authentication). An intermediary service is an explicit opt-in.
 
 **Application is a config layer, not a renderer.** A platform preset is applied
 as the **lowest-priority** configuration layer — strictly below user CLI flags
@@ -29,7 +29,7 @@ Manifest shape::
     [platform]
     name = "microservices"
     display_label = "Microservices platform"
-    description = "N services behind a gateway, S2S auth, event bus"
+    description = "Directly routed domain services, S2S auth, event bus"
     include_keycloak = true
     database_mode = "compose"          # optional override
 
@@ -38,11 +38,17 @@ Manifest shape::
     "infrastructure.event_bus" = "postgres_notify"
 
     [[platform.backends]]              # per-backend shape + wiring
-    name = "gateway"
+    name = "orders"
     language = "python"
-    app_template = "api-gateway"
-    server_port = 5010
-    depends_on = ["orders", "inventory"]
+    app_template = "crud-service"
+    server_port = 5020
+    depends_on = ["inventory"]
+
+    [[platform.backends]]
+    name = "inventory"
+    language = "python"
+    app_template = "crud-service"
+    server_port = 5030
 
     [platform.frontend]                # omit entirely for a headless platform
     framework = "vue"

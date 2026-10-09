@@ -27,4 +27,4 @@ forge --yes --no-docker --backend-language python \
       --project-name banner-demo --output-dir /tmp
 ```
 
-See `docs/plugin-development.md` for the full guide.
+See `docs/guides/plugins.md` for the full guide.

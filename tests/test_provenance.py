@@ -155,7 +155,7 @@ class TestProvenanceCollector:
         assert entry["fragment_name"] == "rate_limit"
         assert "emitted_at" in entry and entry["emitted_at"]
         # Only fields above plus emitted_at; no fragment_version / template_*.
-        assert set(entry) == {"origin", "sha256", "fragment_name", "emitted_at"}
+        assert set(entry) == {"origin", "sha256", "fragment_name", "emitted_at", "ownership"}
 
     def test_as_dict_omits_none_fields(self, tmp_path: Path) -> None:
         (tmp_path / "a.py").write_text("pass")

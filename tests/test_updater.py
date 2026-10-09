@@ -205,7 +205,7 @@ class TestIntegrationAgainstGenerator:
     """End-to-end: use the real generator, then run update on the output."""
 
     def test_full_generate_then_update(self, tmp_path: Path) -> None:
-        from forge.generator import generate
+        from tests._legacy_generation import generate
 
         cfg = ProjectConfig(
             project_name="updatable",
@@ -259,7 +259,7 @@ class TestIntegrationAgainstGenerator:
         origins into the resolver, which silently skips Python-only
         defaults on Node-only projects.
         """
-        from forge.generator import generate
+        from tests._legacy_generation import generate
 
         cfg = ProjectConfig(
             project_name="node_update",
@@ -319,7 +319,7 @@ class TestIntegrationAgainstGenerator:
         ``"default"`` — silently demoting the user's intent on the
         next ``--update``.
         """
-        from forge.generator import generate
+        from tests._legacy_generation import generate
 
         cfg = ProjectConfig(
             project_name="alias_origin",
@@ -377,7 +377,7 @@ class TestUpdateModeMatrix:
     @pytest.fixture
     def generated_project(self, tmp_path: Path) -> Path:
         """Generate a real project with a few fragments enabled."""
-        from forge.generator import generate  # noqa: PLC0415
+        from tests._legacy_generation import generate  # noqa: PLC0415
 
         cfg = ProjectConfig(
             project_name="merge-test",
@@ -477,7 +477,7 @@ class TestUpdateModeConflict:
         Yields the project root and the rel-path of the file we
         engineered a conflict on.
         """
-        from forge.generator import generate  # noqa: PLC0415
+        from tests._legacy_generation import generate  # noqa: PLC0415
         from forge.sync.manifest import read_forge_toml, write_forge_toml  # noqa: PLC0415
 
         cfg = ProjectConfig(
@@ -569,7 +569,7 @@ class TestUpdateModeUserDeleted:
     def test_merge_mode_reemits_user_deleted_fragment_file(
         self, tmp_path: Path
     ) -> None:
-        from forge.generator import generate  # noqa: PLC0415
+        from tests._legacy_generation import generate  # noqa: PLC0415
 
         cfg = ProjectConfig(
             project_name="deleted-test",
@@ -617,7 +617,7 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_merge_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.generator import generate
+        from tests._legacy_generation import generate
         from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
@@ -660,7 +660,7 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_skip_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.generator import generate
+        from tests._legacy_generation import generate
         from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
@@ -701,7 +701,7 @@ class TestUpdateModeUserModifiedOutput:
     def test_user_modified_summary_in_overwrite_mode(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.generator import generate
+        from tests._legacy_generation import generate
         from forge.sync.manifest import read_forge_toml
 
         cfg = ProjectConfig(
@@ -752,7 +752,7 @@ class TestUpdateUninstallPath:
     def test_uninstall_logs_when_fragment_disabled(
         self, tmp_path: Path, capsys
     ) -> None:
-        from forge.generator import generate
+        from tests._legacy_generation import generate
         from forge.sync.manifest import read_forge_toml, write_forge_toml
 
         cfg = ProjectConfig(

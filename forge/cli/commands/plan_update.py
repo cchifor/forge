@@ -20,6 +20,17 @@ def _run_plan_update(args: argparse.Namespace) -> None:
     update_mode = cast("UpdateMode", getattr(args, "update_mode", "merge"))
     json_output = bool(getattr(args, "json_output", False))
 
+    if (project_path / ".forge/quality.json").is_file():
+        from forge.quality.update import update_owned_project
+
+        try:
+            result = update_owned_project(project_path, dry_run=True)
+            print(json.dumps(result, indent=2))
+            sys.exit(0 if result["passed"] else 12)
+        except (ValueError, OSError, _GeneratorError) as exc:
+            print(json.dumps({"error": str(exc)}))
+            sys.exit(2)
+
     try:
         report = plan_update(project_path, update_mode=update_mode)
     except _GeneratorError as exc:

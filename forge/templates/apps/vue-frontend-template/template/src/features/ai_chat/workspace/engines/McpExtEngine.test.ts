@@ -15,7 +15,7 @@ const mockBridge = {
 }
 
 vi.mock('@modelcontextprotocol/ext-apps/app-bridge', () => ({
-  AppBridge: vi.fn().mockImplementation(() => mockBridge),
+  AppBridge: vi.fn().mockImplementation(function () { return mockBridge }),
   PostMessageTransport: vi.fn(),
 }))
 

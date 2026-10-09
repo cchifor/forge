@@ -1001,12 +1001,9 @@ def _run_plugin_emitters(
     first claimed — so callers see deterministic output independent of
     how many plugins later attempted to override.
 
-    Emitter exceptions are caught and logged — a broken plugin emitter
-    must not abort codegen for the remaining plugins. The caller
-    (``forge.generator._apply_project_scope``) already wraps
-    ``run_codegen`` in a try/except that downgrades any escape to a
-    warning, but per-plugin isolation here means one bad plugin doesn't
-    shadow every plugin that follows.
+    Collect emitter failures while allowing sibling emitters to report their
+    diagnostics, then fail generation. A selected emitter is required output;
+    a partial project must never be reported as a successful generation.
     """
     from forge.plugins import LOADED_PLUGINS  # noqa: PLC0415
 
@@ -1024,10 +1021,12 @@ def _run_plugin_emitters(
             winners[registration.target] = (plugin.name, registration)
 
     # Invocation pass: each surviving emitter runs exactly once.
+    failures: list[str] = []
     for plugin_name, registration in winners.values():
         try:
             registration.emitter(project_root, config, resolved)
         except Exception as exc:  # noqa: BLE001 — isolate per-plugin failure
+            failures.append(f"{plugin_name}/{registration.target}: {exc}")
             log_event(
                 _LOGGER,
                 "plugin.emitter.failed",
@@ -1041,6 +1040,8 @@ def _run_plugin_emitters(
                 target=registration.target,
                 error_type=type(exc).__name__,
             )
+    if failures:
+        raise RuntimeError("Required plugin emitters failed: " + "; ".join(failures))
 
 
 def _warn_emitter_target_collision(*, target: str, loser: str, winner: str) -> None:

@@ -374,6 +374,16 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_claims={"nbf": 9999999999},  # year 2286 — always in the future
         expected=ExpectedOutcome(error="invalid_token"),
     ),
+    Scenario(
+        name="reject_malformed_optional_nbf",
+        description=(
+            "Optional nbf is present with an invalid JSON type. Reject the "
+            "signed token instead of treating the claim as absent; guards "
+            "against CVE-2026-25537 in jsonwebtoken before 10.3.0."
+        ),
+        extra_claims={"nbf": "not-a-timestamp"},
+        expected=ExpectedOutcome(error="invalid_token"),
+    ),
     # ----------------------------------------------------------- audience
     Scenario(
         name="reject_wrong_audience",

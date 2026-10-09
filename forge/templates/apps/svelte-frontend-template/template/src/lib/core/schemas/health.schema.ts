@@ -5,7 +5,7 @@ export const healthStatusSchema = z.enum(['UP', 'DOWN', 'DEGRADED']);
 export const componentStatusSchema = z.object({
 	status: healthStatusSchema,
 	latency_ms: z.number().nullable(),
-	details: z.record(z.unknown()).nullable()
+	details: z.record(z.string(), z.unknown()).nullable()
 });
 
 export const livenessResponseSchema = z.object({
@@ -15,8 +15,8 @@ export const livenessResponseSchema = z.object({
 
 export const readinessResponseSchema = z.object({
 	status: healthStatusSchema,
-	components: z.record(componentStatusSchema),
-	system_info: z.record(z.string())
+	components: z.record(z.string(), componentStatusSchema),
+	system_info: z.record(z.string(), z.string())
 });
 
 export const infoResponseSchema = z.object({

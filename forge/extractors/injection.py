@@ -42,6 +42,7 @@ The trickier classification cases live here:
 from __future__ import annotations
 
 import difflib
+import hashlib
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -136,6 +137,15 @@ class InjectionExtractor:
         # template that the plan was built from. Fall back to the raw
         # snippet (with a needs-review note) when rendering would fail.
         upstream_body, render_failed = _resolve_upstream_body(inj, options=dict(ctx.options))
+        # The emitted block may have been canonicalized after injection (for
+        # example, Ruff inserts a blank line after a local import). Compare
+        # upstream with the separately recorded, post-render/pre-format snippet
+        # hash; its bytes are in the same domain as this fresh render.
+        upstream_snippet_unchanged = bool(
+            entry
+            and entry.get("snippet_sha256")
+            == hashlib.sha256(upstream_body.encode("utf-8")).hexdigest()
+        )
 
         # Sentinel for "orchestrator couldn't reach the upstream
         # snippet" (fragment disabled, inject.yaml missing, etc.) OR
@@ -248,6 +258,12 @@ class InjectionExtractor:
             current_body=current_body,
             upstream_body=upstream_body,
         )
+        if decision == "conflict" and upstream_snippet_unchanged:
+            # The current body differs from its formatted baseline, but the
+            # upstream snippet is byte-for-byte unchanged. This is a user-only
+            # edit, not an upstream conflict. Legacy manifests without the
+            # snippet hash retain the conservative three-way result.
+            decision = "safe-apply"
 
         # ``no-baseline`` and ``skipped-*`` outcomes don't promote a
         # harvest candidate. ``no-baseline`` means the manifest is v1

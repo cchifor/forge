@@ -15,7 +15,13 @@
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { embed as aiEmbed, jsonSchema, streamText, type CoreMessage, type ToolSet } from "ai";
+import {
+	embed as aiEmbed,
+	jsonSchema,
+	streamText,
+	type ModelMessage,
+	type ToolSet,
+} from "ai";
 
 import type {
 	ChatMessage,
@@ -39,24 +45,16 @@ export class OpenAiAdapter implements LlmPort {
 	}
 
 	complete(prompt: ChatPrompt, options: LlmOptions): AsyncIterable<LlmChunk> {
-		const model = this.provider(options.modelId);
-		const messages: CoreMessage[] = prompt.messages.map(toCoreMessage);
+		const model = this.provider.chat(options.modelId);
+		const messages: ModelMessage[] = prompt.messages.map(toModelMessage);
 		const tools = prompt.tools ? toAiTools(prompt.tools) : undefined;
 
 		const result = streamText({
 			model,
 			messages,
 			temperature: options.temperature,
-			maxTokens: options.maxTokens,
+			maxOutputTokens: options.maxTokens,
 			...(tools ? { tools } : {}),
-			// Codex Phase B round 1 follow-up: AI SDK 4 gates
-			// tool-call delta streaming behind `toolCallStreaming: true`.
-			// Without this, tool-call ARGUMENTS arrive as one final
-			// `tool-call` event with no incremental delta, defeating
-			// the port's `arguments_delta` field semantic. Enable
-			// unconditionally — the cost when no tools are configured
-			// is zero (no tool-call events fire either way).
-			toolCallStreaming: true,
 		});
 
 		return mapStream(result.fullStream);
@@ -77,8 +75,8 @@ export class OpenAiAdapter implements LlmPort {
 	}
 }
 
-function toCoreMessage(m: ChatMessage): CoreMessage {
-	// AI SDK's `CoreMessage` shape is role-discriminated; assistant
+function toModelMessage(m: ChatMessage): ModelMessage {
+	// AI SDK's `ModelMessage` shape is role-discriminated; assistant
 	// turns with tool calls use a parts array, plain text messages use
 	// a string. This mapping handles the common cases — provider-
 	// specific edge cases (e.g. mixed text+tool turns) live in the
@@ -98,28 +96,34 @@ function toCoreMessage(m: ChatMessage): CoreMessage {
 						type: "tool-result",
 						toolCallId: m.toolCallId ?? "",
 						toolName: m.name ?? "",
-						result: m.content,
+						output: { type: "text", value: m.content },
 					},
 				],
 			};
 		default: {
 			const _exhaustive: never = m.role;
-			return { role: "user", content: m.content, _unreachable: _exhaustive } as never;
+			return {
+				role: "user",
+				content: m.content,
+				_unreachable: _exhaustive,
+			} as never;
 		}
 	}
 }
 
 function toAiTools(tools: Tool[]): ToolSet {
-	// AI SDK takes tools as a `{ toolName: {description, parameters} }`
+	// AI SDK takes tools as a `{ toolName: {description, inputSchema} }`
 	// dictionary; the JSON Schema is wrapped with `jsonSchema()` so each entry
 	// is a SDK `Schema` and the dict satisfies `ToolSet` (not a raw object —
-	// AI SDK 4 typed `tools` as `ToolSet`). Strict schema-validation lives one
+	// AI SDK typed `tools` as `ToolSet`). Strict schema-validation lives one
 	// level up in the agent loop.
 	const out: ToolSet = {};
 	for (const tool of tools) {
 		out[tool.name] = {
 			description: tool.description,
-			parameters: jsonSchema(tool.inputSchema as Parameters<typeof jsonSchema>[0]),
+			inputSchema: jsonSchema(
+				tool.inputSchema as Parameters<typeof jsonSchema>[0],
+			),
 		};
 	}
 	return out;
@@ -132,29 +136,44 @@ async function* mapStream(
 	// translate text-delta + tool-call deltas + finish chunks; other
 	// event types (step-start, reasoning, source) are no-ops for the
 	// cross-language chunk contract.
+	const streamedTools = new Set<string>();
 	for await (const part of source) {
 		const evt = part as { type?: string } & Record<string, unknown>;
 		switch (evt.type) {
 			case "text-delta":
-				yield { delta: (evt.textDelta as string) ?? "" };
+				yield { delta: (evt.text as string) ?? "" };
 				break;
-			case "tool-call-delta":
+			case "tool-input-start":
 				yield {
 					delta: "",
 					toolCall: {
-						id: evt.toolCallId as string | undefined,
+						id: evt.id as string,
+						name: evt.toolName as string,
+					},
+				};
+				break;
+			case "tool-input-delta":
+				if (typeof evt.delta === "string" && evt.delta.length > 0) {
+					streamedTools.add(evt.id as string);
+				}
+				yield {
+					delta: "",
+					toolCall: {
+						id: evt.id as string | undefined,
 						name: evt.toolName as string | undefined,
-						argumentsDelta: evt.argsTextDelta as string | undefined,
+						argumentsDelta: evt.delta as string | undefined,
 					},
 				};
 				break;
 			case "tool-call":
+				// Final full input must not duplicate already streamed JSON fragments.
+				if (streamedTools.has(evt.toolCallId as string)) break;
 				yield {
 					delta: "",
 					toolCall: {
 						id: evt.toolCallId as string | undefined,
 						name: evt.toolName as string | undefined,
-						argumentsDelta: JSON.stringify(evt.args ?? {}),
+						argumentsDelta: JSON.stringify(evt.input ?? {}),
 					},
 				};
 				break;

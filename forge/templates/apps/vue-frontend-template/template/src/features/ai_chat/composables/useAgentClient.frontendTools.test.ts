@@ -17,7 +17,7 @@ vi.mock('@forge/canvas-core', async () => {
   const actual = await vi.importActual('@forge/canvas-core')
   return {
     ...actual,
-    AgUiClient: vi.fn().mockImplementation((opts: any) => {
+    AgUiClient: vi.fn().mockImplementation(function (opts: any) {
       capturedOnEvent = opts.onEvent
       return { runAgent: mockRunAgent }
     }),

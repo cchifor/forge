@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { categorizeError, userFacingMessage } from '$lib/core/errors';
+import { categorizeError, userFacingMessage } from '#lib/core/errors.ts';
 
 describe('categorizeError', () => {
 	it('returns "not-found" for 404', () => {

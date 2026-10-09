@@ -14,15 +14,15 @@
 	// Chat is an OVERLAY so the 3-col reading layout is preserved underneath:
 	// a right slide-in drawer on desktop/tablet, a bottom sheet on mobile.
 	import { goto } from '$app/navigation';
-	import { getAuth } from '$lib/core';
-	import { getUiStore } from '$lib/features/shell';
-	import { PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-svelte';
-	import AppHeader from '$lib/features/shell/ui/AppHeader.svelte';
-	import DocTreeNav from '$lib/features/shell/ui/DocTreeNav.svelte';
-	import TocPanel from '$lib/features/shell/ui/TocPanel.svelte';{% endraw %}{% if include_chat %}
-	{% raw %}import { AiChat } from '$lib/features/chat';
-	import ChatDrawer from '$lib/features/shell/ui/ChatDrawer.svelte';
-	import ChatBottomSheet from '$lib/features/shell/ui/ChatBottomSheet.svelte';{% endraw %}{% endif %}{% raw %}
+	import { getAuth } from '#lib/core/index.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
+	import { PanelLeftClose, PanelLeftOpen, Menu } from '@lucide/svelte';
+	import AppHeader from '#lib/features/shell/ui/AppHeader.svelte';
+	import DocTreeNav from '#lib/features/shell/ui/DocTreeNav.svelte';
+	import TocPanel from '#lib/features/shell/ui/TocPanel.svelte';{% endraw %}{% if include_chat %}
+	{% raw %}import { AiChat } from '#lib/features/chat/index.ts';
+	import ChatDrawer from '#lib/features/shell/ui/ChatDrawer.svelte';
+	import ChatBottomSheet from '#lib/features/shell/ui/ChatBottomSheet.svelte';{% endraw %}{% endif %}{% raw %}
 
 	let { children } = $props();
 	const auth = getAuth();

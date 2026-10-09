@@ -7,14 +7,13 @@ import {
 } from 'vue'
 import type {
   ColumnOrderState,
-  ColumnPinningState,
-  VisibilityState,
+  ColumnVisibilityState,
 } from '@tanstack/vue-table'
 import type { DataTableColumnDef } from './types'
 import { useAugmentedColumns } from './augmentedColumns'
 import { useColumnVisibility } from './useColumnVisibility'
 import { useColumnOrder } from './useColumnOrder'
-import { useColumnPinning, type PinSide } from './useColumnPinning'
+import { useColumnPinning, type PinSide, type ColumnPinningState } from './useColumnPinning'
 import { useColumnSizing } from './useColumnSizing'
 import { twBelow } from './breakpoints'
 
@@ -52,8 +51,8 @@ export interface UseColumnManagerOptions {
  */
 export interface ColumnManager {
   togglableColumns: ComputedRef<ColumnManagerItem[]>
-  augmentedColumns: ComputedRef<DataTableColumnDef<unknown>[]>
-  columnVisibility: ComputedRef<VisibilityState>
+  augmentedColumns: ComputedRef<DataTableColumnDef<object>[]>
+  columnVisibility: ComputedRef<ColumnVisibilityState>
   columnOrder: ComputedRef<ColumnOrderState>
   columnSizing: ComputedRef<Record<string, number>>
   columnPinning: ComputedRef<ColumnPinningState>
@@ -84,7 +83,7 @@ export interface ColumnManager {
    * the baseline (diff-writing change handlers) never diverge from the
    * effective state.
    */
-  baseVisibilityFor: (col: DataTableColumnDef<unknown>) => boolean
+  baseVisibilityFor: (col: DataTableColumnDef<object>) => boolean
   enableRowSelection: boolean
   toggleColumn: (id: string, visible: boolean) => void
   setColumnOrder: (ids: string[]) => void
@@ -127,7 +126,7 @@ function warnDuplicateTableId(id: string) {
  * caller only needs one slice (e.g., a stand-alone "column visibility
  * picker" component without order or pinning concerns).
  */
-export function useColumnManager<T>(
+export function useColumnManager<T extends object>(
   tableId: string,
   columns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
   options: UseColumnManagerOptions = {},

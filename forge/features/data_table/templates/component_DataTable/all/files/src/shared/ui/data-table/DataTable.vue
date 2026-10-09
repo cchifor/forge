@@ -1,4 +1,5 @@
 <script setup lang="ts" generic="T extends { id: string }">
+import type { DataTableFeatures } from './features'
 /**
  * Container-aware data table.
  *
@@ -28,7 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import { useContainerSize } from '@/shared/composables/useContainerSize'
 import { useDataTable } from './useDataTable'
@@ -195,7 +196,7 @@ const hasExpandedRowSlot = computed(() => !!slots['expanded-row'])
 // Pinned-cell sticky helpers (table tier)
 // ---------------------------------------------------------------------------
 
-function pinBinding(column: Column<T, unknown>, isHeader = false) {
+function pinBinding(column: Column<DataTableFeatures, T, unknown>, isHeader = false) {
   // Internal z-stack (scoped to the wrapper's `isolation: isolate`):
   //   pinned thead intersection   z-[25]   (sticky top + sticky left)
   //   thead                       z-20
@@ -209,12 +210,12 @@ function pinBinding(column: Column<T, unknown>, isHeader = false) {
   // pinned cells paint in `bg-card`.
   const bgClass = isHeader ? 'bg-muted' : 'bg-card'
   const zClass = isHeader ? 'z-[25]' : 'z-10'
-  if (column.getIsPinned() === 'left') {
+  if (column.getIsPinned() === 'start') {
     return {
       class: `sticky ${zClass} ${bgClass} data-[pinned-last=true]:shadow-[inset_-1px_0_0_theme(colors.border)]`,
-      style: { left: `${column.getStart('left')}px` },
+      style: { left: `${column.getStart('start')}px` },
       dataPinned: 'left',
-      dataPinnedLast: column.getIsLastColumn('left'),
+      dataPinnedLast: column.getIsLastColumn('start'),
     }
   }
   return {
@@ -242,13 +243,13 @@ const heroColumnId = computed(() => {
   )?.id
 })
 
-function heroCell(row: Row<T>) {
+function heroCell(row: Row<DataTableFeatures, T>) {
   return row
     .getVisibleCells()
     .find((cell) => cell.column.id === heroColumnId.value)
 }
 
-function selectionCell(row: Row<T>) {
+function selectionCell(row: Row<DataTableFeatures, T>) {
   return row.getVisibleCells().find((cell) => cell.column.id === 'select')
 }
 
@@ -259,7 +260,7 @@ function selectionCell(row: Row<T>) {
  * wins. Returns ``null`` when no column opts in — list tier then
  * falls back to the joined-secondary-cells layout.
  */
-function subtitleCell(row: Row<T>) {
+function subtitleCell(row: Row<DataTableFeatures, T>) {
   return (
     row.getVisibleCells().find((cell) => {
       const col = cell.column.columnDef as DataTableColumnDef<T>
@@ -269,7 +270,7 @@ function subtitleCell(row: Row<T>) {
 }
 
 /** Non-hero, non-select, non-subtitle visible cells — the "secondary metadata" line. */
-function secondaryCellsForCard(row: Row<T>) {
+function secondaryCellsForCard(row: Row<DataTableFeatures, T>) {
   return row.getVisibleCells().filter((cell) => {
     const col = cell.column.columnDef as DataTableColumnDef<T>
     if (col.meta?.alwaysVisible) return false // skip select
@@ -289,12 +290,12 @@ function isNonInteractiveTarget(e: MouseEvent): boolean {
   return !el.closest('[data-row-ignore-click]')
 }
 
-function onRowClick(row: Row<T>, e: MouseEvent) {
+function onRowClick(row: Row<DataTableFeatures, T>, e: MouseEvent) {
   if (!isNonInteractiveTarget(e)) return
   emit('row-click', row.original)
 }
 
-function onRowKeydown(row: Row<T>, e: KeyboardEvent) {
+function onRowKeydown(row: Row<DataTableFeatures, T>, e: KeyboardEvent) {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     emit('row-click', row.original)
@@ -721,7 +722,7 @@ useIntersectionObserver(
         class="flex items-center justify-between gap-2 text-xs text-muted-foreground"
       >
         <div>
-          Page {{ table.getState().pagination.pageIndex + 1 }} of
+          Page {{ table.atoms.pagination.get().pageIndex + 1 }} of
           {{ Math.max(1, table.getPageCount()) }}
         </div>
         <div class="flex items-center gap-1">
@@ -730,6 +731,7 @@ useIntersectionObserver(
             size="sm"
             class="h-8 px-2"
             :disabled="!table.getCanPreviousPage()"
+            aria-label="Previous page"
             @click="table.previousPage()"
           >
             <ChevronLeft class="h-3.5 w-3.5" />
@@ -739,6 +741,7 @@ useIntersectionObserver(
             size="sm"
             class="h-8 px-2"
             :disabled="!table.getCanNextPage()"
+            aria-label="Next page"
             @click="table.nextPage()"
           >
             <ChevronRight class="h-3.5 w-3.5" />

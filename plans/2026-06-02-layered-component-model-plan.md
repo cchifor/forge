@@ -50,7 +50,7 @@ writable dev clone in the workspace** (see "Open: implementation location").
 | Agent chat (AG-UI) | `features/agent` (`agent.mode` none\|llm_only\|tool_calling\|multi_agent; WS `/api/v1/ws/agent`; `AgentEvent` union); `codegen/event_union.py`; Vue `features/ai_chat/canvas/registry.ts` (`registerCanvasComponent`) | streaming idiom + canvas registry **already ship** — reuse, no 2nd transport |
 | CLI verbs + scaffold | `cli/parser.py:_build_parser`, `cli/main.py` if-chain + `_exit_code_for`; `commands/{plan,plan_update,features,plugins,canvas,reapply_baseline}.py`; `cli/scaffold/` Jinja skeletons; `reports/` | subcommand + plan-only + scaffold patterns ready to extend |
 | Errors / exit codes | `errors.py` (`OPTIONS_DEP_CYCLE`→2, `FEATURE_CONTRACT_VIOLATION`/`FEATURE_DEPENDENCY_MISSING`→6, `MERGE_CONFLICT`→4) + `_exit_code_for` | every new failure mode maps to an **existing** code/exit |
-| Telemetry / logs | `telemetry.py:emit` + `EVENT_*`; `--telemetry`/`--log-json`/`--log-level`; `docs/telemetry.md` | add `EVENT_*` constants per verb |
+| Telemetry / logs | `telemetry.py:emit` + `EVENT_*`; `--telemetry`/`--log-json`/`--log-level`; `docs/reference/telemetry.md` | add `EVENT_*` constants per verb |
 | Templates / generate pipeline | `generator.py:_generate_into` (8 phases) / `_generate_frontend`; `templates/apps/vue-frontend-template/` (`router/index.ts.jinja` has `// --- feature routes ---` anchors; `shared/layouts/MainLayout.vue` shell); ADR-007 | app shell/routes hand-authored — Layer-3 makes them manifest-driven |
 
 **Confirmed genuinely new (small, additive):** (a) `layer` field + component-dep
@@ -359,7 +359,7 @@ mock-server) is green for that version; and a freshly generated app passes
 | Regeneration conflict | `MERGE_CONFLICT` / `FILE_MERGE_CONFLICT` | 4 |
 
 New verbs emit `EVENT_*` telemetry + structured logs via `telemetry.emit`,
-honoring `--telemetry`/`--log-json`/`--log-level`; update `docs/telemetry.md` +
+honoring `--telemetry`/`--log-json`/`--log-level`; update `docs/reference/telemetry.md` +
 `_MINIMAL_ALLOWED_FIELDS`.
 
 ### J. CI validation profiles (§8)

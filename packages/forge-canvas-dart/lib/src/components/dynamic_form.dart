@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../generated/props.dart';
 
@@ -31,17 +31,17 @@ class DynamicForm extends StatefulWidget {
     this.onSubmit,
     this.onCancel,
   }) : fields = fields
-            .map((raw) => DynamicFormField.fromJson(raw))
-            .toList(growable: false);
+           .map((raw) => DynamicFormField.fromJson(raw))
+           .toList(growable: false);
 
   factory DynamicForm.fromProps(Map<String, dynamic> props) => DynamicForm(
-        title: props['title'] as String?,
-        fields: ((props['fields'] as List?) ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        submitLabel: (props['submitLabel'] as String?) ?? 'Submit',
-        cancelLabel: (props['cancelLabel'] as String?) ?? 'Cancel',
-      );
+    title: props['title'] as String?,
+    fields: ((props['fields'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(),
+    submitLabel: (props['submitLabel'] as String?) ?? 'Submit',
+    cancelLabel: (props['cancelLabel'] as String?) ?? 'Cancel',
+  );
 
   @override
   State<DynamicForm> createState() => _DynamicFormState();
@@ -183,7 +183,7 @@ class _FieldWidgetState extends State<_FieldWidget> {
     if (field.type == 'select') {
       return DropdownButtonFormField<String>(
         decoration: decoration,
-        value: _value as String?,
+        initialValue: _value as String?,
         items: [
           for (final opt in (field.options ?? const <String>[]))
             DropdownMenuItem(value: opt, child: Text(opt)),

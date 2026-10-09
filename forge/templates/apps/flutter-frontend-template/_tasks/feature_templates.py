@@ -26,7 +26,7 @@ def make_feature_context(plural: str, package_name: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 
 ROUTES_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../routing/route_names.dart';
@@ -253,7 +253,7 @@ Future<Map<String, dynamic>> {singular}Detail(Ref ref, String id) async {{
 """
 
 LIST_PAGE_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -336,7 +336,7 @@ class {Plural}ListPage extends ConsumerWidget {{
 """
 
 DETAIL_PAGE_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -423,7 +423,7 @@ class {Singular}DetailPage extends ConsumerWidget {{
 """
 
 CREATE_PAGE_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -462,7 +462,7 @@ class {Singular}CreatePage extends ConsumerWidget {{
 """
 
 CARD_WIDGET_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../../theme/design_tokens.dart';
 
@@ -518,7 +518,7 @@ class {Singular}Card extends StatelessWidget {{
 """
 
 FORM_WIDGET_TEMPLATE = """\
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 

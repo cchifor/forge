@@ -2,6 +2,7 @@
   DynamicForm canvas component — Svelte 5 variant.
 -->
 <script lang="ts">
+  import { untrack } from 'svelte'
   import type { DynamicFormProps } from '../generated/props'
 
   // The generated `DynamicFormProps` is the single source of truth —
@@ -29,9 +30,10 @@
     return ''
   }
 
-  let values = $state<Record<string, unknown>>(
+  // Defaults initialize the form once; later prop changes must not reset edits.
+  let values = $state<Record<string, unknown>>(untrack(() =>
     Object.fromEntries(fields.map((f) => [f.name, f.default ?? _defaultFor(f.type)])),
-  )
+  ))
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
@@ -90,7 +92,10 @@
             id="dform-{field.name}"
             type="checkbox"
             name={field.name}
-            bind:checked={values[field.name]}
+            bind:checked={
+              () => Boolean(values[field.name]),
+              (checked: boolean) => { values[field.name] = checked }
+            }
           />
           <span>{field.description || field.label}</span>
         </label>

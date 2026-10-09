@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { colorSchemes, getSchemeByName } from '$lib/shared/lib/color-schemes';
+import { colorSchemes, getSchemeByName } from '#lib/shared/lib/color-schemes.ts';
 
 describe('colorSchemes', () => {
 	it('contains multiple color schemes', () => {

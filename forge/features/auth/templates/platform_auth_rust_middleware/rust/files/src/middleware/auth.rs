@@ -122,32 +122,32 @@ pub async fn init_auth() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// On verification failure, returns an RFC 7807 problem response
 /// with the `AuthError`'s status code and reason slug.
-pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Response, Response> {
+pub async fn auth_middleware(request: Request<Body>, next: Next) -> Response {
     // Skip the predefined paths so probes work without auth.
     let path = request.uri().path();
     if EXCLUDED_PATHS.contains(&path) {
-        return Ok(next.run(request).await);
+        return next.run(request).await;
     }
 
     let Some(guard) = AUTH_GUARD.get() else {
         // init_auth() wasn't called — fail closed. This is a
         // configuration error, not an auth failure; surface as 503.
-        return Err(problem_response(
+        return problem_response(
             StatusCode::SERVICE_UNAVAILABLE,
             "service_misconfigured",
             "AuthGuard not initialized; call init_auth() in main() before starting the server",
             None,
-        ));
+        );
     };
 
     let token = match extract_bearer(&request) {
         Ok(t) => t,
-        Err(err) => return Err(map_auth_error(&err)),
+        Err(err) => return map_auth_error(&err),
     };
 
     let identity = match guard.verify(&token).await {
         Ok(id) => id,
-        Err(err) => return Err(map_auth_error(&err)),
+        Err(err) => return map_auth_error(&err),
     };
 
     // Convert the SDK's IdentityContext to the consumer's local type
@@ -171,7 +171,7 @@ pub async fn auth_middleware(request: Request<Body>, next: Next) -> Result<Respo
 
     let mut request = request;
     request.extensions_mut().insert(local);
-    Ok(next.run(request).await)
+    next.run(request).await
 }
 
 fn extract_bearer(request: &Request<Body>) -> Result<String, AuthError> {

@@ -4,7 +4,7 @@ and assert the *assembled* platform actually runs.
 This is the highest-fidelity gate in the suite: it scaffolds a real project from
 a platform preset, builds the images, starts the containers, and exercises the
 running system — health endpoints for every preset, plus a live
-service-to-service (S2S) token round-trip for the synthesis presets (gateway
+service-to-service (S2S) token round-trip for the microservices preset (orders
 mints a token from the gatekeeper using the *synthesized* registry secret, then
 calls a downstream service which verifies it).
 
@@ -12,7 +12,9 @@ Heavy + opt-in: marked ``e2e`` (excluded from the default ``pytest`` run) and
 skipped unless Docker is available. On a shared host the ingress ``traefik``
 service is intentionally NOT started (it binds host :80, which often collides);
 all assertions run *in-network* via ``docker compose exec`` so no host ports are
-needed. Every test tears its stack down (``down -v``) in a ``finally``.
+needed. The port-reset override uses Compose's ``!reset`` YAML tag; use Docker
+Compose 2.24 or newer for this suite. Every test tears its stack down
+(``down -v``) in a ``finally``.
 
 Run explicitly::
 
@@ -38,17 +40,24 @@ _BUILD_TIMEOUT = 1500
 _UP_TIMEOUT = 360
 _EXEC_TIMEOUT = 45
 _HEALTH_WAIT = 180
+_PORT_OVERRIDE = "compose.forge-e2e-ports.yaml"
 
 
 def _forge_generate(preset: str, name: str, out_dir: Path) -> Path:
     """Scaffold ``preset`` via the real CLI; return the project root."""
     proc = subprocess.run(
         [
-            sys.executable, "-m", "forge",
-            "--platform", preset,
-            "--project-name", name,
-            "--output-dir", str(out_dir),
-            "--no-docker", "--yes",
+            sys.executable,
+            "-m",
+            "forge",
+            "--platform",
+            preset,
+            "--project-name",
+            name,
+            "--output-dir",
+            str(out_dir),
+            "--no-docker",
+            "--yes",
         ],
         cwd=_REPO_ROOT,
         capture_output=True,
@@ -61,9 +70,22 @@ def _forge_generate(preset: str, name: str, out_dir: Path) -> Path:
     return root
 
 
-def _compose(root: Path, *args: str, timeout: int = 60, check: bool = True) -> subprocess.CompletedProcess[str]:
+def _compose(
+    root: Path, *args: str, timeout: int = 60, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    files = ["-f", "docker-compose.yml"]
+    # Preserve project overrides and apply the test-only port reset last.
+    for name in (
+        "compose.override.yaml",
+        "compose.override.yml",
+        "docker-compose.override.yml",
+        "docker-compose.override.yaml",
+        _PORT_OVERRIDE,
+    ):
+        if (root / name).is_file():
+            files.extend(["-f", name])
     proc = subprocess.run(
-        ["docker", "compose", *args],
+        ["docker", "compose", *files, *args],
         cwd=root,
         capture_output=True,
         text=True,
@@ -85,6 +107,11 @@ def _services(root: Path) -> list[str]:
 def _boot(root: Path) -> None:
     """Build + start every service except ``traefik`` (the host-:80 ingress)."""
     services = [s for s in _services(root) if s != "traefik"]
+    # Every assertion runs on the Compose network. Avoid conflicting with
+    # databases or applications already published on a developer's machine.
+    # This test-only override requires Compose with !reset support (2.24+).
+    override = "services:\n" + "".join(f"  {name}:\n    ports: !reset []\n" for name in services)
+    (root / _PORT_OVERRIDE).write_text(override, encoding="utf-8")
     _compose(root, "up", "-d", "--build", *services, timeout=_BUILD_TIMEOUT + _UP_TIMEOUT)
 
 
@@ -115,8 +142,15 @@ def _wait_healthy(root: Path, services: list[str], timeout: int = _HEALTH_WAIT) 
 def _exec_py(root: Path, service: str, script: str) -> str:
     """Run a python snippet inside ``service`` (in-network, no host ports)."""
     proc = _compose(
-        root, "exec", "-T", service, "python", "-c", script,
-        timeout=_EXEC_TIMEOUT, check=False,
+        root,
+        "exec",
+        "-T",
+        service,
+        "python",
+        "-c",
+        script,
+        timeout=_EXEC_TIMEOUT,
+        check=False,
     )
     assert proc.returncode == 0, (
         f"exec in {service} failed ({proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
@@ -138,10 +172,10 @@ for path in ["/api/v1/health/live", "/api/v1/health/ready", "/api/v1/info"]:
 print("HEALTH_OK")
 """
 
-# --- the live S2S round-trip, run inside the gateway container ---------------
+# --- the live S2S round-trip, run inside the orders container ---------------
 #
 # This exercises a *protected* downstream route (``/api/v1/items``), not a
-# health probe: the orders ``AuthContextMiddleware`` excludes ``/health*`` from
+# health probe: the inventory ``AuthContextMiddleware`` excludes ``/health*`` from
 # verification, so only a non-excluded path actually drives the JWKS-backed
 # token verifier. We prove two things end-to-end:
 #   1. the verifier is live — a malformed bearer is rejected (401/403);
@@ -153,8 +187,8 @@ _S2S_SCRIPT = """
 import os, json, urllib.request, urllib.parse, urllib.error
 ep = os.environ["GATEKEEPER_TOKEN_ENDPOINT"]
 cid = os.environ["GATEKEEPER_CLIENT_ID"]; sec = os.environ["GATEKEEPER_CLIENT_SECRET"]
-orders = os.environ["INTERNAL_SERVICE_URL_ORDERS"]
-items = orders + "/api/v1/items"
+inventory = os.environ["INTERNAL_SERVICE_URL_INVENTORY"]
+items = inventory + "/api/v1/items"
 
 def status_for(headers):
     req = urllib.request.Request(items, headers=headers)
@@ -170,7 +204,7 @@ assert bad in (401, 403), "verifier accepted a malformed token: %s" % bad
 # 2) mint a real S2S token from the synthesized registry secret.
 body = urllib.parse.urlencode({
     "grant_type": "client_credentials", "client_id": cid, "client_secret": sec,
-    "audience": "svc-orders", "scope": "orders:read",
+    "audience": "svc-inventory", "scope": "inventory:read",
     "tenant_id": "00000000-0000-0000-0000-000000000001",
 }).encode()
 req = urllib.request.Request(ep, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"})
@@ -184,6 +218,52 @@ print("S2S_OK")
 """
 
 
+# A fixture identity issued with Gatekeeper's real key, exercised against the
+# domain API. This validates issuer/JWKS verification and CRUD, not OIDC login.
+# Intentional internal test contract: FileKeyRing reads SIGNING_KEY_DIR and
+# mint_internal_token signs the fixture with the configured issuer/audience.
+# Keep these imports and arguments in sync with Gatekeeper's implementation;
+# this fixture does not expose a development-only token endpoint in the service.
+_DIRECT_API_SCRIPT = """
+import json, os, time, urllib.request, urllib.error
+from pathlib import Path
+from uuid import uuid4
+from app.gatekeeper.key_store import FileKeyRing
+from app.gatekeeper.internal_token import mint_internal_token
+
+ring = FileKeyRing(Path(os.environ["SIGNING_KEY_DIR"]))
+token, _ = mint_internal_token(
+    keycloak_payload={"sub": str(uuid4()), "exp": int(time.time()) + 300,
+        "https://forge/tenant_id": "00000000-0000-0000-0000-000000000001",
+        "realm_access": {"roles": ["user"]}},
+    key_ring=ring, issuer=os.environ["GATEKEEPER_ISSUER"],
+    audience=os.environ["INTERNAL_TOKEN_AUDIENCE"], ttl_seconds=300,
+)
+base = "{base_url}/api/v1/items"
+
+def call(url=base, method="GET", body=None, bearer=token):
+    headers = {"Content-Type": "application/json"}
+    if bearer:
+        headers["Authorization"] = "Bearer " + bearer
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body else None,
+        method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+assert call(bearer=None)[0] in (401, 403)
+assert call(bearer="not.a.jwt")[0] in (401, 403)
+status, raw = call(method="POST", body={"name": "Direct route fixture"})
+assert status == 201, (status, raw)
+item = json.loads(raw)
+assert call(base + "/" + item["id"])[0] == 200
+assert call(base + "/" + item["id"], method="DELETE")[0] == 204
+print("DIRECT_API_OK")
+"""
+
+
 def test_monolithic_platform_boots_and_serves(tmp_path: Path, require_docker: None) -> None:
     """`--platform monolithic`: backend boots, connects to postgres, serves CRUD."""
     root = _forge_generate("monolithic", "monoboot", tmp_path)
@@ -192,7 +272,8 @@ def test_monolithic_platform_boots_and_serves(tmp_path: Path, require_docker: No
         _wait_healthy(root, ["backend"])
         assert "HEALTH_OK" in _exec_py(root, "backend", _HEALTH_SCRIPT.format(port=5000))
         items = _exec_py(
-            root, "backend",
+            root,
+            "backend",
             "import urllib.request; print(urllib.request.urlopen("
             "'http://localhost:5000/api/v1/items', timeout=10).status)",
         )
@@ -201,27 +282,33 @@ def test_monolithic_platform_boots_and_serves(tmp_path: Path, require_docker: No
         _teardown(root)
 
 
-def test_headless_api_platform_s2s_round_trip(tmp_path: Path, require_docker: None) -> None:
-    """`--platform headless-api`: gatekeeper + 2 services boot; a live S2S token
-    minted from the synthesized registry secret is accepted by the downstream."""
+def test_headless_api_platform_direct_authenticated_api(
+    tmp_path: Path, require_docker: None
+) -> None:
+    """One domain API boots and validates Gatekeeper tokens without a proxy."""
     root = _forge_generate("headless-api", "hapiboot", tmp_path)
     try:
+        assert "gateway" not in _services(root)
+        assert not (root / "services/orders/src/app/gateway").exists()
         _boot(root)
-        _wait_healthy(root, ["keycloak", "gatekeeper", "gateway", "orders"])
+        _wait_healthy(root, ["keycloak", "gatekeeper", "orders"])
         assert "HEALTH_OK" in _exec_py(root, "orders", _HEALTH_SCRIPT.format(port=5020))
-        assert "S2S_OK" in _exec_py(root, "gateway", _S2S_SCRIPT)
+        script = _DIRECT_API_SCRIPT.replace("{base_url}", "http://orders:5020")
+        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", script)
     finally:
         _teardown(root)
 
 
 def test_microservices_platform_s2s_round_trip(tmp_path: Path, require_docker: None) -> None:
-    """`--platform microservices`: the full synthesis stack (3 services + event
-    bus + frontend) boots and the S2S round-trip works."""
+    """Two directly routed domain services boot and orders can call inventory."""
     root = _forge_generate("microservices", "msvcboot", tmp_path)
     try:
         _boot(root)
-        _wait_healthy(root, ["keycloak", "gatekeeper", "gateway", "orders", "inventory"])
-        assert "S2S_OK" in _exec_py(root, "gateway", _S2S_SCRIPT)
+        assert "gateway" not in _services(root)
+        _wait_healthy(root, ["keycloak", "gatekeeper", "orders", "inventory"])
+        assert "S2S_OK" in _exec_py(root, "orders", _S2S_SCRIPT)
+        script = _DIRECT_API_SCRIPT.replace("{base_url}", "http://orders:5020")
+        assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", script)
     finally:
         _teardown(root)
 
@@ -231,9 +318,9 @@ def test_multitenant_saas_platform_boots_and_serves(tmp_path: Path, require_dock
     gatekeeper + the TMS control plane + the RLS-isolated app service — boots and
     both backend tiers serve their health surface in-network.
 
-    (No S2S round-trip here: this preset puts the gatekeeper at the edge rather
-    than synthesizing an api-gateway, so the `_S2S_SCRIPT` env contract that the
-    microservices/headless presets rely on isn't present.)
+    (No S2S round-trip here: this preset leaves service discovery disabled,
+    as documented in the platform guide, so `_S2S_SCRIPT`'s synthesized
+    client-credential and downstream-URL env contract is not present.)
     """
     root = _forge_generate("multitenant-saas", "mtsaasboot", tmp_path)
     try:

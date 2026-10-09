@@ -6,11 +6,11 @@ import {
   Pin,
   PinOff,
   RotateCcw,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Button } from '@/shared/ui/button'
 import { Checkbox } from './checkbox'
-import type { ColumnPinningState } from '@tanstack/vue-table'
+import type { ColumnPinningState } from './useColumnPinning'
 import type { PinSide } from './useDataTable'
 
 export interface ColumnManagerColumn {

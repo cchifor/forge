@@ -7,8 +7,8 @@ name: E2E platform boot
 # zero signal and had a ~24h blind window — which is exactly how the
 # multitenant-saas preset shipped red for three nights before #245. This lane
 # closes that window: it runs the heaviest preset (multitenant-saas, a full
-# Keycloak + Gatekeeper + TMS + RLS-app boot) plus one synthesis S2S
-# round-trip (microservices) on any PR that changes platform / deploy /
+# Keycloak + Gatekeeper + TMS + RLS-app boot), direct headless API coverage,
+# and a synthesis S2S round-trip (microservices) on any PR that changes platform / deploy /
 # synthesis / TMS / crud-base templates. Mirrors ci.yml::matrix-smoke-fast in
 # spirit (a fast, targeted compose check on the PR path).
 #
@@ -21,6 +21,8 @@ on:
       - "forge/templates/deploy/**"
       - "forge/synthesis/**"
       - "forge/templates/services/python/tenant-management-service/**"
+      - "forge/templates/services/python/service-proxy/**"
+      - "forge/templates/services/python/api-gateway/**"
       - "forge/templates/services/python-service-template/**"
       - "tests/e2e/test_platform_compose_boot.py"
       - ".github/workflows/e2e-platform-boot.yml"
@@ -35,13 +37,14 @@ concurrency:
 
 jobs:
   platform-boot:
-    name: platform compose-boot (multitenant-saas + S2S)
+    name: platform compose-boot (direct APIs + multitenant-saas + S2S)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          prune-cache: true
           enable-cache: true
       - name: Install Python 3.13
         run: uv python install 3.13
@@ -55,7 +58,8 @@ jobs:
         # docker + docker compose are preinstalled on ubuntu-latest. The
         # platform presets are Python-only (tms + app are FastAPI), so no
         # node/rust/flutter toolchains are needed here. ``-k`` selects the
-        # heaviest boot (multitenant-saas) + one S2S round-trip (microservices).
+        # heaviest boot (multitenant-saas), direct API (headless-api), and
+        # domain-to-domain S2S round-trip (microservices).
         env:
           FORGE_E2E_PLATFORM: "1"
-        run: uv run pytest tests/e2e/test_platform_compose_boot.py -m e2e -v -rs --no-cov -k "multitenant_saas or microservices"
+        run: uv run pytest tests/e2e/test_platform_compose_boot.py -m e2e -v -rs --no-cov -k "multitenant_saas or microservices or headless_api"

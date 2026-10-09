@@ -16,14 +16,14 @@ import type { DataTableColumnDef } from './types'
  * The ``alwaysVisible`` flag locks this column at the front of the
  * left-pinned list and excludes it from the column-manager menu.
  */
-const SELECT_DESCRIPTOR: DataTableColumnDef<unknown> = {
+const SELECT_DESCRIPTOR: DataTableColumnDef<object> = {
   id: 'select',
   meta: {
     alwaysVisible: true,
     enableResizing: false,
     enablePinning: false,
   },
-} as DataTableColumnDef<unknown>
+} as DataTableColumnDef<object>
 
 /**
  * Single source of truth for the column list every column composable
@@ -36,13 +36,13 @@ const SELECT_DESCRIPTOR: DataTableColumnDef<unknown> = {
  * Defensive: if a caller hand-rolls a ``select`` column (with a custom
  * header / cell), we leave it alone — the caller's column wins.
  */
-export function useAugmentedColumns<T>(
+export function useAugmentedColumns<T extends object>(
   columns: MaybeRefOrGetter<DataTableColumnDef<T>[]>,
   enableRowSelection: boolean,
-): ComputedRef<DataTableColumnDef<unknown>[]> {
+): ComputedRef<DataTableColumnDef<object>[]> {
   const columnsGetter = () => toValue(columns)
   return computed(() => {
-    const user = columnsGetter() as DataTableColumnDef<unknown>[]
+    const user = columnsGetter() as DataTableColumnDef<object>[]
     if (!enableRowSelection) return user
     const hasSelect = user.some(
       (c) =>

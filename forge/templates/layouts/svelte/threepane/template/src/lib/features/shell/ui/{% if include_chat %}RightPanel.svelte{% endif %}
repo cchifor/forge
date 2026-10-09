@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { MessageSquare, LayoutPanelLeft, PanelRightClose } from 'lucide-svelte';
-	import { AiChat, CanvasPane, getChatStore } from '$lib/features/chat';
-	import type { ChatMode } from '$lib/features/shell';
+	import { MessageSquare, LayoutPanelLeft, PanelRightClose } from '@lucide/svelte';
+	import { AiChat, CanvasPane, getChatStore } from '#lib/features/chat/index.ts';
+	import type { ChatMode } from '#lib/features/shell/index.ts';
 
 	let {
 		mode = 'inline',

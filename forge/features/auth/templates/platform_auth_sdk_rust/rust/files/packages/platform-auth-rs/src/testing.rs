@@ -11,20 +11,16 @@
 //! three SDKs verify identically. The shared parity-fixture suite at
 //! `forge/tests/contract/auth_sdk_parity/` pins this contract.
 //!
-//! Available behind no feature gate so production builds can also
-//! mint a token if they need to (rare — typically for break-glass
-//! tooling); the dev-dependencies that drive keypair generation
-//! (`p256`, `ecdsa`, `rand`) keep this module's compile cost
-//! contained.
+//! Enable the `testing` feature to compile these helpers and their optional
+//! key-generation dependencies (`p256`, `ecdsa`, `rand`).
 
 use std::collections::HashMap;
 
 use ecdsa::SigningKey;
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use p256::NistP256;
-use rand::rngs::OsRng;
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use p256::{NistP256, elliptic_curve::Generate};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::errors::AuthError;
 
@@ -51,7 +47,7 @@ impl TestEcdsaKeypair {
     pub fn generate_with_kid(kid: impl Into<String>) -> Result<Self, AuthError> {
         use p256::pkcs8::{EncodePrivateKey, EncodePublicKey};
 
-        let signing_key: SigningKey<NistP256> = SigningKey::random(&mut OsRng);
+        let signing_key: SigningKey<NistP256> = SigningKey::generate_from_rng(&mut rand::rng());
         let private_pem = signing_key
             .to_pkcs8_pem(p256::pkcs8::LineEnding::LF)
             .map_err(|e| AuthError::InvalidToken(format!("private PEM encode: {e}")))?
@@ -71,13 +67,13 @@ impl TestEcdsaKeypair {
     /// JWKS document. The JWK carries `kid`/`alg`/`use` so the
     /// resulting JWKS is directly usable by AuthGuard's verifier.
     pub fn public_jwk(&self) -> Result<Value, AuthError> {
-        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-        use p256::elliptic_curve::sec1::ToEncodedPoint;
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        use p256::elliptic_curve::sec1::ToSec1Point;
         use p256::pkcs8::DecodePublicKey;
 
         let public_key = p256::PublicKey::from_public_key_pem(&self.public_pem)
             .map_err(|e| AuthError::InvalidToken(format!("public PEM decode: {e}")))?;
-        let point = public_key.to_encoded_point(false);
+        let point = public_key.to_sec1_point(false);
         // Strip the SEC1 leading 0x04 (uncompressed point marker) and
         // split the remainder into the x/y coordinate halves.
         let bytes = point.as_bytes();
@@ -290,13 +286,11 @@ fn chrono_now() -> i64 {
 }
 
 fn random_jti() -> String {
-    use rand::Rng;
-    let n: u64 = rand::thread_rng().gen();
+    let n: u64 = rand::random();
     format!("test-jti-{n:x}")
 }
 
 fn random_kid() -> String {
-    use rand::Rng;
-    let n: u64 = rand::thread_rng().gen();
+    let n: u64 = rand::random();
     format!("{n:x}")
 }

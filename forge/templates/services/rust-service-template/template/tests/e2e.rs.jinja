@@ -1,0 +1,84 @@
+use {{ project_name | replace('-', '_') }}::app::create_app;
+
+#[tokio::test]
+async fn real_network_lifecycle() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://localhost/unused")
+        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (shutdown, stop) = tokio::sync::oneshot::channel::<()>();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, create_app(pool))
+            .with_graceful_shutdown(async {
+                let _ = stop.await;
+            })
+            .await
+            .unwrap();
+    });
+    let response = reqwest::get(format!("http://{address}/api/v1/health/live")).await;
+    shutdown.send(()).unwrap();
+    task.await.unwrap();
+    let response = response.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(
+        response.json::<serde_json::Value>().await.unwrap()["status"],
+        "UP"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn actual_service_binary_starts_and_stops_gracefully() {
+    use std::process::{Command, Stdio};
+    let port = {
+        let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        socket.local_addr().unwrap().port()
+    };
+    let mut child = Command::new(env!("CARGO_BIN_EXE_{{ project_name }}"))
+        .env("ENV", "testing")
+        .env("PORT", port.to_string())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    let client = reqwest::Client::new();
+    let mut ready = false;
+    for _ in 0..100 {
+        if let Ok(response) = client
+            .get(format!("http://127.0.0.1:{port}/api/v1/health/live"))
+            .send()
+            .await
+        {
+            ready = response.status().is_success();
+            break;
+        }
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let mut info_ok = false;
+    if ready {
+        info_ok = client
+            .get(format!("http://127.0.0.1:{port}/api/v1/info"))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+    }
+    let _ = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status();
+    let status = child.wait().unwrap();
+    assert!(ready, "service did not become live");
+    assert!(info_ok);
+    assert!(status.success());
+}
+
+#[test]
+fn migration_binary_applies_database_schema() {
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_migrate"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+}

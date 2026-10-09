@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { Sun, Moon, Monitor, ChevronRight, Sparkles } from 'lucide-svelte';
+	import { appPath } from '#lib/shared/lib/paths.ts';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { Sun, Moon, Monitor, ChevronRight, Sparkles } from '@lucide/svelte';
 	import { Tooltip } from 'bits-ui';
-	import { getSettingsStore } from '$lib/features/settings';
-	import { getUiStore } from '$lib/features/shell';
+	import { getSettingsStore } from '#lib/features/settings/index.ts';
+	import { getUiStore } from '#lib/features/shell/index.ts';
 
 	const settings = getSettingsStore();
 	const ui = getUiStore();
@@ -18,7 +20,7 @@
 	};
 
 	const breadcrumbs = $derived(() => {
-		const pathname = $page.url.pathname;
+		const pathname = '/' + appPath(page.url.pathname, resolve(''));
 		const crumbs: { label: string; href?: string }[] = [];
 
 		if (pathname === '/') {
@@ -48,7 +50,7 @@
 	});
 
 	const currentPageTitle = $derived(() => {
-		const pathname = $page.url.pathname;
+		const pathname = '/' + appPath(page.url.pathname, resolve(''));
 		return routeTitleMap[pathname] ?? 'Detail';
 	});
 
@@ -63,13 +65,13 @@
 		<span class="text-sm font-medium">{currentPageTitle()}</span>
 	{:else}
 		<nav class="flex items-center gap-1.5 text-sm">
-			{#each breadcrumbs() as crumb, i}
+			{#each breadcrumbs() as crumb, i (crumb.href ?? crumb.label)}
 				{#if i > 0}
 					<ChevronRight class="h-3.5 w-3.5 text-muted-foreground" />
 				{/if}
 				{#if crumb.href}
 					<a
-						href={crumb.href}
+						href={resolve(appPath(crumb.href))}
 						class="text-muted-foreground transition-colors hover:text-foreground"
 					>
 						{crumb.label}

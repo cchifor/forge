@@ -31,3 +31,7 @@ pub mod services;
 // FORGE:BEGIN reliability_connection_pool:LIB_MOD_REGISTRATION
 pub mod db_pool;
 // FORGE:END reliability_connection_pool:LIB_MOD_REGISTRATION
+
+#[cfg(test)]
+#[path = "../tests/unit/contracts.rs"]
+mod unit_tests;

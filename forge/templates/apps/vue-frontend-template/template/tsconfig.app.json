@@ -18,7 +18,6 @@
       "@/*": ["./src/*"],
       "@forge/canvas-core": ["./src/features/ai_chat/canvas-core/index.ts"]
     },
-    "baseUrl": ".",
     "types": ["vite/client"]
   },
   "include": [

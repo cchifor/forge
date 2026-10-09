@@ -96,14 +96,14 @@ def test_compose_up_failure_dumps_diagnostics(tmp_path, monkeypatch):
 
     # Pretend docker is on PATH — the lane short-circuits to skip
     # otherwise.
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None
+    )
 
     # Stub generate() so we don't pay for a real generate. The
     # function returns a project_root with a docker-compose.yml file
     # the lane can find.
-    monkeypatch.setattr(
-        "forge.generator.generate", _fake_generate(tmp_path)
-    )
+    monkeypatch.setattr("forge.generator.generate", _fake_generate(tmp_path))
 
     # Stub _build_config + validate to no-op so the lane proceeds.
     fake_config = MagicMock()
@@ -160,6 +160,13 @@ def test_compose_up_failure_dumps_diagnostics(tmp_path, monkeypatch):
         f"FORGE_MATRIX_LOG_DIR missing {ps_file} — diagnostic dump did not fire on "
         f"compose-up failure path; invocations: {seen_invocations}"
     )
+    cleanup = [cmd for cmd in seen_invocations if "down" in cmd]
+    assert len(cleanup) == 1
+    assert "-v" in cleanup[0]
+    assert "--remove-orphans" in cleanup[0]
+    assert seen_invocations.index(cleanup[0]) > next(
+        i for i, cmd in enumerate(seen_invocations) if "logs" in cmd
+    )
 
 
 def test_diagnostics_dump_skipped_when_log_dir_unset(tmp_path, monkeypatch):
@@ -170,10 +177,10 @@ def test_diagnostics_dump_skipped_when_log_dir_unset(tmp_path, monkeypatch):
     clean FAIL/OK result without trying to write to a None path.
     """
     monkeypatch.delenv("FORGE_MATRIX_LOG_DIR", raising=False)
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None)
     monkeypatch.setattr(
-        "forge.generator.generate", _fake_generate(tmp_path)
+        "shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None
     )
+    monkeypatch.setattr("forge.generator.generate", _fake_generate(tmp_path))
 
     fake_config = MagicMock()
     fake_config.backends = []
@@ -208,9 +215,7 @@ class TestDiffProjectTreesNormalizedExclusions:
     weaken the FR2 contract.
     """
 
-    def test_returns_empty_when_only_excluded_artefacts_differ(
-        self, tmp_path: Path
-    ):
+    def test_returns_empty_when_only_excluded_artefacts_differ(self, tmp_path: Path):
         from tests.matrix.runner import _diff_project_trees_normalized
 
         a = tmp_path / "a"
@@ -242,9 +247,7 @@ class TestDiffProjectTreesNormalizedExclusions:
         (b / "shared/real.py").write_text("def x(): return 1\n")
 
         diff = _diff_project_trees_normalized(a, b)
-        assert diff == [], (
-            f"FR2 diff must ignore generated artefacts; got: {diff}"
-        )
+        assert diff == [], f"FR2 diff must ignore generated artefacts; got: {diff}"
 
     def test_returns_non_empty_when_real_files_differ(self, tmp_path: Path):
         """Regression — a real content difference must still surface,
@@ -261,9 +264,63 @@ class TestDiffProjectTreesNormalizedExclusions:
         (b / "real.py").write_text("b content\n")
 
         diff = _diff_project_trees_normalized(a, b)
-        assert diff == ["real.py"], (
-            f"real.py difference must surface, but got: {diff}"
-        )
+        assert diff == ["real.py"], f"real.py difference must surface, but got: {diff}"
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            "identity",
+            "config",
+            "plugins",
+            "version",
+            "missing",
+            "invalid",
+            "empty_requirement",
+            "invalid_vcs",
+            "mismatched_version",
+            "other_remote",
+        ],
+    )
+    def test_quality_recipe_only_normalizes_generator_identity(self, tmp_path: Path, change: str):
+        import json
+
+        from tests.matrix.runner import _diff_project_trees_normalized
+
+        a, b = tmp_path / "a", tmp_path / "b"
+        recipe = {
+            "generator_requirement": "forge-cli @ git+https://github.com/cchifor/forge@" + "a" * 40,
+            "generator_sha256": "a" * 64,
+            "generator_version": "1.2.0",
+            "plugin_requirements": [],
+            "config": {"project_name": "Roundtrip", "include_keycloak": True},
+        }
+        for root in (a, b):
+            (root / ".forge").mkdir(parents=True)
+        (a / ".forge/quality.json").write_text(json.dumps(recipe))
+        recipe.update(generator_requirement="forge-cli==1.2.0", generator_sha256="b" * 64)
+        if change == "config":
+            recipe["config"]["include_keycloak"] = False
+        elif change == "plugins":
+            recipe["plugin_requirements"] = ["other-plugin==1.0"]
+        elif change == "version":
+            recipe["generator_version"] = "2.0.0"
+        elif change == "missing":
+            del recipe["generator_sha256"]
+        elif change == "invalid":
+            recipe["generator_sha256"] = "invalid"
+        elif change == "empty_requirement":
+            recipe["generator_requirement"] = "forge-cli=="
+        elif change == "invalid_vcs":
+            recipe["generator_requirement"] = "forge-cli @ git+"
+        elif change == "mismatched_version":
+            recipe["generator_requirement"] = "forge-cli==2.0.0"
+        elif change == "other_remote":
+            recipe["generator_requirement"] = (
+                "forge-cli @ git+https://example.com/forge@" + "a" * 40
+            )
+        (b / ".forge/quality.json").write_text(json.dumps(recipe))
+        expected = [] if change == "identity" else [".forge/quality.json"]
+        assert _diff_project_trees_normalized(a, b) == expected
 
 
 class TestLaneDEmptyCandidateGate:
@@ -450,8 +507,7 @@ class TestLaneDLiveTreeSandbox:
             p.relative_to(live).as_posix() for p in (live / "forge").rglob("inject.yaml")
         )
         sandbox_yamls = sorted(
-            p.relative_to(sandbox).as_posix()
-            for p in (sandbox / "forge").rglob("inject.yaml")
+            p.relative_to(sandbox).as_posix() for p in (sandbox / "forge").rglob("inject.yaml")
         )
         assert sandbox_yamls == live_yamls, (
             "sandbox missing inject.yaml files copied from live tree — "
@@ -502,9 +558,7 @@ class TestLaneDLiveTreeSandbox:
         sandbox = _materialize_forge_sandbox(tmp_path / "sandbox")
         rel = live_yaml.relative_to(live)
         sandbox_yaml = sandbox / rel
-        assert sandbox_yaml.is_file(), (
-            f"sandbox should have a mirrored copy of {rel.as_posix()!r}"
-        )
+        assert sandbox_yaml.is_file(), f"sandbox should have a mirrored copy of {rel.as_posix()!r}"
 
         # Drive a non-trivial mutation on the sandbox copy.
         sandbox_doc = _yaml.safe_load(sandbox_yaml.read_text(encoding="utf-8")) or []
@@ -680,6 +734,7 @@ class TestSkippedLaneAnnotations:
         assert "1 sub-check(s) skipped" in summary
         # Empty when nothing was skipped — silent on the happy path.
         assert _format_skip_summary([results[-1]]) == ""
+
 
 def test_smoke_compose_up_uses_build(tmp_path, monkeypatch):
     """Lane C must ``compose up --build`` so it tests the CURRENT generated

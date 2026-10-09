@@ -201,7 +201,7 @@ import {{ {singular}Schema, paginated{Singular}ResponseSchema }} from './{singul
 
 describe('{singular}Schema', () => {{
   const valid{Singular} = {{
-    id: '00000000-0000-0000-0000-000000000001',
+    id: '00000000-0000-4000-8000-000000000001',
     name: 'Test {Singular}',
     description: null,
     created_at: '2026-01-01T00:00:00Z',
@@ -224,7 +224,7 @@ describe('paginated{Singular}ResponseSchema', () => {{
   it('parses a valid paginated response', () => {{
     const response = {{
       items: [{{
-        id: '00000000-0000-0000-0000-000000000001',
+        id: '00000000-0000-4000-8000-000000000001',
         name: '{Singular}',
         description: null,
         created_at: null,
@@ -249,7 +249,7 @@ LIST_PAGE_TEMPLATE = """\
 <script setup lang="ts">
 import {{ ref, computed, watch }} from 'vue'
 import {{ useRouter }} from 'vue-router'
-import {{ Plus, Search, X, Trash2, Eye, MoreHorizontal, Package }} from 'lucide-vue-next'
+import {{ Plus, Search, X, Trash2, Eye, MoreHorizontal, Package }} from '@lucide/vue'
 import {{ toast }} from 'vue-sonner'
 import {{ Card, CardContent }} from '@/shared/ui/card'
 import {{ Button }} from '@/shared/ui/button'
@@ -428,7 +428,7 @@ CREATE_PAGE_TEMPLATE = """\
 <script setup lang="ts">
 import {{ ref }} from 'vue'
 import {{ useRouter }} from 'vue-router'
-import {{ ArrowLeft, Loader2 }} from 'lucide-vue-next'
+import {{ ArrowLeft, Loader2 }} from '@lucide/vue'
 import {{ toast }} from 'vue-sonner'
 import {{ Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }} from '@/shared/ui/card'
 import {{ Button }} from '@/shared/ui/button'
@@ -510,7 +510,7 @@ DETAIL_PAGE_TEMPLATE = """\
 <script setup lang="ts">
 import {{ ref, watch }} from 'vue'
 import {{ useRouter }} from 'vue-router'
-import {{ ArrowLeft, Pencil, Trash2, Save, X, Loader2 }} from 'lucide-vue-next'
+import {{ ArrowLeft, Pencil, Trash2, Save, X, Loader2 }} from '@lucide/vue'
 import {{ toast }} from 'vue-sonner'
 import {{ Card, CardHeader, CardTitle, CardContent, CardFooter }} from '@/shared/ui/card'
 import {{ Button }} from '@/shared/ui/button'
@@ -644,14 +644,14 @@ import {{ http, HttpResponse }} from 'msw'
 
 const mock{Plural} = [
   {{
-    id: '00000000-0000-0000-0000-000000000010',
+    id: '00000000-0000-4000-8000-000000000010',
     name: 'Test {Singular} 1',
     description: 'First test {singular}',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: null,
   }},
   {{
-    id: '00000000-0000-0000-0000-000000000020',
+    id: '00000000-0000-4000-8000-000000000020',
     name: 'Test {Singular} 2',
     description: null,
     created_at: '2026-02-01T00:00:00Z',
@@ -696,7 +696,7 @@ export const {plural}Handlers = [
     const body = (await request.json()) as Record<string, unknown>
     return HttpResponse.json(
       {{
-        id: '00000000-0000-0000-0000-000000000099',
+        id: '00000000-0000-4000-8000-000000000099',
         name: body.name,
         description: body.description ?? null,
         created_at: new Date().toISOString(),

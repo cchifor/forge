@@ -74,7 +74,9 @@ def test_api_gateway_not_valid_for_node():
 # --- (b) INTEGRATION: real two-stage render path ---------------------------
 
 
-def _render_gateway(tmp_path: Path, name: str = "edge-gateway") -> Path:
+def _render_gateway(
+    tmp_path: Path, name: str = "edge-gateway", variant: str = "api-gateway"
+) -> Path:
     cfg = ProjectConfig(
         project_name="gw_demo",
         output_dir=str(tmp_path),
@@ -83,7 +85,7 @@ def _render_gateway(tmp_path: Path, name: str = "edge-gateway") -> Path:
                 name=name,
                 project_name="gw_demo",
                 language=BackendLanguage.PYTHON,
-                app_template="api-gateway",
+                app_template=variant,
                 features=["items"],
             )
         ],
@@ -189,3 +191,26 @@ def test_downstreams_and_s2s_module_contracts(tmp_path: Path):
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
     assert "auth_header" in s2s_methods
+
+
+@pytest.mark.parametrize("variant", ["service-proxy", "api-gateway"])
+def test_service_proxy_names_share_the_implementation(variant):
+    template = bat.get_backend_application_template(BackendLanguage.PYTHON, variant)
+    assert template is not None
+    assert template.template_dir == _TEMPLATE_DIR
+    assert template.base_template_dir == _BASE
+    assert "service proxy" in template.display_label
+    BackendConfig(name="proxy", language=BackendLanguage.PYTHON, app_template=variant).validate()
+    assert bat.get_backend_application_template(BackendLanguage.NODE, variant) is None
+
+
+def test_service_proxy_keeps_legacy_modules_and_routes(tmp_path):
+    legacy = _render_gateway(tmp_path / "legacy", name="proxy", variant="api-gateway")
+    preferred = _render_gateway(tmp_path / "preferred", name="proxy", variant="service-proxy")
+    for relative in (
+        "src/app/api/v1/api.py",
+        "src/app/api/v1/endpoints/gateway.py",
+        "src/app/gateway/downstreams.py",
+        "src/app/gateway/s2s_client.py",
+    ):
+        assert (preferred / relative).read_bytes() == (legacy / relative).read_bytes()

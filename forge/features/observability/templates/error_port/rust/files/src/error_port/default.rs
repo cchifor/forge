@@ -32,7 +32,7 @@ impl ErrorPort for DefaultErrorPort {
             return ErrorEnvelope {
                 error: ErrorBody {
                     code: app_err.code().as_str().to_string(),
-                    message: app_err.to_string(),
+                    message: app_err.public_message(),
                     type_name: app_err.type_name().to_string(),
                     context: app_err_context(app_err),
                     correlation_id: String::new(),

@@ -1,28 +1,56 @@
 {
   "files": {
+    ".agents/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".agents/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
+    ".claude/settings.json": {
+      "size": 69,
+      "sha256": "062d78308067ddd1"
+    },
+    ".claude/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".claude/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
     ".editorconfig": {
       "size": 580,
       "sha256": "2ac15b8600196a9b"
     },
+    ".forge/quality.json": {
+      "size": 721,
+      "sha256": "750efea627473756"
+    },
     ".github/workflows/ci.yml": {
-      "size": 1170,
-      "sha256": "d2449537de9472c9"
+      "size": 1089,
+      "sha256": "3a519b182478cbdf"
+    },
+    ".github/workflows/quality.yml": {
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
-      "size": 491,
-      "sha256": "3f1ced030f22fea7"
+      "size": 523,
+      "sha256": "99517caa29227052"
     },
     ".pre-commit-config.yaml": {
       "size": 471,
       "sha256": "52e8e600cab57fa5"
     },
     "AGENTS.md": {
-      "size": 2577,
-      "sha256": "27cb9957eec7caf9"
+      "size": 1814,
+      "sha256": "9d1d4cc2595631d1"
     },
     "CLAUDE.md": {
-      "size": 1912,
-      "sha256": "ae83d48b4638adaf"
+      "size": 100,
+      "sha256": "77ac9733140f48bb"
     },
     "deploy/infra/nginx-csp.conf": {
       "size": 1661,
@@ -33,11 +61,11 @@
       "sha256": "0d5d5e297f0ee7a4"
     },
     "forge.toml": {
-      "size": 47264,
+      "size": 53110,
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
-      "size": 533,
+      "size": 546,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -109,8 +137,8 @@
       "sha256": "df2a39103908a6ed"
     },
     "services/api/pyproject.toml": {
-      "size": 4803,
-      "sha256": "098e76dab2bc3a56"
+      "size": 4782,
+      "sha256": "56fbdb0c53b11c72"
     },
     "services/api/sdks/forge-core/pyproject.toml": {
       "size": 1613,
@@ -301,16 +329,16 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/api.py": {
-      "size": 455,
-      "sha256": "dae7e436261107ab"
+      "size": 456,
+      "sha256": "dc0d0f332efb5cb7"
     },
     "services/api/src/app/api/v1/endpoints/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/api/v1/endpoints/admin.py": {
-      "size": 2952,
-      "sha256": "d9627fdb6403d324"
+      "size": 2918,
+      "sha256": "32cddbe55cf8be29"
     },
     "services/api/src/app/api/v1/endpoints/health.py": {
       "size": 1505,
@@ -322,11 +350,11 @@
     },
     "services/api/src/app/api/v1/endpoints/items.py": {
       "size": 3369,
-      "sha256": "559c69369f87b815"
+      "sha256": "9e794f143b758941"
     },
     "services/api/src/app/cli/__init__.py": {
-      "size": 306,
-      "sha256": "3477cf9420b43306"
+      "size": 307,
+      "sha256": "8513702a5bd16c8e"
     },
     "services/api/src/app/cli/db.py": {
       "size": 1016,
@@ -345,8 +373,8 @@
       "sha256": "d9795309dc89bd45"
     },
     "services/api/src/app/core/config/domain.py": {
-      "size": 7184,
-      "sha256": "ad1c79b321fcc5fa"
+      "size": 7181,
+      "sha256": "0ad8006e87e54a4a"
     },
     "services/api/src/app/core/config/loader.py": {
       "size": 3530,
@@ -365,12 +393,12 @@
       "sha256": "112704f0cb4111ea"
     },
     "services/api/src/app/core/db_pool.py": {
-      "size": 1399,
-      "sha256": "fc4828a16e0ccc77"
+      "size": 1391,
+      "sha256": "bb9b532d9b2aa7b4"
     },
     "services/api/src/app/core/errors.py": {
-      "size": 17806,
-      "sha256": "b4d012a62bb5272b"
+      "size": 17805,
+      "sha256": "698342351b7ce3c0"
     },
     "services/api/src/app/core/ioc/__init__.py": {
       "size": 437,
@@ -378,19 +406,19 @@
     },
     "services/api/src/app/core/ioc/infra.py": {
       "size": 1888,
-      "sha256": "ba1da5b926b63cb9"
+      "sha256": "1a6506525224676e"
     },
     "services/api/src/app/core/ioc/security.py": {
-      "size": 2355,
-      "sha256": "ba49ab687401804f"
+      "size": 2354,
+      "sha256": "aeebf8f7b911c784"
     },
     "services/api/src/app/core/ioc/services.py": {
       "size": 616,
       "sha256": "ec360ce5bde7f803"
     },
     "services/api/src/app/core/lifecycle.py": {
-      "size": 5682,
-      "sha256": "c1283c0ad76f63b7"
+      "size": 5795,
+      "sha256": "8e19e8a466b872fd"
     },
     "services/api/src/app/core/pii_redaction.py": {
       "size": 2600,
@@ -406,7 +434,7 @@
     },
     "services/api/src/app/data/models/audit.py": {
       "size": 1490,
-      "sha256": "a21f28aa905916f4"
+      "sha256": "6416c00e17069e27"
     },
     "services/api/src/app/data/models/base.py": {
       "size": 216,
@@ -414,19 +442,19 @@
     },
     "services/api/src/app/data/models/item.py": {
       "size": 1036,
-      "sha256": "3183917dc2c32d13"
+      "sha256": "bf3b2005304be824"
     },
     "services/api/src/app/data/repositories/__init__.py": {
       "size": 0,
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/data/repositories/base_tenant_aware.py": {
-      "size": 2340,
-      "sha256": "600f2106284e1085"
+      "size": 2310,
+      "sha256": "3316dc731f298436"
     },
     "services/api/src/app/data/repositories/item_repository.py": {
       "size": 2566,
-      "sha256": "d7e903b8aa3c83a4"
+      "sha256": "728686866e1ff03a"
     },
     "services/api/src/app/domain/__init__.py": {
       "size": 0,
@@ -437,12 +465,12 @@
       "sha256": "c65d6235b6631cea"
     },
     "services/api/src/app/domain/canvas_events.py": {
-      "size": 2498,
-      "sha256": "5f7a08d5b974005a"
+      "size": 2506,
+      "sha256": "c6b4774852475d5a"
     },
     "services/api/src/app/domain/canvas_props.py": {
-      "size": 1601,
-      "sha256": "b5578609c8b014d1"
+      "size": 1578,
+      "sha256": "c88c83734c2fb1c4"
     },
     "services/api/src/app/domain/enums/approval_mode.py": {
       "size": 312,
@@ -462,11 +490,11 @@
     },
     "services/api/src/app/domain/ui_protocol.py": {
       "size": 2193,
-      "sha256": "ea3e9cb23e04dc3d"
+      "sha256": "44b661c1caec1842"
     },
     "services/api/src/app/main.py": {
-      "size": 5582,
-      "sha256": "e7a79cfa7edff2a5"
+      "size": 5777,
+      "sha256": "81c779ad0528f305"
     },
     "services/api/src/app/middleware/__init__.py": {
       "size": 0,
@@ -477,20 +505,20 @@
       "sha256": "102f4d35b032f83d"
     },
     "services/api/src/app/middleware/body_limit.py": {
-      "size": 3120,
-      "sha256": "b83b5266cabcaeb9"
+      "size": 3036,
+      "sha256": "6b05ddb417be48c9"
     },
     "services/api/src/app/middleware/correlation.py": {
       "size": 1275,
-      "sha256": "bf935eaf8b47abf3"
+      "sha256": "9755151b405e0d0f"
     },
     "services/api/src/app/middleware/logging.py": {
       "size": 5497,
       "sha256": "b4fe5bc69a8b07e2"
     },
     "services/api/src/app/middleware/rate_limit.py": {
-      "size": 5300,
-      "sha256": "019e1aa33f277e91"
+      "size": 5301,
+      "sha256": "ae03e8ff0673881b"
     },
     "services/api/src/app/middleware/security_headers.py": {
       "size": 2305,
@@ -505,12 +533,12 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "services/api/src/app/services/health_service.py": {
-      "size": 1109,
-      "sha256": "ff38f8453a1a6ea2"
+      "size": 1110,
+      "sha256": "c667ea4a5d840ed7"
     },
     "services/api/src/app/services/item_service.py": {
-      "size": 2533,
-      "sha256": "382614b2222f4045"
+      "size": 2534,
+      "sha256": "0d3ce8ef78eeab73"
     },
     "services/api/tests/__init__.py": {
       "size": 0,
@@ -519,6 +547,14 @@
     "services/api/tests/conftest.py": {
       "size": 587,
       "sha256": "48dac8b69543cab8"
+    },
+    "services/api/tests/e2e/test_network.py": {
+      "size": 1265,
+      "sha256": "48b1a2c8b792bf29"
+    },
+    "services/api/tests/integration/test_application.py": {
+      "size": 2383,
+      "sha256": "81b5b8f2882907da"
     },
     "services/api/tests/unit/__init__.py": {
       "size": 0,
@@ -529,68 +565,72 @@
       "sha256": "0667082bdaf3cf68"
     },
     "services/api/tests/unit/test_app_errors.py": {
-      "size": 7527,
-      "sha256": "9e9798b0d41355f9"
+      "size": 7483,
+      "sha256": "42883eed7a0d73f4"
     },
     "services/api/tests/unit/test_app_main.py": {
-      "size": 1796,
-      "sha256": "ffb377d5c15b6d0f"
+      "size": 1925,
+      "sha256": "1b1774d8770720db"
     },
     "services/api/tests/unit/test_config.py": {
       "size": 1494,
       "sha256": "7698911ed45d1d0d"
     },
     "services/api/tests/unit/test_config_sources.py": {
-      "size": 3335,
-      "sha256": "9f6b4525a92bdece"
+      "size": 3338,
+      "sha256": "4786aabcf5ea6ea7"
     },
     "services/api/tests/unit/test_domain_models.py": {
-      "size": 5807,
-      "sha256": "f5c53b0342e24eda"
+      "size": 5641,
+      "sha256": "08349a964b3f67f8"
     },
     "services/api/tests/unit/test_errors.py": {
-      "size": 7812,
-      "sha256": "08afd0c291e63645"
+      "size": 7746,
+      "sha256": "fce7eab120fb593b"
     },
     "services/api/tests/unit/test_health_service.py": {
       "size": 1294,
       "sha256": "e2fb712da9e6456e"
     },
     "services/api/tests/unit/test_item_repository.py": {
-      "size": 4166,
-      "sha256": "41b089a831f9fe95"
+      "size": 4115,
+      "sha256": "e8f99dec937695e6"
     },
     "services/api/tests/unit/test_item_service.py": {
       "size": 4175,
       "sha256": "563726c53a3c031d"
     },
     "services/api/tests/unit/test_lifecycle.py": {
-      "size": 2756,
-      "sha256": "4a07bf04e2f29db3"
+      "size": 2820,
+      "sha256": "b02381bf3974d2d6"
     },
     "services/api/tests/unit/test_middleware_unit.py": {
-      "size": 10485,
-      "sha256": "52f139c434679ffc"
+      "size": 10428,
+      "sha256": "5e556918e44ad021"
     },
     "services/api/tests/unit/test_orm_models.py": {
-      "size": 3155,
-      "sha256": "16ce90a72edf7425"
+      "size": 3277,
+      "sha256": "bafaee5c46ad2911"
+    },
+    "services/api/tests/unit/test_ui_contract.py": {
+      "size": 2690,
+      "sha256": "ccb44b9a90a16578"
     },
     "services/api/tests/utils/__init__.py": {
       "size": 459,
       "sha256": "b9e4dd0edc59a926"
     },
     "services/api/tests/utils/errors.py": {
-      "size": 2038,
-      "sha256": "93b444fdc83a1487"
+      "size": 1998,
+      "sha256": "7720ace6f64ebf2d"
     },
     "services/api/tests/utils/tenant.py": {
       "size": 2094,
       "sha256": "3e7454fc99b0eed2"
     },
     "services/api/uv.lock": {
-      "size": 201791,
-      "sha256": "56f7ae592dc80128"
+      "size": 296595,
+      "sha256": "937e435e82b75f33"
     }
   }
 }

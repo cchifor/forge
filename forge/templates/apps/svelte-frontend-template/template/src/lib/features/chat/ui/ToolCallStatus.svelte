@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle2, CircleX, Loader2 } from 'lucide-svelte';
+	import { CheckCircle2, CircleX, Loader2 } from '@lucide/svelte';
 	import type { ToolCallInfo } from '../chat.types';
 
 	let { toolCall }: { toolCall: ToolCallInfo } = $props();

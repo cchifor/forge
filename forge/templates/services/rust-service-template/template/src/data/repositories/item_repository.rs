@@ -1,7 +1,7 @@
 //! Tenant-aware repository for the `items` table.
 
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::identity::IdentityContext;
@@ -82,53 +82,22 @@ impl ItemRepository for PgItemRepository {
         }
         let limit = limit.min(100);
 
-        let mut conditions = vec!["customer_id = $1".to_string()];
-        let mut bind_idx = 1u32;
+        let mut count_query = filtered_items_query("SELECT COUNT(*) FROM items", identity, &params);
+        let total = count_query
+            .build_query_scalar::<i64>()
+            .fetch_one(&self.pool)
+            .await?;
 
-        if params.status.is_some() {
-            bind_idx += 1;
-            conditions.push(format!("status = ${bind_idx}"));
-        }
-        if params.search.is_some() {
-            bind_idx += 1;
-            let name_idx = bind_idx;
-            bind_idx += 1;
-            let desc_idx = bind_idx;
-            conditions.push(format!(
-                "(name ILIKE ${name_idx} OR description ILIKE ${desc_idx})"
-            ));
-        }
-
-        let where_clause = format!("WHERE {}", conditions.join(" AND "));
-        let count_sql = format!("SELECT COUNT(*) as count FROM items {where_clause}");
-        let query_sql = format!(
-            "SELECT * FROM items {where_clause} ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
-            bind_idx + 1,
-            bind_idx + 2,
-        );
-
-        let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
-        count_query = count_query.bind(identity.tenant_id);
-        if let Some(ref status) = params.status {
-            count_query = count_query.bind(status);
-        }
-        if let Some(ref search) = params.search {
-            let pattern = format!("%{search}%");
-            count_query = count_query.bind(pattern.clone()).bind(pattern);
-        }
-        let total = count_query.fetch_one(&self.pool).await?;
-
-        let mut items_query = sqlx::query_as::<_, Item>(&query_sql);
-        items_query = items_query.bind(identity.tenant_id);
-        if let Some(ref status) = params.status {
-            items_query = items_query.bind(status);
-        }
-        if let Some(ref search) = params.search {
-            let pattern = format!("%{search}%");
-            items_query = items_query.bind(pattern.clone()).bind(pattern);
-        }
-        items_query = items_query.bind(limit).bind(skip);
-        let items = items_query.fetch_all(&self.pool).await?;
+        let mut items_query = filtered_items_query("SELECT * FROM items", identity, &params);
+        items_query
+            .push(" ORDER BY created_at DESC LIMIT ")
+            .push_bind(limit)
+            .push(" OFFSET ")
+            .push_bind(skip);
+        let items = items_query
+            .build_query_as::<Item>()
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(PaginatedResponse {
             items,
@@ -212,61 +181,41 @@ impl ItemRepository for PgItemRepository {
         id: Uuid,
         data: UpdateItem,
     ) -> Result<Item, AppError> {
-        let mut sets = Vec::new();
-        let mut bind_idx = 0u32;
-
-        if data.name.is_some() {
-            bind_idx += 1;
-            sets.push(format!("name = ${bind_idx}"));
-        }
-        if data.description.is_some() {
-            bind_idx += 1;
-            sets.push(format!("description = ${bind_idx}"));
-        }
-        if data.tags.is_some() {
-            bind_idx += 1;
-            sets.push(format!("tags = ${bind_idx}"));
-        }
-        if data.status.is_some() {
-            bind_idx += 1;
-            sets.push(format!("status = ${bind_idx}"));
-        }
-
-        if sets.is_empty() {
+        if data.name.is_none()
+            && data.description.is_none()
+            && data.tags.is_none()
+            && data.status.is_none()
+        {
             // Nothing to patch — return the row unchanged.
             return self
                 .get_by_id(identity, id)
                 .await?
                 .ok_or_else(|| AppError::not_found("Item", id.to_string()));
         }
-
-        sets.push("updated_at = NOW()".to_string());
-        bind_idx += 1;
-        let id_idx = bind_idx;
-        bind_idx += 1;
-        let cust_idx = bind_idx;
-
-        let sql = format!(
-            "UPDATE items SET {} WHERE id = ${id_idx} AND customer_id = ${cust_idx} RETURNING *",
-            sets.join(", ")
-        );
-
-        let mut query = sqlx::query_as::<_, Item>(&sql);
+        let mut query = QueryBuilder::<Postgres>::new("UPDATE items SET ");
         if let Some(ref name) = data.name {
-            query = query.bind(name);
+            query.push("name = ").push_bind(name).push(", ");
         }
         if let Some(ref description) = data.description {
-            query = query.bind(description);
+            query
+                .push("description = ")
+                .push_bind(description)
+                .push(", ");
         }
         if let Some(ref tags) = data.tags {
-            query = query.bind(tags);
+            query.push("tags = ").push_bind(tags).push(", ");
         }
         if let Some(ref status) = data.status {
-            query = query.bind(status);
+            query.push("status = ").push_bind(status).push(", ");
         }
-        query = query.bind(id).bind(identity.tenant_id);
+        query
+            .push("updated_at = NOW() WHERE id = ")
+            .push_bind(id)
+            .push(" AND customer_id = ")
+            .push_bind(identity.tenant_id)
+            .push(" RETURNING *");
+        let item = query.build_query_as::<Item>().fetch_one(&self.pool).await?;
 
-        let item = query.fetch_one(&self.pool).await?;
         Ok(item)
     }
 
@@ -278,4 +227,30 @@ impl ItemRepository for PgItemRepository {
             .await?;
         Ok(())
     }
+}
+
+// Both count and row queries use the same tenant/filter predicates. Only fixed
+// SQL fragments enter the builder; all external values remain bind parameters.
+fn filtered_items_query(
+    select: &'static str,
+    identity: &IdentityContext,
+    params: &ListParams,
+) -> QueryBuilder<Postgres> {
+    let mut query = QueryBuilder::new(select);
+    query
+        .push(" WHERE customer_id = ")
+        .push_bind(identity.tenant_id);
+    if let Some(ref status) = params.status {
+        query.push(" AND status = ").push_bind(status);
+    }
+    if let Some(ref search) = params.search {
+        let pattern = format!("%{search}%");
+        query
+            .push(" AND (name ILIKE ")
+            .push_bind(pattern.clone())
+            .push(" OR description ILIKE ")
+            .push_bind(pattern)
+            .push(")");
+    }
+    query
 }

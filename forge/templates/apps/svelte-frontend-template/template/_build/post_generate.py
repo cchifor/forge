@@ -231,6 +231,12 @@ def generate_features():
 
     for feature_name in features:
         ctx = make_feature_context(feature_name)
+        write_file(
+            PROJECT_DIR / "tests" / "e2e" / f"{ctx['plural']}.spec.ts",
+            "import { testCrud } from './crud';\n"
+            f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, "
+            f"{FEATURE_TO_BACKEND.get(feature_name, DEFAULT_BACKEND)!r});\n",
+        )
         print("  [+] %s" % feature_name)
 
         feat_base = PROJECT_DIR / "src" / "lib" / "features" / ctx["plural"]
@@ -259,6 +265,30 @@ def generate_features():
         inject_marker(PROJECT_DIR / "src" / "lib" / "core" / "schemas" / "index.ts", "// --- feature schema exports ---", HUB_SCHEMA_EXPORT.format(**ctx))
         inject_marker(PROJECT_DIR / "src" / "test" / "mocks" / "handlers.ts", "// --- feature mock handlers ---", HUB_MSW_HANDLERS.format(**ctx))
         inject_marker(PROJECT_DIR / "src" / "lib" / "core" / "api" / "generated" / "types.gen.ts", "// --- feature type definitions ---", HUB_TYPES.format(**ctx))
+        snapshot_path = PROJECT_DIR / "openapi-snapshot.json"
+        if INCLUDE_OPENAPI and snapshot_path.is_file():
+            snapshot = _json.loads(snapshot_path.read_text(encoding="utf-8"))
+            schemas = snapshot.setdefault("components", {}).setdefault("schemas", {})
+            status_name = ctx["Singular"] + "Status"
+            schemas[status_name] = {"type": "string", "enum": ["DRAFT", "ACTIVE", "ARCHIVED"]}
+            properties = {
+                "name": {"type": "string"},
+                "description": {"type": ["string", "null"]},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "status": {"$ref": "#/components/schemas/" + status_name},
+            }
+            schemas[ctx["Singular"] + "Create"] = {
+                "type": "object", "required": ["name"], "properties": properties,
+            }
+            schemas[ctx["Singular"] + "Update"] = {
+                "type": "object",
+                "properties": {
+                    name: {"anyOf": [schema, {"type": "null"}]}
+                    for name, schema in properties.items()
+                },
+            }
+            snapshot_path.write_text(_json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+
 
     return features
 
@@ -410,7 +440,7 @@ agent endpoint via `VITE_AGENT_BASE_URL` (defaults to `${origin}/agent/`).
 Add a custom workspace activity:
 
 ```ts
-import { registerWorkspaceComponent } from '$lib/features/chat';
+import { registerWorkspaceComponent } from '#lib/features/chat/index.ts';
 import MyActivity from './MyActivity.svelte';
 
 registerWorkspaceComponent('my_activity_type', {
@@ -491,16 +521,11 @@ def remove_optional_files():
 
     if not INCLUDE_CHAT:
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "chat")
-        # The vendored canvas-core lived under the chat dir just removed, so
-        # drop its svelte.config.js alias line — a mapping at a deleted dir is
-        # dead config. (An empty `alias: {}` left behind is valid SvelteKit.)
-        svelte_config = PROJECT_DIR / "svelte.config.js"
-        if svelte_config.exists():
-            content = svelte_config.read_text(encoding="utf-8")
-            lines = [
-                l for l in content.splitlines(keepends=True) if "@forge/canvas-core" not in l
-            ]
-            svelte_config.write_text("".join(lines), encoding="utf-8")
+        # Remove the package import for the vendored module pruned with chat.
+        package_path = PROJECT_DIR / "package.json"
+        package = _json.loads(package_path.read_text(encoding="utf-8"))
+        package.get("imports", {}).pop("#canvas-core", None)
+        package_path.write_text(_json.dumps(package, indent=2) + "\n", encoding="utf-8")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatDrawer.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "ChatBottomSheet.svelte")
         remove_path(PROJECT_DIR / "src" / "lib" / "features" / "shell" / "ui" / "VerticalSplitHandle.svelte")
@@ -546,6 +571,10 @@ def main():
     print("=" * 60)
     print()
 
+    # Select shell variants before injecting feature navigation into them.
+    # Replacing the no-auth sidebar afterwards discarded every feature link.
+    remove_optional_files()
+
     # 1. Generate features
     print("> Generating features")
     features = generate_features()
@@ -560,8 +589,11 @@ def main():
     print("> Configuring project")
     patch_config_files()
     generate_readme(features)
-    remove_optional_files()
     print()
+
+    if os.environ.get("FORGE_RENDER_ONLY") == "1":
+        remove_path(PROJECT_DIR / "_build")
+        return
 
     # 3. Install dependencies
     print("> Building project")
@@ -586,20 +618,21 @@ def main():
         remove_path(PROJECT_DIR / "_build")
         return
 
-    # 4. Validate
-    print()
-    print("> Validating project")
-    run_command([pm, "run", "check"], "Running svelte-check", timeout=120)
+    if not ANSWERS.get("forge_orchestrated", False):
+        # 4. Validate
+        print()
+        print("> Validating project")
+        run_command([pm, "run", "check"], "Running svelte-check", timeout=120)
 
-    # 5. Build
-    print()
-    print("> Building for production")
-    build_ok = run_command([pm, "run", "build"], "Building (vite build)", timeout=180)
+        # 5. Build
+        print()
+        print("> Building for production")
+        build_ok = run_command([pm, "run", "build"], "Building (vite build)", timeout=180)
 
-    build_dir = PROJECT_DIR / "build"
-    if build_ok and build_dir.is_dir():
-        file_count = sum(1 for _ in build_dir.rglob("*") if _.is_file())
-        print("  Build output: %s (%d files)" % (build_dir, file_count))
+        build_dir = PROJECT_DIR / "build"
+        if build_ok and build_dir.is_dir():
+            file_count = sum(1 for _ in build_dir.rglob("*") if _.is_file())
+            print("  Build output: %s (%d files)" % (build_dir, file_count))
 
     # 6. Clean up _build
     remove_path(PROJECT_DIR / "_build")

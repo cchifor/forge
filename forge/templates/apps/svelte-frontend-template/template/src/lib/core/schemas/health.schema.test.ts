@@ -5,7 +5,7 @@ import {
 	livenessResponseSchema,
 	readinessResponseSchema,
 	infoResponseSchema
-} from '$lib/core/schemas/health.schema';
+} from '#lib/core/schemas/health.schema.ts';
 
 describe('healthStatusSchema', () => {
 	it.each(['UP', 'DOWN', 'DEGRADED'])('accepts "%s"', (value) => {

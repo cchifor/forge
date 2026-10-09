@@ -7,7 +7,7 @@ import {
   DialogPortal,
 } from 'radix-vue'
 import { type HTMLAttributes, computed } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import { cn } from '@/shared/lib/utils'
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()

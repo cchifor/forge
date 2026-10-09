@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Mail, Shield, Building2, Hash, LogOut } from 'lucide-vue-next'
+import { Mail, Shield, Building2, Hash, LogOut } from '@lucide/vue'
 import {
   Card,
   CardContent,

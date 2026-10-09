@@ -6,7 +6,7 @@
 		type MountMcpExtBridgeHandle,
 		type AppBridgeConstructor,
 		type PostMessageTransportConstructor
-	} from '@forge/canvas-core';
+	} from '#canvas-core';
 
 	import type { WorkspaceAction, WorkspaceActivity } from '../../chat.types';
 

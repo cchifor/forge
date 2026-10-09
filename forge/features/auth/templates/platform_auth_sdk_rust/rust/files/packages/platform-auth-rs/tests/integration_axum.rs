@@ -27,17 +27,17 @@
 use std::sync::Arc;
 
 use axum::{
-    body::Body,
-    http::{header, Request, StatusCode},
-    routing::get,
     Router,
+    body::Body,
+    http::{Request, StatusCode, header},
+    routing::get,
 };
 use platform_auth::{
-    testing::{build_test_token, BuildTestTokenOptions, TestEcdsaKeypair},
     AuthGuard, AuthGuardConfig, AuthLayer, IdentityContext, JwksCache, RequireScope,
+    testing::{BuildTestTokenOptions, TestEcdsaKeypair, build_test_token},
 };
 use tower::ServiceExt;
-use wiremock::{matchers, Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
 const TEST_ISSUER: &str = "http://gatekeeper.test:5000";
 const TEST_AUDIENCE: &str = "svc-test";
@@ -251,4 +251,40 @@ async fn require_scope_supports_wildcard() {
         .await
         .expect("oneshot");
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+/// CVE-2026-25537: optional nbf must be rejected when present with an
+/// invalid JSON type, even though it is not a required claim.
+#[tokio::test]
+async fn auth_layer_rejects_malformed_optional_nbf() {
+    let (guard, keypair, _mock) = setup().await;
+    let app = build_app(guard);
+    let mut opts = BuildTestTokenOptions::new(
+        &keypair,
+        TEST_ISSUER,
+        TEST_AUDIENCE,
+        TEST_SUBJECT,
+        TEST_TENANT_ID,
+    );
+    opts.scopes = vec!["things:read".to_string()];
+    opts.extra_claims
+        .insert("nbf".to_string(), serde_json::json!("not-a-timestamp"));
+    let token = build_test_token(opts).expect("mint token");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/things")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("oneshot");
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .expect("body");
+    let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+    assert_eq!(payload["title"], "invalid_token");
 }

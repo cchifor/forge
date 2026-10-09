@@ -10,7 +10,7 @@
  *   OTEL_SERVICE_NAME           = project-backend
  */
 import { NodeSDK } from '@opentelemetry/sdk-node'
-import { Resource } from '@opentelemetry/resources'
+import { resourceFromAttributes } from '@opentelemetry/resources'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
 
@@ -21,7 +21,7 @@ export function configureOtel(serviceName: string): void {
   if (!endpoint) return
 
   sdk = new NodeSDK({
-    resource: new Resource({ 'service.name': serviceName }),
+    resource: resourceFromAttributes({ 'service.name': serviceName }),
     traceExporter: new OTLPTraceExporter({ url: endpoint }),
     instrumentations: [getNodeAutoInstrumentations()],
   })

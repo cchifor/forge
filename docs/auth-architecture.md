@@ -2,12 +2,12 @@
 
 How forge-generated projects authenticate users and services.
 
-This document is the architectural reference for the auth stack
-forge generates when `auth.mode = "generate"` (the default). For the
-full implementation plan and rollout phasing, see the design doc at
-`~/.claude/plans/review-the-c-users-chifo-work-platform-a-pure-torvalds.md`.
-For the BFF + session-timeout RFC that drives the SPA half, see
-`~/.claude/plans/analyze-the-following-issue-lovely-sonnet.md`.
+This is the detailed auth contract for generated Gatekeeper-backed projects.
+Start with the [platform overview](architecture/overview.md) for a shorter
+request/auth/tenant flow and the [platform preset guide](guides/platforms.md)
+for configuration. The implementation is in the auth feature templates and
+shared verifier contracts; unavailable workstation-local planning files are
+not required to understand or operate it.
 
 > **1.2 update.** The architecture below — Keycloak as IdP, Gatekeeper
 > as token authority, ES256 JWTs, ForwardAuth, opaque session cookies

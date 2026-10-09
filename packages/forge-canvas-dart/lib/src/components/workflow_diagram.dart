@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../generated/props.dart';
 
@@ -22,14 +22,15 @@ class WorkflowDiagram extends StatelessWidget {
     super.key,
     required List<Map<String, dynamic>> nodes,
     required List<Map<String, dynamic>> edges,
-  })  : nodes = nodes
-            .map((raw) => WorkflowDiagramNode.fromJson(raw))
-            .toList(growable: false),
-        edges = edges
-            .map((raw) => WorkflowDiagramEdge.fromJson(raw))
-            .toList(growable: false);
+  }) : nodes = nodes
+           .map((raw) => WorkflowDiagramNode.fromJson(raw))
+           .toList(growable: false),
+       edges = edges
+           .map((raw) => WorkflowDiagramEdge.fromJson(raw))
+           .toList(growable: false);
 
-  factory WorkflowDiagram.fromProps(Map<String, dynamic> props) => WorkflowDiagram(
+  factory WorkflowDiagram.fromProps(Map<String, dynamic> props) =>
+      WorkflowDiagram(
         nodes: ((props['nodes'] as List?) ?? const [])
             .whereType<Map<String, dynamic>>()
             .toList(),
@@ -52,9 +53,13 @@ class WorkflowDiagram extends StatelessWidget {
     for (final e in edges) {
       incoming[e.to] = (incoming[e.to] ?? 0) + 1;
     }
-    final queue =
-        nodes.where((n) => (incoming[n.id] ?? 0) == 0).map((n) => n.id).toList();
-    for (final id in queue) depth[id] = 0;
+    final queue = nodes
+        .where((n) => (incoming[n.id] ?? 0) == 0)
+        .map((n) => n.id)
+        .toList();
+    for (final id in queue) {
+      depth[id] = 0;
+    }
     while (queue.isNotEmpty) {
       final id = queue.removeAt(0);
       for (final e in edges) {
@@ -72,8 +77,9 @@ class WorkflowDiagram extends StatelessWidget {
     }
 
     final positions = <String, Offset>{};
-    final maxCols =
-        byDepth.values.map((a) => a.length).fold<int>(1, (p, c) => p > c ? p : c);
+    final maxCols = byDepth.values
+        .map((a) => a.length)
+        .fold<int>(1, (p, c) => p > c ? p : c);
     for (final entry in byDepth.entries) {
       final d = entry.key;
       final ids = entry.value;
@@ -88,7 +94,9 @@ class WorkflowDiagram extends StatelessWidget {
     }
 
     final width = maxCols * _nodeW + (maxCols - 1) * _hGap;
-    final height = ((byDepth.length == 0 ? 1 : byDepth.length) - 1) * (_nodeH + _vGap) + _nodeH;
+    final height =
+        ((byDepth.isEmpty ? 1 : byDepth.length) - 1) * (_nodeH + _vGap) +
+        _nodeH;
     return _Layout(positions: positions, width: width, height: height);
   }
 
@@ -126,7 +134,11 @@ class _Layout {
   final double width;
   final double height;
 
-  const _Layout({required this.positions, required this.width, required this.height});
+  const _Layout({
+    required this.positions,
+    required this.width,
+    required this.height,
+  });
 }
 
 class _WfPainter extends CustomPainter {
@@ -211,10 +223,7 @@ class _WfPainter extends CustomPainter {
       if (pos == null) continue;
       final rect = Rect.fromLTWH(pos.dx, pos.dy, nodeW, nodeH);
       final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(8));
-      canvas.drawRRect(
-        rrect,
-        Paint()..color = _fill(node.status),
-      );
+      canvas.drawRRect(rrect, Paint()..color = _fill(node.status));
       canvas.drawRRect(
         rrect,
         Paint()

@@ -10,7 +10,7 @@
 	// Self-contained: no shared store. The host passes the scrollable content
 	// selector so the panel knows where to look and which container to spy on.
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 
 	let { contentSelector = '[data-docs-content]' }: { contentSelector?: string } = $props();
 
@@ -105,7 +105,7 @@
 
 	// Re-scan whenever the route changes (the page swaps the article).
 	$effect(() => {
-		void $page.url.pathname;
+		void page.url.pathname;
 		rescanSoon();
 	});
 </script>

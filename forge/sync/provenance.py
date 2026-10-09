@@ -76,7 +76,8 @@ class MergeBlockRecord:
 
     ``sha256`` is the SHA-256 of the block body (between BEGIN and END
     sentinels, exclusive). ``snippet_sha256`` is the SHA-256 of the
-    ``inject.yaml`` snippet text BEFORE Jinja rendering — lets harvest
+    ``inject.yaml`` snippet text AFTER Jinja rendering, before indentation
+    and output formatting — lets harvest
     detect whether the fragment template's snippet has drifted since
     this block was emitted. ``line_range`` is a 1-indexed
     (begin_line, end_line) tuple recording the block's position at emit
@@ -272,6 +273,9 @@ class ProvenanceCollector:
         out: dict[str, dict[str, Any]] = {}
         for key, rec in sorted(self.records.items()):
             entry: dict[str, Any] = {"origin": rec.origin, "sha256": rec.sha256}
+            from forge.quality.model import ownership
+
+            entry["ownership"] = ownership(key, rec.origin, rec.template_name)
             if rec.fragment_name:
                 entry["fragment_name"] = rec.fragment_name
             if rec.fragment_version:

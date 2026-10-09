@@ -17,7 +17,7 @@
 -->
 <script setup lang="ts">
 import { onErrorCaptured, ref } from 'vue'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle } from '@lucide/vue'
 
 interface Props {
   componentName?: string

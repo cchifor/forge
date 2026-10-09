@@ -9,6 +9,7 @@ the backend or frontend template.
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -55,7 +56,50 @@ def apply_common_files(
             continue
         filename = "ci.yml" if is_first else f"ci-{bc.language.value}.yml"
         is_first = False
-        _copy_if_absent(ci_src, workflows_dir / filename, collector)
+        destination = workflows_dir / filename
+        if not destination.exists():
+            from forge.quality.model import subjects
+
+            matrix = [item for item in subjects(config) if item["language"] == bc.language.value]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(
+                ci_src.read_text().replace("__FORGE_SERVICE_MATRIX__", json.dumps(matrix))
+            )
+            if collector:
+                collector.record(destination, origin="base-template", template_name="_common")
+
+    # One canonical skill, copied to both agent discovery locations for
+    # portability on Windows and in packaged archives.
+    skill_source = COMMON_DIR / "skills" / "forge-platform"
+    for agent in (".agents", ".claude"):
+        for source in sorted(skill_source.rglob("*")):
+            if source.is_file():
+                _copy_if_absent(
+                    source,
+                    project_root
+                    / agent
+                    / "skills"
+                    / "forge-platform"
+                    / source.relative_to(skill_source),
+                    collector,
+                )
+    _copy_if_absent(COMMON_DIR / "quality.yml", workflows_dir / "quality.yml", collector)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        _copy_if_absent(COMMON_DIR / name, project_root / name, collector)
+    _copy_if_absent(
+        COMMON_DIR / "claude-settings.json", project_root / ".claude/settings.json", collector
+    )
+    if config.frontend and config.frontend.framework.value in {"vue", "svelte"}:
+        _copy_if_absent(
+            COMMON_DIR / "browser-coverage.ts",
+            project_root / "apps" / config.frontend_slug / "scripts/browser-coverage.ts",
+            collector,
+        )
+        _copy_if_absent(
+            COMMON_DIR / "remap-browser.mjs",
+            project_root / "apps" / config.frontend_slug / "scripts/remap-browser.mjs",
+            collector,
+        )
 
 
 def _ci_source_for(bc: BackendConfig) -> Path | None:

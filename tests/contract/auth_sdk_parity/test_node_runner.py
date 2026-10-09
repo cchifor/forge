@@ -91,7 +91,7 @@ def test_node_sdk_passes_all_parity_scenarios(tmp_path: Path) -> None:
         "FORCE_COLOR": "0",
     }
     completed = subprocess.run(
-        ["npx", "vitest", "run", "test/parity_runner.test.ts", "--reporter=basic"],
+        ["npx", "vitest", "run", "test/parity_runner.test.ts", "--reporter=default"],
         cwd=NODE_SDK_DIR,
         env=env,
         capture_output=True,

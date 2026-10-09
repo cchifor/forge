@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Sun, Moon, Monitor, Check } from 'lucide-vue-next'
+import { Sun, Moon, Monitor, Check } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import {
   Card,

@@ -17,5 +17,5 @@ variant = "api-gateway"
 language = "python"
 template_dir = "services/python/api-gateway"
 base = "services/python-service-template"
-display_label = "Python — API gateway"
+display_label = "Python — service proxy (legacy api-gateway name)"
 supported = true

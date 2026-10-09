@@ -1,7 +1,7 @@
 {
   "name": "@forge/platform-auth-node",
   "version": "0.1.0",
-  "description": "Identity, RBAC, and S2S auth primitives for Fastify services — Node port of platform-auth (Python). Verifies Gatekeeper-issued ES256 JWTs, multi-issuer JWKS cache with stale-serve, scope-based authz with wildcard, RFC 8693 token-exchange.",
+  "description": "Identity, RBAC, and S2S auth primitives for Fastify services \u2014 Node port of platform-auth (Python). Verifies Gatekeeper-issued ES256 JWTs, multi-issuer JWKS cache with stale-serve, scope-based authz with wildcard, RFC 8693 token-exchange.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,19 +25,22 @@
     "format": "biome format --write src/ test/"
   },
   "dependencies": {
-    "jose": "^5.9.6",
-    "lru-cache": "^11.0.2",
-    "fastify-plugin": "^5.0.1"
+    "jose": "^6.2.12",
+    "lru-cache": "^11.5.3",
+    "fastify-plugin": "^6.0.0"
+  },
+  "overrides": {
+    "vitest": "5.0.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.5.15",
     "@types/node": "^22.10.0",
-    "fastify": "^5.0.0",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "fastify": "^5.12.5",
+    "typescript": "^6.0.3",
+    "vitest": "5.0.3"
   },
   "peerDependencies": {
-    "fastify": "^5.0.0"
+    "fastify": "^5.12.5"
   },
   "peerDependenciesMeta": {
     "fastify": {

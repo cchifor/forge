@@ -21,7 +21,7 @@ from pathlib import Path
 
 import forge.sync.forge_to_project.updater as updater_mod
 from forge.config import BackendConfig, FrontendConfig, FrontendFramework, ProjectConfig
-from forge.generator import generate
+from tests._legacy_generation import generate
 from forge.sync.forge_to_project.updater import update_project
 
 

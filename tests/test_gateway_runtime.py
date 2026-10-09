@@ -35,12 +35,12 @@ def _run[T](coro: Awaitable[T]) -> T:
     return asyncio.run(coro)
 
 
-# --- render the real api-gateway variant once for the whole module ---------
+# --- render each proxy template identifier once for the whole module -------
 
 
-@pytest.fixture(scope="module")
-def gateway_src(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Render the api-gateway variant and return ``<svc>/src`` (on sys.path)."""
+@pytest.fixture(scope="module", params=["service-proxy", "api-gateway"])
+def gateway_src(tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest) -> Path:
+    """Render one proxy identifier with isolated imports from ``<svc>/src``."""
     out = tmp_path_factory.mktemp("gw_runtime")
     cfg = ProjectConfig(
         project_name="gw_rt",
@@ -50,7 +50,7 @@ def gateway_src(tmp_path_factory: pytest.TempPathFactory) -> Path:
                 name="gw",
                 project_name="gw_rt",
                 language=BackendLanguage.PYTHON,
-                app_template="api-gateway",
+                app_template=request.param,
                 features=["items"],
             )
         ],
@@ -64,25 +64,31 @@ def gateway_src(tmp_path_factory: pytest.TempPathFactory) -> Path:
     for mod in list(sys.modules):
         if mod == "app" or mod.startswith("app."):
             del sys.modules[mod]
-    yield src
-    sys.path.remove(str(src))
-    for mod in list(sys.modules):
-        if mod == "app" or mod.startswith("app."):
-            del sys.modules[mod]
+    try:
+        yield src
+    finally:
+        sys.path.remove(str(src))
+        for mod in list(sys.modules):
+            if mod == "app" or mod.startswith("app."):
+                del sys.modules[mod]
 
 
 @pytest.fixture()
 def s2s_mod(gateway_src: Path):
     """Import the rendered ``app.gateway.s2s_client`` module fresh per test."""
     sys.modules.pop("app.gateway.s2s_client", None)
-    return importlib.import_module("app.gateway.s2s_client")
+    module = importlib.import_module("app.gateway.s2s_client")
+    assert Path(module.__file__).resolve() == (gateway_src / "app/gateway/s2s_client.py").resolve()
+    return module
 
 
 @pytest.fixture()
 def downstreams_mod(gateway_src: Path):
     """Import the rendered ``app.gateway.downstreams`` module fresh per test."""
     sys.modules.pop("app.gateway.downstreams", None)
-    return importlib.import_module("app.gateway.downstreams")
+    module = importlib.import_module("app.gateway.downstreams")
+    assert Path(module.__file__).resolve() == (gateway_src / "app/gateway/downstreams.py").resolve()
+    return module
 
 
 # --- a mock-transport-backed AsyncClient factory ---------------------------

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Star, ArrowUp } from 'lucide-vue-next'
+import { Star, ArrowUp } from '@lucide/vue'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import type { WorkspaceActivity, AgentState, WorkspaceAction } from '../types'

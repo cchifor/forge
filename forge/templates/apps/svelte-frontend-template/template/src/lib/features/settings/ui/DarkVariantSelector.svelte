@@ -20,7 +20,7 @@
 		? 'opacity-50 pointer-events-none'
 		: ''}"
 >
-	{#each options as option}
+	{#each options as option (option.value)}
 		<button
 			class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors {value ===
 			option.value

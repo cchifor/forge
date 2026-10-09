@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { X } from 'lucide-svelte';
-	import { getChatStore } from '$lib/features/chat';
+	import { X } from '@lucide/svelte';
+	import { getChatStore } from '#lib/features/chat/index.ts';
 	import type { WorkspaceAction } from '../chat.types';
 	import { resolveWorkspaceComponent } from './registry';
 	import AgUiEngine from './engines/AgUiEngine.svelte';

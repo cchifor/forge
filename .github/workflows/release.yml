@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Fail closed if the tag and the package __version__ disagree, so a tag
       # never cuts a release whose artifacts carry a different version.
@@ -34,9 +34,10 @@ jobs:
         run: bash .github/scripts/check-tag-version.sh "${{ github.ref_name }}"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          enable-cache: true
+          # Build releases with a fresh dependency cache.
+          enable-cache: false
 
       - name: Build sdist + wheel
         run: uv build
@@ -57,12 +58,12 @@ jobs:
       # as a downloadable supply-chain artifact.
       - name: Generate CycloneDX SBOM
         run: |
-          uv sync --all-extras --dev
-          uvx --from cyclonedx-bom cyclonedx-py environment \
+          uv sync --locked --all-extras --no-dev --no-editable
+          uvx --from cyclonedx-bom cyclonedx-py environment .venv/bin/python \
             --output-format json --output-file forge-sbom.cdx.json
 
       - name: Create release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: release-notes.md
           prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}

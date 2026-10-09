@@ -9,13 +9,13 @@
 //! `http-proto` (or `http-json`) + `reqwest-client`, then change the
 //! `.with_tonic()` call below to `.with_http()`.
 
-use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::Tracer as SdkTracer;
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::SdkTracer;
 use tracing::Subscriber;
-use tracing_subscriber::{registry::LookupSpan, Layer};
+use tracing_subscriber::{Layer, registry::LookupSpan};
 
 pub fn build_otel_layer<S>() -> Option<Box<dyn Layer<S> + Send + Sync + 'static>>
 where
@@ -39,8 +39,8 @@ where
 }
 
 fn init_tracer(endpoint: &str) -> Result<SdkTracer, String> {
-    let service_name = std::env::var("OTEL_SERVICE_NAME")
-        .unwrap_or_else(|_| "forge-service".to_string());
+    let service_name =
+        std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "forge-service".to_string());
 
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
@@ -48,12 +48,13 @@ fn init_tracer(endpoint: &str) -> Result<SdkTracer, String> {
         .build()
         .map_err(|e| format!("build exporter: {e}"))?;
 
-    let provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_resource(Resource::new(vec![KeyValue::new(
-            "service.name",
-            service_name.clone(),
-        )]))
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(
+            Resource::builder()
+                .with_attributes(vec![KeyValue::new("service.name", service_name.clone())])
+                .build(),
+        )
         .build();
 
     // Register provider globally so crates using the opentelemetry API

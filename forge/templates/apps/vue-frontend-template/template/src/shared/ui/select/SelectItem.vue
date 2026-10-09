@@ -6,7 +6,7 @@ import {
   SelectItemText,
 } from 'radix-vue'
 import { type HTMLAttributes, computed } from 'vue'
-import { Check } from 'lucide-vue-next'
+import { Check } from '@lucide/vue'
 import { cn } from '@/shared/lib/utils'
 
 const props = defineProps<SelectItemProps & { class?: HTMLAttributes['class'] }>()

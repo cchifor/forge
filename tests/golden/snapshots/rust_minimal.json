@@ -1,32 +1,60 @@
 {
   "files": {
+    ".agents/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".agents/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
+    ".claude/settings.json": {
+      "size": 69,
+      "sha256": "062d78308067ddd1"
+    },
+    ".claude/skills/forge-platform/SKILL.md": {
+      "size": 2953,
+      "sha256": "c35f5f6995d8332e"
+    },
+    ".claude/skills/forge-platform/references/workloads.md": {
+      "size": 2280,
+      "sha256": "05122ff35ff454c8"
+    },
     ".editorconfig": {
       "size": 580,
       "sha256": "2ac15b8600196a9b"
     },
+    ".forge/quality.json": {
+      "size": 723,
+      "sha256": "e20ed9c8595ac530"
+    },
     ".github/workflows/ci.yml": {
-      "size": 1634,
-      "sha256": "26a0755f5d357e05"
+      "size": 882,
+      "sha256": "88bd7425aa0337b3"
+    },
+    ".github/workflows/quality.yml": {
+      "size": 3203,
+      "sha256": "c56239ed83b1127b"
     },
     ".gitignore": {
-      "size": 491,
-      "sha256": "3f1ced030f22fea7"
+      "size": 523,
+      "sha256": "99517caa29227052"
     },
     ".pre-commit-config.yaml": {
       "size": 471,
       "sha256": "52e8e600cab57fa5"
     },
     "AGENTS.md": {
-      "size": 2577,
-      "sha256": "27cb9957eec7caf9"
+      "size": 1814,
+      "sha256": "9d1d4cc2595631d1"
     },
     "CLAUDE.md": {
-      "size": 1912,
-      "sha256": "ae83d48b4638adaf"
+      "size": 100,
+      "sha256": "77ac9733140f48bb"
     },
     "Cargo.toml": {
       "size": 625,
-      "sha256": "368a99db9db2c35e"
+      "sha256": "4e70974a9fc9f80e"
     },
     "deploy/infra/nginx-csp.conf": {
       "size": 1661,
@@ -37,11 +65,11 @@
       "sha256": "6b2aa6e589fd88e2"
     },
     "forge.toml": {
-      "size": 20894,
+      "size": 24785,
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
-      "size": 529,
+      "size": 542,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -53,12 +81,12 @@
       "sha256": "5e209bd98e8e7724"
     },
     "services/api/Cargo.toml": {
-      "size": 900,
-      "sha256": "c0894954713a652d"
+      "size": 958,
+      "sha256": "0c02c3c815f2a65b"
     },
     "services/api/Dockerfile": {
-      "size": 4226,
-      "sha256": "f6878f7b5ce0a950"
+      "size": 4391,
+      "sha256": "5d0e1b8862f7d0ff"
     },
     "services/api/OBSERVABILITY.md": {
       "size": 2033,
@@ -121,8 +149,8 @@
       "sha256": "b79d73638ab2b26e"
     },
     "services/api/src/data/repositories/item_repository.rs": {
-      "size": 8809,
-      "sha256": "5369479a690f3d44"
+      "size": 7930,
+      "sha256": "ecb1d4643edeeb33"
     },
     "services/api/src/data/repositories/mod.rs": {
       "size": 748,
@@ -137,24 +165,24 @@
       "sha256": "9ced2ad561bff6ce"
     },
     "services/api/src/error_port/default.rs": {
-      "size": 3131,
-      "sha256": "45132a486208c28d"
+      "size": 3136,
+      "sha256": "6fe4a97158f0b3a8"
     },
     "services/api/src/error_port/mod.rs": {
-      "size": 3226,
-      "sha256": "ff9934ca89807c9d"
+      "size": 3294,
+      "sha256": "c340f2469ef3e35c"
     },
     "services/api/src/errors.rs": {
-      "size": 9508,
-      "sha256": "bbb3e7e29255f01d"
+      "size": 9716,
+      "sha256": "eec211c78ed73166"
     },
     "services/api/src/identity.rs": {
       "size": 2237,
       "sha256": "2c313c0d5e86dac0"
     },
     "services/api/src/lib.rs": {
-      "size": 1619,
-      "sha256": "4007d90545bcff2f"
+      "size": 1688,
+      "sha256": "c40e7790e87053da"
     },
     "services/api/src/main.rs": {
       "size": 4632,
@@ -220,13 +248,29 @@
       "size": 57,
       "sha256": "db8bb31bf3d91e15"
     },
+    "services/api/tests/e2e.rs": {
+      "size": 2645,
+      "sha256": "f5daf748af6ebec1"
+    },
     "services/api/tests/health_test.rs": {
-      "size": 1453,
-      "sha256": "1479f5c245978c1b"
+      "size": 1352,
+      "sha256": "71d76d006a01801c"
     },
     "services/api/tests/items_test.rs": {
-      "size": 4509,
-      "sha256": "5d902d1309c5d022"
+      "size": 4458,
+      "sha256": "0846b53d33bfb374"
+    },
+    "services/api/tests/pool_test.rs": {
+      "size": 402,
+      "sha256": "5774c8576e300f7a"
+    },
+    "services/api/tests/unit/contracts.rs": {
+      "size": 3871,
+      "sha256": "b3d693818b69dc9a"
+    },
+    "services/api/tests/unit/error_port.rs": {
+      "size": 1068,
+      "sha256": "4214acb76d91000a"
     },
     "services/api/tests/utils.rs": {
       "size": 2111,

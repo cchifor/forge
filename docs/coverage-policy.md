@@ -1,6 +1,10 @@
 # Coverage Policy
 
-Forge uses two layers of coverage gates:
+This policy covers the **Forge generator repository**. Generated applications
+have a separate [unit/integration/E2E coverage gate](operations/generated-code-quality.md#coverage-gate)
+requiring strictly greater than 80% on new lines per subject.
+
+Forge itself uses two layers of coverage gates:
 
 1. **Project-wide floor** — configured in `pyproject.toml` as `fail_under`.
    Catches outright regressions across the whole package.
@@ -11,6 +15,13 @@ Forge uses two layers of coverage gates:
 
 Every PR runs the `coverage` job in `ci.yml` (ubuntu × Python 3.13 only) and
 either passes both gates or blocks the merge.
+
+The job publishes its measured coverage and tested revision in the GitHub run
+summary. Download the `generator-coverage-<revision>` artifact from that run for
+line-by-line HTML coverage, `coverage.xml`, `coverage.json` and the badge metadata.
+Reports are retained for 14 days; missing reports or failed uploads fail the job.
+This reporting needs no external Codecov account. Generated application reports
+remain in the separate `generated-<language>-coverage` artifacts.
 
 ## Why two layers?
 

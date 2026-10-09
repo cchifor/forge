@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { appPath } from '#lib/shared/lib/paths.ts';
+	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { Shield, LogIn } from 'lucide-svelte';
-	import { getAuth } from '$lib/core';
+	import { page } from '$app/state';
+	import { Shield, LogIn } from '@lucide/svelte';
+	import { getAuth } from '#lib/core/index.ts';
 	import { onMount } from 'svelte';
 
 	const auth = getAuth();
@@ -10,18 +12,18 @@
 
 	onMount(() => {
 		if (auth.isAuthenticated) {
-			const redirect = $page.url.searchParams.get('redirect') || '/';
-			goto(redirect, { replaceState: true });
+			const redirect = page.url.searchParams.get('redirect') || '/';
+			goto(resolve(appPath(redirect, resolve(''))), { replaceState: true });
 		}
 	});
 
 	function handleLogin() {
-		const redirect = $page.url.searchParams.get('redirect') || '/';
+		const redirect = page.url.searchParams.get('redirect') || '/';
 		if (authDisabled) {
 			auth.login();
-			goto(redirect, { replaceState: true });
+			goto(resolve(appPath(redirect, resolve(''))), { replaceState: true });
 		} else {
-			auth.login(redirect);
+			auth.login(resolve(appPath(redirect, resolve(''))));
 		}
 	}
 </script>

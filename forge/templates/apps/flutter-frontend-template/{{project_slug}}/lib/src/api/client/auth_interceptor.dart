@@ -47,7 +47,7 @@ class AuthInterceptor extends Interceptor {
   /// shorter than the client's idle timeout), rotate via the refresh
   /// token and replay the original request with the new bearer.
   ///
-  /// Web is a no-op — the cookie-based BFF lets the API layer's
+  /// Web is a no-op — edge authentication handles cookies and lets the API layer's
   /// redirect handler land the user back at `/auth/login`.
   ///
   /// Single-retry semantics: a second 401 surfaces as-is so the caller
@@ -70,7 +70,7 @@ class AuthInterceptor extends Interceptor {
     }
     final dio = _dio;
     if (dio == null) {
-      // Interceptor wasn't bound yet; can't retry. Fail open.
+      // Interceptor wasn't bound yet; pass the original error through.
       handler.next(err);
       return;
     }

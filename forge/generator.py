@@ -251,12 +251,12 @@ def generate(
                 staging_dir,
             )
         else:
-            shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
         raise
 
     # Success — promote staging dir contents to the final location.
     shutil.move(str(project_root), str(final_root))
-    shutil.rmtree(staging_dir, onerror=_force_remove_readonly)
+    shutil.rmtree(staging_dir, onexc=_force_remove_readonly)
 
     # Re-populate the report with the final path (not the staging path).
     if report is not None:
@@ -322,7 +322,7 @@ def _run_generation_phases(
     # auth.service_discovery is on — so single-service output stays byte-identical.
     synthesis = _synthesize_platform(config, plan, project_root, quiet=quiet)
     _render_docker_stack(config, plan, project_root, quiet=quiet, synthesis=synthesis)
-    _generate_frontend_extras(config, project_root, quiet=quiet)
+    _generate_frontend_extras(config, project_root, quiet=quiet, dry_run=dry_run)
     _apply_project_scope(
         config, plan, project_root, collector, quiet=quiet, report=report, synthesis=synthesis
     )
@@ -344,6 +344,9 @@ def _run_generation_phases(
     # ``package.json`` are on disk before ``npm install`` resolves the service's
     # ``file:`` workspace dependency. Kept before _finalize so produced
     # lockfiles are still captured by the finalize git commit.
+    from forge.quality.formatting import canonicalize
+
+    canonicalize(config, project_root, collector)
     _run_backend_toolchains(config, project_root, quiet=quiet, dry_run=dry_run, report=report)
     # Renumber each Python backend's alembic migrations into a valid linear
     # chain BEFORE provenance is stamped (so forge.toml records the rewritten
@@ -358,6 +361,7 @@ def _run_generation_phases(
     # freshly generated project passes ``forge --verify`` instead of reporting
     # day-0 drift on its own pyproject.toml / .env.example (exit 10).
     _rerecord_mutated_manifests(config, project_root, collector)
+    _run_frontend_checks(config, project_root, quiet=quiet, dry_run=dry_run)
     _finalize(config, plan, project_root, collector, quiet=quiet, dry_run=dry_run)
     if report is not None:
         _populate_report(report, config, plan, project_root, collector, dry_run=dry_run)
@@ -742,7 +746,9 @@ def _render_docker_stack(
             validate_dst.write_bytes(validate_src.replace("\r\n", "\n").encode("utf-8"))
 
 
-def _generate_frontend_extras(config: ProjectConfig, project_root: Path, *, quiet: bool) -> None:
+def _generate_frontend_extras(
+    config: ProjectConfig, project_root: Path, *, quiet: bool, dry_run: bool = False
+) -> None:
     """Phases 4 & 5: Playwright e2e tests + frontend Dockerfile/nginx."""
 
     def _log(msg: str) -> None:
@@ -756,7 +762,7 @@ def _generate_frontend_extras(config: ProjectConfig, project_root: Path, *, quie
         and config.frontend.generate_e2e_tests
     ):
         _log("  Generating Playwright e2e tests ...")
-        _generate_e2e_tests(config, project_root, quiet=quiet)
+        _generate_e2e_tests(config, project_root, quiet=quiet, dry_run=dry_run)
 
     # 5. Render frontend Dockerfile and nginx.conf — built-ins always, and
     # node-based plugin frontends (npm build → nginx static serve). A
@@ -857,8 +863,8 @@ def _apply_project_scope(
 
     # Schema-first codegen: UI protocol types, canvas manifest, shared enums.
     # Runs last so per-template and fragment outputs don't clobber the
-    # authoritative generated files. Failures are warnings — codegen
-    # errors shouldn't take down a generation that's otherwise complete.
+    # authoritative generated files. Required schema output is part of the
+    # application contract: never publish a partially generated project.
     from forge.codegen.pipeline import run_codegen  # noqa: PLC0415
 
     try:
@@ -871,11 +877,11 @@ def _apply_project_scope(
             # paths exercised the threading otherwise.
             run_codegen(config, project_root, collector=collector, resolved=plan)
     except Exception as exc:  # noqa: BLE001
-        msg = f"codegen pipeline emitted an error: {exc}"
-        if not quiet:
-            print(f"  [warn] {msg}")
-        if report is not None:
-            report.add_warning(msg)
+        raise TemplateError(
+            f"Required code generation failed: {exc}",
+            code=TEMPLATE_RENDER_FAILED,
+            hint="Fix the schema or emitter and generate again; incomplete output is not usable.",
+        ) from exc
 
 
 def _finalize(
@@ -893,11 +899,26 @@ def _finalize(
         if not quiet:
             print(msg)
 
+    if not dry_run:
+        _generate_lockfiles(config, project_root, quiet=quiet)
+        for directory in [
+            project_root,
+            *project_root.glob("services/*"),
+            *project_root.glob("apps/*"),
+        ]:
+            for filename in ("uv.lock", "package-lock.json", "Cargo.lock", "pubspec.lock"):
+                lockfile = directory / filename
+                if lockfile.is_file():
+                    collector.record(lockfile, origin="base-template")
+
     with phase_timer(_logger, "generate.write_forge_toml"):
         _write_forge_toml(config, project_root, plan, collector=collector)
 
+    from forge.quality.model import write_recipe
+
+    write_recipe(project_root, config)
+
     if not dry_run:
-        _generate_lockfiles(config, project_root, quiet=quiet)
         _log("  Initializing git repository ...")
         _cleanup_sub_git_repos(project_root)
         _git_init(project_root)
@@ -919,6 +940,14 @@ def _generate_lockfiles(config: ProjectConfig, project_root: Path, *, quiet: boo
     install. A missing lockfile must never abort generation.
     """
     languages = {bc.language for bc in config.backends}
+    for backend in config.backends:
+        if backend.language == BackendLanguage.PYTHON:
+            _run_backend_cmd(
+                project_root / "services" / backend.name,
+                ["uv", "lock"],
+                "Generate uv.lock",
+                quiet=quiet,
+            )
 
     # Node — emit the root ``package-lock.json`` an ``npm ci`` build needs.
     # ``--package-lock-only`` resolves the dependency graph and writes the
@@ -1365,12 +1394,14 @@ def _read_template_commit(template_path: Path) -> str | None:
     return sha or None
 
 
-def _generate_e2e_tests(config: ProjectConfig, project_root: Path, quiet: bool = False) -> Path:
+def _generate_e2e_tests(
+    config: ProjectConfig, project_root: Path, quiet: bool = False, *, dry_run: bool = False
+) -> Path:
     """Generate E2E testing platform using Copier template."""
     ctx = variable_mapper.e2e_context(config)
     dst = project_root / "tests" / "e2e"
     dst.mkdir(parents=True, exist_ok=True)
-    _run_copier(TEMPLATES_DIR / "tests" / "e2e-testing-template", dst, ctx, quiet)
+    _run_copier(TEMPLATES_DIR / "tests" / "e2e-testing-template", dst, ctx, quiet, dry_run=dry_run)
     return dst
 
 
@@ -1435,6 +1466,10 @@ def _generate_frontend(
         raise GeneratorError(f"No template for framework {fw.value!r} (layout {layout_name!r})")
 
     ctx = variable_mapper.frontend_context(config)
+    if fw in {FrontendFramework.VUE, FrontendFramework.SVELTE}:
+        # Copier still installs dependencies and prepares the template. Checks
+        # need the API clients/protocols emitted by later composition phases.
+        ctx["forge_orchestrated"] = True
 
     # Templates that declare ``_subdirectory:`` render INTO dst_path
     # (Vue/Svelte + most plugin templates); templates without it own the
@@ -1452,6 +1487,24 @@ def _generate_frontend(
         # Phase-0 PoC. Self-contained variants (base_dir == "") skip this.
         _run_copier(TEMPLATES_DIR / base_dir, dst, ctx, quiet, skip_tasks=True, dry_run=dry_run)
     _run_copier(TEMPLATES_DIR / template_dir, dst, ctx, quiet, dry_run=dry_run)
+    if dry_run and config.frontend.framework in {FrontendFramework.VUE, FrontendFramework.SVELTE}:
+        import sys
+
+        relative = (
+            "scripts/post_generate.py"
+            if config.frontend.framework == FrontendFramework.VUE
+            else "_build/post_generate.py"
+        )
+        script = app_dir / relative
+        if script.is_file():
+            subprocess.run(
+                [sys.executable, str(script)],
+                cwd=app_dir,
+                env={**os.environ, "FORGE_RENDER_ONLY": "1"},
+                check=True,
+                capture_output=True,
+                text=True,
+            )
     if not uses_subdir:
         # The template owns its inner ``{{project_slug}}/`` directory, so it
         # renders under ``apps/`` and ``_run_copier`` stamped
@@ -1463,6 +1516,31 @@ def _generate_frontend(
         if parent_answers.is_file() and app_dir.is_dir():
             parent_answers.replace(app_dir / ".copier-answers.yml")
     return app_dir
+
+
+def _run_frontend_checks(
+    config: ProjectConfig, project_root: Path, *, quiet: bool, dry_run: bool
+) -> None:
+    """Validate the composed frontend before stamping ownership and committing.
+
+    Copier's setup hook installs dependencies once, but cannot check sources
+    that Forge has not emitted yet. Quiet mode suppresses progress, not checks.
+    """
+    frontend = config.frontend
+    if dry_run or frontend is None:
+        return
+    scripts = {
+        FrontendFramework.VUE: ("lint", "build"),  # build includes vue-tsc
+        FrontendFramework.SVELTE: ("check", "lint", "build"),
+    }.get(frontend.framework, ())
+    for script in scripts:
+        _run_backend_cmd(
+            project_root / "apps" / config.frontend_slug,
+            [frontend.package_manager, "run", script],
+            f"Frontend {frontend.framework.value} {script}",
+            required=True,
+            quiet=quiet,
+        )
 
 
 def _run_backend_cmd(
@@ -1524,21 +1602,24 @@ def _run_backend_cmd(
         return True
     if not quiet:
         print(f"  [!!] {description} failed")
-    stderr_tail = ""
-    if result.stderr:
-        stderr_tail = "\n".join(result.stderr.strip().splitlines()[-5:])
-        if not quiet:
-            for line in stderr_tail.splitlines():
-                print(f"       {line}")
+    # Type checkers commonly print diagnostics to stdout, even on failure.
+    output_tail = "\n".join(
+        "\n".join(part for part in (result.stdout, result.stderr) if part)
+        .strip()
+        .splitlines()[-20:]
+    )
+    if output_tail and not quiet:
+        for line in output_tail.splitlines():
+            print(f"       {line}")
     if required:
-        suffix = f"\n{stderr_tail}" if stderr_tail else ""
+        suffix = f"\n{output_tail}" if output_tail else ""
         raise GeneratorError(
             f"{description} failed (exit {result.returncode}): {' '.join(cmd)}{suffix}"
         )
     return False
 
 
-def _force_remove_readonly(func, path, _exc_info):
+def _force_remove_readonly(func, path, _exception):
     """Error handler for shutil.rmtree to clear read-only flags on Windows."""
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -1548,7 +1629,7 @@ def _cleanup_sub_git_repos(project_root: Path) -> None:
     """Remove .git directories from generated subdirectories (recursive)."""
     for git_dir in project_root.rglob(".git"):
         if git_dir.is_dir() and git_dir.parent != project_root:
-            shutil.rmtree(git_dir, onerror=_force_remove_readonly)
+            shutil.rmtree(git_dir, onexc=_force_remove_readonly)
 
 
 def _git_init(project_root: Path) -> None:
@@ -1565,10 +1646,26 @@ def _git_init(project_root: Path) -> None:
         "GIT_COMMITTER_NAME": "forge",
         "GIT_COMMITTER_EMAIL": "forge@localhost",
     }
+    # Automatic maintenance can otherwise outlive commit and mutate .git after
+    # generation returns. Keep it enabled, but finish it before callers snapshot
+    # or update the project. Set both keys because newer Git prefers maintenance.
     for step, cmd, step_env in (
         ("init", ["git", "init"], None),
         ("add", ["git", "add", "."], None),
-        ("commit", ["git", "commit", "-m", "Initial commit from forge"], env),
+        (
+            "commit",
+            [
+                "git",
+                "-c",
+                "gc.autoDetach=false",
+                "-c",
+                "maintenance.autoDetach=false",
+                "commit",
+                "-m",
+                "Initial commit from forge",
+            ],
+            env,
+        ),
     ):
         try:
             subprocess.run(

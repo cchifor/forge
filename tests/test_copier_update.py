@@ -560,7 +560,7 @@ class TestEndToEndAgainstGenerator:
 
     def test_generate_then_update_no_copier_call(self, tmp_path: Path) -> None:
         from forge.config import FrontendConfig, FrontendFramework
-        from forge.generator import generate
+        from tests._legacy_generation import generate
 
         cfg = ProjectConfig(
             project_name="copierupdate",

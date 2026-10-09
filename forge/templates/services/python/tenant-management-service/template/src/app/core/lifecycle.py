@@ -1,9 +1,9 @@
 import logging
 import logging.config
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 
-from dishka import AsyncContainer, make_async_container
+from dishka import AsyncContainer, Provider, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 
@@ -26,7 +26,9 @@ class AppLifecycle:
     _outbox_relay: OutboxRelay | None = None
 
     @classmethod
-    def bootstrap(cls, app: FastAPI, config: Settings) -> None:
+    def bootstrap(
+        cls, app: FastAPI, config: Settings, *, providers: Iterable[Provider] = ()
+    ) -> None:
         """PHASE 1: BUILD-TIME CONFIGURATION"""
 
         # 1. Configure Logging
@@ -34,8 +36,9 @@ class AppLifecycle:
         logger.info(f"Bootstrapping {config.app.title} v{config.app.version}...")
 
         # 2. Setup Dependency Injection (Dishka)
-        providers = [P() for P in ALL_PROVIDERS]
-        container = make_async_container(*providers, context={Settings: config})
+        container = make_async_container(
+            *(P() for P in ALL_PROVIDERS), *providers, context={Settings: config}
+        )
         setup_dishka(container, app)
 
         # 3. Setup Authentication. TMS is the cross-tenant control plane —
@@ -53,10 +56,8 @@ class AppLifecycle:
         # TMS-backed CachingIssuerTrustMap. ``issuer_url`` returns the
         # configured issuer base URL — the only trusted issuer.
         try:
-            from uuid import UUID
-
             bundle.trust_map.set(
-                UUID("00000000-0000-0000-0000-000000000001"),
+                "00000000-0000-0000-0000-000000000001",
                 TenantTrust(expected_issuer=issuer_url(config.security.auth)),
             )
         except (ValueError, AttributeError) as exc:

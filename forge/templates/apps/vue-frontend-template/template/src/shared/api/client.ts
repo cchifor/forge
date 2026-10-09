@@ -6,8 +6,6 @@ let onUnauthorized: (() => void) | null = null
 
 let refreshInFlight: Promise<boolean> | null = null
 
-const bodiesForRetry = new WeakMap<Request, ArrayBuffer>()
-
 async function silentRefresh(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight
   refreshInFlight = (async () => {
@@ -48,27 +46,23 @@ export function getApiClient(): KyInstance {
   if (clientInstance) return clientInstance
 
   clientInstance = ky.create({
-    prefixUrl: import.meta.env.VITE_API_BASE_URL || window.location.origin,
+    prefix: import.meta.env.VITE_API_BASE_URL || window.location.origin,
     credentials: 'include',
     timeout: 30_000,
     retry: { limit: 0 },
     hooks: {
       beforeRequest: [
-        async (request) => {
+        async ({ request }) => {
           if (tokenGetter) {
             const token = await tokenGetter()
             if (token) {
               request.headers.set('Authorization', `Bearer ${token}`)
             }
           }
-          const body = await captureBody(request)
-          if (body !== undefined) {
-            bodiesForRetry.set(request, body)
-          }
         },
       ],
       afterResponse: [
-        async (request, _options, response) => {
+        async ({ request, response }) => {
           if (response.status !== 401) return response
 
           const refreshed = await silentRefresh()
@@ -78,7 +72,10 @@ export function getApiClient(): KyInstance {
           }
 
           try {
-            const body = bodiesForRetry.get(request)
+            // Ky passes a retained Request clone to afterResponse. Object
+            // identity differs from beforeRequest, so read this clone directly.
+            const body = await captureBody(request)
+            if (request.body && body === undefined) return response
             const retryResp = await fetch(request.url, {
               method: request.method,
               headers: request.headers,

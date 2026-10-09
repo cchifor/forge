@@ -19,14 +19,14 @@
  * tree-shake cleanly out of production bundles.
  */
 
-import { exportJWK, generateKeyPair, SignJWT, type JWK, type KeyLike } from "jose";
+import { exportJWK, generateKeyPair, SignJWT, type JWK } from "jose";
 
 /** A test ECDSA P-256 keypair plus its JWK shapes. */
 export interface TestEcdsaKeypair {
   /** Stable kid generated at construction time. */
   readonly kid: string;
-  readonly privateKey: KeyLike;
-  readonly publicKey: KeyLike;
+  readonly privateKey: CryptoKey;
+  readonly publicKey: CryptoKey;
   readonly publicJwk: JWK;
   /** A complete JWKS document containing only this keypair's public JWK. */
   jwks(): { keys: JWK[] };
