@@ -286,11 +286,11 @@ def test_apikeys_create_bounds_role_delegation_to_admin_roles() -> None:
     src = _apikeys_api_src()
 
     # _require_admin must hand back the verified roles so create_key can bound.
-    assert "admin_roles = await _require_admin(" in src, (
+    assert "admin_roles, admin_scopes = await _require_admin(" in src, (
         "create_key must capture the admin's verified roles from _require_admin"
     )
     assert (
-        "async def _require_admin(request: Request, session: ServerSession) -> list[str]:" in src
+        "-> tuple[list[str], frozenset[str]]:" in src
     ), "_require_admin must return the verified role list"
 
     # The delegation bound + its 422 rejection.

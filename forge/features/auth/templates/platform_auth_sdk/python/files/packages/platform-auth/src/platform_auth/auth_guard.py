@@ -56,6 +56,12 @@ from jwt.exceptions import (
     MissingRequiredClaimError,
 )
 
+try:
+    from starlette.requests import Request
+except ImportError:
+    # The verifier also supports non-HTTP consumers without the fastapi extra.
+    Request = Any
+
 from platform_auth.exceptions import (
     ActorNotAuthorized,
     InvalidToken,
@@ -186,12 +192,12 @@ class AuthGuard:
         """
         return self._audiences
 
-    async def __call__(self, request: Any) -> IdentityContext:
+    async def __call__(self, request: Request) -> IdentityContext:
         """FastAPI dependency entry point.
 
-        ``request`` is duck-typed as anything with ``.headers`` (a Mapping)
-        and ``.state`` (an attribute container). Avoiding a hard FastAPI
-        import keeps this module testable without the framework installed.
+        A concrete Request annotation lets FastAPI inject the request rather
+        than treating it as a required query parameter. Non-HTTP consumers
+        can still use verify() without installing the framework extra.
         """
         token = self._extract_bearer(request)
         identity = await self.verify(token)
@@ -509,7 +515,7 @@ def require_scope(*required: str) -> Callable[..., Awaitable[IdentityContext]]:
     """
     needed = frozenset(str(r) for r in required)
 
-    async def dep(request: Any) -> IdentityContext:
+    async def dep(request: Request) -> IdentityContext:
         identity: IdentityContext | None = getattr(request.state, "identity", None)
         if identity is None:
             # AuthGuard didn't run — caller forgot to wire it.

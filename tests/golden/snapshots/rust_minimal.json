@@ -65,11 +65,11 @@
       "sha256": "6b2aa6e589fd88e2"
     },
     "forge.toml": {
-      "size": 24785,
+      "size": 24837,
       "sha256": "<version-dependent>"
     },
     "services/api/.copier-answers.yml": {
-      "size": 542,
+      "size": 545,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {

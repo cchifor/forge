@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -105,6 +106,11 @@ class GatekeeperSettings(BaseSettings):
     # credentials, so they are gated behind an explicit admin role rather
     # than mere authentication. Operator-overridable via ``ADMIN_ROLE``.
     admin_role: str = "admin"
+
+    # Third-party credentials are an explicit opt-in. Scope checks still
+    # belong at the receiving application endpoints.
+    api_keys_enabled: bool = False
+    api_key_max_ttl_seconds: int = Field(default=7_776_000, ge=1)  # 90 days
 
     # Internal test bypass (disabled by default, dev/test environments only)
     test_bypass_enabled: bool = False

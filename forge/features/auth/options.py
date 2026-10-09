@@ -175,3 +175,19 @@ Only meaningful when ``auth.mode=generate``; coerced to ``none`` otherwise.
             },
         )
     )
+
+    api.add_option(
+        Option(
+            path="auth.api_keys",
+            type=OptionType.BOOL,
+            default=False,
+            summary="Enable scoped, expiring third-party API keys in Gatekeeper.",
+            description="""Opt-in API key lifecycle and X-API-Key authentication.
+Requires include_keycloak=true, auth.mode=generate and auth.provider=gatekeeper.
+Administrators issue tenant-bound keys with explicit scopes limited to their own
+verified scopes. Services must enforce those scopes and resource ownership.
+Generated Compose sets API_KEYS_ENABLED; other deployments must set it explicitly.
+Keys are disabled by default, including their management routes.""",
+            category=FeatureCategory.PLATFORM,
+        )
+    )

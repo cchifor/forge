@@ -2,7 +2,6 @@
 #
 # Domain services receive requests directly from the edge. Orders declares
 # inventory as a downstream to demonstrate S2S grants without an intermediary.
-# The optional service-proxy application template must be selected explicitly.
 [platform]
 name = "microservices"
 display_label = "Microservices platform"

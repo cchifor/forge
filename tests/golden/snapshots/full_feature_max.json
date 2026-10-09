@@ -57,7 +57,7 @@
       "sha256": "77ac9733140f48bb"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1276,
+      "size": 1279,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -1353,8 +1353,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "deploy/infra/gatekeeper/src/app/api/v1/api.py": {
-      "size": 321,
-      "sha256": "f01af98a66c34ffe"
+      "size": 215,
+      "sha256": "a3ea2fe7c73c5dd9"
     },
     "deploy/infra/gatekeeper/src/app/api/v1/endpoints/__init__.py": {
       "size": 0,
@@ -1409,24 +1409,24 @@
       "sha256": "34bcdba3aaf1d37b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys.py": {
-      "size": 6816,
-      "sha256": "9aacb5f4d50ee103"
+      "size": 8762,
+      "sha256": "b192fd702de61396"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/apikeys_api.py": {
-      "size": 10873,
-      "sha256": "dc8fffecf676de0e"
+      "size": 12618,
+      "sha256": "97fff7148e9cbbf9"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/authz.py": {
       "size": 2901,
       "sha256": "0d031823b3226dd2"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/config.py": {
-      "size": 17481,
-      "sha256": "807b2318eef7e98e"
+      "size": 17747,
+      "sha256": "bc0f5ed7ae44df67"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/delegation_grant.py": {
-      "size": 6933,
-      "sha256": "78b5c404bb798c8c"
+      "size": 7041,
+      "sha256": "2c7322a606f0fcb5"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/helpers.py": {
       "size": 11176,
@@ -1445,8 +1445,8 @@
       "sha256": "fc3074e3a2111eb6"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/jwks.py": {
-      "size": 5403,
-      "sha256": "fcc96e0e7ed39129"
+      "size": 5508,
+      "sha256": "fc54102cfcf19458"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/key_store.py": {
       "size": 8629,
@@ -1481,16 +1481,16 @@
       "sha256": "bebbec570db9b36e"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes.py": {
-      "size": 39338,
-      "sha256": "499c629dd4fa962c"
+      "size": 41357,
+      "sha256": "5de9958fd346872b"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_jwks.py": {
       "size": 1839,
       "sha256": "a291d21841b463ae"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/routes_session.py": {
-      "size": 7983,
-      "sha256": "b5c68a17d8814c64"
+      "size": 9103,
+      "sha256": "198b4e60cbf9e241"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/scopes.py": {
       "size": 1718,
@@ -1505,20 +1505,20 @@
       "sha256": "65c6f0db128246a0"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/service_token.py": {
-      "size": 25742,
-      "sha256": "944da518d8353b80"
+      "size": 26223,
+      "sha256": "a4f996456f26ceb0"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/service_verifier.py": {
       "size": 18301,
       "sha256": "57ac8f8bd6d5c3fe"
     },
     "deploy/infra/gatekeeper/src/app/gatekeeper/tenant_config.py": {
-      "size": 5035,
-      "sha256": "c020a2c009f31501"
+      "size": 5115,
+      "sha256": "8609cdad51324d84"
     },
     "deploy/infra/gatekeeper/src/app/main.py": {
-      "size": 3848,
-      "sha256": "9836ccaf2c9bb3af"
+      "size": 4090,
+      "sha256": "4ff0c4c607abc166"
     },
     "deploy/infra/gatekeeper/src/app/middleware/__init__.py": {
       "size": 0,
@@ -1585,11 +1585,11 @@
       "sha256": "22237aeddb41cfae"
     },
     "docker-compose.yml": {
-      "size": 13142,
-      "sha256": "e772952c9b65e934"
+      "size": 13275,
+      "sha256": "1382f086b4a75dde"
     },
     "forge.toml": {
-      "size": 181413,
+      "size": 181465,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -1609,8 +1609,8 @@
       "sha256": "f89b9b770112c796"
     },
     "packages/platform-auth/src/platform_auth/auth_guard.py": {
-      "size": 21876,
-      "sha256": "6929f71141b3dc81"
+      "size": 22049,
+      "sha256": "4e3249203fe1a3d1"
     },
     "packages/platform-auth/src/platform_auth/exceptions.py": {
       "size": 3572,
@@ -1713,7 +1713,7 @@
       "sha256": "c6ebc62488d3a40a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 545,
+      "size": 548,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -2537,7 +2537,7 @@
       "sha256": "d3c7f25811409282"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 593,
+      "size": 596,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {

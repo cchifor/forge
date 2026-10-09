@@ -20,9 +20,10 @@ on:
       - "forge/templates/platforms/**"
       - "forge/templates/deploy/**"
       - "forge/synthesis/**"
+      - "forge/features/auth/**"
+      - "tests/e2e/test_generated_auth_contract.py"
+      - "tests/runtime/gatekeeper_contract.py"
       - "forge/templates/services/python/tenant-management-service/**"
-      - "forge/templates/services/python/service-proxy/**"
-      - "forge/templates/services/python/api-gateway/**"
       - "forge/templates/services/python-service-template/**"
       - "tests/e2e/test_platform_compose_boot.py"
       - ".github/workflows/e2e-platform-boot.yml"
@@ -63,3 +64,15 @@ jobs:
         env:
           FORGE_E2E_PLATFORM: "1"
         run: uv run pytest tests/e2e/test_platform_compose_boot.py -m e2e -v -rs --no-cov -k "multitenant_saas or microservices or headless_api"
+
+  auth-contract:
+    name: generated auth contract (S2S + scoped API keys)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked --dev
+      - run: uv run pytest tests/e2e/test_generated_auth_contract.py -m e2e -q --no-cov

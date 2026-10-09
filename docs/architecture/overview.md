@@ -47,9 +47,7 @@ features and is a separate concern from using a coding agent to operate Forge.
 
 ## Generated runtime
 
-This diagram shows a Gatekeeper-backed multi-service shape. The default path
-runs directly from the edge to application services. The dotted path is an
-explicitly selected service proxy. A minimal project omits components it did
+This diagram shows a Gatekeeper-backed multi-service shape. Application requests run directly from the edge to services with public APIs. A minimal project omits components it did
 not select; a headless project has no frontend.
 
 ```mermaid
@@ -60,8 +58,7 @@ flowchart TB
     GK --> IdP[Keycloak or configured identity provider]
     GK --> Redis[Redis sessions and tenant routes]
     Edge -->|URL routing and verified internal token| Service[Application APIs / services]
-    Edge -.-> Proxy["Service proxy (opt-in)"]
-    Proxy -->|declared dependency and S2S token| Service
+    Service -->|direct API call with S2S token| Internal[Private domain service]
     Service --> PG[(PostgreSQL)]
     Service --> Ports[Public application ports]
     Ports --> LLM[LLM provider]
@@ -81,48 +78,62 @@ generator also supports mixed-language backends; changing a preset's language
 requires a compatible application template and options. A language badge is not
 a guarantee that every specialized template has an equivalent implementation.
 
-## Direct routing and optional composition
+## Service boundaries and routing
 
-An intermediary application service is optional. Traefik or Nginx can route
-requests to services by URL. Forge's Compose template already emits a Traefik
-route for each backend: `/api/orders/v1/items`, for example, reaches the orders
-service as `/api/v1/items`. The built-in presets use this direct path by default.
-Per-service edge routes also remain present when a proxy is explicitly selected;
-adding a proxy does not make it the exclusive entry point to the domain services.
+The edge routes requests to application APIs by host/path. Each service owns its
+business behavior, authorization, API contract and domain data. A backend for
+frontend (BFF) is optional application code tailored to a particular client;
+aggregation is one possible responsibility. Gatekeeper's browser session/token
+management is separate from that client-specific API behavior.
 
 | Component | Responsibility |
 | --- | --- |
-| Edge proxy / ingress (Traefik or Nginx) | Route HTTP by host/path, serve or route the frontend, and terminate TLS when configured. In the Gatekeeper topology, Traefik also performs the ForwardAuth check. |
-| Gatekeeper | Manage authentication sessions and issue internal tokens. |
-| Application API / domain service | Validate requests, enforce authorization, execute business logic, and own domain data. |
-| Optional service proxy | Forward requests to configured services and authenticate its downstream calls. |
-| Optional backend for frontend (BFF) | Adapt or combine domain APIs for a particular client. Implement this application behavior when a frontend needs it. |
+| Edge / ingress | Route public APIs, terminate TLS when configured, invoke ForwardAuth on authenticated routes. |
+| Gatekeeper | Verify browser sessions or optional API keys, issue internal JWTs and S2S tokens. |
+| Domain service | Verify accepted credentials; enforce scopes, tenant/resource ownership and business rules. Call dependencies directly. |
+| Optional application BFF | Implement a client-specific API using the same authenticated service-call contracts. |
 
-The Python `service-proxy` application template provides a downstream registry,
-HTTP forwarding, and acquisition/caching of service-to-service tokens when
-credentials are configured. Calls have timeouts and map upstream failures to
-HTTP errors. The older `api-gateway` identifier is a compatible name for the
-same implementation; its emitted `app.gateway` modules and `/gateway` routes
-remain unchanged. The template supplies no response aggregation or business
-workflow orchestration, so it is not a complete BFF. Those responsibilities
-belong in custom application modules if needed.
+Select service boundaries for distinct business capabilities, ownership,
+independent deployment or scaling needs. Multiple CRUD processes alone do not
+establish those properties. A modular single-service application is a reasonable
+starting point; split it when the benefits justify distributed failure modes.
 
-For URL routing alone, the direct path avoids an extra network hop and service
-to operate. A BFF becomes useful when a request must combine several domain
-responses or present a client-specific API. An optional service proxy can be
-useful when downstream calls need its service credentials. Its client-credentials
-flow represents the proxy service; preserving an end user's identity through
-delegated calls needs explicit integration.
+The generated Compose stack is for development: it publishes backend host ports,
+routes every backend through Traefik, uses an application-wide bridge network,
+and shares a PostgreSQL administrator credential. The production reference model
+exposes only deliberately public APIs; internal services remain private. A shared
+PostgreSQL cluster is acceptable with separate service-owned databases and
+restricted runtime roles. The template does not establish those production
+boundaries automatically. See [deployment](../operations/deployment.md).
 
-Directly routed services still verify their accepted token issuer/audience and
-enforce scopes, tenant isolation, and domain authorization as applicable. Retain
-the edge's auth middleware for authenticated routes. Removing a proxy's token
-exchange can change the caller's identity, so validate the direct user-to-service
-journey when migrating an existing project.
+## Direct service-to-service communication
 
-See [platform shapes and explicit opt-in](../guides/platforms.md#opting-into-a-service-proxy).
-A single-service application can use
-`browser → edge proxy → application API → database`.
+A calling service obtains a short-lived token from Gatekeeper, then calls its
+dependency directly. Gatekeeper is the credential issuer, not the data path for
+that request. `depends_on` plus `auth.service_discovery=true` generates permitted
+targets, credentials and internal URLs; business calls still belong in application
+code.
+
+Use client credentials for an autonomous machine operation with an explicitly
+authorized tenant. Use token exchange for a user-delegated operation: retain the
+user's subject and tenant, record the calling service as actor, and intersect
+permissions. Delegation must be allowed by the registry and receiving policy.
+The requested service target (`svc-inventory`) is distinct from the current
+platform-wide JWT audience (`forge-services`); receiving services must enforce
+service-specific permissions. See [S2S communication](../guides/service-to-service.md).
+
+## Optional third-party API access
+
+`auth.api_keys=true` enables Gatekeeper's API-key management and `X-API-Key`
+authentication. It requires generated Gatekeeper authentication and defaults to
+false. An administrator issues a tenant-bound key with explicit scopes and an
+expiry; Gatekeeper stores its hash and forwards a signed internal identity to the
+public API. The service enforces feature permissions and resource ownership.
+
+API keys identify an integration, not the administrator who created it. They
+cannot be used as user-delegation subjects. Enabling the option does not generate
+application permission rules or expose administrative endpoints publicly.
+See [API keys](../guides/api-keys.md) for issuance, use, revocation and deployment.
 
 ## Browser request and authentication flow
 
@@ -152,8 +163,8 @@ sequenceDiagram
 
 Gatekeeper is the sole internal token authority for this configuration.
 Backends verify its tokens; they do not directly accept the upstream Keycloak
-token. Python delegates its verifier integration to Weld libraries; Node and
-Rust use the emitted platform-auth SDKs. Explicit user activity refreshes the
+token. Python ships the baseline `forge_core` verifier integration and the optional
+`platform_auth` SDK; Node and Rust use their emitted platform-auth SDKs. Explicit user activity refreshes the
 idle session through `/auth/session`; background API traffic does not extend it.
 See the [auth contract](../auth-architecture.md) for two-key Redis TTL behavior,
 JWKS caching, session timeout, and on-behalf-of token exchange.
@@ -180,8 +191,10 @@ The `multitenant-saas` preset uses `database.multitenancy=shared_rls` and
 `database.tenant_resolution=token_claim`. The app binds the verified tenant to
 `app.current_tenant` for the transaction. The tenant-management service is exempt
 from the application RLS fragment and uses its separate control-plane model.
-This pattern requires the correct database role, policies, and transaction
-boundaries; validate tenant-isolation journeys for the deployment you operate.
+PostgreSQL superusers and BYPASSRLS roles bypass RLS; table owners also bypass
+it unless FORCE ROW LEVEL SECURITY applies. The development `postgres` runtime
+credential must be replaced by restricted roles. This pattern requires the
+correct policies and transaction boundaries; validate tenant-isolation journeys for the deployment you operate.
 
 ## AI, retrieval, and asynchronous work
 

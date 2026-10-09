@@ -120,3 +120,6 @@ service:
       - "traefik.enable=true"
       - "traefik.http.middlewares.auth.forwardauth.address=http://gatekeeper:5000/auth"
       - "traefik.http.middlewares.auth.forwardauth.authResponseHeaders=Authorization,X-Gatekeeper-User-Id,X-Gatekeeper-Email,X-Gatekeeper-Tenant,X-Gatekeeper-Roles,X-Gatekeeper-Auth-Method"
+      # Run after ForwardAuth: application services receive the internal JWT,
+      # not the integration's long-lived API key.
+      - "traefik.http.middlewares.strip-api-key.headers.customrequestheaders.X-API-Key="

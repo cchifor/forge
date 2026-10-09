@@ -81,7 +81,12 @@ def render_compose(
         # the rendered docker-compose.yml stable so golden snapshots
         # don't drift between identical generations.
         for svc in get_services_for_capabilities(sorted(plan.capabilities)):
-            extra_services.append({"name": svc.name, "block": svc.as_compose_dict()})
+            block = svc.as_compose_dict()
+            if svc.name == "gatekeeper":
+                block.setdefault("environment", {})["API_KEYS_ENABLED"] = (
+                    "true" if plan.option_values.get("auth.api_keys") else "false"
+                )
+            extra_services.append({"name": svc.name, "block": block})
             for vol in svc.named_volumes:
                 if vol not in seen_volumes:
                     seen_volumes.add(vol)

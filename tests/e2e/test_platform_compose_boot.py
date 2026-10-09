@@ -224,6 +224,56 @@ print("S2S_OK")
 # mint_internal_token signs the fixture with the configured issuer/audience.
 # Keep these imports and arguments in sync with Gatekeeper's implementation;
 # this fixture does not expose a development-only token endpoint in the service.
+_OIDC_LOGIN_SCRIPT = """
+import os
+from html.parser import HTMLParser
+from urllib.parse import urlsplit
+import httpx
+
+class LoginForm(HTMLParser):
+    action = None
+    fields = None
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "form" and attrs.get("id") == "kc-form-login":
+            self.action = attrs["action"]
+            self.fields = {}
+        if tag == "input" and self.fields is not None and attrs.get("type") == "hidden":
+            if attrs.get("name"):
+                self.fields[attrs["name"]] = attrs.get("value", "")
+
+base = "http://localhost:5000"
+edge = {"X-Forwarded-Host": "app.localhost", "X-Forwarded-Proto": "http"}
+with httpx.Client(timeout=15, follow_redirects=False) as client:
+    login = client.get(base + "/auth/login", headers=edge)
+    assert login.status_code == 302, login.status_code
+    auth_url = login.headers["location"]
+    expected_issuer = os.environ["KEYCLOAK_BASE_URL"] + "/" + os.environ["KEYCLOAK_ADMIN_REALM"]
+    assert auth_url.startswith(expected_issuer + "/protocol/openid-connect/auth?")
+    page = client.get(auth_url)
+    assert page.status_code == 200, page.status_code
+    form = LoginForm()
+    form.feed(page.text)
+    assert form.action, "Keycloak did not render the expected login form"
+    result = client.post(form.action, data={**form.fields, "username": "dev@localhost", "password": "devpass"})
+    assert result.status_code == 302, result.status_code
+    callback = urlsplit(result.headers["location"])
+    assert callback.path == "/callback" and "code=" in callback.query
+    # Emulate the edge's forwarding of the public callback to Gatekeeper.
+    response = client.get(base + callback.path + "?" + callback.query, headers=edge)
+    assert response.status_code == 302, (response.status_code, response.text)
+    assert client.cookies.get("tenant_session_id"), "opaque session cookie missing"
+    user = client.get(base + "/auth/userinfo", headers=edge)
+    assert user.status_code == 200, (user.status_code, user.text)
+    assert user.json()["email"] == "dev@localhost"
+    auth = client.get(base + "/auth", headers={**edge, "Accept": "application/json"})
+    assert auth.status_code == 200, (auth.status_code, auth.text)
+    downstream = client.get("http://orders:5020/api/v1/items", headers={"Authorization": auth.headers["authorization"]})
+    assert downstream.status_code == 200, (downstream.status_code, downstream.text)
+print("OIDC_LOGIN_OK")
+"""
+
+
 _DIRECT_API_SCRIPT = """
 import json, os, time, urllib.request, urllib.error
 from pathlib import Path
@@ -292,6 +342,7 @@ def test_headless_api_platform_direct_authenticated_api(
         assert not (root / "services/orders/src/app/gateway").exists()
         _boot(root)
         _wait_healthy(root, ["keycloak", "gatekeeper", "orders"])
+        assert "OIDC_LOGIN_OK" in _exec_py(root, "gatekeeper", _OIDC_LOGIN_SCRIPT)
         assert "HEALTH_OK" in _exec_py(root, "orders", _HEALTH_SCRIPT.format(port=5020))
         script = _DIRECT_API_SCRIPT.replace("{base_url}", "http://orders:5020")
         assert "DIRECT_API_OK" in _exec_py(root, "gatekeeper", script)

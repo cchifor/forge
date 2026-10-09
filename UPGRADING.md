@@ -70,148 +70,79 @@ then run architecture and all three native test suites against the candidate.
 Follow the [coordinated upgrade checklist](docs/operations/maintainer-runbook.md#coordinated-dependency-upgrades)
 for locked installs, generated applications, release artifacts and CI sign-off.
 
-The 1.2 series aligns forge templates with the platform's **10-SDK
-restructure** (`platform/sdks/weld-*`, Tier 0 → Tier 2 acyclic
-dependency DAG, May 2026). The Python service template now imports
-weld-* SDKs directly instead of vendoring the duplicate `src/service/`
-shim that shipped through 1.0/1.1.
+### Python SDK migration from 1.1 and 1.2 alphas
+
+The early 1.2 alpha replaced the Python `src/service/` shim with `weld-*`
+imports. Its [original migration notes](docs/archive/1.2-alpha-weld-migration.md)
+preserve the import table, copier prompts, optional features, deployment and Vue
+changes for projects built with that version. That SDK layout has since been
+superseded: current Python services ship their own `sdks/forge-core` and use
+`forge_core` imports. Generated authentication additionally supplies `platform_auth`.
+Neither regeneration nor `sdk_consumption=none` preserves the old shim.
+
+For custom code migrating to current Forge, review these public equivalents:
+
+| Previous import family | Current application dependency |
+| --- | --- |
+| `service.db`, `service.repository`, `service.uow`; `weld.core.persistence` | `forge_core.persistence` (`AsyncDatabase`, `AsyncBaseRepository`, `AsyncUnitOfWork`, mixins) |
+| `service.security`; `weld.fastapi.security` | `forge_core.security`; use the optional `platform_auth` public API for its delegation/S2S contracts |
+| `service.core.context`, `service.domain`; `weld.core.context`, `weld.core.domain` | `forge_core.domain` and `forge_core.domain.context` |
+| `service.discovery`; `weld.core.discovery` | `forge_core.discovery` |
+| `service.utils.fastapiutils`; `weld.fastapi.api.errors` | `forge_core.errors` and the application's error port/handlers |
+| `service.api`; `weld.fastapi.api` filtering/pagination | `forge_core.api` |
+| `service.observability`; `weld.observability` | `forge_core.observability` |
+| `service.client`; `weld.http_client` | Explicit application HTTP client; `platform_auth.S2SClient` for authenticated service calls |
+| `service.tasks` | Select a supported queue option and implement the application's job contract |
+
+These are API families, not a mechanical namespace substitution: compare public
+signatures, error envelopes, transactions and identity handling in the rendered
+candidate. Preserve required external SDK dependencies until their consumers are
+migrated. `weld_base_sdks` is no longer a Python copier prompt; `sdk_consumption`
+now controls the sibling Docker SDK build context, while the service-local
+`forge-core` is always shipped. `service_path_prefix` still controls routing.
+Resolve optional features against the current [catalog](docs/FEATURES.md); the
+archived defaults and proposed `auth.mode=weld` are not current promises.
+
+For Vue, preserve custom UI behavior and migrate generated API-client imports to
+`src/custom/api/` as described above. `consumed_services` selects service-specific
+OpenAPI output; run code generation explicitly. Review the candidate's lockfiles,
+Docker build contexts, migrations and entrypoints, then run architecture, unit,
+integration and E2E gates before replacing the old deployment.
 
 ### Direct routing defaults
 
-These defaults are part of the unreleased changes targeting 1.2.0.
+The `service-proxy` and legacy `api-gateway` application templates have been
+removed. Existing configurations selecting either name fail validation; Forge
+does not silently replace them or delete an existing generated service.
 
-New `microservices` projects contain `orders` and `inventory` behind the edge,
-with `orders → inventory` S2S grants. New `headless-api` projects contain one
-`orders` API behind edge authentication, with S2S discovery disabled. Neither
-preset inserts a forwarding service.
+For an existing project, preserve any custom application behavior, then create a
+reviewable candidate with an explicit backend list containing the domain services.
+Update client URLs to their edge routes, and implement necessary business calls
+using the S2S SDK. Remove references to the retired service from dependencies,
+deployment and the recorded generation recipe as part of the reviewed topology
+migration. Validate user identity, scopes and tenant access before retiring the
+old deployment. Do not rename the template and assume authorization is unchanged.
 
-The preferred optional template name is `service-proxy`. The old `api-gateway`
-name remains supported and emits the same modules and endpoint paths. A BFF
-that adapts APIs for a particular frontend remains custom application code.
+API keys now require `auth.api_keys=true` (`API_KEYS_ENABLED=true` in Gatekeeper;
+generated Compose sets it). Existing unscoped or non-expiring keys are rejected
+and must be reissued with explicit scopes and an expiry. Creating administrators
+must hold the requested scopes as well as the admin role. Sessions now bind the
+verified tenant ID; older hostname-based sessions are invalidated and their
+cookies cleared. API/session requests return 401 to trigger reauthentication;
+page navigations begin a fresh login.
+Non-default realms also need explicit hostname-to-tenant UUID routing records
+(normally provisioned by TMS). Only the configured default realm falls back to
+`DEFAULT_TENANT_ID`; signing in again does not create missing tenant routes.
 
-For projects with a `.forge/quality.json` recipe, `forge --update` retains its
-recorded backend list, including `api-gateway` services. An explicit `backends`
-list in generation configuration also overrides the new preset defaults.
-The `platform_template` name in `forge.toml` alone is not a frozen topology.
-Regenerating from a preset-only configuration uses the currently installed
-preset and can omit the old gateway. For legacy projects without a recipe,
-recover and explicitly record the original backends and dependencies before
-regeneration; follow the [ownership migration guide](docs/operations/generated-code-quality.md).
-
-To adopt direct routing, prepare a candidate configuration without the
-proxy, update callers to `/api/<service>/...`, and review the generated service
-grants and deployment resources through the [customization workflow](docs/guides/customization.md).
-Preserve edge authentication and verify user identity, audience, scopes, and
-tenant authorization at each directly exposed service before retiring the old
-proxy. For a single remaining backend, set `auth.service_discovery: false`.
-
-### 1.2.0-alpha.1 — weld-* SDKs
-
-#### Breaking changes
-
-1. **`src/service/` removed from the Python template.** Every import
-   that previously reached into the in-tree shim now resolves directly
-   to its weld-* equivalent. Generated services regenerated against
-   1.2 will not include the shim — services that haven't migrated
-   their hand-written code stay on 1.1.x or pick `sdk_consumption=none`
-   in the new copier prompt (see below).
-
-   Import mapping for services migrating by hand:
-
-   | Old (`service.*`) | New (`weld.*`) |
-   |---|---|
-   | `service.db.aio.AsyncDatabase` | `weld.core.persistence.db.aio.AsyncDatabase` |
-   | `service.repository.{aio,mixins}` | `weld.core.persistence.repository.{aio,mixins}` |
-   | `service.uow.aio.AsyncUnitOfWork` | `weld.core.persistence.uow.aio.AsyncUnitOfWork` |
-   | `service.security.auth.{authenticate_request, oauth2_scheme}` | `weld.fastapi.security.auth.{authenticate_request, oauth2_scheme}` |
-   | `service.security.platform_auth_setup.build_auth_guard` | `weld.fastapi.security.platform_auth_setup.build_auth_guard` |
-   | `service.security (auth)` | `weld.fastapi.security (auth)` |
-   | `service.core.context` | `weld.core.context` |
-   | `service.domain.{account,user,config}` | `weld.core.domain.{account,user,config}` |
-   | `service.discovery.Discovery` | `weld.core.discovery.Discovery` |
-   | `service.utils.fastapiutils.{ErrorEnvelope,ErrorBody}` | `weld.fastapi.api.errors.Error` (see note below) |
-   | `service.observability.{correlation,json_logging}` | `weld.observability.{correlation,…}` |
-   | `service.client.*` | `weld.http_client.*` |
-   | `service.api.{filtering,pagination}` | `weld.fastapi.api.{filtering,pagination}` |
-   | `service.tasks.*` | (removed from base — enable `async.task_queue` for an equivalent runner) |
-
-   The `Error` shape from `weld.fastapi.api.errors` has fields
-   `(message, type, detail)` instead of the older
-   `ErrorEnvelope(error=ErrorBody(code, message, type, context, correlation_id))`.
-   The RFC-007 `code` and `correlation_id` now ride inside `detail` so
-   existing tooling can still extract them — they're just one level
-   deeper. See `forge/templates/services/python-service-template/template/src/app/core/errors.py`
-   for the canonical rewrite.
-
-2. **`background_tasks` endpoint removed from the base Python template.**
-   The previous template scaffolded `src/app/api/v1/endpoints/tasks.py`
-   + `src/service/tasks/*`. The new shape defers background-work
-   scaffolding to the `async.task_queue` option (Taskiq fragment).
-   Enable `async.task_queue=true` to get an equivalent runner +
-   endpoint without the in-tree code.
-
-3. **Auth feature option default flipping (deferred).** `auth.mode`
-   default remains `"generate"` in 1.2.0-alpha.1; the upcoming
-   `"weld"` mode that drops the per-service auth SDK in favor of a
-   direct `weld-auth` dependency will land in a follow-up alpha.
-
-#### New copier prompts (Python template)
-
-| Prompt | Default | Purpose |
-|---|---|---|
-| `sdk_consumption` | `"monorepo"` | `monorepo` → weld-* path deps to `../../sdks/weld-*`; `standalone` → pinned PyPI versions (requires weld-* to be published); `none` → preserve the legacy 1.1.x behavior and keep `src/service/`. |
-| `weld_base_sdks` | `"auth,core,fastapi,observability,http-client,events"` | Comma-separated weld-* SDKs declared in the generated pyproject. Default covers the common base used by every platform service. |
-| `service_path_prefix` | `"/api/{{ project_slug }}"` | Traefik PathPrefix used by the generated `docker-compose.fragment.yaml`. |
-
-#### New feature modules
-
-Five new options register fragments scaffolding the remaining weld-*
-SDKs. All Python-only (tier 3), all additive:
-
-| Option | Default | Fragment | What it scaffolds |
-|---|---|---|---|
-| `events.bus` | `"none"` | `events_core` | `weld.events.EventBus` factory + DI provider |
-| `events.outbox` | `true` | `events_outbox` | Outbox table migration + `OutboxRelay` lifespan hooks |
-| `streaming.sse` | `false` | `streaming_sse` | `/api/v1/stream` SSE endpoint via `weld.streaming.CloudEventStreamer` |
-| `connectors.enabled` + `connectors.backends` | `false` / `[]` | `connectors_registry` | `weld.connectors.ConnectorRegistry` with selected `[http,fs,sql,s3,mcp]` extras |
-| `airlock.client` | `false` | `airlock_client` | `weld.airlock.AsyncAirlockClient` DI provider + shutdown hook |
-| `mcp_template.server` | `false` | `mcp_template_server` | First-party MCP server via `weld.mcp_template.build_server()` |
-| `mcp_template.openapi_to_tools` | `false` | `mcp_template_openapi_tools` | Codegen step turning the service's OpenAPI into MCP tool defs |
-
-#### New scaffolding shape
-
-- `Dockerfile.jinja` is now multi-stage: the builder copies weld-*
-  SDK source from the `sdks` build context, builds wheels into
-  `/wheels`, strips `[tool.uv.sources]` from the project pyproject so
-  uv resolves from `/wheels` at install time. Runtime stage runs as
-  non-root `appuser` (uid 10001) with a urllib healthcheck against
-  `/api/v1/health/live`.
-- `entrypoint.sh.jinja` runs `alembic upgrade head` (advisory-lock
-  serialized) before exec-ing the server.
-- `docker-compose.fragment.yaml.jinja` is a new artifact merged into
-  the platform's `docker-compose.yaml` at generation time: separate
-  migrate-job + runtime service, Traefik labels with path-rewrite
-  middleware, `depends_on` chain on postgres-healthy +
-  keycloak-healthy.
-- Node and Rust templates inherit the same shape (multi-stage, non-
-  root, healthcheck, migrate-job + Traefik fragment) so platform
-  orchestration is uniform across language backends.
-
-#### Vue frontend template
-
-The Vue template gains `@hey-api/client-fetch`, `@tanstack/vue-virtual`,
-and `@sentry/vue` (gated by the new `include_sentry` prompt). A new
-`consumed_services` prompt drives a multi-spec `openapi-ts.config.ts`
-that mirrors `apps/web` — each backend service gets its own subfolder
-under `src/shared/api/generated/<svc>/` to avoid type collisions.
-
-#### Latent bug fixed
-
-`forge.capability_resolver._collect_fragments` crashed on LIST-typed
-options because `dict.get(value, ())` raised on the unhashable list
-value. The resolver now short-circuits when `spec.enables` is empty —
-this had no observable impact in 1.1 because no LIST option was
-registered until `connectors.backends`.
+User-delegation grants now retain their scope ceiling and bind to their issuing
+client and target. Older grants lacking these fields must be reissued. API-key
+and service-account identities cannot be used as user-delegation subjects.
+Replace/drain every older Gatekeeper instance during rollout: upgraded instances
+reject legacy grant exchange and cannot establish ownership for API revocation.
+Legacy Redis records expire within their original TTL (at most 24 hours); an
+operator can instead purge those `gk:delegation_grant:*` records during a coordinated
+cutover before issuing replacements. Grant lookup does not extend their TTL.
+See [S2S](docs/guides/service-to-service.md) and [API keys](docs/guides/api-keys.md).
 
 ## 1.0 → 1.1
 

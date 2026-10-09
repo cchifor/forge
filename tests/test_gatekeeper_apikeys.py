@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -46,7 +47,7 @@ class _FakeRedis:
     async def get(self, key: str) -> str | None:
         return self.kv.get(key)
 
-    async def set(self, key: str, value: str) -> None:
+    async def set(self, key: str, value: str, *, ex: int | None = None) -> None:
         self.kv[key] = value
 
     async def delete(self, key: str) -> int:
@@ -94,6 +95,9 @@ async def _seed_key(module, fake, *, key_hash: str, tenant_id: str) -> None:
         name="label",
         roles=["admin"],
         owner="owner",
+        scopes=["orders:read"],
+        created_at=int(time.time()),
+        expires_at=int(time.time()) + 300,
     )
 
 

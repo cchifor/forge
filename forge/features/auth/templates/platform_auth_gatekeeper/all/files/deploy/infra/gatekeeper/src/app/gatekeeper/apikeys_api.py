@@ -17,10 +17,11 @@ from __future__ import annotations
 import logging
 import secrets
 import time
+from typing import Annotated, Literal
 
 import jwt
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.gatekeeper import authz
 from app.gatekeeper.apikeys import (
@@ -44,6 +45,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
+KeyScope = Annotated[
+    str,
+    StringConstraints(
+        min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+$"
+    ),
+]
+
 
 # ── Request / Response models ───────────────────────────────────────────────
 
@@ -57,6 +65,8 @@ class CreateKeyRequest(BaseModel):
     roles: list[str] = Field(
         default_factory=list, description="Roles granted to this key"
     )
+    scopes: list[KeyScope] = Field(min_length=1, max_length=100)
+    expires_in_seconds: int = Field(default=2_592_000, ge=1, le=31_536_000)
 
 
 class CreateKeyResponse(BaseModel):
@@ -68,6 +78,8 @@ class CreateKeyResponse(BaseModel):
     name: str
     prefix: str
     roles: list[str]
+    scopes: list[str]
+    expires_at: int
 
 
 class KeySummary(BaseModel):
@@ -78,6 +90,10 @@ class KeySummary(BaseModel):
     roles: list[str]
     owner: str
     key_hash: str
+    scopes: list[str] = Field(default_factory=list)
+    created_at: int | None = None
+    expires_at: int | None = None
+    status: Literal["active", "legacy"]
 
 
 class ListKeysResponse(BaseModel):
@@ -102,6 +118,8 @@ async def _verified_session(request: Request) -> ServerSession:
     with 401.
     """
     cfg = get_settings()
+    if not cfg.api_keys_enabled:
+        raise HTTPException(status_code=404, detail="API keys are disabled")
     session_id = request.cookies.get(cfg.session_id_cookie_name)
     server_session = getattr(request.app.state, "server_session", None)
     if not session_id or server_session is None:
@@ -141,7 +159,9 @@ def _enforce_csrf(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Origin mismatch")
 
 
-async def _require_admin(request: Request, session: ServerSession) -> list[str]:
+async def _require_admin(
+    request: Request, session: ServerSession
+) -> tuple[list[str], frozenset[str]]:
     """Enforce the admin realm role on the verified *session*; return its roles.
 
     Roles live in the Keycloak access token's ``realm_access.roles`` claim,
@@ -182,11 +202,16 @@ async def _require_admin(request: Request, session: ServerSession) -> list[str]:
     except jwt.ExpiredSignatureError as exc:
         # Fail closed on an expired access token: the SPA can re-auth via
         # /auth/userinfo's refresh path, then retry this admin call.
-        raise HTTPException(
-            status_code=401, detail="Session token expired"
-        ) from exc
+        raise HTTPException(status_code=401, detail="Session token expired") from exc
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=401, detail="Invalid session token") from exc
+
+    if (
+        payload.get("sub") != session.sub
+        or payload.get(cfg.tenant_id_claim) != session.tenant_id
+        or session.tenant_id != tc.tenant_id
+    ):
+        raise HTTPException(status_code=403, detail="Session identity mismatch")
 
     roles = authz.extract_realm_roles(payload)
     if not authz.is_authorized(roles, cfg.admin_role):
@@ -197,7 +222,11 @@ async def _require_admin(request: Request, session: ServerSession) -> list[str]:
             cfg.admin_role,
         )
         raise HTTPException(status_code=403, detail="Admin role required")
-    return roles
+    raw_scopes = payload.get("scope", "")
+    scopes = (
+        frozenset(raw_scopes.split()) if isinstance(raw_scopes, str) else frozenset()
+    )
+    return roles, scopes
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
@@ -211,7 +240,7 @@ async def create_key(
     """Generate a new API key for the authenticated tenant (admin only)."""
     _enforce_csrf(request)
     session = await _verified_session(request)
-    admin_roles = await _require_admin(request, session)
+    admin_roles, admin_scopes = await _require_admin(request, session)
     tenant, owner = session.tenant_id, (session.sub or "unknown")
 
     # Bound delegation: an admin may only mint a key with roles they hold, so a
@@ -230,6 +259,20 @@ async def create_key(
             detail="Requested roles must be a subset of your own realm roles",
         )
 
+    if not set(body.scopes).issubset(admin_scopes):
+        raise HTTPException(
+            status_code=422,
+            detail="Requested scopes must be a subset of your own scopes",
+        )
+    if body.expires_in_seconds > get_settings().api_key_max_ttl_seconds:
+        raise HTTPException(
+            status_code=422, detail="Requested lifetime exceeds the configured maximum"
+        )
+
+    created_at = int(time.time())
+    expires_at = created_at + body.expires_in_seconds
+    scopes = sorted(set(body.scopes))
+
     plain_key, key_hash = generate_api_key(tenant)
     key_id = secrets.token_hex(8)
     prefix = key_prefix(plain_key)
@@ -241,6 +284,9 @@ async def create_key(
         name=body.name,
         roles=body.roles,
         owner=owner,
+        scopes=scopes,
+        created_at=created_at,
+        expires_at=expires_at,
     )
 
     logger.info(
@@ -258,6 +304,8 @@ async def create_key(
         name=body.name,
         prefix=prefix,
         roles=body.roles,
+        scopes=scopes,
+        expires_at=expires_at,
     )
 
 
@@ -265,7 +313,7 @@ async def create_key(
 async def list_keys(
     request: Request,
 ) -> ListKeysResponse:
-    """List all active API keys for the authenticated tenant (admin only)."""
+    """List active and rejected legacy keys for the tenant (admin only)."""
     session = await _verified_session(request)
     await _require_admin(request, session)
     tenant = session.tenant_id

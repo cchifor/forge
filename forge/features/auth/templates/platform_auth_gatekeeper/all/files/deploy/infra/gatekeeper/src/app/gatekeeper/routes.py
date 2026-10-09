@@ -41,6 +41,7 @@ from app.gatekeeper.helpers import (
 from app.gatekeeper.jwks import verify_token
 from app.gatekeeper.metrics import RATE_LIMIT_REJECTIONS, AuthMetricsRecorder
 from app.gatekeeper.oidc import exchange_code, refresh_tokens
+
 # _pop_auth_state logs session_fp(state) on its corrupt/expired-envelope reject
 # branches; without this import those branches raise NameError -> a 500 instead
 # of the intended graceful 400. (audit #28)
@@ -132,6 +133,16 @@ def _synthetic_keycloak_payload(
 
 
 # ── OIDC PKCE + nonce bound-state envelope (WS-2.5) ─────────────────────────
+
+
+def _session_identity_matches(
+    session: Any, payload: Mapping[str, Any], tc: TenantConfig
+) -> bool:
+    """Sessions cannot cross tenants or change subject during refresh."""
+    return session.tenant_id == tc.tenant_id == payload.get(
+        get_settings().tenant_id_claim
+    ) and session.sub == payload.get("sub")
+
 
 _AUTH_STATE_PREFIX = "gk:auth-state:"
 
@@ -263,13 +274,16 @@ async def auth_userinfo(request: Request) -> Response:
     # expiry; otherwise ``get`` returns the row regardless of the
     # ``:active`` marker.
     if cfg.session_timeout_enabled:
-        session = await server_session.check_validity(
-            session_id, now=int(time.time())
-        )
+        session = await server_session.check_validity(session_id, now=int(time.time()))
     else:
         session = await server_session.get(session_id)
     if session is None:
         return Response(status_code=401, content="Not authenticated")
+    if session.tenant_id != tc.tenant_id:
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
 
     try:
         payload = await verify_token(
@@ -292,27 +306,29 @@ async def auth_userinfo(request: Request) -> Response:
             )
             new_access = token_data["access_token"]
             new_refresh = token_data.get("refresh_token", session.refresh_token)
-            await server_session.update_tokens(
-                session_id,
-                access_token=new_access,
-                refresh_token=new_refresh,
-            )
             payload = await verify_token(
                 new_access,
                 tenant,
                 issuer_url=tc.issuer_url,
                 client_id=tc.client_id,
             )
+            if not _session_identity_matches(session, payload, tc):
+                return Response(status_code=403, content="Session identity mismatch")
+            await server_session.update_tokens(
+                session_id,
+                access_token=new_access,
+                refresh_token=new_refresh,
+            )
         except (httpx.HTTPStatusError, jwt.InvalidTokenError, KeyError):
             return Response(status_code=401, content="Token refresh failed")
     except jwt.InvalidTokenError:
         return Response(status_code=401, content="Invalid token")
 
+    if not _session_identity_matches(session, payload, tc):
+        return Response(status_code=403, content="Session identity mismatch")
     realm_access = payload.get("realm_access", {})
     roles = [
-        r
-        for r in realm_access.get("roles", [])
-        if not r.startswith("default-roles")
+        r for r in realm_access.get("roles", []) if not r.startswith("default-roles")
     ]
     return JSONResponse(
         {
@@ -412,9 +428,7 @@ async def auth_login(request: Request, redirect_uri: str = "/") -> Response:
     if tc is None:
         tc = get_fallback_config(tenant)
 
-    return await _begin_oidc_login(
-        request, tenant, forwarded_host, redirect_uri, tc=tc
-    )
+    return await _begin_oidc_login(request, tenant, forwarded_host, redirect_uri, tc=tc)
 
 
 # ── GET /auth ───────────────────────────────────────────────────────────────
@@ -475,30 +489,36 @@ async def auth(request: Request) -> Response:
     # TRACK 1: MACHINE AUTHENTICATION (API KEY)
     # ================================================================
     api_key = request.headers.get("x-api-key")
-    if api_key:
+    if api_key is not None:
         metrics.method = "api_key"
+        if not cfg.api_keys_enabled:
+            metrics.record("invalid_key")
+            return Response(status_code=401, content="API keys are disabled")
         record = await validate_api_key(api_key)
 
-        if not record or record.tenant_id != tenant:
+        if not record or record.tenant_id != tc.tenant_id:
             metrics.record("invalid_key")
             return Response(status_code=401, content="Invalid API Key")
 
         rate_headers = await _check_rate_limit(tenant, tc.rate_limit, metrics)
         metrics.record("success")
+        key_payload = _synthetic_keycloak_payload(
+            user_id=f"api-key:{record.key_id}",
+            email=f"{record.name}@api-key",
+            roles=record.roles,
+            tenant_id=record.tenant_id,
+            auth_method_label="api-key",
+            jti_subject=cache_subject(record),
+        )
+        key_payload["scope"] = " ".join(record.scopes)
+        key_payload["exp"] = min(key_payload["exp"], record.expires_at)
         internal_token = await _mint_internal_token(
             request,
-            keycloak_payload=_synthetic_keycloak_payload(
-                user_id=record.owner,
-                email=f"{record.name}@api-key",
-                roles=record.roles,
-                tenant_id=record.tenant_id,
-                auth_method_label="api-key",
-                jti_subject=cache_subject(record),
-            ),
+            keycloak_payload=key_payload,
             auth_method="api_key",
         )
         return create_machine_success_response(
-            user_id=record.owner,
+            user_id=f"api-key:{record.key_id}",
             email=f"{record.name}@api-key",
             tenant=tenant,
             roles=record.roles,
@@ -610,6 +630,11 @@ async def auth(request: Request) -> Response:
         return await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
 
     # 4. Validate the access token from the session row.
+    if session.tenant_id != tc.tenant_id:
+        await server_session.delete(session_id)
+        response = await _redirect_to_login(request, tenant, forwarded_host, tc=tc)
+        _delete_session_id_cookie(response)
+        return response
     try:
         payload = await verify_token(
             session.access_token,
@@ -617,6 +642,8 @@ async def auth(request: Request) -> Response:
             issuer_url=tc.issuer_url,
             client_id=tc.client_id,
         )
+        if not _session_identity_matches(session, payload, tc):
+            return Response(status_code=403, content="Session identity mismatch")
         rate_headers = await _check_rate_limit(tenant, tc.rate_limit, metrics)
         metrics.record("success")
         internal_token = await _mint_internal_token(request, keycloak_payload=payload)
@@ -687,6 +714,8 @@ async def _try_refresh_or_redirect(
             issuer_url=tc.issuer_url,
             client_id=tc.client_id,
         )
+        if not _session_identity_matches(session, payload, tc):
+            return Response(status_code=403, content="Session identity mismatch")
         await server_session.update_tokens(
             session.session_id,
             access_token=new_access,
@@ -739,9 +768,7 @@ async def _redirect_to_login(
         return Response(status_code=401, content="Session expired")
 
     # Page navigations get 302 — mint+store the envelope and redirect to KC.
-    return await _begin_oidc_login(
-        request, tenant, forwarded_host, original_uri, tc=tc
-    )
+    return await _begin_oidc_login(request, tenant, forwarded_host, original_uri, tc=tc)
 
 
 # ── GET /callback ───────────────────────────────────────────────────────────
@@ -861,17 +888,11 @@ async def callback(
     # Admin API and re-mint the token via refresh so the protocol
     # mappers re-run and emit the claim.
     try:
-        claims = jwt.decode(
-            access_token,
-            options={
-                "verify_signature": False,
-                "verify_aud": False,
-                "verify_exp": False,
-            },
+        claims = await verify_token(
+            access_token, tenant, issuer_url=tc.issuer_url, client_id=tc.client_id
         )
-    except jwt.InvalidTokenError as exc:
-        logger.error("Could not decode just-issued access token: %s", exc)
-        return Response(status_code=502, content="Malformed token from IdP")
+    except jwt.InvalidTokenError:
+        return Response(status_code=401, content="Invalid access token")
 
     if cfg.tenant_id_claim not in claims:
         sub = claims.get("sub", "")
@@ -920,18 +941,31 @@ async def callback(
         access_token = refreshed.get("access_token", "")
         refresh_token = refreshed.get("refresh_token", refresh_token)
 
+    # Bind sessions to verified identity after any tenant-assignment refresh.
+    try:
+        claims = await verify_token(
+            access_token, tenant, issuer_url=tc.issuer_url, client_id=tc.client_id
+        )
+    except jwt.InvalidTokenError:
+        return Response(status_code=401, content="Invalid access token")
+    verified_tenant = claims.get(cfg.tenant_id_claim)
+    if not verified_tenant or verified_tenant != tc.tenant_id:
+        return Response(status_code=403, content="Tenant mismatch")
+
     # 5. BFF: persist tokens server-side, issue an opaque session_id, set
     # the single ``tenant_session_id`` cookie. Browser never sees the JWT.
     server_session = getattr(request.app.state, "server_session", None)
     if server_session is None:
-        logger.error("server_session store not initialised — /callback cannot mint session")
+        logger.error(
+            "server_session store not initialised — /callback cannot mint session"
+        )
         return Response(status_code=503, content="Session store unavailable")
 
     sub = claims.get("sub", "")
     session_id = await server_session.issue(
         access_token=access_token,
         refresh_token=refresh_token,
-        tenant_id=tenant,
+        tenant_id=verified_tenant,
         sub=sub,
         idle_timeout_seconds=tc.idle_timeout_seconds,
         absolute_timeout_seconds=tc.absolute_timeout_seconds,

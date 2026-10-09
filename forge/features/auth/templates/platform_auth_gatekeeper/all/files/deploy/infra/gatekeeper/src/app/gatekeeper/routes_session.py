@@ -37,7 +37,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 from app.gatekeeper.config import get_settings
-from app.gatekeeper.helpers import extract_tenant
+from app.gatekeeper.helpers import _delete_session_id_cookie, check_origin, extract_tenant
 from app.gatekeeper.metrics import AuthMetricsRecorder
 from app.gatekeeper.redis import get_redis
 from app.gatekeeper.tenant_config import (
@@ -137,6 +137,15 @@ async def get_session(request: Request) -> Response:
     if not session_id or server_session is None:
         return Response(status_code=401, content="Not authenticated")
 
+    session = await server_session.get(session_id)
+    if session is None:
+        return Response(status_code=401, content="Session expired")
+    if session.tenant_id != tc.tenant_id:
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
+
     remaining = await server_session.remaining(session_id, now=int(time.time()))
     if remaining is None:
         return Response(status_code=401, content="Session expired")
@@ -165,6 +174,14 @@ async def extend_session(request: Request) -> Response:
     Returns 429 when the per-session 4/min cap is exceeded.
     """
     cfg = get_settings()
+    if not check_origin(
+        method=request.method,
+        origin=request.headers.get("origin"),
+        referer=request.headers.get("referer"),
+        expected_host=request.headers.get("x-forwarded-host")
+        or request.headers.get("host", ""),
+    ):
+        return Response(status_code=403, content="Origin mismatch")
 
     forwarded_host = request.headers.get("x-forwarded-host")
     try:
@@ -181,6 +198,15 @@ async def extend_session(request: Request) -> Response:
     server_session = getattr(request.app.state, "server_session", None)
     if not session_id or server_session is None:
         return Response(status_code=401, content="Not authenticated")
+
+    session = await server_session.get(session_id)
+    if session is None:
+        return Response(status_code=401, content="Session expired")
+    if session.tenant_id != tc.tenant_id:
+        await server_session.delete(session_id)
+        response = Response(status_code=401, content="Session expired")
+        _delete_session_id_cookie(response)
+        return response
 
     # Rate limit BEFORE touching so we don't reset the idle TTL on
     # rejected requests. Returns a 429 Response on excess (preserving

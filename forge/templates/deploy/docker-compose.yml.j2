@@ -134,7 +134,7 @@ services:
       - "traefik.http.middlewares.{{ be.name }}-rewrite.replacepathregex.regex=^/api/{{ be.name }}/(.*)"
       - "traefik.http.middlewares.{{ be.name }}-rewrite.replacepathregex.replacement=/api/$$1"
 {% if include_keycloak %}
-      - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite,auth"
+      - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite,auth,strip-api-key"
 {% else %}
       - "traefik.http.routers.{{ be.name }}.middlewares={{ be.name }}-rewrite"
 {% endif %}

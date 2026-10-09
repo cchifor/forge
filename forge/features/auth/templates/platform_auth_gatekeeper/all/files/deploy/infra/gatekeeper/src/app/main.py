@@ -22,6 +22,8 @@ from app.core.errors import (
     validation_exception_handler,
 )
 from app.core.lifecycle import AppLifecycle
+from app.gatekeeper.apikeys_api import router as apikeys_router
+from app.gatekeeper.config import get_settings as gatekeeper_settings
 from app.gatekeeper.routes import router as gatekeeper_router
 from app.gatekeeper.routes_jwks import router as gatekeeper_jwks_router
 from app.gatekeeper.routes_session import router as gatekeeper_session_router
@@ -67,6 +69,8 @@ def _configure_routers(app: FastAPI) -> None:
 
     # Service meta endpoints (health, info)
     app.include_router(api_v1_router, prefix="/api/v1")
+    if gatekeeper_settings().api_keys_enabled:
+        app.include_router(apikeys_router, prefix="/api/v1")
 
 
 def _configure_exceptions(app: FastAPI) -> None:
