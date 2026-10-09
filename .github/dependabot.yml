@@ -32,7 +32,8 @@ updates:
     patterns: ["*"]
     multi-ecosystem-group: platform-dependencies
     ignore:
-      # Stock TypeScript 7 breaks Vue's compiler API; migration tracked in #357.
+      # Vue/Svelte remain on TS 6's JavaScript API; canvas-core uses TS 7.
+      # Keep major bumps coordinated until the framework migration in #357.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
 
