@@ -159,7 +159,8 @@ class DelegationGrantStore:
         identity = envelope.get("identity")
         if not isinstance(identity, dict) or "sub" not in identity:
             raise DelegationGrantError("grant identity malformed")
-        return identity
+        # The minted JWT must not survive the consent grant itself.
+        return {**identity, "exp": int(envelope["expires_at"])}
 
     async def revoke(self, grant_id: str) -> bool:
         """Delete the grant. Returns ``True`` if the row existed."""

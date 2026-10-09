@@ -68,9 +68,7 @@ def test_worker_variant_registered_for_python_only():
 
 def test_available_backend_templates_per_language():
     assert bat.available_backend_templates(BackendLanguage.PYTHON) == (
-        "api-gateway",
         "crud-service",
-        "service-proxy",
         "tenant-management-service",
         "worker",
     )
@@ -80,9 +78,7 @@ def test_available_backend_templates_per_language():
 
 def test_all_backend_template_names():
     assert bat.all_backend_template_names() == (
-        "api-gateway",
         "crud-service",
-        "service-proxy",
         "tenant-management-service",
         "worker",
     )
@@ -394,3 +390,10 @@ def test_two_stage_variant_renders_nonempty_app_title(tmp_path: Path):
     # The overlay overwrites the base config; its title must not be empty.
     assert 'title: ""' not in cfg_yaml, "two-stage variant rendered an empty app.title"
     assert 'title: "Tms"' in cfg_yaml
+
+
+@pytest.mark.parametrize("variant", ["api-gateway", "service-proxy"])
+def test_removed_forwarding_templates_rejected(variant):
+    assert bat.get_backend_application_template(BackendLanguage.PYTHON, variant) is None
+    with pytest.raises(ValueError, match="not available"):
+        BackendConfig(name="old", language=BackendLanguage.PYTHON, app_template=variant).validate()

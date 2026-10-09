@@ -101,9 +101,7 @@ async def resolve_tenant_config(hostname: str) -> TenantConfig | None:
             client_secret=data["client_secret"],
             rate_limit=int(data.get("rate_limit", cfg.default_rate_limit)),
             idle_timeout_seconds=int(
-                data.get(
-                    "idle_timeout_seconds", cfg.default_idle_timeout_seconds
-                )
+                data.get("idle_timeout_seconds", cfg.default_idle_timeout_seconds)
             ),
             absolute_timeout_seconds=int(
                 data.get(
@@ -130,7 +128,11 @@ def get_fallback_config(tenant_slug: str) -> TenantConfig:
     """
     cfg = get_settings()
     return TenantConfig(
-        tenant_id=tenant_slug,
+        tenant_id=(
+            cfg.default_tenant_id
+            if tenant_slug == cfg.keycloak_admin_realm
+            else tenant_slug
+        ),
         realm_type="dedicated",
         realm_name=tenant_slug,
         issuer_url=f"{cfg.keycloak_base_url}/{tenant_slug}",

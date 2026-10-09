@@ -69,7 +69,7 @@
       "sha256": "9a94950eef4a8084"
     },
     "forge.toml": {
-      "size": 76137,
+      "size": 76189,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -77,7 +77,7 @@
       "sha256": "07715a68b8077b4b"
     },
     "services/api-node/.copier-answers.yml": {
-      "size": 561,
+      "size": 564,
       "sha256": "<version-dependent>"
     },
     "services/api-node/.env.example": {
@@ -349,7 +349,7 @@
       "sha256": "2849d98820cb0d33"
     },
     "services/api-py/.copier-answers.yml": {
-      "size": 558,
+      "size": 561,
       "sha256": "<version-dependent>"
     },
     "services/api-py/.env.example": {

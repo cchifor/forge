@@ -148,7 +148,7 @@ async def verify_token(
 
     key = public_keys[kid]
 
-    options: dict[str, Any] = {}
+    options: dict[str, Any] = {"require": ["iss", "aud", "sub", "exp"]}
     if allow_expired:
         options["verify_exp"] = False
 
@@ -157,6 +157,7 @@ async def verify_token(
         key=key,
         algorithms=["RS256"],
         audience=client_id or cfg.gatekeeper_client_id,
+        issuer=issuer_url or f"{cfg.keycloak_base_url}/{tenant}",
         options=options,  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     )  # ty:ignore[invalid-assignment]
     return payload

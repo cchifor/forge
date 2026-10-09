@@ -385,7 +385,7 @@ def _delegated_user_payload(
         "iss": "gatekeeper-service-token",
         "aud": "gatekeeper-service-token",  # mint overrides this
         "iat": now,
-        "exp": now + 3600,  # mint clamps
+        "exp": min(now + 3600, int(subject_claims["exp"])),
         "jti": f"obo:{actor_client_id}:{uuid.uuid4()}",
         "azp": actor_client_id,
         "platform_target_service": target_service,
@@ -467,7 +467,9 @@ def _verify_gatekeeper_token(
     # propagating *user* identity. A service can use client_credentials
     # directly; layering svc-on-svc here just expands the trust radius.
     azp = claims.get("azp")
-    if isinstance(azp, str) and azp.startswith("svc-"):
+    if claims.get("auth_method") == "api_key" or (
+        isinstance(azp, str) and azp.startswith("svc-")
+    ):
         raise _SubjectTokenError(
             "subject_token must represent a user; got service-account token"
         )
@@ -553,9 +555,8 @@ async def auth_delegation_grant(
     except _SubjectTokenError as exc:
         return _error(400, "invalid_grant", str(exc))
 
-    # Strip claims that are mint-time / per-token rather than identity:
-    # iat, exp, nbf, jti, aud, iss, scope. Keep the user-identity ones
-    # so the redeem path can rebuild a fresh internal JWT later.
+    # Keep the permission ceiling and bind consent to the issuing client
+    # and target. A grant is explicit longer-lived consent, not a wildcard.
     identity: dict[str, Any] = {
         k: v
         for k, v in subject_claims.items()
@@ -567,8 +568,13 @@ async def auth_delegation_grant(
             EMAIL_CLAIM,
             "email",
             "realm_access",
+            "scope",
         )
     }
+    if not identity.get("scope"):
+        return _error(400, "invalid_scope", "subject_token must carry scopes")
+    identity["grant_client_id"] = verified.client_id
+    identity["grant_audience"] = audience
 
     store = _delegation_store(request)
     try:
@@ -643,6 +649,14 @@ async def auth_delegation_exchange(
     except DelegationGrantError as exc:
         return _error(400, "invalid_grant", str(exc))
 
+    if (
+        identity.get("grant_client_id") != verified.client_id
+        or identity.get("grant_audience") != audience
+    ):
+        return _error(
+            403, "unauthorized_client", "grant is bound to another client or target"
+        )
+
     user_scopes = (
         frozenset(split_scope_string(identity.get("scope", "")))
         if identity.get("scope")
@@ -651,13 +665,7 @@ async def auth_delegation_exchange(
     allowed = entry.allowed_scopes_for(audience)
     requested = split_scope_string(scope) if scope else None
     candidate = scopes_intersection(allowed, requested)
-    # If the original subject_token had scopes recorded, preserve the
-    # privilege-escalation safeguard (registry ∩ user ∩ requested);
-    # otherwise allow registry ∩ requested (the original consent
-    # implicitly authorised the registry's allowed set).
-    effective = (
-        scopes_intersection(candidate, user_scopes) if user_scopes else candidate
-    )
+    effective = scopes_intersection(candidate, user_scopes)
     if not effective:
         return _error(400, "invalid_scope", "no scopes survive intersection")
 
@@ -727,6 +735,12 @@ async def auth_delegation_revoke(
         return _error(401, "invalid_client", "client not registered")
 
     store = _delegation_store(request)
+    try:
+        identity = await store.redeem(grant_id)
+    except DelegationGrantError:
+        return _error(404, "not_found", "grant not found")
+    if identity.get("grant_client_id") != verified.client_id:
+        return _error(403, "unauthorized_client", "grant belongs to another client")
     deleted = await store.revoke(grant_id)
     return JSONResponse(
         status_code=204 if deleted else 404,

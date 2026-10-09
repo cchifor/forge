@@ -9,41 +9,36 @@ for configuration. The implementation is in the auth feature templates and
 shared verifier contracts; unavailable workstation-local planning files are
 not required to understand or operate it.
 
-> **1.2 update.** The architecture below — Keycloak as IdP, Gatekeeper
-> as token authority, ES256 JWTs, ForwardAuth, opaque session cookies
-> — is unchanged. What changed in 1.2.0-alpha.1 is the *consumer-side
-> library*: generated Python services now import directly from
-> `weld.fastapi.security` + `weld.auth` instead of receiving a vendored
-> `platform_auth` SDK tree. `AuthGuard`, `IdentityContext`, `JWKSCache`,
-> `S2SClient`, `IssuerTrustMap`, and the scope matcher live in
-> `weld.auth`; the FastAPI integration (`initialize_auth`,
-> `authenticate_request`, `oauth2_scheme`, `AuthGuardBundle`,
-> `AuthContextMiddleware`) lives in `weld.fastapi.security`. The
-> Node and Rust per-service SDKs (`platform_auth_sdk_node` /
-> `platform_auth_sdk_rust`) are still scaffolded — only the Python
-> path has been delegated to weld-*.
+Python services ship their baseline `forge_core` auth integration; projects with
+`auth.mode=generate` also receive the platform-auth SDKs. Scope guards and business
+policy must be wired into application endpoints. SDK availability is not proof
+that every generated route enforces a feature permission.
+
+See [direct S2S calls](guides/service-to-service.md) and
+[optional API keys](guides/api-keys.md) for executable configuration and lifecycle
+contracts. Production boundaries are covered in [deployment](operations/deployment.md).
 
 ## TL;DR
 
 - **Keycloak** is the identity provider — login form, user store, OIDC
   authorization-code flow.
 - **Gatekeeper** is the *sole* token authority for backend services.
-  It mints ES256-signed JWTs from server-side state and serves them at
-  `/auth/jwks`. Backends never trust Keycloak-issued tokens directly.
+  It mints ES256-signed JWTs from verified credentials and publishes public
+  verification keys at `/auth/jwks`. Backends never trust Keycloak-issued tokens directly.
 - **`platform-auth` SDKs** (Python, Node, Rust — one per backend
   language forge supports) are the verifier libraries. They expose a
   small public surface (`AuthGuard`, `IdentityContext`, `JWKSCache`,
   `S2SClient`, `MayActPolicy`, `IssuerTrustMap`, `RevocationStore`,
   scope matching, test-token minter) with cross-language parity
   enforced by a shared fixture suite.
-- **Browser tokens never exist** — the SPA gets a single opaque
+- **Browser JavaScript does not receive OAuth tokens in this session flow** — the SPA gets a single opaque
   `tenant_session_id` cookie; access + refresh tokens live server-side
   in Redis, encrypted with Fernet.
 - **Sessions extend on real user activity**, not on background API
   traffic. The SPA explicitly POSTs `/auth/session` on
   mouse/keyboard/scroll/visibility events (debounced 30s,
   visibility-gated, BroadcastChannel-deduplicated across tabs).
-- **Authorization is scope-based** with wildcard support
+- **SDK authorization supports scope checks** with wildcard support
   (`<service>:<action>[:<resource>]`); RFC 8693 `act` chains carry
   on-behalf-of identities for service-to-service calls.
 
@@ -126,9 +121,9 @@ keys are served at `GET /auth/jwks` for backend verification.
 
 The internal JWT carries:
 - `iss`: `http://gatekeeper:5000` (or the configured issuer URL)
-- `aud`: the target service audience (e.g., `forge-services`,
-  `svc-things`)
-- `sub`: the upstream user's subject
+- `aud`: the configured platform-wide audience (generated Compose: `forge-services`).
+  The requested registry target such as `svc-things` is not the JWT audience.
+- `sub`: the user subject, service client ID, or `api-key:<key_id>`, depending on the grant
 - `exp`: `now + 300` (5-minute TTL — bounds the revocation
   latency)
 - `jti`: random per-mint
@@ -160,9 +155,10 @@ correct semantics.
 
 `SameSite=Lax` (not `Strict`) allows deep-linking from external
 tools (Slack, email, intranet portals) to land in the app already
-authenticated. CSRF is mitigated at the API layer via
-`Content-Type: application/json` + CORS preflight on every
-mutating endpoint — per OWASP 2024–2025 SaaS-cookie guidance.
+authenticated. Gatekeeper checks Origin/Referer on unsafe forwarded methods and
+on API-key management mutations. Preserve trusted forwarding headers and enforce
+CSRF protection on every cookie-authenticated mutation; CORS alone is not a
+general CSRF defense.
 
 #### 4. Service-to-service token issuer
 
@@ -170,12 +166,12 @@ mutating endpoint — per OWASP 2024–2025 SaaS-cookie guidance.
 they need to make an authenticated call to a sibling service.
 Gatekeeper supports two grants:
 
-- `client_credentials` — bare machine-identity token (no `sub`,
-  no user context). The caller authenticates via its registered
+- `client_credentials` — machine identity (`sub=client_id`, no user context).
+  The caller must provide an explicitly authorized `tenant_id`. The caller authenticates via its registered
   client_id + client_secret (argon2id-hashed in
   `secrets/service_registry.yaml`); the response carries a token
-  audienced for the target service with the scopes the registry
-  permits.
+  with the shared platform audience and the target-specific scopes the registry
+  permits. The requested target is recorded in `platform_target_service`.
 - `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) —
   on-behalf-of delegation. Caller passes its own credentials plus
   a `subject_token` (the inbound user token). Gatekeeper mints a
@@ -196,6 +192,26 @@ Each entry maps `client_id → audiences → scopes`:
     svc-mcp:
       scopes: [mcp:read, mcp:write]
 ```
+
+### Optional API-key authentication
+
+`auth.api_keys` defaults to false. With generated Gatekeeper enabled, setting it
+true activates key administration and `X-API-Key` authentication. Keys have
+explicit scopes and a bounded lifetime; administrators cannot delegate scopes
+or roles they do not hold. Their verified tenant must match the resolved route.
+The plaintext key is returned once; Redis stores the hash and metadata.
+
+Gatekeeper emits a distinct integration subject, tenant and `scope` claim.
+Services must enforce operation scopes and resource ownership. API keys cannot
+act as user-delegation subjects. Expired, revoked, wrong-tenant and legacy
+unscoped keys are rejected. Disabling the feature removes management routes and
+rejects API-key authentication. See the [API-key guide](guides/api-keys.md).
+
+Synchronous user token exchange retains the subject token's expiry ceiling.
+Long-lived delegation grants are bound to the issuing client and target and
+retain the original scope ceiling; exchange cannot extend their expiry. Old
+grants missing these limits must be reissued. Already-minted JWTs retain their
+bounded validity after key/grant revocation; this is not immediate bearer revocation.
 
 ### Backend verifier SDKs
 
@@ -224,7 +240,7 @@ All three expose the same public surface:
   implementations leverage native lib affordances (`jose.createRemoteJWKSet`
   in Node, `tokio::sync::Mutex` for the per-issuer refresh in Rust).
 - `S2SClient` — outbound HTTP client targeting a single audience.
-  Caches client_credentials and on-behalf-of tokens per-user-jti;
+  Caches Python client-credentials tokens per tenant and delegated tokens by subject-token identity;
   refreshes 60s before expiry; 401 retry-once. (Phase 4/6 follow-up
   for Node + Rust; Python ships today.)
 - `MayActPolicy` — RFC 8693 act-chain authorization. Two
@@ -350,11 +366,11 @@ behavioral difference.
 
 ```
 1. Service A handler (e.g., svc-workflow) holds the inbound user token
-   on req.state.identity.raw_claims (or its language equivalent).
+   from the authenticated request (raw_claims is a decoded mapping, not a bearer).
 2. Wants to call svc-knowledge on behalf of the user:
-     S2SClient(audience="svc-knowledge").get(
+     configured_s2s_client.get(
          "https://knowledge.svc/api/items",
-         on_behalf_of=request.headers["authorization"],  # the inbound bearer
+         on_behalf_of=verified_bearer_token,  # token only, without Bearer prefix
      )
 3. S2SClient cache-hits or POSTs Gatekeeper /auth/token:
      grant_type: urn:ietf:params:oauth:grant-type:token-exchange
@@ -363,15 +379,15 @@ behavioral difference.
      client_id + client_secret: svc-workflow's registry creds
 4. Gatekeeper:
      a. authenticate svc-workflow via service_registry.yaml argon2id check
-     b. verify subject_token (svc-workflow's audience)
-     c. mint new token: sub=user, tenant=user.tenant, aud=svc-knowledge,
-        act={client_id: svc-workflow}
+     b. verify subject_token (shared internal audience)
+     c. mint new token: sub=user, tenant=user.tenant, aud=forge-services,
+        platform_target_service=svc-knowledge, act={sub: svc-workflow}
 5. S2SClient receives the token; caches by (audience, user-jti);
    sends GET to knowledge with Authorization: Bearer <delegated_token>.
 6. svc-knowledge AuthGuard:
      a. verify signature, audience, expiry, etc.
      b. walk act chain: ask MayActPolicy.is_authorized("svc-workflow",
-        "svc-knowledge"). Allowlist matches → ok.
+        "forge-services"). Also enforce knowledge-specific scopes/target policy.
      c. IdentityContext{tenant_id=user.tenant, subject=user.sub,
         actor="svc-workflow"} → req.state.identity.
 7. Handler authorises and serves; downstream sees the user's tenant
@@ -445,8 +461,8 @@ the gatekeeper resolves from Redis with a 60s in-process cache).
   (30 min idle / 12 h absolute) sit at the strict end of that range
   and are configurable per-tenant.
 - **OWASP 2024-2025 SaaS cookie guidance** — `SameSite=Lax` +
-  `HttpOnly` + `Secure` + API-layer JSON enforcement. CSRF is
-  mitigated at the API layer (Content-Type + CORS preflight) since
+  `HttpOnly` + `Secure` + explicit Origin/Referer validation. CSRF
+  protection must cover all cookie-authenticated mutations because
   `Lax` doesn't fully block cross-site form posts.
 - **RFC 8693 token-exchange** — full implementation of the
   on-behalf-of grant, with `act` chain validation enforced via

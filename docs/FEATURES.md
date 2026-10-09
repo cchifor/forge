@@ -1055,6 +1055,19 @@ ENV: AIRLOCK_BASE_URL, AIRLOCK_TOKEN
 **Enables fragments:**
 - on `true` → `airlock_client`
 
+### `auth.api_keys`
+
+**Type:** `bool` · **Default:** `false` · **Stability:** `stable` · **Backends:** —
+
+_Enable scoped, expiring third-party API keys in Gatekeeper._
+
+Opt-in API key lifecycle and X-API-Key authentication.
+Requires include_keycloak=true, auth.mode=generate and auth.provider=gatekeeper.
+Administrators issue tenant-bound keys with explicit scopes limited to their own
+verified scopes. Services must enforce those scopes and resource ownership.
+Generated Compose sets API_KEYS_ENABLED; other deployments must set it explicitly.
+Keys are disabled by default, including their management routes.
+
 ### `auth.provider`
 
 **Type:** `enum` · **Default:** `gatekeeper` · **Stability:** `stable` · **Backends:** node, python, rust

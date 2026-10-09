@@ -37,7 +37,7 @@ Everything except `monolithic` brings up Keycloak + the Gatekeeper edge-auth
 stack + Redis — a substantial stack. Start with `monolithic` if you don't yet
 need cross-service auth.
 
-No built-in preset inserts a service proxy or BFF. URL routing is handled by
+Built-in presets route directly to domain APIs. URL routing is handled by
 Traefik; each application service owns its business logic and authorization.
 The microservices preset still synthesizes S2S grants for `orders → inventory`.
 This declares a callable dependency; the CRUD scaffold does not automatically
@@ -63,64 +63,22 @@ as an allowed S2S target. Traefik routes `/api/orders/...` and
 `/api/inventory/...` directly to the corresponding backend, with the configured
 authentication middleware.
 
-### Opting into a service proxy
+### Application composition and third-party access
 
-Use a proxy when requests need forwarding with service credentials. A backend
-for frontend (BFF) goes further: it adapts or combines domain APIs for a specific
-client. Forge's proxy template does not generate that client-specific behavior;
-implement it in custom application modules if required. See
-[routing responsibilities](../architecture/overview.md#direct-routing-and-optional-composition).
+Implement client-specific BFF behavior as application code when needed. Services
+call their dependencies directly using [S2S credentials or user delegation](service-to-service.md).
+API keys are optional and disabled in every preset. Add `auth.api_keys: true` to
+a Gatekeeper-backed configuration to enable [scoped third-party access](api-keys.md).
+The option does not add another application service.
 
-To add the optional Python service proxy, declare it explicitly in a complete
-backend list. Save this example as `proxy.yaml`:
-
-```yaml
-project_name: proxy-example
-include_keycloak: true
-options:
-  auth.service_discovery: true
-backends:
-  - name: proxy
-    language: python
-    app_template: service-proxy
-    server_port: 5010
-    depends_on: [orders]
-  - name: orders
-    language: python
-    app_template: crud-service
-    server_port: 5020
-```
-
-```bash
-forge --config proxy.yaml --plan --json
-forge --config proxy.yaml --yes --no-docker
-```
-
-An explicit `backends` list replaces the preset's entire list. Include every
-service you want to keep and its actual dependencies. The legacy
-`app_template: api-gateway` identifier remains supported and renders the same
-proxy. Both names retain the existing `app.gateway` modules and `/gateway`
-endpoint paths for compatibility.
-
-The generated proxy obtains and caches S2S tokens when credentials are
-configured. Those client-credentials tokens represent the proxy service.
-Direct user requests can have different authorization semantics; downstream
-services must validate accepted tokens and enforce domain permissions.
-
-Projects with a `.forge/quality.json` recipe retain its recorded backend list
-when using `forge --update`. A preset name alone does not freeze that list:
-regeneration from a preset-only configuration uses the installed defaults.
-For legacy projects without a recipe, explicitly record the original backends
-and dependencies before regenerating. Adopting the new defaults is a topology
-change: review client URLs, ingress auth, service grants, deployment resources,
-and the persisted generation config.
-Follow [customization](customization.md) and [upgrade notes](../../UPGRADING.md#direct-routing-defaults)
-to migrate safely.
+An explicit `backends` list replaces a preset's entire list. Preserve the actual
+service topology in the persisted configuration and review changes to URLs,
+authorization and dependencies when upgrading. See [upgrade notes](../../UPGRADING.md#direct-routing-defaults).
 
 ## How multi-service auth works (synthesis)
 
 When a preset sets `auth.service_discovery=true` and the project has more than
-one backend, forge **synthesizes** an S2S trust mesh
+one backend, Forge generates an S2S credential registry
 (`forge/synthesis/platform.py`). Two things are generated:
 
 1. **A service registry** (`deploy/infra/gatekeeper/secrets/service_registry.yaml`) —
@@ -134,9 +92,11 @@ one backend, forge **synthesizes** an S2S trust mesh
    in-network callee.
 
 At runtime: a caller exchanges its client id+secret at the Gatekeeper's token
-endpoint for a short-lived (≈5 min) ES256 JWT scoped to the audience
+endpoint, specifying the target such as `svc-inventory` and the authorized
+tenant ID, for a short-lived (≈5 min) ES256 JWT with the shared audience
 `forge-services`; the callee verifies that JWT against the Gatekeeper's JWKS
-endpoint before trusting the request. The Gatekeeper — not Keycloak — is the
+endpoint and enforces service-specific scopes and tenant/resource permissions.
+Target grants are not network policies or per-service JWT audience isolation. The Gatekeeper — not Keycloak — is the
 sole internal issuer; Keycloak is the upstream identity provider for *end
 users*. See [`docs/auth-architecture.md`](../auth-architecture.md) for the full
 token/JWKS/BFF-session design.

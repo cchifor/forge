@@ -685,6 +685,11 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     # project while still defaulting to ``gatekeeper`` when auth IS generated.
     if option_values.get("auth.mode") != "generate" and "auth.provider" in option_values:
         option_values["auth.provider"] = "none"
+    if option_values.get("auth.api_keys") and option_values.get("auth.provider") != "gatekeeper":
+        raise OptionsError(
+            "auth.api_keys requires include_keycloak=True, auth.mode=generate "
+            "and auth.provider=gatekeeper."
+        )
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)

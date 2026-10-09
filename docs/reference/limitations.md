@@ -25,6 +25,20 @@ Inspect a candidate with `forge --config stack.yaml --plan --json`. The
 requirements and preserves explicit compatible choices; it is not a benchmark
 or a distributed topology optimizer.
 
+## Authentication and service boundaries
+
+Application services call dependencies directly. Generated S2S grants and SDKs
+provide credentials; they do not generate business workflows, network policies,
+or endpoint permission rules. JWTs currently use one shared platform audience;
+service-specific scopes and resource authorization remain receiver obligations.
+
+`auth.api_keys` is disabled by default and requires Gatekeeper. It provides scoped,
+expiring integration keys and create/list/revoke APIs. A management UI, automatic
+rotation and per-key quotas are not generated. Roles do not automatically become
+scopes. Already-issued bearer tokens retain their validity until expiry after a
+key is revoked; configure revocation enforcement if a shorter window is needed.
+See [API keys](../guides/api-keys.md) and [deployment](../operations/deployment.md).
+
 ## Validation boundaries
 
 - **Architecture:** independent regeneration protects generic runtime and checks

@@ -2,6 +2,35 @@
 
 This guide covers deploying a forge-generated project to production.
 
+## Trust boundaries before deployment
+
+The generated Compose stack is a development scaffold. Its defaults publish
+backend host ports, route every backend through the edge, share an application
+bridge network and use the PostgreSQL administrator account for runtime access.
+Changing secrets or setting `ENV=production` does not remove those access paths.
+
+| Boundary | Production requirement |
+| --- | --- |
+| Public ingress | Explicitly select public APIs. Keep internal services private; remove backend host-port publishing. Protect health/admin endpoints according to their purpose. |
+| Authentication | Configure ForwardAuth for public protected routes and verify signed JWTs in services. Strip spoofable identity/forwarding headers at the trusted edge. |
+| Authorization | Enforce operation scopes, tenant and resource ownership at each receiver. Shared JWT audience does not isolate service recipients. |
+| Transport | HTTPS at ingress; authenticated/encrypted service transport appropriate to the network threat model. |
+| Data | Separate service-owned databases and least-privilege runtime roles. Use separate migration roles; runtime must not be superuser or BYPASSRLS. Apply FORCE ROW LEVEL SECURITY where owners would otherwise bypass policies. |
+| Credentials | Replace deterministic development service secrets, protect signing keys, and operate rotation/revocation procedures. |
+| Availability | Operate Gatekeeper and Redis as authentication dependencies; plan replication, key consistency, durable API-key records, backups and monitoring. |
+
+Helm generation is deployment scaffolding, not proof of configured ForwardAuth,
+TLS or network policies. Validate those controls in the actual ingress controller
+and cluster. The generic chart does not automatically reproduce every Compose
+auth infrastructure behavior.
+
+Optional API keys require `API_KEYS_ENABLED=true` in Gatekeeper (Compose derives
+it from `auth.api_keys`). Set `API_KEY_MAX_TTL_SECONDS` for the permitted lifetime.
+Expose their management routes deliberately through a protected same-origin
+path. Tenant quotas are generated; per-key quotas require additional policy.
+Validate [S2S](../guides/service-to-service.md) and [API-key](../guides/api-keys.md)
+allowed/denied journeys, including attempts to bypass ingress, before release.
+
 ## Required Environment Variables
 
 Review the generated configuration and `.env.example` for each selected
@@ -45,7 +74,7 @@ Before going live, verify:
 - [ ] `MCP_APPROVAL_SIGNING_KEY` is set (if using MCP tool invocations)
 - [ ] Signing key PEM files exist in `SIGNING_KEY_DIR`
 - [ ] Redis is accessible via `REDIS_URL`
-- [ ] Database connection string is production-grade (not SQLite)
+- [ ] Database credentials use least-privilege runtime roles and tenant-isolation tests pass
 - [ ] Health check endpoints (`/api/v1/health/live`, `/api/v1/health/ready`) are monitored
 - [ ] Body size limits are appropriate for your workload (Python: `audit.max_body_size`, Node/Rust: 1MB default)
 

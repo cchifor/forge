@@ -362,7 +362,7 @@ class TestProvenanceRestamp:
     def test_sibling_prefix_dir_not_restamped(self, tmp_path: Path) -> None:
         """Sibling backend whose path is a string-prefix of the target is NOT contained.
 
-        ``services/api-gateway`` must not be treated as inside
+        ``services/api-admin`` must not be treated as inside
         ``services/api``: a component-boundary-blind ``startswith`` check
         wrongly restamps the sibling's provenance, corrupting cross-backend
         provenance on re-render.
@@ -372,7 +372,7 @@ class TestProvenanceRestamp:
         services = tmp_path / "services"
         target_dir = services / "api"
         target_dir.mkdir(parents=True)
-        sibling_dir = services / "api-gateway"
+        sibling_dir = services / "api-admin"
         sibling_dir.mkdir(parents=True)
 
         in_file = target_dir / "main.py"
@@ -386,7 +386,7 @@ class TestProvenanceRestamp:
                 "sha256": "stale_in_sha",
                 "template_version": "0.1.0",
             },
-            "services/api-gateway/main.py": {
+            "services/api-admin/main.py": {
                 "origin": "base-template",
                 "sha256": "stale_sibling_sha",
                 "template_version": "0.1.0",
@@ -403,8 +403,8 @@ class TestProvenanceRestamp:
         assert mutated == 1
         assert provenance["services/api/main.py"]["template_version"] == "2.0.0"
         # The sibling is outside the target subtree and must be untouched.
-        assert provenance["services/api-gateway/main.py"]["sha256"] == "stale_sibling_sha"
-        assert provenance["services/api-gateway/main.py"]["template_version"] == "0.1.0"
+        assert provenance["services/api-admin/main.py"]["sha256"] == "stale_sibling_sha"
+        assert provenance["services/api-admin/main.py"]["template_version"] == "0.1.0"
 
     def test_idempotent_when_sha_already_matches(self, tmp_path: Path) -> None:
         """Re-running restamp on unchanged content returns mutated=0."""
@@ -442,7 +442,7 @@ class TestPresurfacePathContainment:
     def test_sibling_prefix_dir_not_presurfaced(self, tmp_path: Path) -> None:
         """A base-template file in a sibling prefix dir gets no pre-flight sidecar.
 
-        ``services/api-gateway`` is not inside ``services/api``; the
+        ``services/api-admin`` is not inside ``services/api``; the
         pre-flight must skip its files so we don't write edit-trail
         sidecars into a backend the current Copier call never touches.
         """
@@ -453,7 +453,7 @@ class TestPresurfacePathContainment:
         services = tmp_path / "services"
         target_dir = services / "api"
         target_dir.mkdir(parents=True)
-        sibling_dir = services / "api-gateway"
+        sibling_dir = services / "api-admin"
         sibling_dir.mkdir(parents=True)
 
         (target_dir / "main.py").write_text("in content\n", encoding="utf-8")
@@ -461,7 +461,7 @@ class TestPresurfacePathContainment:
 
         written = _presurface_user_modified_sidecars(
             target_dir,
-            ("services/api/main.py", "services/api-gateway/main.py"),
+            ("services/api/main.py", "services/api-admin/main.py"),
             tmp_path,
         )
         names = {p.name for p in written}

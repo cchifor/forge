@@ -11,7 +11,7 @@
 [![ci](https://img.shields.io/github/actions/workflow/status/cchifor/forge/ci.yml?branch=main&label=ci&style=flat-square)](https://github.com/cchifor/forge/actions/workflows/ci.yml)
 [![backends](https://img.shields.io/badge/backends-3-informational?style=flat-square)](docs/FEATURES.md)
 [![frontends](https://img.shields.io/badge/frontends-3-informational?style=flat-square)](docs/FEATURES.md)
-[![options](https://img.shields.io/badge/options-63-informational?style=flat-square)](docs/FEATURES.md)
+[![options](https://img.shields.io/badge/options-64-informational?style=flat-square)](docs/FEATURES.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 </div>
@@ -77,9 +77,8 @@ use the same composition pipeline. See [generator internals](docs/architecture/g
 ### Generated runtime
 
 The default topology routes requests from the edge directly to application
-services. This example includes Gatekeeper authentication and shows a service
-proxy as an explicit opt-in. A minimal application can omit auth, AI, and other
-optional services.
+services. This example includes Gatekeeper authentication. A minimal application
+can omit auth, AI, and other optional services.
 
 ```mermaid
 flowchart TB
@@ -89,8 +88,6 @@ flowchart TB
     GK --> IdP[Keycloak / configured identity provider]
     GK --> Redis[Redis sessions and tenant routes]
     Edge -->|URL routing and internal ES256 token| Services[Application APIs / services]
-    Edge -.-> Proxy["Service proxy (opt-in)"]
-    Proxy -->|declared dependency and S2S token| Services
     Services --> DB[(PostgreSQL)]
     Services --> Ports[Public application ports]
     Ports --> AI[LLM / retrieval / MCP]
@@ -99,10 +96,11 @@ flowchart TB
 ```
 
 Traefik routes `/api/<service>/...` directly to each backend. URL routing alone
-needs no intermediary application service. An optional `service-proxy` template
-adds forwarding with service-to-service token acquisition and caching. A backend
-for frontend (BFF) adapts or combines APIs for a particular client; that behavior
-requires custom application code. See [routing responsibilities](docs/architecture/overview.md#direct-routing-and-optional-composition).
+needs no intermediary application service. Services call dependencies directly
+using S2S credentials or user delegation.
+Third-party API keys are an optional Gatekeeper feature; services enforce their
+scopes and tenant boundaries. See [S2S](docs/guides/service-to-service.md) and
+[API keys](docs/guides/api-keys.md).
 
 Gatekeeper manages browser sessions and issues internal tokens; backends verify
 those tokens. Service-to-service grants follow declared dependencies. In the
@@ -199,10 +197,9 @@ and [customization](docs/guides/customization.md).
 forge --platform microservices --project-name commerce --output-dir ./projects --yes --no-docker
 ```
 
-No built-in preset inserts a service proxy or BFF by default. Select
-`app_template: service-proxy` explicitly when forwarding with S2S credentials is
-needed; the former `api-gateway` name remains compatible. See
-[opting into a service proxy](docs/guides/platforms.md#opting-into-a-service-proxy).
+Built-in presets route directly to application APIs. Implement a client-specific
+BFF only when needed. Enable `auth.api_keys=true` explicitly for third-party API
+credentials; it is disabled by default.
 
 Built-in platform presets use Python application templates. The generator also
 supports mixed-language backends, subject to compatible templates and features.

@@ -17,7 +17,8 @@ import hashlib
 import json
 import logging
 import secrets
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 
 from app.gatekeeper.redis import get_redis
 
@@ -36,6 +37,9 @@ class APIKeyRecord:
     name: str
     roles: list[str]
     owner: str
+    scopes: list[str] = field(default_factory=list)
+    created_at: int = 0
+    expires_at: int = 0
 
 
 def cache_subject(record: APIKeyRecord) -> str:
@@ -108,6 +112,9 @@ async def store_api_key(
     name: str,
     roles: list[str],
     owner: str,
+    scopes: list[str],
+    created_at: int,
+    expires_at: int,
 ) -> None:
     """Persist the hashed key metadata in Redis."""
     r = get_redis()
@@ -118,9 +125,15 @@ async def store_api_key(
             "name": name,
             "roles": roles,
             "owner": owner,
+            "scopes": scopes,
+            "created_at": created_at,
+            "expires_at": expires_at,
         }
     )
-    await r.set(_redis_key(key_hash), payload)
+    ttl = expires_at - int(time.time())
+    if ttl <= 0:
+        raise ValueError("API key expiry must be in the future")
+    await r.set(_redis_key(key_hash), payload, ex=ttl)
     # Also maintain a per-tenant index so we can list / revoke keys
     await r.sadd(f"apikeys_by_tenant:{tenant_id}", key_hash)
 
@@ -140,12 +153,25 @@ async def validate_api_key(plain_key: str) -> APIKeyRecord | None:
 
     try:
         data = json.loads(raw)
+        # Old, unscoped/non-expiring records must be reissued explicitly.
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("expires_at"), int)
+            or data["expires_at"] <= int(time.time())
+            or not isinstance(data.get("scopes"), list)
+            or not data["scopes"]
+            or any(not isinstance(scope, str) for scope in data["scopes"])
+        ):
+            return None
         return APIKeyRecord(
             key_id=data["key_id"],
             tenant_id=data["tenant_id"],
             name=data["name"],
             roles=data["roles"],
             owner=data["owner"],
+            scopes=data["scopes"],
+            created_at=data.get("created_at", 0),
+            expires_at=data["expires_at"],
         )
     except (json.JSONDecodeError, KeyError) as exc:
         logger.warning("Corrupt API key record in Redis: %s", exc)
@@ -206,6 +232,10 @@ async def list_api_keys(tenant_id: str) -> list[dict]:
             continue
         try:
             data = json.loads(raw)
+            if data.get("tenant_id") != tenant_id or data.get("expires_at", 0) <= int(
+                time.time()
+            ):
+                continue
             data["key_hash"] = h
             results.append(data)
         except (json.JSONDecodeError, KeyError):
