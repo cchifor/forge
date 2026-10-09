@@ -83,7 +83,7 @@ class TestGitInitFailures:
 
         def behavior(cmd, **kwargs):
             calls.append(cmd)
-            if cmd[1] == "commit":
+            if "commit" in cmd:
                 raise subprocess.CalledProcessError(returncode=1, cmd=cmd, stderr="hook fail\n")
             return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
 

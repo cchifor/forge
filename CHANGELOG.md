@@ -63,6 +63,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   identity while retaining checks for configuration, version, and plugin drift.
 - Make nightly update checks enforce the rejection of partial/overwrite modes
   for ownership-managed projects and verify that rejected updates change no files.
+  Finish Git's automatic maintenance before generation returns, so background
+  object repacking cannot race the unchanged-file check.
 
 ### Platform routing
 

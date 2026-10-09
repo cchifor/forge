@@ -173,7 +173,7 @@ class TestGitInit:
         cmds = [call.args[0] for call in mock_run.call_args_list]
         assert cmds[0] == ["git", "init"]
         assert cmds[1] == ["git", "add", "."]
-        assert cmds[2][0:2] == ["git", "commit"]
+        assert cmds[2][-3:] == ["commit", "-m", "Initial commit from forge"]
 
     def test_passes_project_root_as_cwd(self, tmp_path):
         with patch("forge.generator.subprocess.run") as mock_run:

@@ -1646,10 +1646,26 @@ def _git_init(project_root: Path) -> None:
         "GIT_COMMITTER_NAME": "forge",
         "GIT_COMMITTER_EMAIL": "forge@localhost",
     }
+    # Automatic maintenance can otherwise outlive commit and mutate .git after
+    # generation returns. Keep it enabled, but finish it before callers snapshot
+    # or update the project. Set both keys because newer Git prefers maintenance.
     for step, cmd, step_env in (
         ("init", ["git", "init"], None),
         ("add", ["git", "add", "."], None),
-        ("commit", ["git", "commit", "-m", "Initial commit from forge"], env),
+        (
+            "commit",
+            [
+                "git",
+                "-c",
+                "gc.autoDetach=false",
+                "-c",
+                "maintenance.autoDetach=false",
+                "commit",
+                "-m",
+                "Initial commit from forge",
+            ],
+            env,
+        ),
     ):
         try:
             subprocess.run(
