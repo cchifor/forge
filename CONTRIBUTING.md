@@ -42,6 +42,29 @@ make e2e         # full e2e suite (slow — needs uv, npm, cargo, git)
 
 CI runs generator checks on Linux, macOS, and Windows for Python 3.13. The `e2e` workflow runs nightly and on PRs that touch templates or the generator.
 
+## Canvas TypeScript toolchains
+
+The canvas npm workspace uses TypeScript 7 for `canvas-core` compilation and
+declaration output. `canvas-vue` and `canvas-svelte` retain TypeScript 6 because
+`vue-tsc`, Vue's SFC compiler, and `svelte-check` require its JavaScript API.
+TypeScript 7 does not provide that API. The remaining framework migration is
+tracked in [#357](https://github.com/cchifor/forge/issues/357).
+
+Use Node 22 and install from the repository root. Commit `package-lock.json`
+with dependency changes; npm installs both compiler majors, and a bare root
+`tsc` can resolve TypeScript 6. Validate the workspace-specific compiler paths:
+
+```bash
+npm ci --no-fund --no-audit
+npm run check:toolchains
+npm run build
+npm run typecheck
+npm test
+```
+
+Build first so the framework packages can resolve `canvas-core` declarations.
+All three workspace scripts are required and run in the canvas E2E job.
+
 ## Adding a new feature
 
 - **New backend language**: see [backend authoring guide](docs/guides/adding-a-backend.md). The `BACKEND_REGISTRY` is the single source of truth.

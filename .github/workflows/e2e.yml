@@ -33,6 +33,7 @@ on:
       - "packages/canvas-*/**"
       - "package.json"
       - "package-lock.json"
+      - "scripts/check-canvas-toolchains.mjs"
       - "tests/e2e/**"
       - ".github/workflows/e2e.yml"
 
@@ -233,8 +234,13 @@ jobs:
       - name: workspace install (root)
         run: npm ci --no-fund --no-audit
 
-      - name: canvas-core — build (workspace dep of the canvas-* packages)
-        run: npm run --workspace=@forge/canvas-core build
+      - name: Verify resolved canvas compiler versions and APIs
+        run: npm run check:toolchains
+
+      - name: canvas-core — typecheck + build (workspace dep of the canvas-* packages)
+        run: |
+          npm run --workspace=@forge/canvas-core typecheck
+          npm run --workspace=@forge/canvas-core build
 
       - name: canvas-vue — typecheck + build
         working-directory: packages/canvas-vue
