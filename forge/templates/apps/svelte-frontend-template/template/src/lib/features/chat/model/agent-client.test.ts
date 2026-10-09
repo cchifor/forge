@@ -14,6 +14,8 @@ vi.stubGlobal('crypto', {
 	randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2)
 });
 
+type ToolSubscriber = Record<string, (payload: { event: Record<string, unknown> }) => void>;
+
 // Drive the current canvas-core transport through its parsed event callback.
 const runAgent = vi.fn().mockResolvedValue(undefined);
 vi.mock('#canvas-core', async () => {
@@ -58,7 +60,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_START seeds the activeToolCalls list', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-1', toolCallName: 'search' }
 			});
@@ -74,7 +76,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_ARGS accumulates delta into argsBuffer', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-a', toolCallName: 'search' }
 			});
@@ -92,7 +94,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END pretty-prints argsBuffer via JSON.stringify', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-b', toolCallName: 'search' }
 			});
@@ -111,7 +113,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END falls back to raw buffer on JSON parse error', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-c', toolCallName: 'search' }
 			});
@@ -131,7 +133,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('concurrent tool calls keep separate argsBuffers (no cross-contamination)', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-x', toolCallName: 'a' }
 			});
@@ -154,7 +156,7 @@ describe('agent-client TOOL_CALL_ARGS streaming (Pillar G.2)', () => {
 	});
 
 	it('TOOL_CALL_END with no args leaves argsPretty unset', async () => {
-		runAgent.mockImplementation(async (_params: unknown, subscriber: any) => {
+		runAgent.mockImplementation(async (_params: unknown, subscriber: ToolSubscriber) => {
 			await subscriber.onToolCallStartEvent({
 				event: { toolCallId: 'tc-empty', toolCallName: 'ping' }
 			});

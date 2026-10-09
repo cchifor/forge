@@ -71,7 +71,8 @@
 		)}
 	>
 		<div class="prose prose-sm dark:prose-invert max-w-none break-words">
-			{@html renderedHtml}
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- HTML is sanitized with DOMPurify above. -->
+	{@html renderedHtml}
 		</div>
 		{#if isAssistant && toolCalls.length > 0}
 			<div class="flex flex-wrap gap-1.5">

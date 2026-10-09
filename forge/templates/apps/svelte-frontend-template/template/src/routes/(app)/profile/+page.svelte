@@ -47,7 +47,7 @@
 				<p class="text-sm text-muted-foreground">{auth.user?.email}</p>
 				<div class="my-4 h-px w-full bg-border"></div>
 				<div class="flex flex-wrap gap-2">
-					{#each auth.user?.roles ?? [] as role}
+					{#each auth.user?.roles ?? [] as role (role)}
 						<span
 							class="inline-flex items-center gap-1 rounded-full border bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground"
 						>
@@ -69,7 +69,7 @@
 			</div>
 			<div class="p-6 pt-0">
 				<dl class="space-y-4">
-					{#each profileFields as field}
+					{#each profileFields as field (field.label)}
 						<div class="flex items-start gap-3">
 							<div
 								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted"

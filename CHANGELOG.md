@@ -31,6 +31,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Validate real TypeScript projects, generated OpenAPI clients and table behavior.
   Instrument browser coverage using the compiler's source maps while retaining
   strict coverage checks. Preserve column preferences and streamed tool arguments.
+  Run frontend checks after composition supplies generated clients and protocols;
+  propagate failures with both stdout and stderr diagnostics.
+  Keep explicit OpenAPI generation in `src/custom/api/`; starting the dev
+  server preserves generic runtime and configured feature types.
+  Protect Svelte's `src/lib/shared/` runtime with the same regeneration checks
+  as Vue's `src/shared/`, including rejection of locally restamped overrides.
 
 - Align AG-UI client and core at 1.0.2 across the generator, canvas packages,
   and npm lockfile; group their future Dependabot updates together.
@@ -43,9 +49,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Raise the Copier and Hypothesis minimum versions to 9.18.2 and 6.168.4,
   respectively, and keep their lockfile requirements synchronized.
 - Use Dependabot's uv ecosystem so Python updates include `uv.lock`.
-- Refresh the pinned setup-uv, setup-go, Codecov, and release actions;
+- Refresh the pinned setup-uv, setup-go, Node, artifact and release actions;
   preserve CI cache pruning and build releases with a fresh dependency cache.
-- Enable the documented Codecov OIDC flow so same-repository uploads authenticate.
+- Replace the inactive Codecov integration with retained GitHub HTML/XML/JSON
+  coverage reports and revision-linked run summaries. Upload failures are fatal;
+  existing generator and generated-application coverage gates remain enforced.
+- Record nightly status from the gated execution rather than rerunning scenarios
+  for reporting, and tear down partial Compose stacks on failure. Match Rust
+  builder/runtime libc versions and validate shipped frontend lint commands.
 - Smoke-test release preparation in isolated temporary directories and build
   the SBOM from Forge's locked runtime environment without development tools.
 - Compare nightly round-trip recipes independently of the sandbox generator

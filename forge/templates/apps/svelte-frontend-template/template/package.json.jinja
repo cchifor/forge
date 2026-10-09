@@ -11,7 +11,6 @@
   "scripts": {
     {%- if include_openapi %}
     "codegen": "openapi-ts",
-    "predev": "npm run codegen",
     {%- endif %}
     "dev": "vite dev",
     "build": "vite build",
@@ -44,6 +43,7 @@
   },
   "overrides": { "vitest": "5.0.3", "cookie@<0.7.0": "0.7.2", "js-yaml@>=4.0.0 <4.3.2": "4.3.2" },
   "devDependencies": {
+    "globals": "^17.13.0",
     {%- if include_openapi %}
     "prettier": "^3.9.9",
     "@hey-api/openapi-ts": "^0.99.0",

@@ -327,7 +327,7 @@ FEATURE_CARD = """\
 \t</div>
 \t{{#if item.tags.length > 0}}
 \t\t<div class="flex flex-wrap gap-1 mt-2">
-\t\t\t{{#each item.tags.slice(0, 4) as tag}}
+\t\t\t{{#each item.tags.slice(0, 4) as tag, i (i)}}
 \t\t\t\t<span class="rounded-full border px-2 py-0.5 text-xs">{{tag}}</span>
 \t\t\t{{/each}}
 \t\t\t{{#if item.tags.length > 4}}
@@ -342,7 +342,7 @@ FEATURE_CARD = """\
 # Route pages
 ROUTE_LIST = """\
 <script lang="ts">
-\timport {{ goto }} from '$app/navigation';
+\timport {{ goto }} from '$app/navigation';\n\timport {{ resolve }} from '$app/paths';
 \timport {{ Plus }} from '@lucide/svelte';
 \timport {{ toast }} from 'svelte-sonner';
 \timport {{ ConfirmDialog, EmptyState, SearchField, SegmentedButton }} from '#lib/shared/index.ts';
@@ -385,7 +385,7 @@ ROUTE_LIST = """\
 \t\t\t<h1 class="text-3xl font-bold tracking-tight">{Plural}</h1>
 \t\t\t<p class="text-muted-foreground">Manage your {plural}</p>
 \t\t</div>
-\t\t<a href="/{plural}/new" data-testid="{plural}-create-btn" class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90">
+\t\t<a href={{resolve('{plural}/new')}} data-testid="{plural}-create-btn" class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90">
 \t\t\t<Plus class="h-4 w-4" /> New {Singular}
 \t\t</a>
 \t</div>
@@ -408,7 +408,7 @@ ROUTE_LIST = """\
 
 \t{{#if {plural}Query.isLoading}}
 \t\t<div class="space-y-3">
-\t\t\t{{#each Array(3) as _}}
+\t\t\t{{#each Array(3) as _, i (i)}}
 \t\t\t\t<div class="h-24 rounded-lg border animate-pulse bg-muted"></div>
 \t\t\t{{/each}}
 \t\t</div>
@@ -421,7 +421,7 @@ ROUTE_LIST = """\
 \t\t\t{{#each {plural}Query.data.items as {singular} ({singular}.id)}}
 \t\t\t\t<{Singular}Card
 \t\t\t\t\titem={{{singular}}}
-\t\t\t\t\tonview={{() => goto(`/{plural}/${{{singular}.id}}`)}}
+\t\t\t\t\tonview={{() => goto(resolve('/(app)/{plural}/[id]', {{ id: {singular}.id }}))}}
 \t\t\t\t\tondelete={{() => confirmDelete({{ id: {singular}.id, name: {singular}.name }})}}
 \t\t\t\t/>
 \t\t\t{{/each}}
@@ -446,7 +446,7 @@ ROUTE_LIST = """\
 """
 
 ROUTE_ERROR = """\
-<script lang="ts">
+<script lang="ts">\n\timport {{ resolve }} from '$app/paths';
 \timport {{ page }} from '$app/state';
 \timport {{ invalidateAll }} from '$app/navigation';
 \timport {{ Package }} from '@lucide/svelte';
@@ -468,7 +468,7 @@ ROUTE_ERROR = """\
 \t\t\t\tTry Again
 \t\t\t</button>
 \t\t{{/if}}
-\t\t<a href="/{plural}" class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+\t\t<a href={{resolve('{plural}')}} class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
 \t\t\tBack to {Plural}
 \t\t</a>
 \t</div>
@@ -477,7 +477,7 @@ ROUTE_ERROR = """\
 
 ROUTE_CREATE = """\
 <script lang="ts">
-\timport {{ goto }} from '$app/navigation';
+\timport {{ goto }} from '$app/navigation';\n\timport {{ resolve }} from '$app/paths';
 \timport {{ ArrowLeft }} from '@lucide/svelte';
 \timport {{ toast }} from 'svelte-sonner';
 \timport {{ createCreate{Singular}Mutation, create{Singular}Form }} from '#lib/features/{plural}/index.ts';
@@ -493,7 +493,7 @@ ROUTE_CREATE = """\
 \t\tcreateMut.mutate(form.toCreatePayload(), {{
 \t\t\tonSuccess: ({singular}) => {{
 \t\t\t\ttoast.success(`{Singular} "${{{singular}.name}}" created`);
-\t\t\t\tgoto(`/{plural}/${{{singular}.id}}`);
+\t\t\t\tgoto(resolve('/(app)/{plural}/[id]', {{ id: {singular}.id }}));
 \t\t\t}}
 \t\t}});
 \t}}
@@ -501,7 +501,7 @@ ROUTE_CREATE = """\
 
 <div class="space-y-4">
 \t<div class="flex items-center gap-2">
-\t\t<button class="btn-press inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto('/{plural}')}}>
+\t\t<button class="btn-press inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto(resolve('{plural}'))}}>
 \t\t\t<ArrowLeft class="h-4 w-4" />
 \t\t</button>
 \t\t<div>
@@ -540,7 +540,7 @@ ROUTE_CREATE = """\
 \t\t\t</form>
 \t\t</div>
 \t\t<div class="flex items-center gap-2 p-6 pt-0">
-\t\t\t<button data-testid="{singular}-cancel-btn" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto('/{plural}')}}>Cancel</button>
+\t\t\t<button data-testid="{singular}-cancel-btn" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto(resolve('{plural}'))}}>Cancel</button>
 \t\t\t<button data-testid="{singular}-submit-btn" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" disabled={{createMut.isPending}} onclick={{handleSubmit}}>
 \t\t\t\t{{createMut.isPending ? 'Creating...' : 'Create {Singular}'}}
 \t\t\t</button>
@@ -551,7 +551,7 @@ ROUTE_CREATE = """\
 
 ROUTE_DETAIL = """\
 <script lang="ts">
-\timport {{ goto }} from '$app/navigation';
+\timport {{ goto }} from '$app/navigation';\n\timport {{ resolve }} from '$app/paths';
 \timport {{ page }} from '$app/state';
 \timport {{ toStore }} from 'svelte/store';
 \timport {{ ArrowLeft, Pencil, Trash2, Save, X }} from '@lucide/svelte';
@@ -585,8 +585,8 @@ ROUTE_DETAIL = """\
 \t\ttry {{
 \t\t\tawait deleteMut.mutateAsync(page.params.id!);
 \t\t\ttoast.success('{Singular} deleted');
-\t\t\tgoto('/{plural}');
-\t\t}} catch {{}}
+\t\t\tgoto(resolve('{plural}'));
+\t\t}} catch {{ /* The mutation hook reports the error in the UI. */ }}
 \t}}
 
 \tfunction formatDate(d: string | null) {{ if (!d) return 'N/A'; return new Date(d).toLocaleString(); }}
@@ -602,7 +602,7 @@ ROUTE_DETAIL = """\
 
 <div class="space-y-4" data-testid="{singular}-detail">
 \t<div class="flex items-center gap-2">
-\t\t<button class="btn-press inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto('/{plural}')}}>
+\t\t<button class="btn-press inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground" onclick={{() => goto(resolve('{plural}'))}}>
 \t\t\t<ArrowLeft class="h-4 w-4" />
 \t\t</button>
 \t\t<div class="flex-1">
@@ -642,7 +642,7 @@ ROUTE_DETAIL = """\
 \t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Name</dt><dd class="text-sm font-medium">{{{singular}Query.data.name}}</dd></div>
 \t\t\t\t\t\t<div><dt class="text-sm text-muted-foreground">Description</dt><dd class="text-sm">{{{singular}Query.data.description || 'No description'}}</dd></div>
 \t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Status</dt><dd><span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {{statusVariant({singular}Query.data.status)}}">{{{singular}Query.data.status}}</span></dd></div>
-\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Tags</dt><dd class="flex flex-wrap gap-1">{{#each {singular}Query.data.tags as tag}}<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">{{tag}}</span>{{/each}}{{#if {singular}Query.data.tags.length === 0}}<span class="text-sm text-muted-foreground">No tags</span>{{/if}}</dd></div>
+\t\t\t\t\t\t<div><dt class="mb-1 text-sm text-muted-foreground">Tags</dt><dd class="flex flex-wrap gap-1">{{#each {singular}Query.data.tags as tag, i (i)}}<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">{{tag}}</span>{{/each}}{{#if {singular}Query.data.tags.length === 0}}<span class="text-sm text-muted-foreground">No tags</span>{{/if}}</dd></div>
 \t\t\t\t\t\t<div class="grid grid-cols-2 gap-4"><div><dt class="text-sm text-muted-foreground">Created</dt><dd class="text-sm">{{formatDate({singular}Query.data.created_at)}}</dd></div><div><dt class="text-sm text-muted-foreground">Updated</dt><dd class="text-sm">{{formatDate({singular}Query.data.updated_at)}}</dd></div></div>
 \t\t\t\t\t</dl>
 \t\t\t\t{{/if}}
@@ -670,7 +670,7 @@ HUB_BOTTOM_NAV_ITEM = """\t\t{{ title: '{Plural}', url: '/{plural}', icon: Folde
 
 HUB_BREADCRUMB = """\t\t'/{plural}': '{Plural}',\n\t\t'/{plural}/new': 'New {Singular}',"""
 
-HUB_DASHBOARD_CHIP = """\t\t\t\t\t<a href="/{plural}" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"><Package class="h-3.5 w-3.5" /> Browse {Plural}</a>\n\t\t\t\t\t<a href="/{plural}/new" class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"><Plus class="h-3.5 w-3.5" /> Create {Singular}</a>"""
+HUB_DASHBOARD_CHIP = """\t\t\t\t\t<a href={{resolve('{plural}')}} class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"><Package class="h-3.5 w-3.5" /> Browse {Plural}</a>\n\t\t\t\t\t<a href={{resolve('{plural}/new')}} class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"><Plus class="h-3.5 w-3.5" /> Create {Singular}</a>"""
 
 HUB_SCHEMA_EXPORT = """export * from './{singular}.schema';"""
 
@@ -745,7 +745,7 @@ export interface Paginated{Singular}Response {{
 
 NO_CHAT_LAYOUT = """\
 <script lang="ts">
-\timport { goto } from '$app/navigation';
+\timport { goto } from '$app/navigation';\n\timport { resolve } from '$app/paths';
 \timport { getAuth } from '#lib/core/index.ts';
 \timport { getUiStore, AppSidebar, AppHeader } from '#lib/features/shell/index.ts';
 \timport BottomNav from '#lib/features/shell/ui/BottomNav.svelte';
@@ -756,7 +756,7 @@ NO_CHAT_LAYOUT = """\
 
 \t$effect(() => {
 \t\tif (!auth.isLoading && !auth.isAuthenticated) {
-\t\t\tgoto('/login');
+\t\t\tgoto(resolve('login'));
 \t\t}
 \t});
 </script>
@@ -892,7 +892,7 @@ NO_AUTH_ROOT_LAYOUT = """\
 
 # (app)/+page.svelte rewritten without the auth-gated greeting line.
 NO_AUTH_APP_HOME = """\
-<script lang="ts">
+<script lang="ts">\n\timport { resolve } from '$app/paths';
 \timport { Activity, Server, Info, Package, Plus } from '@lucide/svelte';
 \timport { HealthIndicator } from '#lib/shared/index.ts';
 \timport { createServiceInfoQuery, createReadinessQuery } from '#lib/features/dashboard/index.ts';
@@ -962,7 +962,7 @@ NO_AUTH_APP_HOME = """\
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
 \t\t\t\t<div class="space-y-3">
-\t\t\t\t\t{#each Object.entries(readinessQuery.data.components) as [name, component]}
+\t\t\t\t\t{#each Object.entries(readinessQuery.data.components) as [name, component] (name)}
 \t\t\t\t\t\t<div class="flex items-center justify-between rounded-lg border p-3">
 \t\t\t\t\t\t\t<div>
 \t\t\t\t\t\t\t\t<p class="font-medium capitalize">{name}</p>
@@ -988,7 +988,7 @@ NO_AUTH_APP_HOME = """\
 \t\t\t</div>
 \t\t\t<div class="p-6 pt-0">
 \t\t\t\t<dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-\t\t\t\t\t{#each Object.entries(readinessQuery.data.system_info) as [key, value]}
+\t\t\t\t\t{#each Object.entries(readinessQuery.data.system_info) as [key, value] (key)}
 \t\t\t\t\t\t<div class="flex flex-col rounded-lg border p-3">
 \t\t\t\t\t\t\t<dt class="text-xs capitalize text-muted-foreground">
 \t\t\t\t\t\t\t\t{key.replace(/_/g, ' ')}
@@ -1008,7 +1008,7 @@ NO_AUTH_APP_HOME = """\
 # no profile link (profile/ is deleted in this build). Settings stays visible.
 NO_AUTH_APP_SIDEBAR = """\
 <script lang="ts">
-\timport { page } from '$app/state';
+\timport { page } from '$app/state';\n\timport { resolve } from '$app/paths';\n\timport { appPath } from '#lib/shared/lib/paths.ts';
 \timport { Home, Settings, FolderOpen } from '@lucide/svelte';
 \timport { getUiStore } from '#lib/features/shell/index.ts';
 
@@ -1023,8 +1023,9 @@ NO_AUTH_APP_SIDEBAR = """\
 \t];
 
 \tfunction isActive(url: string) {
-\t\tif (url === '/') return page.url.pathname === '/';
-\t\treturn page.url.pathname.startsWith(url);
+\t\tconst path = resolve(appPath(url));
+\t\tif (url === '/') return page.url.pathname === path;
+\t\treturn page.url.pathname === path || page.url.pathname.startsWith(`${path}/`);
 \t}
 
 \tfunction handleBrandClick() {
@@ -1061,10 +1062,10 @@ NO_AUTH_APP_SIDEBAR = """\
 
 \t<nav class="flex-1 overflow-y-auto py-3 px-2">
 \t\t<ul class="space-y-1">
-\t\t\t{#each navItems as item}
+\t\t\t{#each navItems as item (item.url)}
 \t\t\t\t<li>
 \t\t\t\t\t<a
-\t\t\t\t\t\thref={item.url}
+\t\t\t\t\t\thref={resolve(appPath(item.url))}
 \t\t\t\t\t\tclass="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
 \t\t\t\t\t\t\t{isActive(item.url) ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
 \t\t\t\t\t\ttitle={isCollapsed ? item.title : undefined}
@@ -1086,7 +1087,7 @@ NO_AUTH_APP_SIDEBAR = """\
 
 \t<div class="border-t py-2 px-2 space-y-1">
 \t\t<a
-\t\t\thref="/settings"
+\t\t\thref={resolve('settings')}
 \t\t\tclass="btn-press relative flex h-10 items-center rounded-md text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
 \t\t\t\t{isActive('/settings') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}"
 \t\t\ttitle={isCollapsed ? 'Settings' : undefined}

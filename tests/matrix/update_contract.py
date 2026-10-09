@@ -240,6 +240,7 @@ def _drive_mode(
 
 def _drive_rejected_owned_mode(project_root: Path, mode: Mode) -> str | None:
     """Require unsupported owned-project modes to fail without changing files."""
+
     def snapshot() -> dict[str, bytes]:
         return {
             path.relative_to(project_root).as_posix(): path.read_bytes()
@@ -253,8 +254,12 @@ def _drive_rejected_owned_mode(project_root: Path, mode: Mode) -> str | None:
         message = "Ownership-managed projects require a complete merge update"
         if result.returncode != 2 or message not in (result.stdout + result.stderr):
             return f"expected ownership-mode rejection for {mode}, got exit {result.returncode}: {_tail(result)}"
-        if snapshot() != before:
-            return f"rejected {mode} update changed project files"
+        after = snapshot()
+        if after != before:
+            changed = sorted(
+                path for path in before.keys() | after.keys() if before.get(path) != after.get(path)
+            )
+            return f"rejected {mode} update changed project files: {', '.join(changed)}"
     return None
 
 

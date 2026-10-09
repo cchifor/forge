@@ -138,9 +138,6 @@ jobs:
   # test_coverage_gates tests parametrize over platform-agnostic path keys.
   coverage:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -160,6 +157,7 @@ jobs:
             --cov=forge \
             --cov-report=xml:coverage.xml \
             --cov-report=json:coverage.json \
+            --cov-report=html:htmlcov \
             --cov-report=term
       - name: Per-module floor gate
         # Re-runs the gate tests against the fresh coverage.json so the CI
@@ -167,20 +165,44 @@ jobs:
         # low". pytest exits non-zero when any parametrized case fails.
         run: uv run pytest tests/test_coverage_gates.py -v --no-cov
       - name: Refresh coverage badge
+        if: always()
         # Epic S — keeps docs/coverage-policy.md's header and
         # .forge-coverage.json in sync with the actual measured coverage.
         # Stops stale numbers (like the stale "21%" this epic opened with)
         # from lingering in docs after coverage improves.
-        run: uv run python scripts/coverage_badge.py
-      - name: Upload coverage to Codecov
-        # Authenticate with GitHub OIDC; public fork uploads use the action's
-        # tokenless fallback. Keep Codecov availability separate from the
-        # pytest coverage gates enforced above.
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        env:
+          FORGE_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          rm -f .forge-coverage.json
+          uv run python scripts/coverage_badge.py
+      - name: Validate the complete report bundle
+        if: always()
+        run: |
+          for report in coverage.xml coverage.json htmlcov/index.html .forge-coverage.json; do
+            if [ ! -s "$report" ]; then
+              echo "::error::Missing coverage report: $report"
+              exit 1
+            fi
+          done
+      - name: Retain generator coverage reports
+        id: coverage-artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          files: coverage.xml
-          fail_ci_if_error: false
-          use_oidc: true
+          name: generator-coverage-${{ github.sha }}
+          path: |
+            coverage.xml
+            coverage.json
+            htmlcov/
+            .forge-coverage.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - name: Link coverage reports in the run summary
+        if: always() && steps.coverage-artifact.outcome == 'success'
+        env:
+          COVERAGE_ARTIFACT_URL: ${{ steps.coverage-artifact.outputs.artifact-url }}
+        run: printf '\n[Download coverage reports (HTML, XML and JSON)](%s)\n' "$COVERAGE_ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Epic DD (1.1.0-alpha.1) — package integrity. Build the sdist + wheel
   # via `uv build`, inspect both archives, assert every sentinel template

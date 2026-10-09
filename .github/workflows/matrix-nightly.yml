@@ -172,24 +172,18 @@ jobs:
       - name: Run lane C (smoke) for ${{ matrix.scenario }}
         env:
           FORGE_MATRIX_LOG_DIR: ${{ github.workspace }}/compose-logs
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane smoke
-      - name: Upload per-scenario JSON status artifact
-        # Each smoke job emits a one-row JSON file; the aggregator job
-        # below stitches them into the final dashboard. Using artifacts
-        # avoids a fan-in via git, which would require a serialized
-        # commit step that conflicts across parallel runners.
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane smoke --json > \
-            matrix-status/${{ matrix.scenario }}.json || true
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane smoke
+          --json-output matrix-status/${{ matrix.scenario }}.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
+          if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -242,20 +236,18 @@ jobs:
       - name: Install forge
         run: uv sync --locked --all-extras --dev
       - name: Run lane D (roundtrip) for ${{ matrix.scenario }}
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane roundtrip
-      - name: Upload per-scenario JSON status artifact
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane roundtrip --json > \
-            matrix-status/${{ matrix.scenario }}-roundtrip.json || true
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane roundtrip
+          --json-output matrix-status/${{ matrix.scenario }}-roundtrip.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-roundtrip-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Append timing summary
         if: always()
         run: |
@@ -303,20 +295,18 @@ jobs:
       - name: Install forge
         run: uv sync --locked --all-extras --dev
       - name: Run lane E (update + harvest) for ${{ matrix.scenario }}
-        run: uv run python tests/matrix/runner.py --scenario ${{ matrix.scenario }} --lane update
-      - name: Upload per-scenario JSON status artifact
-        if: always()
-        run: |
-          mkdir -p matrix-status
-          uv run python tests/matrix/runner.py \
-            --scenario ${{ matrix.scenario }} --lane update --json > \
-            matrix-status/${{ matrix.scenario }}-update.json || true
+        # Write the result from this exact run; never rerun a failing scenario
+        # just to publish its status (a second execution can hide the failure).
+        run: >-
+          uv run python tests/matrix/runner.py
+          --scenario ${{ matrix.scenario }} --lane update
+          --json-output matrix-status/${{ matrix.scenario }}-update.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: matrix-status-update-${{ matrix.scenario }}
           path: matrix-status/
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Append timing summary
         if: always()
         run: |

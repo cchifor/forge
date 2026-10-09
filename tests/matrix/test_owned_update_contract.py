@@ -34,3 +34,5 @@ def test_owned_mode_rejection_requires_the_right_error_and_unchanged_files(
         assert source.read_text() == "custom code"
     else:
         assert error is not None
+        if behavior == "mutate":
+            assert "custom.py" in error

@@ -3,10 +3,10 @@
 
 	let {
 		message = 'No items found',
-		icon: Icon = Package as any
+		icon: Icon = Package
 	}: {
 		message?: string;
-		icon?: any;
+		icon?: typeof Package;
 	} = $props();
 </script>
 

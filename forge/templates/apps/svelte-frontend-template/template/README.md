@@ -495,7 +495,9 @@ The frontend integrates with a FastAPI backend at `/api/v1`:
 
 ### OpenAPI Code Generation
 
-TypeScript types are generated from the backend's OpenAPI spec:
+`npm run dev` uses the shipped generic/feature contracts without regenerating
+or overwriting them. Generate service-specific types explicitly into
+`src/custom/api` from the backend's OpenAPI spec:
 
 ```bash
 # Generate types from running backend
@@ -505,7 +507,10 @@ OPENAPI_SPEC=http://localhost:5000/openapi.json npm run codegen
 npm run codegen
 ```
 
-Generated types are re-exported under the `API` namespace:
+Import service-specific types from `src/custom/api/types.gen.ts` in application code. Review
+and test that output before use; Forge's generic runtime does not import it.
+The existing `API` namespace continues to expose Forge's generic and configured
+feature contracts, so generating an external client cannot erase feature types:
 
 ```typescript
 import { API } from '$api/namespace';

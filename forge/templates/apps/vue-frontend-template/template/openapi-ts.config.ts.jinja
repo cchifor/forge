@@ -2,7 +2,7 @@ import { defineConfig } from '@hey-api/openapi-ts'
 
 {% if consumed_services -%}
 // Multi-spec setup: each backend gets its own subfolder under
-// `src/shared/api/generated/<service>/` so type collisions across
+// `src/custom/api/<service>/` so type collisions across
 // services (each service exports its own domain types) are scoped per
 // import. Each entry below can also be run individually via
 // `openapi-ts -f openapi-ts.<service>.ts`.
@@ -11,7 +11,7 @@ export default defineConfig([
   {
     input: '../../services/{{ svc|trim }}/openapi.json',
     output: {
-      path: 'src/shared/api/generated/{{ svc|trim }}',
+      path: 'src/custom/api/{{ svc|trim }}',
       postProcess: ['prettier'],
     },
     plugins: [{ name: '@hey-api/typescript', enums: 'typescript' }, '@hey-api/sdk', '@hey-api/client-fetch'],
@@ -19,6 +19,8 @@ export default defineConfig([
 {%- endfor %}
 ])
 {%- else -%}
+// Service-specific output belongs to the custom extension boundary.
+// Forge-owned shared/core API contracts remain unchanged.
 // Single-spec snapshot mode — generates from a checked-in
 // openapi-snapshot.json. Switch to multi-spec by regenerating the
 // project with consumed_services="svc1,svc2,..." or by editing this
@@ -26,7 +28,7 @@ export default defineConfig([
 export default defineConfig({
   input: process.env.OPENAPI_SPEC || './openapi-snapshot.json',
   output: {
-    path: 'src/shared/api/generated',
+    path: 'src/custom/api',
     postProcess: ['prettier'],
   },
   plugins: [{ name: '@hey-api/typescript', enums: 'typescript' }, '@hey-api/sdk', '@hey-api/client-fetch'],

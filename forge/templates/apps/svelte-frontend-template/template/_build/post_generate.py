@@ -618,20 +618,21 @@ def main():
         remove_path(PROJECT_DIR / "_build")
         return
 
-    # 4. Validate
-    print()
-    print("> Validating project")
-    run_command([pm, "run", "check"], "Running svelte-check", timeout=120)
+    if not ANSWERS.get("forge_orchestrated", False):
+        # 4. Validate
+        print()
+        print("> Validating project")
+        run_command([pm, "run", "check"], "Running svelte-check", timeout=120)
 
-    # 5. Build
-    print()
-    print("> Building for production")
-    build_ok = run_command([pm, "run", "build"], "Building (vite build)", timeout=180)
+        # 5. Build
+        print()
+        print("> Building for production")
+        build_ok = run_command([pm, "run", "build"], "Building (vite build)", timeout=180)
 
-    build_dir = PROJECT_DIR / "build"
-    if build_ok and build_dir.is_dir():
-        file_count = sum(1 for _ in build_dir.rglob("*") if _.is_file())
-        print("  Build output: %s (%d files)" % (build_dir, file_count))
+        build_dir = PROJECT_DIR / "build"
+        if build_ok and build_dir.is_dir():
+            file_count = sum(1 for _ in build_dir.rglob("*") if _.is_file())
+            print("  Build output: %s (%d files)" % (build_dir, file_count))
 
     # 6. Clean up _build
     remove_path(PROJECT_DIR / "_build")

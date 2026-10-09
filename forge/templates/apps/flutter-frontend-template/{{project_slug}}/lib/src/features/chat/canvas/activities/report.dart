@@ -24,7 +24,11 @@ class ReportActivity extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
         ],
-        MarkdownBody(data: markdown, selectable: true),
+        // Markdown still uses Flutter's legacy Material theme/localizations.
+        // ignore: deprecated_member_use
+        MaterialUiCompatibilityBridge(
+          child: MarkdownBody(data: markdown, selectable: true),
+        ),
       ],
     );
   }

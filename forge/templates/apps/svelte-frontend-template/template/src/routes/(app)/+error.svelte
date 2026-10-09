@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { AlertTriangle } from '@lucide/svelte';
@@ -22,7 +23,7 @@
 			</button>
 		{/if}
 		<a
-			href="/"
+			href={resolve('')}
 			class="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
 		>
 			Back to Dashboard

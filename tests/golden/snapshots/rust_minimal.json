@@ -85,8 +85,8 @@
       "sha256": "0c02c3c815f2a65b"
     },
     "services/api/Dockerfile": {
-      "size": 4226,
-      "sha256": "f6878f7b5ce0a950"
+      "size": 4391,
+      "sha256": "5d0e1b8862f7d0ff"
     },
     "services/api/OBSERVABILITY.md": {
       "size": 2033,

@@ -62,9 +62,7 @@ def test_write_badge_json(badge_module, tmp_path: Path) -> None:
     assert "updated_at" in payload
 
 
-def test_refresh_policy_doc_inserts_block_when_missing(
-    badge_module, tmp_path: Path
-) -> None:
+def test_refresh_policy_doc_inserts_block_when_missing(badge_module, tmp_path: Path) -> None:
     doc = tmp_path / "coverage-policy.md"
     doc.write_text("# Coverage Policy\n\nIntro paragraph.\n", encoding="utf-8")
     badge_module._refresh_policy_doc(83.5, doc)
@@ -75,9 +73,7 @@ def test_refresh_policy_doc_inserts_block_when_missing(
     assert "Intro paragraph." in text  # original content preserved
 
 
-def test_refresh_policy_doc_replaces_existing_block(
-    badge_module, tmp_path: Path
-) -> None:
+def test_refresh_policy_doc_replaces_existing_block(badge_module, tmp_path: Path) -> None:
     doc = tmp_path / "coverage-policy.md"
     doc.write_text(
         "# Coverage Policy\n\n"
@@ -100,3 +96,31 @@ def test_refresh_policy_doc_creates_parent_dir(badge_module, tmp_path: Path) -> 
     badge_module._refresh_policy_doc(90.0, doc)
     assert doc.exists()
     assert "90.0%" in doc.read_text(encoding="utf-8")
+
+
+def test_ci_summary_retains_measured_coverage_and_revision_provenance(
+    badge_module, tmp_path, monkeypatch
+):
+    cov = tmp_path / "coverage.json"
+    _write_coverage_json(cov, 85.48)
+    badge = tmp_path / "badge.json"
+    doc = tmp_path / "policy.md"
+    summary = tmp_path / "summary.md"
+    summary.write_text("Existing job summary\n")
+    monkeypatch.setattr(badge_module, "COVERAGE_JSON", cov)
+    monkeypatch.setattr(badge_module, "BADGE_JSON", badge)
+    monkeypatch.setattr(badge_module, "POLICY_DOC", doc)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setenv("GITHUB_REPOSITORY", "cchifor/forge")
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_RUN_ID", "123")
+    monkeypatch.setenv("GITHUB_SHA", "tested-merge-sha")
+    monkeypatch.setenv("FORGE_PR_HEAD_SHA", "pr-head-sha")
+    assert badge_module.main() == 0
+    text = summary.read_text()
+    assert text.startswith("Existing job summary\n")
+    assert "85.48%" in text
+    assert "Head revision: `pr-head-sha`" in text
+    assert "Tested revision: `tested-merge-sha`" in text
+    assert "https://github.com/cchifor/forge/actions/runs/123" in text
+    assert json.loads(badge.read_text())["percent_covered"] == 85.48

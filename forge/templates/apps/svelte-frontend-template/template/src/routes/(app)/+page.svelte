@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { Activity, Server, Info, Package, Plus, User } from '@lucide/svelte';
 	import { HealthIndicator } from '#lib/shared/index.ts';
 	import { createServiceInfoQuery, createReadinessQuery } from '#lib/features/dashboard/index.ts';
@@ -67,7 +68,7 @@
 				<div class="flex flex-wrap gap-2">
 					<!-- --- feature action chips --- -->
 					<a
-						href="/profile"
+						href={resolve('profile')}
 						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
 					>
 						<User class="h-3.5 w-3.5" /> View Profile
@@ -91,7 +92,7 @@
 			</div>
 			<div class="p-6 pt-0">
 				<div class="space-y-3">
-					{#each Object.entries(readinessQuery.data.components) as [name, component]}
+					{#each Object.entries(readinessQuery.data.components) as [name, component] (name)}
 						<div class="flex items-center justify-between rounded-lg border p-3">
 							<div>
 								<p class="font-medium capitalize">{name}</p>
@@ -117,7 +118,7 @@
 			</div>
 			<div class="p-6 pt-0">
 				<dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-					{#each Object.entries(readinessQuery.data.system_info) as [key, value]}
+					{#each Object.entries(readinessQuery.data.system_info) as [key, value] (key)}
 						<div class="flex flex-col rounded-lg border p-3">
 							<dt class="text-xs capitalize text-muted-foreground">
 								{key.replace(/_/g, ' ')}

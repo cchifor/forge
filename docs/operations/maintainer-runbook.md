@@ -326,8 +326,9 @@ do not wait for the weekly batch to fix an exploitable vulnerability.
    rendered Python/Node/Rust applications and Vue/Svelte/Flutter frontends.
    Run native generated-code architecture and unit/integration/E2E coverage
    gates without changing their thresholds. Inspect actual upload/SBOM output
-   when updating reporting or release tools; a nonblocking upload can fail
-   inside an otherwise green job.
+   when updating reporting or release tools. The generator coverage job publishes
+   required GitHub artifacts; verify their contents and revision-linked summary.
+   Nightly status artifacts describe the same execution that determines the gate.
 4. Freeze the candidate commit before validation. Run the full nightly smoke,
    round-trip and update matrix on that same revision, including non-PR setup
    paths. Regenerate golden snapshots only for reviewed output changes and

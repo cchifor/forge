@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { getAuth } from '#lib/core/index.ts';
 	import { getUiStore, AppSidebar, AppHeader } from '#lib/features/shell/index.ts';
@@ -14,7 +15,7 @@
 
 	$effect(() => {
 		if (!auth.isLoading && !auth.isAuthenticated) {
-			goto('/login');
+			goto(resolve('login'));
 		}
 	});
 

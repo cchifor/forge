@@ -82,7 +82,10 @@ def ownership(
         "_capabilities",
     }:
         return "generated"
-    if len(p.parts) >= 5 and p.parts[0] == "apps" and p.parts[2:4] == ("src", "shared"):
+    if p.parts[0] == "apps" and (
+        (len(p.parts) >= 5 and p.parts[2:4] == ("src", "shared"))
+        or (len(p.parts) >= 6 and p.parts[2:5] == ("src", "lib", "shared"))
+    ):
         return "generated"
     if len(p.parts) >= 5 and p.parts[0] == "services" and p.parts[2:4] == ("src", "lib"):
         return "generated"

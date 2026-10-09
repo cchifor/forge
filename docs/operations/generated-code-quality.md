@@ -38,6 +38,13 @@ Fastify plugins on the returned app before listening. In Rust, compose the
 returned Axum router from the application entry point. Keep these registrations
 in scaffold/application files and implement the published port contracts.
 
+For Vue and Svelte, explicit `npm run codegen` writes service-specific OpenAPI
+SDKs or types to `src/custom/api/`. Application code can import this output without
+overwriting Forge-owned generic API and feature types. The development server
+does not run client generation automatically. Keep custom client generation in
+this extension directory; writing its output into a protected namespace fails
+the architecture gate. The usual testing and coverage requirements still apply.
+
 The generated workflow installs the recorded release or Git commit. Treat
 recipe, workflow and generator upgrades as reviewed infrastructure changes.
 A recipe produced from an uncommitted generator checkout is for local

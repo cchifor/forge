@@ -26,6 +26,8 @@ then run architecture and all three native test suites against the candidate.
 - **Rust services:** SQLx 0.9 raises the generated workspace minimum to Rust 1.94.
   Dynamic repository queries use `QueryBuilder` with bound values. reqwest 0.13
   uses the `rustls` feature name; update custom HTTP integrations accordingly.
+  Keep Rust Docker build and runtime stages on the same Debian release; the
+  template pins both to Bookworm so newer libc symbols cannot break startup.
 - **Optional adapters:** OpenTelemetry uses its current resource/provider builders
   (Node 2 and Rust 0.33). Rust HTTP export uses the blocking client required by
   the default batch processor. Queue/cache dependencies move to BullMQ 6,
@@ -47,9 +49,17 @@ then run architecture and all three native test suites against the candidate.
   substituted automatically.
 - **Web frontends:** use Node 22.18 or newer. Vite 8 uses Rolldown build options.
   SvelteKit 3 puts adapter/preprocessor settings in the Vite plugin and replaces
-  `$app/stores` with `$app/state`; Query 6 uses reactive option functions.
+  `$app/stores` with `$app/state`. Resolve application paths through
+  `$app/paths.resolve()` so navigation respects the deployment base; runtime
+  redirect destinations must stay within the application. Query 6 uses reactive
+  option functions.
   Ky 2 hooks receive a state object and use `prefix` rather than `prefixUrl`.
   Regenerate API clients with OpenAPI TS 0.99 and mock workers with MSW 3.
+  OpenAPI generation is now explicit: `npm run codegen` writes service-specific
+  types (Svelte) or a client SDK (Vue) to `src/custom/api/`. Import them from
+  application code. Starting the dev server no longer regenerates clients or
+  overwrites Forge-owned generic API/feature types. Update custom OpenAPI
+  configuration and imports to use this extension directory.
   Lucide imports move to `@lucide/vue` and `@lucide/svelte`. Browser coverage uses
   the shared `scripts/browser-coverage.ts` plugin and the compiler's actual
   source maps. Keep this file when migrating custom Vite configurations.

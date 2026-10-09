@@ -608,7 +608,7 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
     start = perf_counter()
     tmp = Path(tempfile.mkdtemp(prefix=f"forge-matrix-{scenario.name}-smoke-"))
     project_root: Path | None = None
-    compose_up = False
+    compose_attempted = False
     try:
         cfg_copy = dict(scenario.config)
         cfg_copy["output_dir"] = str(tmp)
@@ -644,6 +644,7 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
         # healthcheck (or a default readiness guess) — much more reliable
         # than polling ourselves. Compose-v2 only; Compose-v1 will fail
         # and we surface it as a lane-C fail rather than try to simulate.
+        compose_attempted = True
         up_result = subprocess.run(
             # ``--build`` is essential: without it compose reuses any cached
             # image of the same name from a prior run, so the smoke lane would
@@ -683,8 +684,6 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                     f"full output in {scenario.name}-compose-up.log:\n{stderr_tail}"
                 ),
             )
-        compose_up = True
-
         # Run the HTTP contract against each backend.
         violations: list[str] = []
         sub_skips: list[str] = []
@@ -733,7 +732,7 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                 # already removed.
                 #
                 # NB: dumping is gated only on ``compose_file.exists()``,
-                # NOT on ``compose_up`` — when ``docker compose up`` itself
+                # NOT on success — when ``docker compose up`` itself
                 # fails mid-way, the containers that DID start (or
                 # partially started) hold exactly the diagnostics we need.
                 # Skipping the dump on the failure path is what made
@@ -744,11 +743,9 @@ def run_lane_smoke(scenario: Scenario) -> LaneResult:
                     _dump_compose_diagnostics(
                         docker_exe, compose_file, Path(log_dir), scenario.name
                     )
-                # ``down`` is still gated on ``compose_up`` because a
-                # failed compose-up may have already aborted any
-                # partial bring-up — calling ``down`` is harmless then but
-                # adds latency to the failure path with no benefit.
-                if compose_up:
+                # A failed/timeout bring-up can leave started containers and
+                # named volumes behind. Tear down every attempted stack.
+                if compose_attempted:
                     subprocess.run(
                         [
                             docker_exe,
@@ -1349,7 +1346,11 @@ def _diff_project_trees_normalized(a: Path, b: Path) -> list[str]:
                     recipe["generator_sha256"] = "<NORM>"
                 requirement = recipe.get("generator_requirement")
                 version = recipe.get("generator_version")
-                release_pin = isinstance(version, str) and bool(version) and requirement == f"forge-cli=={version}"
+                release_pin = (
+                    isinstance(version, str)
+                    and bool(version)
+                    and requirement == f"forge-cli=={version}"
+                )
                 # These are the two forms produced by this checkout/sandbox
                 # harness. Preserve other remotes, invalid refs and versions.
                 checkout_pin = isinstance(requirement, str) and re.fullmatch(
@@ -1488,6 +1489,11 @@ def _parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="emit JSON results to stdout (for CI matrix aggregation)",
+    )
+    parser.add_argument(
+        "--json-output",
+        type=Path,
+        help="write this execution's results to a JSON artifact, keeping logs on stdout",
     )
     parser.add_argument(
         "--report",
@@ -1652,25 +1658,26 @@ def main() -> int:
         return 3
 
     results = [run_scenario(sc, args.lane) for sc in selected]
-
+    payload = json.dumps(
+        [
+            {
+                "scenario": r.scenario,
+                "lane": r.lane,
+                "status": r.status,
+                "duration_ms": r.duration_ms,
+                "details": r.details,
+                "missing_files": r.missing_files,
+                "skipped_subchecks": r.skipped_subchecks,
+            }
+            for r in results
+        ],
+        indent=2,
+    )
+    if args.json_output:
+        args.json_output.parent.mkdir(parents=True, exist_ok=True)
+        args.json_output.write_text(payload + "\n", encoding="utf-8")
     if args.json:
-        print(
-            json.dumps(
-                [
-                    {
-                        "scenario": r.scenario,
-                        "lane": r.lane,
-                        "status": r.status,
-                        "duration_ms": r.duration_ms,
-                        "details": r.details,
-                        "missing_files": r.missing_files,
-                        "skipped_subchecks": r.skipped_subchecks,
-                    }
-                    for r in results
-                ],
-                indent=2,
-            )
-        )
+        print(payload)
     elif args.report == "markdown":
         print(_format_markdown_grid(results, selected))
     else:

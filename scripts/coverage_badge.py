@@ -9,9 +9,8 @@ produced ``coverage.json`` in the repo root. The script:
 3. Refreshes the ``<!-- COVERAGE-BADGE -->`` block at the top of
    ``docs/coverage-policy.md`` with the current number.
 
-The coverage CI job in ``.github/workflows/ci.yml`` is expected to
-invoke this script and commit any diff so a stale value cannot drift
-past a PR.
+The coverage CI job retains these files as artifacts and writes the measured
+coverage and revision to its run summary. It does not commit generated reports.
 
 Exits 0 on success, non-zero on malformed inputs (to fail the CI
 job early).
@@ -20,9 +19,10 @@ job early).
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -54,14 +54,12 @@ def _read_coverage_percent(path: Path) -> float:
     totals = data.get("totals") or {}
     pct = totals.get("percent_covered")
     if not isinstance(pct, (int, float)):
-        raise ValueError(
-            f"{path} missing totals.percent_covered — unexpected coverage.json shape"
-        )
+        raise ValueError(f"{path} missing totals.percent_covered — unexpected coverage.json shape")
     return float(pct)
 
 
 def _write_badge_json(pct: float, path: Path) -> None:
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {
         "percent_covered": pct,
         "display": f"{pct:.1f}%",
@@ -118,6 +116,20 @@ def main() -> int:
         return 2
     _write_badge_json(pct, BADGE_JSON)
     _refresh_policy_doc(pct, POLICY_DOC)
+    if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
+        repository = os.environ.get("GITHUB_REPOSITORY", "")
+        server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+        run_id = os.environ.get("GITHUB_RUN_ID", "")
+        revision = os.environ.get("GITHUB_SHA", "")
+        head = os.environ.get("FORGE_PR_HEAD_SHA", revision)
+        with Path(summary_path).open("a", encoding="utf-8") as summary:
+            summary.write(
+                f"## Forge generator coverage\n\nMeasured coverage: **{pct:.2f}%**.\n\n"
+                "The pytest project floor and critical-module floors remain enforced. "
+                "Generated applications run separate architecture and unit/integration/E2E gates.\n\n"
+                f"Head revision: `{head}`. Tested revision: `{revision}`. "
+                f"[Workflow run]({server}/{repository}/actions/runs/{run_id}).\n"
+            )
     print(f"coverage_badge: project-wide coverage = {pct:.1f}%")
     return 0
 

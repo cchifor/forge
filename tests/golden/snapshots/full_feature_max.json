@@ -57,7 +57,7 @@
       "sha256": "77ac9733140f48bb"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1251,
+      "size": 1276,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -69,16 +69,16 @@
       "sha256": "ef70b936f826a0cc"
     },
     "apps/frontend/.gitignore": {
-      "size": 343,
-      "sha256": "3ee819008690beca"
+      "size": 317,
+      "sha256": "fee1dc76e03de16a"
     },
     "apps/frontend/Dockerfile": {
       "size": 561,
       "sha256": "601806cd08a11e8c"
     },
     "apps/frontend/README.md": {
-      "size": 1180,
-      "sha256": "343cc4e6fb5f58b1"
+      "size": 1628,
+      "sha256": "4336f0d9b15f28ed"
     },
     "apps/frontend/components.json": {
       "size": 430,
@@ -105,12 +105,12 @@
       "sha256": "9fe69f2287f66dcf"
     },
     "apps/frontend/openapi-ts.config.ts": {
-      "size": 588,
-      "sha256": "52e64d914b235aff"
+      "size": 706,
+      "sha256": "42a1a249ee3641ff"
     },
     "apps/frontend/package.json": {
-      "size": 2437,
-      "sha256": "60a1dc2cbb9b2c2f"
+      "size": 2433,
+      "sha256": "df74089a9c8b9258"
     },
     "apps/frontend/playwright.quality.config.ts": {
       "size": 385,
@@ -125,8 +125,8 @@
       "sha256": "0f61424bd6ad73f8"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 20993,
-      "sha256": "24b622334521f6e7"
+      "size": 21575,
+      "sha256": "69f60f968204597b"
     },
     "apps/frontend/scripts/remap-browser.mjs": {
       "size": 778,
@@ -577,8 +577,8 @@
       "sha256": "d35f0952ee350bc8"
     },
     "apps/frontend/src/shared/api/errors.ts": {
-      "size": 3199,
-      "sha256": "cd6d8bb28db00793"
+      "size": 3192,
+      "sha256": "e047e1050de992c1"
     },
     "apps/frontend/src/shared/api/namespace.ts": {
       "size": 290,
@@ -1589,7 +1589,7 @@
       "sha256": "e772952c9b65e934"
     },
     "forge.toml": {
-      "size": 181178,
+      "size": 181413,
       "sha256": "<version-dependent>"
     },
     "package.json": {

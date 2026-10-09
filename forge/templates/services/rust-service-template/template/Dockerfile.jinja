@@ -13,7 +13,9 @@
 #     services/{{ project_slug }}/         (this service — main context)
 
 # --- Builder Stage ---
-FROM rust:slim AS builder
+# Keep the build libc compatible with the runtime; the floating slim tag can
+# switch Debian releases and emit binaries that fail with GLIBC_x.y not found.
+FROM rust:slim-bookworm AS builder
 
 WORKDIR /workspace
 

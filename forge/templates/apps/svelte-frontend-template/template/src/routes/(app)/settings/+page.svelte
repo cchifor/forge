@@ -42,7 +42,7 @@
 						Select the color scheme for the interface
 					</p>
 					<div class="inline-flex items-center rounded-lg border bg-muted p-1">
-						{#each themeOptions as option}
+						{#each themeOptions as option (option.value)}
 							<button
 								class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {settings.theme ===
 								option.value

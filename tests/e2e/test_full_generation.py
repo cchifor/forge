@@ -644,19 +644,47 @@ def test_chatfirst_template_greenfield_typechecks(
 # -----------------------------------------------------------------------------
 
 
+def _check_custom_codegen_boundary(project_root: Path) -> None:
+    """Explicit service clients cannot overwrite trusted runtime/feature types."""
+    from forge.quality.architecture import verify_architecture
+    from forge.sync.manifest import read_forge_toml
+
+    frontend_dir = project_root / "apps" / "frontend"
+    before = {
+        rel: (project_root / rel).read_bytes()
+        for rel, record in read_forge_toml(project_root / "forge.toml").provenance.items()
+        if record.get("ownership") == "generated"
+    }
+    initial = verify_architecture(project_root)
+    assert initial["passed"], initial["violations"]
+    codegen = _run(["npm", "run", "codegen"], cwd=frontend_dir)
+    assert codegen.returncode == 0, f"OpenAPI codegen failed:\n{codegen.stdout}\n{codegen.stderr}"
+    assert (frontend_dir / "src" / "custom" / "api" / "types.gen.ts").is_file()
+    assert before == {rel: (project_root / rel).read_bytes() for rel in before}
+    result = verify_architecture(project_root)
+    assert result["passed"], result["violations"]
+
+
+@pytest.mark.parametrize("with_openapi", [False, True])
 def test_vue_chat_on_typechecks(
-    tmp_path: Path, require_uv: None, require_npm: None, require_git: None
+    with_openapi: bool, tmp_path: Path, require_uv: None, require_npm: None, require_git: None
 ) -> None:
     config = ProjectConfig(
         project_name="E2E Vue Chat",
         output_dir=str(tmp_path),
         backends=[_make_python_backend()],
-        frontend=_make_frontend(FrontendFramework.VUE, with_auth=True, with_chat=True),
+        frontend=_make_frontend(
+            FrontendFramework.VUE, with_auth=True, with_chat=True, with_openapi=with_openapi
+        ),
         include_keycloak=False,
     )
+    if with_openapi:
+        config.backends[0].features.append("invoices")
     config.validate()
 
     project_root = generate(config, quiet=True)
+    if with_openapi:
+        _check_custom_codegen_boundary(project_root)
     _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
@@ -668,6 +696,9 @@ def test_vue_chat_on_typechecks(
         assert (frontend_dir / "src" / "features" / "ai_chat" / gen).is_file()
     assert (frontend_dir / "public" / "canvas.manifest.json").is_file()
     assert not (project_root / "frontend").exists(), "orphaned frontend/ codegen tree"
+
+    lint = _run(["npm", "run", "lint"], cwd=frontend_dir)
+    assert lint.returncode == 0, f"Vue chat lint failed:\n{lint.stdout}\n{lint.stderr}"
 
     # Real type-check: the bare `vue-tsc --noEmit` is a near-no-op on the
     # solution-style root tsconfig, so assert against tsconfig.app.json — a
@@ -698,9 +729,13 @@ def test_svelte_chat_on_typechecks(
         ),
         include_keycloak=False,
     )
+    if with_openapi:
+        config.backends[0].features.append("invoices")
     config.validate()
 
     project_root = generate(config, quiet=True)
+    if with_openapi:
+        _check_custom_codegen_boundary(project_root)
     _inject_weld_stubs(project_root)
     frontend_dir = project_root / "apps" / "frontend"
     assert (frontend_dir / "package.json").exists()
@@ -708,11 +743,8 @@ def test_svelte_chat_on_typechecks(
     install = _run(["npm", "install", "--no-audit", "--no-fund"], cwd=frontend_dir)
     assert install.returncode == 0, f"npm install failed:\n{install.stderr}"
 
-    if with_openapi:
-        codegen = _run(["npm", "run", "codegen"], cwd=frontend_dir)
-        assert codegen.returncode == 0, (
-            f"OpenAPI codegen failed:\n{codegen.stdout}\n{codegen.stderr}"
-        )
+    lint = _run(["npm", "run", "lint"], cwd=frontend_dir)
+    assert lint.returncode == 0, f"Svelte chat lint failed:\n{lint.stdout}\n{lint.stderr}"
 
     result = _run(["npm", "run", "check"], cwd=frontend_dir)
     assert result.returncode == 0, (
