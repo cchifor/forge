@@ -57,7 +57,7 @@
       "sha256": "77ac9733140f48bb"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1279,
+      "size": 1246,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -101,8 +101,8 @@
       "sha256": "62a7e656f3823799"
     },
     "apps/frontend/openapi-snapshot.json": {
-      "size": 55610,
-      "sha256": "9fe69f2287f66dcf"
+      "size": 55628,
+      "sha256": "56cbc10de6f518c5"
     },
     "apps/frontend/openapi-ts.config.ts": {
       "size": 706,
@@ -1285,8 +1285,8 @@
       "sha256": "2feeb9c03f762d51"
     },
     "deploy/infra/gatekeeper/config/default.yaml": {
-      "size": 1868,
-      "sha256": "c8926c3bb62484b7"
+      "size": 1896,
+      "sha256": "0defe6343b5fc6b9"
     },
     "deploy/infra/gatekeeper/config/development.yaml": {
       "size": 69,
@@ -1305,8 +1305,8 @@
       "sha256": "4245b692a1baee92"
     },
     "deploy/infra/gatekeeper/pyproject.toml": {
-      "size": 2951,
-      "sha256": "955c6604957e47cc"
+      "size": 2965,
+      "sha256": "5a652b32fa5cce01"
     },
     "deploy/infra/gatekeeper/scripts/keygen.py": {
       "size": 2386,
@@ -1569,8 +1569,8 @@
       "sha256": "173308d6bc79f077"
     },
     "deploy/infra/keycloak/themes/vscode/login/resources/css/styles.css": {
-      "size": 23360,
-      "sha256": "99556c5a29cc552f"
+      "size": 23365,
+      "sha256": "6708c30f946a4b96"
     },
     "deploy/infra/keycloak/themes/vscode/login/theme.properties": {
       "size": 64,
@@ -1713,7 +1713,7 @@
       "sha256": "c6ebc62488d3a40a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 548,
+      "size": 515,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -1893,8 +1893,8 @@
       "sha256": "3ac04acb9960986d"
     },
     "services/api/sdks/forge-core/src/forge_core/security/__init__.py": {
-      "size": 3321,
-      "sha256": "47bea3047154b489"
+      "size": 3323,
+      "sha256": "91334c4bfc65def0"
     },
     "services/api/sdks/forge-core/src/forge_core/security/auth.py": {
       "size": 10539,
@@ -1906,11 +1906,11 @@
     },
     "services/api/sdks/forge-core/src/forge_core/security/guard.py": {
       "size": 10974,
-      "sha256": "69a650dffba45171"
+      "sha256": "ddff959f667ded9f"
     },
     "services/api/sdks/forge-core/src/forge_core/security/identity.py": {
       "size": 2387,
-      "sha256": "94aa63828e9120b7"
+      "sha256": "9d00f0903d0cda1e"
     },
     "services/api/sdks/forge-core/src/forge_core/security/jwks.py": {
       "size": 7009,
@@ -1926,7 +1926,7 @@
     },
     "services/api/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,
-      "sha256": "ec261a2f0ce7b80b"
+      "sha256": "7058a4d951a65e70"
     },
     "services/api/sdks/forge-core/src/forge_core/security/trust.py": {
       "size": 2434,
@@ -1961,8 +1961,8 @@
       "sha256": "8d06b1988ef7d35a"
     },
     "services/api/sdks/forge-core/tests/unit/test_persistence.py": {
-      "size": 13275,
-      "sha256": "108df15f5d4698de"
+      "size": 13276,
+      "sha256": "bb1452ffb85a6abc"
     },
     "services/api/sdks/forge-core/tests/unit/test_persistence_internals.py": {
       "size": 16165,
@@ -2537,7 +2537,7 @@
       "sha256": "d3c7f25811409282"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 596,
+      "size": 563,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
