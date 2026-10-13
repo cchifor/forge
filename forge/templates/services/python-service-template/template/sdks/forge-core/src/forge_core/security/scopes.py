@@ -2,7 +2,7 @@
 
 Scopes follow a colon-delimited convention (``<namespace>:<verb>``) but this
 module hardcodes *no* catalogue of services or verbs — it is the
-Strive-decoupled generalisation of the platform's scope graph. Any
+Product-agnostic generalisation of the platform's scope graph. Any
 project-defined scope string works; the only structure assumed is the ``:``
 delimiter for wildcard resolution.
 

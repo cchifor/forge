@@ -9,7 +9,7 @@ extraction) but the typed accessors should be preferred.
 The tenant id is kept as a plain ``str`` (not ``UUID``) so the generic layer
 imposes no opinion on the tenant identifier's shape — a project that wants
 UUID semantics validates the claim in its own claim mapper. This is the
-Strive-decoupled generalisation of the platform's UUID-only identity.
+Product-agnostic generalisation of the platform's UUID-only identity.
 """
 
 from __future__ import annotations

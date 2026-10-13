@@ -56,7 +56,7 @@ OUTBOX_TABLE = sa.Table(
     sa.Column("event_type", sa.String(255), nullable=False),
     sa.Column("source", sa.String(255), nullable=False),
     sa.Column("subject", sa.String(255), nullable=True),
-    # Generic, nullable partition / actor keys (formerly Strive's
+    # Generic, nullable partition / actor keys (formerly a platform's
     # tenant_id / actor_id). Single-tenant services leave them NULL.
     sa.Column("partition_key", sa.String(255), nullable=True),
     sa.Column("actor_key", sa.String(255), nullable=True),

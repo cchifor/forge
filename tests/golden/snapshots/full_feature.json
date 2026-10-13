@@ -97,8 +97,8 @@
       "sha256": "62a7e656f3823799"
     },
     "apps/frontend/openapi-snapshot.json": {
-      "size": 55610,
-      "sha256": "9fe69f2287f66dcf"
+      "size": 55628,
+      "sha256": "56cbc10de6f518c5"
     },
     "apps/frontend/openapi-ts.config.ts": {
       "size": 706,
@@ -1453,8 +1453,8 @@
       "sha256": "3ac04acb9960986d"
     },
     "services/api/sdks/forge-core/src/forge_core/security/__init__.py": {
-      "size": 3321,
-      "sha256": "47bea3047154b489"
+      "size": 3323,
+      "sha256": "91334c4bfc65def0"
     },
     "services/api/sdks/forge-core/src/forge_core/security/auth.py": {
       "size": 10539,
@@ -1466,11 +1466,11 @@
     },
     "services/api/sdks/forge-core/src/forge_core/security/guard.py": {
       "size": 10974,
-      "sha256": "69a650dffba45171"
+      "sha256": "ddff959f667ded9f"
     },
     "services/api/sdks/forge-core/src/forge_core/security/identity.py": {
       "size": 2387,
-      "sha256": "94aa63828e9120b7"
+      "sha256": "9d00f0903d0cda1e"
     },
     "services/api/sdks/forge-core/src/forge_core/security/jwks.py": {
       "size": 7009,
@@ -1486,7 +1486,7 @@
     },
     "services/api/sdks/forge-core/src/forge_core/security/scopes.py": {
       "size": 2461,
-      "sha256": "ec261a2f0ce7b80b"
+      "sha256": "7058a4d951a65e70"
     },
     "services/api/sdks/forge-core/src/forge_core/security/trust.py": {
       "size": 2434,
@@ -1521,8 +1521,8 @@
       "sha256": "8d06b1988ef7d35a"
     },
     "services/api/sdks/forge-core/tests/unit/test_persistence.py": {
-      "size": 13275,
-      "sha256": "108df15f5d4698de"
+      "size": 13276,
+      "sha256": "bb1452ffb85a6abc"
     },
     "services/api/sdks/forge-core/tests/unit/test_persistence_internals.py": {
       "size": 16165,

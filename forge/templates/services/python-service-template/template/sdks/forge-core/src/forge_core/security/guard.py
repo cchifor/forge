@@ -16,7 +16,7 @@ This is the integration piece the security layer orbits. On each token:
 A failure at any step raises a typed :class:`AuthError`; the caller's HTTP
 exception-handler translates these into RFC 7807 problem responses.
 
-This is the *generic*, Strive-decoupled verifier: the tenant id is a plain
+This is the *generic*, product-agnostic verifier: the tenant id is a plain
 string (no UUID requirement), the claim names are fully configurable, and the
 signing algorithm defaults to ES256 but is overridable (RS256 / ES384 / …).
 It carries no on-behalf-of (RFC 8693 ``act``) chain handling or revocation

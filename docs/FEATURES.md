@@ -1081,7 +1081,7 @@ middleware (shipped by ``auth.mode``) are issuer-agnostic — they verify a JWT
 against a JWKS endpoint and bind an ``IdentityContext``. ``auth.provider``
 selects *which* issuer the stack is wired to:
 
-- ``gatekeeper`` (default): forge generates the Strive-style Gatekeeper
+- ``gatekeeper`` (default): forge generates the Gatekeeper
   container (token authority + BFF session manager, RFC 8693 token-exchange).
   Batteries-included; this reproduces today's behaviour exactly.
 - ``in_memory``: a zero-dependency dev issuer that mints test JWTs in-process

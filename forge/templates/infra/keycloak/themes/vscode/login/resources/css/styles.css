@@ -176,7 +176,7 @@ html, body {
  * Typography
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Page header (realm name "Strive") */
+/* Page header (the realm's display name) */
 .pf-v5-c-login__header {
   text-align: center;
   margin-bottom: 8px;
