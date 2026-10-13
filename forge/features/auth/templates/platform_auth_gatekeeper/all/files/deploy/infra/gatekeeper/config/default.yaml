@@ -3,14 +3,14 @@ app:
   title: Gatekeeper
   description: OIDC Relying Party and Traefik ForwardAuth gateway for multi-tenant authentication
   version: "1.0.0"
-  terms_of_service: http://strive.us/terms/
+  terms_of_service: https://example.com/terms/
   contact:
-    name: Strive
-    url: http://strive.us/contact/
-    email: dev@strive.us
+    name: Platform team
+    url: https://example.com/contact/
+    email: platform@example.com
   license_info:
-    name: strive
-    url: http://strive.us/license/
+    name: Proprietary
+    url: https://example.com/license/
 
 server:
   host: "0.0.0.0"

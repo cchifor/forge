@@ -283,7 +283,7 @@ class TestUnscopedModel:
 
 class TestTenantScopingIsOptIn:
     def test_default_guc_is_app_current_tenant(self):
-        # Aligns with forge's multitenancy feature GUC, not a Strive-specific name.
+        # Aligns with forge's multitenancy feature GUC, not a product-specific name.
         assert DEFAULT_TENANT_GUC == "app.current_tenant"
 
     async def test_set_tenant_context_is_noop_on_sqlite(self, session):

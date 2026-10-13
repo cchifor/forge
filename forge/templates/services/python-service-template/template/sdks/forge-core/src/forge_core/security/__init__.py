@@ -25,7 +25,7 @@ but the always-shipped base never imports it. The module-level
 
 The scope checker is registry-free (no hardcoded service enum) and the signing
 algorithm defaults to ES256 but is configurable; provider-specific concerns
-(on-behalf-of ``act`` chains, revocation, the Strive scope graph) live in the
+(on-behalf-of ``act`` chains, revocation, a platform's scope graph) live in the
 optional platform-auth layer, not here.
 """
 

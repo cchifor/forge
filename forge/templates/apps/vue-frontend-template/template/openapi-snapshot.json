@@ -3,15 +3,15 @@
   "info": {
     "title": "Airlock Service",
     "description": "Airlock Service API",
-    "termsOfService": "http://strive.us/terms/",
+    "termsOfService": "https://example.com/terms/",
     "contact": {
       "name": "cchifor",
-      "url": "http://strive.us/contact/",
-      "email": "cchifor@strive.us"
+      "url": "https://example.com/contact/",
+      "email": "platform@example.com"
     },
     "license": {
-      "name": "Strive",
-      "url": "http://strive.us/licese/"
+      "name": "Proprietary",
+      "url": "https://example.com/license/"
     },
     "version": "1.0.0"
   },
