@@ -457,7 +457,7 @@ def render_service_registry(
 
     When synthesis is active this REPLACES
     ``<project_root>/infra/gatekeeper/secrets/service_registry.yaml`` (the
-    fragment's baseline ships Strive-specific ``svc-*`` entries that are bogus
+    fragment's baseline ships placeholder ``svc-*`` entries that are bogus
     for a forge project) with a registry conforming to the vendored
     ``ServiceRegistry`` schema: one entry per :class:`ServiceClient` carrying
 
