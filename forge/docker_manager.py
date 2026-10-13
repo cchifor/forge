@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -470,11 +471,15 @@ def render_service_registry(
     * ``may_act_for_audiences`` — empty (no RFC-8693 token-exchange wiring in
       forge-synthesized graphs yet).
 
-    Ordering is deterministic (clients in config order, audiences sorted) so a
-    re-render is stable except for the argon2 salt — which is random by design.
-    The schema stores only the hash, so the random salt is harmless: the
-    caller's plaintext verifies against it regardless (the in-process
-    hash↔plaintext coherence test proves this).
+    The output is byte-stable across renders: clients keep config order,
+    audiences are sorted, and each argon2 salt is derived from the project slug
+    and the client id. A random salt made every re-render differ, so an
+    ownership-managed ``forge --update`` saw an upstream change on each run and
+    a project that had customised the registry could never finish an update.
+    A derived salt costs nothing here: the plaintext is a deterministic
+    development secret documented in the header, and production rotates the
+    hashes or uses the ``k8s_subject`` verifier. The caller's plaintext still
+    verifies against the hash (the in-process coherence test proves this).
     """
     if synthesis is None:
         return None
@@ -482,8 +487,22 @@ def render_service_registry(
     # Lazy import — argon2 cost is paid only when synthesis is active.
     import yaml  # noqa: PLC0415
     from argon2 import PasswordHasher  # noqa: PLC0415
+    from argon2.low_level import hash_secret  # noqa: PLC0415
 
     hasher = PasswordHasher()
+
+    def _dev_secret_hash(client_id: str, secret: str) -> str:
+        seed = f"forge-dev-s2s:{config.project_slug}:{client_id}".encode()
+        salt = hashlib.sha256(seed).digest()[:16]
+        return hash_secret(
+            secret.encode(),
+            salt,
+            time_cost=hasher.time_cost,
+            memory_cost=hasher.memory_cost,
+            parallelism=hasher.parallelism,
+            hash_len=hasher.hash_len,
+            type=hasher.type,
+        ).decode()
 
     services: list[dict[str, object]] = []
     for client in synthesis.clients:
@@ -493,7 +512,7 @@ def render_service_registry(
         services.append(
             {
                 "client_id": client.client_id,
-                "secret_hash": hasher.hash(client.secret),
+                "secret_hash": _dev_secret_hash(client.client_id, client.secret),
                 "k8s_subject": (f"system:serviceaccount:{config.project_slug}:{client.name}"),
                 "audiences": audiences,
                 "may_act_for_audiences": [],

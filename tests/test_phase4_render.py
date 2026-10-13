@@ -227,6 +227,21 @@ def test_hash_plaintext_coherence(tmp_path: Path) -> None:
     assert PasswordHasher().verify(secret_hash, plaintext) is True
 
 
+def test_service_registry_is_byte_stable_across_renders(tmp_path: Path) -> None:
+    """Two renders of one config write the same registry, salts included.
+
+    A random salt made every re-render differ, so ``forge --update`` reported
+    an upstream change on each run and a project with a customised registry
+    could never complete an update.
+    """
+    registry = Path("deploy") / "infra" / "gatekeeper" / "secrets" / "service_registry.yaml"
+    first = (_generate_shop(tmp_path / "a") / registry).read_bytes()
+    second = (_generate_shop(tmp_path / "b") / registry).read_bytes()
+    assert first == second
+    hashes = [s["secret_hash"] for s in yaml.safe_load(first)["services"]]
+    assert len(set(hashes)) == len(hashes)  # one salt per client
+
+
 # -- (e) event bus wiring ----------------------------------------------------
 
 
