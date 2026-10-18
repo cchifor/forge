@@ -148,7 +148,7 @@ forge-plugin-example/
     └── test_register.py
 ```
 
-The fragment's `files/` tree mirrors the *backend root* layout — a file at `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is therefore importable as `app.hello`. Fragment directories must be passed to `FragmentImplSpec(fragment_dir=...)` as **absolute paths** (typically `str(Path(__file__).resolve().parent / "fragments" / "<name>" / "<lang>")`). Built-in forge features use the same pattern — `forge/features/<ns>/fragments.py` is a working reference, e.g. `forge/features/middleware/fragments.py` for the simplest case (`correlation_id`, single Python implementation, no inject.yaml).
+The fragment's `files/` tree mirrors the *backend root* layout — a file at `files/src/app/hello.py` lands at `<backend>/src/app/hello.py` and is therefore importable as `app.hello`. A project-scoped fragment (`scope="project"`) mirrors the project root instead, unless it declares `target_frontends`: its tree is then app-relative and lands in the frontend app, `apps/<frontend>/` (`files/src/...` becomes `apps/frontend/src/...`). Fragment directories must be passed to `FragmentImplSpec(fragment_dir=...)` as **absolute paths** (typically `str(Path(__file__).resolve().parent / "fragments" / "<name>" / "<lang>")`). Built-in forge features use the same pattern — `forge/features/<ns>/fragments.py` is a working reference, e.g. `forge/features/middleware/fragments.py` for the simplest case (`correlation_id`, single Python implementation, no inject.yaml).
 
 ### 2. `pyproject.toml`
 

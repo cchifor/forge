@@ -197,7 +197,9 @@ class Fragment:
     # ``apply_project_features`` applier honors this; backend-scoped
     # fragments don't currently consult it (frontend-targeted fragments
     # are typically project-scoped because they touch the active frontend
-    # tree).
+    # tree). A non-empty tuple also sets placement: the fragment's
+    # ``files/`` tree is app-relative and lands in ``apps/<slug>/``, never
+    # at the project root.
     target_frontends: tuple[FrontendFramework, ...] = ()
     # RFC-011 acceptance (1.2.0) — opt-out marker for the three-frontend
     # coverage lint at ``tests/test_three_frontend_coverage.py``. Any

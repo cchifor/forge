@@ -584,16 +584,11 @@ def _update_locked(
         collector=collector,
         option_values=plan.option_values,
         frontend_framework=frontend_framework,
-        # Route component_<Name> fragments into the frontend app dir on update,
-        # exactly like generate (generator.py). Without this the updater passed
-        # frontend_dir=None and every component fragment's files/src/... tree was
-        # orphaned at the project root instead of apps/<slug>/, so component
-        # fixes never reached the running app.
-        frontend_dir=(
-            project_root / "apps" / config.frontend_slug
-            if frontend_framework != FrontendFramework.NONE
-            else None
-        ),
+        # Route frontend-targeted fragments into the recorded frontend app on
+        # update, exactly like generate (generator.py). Without an app dir they
+        # would be skipped; the updater once passed None and orphaned every
+        # component fragment's files/src/... tree at the project root.
+        frontend_dir=frontend_app_dir(project_root, data.frontend, frontend_framework),
         # Keep the topology-aware Helm chart current on --update: per-backend
         # ports flow through ``topology``; ``primary_server_port`` covers any
         # residual single-port ``{{ server_port }}`` usage (the updater used to
@@ -1128,6 +1123,21 @@ def _cleanup_orphaned_frontend_codegen(
         )
 
 
+def frontend_app_dir(
+    project_root: Path,
+    frontend: ForgeFrontendData,
+    framework: FrontendFramework | _PluginFramework,
+) -> Path | None:
+    """The recorded frontend app directory, where frontend-targeted fragments apply.
+
+    ``None`` for a project without a frontend. A manifest without an
+    ``app_dir`` falls back to the generator's fixed ``apps/frontend``.
+    """
+    if framework == FrontendFramework.NONE:
+        return None
+    return project_root / (frontend.app_dir or "apps/frontend")
+
+
 def _frontend_framework_from_manifest(
     frontend: ForgeFrontendData,
 ) -> FrontendFramework | _PluginFramework:
@@ -1249,5 +1259,6 @@ __all__ = [
     "apply_features",
     "apply_project_features",
     "classify_project_state",
+    "frontend_app_dir",
     "update_project",
 ]

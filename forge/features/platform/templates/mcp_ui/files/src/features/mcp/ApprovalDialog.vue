@@ -37,7 +37,7 @@ function deny() { emit('deny') }
     <p><strong>{{ props.server }} · {{ props.toolName }}</strong></p>
     <pre class="input-preview">{{ props.inputPreview }}</pre>
     <label>
-      <input type="checkbox" v-model="remember" />
+      <input v-model="remember" type="checkbox" />
       Remember this choice for this session
     </label>
     <footer>

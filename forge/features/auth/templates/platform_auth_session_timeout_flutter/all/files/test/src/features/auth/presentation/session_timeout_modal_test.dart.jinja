@@ -1,0 +1,144 @@
+/// Widget tests for SessionTimeoutModal: when the pre-warning shows, its live
+/// countdown, and both actions.
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:{{project_slug}}/src/features/auth/data/session_timeout_service.dart';
+import 'package:{{project_slug}}/src/features/auth/presentation/session_timeout_modal.dart';
+
+/// A service whose countdown the test sets directly.
+class _FakeSession extends SessionTimeoutService {
+  _FakeSession() : super();
+
+  bool on = true;
+  int remaining = 90;
+  int warnAt = 120;
+  int extendCalls = 0;
+  Completer<void>? pending;
+
+  @override
+  bool get enabled => on;
+
+  @override
+  int get idleRemainingSeconds => remaining;
+
+  @override
+  int get warnAtSeconds => warnAt;
+
+  @override
+  Future<void> extend() {
+    extendCalls++;
+    pending = Completer<void>();
+    return pending!.future;
+  }
+
+  void update(void Function() change) {
+    change();
+    notifyListeners();
+  }
+}
+
+Future<void> _pumpModal(
+  WidgetTester tester,
+  SessionTimeoutService service, {
+  VoidCallback? onSignOut,
+}) {
+  return tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SessionTimeoutModal(
+          service: service,
+          onSignOut: onSignOut ?? () {},
+        ),
+      ),
+    ),
+  );
+}
+
+void main() {
+  late _FakeSession session;
+
+  setUp(() => session = _FakeSession());
+  tearDown(() => session.dispose());
+
+  testWidgets('warns inside the threshold with a live countdown', (
+    WidgetTester tester,
+  ) async {
+    await _pumpModal(tester, session);
+    expect(find.text("You'll be signed out soon"), findsOneWidget);
+    expect(find.textContaining('1m 30s', findRichText: true), findsOneWidget);
+
+    session.update(() => session.remaining = 45);
+    await tester.pump();
+    expect(find.textContaining('45s', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('stays closed outside the threshold, when off and once expired', (
+    WidgetTester tester,
+  ) async {
+    session.remaining = 300;
+    await _pumpModal(tester, session);
+    expect(find.text("You'll be signed out soon"), findsNothing);
+
+    session.update(() {
+      session.remaining = 90;
+      session.on = false;
+    });
+    await tester.pump();
+    expect(find.text("You'll be signed out soon"), findsNothing);
+
+    session.update(() {
+      session.on = true;
+      session.remaining = 0;
+    });
+    await tester.pump();
+    expect(find.text("You'll be signed out soon"), findsNothing);
+  });
+
+  testWidgets('extends the session once while a request is in flight', (
+    WidgetTester tester,
+  ) async {
+    await _pumpModal(tester, session);
+
+    await tester.tap(find.text('Stay signed in'));
+    await tester.pump();
+    expect(find.text('Staying signed in…'), findsOneWidget);
+    await tester.tap(find.text('Staying signed in…'));
+    await tester.pump();
+    expect(session.extendCalls, 1);
+
+    session.pending!.complete();
+    await tester.pump();
+    expect(find.text('Stay signed in'), findsOneWidget);
+  });
+
+  testWidgets('signs out through the callback', (WidgetTester tester) async {
+    var signedOut = 0;
+    await _pumpModal(tester, session, onSignOut: () => signedOut++);
+
+    await tester.tap(find.text('Sign out'));
+    expect(signedOut, 1);
+  });
+
+  test('requires a sign-out callback off the web', () {
+    expect(() => SessionTimeoutModal(service: session), throwsAssertionError);
+  });
+
+  test('signs out on the web through /logout in the same tab', () {
+    final opened = <(Uri, String?)>[];
+    final original = SessionTimeoutModal.openUrl;
+    addTearDown(() => SessionTimeoutModal.openUrl = original);
+    SessionTimeoutModal.openUrl = (Uri url, {String? webOnlyWindowName}) async {
+      opened.add((url, webOnlyWindowName));
+      return true;
+    };
+
+    SessionTimeoutModal.webSignOut();
+
+    expect(opened, [(Uri.parse('/logout'), '_self')]);
+  });
+}

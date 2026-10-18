@@ -40,6 +40,17 @@ def update_owned_project(root: Path, *, dry_run: bool = False) -> dict:
     candidate = generate(config, quiet=True, dry_run=True)
     try:
         new = read_forge_toml(candidate / "forge.toml")
+        # Regeneration always writes the frontend app to the generator's fixed
+        # apps/<frontend_slug>. A different recorded location (an edited
+        # manifest or a moved app) would silently recreate the app there and
+        # delete its protected files: refuse instead of relocating it.
+        recorded_app, regenerated_app = old.frontend.app_dir, new.frontend.app_dir
+        if recorded_app and regenerated_app and recorded_app != regenerated_app:
+            raise ValueError(
+                f"forge.toml records the frontend app at {recorded_app}, but the "
+                f"generator writes it to {regenerated_app}. This update does not move "
+                f"an app: restore it at {regenerated_app} before updating."
+            )
         writes: dict[str, bytes | None] = {}
         conflicts: list[str] = []
         for rel, record in new.provenance.items():
