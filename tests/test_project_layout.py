@@ -370,3 +370,22 @@ def test_update_removes_outputs_left_at_the_old_root_placement(
     # An editable file the generator no longer writes stays for the owner.
     assert (project / ".keep").is_file()
     assert verify_architecture(project)["passed"]
+
+
+def test_update_refuses_to_move_a_frontend_app(vue_project: Path, tmp_path: Path) -> None:
+    # Generation records the one location it writes the app to.
+    assert read_forge_toml(vue_project / "forge.toml").frontend.app_dir == "apps/frontend"
+    # A manifest recording another location (edited, or the app was moved) is
+    # refused rather than silently recreated at apps/frontend.
+    project = tmp_path / "project"
+    shutil.copytree(vue_project, project)
+    manifest_path = project / "forge.toml"
+    manifest = tomlkit.parse(manifest_path.read_text(encoding="utf-8"))
+    manifest["forge"]["frontend"]["app_dir"] = "apps/mobile"
+    manifest_path.write_text(tomlkit.dumps(manifest), encoding="utf-8")
+    before = {p: p.read_bytes() for p in project.rglob("*") if p.is_file()}
+
+    with pytest.raises(ValueError, match="does not move an app"):
+        update_owned_project(project)
+
+    assert {p: p.read_bytes() for p in project.rglob("*") if p.is_file()} == before

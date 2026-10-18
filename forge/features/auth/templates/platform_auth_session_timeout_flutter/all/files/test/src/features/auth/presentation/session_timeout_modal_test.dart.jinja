@@ -50,7 +50,10 @@ Future<void> _pumpModal(
   return tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: SessionTimeoutModal(service: service, onSignOut: onSignOut),
+        body: SessionTimeoutModal(
+          service: service,
+          onSignOut: onSignOut ?? () {},
+        ),
       ),
     ),
   );
@@ -121,13 +124,21 @@ void main() {
     expect(signedOut, 1);
   });
 
-  testWidgets('leaves sign-out to the app off the web', (
-    WidgetTester tester,
-  ) async {
-    await _pumpModal(tester, session);
+  test('requires a sign-out callback off the web', () {
+    expect(() => SessionTimeoutModal(service: session), throwsAssertionError);
+  });
 
-    await tester.tap(find.text('Sign out'));
-    await tester.pump();
-    expect(find.text("You'll be signed out soon"), findsOneWidget);
+  test('signs out on the web through /logout in the same tab', () {
+    final opened = <(Uri, String?)>[];
+    final original = SessionTimeoutModal.openUrl;
+    addTearDown(() => SessionTimeoutModal.openUrl = original);
+    SessionTimeoutModal.openUrl = (Uri url, {String? webOnlyWindowName}) async {
+      opened.add((url, webOnlyWindowName));
+      return true;
+    };
+
+    SessionTimeoutModal.webSignOut();
+
+    expect(opened, [(Uri.parse('/logout'), '_self')]);
   });
 }

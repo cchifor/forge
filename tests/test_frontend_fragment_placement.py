@@ -116,3 +116,47 @@ def test_update_places_frontend_fragments_in_the_recorded_app(
         tmp_path, ForgeFrontendData(framework=framework.value, app_dir=app_dir), framework
     )
     assert found == (tmp_path / expected if expected else None)
+
+
+@pytest.mark.parametrize(
+    ("pubspec", "package"),
+    [
+        # A Flutter app keeps its pubspec name wherever its directory is.
+        ("name: frontend\ndescription: app\n", "frontend"),
+        # Without a pubspec the app directory's name stands in.
+        (None, "mobile"),
+    ],
+)
+def test_frontend_fragment_renders_the_app_package_name(
+    tmp_path: Path, pubspec: str | None, package: str
+) -> None:
+    frag_dir = tmp_path / "tpl" / "flutter_probe" / "all"
+    test_dir = frag_dir / "files" / "test"
+    test_dir.mkdir(parents=True)
+    (test_dir / "probe_test.dart.jinja").write_text(
+        "import 'package:{{ project_slug }}/src/probe.dart';\n", encoding="utf-8"
+    )
+    frag = Fragment(
+        name="flutter_probe",
+        implementations={
+            BackendLanguage.PYTHON: FragmentImplSpec(fragment_dir=str(frag_dir), scope="project")
+        },
+        target_frontends=(FrontendFramework.FLUTTER,),
+        frontend_skip_reason="Flutter-only probe.",
+    )
+    project_root = tmp_path / "proj"
+    frontend_dir = project_root / "apps" / "mobile"
+    frontend_dir.mkdir(parents=True)
+    if pubspec is not None:
+        (frontend_dir / "pubspec.yaml").write_text(pubspec, encoding="utf-8")
+
+    apply_project_features(
+        project_root,
+        (ResolvedFragment(fragment=frag, target_backends=(BackendLanguage.PYTHON,)),),
+        quiet=True,
+        frontend_framework=FrontendFramework.FLUTTER,
+        frontend_dir=frontend_dir,
+    )
+
+    rendered = (frontend_dir / "test" / "probe_test.dart").read_text(encoding="utf-8")
+    assert rendered == f"import 'package:{package}/src/probe.dart';\n"

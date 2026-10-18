@@ -6,6 +6,7 @@ Split out from the original ``updater.py`` god module — see
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -159,14 +160,29 @@ def project_fragment_root(
     return frontend_dir, ""
 
 
+# The top-level ``name:`` of a Flutter app's pubspec.yaml (a Dart package name).
+_PUBSPEC_NAME = re.compile(
+    r"""^name:[ \t]*["']?([A-Za-z0-9_]+)["']?[ \t]*(?:#.*)?$""", re.MULTILINE
+)
+
+
 def project_proxy_name(apply_root: Path, project_root: Path) -> str:
     """Name of the synthetic backend a project-scoped fragment renders with.
 
-    Inside the frontend app it is the app's directory name, so a fragment's
-    ``{{ project_slug }}`` renders the slug the frontend templates use (the
-    Flutter package name); at the project root it is ``project``.
+    At the project root it is ``project``. Inside the frontend app it is the
+    app's package name, so a fragment's ``{{ project_slug }}`` renders what the
+    app's own imports use: a Flutter app's ``pubspec.yaml`` ``name`` (which the
+    generator sets to the frontend slug, wherever the app directory is), or
+    else the app directory's name.
     """
-    return "project" if apply_root == project_root else apply_root.name
+    if apply_root == project_root:
+        return "project"
+    pubspec = apply_root / "pubspec.yaml"
+    if pubspec.is_file():
+        match = _PUBSPEC_NAME.search(pubspec.read_text(encoding="utf-8"))
+        if match:
+            return match.group(1)
+    return apply_root.name
 
 
 def apply_project_features(

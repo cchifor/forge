@@ -12,18 +12,28 @@
 ///  - **Sign out** → consumer-supplied ``onSignOut`` callback.
 ///    Native consumers MUST pass it (typically wired to
 ///    ``AuthRepository.logout`` plus a navigation to the login route);
-///    web consumers can leave it null and the modal will redirect to
-///    ``/logout`` via the browser.
+///    a debug build asserts it. Web consumers can leave it null: the
+///    browser then navigates to the BFF's ``/logout`` in the same tab,
+///    as the login page does for ``/auth/login``.
 ///
 /// Wire once at the authenticated layout's root. Consume the service
 /// via the framework integration the project already uses (Provider,
 /// Riverpod, manual ``ListenableBuilder`` — they all work with the
 /// service's ``ChangeNotifier`` shape).
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/session_timeout_service.dart';
+
+/// Opens [url]; the web default sign-out navigates with it.
+typedef UrlOpener = Future<bool> Function(Uri url, {String? webOnlyWindowName});
+
+Future<bool> _launch(Uri url, {String? webOnlyWindowName}) =>
+    launchUrl(url, webOnlyWindowName: webOnlyWindowName);
 
 /// Modal that surfaces the session-timeout pre-warning.
 ///
@@ -31,20 +41,33 @@ import '../data/session_timeout_service.dart';
 /// ``Stack`` overlay or a parent of ``MaterialApp.builder`` so it can
 /// surface above any route.
 class SessionTimeoutModal extends StatelessWidget {
+  const SessionTimeoutModal({
+    super.key,
+    required this.service,
+    this.onSignOut,
+  }) : assert(
+          kIsWeb || onSignOut != null,
+          'Pass onSignOut: only the web build has a default sign-out (/logout).',
+        );
+
   /// The service driving the countdown. Must be initialised via
   /// ``service.init()`` somewhere in the app lifecycle (typically the
   /// authenticated layout's mount).
   final SessionTimeoutService service;
 
-  /// Called when the user taps "Sign out". Defaults to navigating
-  /// to ``/logout`` on web (no-op on other targets — wire your own).
+  /// Called when the user taps "Sign out". Required off the web; on the
+  /// web it defaults to [webSignOut].
   final VoidCallback? onSignOut;
 
-  const SessionTimeoutModal({
-    super.key,
-    required this.service,
-    this.onSignOut,
-  });
+  /// How [webSignOut] opens ``/logout``; replaceable in tests.
+  @visibleForTesting
+  static UrlOpener openUrl = _launch;
+
+  /// The web default for "Sign out": navigate the browser to the BFF's
+  /// ``/logout`` in the same tab, which ends the server-side session.
+  static void webSignOut() {
+    unawaited(openUrl(Uri.parse('/logout'), webOnlyWindowName: '_self'));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,24 +84,10 @@ class SessionTimeoutModal extends StatelessWidget {
         return _SessionTimeoutOverlay(
           remainingSeconds: remaining,
           onStaySignedIn: service.extend,
-          onSignOut: onSignOut ?? _defaultSignOut,
+          onSignOut: onSignOut ?? webSignOut,
         );
       },
     );
-  }
-
-  static void _defaultSignOut() {
-    // Web: browser navigation to /logout. Native: noop unless the
-    // consumer overrides via ``onSignOut`` (typically routing to a
-    // logout screen that calls the auth service's logout endpoint).
-    if (kIsWeb) {
-      // Use a low-level navigation; package:web is the modern path
-      // but pulling it in just for this would inflate the dep tree.
-      // The consuming app can override via ``onSignOut`` to use its
-      // own router instead.
-      // ignore: avoid_web_libraries_in_flutter
-      // (deferred to consumer)
-    }
   }
 }
 

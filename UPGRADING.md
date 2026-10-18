@@ -164,7 +164,11 @@ until it adopts the recipe, which `forge --quality migrate` proposes.
 
 Nothing mounts the session-timeout dialog automatically. To show it, mount
 `SessionTimeoutModal`, or your own dialog built on `useSessionTimeout()`, once in
-the authenticated layout. The MCP UI components are written only to Vue apps;
+the authenticated layout. The Flutter `SessionTimeoutModal` needs an `onSignOut`
+callback outside the web; on the web it defaults to navigating to `/logout`.
+An ownership-managed update stops, without changing anything, when `forge.toml`
+records the frontend app anywhere other than `apps/frontend`, where the
+generator writes it. The MCP UI components are written only to Vue apps;
 `mcp.config.example.json` stays at the project root. Plugin fragments that declare
 `target_frontends` now land in the app as well, so ship their `files/` tree
 app-relative (`files/src/...`).
