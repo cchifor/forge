@@ -141,7 +141,11 @@ count as success. Credentials belong in CI secrets/environment, not recipes.
 The repository's [generated-quality workflow](../../.github/workflows/generated-quality.yml)
 runs policy/acceptance checks on Windows and Linux and rendered native gates
 for Python, Node, Rust, Vue, and Svelte on Linux. These lanes exercise selected
-configurations, not every possible option cross-product. Other workflows cover
+configurations, not every possible option cross-product. Pull request runs
+resolve the rendered npm applications as of a recorded registry snapshot; a
+weekly run resolves them against the live registry to detect upstream changes
+(see the [maintainer runbook](maintainer-runbook.md#generated-quality-failures)).
+Other workflows cover
 generation matrices, platform boot, authentication contracts, and frontend
 analysis/builds.
 

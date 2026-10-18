@@ -3,11 +3,22 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Weekly drift canary: the same gates against the live npm registry.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: generated-quality-${{ github.ref }}
+  group: generated-quality-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
+env:
+  # Rendered npm applications have no committed lockfile; their dependencies
+  # are resolved in each run. Pull requests and pushes resolve them as of this
+  # registry snapshot, so an upstream release cannot turn this required check
+  # red without a commit. Scheduled and manual runs resolve against the live
+  # registry. Advance the snapshot as the maintainer runbook describes.
+  FORGE_NPM_SNAPSHOT: '2026-10-18T00:00:00Z'
 jobs:
   policy:
     strategy:
@@ -79,6 +90,9 @@ jobs:
           components: llvm-tools-preview
       - if: matrix.language == 'rust'
         run: cargo install cargo-llvm-cov --locked --version 0.9.1
+      - name: Resolve npm dependencies as of the registry snapshot
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        run: echo "npm_config_before=$FORGE_NPM_SNAPSHOT" >> "$GITHUB_ENV"
       - run: uv sync --locked --dev
       - name: Rendered application and shared-runtime gates
         run: uv run --locked python scripts/check_generated_quality.py --language ${{ matrix.language }} --output .artifacts/generated-${{ matrix.language }}
