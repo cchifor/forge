@@ -62,16 +62,18 @@ def test_frontend_targeted_fragment_lands_in_app_dir(tmp_path: Path, name: str) 
     assert not (project_root / "src").exists()
 
 
-def test_frontend_targeted_fragment_without_app_dir_is_skipped(tmp_path: Path) -> None:
+@pytest.mark.parametrize("framework", [FrontendFramework.VUE, None])
+def test_frontend_targeted_fragment_without_app_dir_is_skipped(
+    tmp_path: Path, framework: FrontendFramework | None
+) -> None:
     # No app directory means no correct place for app-relative files: the
-    # fragment is skipped instead of being written at the project root.
+    # fragment is skipped instead of being written at the project root, also
+    # when the caller does not know the frontend (framework None).
     rf = _fragment(tmp_path, "component_Widget", target_frontends=(FrontendFramework.VUE,))
     project_root = tmp_path / "proj"
     project_root.mkdir()
 
-    apply_project_features(
-        project_root, (rf,), quiet=True, frontend_framework=FrontendFramework.VUE
-    )
+    apply_project_features(project_root, (rf,), quiet=True, frontend_framework=framework)
 
     assert list(project_root.iterdir()) == []
 
@@ -92,3 +94,25 @@ def test_frontend_agnostic_project_fragment_stays_at_root(tmp_path: Path) -> Non
 
     assert (project_root / "src" / "shared" / "components" / "Widget.vue").is_file()
     assert not (frontend_dir / "src").exists()
+
+
+@pytest.mark.parametrize(
+    ("framework", "app_dir", "expected"),
+    [
+        (FrontendFramework.VUE, "apps/web", "apps/web"),
+        (FrontendFramework.SVELTE, "", "apps/frontend"),
+        (FrontendFramework.NONE, "apps/frontend", None),
+    ],
+)
+def test_update_places_frontend_fragments_in_the_recorded_app(
+    tmp_path: Path, framework: FrontendFramework, app_dir: str, expected: str | None
+) -> None:
+    # --update and --plan-update use the manifest's app_dir, falling back to
+    # the generator's fixed apps/frontend; a project without a frontend has none.
+    from forge.sync.forge_to_project.updater import frontend_app_dir
+    from forge.sync.manifest import ForgeFrontendData
+
+    found = frontend_app_dir(
+        tmp_path, ForgeFrontendData(framework=framework.value, app_dir=app_dir), framework
+    )
+    assert found == (tmp_path / expected if expected else None)

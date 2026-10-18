@@ -36,6 +36,7 @@ from forge.generator import generate
 from forge.quality.architecture import verify_architecture
 from forge.quality.model import SOURCE_SUFFIXES, digest
 from forge.quality.update import update_owned_project
+from forge.sync.forge_to_project.plan import plan_update
 from forge.sync.manifest import read_forge_toml
 from tests._artefact_filters import is_generated_artefact
 
@@ -224,15 +225,50 @@ def _assert_frontend_layout(root: Path, expected: Iterable[str]) -> set[str]:
     return files
 
 
-def test_rendered_vue_project_keeps_frontend_fragments_in_the_app(vue_project: Path) -> None:
+def _assert_preview_matches(
+    root: Path, monkeypatch: pytest.MonkeyPatch, *fragments: str, absent: str = ""
+) -> None:
+    """``--plan-update`` sees each fragment's files where generation wrote them.
+
+    The preview rebuilds the project config from the manifest without Keycloak,
+    which drops the Gatekeeper fragments from its plan (and rejects MCP), so the
+    plan is pinned to the fragments under test.
+    """
+    from forge.capability_resolver import ResolvedFragment, ResolvedPlan
+    from forge.sync.forge_to_project import plan as plan_module
+
+    names = (*fragments, absent) if absent else fragments
+    pinned = ResolvedPlan(
+        ordered=tuple(
+            ResolvedFragment(
+                fragment=FRAGMENT_REGISTRY[name], target_backends=(BackendLanguage.PYTHON,)
+            )
+            for name in names
+        ),
+        capabilities=frozenset(),
+        option_values={},
+    )
+    monkeypatch.setattr(plan_module, "resolve", lambda _config: pinned)
+    entries = plan_update(root).file_decisions
+    assert {e.fragment for e in entries} == set(fragments)
+    assert all(e.rel_path.startswith("apps/frontend/") for e in entries), entries
+    assert {e.action for e in entries} == {"skipped-idempotent"}, entries
+
+
+def test_rendered_vue_project_keeps_frontend_fragments_in_the_app(
+    vue_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _assert_frontend_layout(vue_project, _VUE_FRONTEND_FILES)
     provenance = read_forge_toml(vue_project / "forge.toml").provenance
     assert provenance[_VUE_FRONTEND_FILES[0]]["fragment_name"] == (
         "platform_auth_session_timeout_vue"
     )
+    _assert_preview_matches(vue_project, monkeypatch, "platform_auth_session_timeout_vue", "mcp_ui")
 
 
-def test_rendered_svelte_project_keeps_frontend_fragments_in_the_app() -> None:
+def test_rendered_svelte_project_keeps_frontend_fragments_in_the_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = generate(_gatekeeper_project(FrontendFramework.SVELTE), quiet=True, dry_run=True)
     try:
         files = _assert_frontend_layout(
@@ -246,11 +282,17 @@ def test_rendered_svelte_project_keeps_frontend_fragments_in_the_app() -> None:
         )
         # The Vue MCP components are not written into a Svelte project at all.
         assert not any(f.endswith(".vue") for f in files)
+        # The preview skips the Vue-only mcp_ui for Svelte as the update does.
+        _assert_preview_matches(
+            root, monkeypatch, "platform_auth_session_timeout_svelte", absent="mcp_ui"
+        )
     finally:
         shutil.rmtree(root.parent)
 
 
-def test_rendered_flutter_project_keeps_frontend_fragments_in_the_app() -> None:
+def test_rendered_flutter_project_keeps_frontend_fragments_in_the_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = generate(_gatekeeper_project(FrontendFramework.FLUTTER), quiet=True, dry_run=True)
     try:
         test = "apps/frontend/test/src/features/auth/data/session_timeout_service_test.dart"
@@ -271,6 +313,8 @@ def test_rendered_flutter_project_keeps_frontend_fragments_in_the_app() -> None:
         )
         source = (root / test).read_text(encoding="utf-8")
         assert f"import 'package:{package}/src/features/auth/data/" in source
+        # The preview renders the test the same way, so its hash matches.
+        _assert_preview_matches(root, monkeypatch, "platform_auth_session_timeout_flutter")
     finally:
         shutil.rmtree(root.parent)
 

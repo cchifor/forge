@@ -17,7 +17,7 @@ from forge.sync.provenance import ProvenanceCollector
 
 if TYPE_CHECKING:
     from forge.config import FrontendFramework
-    from forge.fragments import FragmentImplSpec
+    from forge.fragments import Fragment, FragmentImplSpec
     from forge.middleware_spec import MiddlewareSpec
 
 
@@ -126,6 +126,49 @@ def apply_features(
         )
 
 
+def project_fragment_root(
+    fragment: Fragment,
+    project_root: Path,
+    *,
+    frontend_framework: FrontendFramework | None,
+    frontend_dir: Path | None,
+) -> tuple[Path | None, str]:
+    """Where a project-scoped fragment applies: ``(root, "")``, or ``(None, reason)``.
+
+    A fragment without ``target_frontends`` applies at the project root. One
+    with ``target_frontends`` ships code for those frameworks, written
+    app-relative (``files/src/...``), so it applies inside the frontend app
+    ``frontend_dir`` (``apps/<slug>/``), never at the project root. It is
+    skipped when the project's ``frontend_framework`` is not one it targets
+    (``FrontendFramework.NONE`` for a frontend-less project; ``None`` when the
+    caller does not know the frontend, which skips this check), and when no app
+    directory is known, since there is then no correct place for its files.
+    Generation, ``forge --update`` and the ``--plan-update`` preview share this
+    decision.
+    """
+    targets = fragment.target_frontends
+    if not targets:
+        return project_root, ""
+    if frontend_framework is not None and frontend_framework not in targets:
+        return None, (
+            f"target_frontends={[f.value for f in targets]}, "
+            f"project frontend={frontend_framework.value}"
+        )
+    if frontend_dir is None:
+        return None, "targets a frontend but no frontend app directory is known"
+    return frontend_dir, ""
+
+
+def project_proxy_name(apply_root: Path, project_root: Path) -> str:
+    """Name of the synthetic backend a project-scoped fragment renders with.
+
+    Inside the frontend app it is the app's directory name, so a fragment's
+    ``{{ project_slug }}`` renders the slug the frontend templates use (the
+    Flutter package name); at the project root it is ``project``.
+    """
+    return "project" if apply_root == project_root else apply_root.name
+
+
 def apply_project_features(
     project_root: Path,
     resolved: tuple[ResolvedFragment, ...],
@@ -152,52 +195,22 @@ def apply_project_features(
     See :func:`apply_features` for ``update_mode``, ``file_baselines``,
     and ``option_values`` semantics.
 
-    ``frontend_framework`` (when provided) gates fragments whose
-    ``target_frontends`` tuple is non-empty: a fragment that declares
-    ``target_frontends=(FrontendFramework.VUE,)`` only applies when the
-    project's frontend is Vue. Pass ``FrontendFramework.NONE`` for
-    frontend-less projects so frontend-targeted fragments skip
-    explicitly. Pass ``None`` (the default) when the caller doesn't yet
-    track frontend choice (the updater path) — gating becomes a no-op
-    in that case so existing behavior is preserved until the caller is
-    wired through.
-
-    ``frontend_dir`` is the active frontend app (``apps/<slug>/``). Every
-    fragment with a non-empty ``target_frontends`` emits there, because its
-    ``files/`` tree is app-relative; one that would otherwise apply is skipped
-    when ``frontend_dir`` is ``None``. Other project-scoped fragments emit at
-    the project root.
+    ``frontend_framework`` and ``frontend_dir`` place frontend-targeted
+    fragments; see :func:`project_fragment_root`.
     """
     if option_values is None:
         option_values = {}
     for rf in resolved:
-        if (
-            frontend_framework is not None
-            and rf.fragment.target_frontends
-            and frontend_framework not in rf.fragment.target_frontends
-        ):
+        apply_root, skip_reason = project_fragment_root(
+            rf.fragment,
+            project_root,
+            frontend_framework=frontend_framework,
+            frontend_dir=frontend_dir,
+        )
+        if apply_root is None:
             if not quiet:
-                print(
-                    f"  [frag] skipping '{rf.fragment.name}' — "
-                    f"target_frontends={[f.value for f in rf.fragment.target_frontends]}, "
-                    f"project frontend={frontend_framework.value}"
-                )
+                print(f"  [frag] skipping '{rf.fragment.name}' — {skip_reason}")
             continue
-        # A fragment that declares ``target_frontends`` ships code for one
-        # frontend framework, written app-relative (``files/src/...``), so it
-        # emits into the active frontend app (apps/<slug>/), never the project
-        # root. Without an app dir there is no correct place for those files:
-        # skip rather than leave them orphaned at the root.
-        apply_root = project_root
-        if rf.fragment.target_frontends:
-            if frontend_dir is None:
-                if not quiet:
-                    print(
-                        f"  [frag] skipping '{rf.fragment.name}' — targets a frontend "
-                        "but no frontend app directory is known"
-                    )
-                continue
-            apply_root = frontend_dir
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
             if impl.scope == "project":
@@ -206,11 +219,8 @@ def apply_project_features(
                 # 5000 mirrors BackendConfig's own default server_port; the
                 # primary backend's port (when known) makes project-level
                 # templates like the Helm values.yaml render the real port.
-                # Inside the app the proxy takes the app's directory name, so
-                # a fragment's ``{{ project_slug }}`` renders the slug the
-                # frontend templates use (the Flutter package name).
                 proxy = BackendConfig(
-                    name="project" if apply_root == project_root else apply_root.name,
+                    name=project_proxy_name(apply_root, project_root),
                     project_name="",
                     language=lang,
                     server_port=primary_server_port if primary_server_port else 5000,

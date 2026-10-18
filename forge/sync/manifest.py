@@ -134,15 +134,13 @@ class ForgeFrontendData:
     generated frontend (typically ``"apps/frontend"``). Empty when
     ``framework == "none"``.
 
-    Note: project-scope frontend fragments emit project-relative
-    paths (e.g. ``files/apps/frontend/src/Foo.vue``) — the apply
-    pipeline copies them under ``project_root`` directly, not under
-    ``project_root / app_dir``. ``app_dir`` is consumed by the
+    Note: project-scope fragments that declare ``target_frontends``
+    ship app-relative trees (e.g. ``files/src/Foo.vue``), which
+    ``forge --update`` and ``--plan-update`` apply under
+    ``project_root / app_dir``. ``app_dir`` is also consumed by the
     inference fallback (it picks up the on-disk slot when an older
     manifest is loaded) and by the template re-render driver
-    (locating Copier's target dir). Fragment authors who want their
-    files to land under a non-default app_dir must include that
-    prefix in their fragment's ``files/`` tree.
+    (locating Copier's target dir).
     """
 
     framework: str = ""

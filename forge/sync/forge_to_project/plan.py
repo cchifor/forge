@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 from forge.appliers.files import (
     _JINJA_SUFFIX,
@@ -31,11 +32,19 @@ from forge.appliers.files import (
 )
 from forge.appliers.plan import FragmentPlan
 from forge.capability_resolver import resolve
-from forge.config import BackendConfig, BackendLanguage, ProjectConfig
+from forge.config import BackendConfig, BackendLanguage, FrontendFramework, ProjectConfig
 from forge.errors import PROVENANCE_MANIFEST_MISSING, ProvenanceError
 from forge.fragment_context import FragmentContext, UpdateMode
 from forge.sync.forge_to_project.uninstaller import disabled_fragments
-from forge.sync.forge_to_project.updater import _infer_backends
+from forge.sync.forge_to_project.updater import (
+    _frontend_framework_from_manifest,
+    _infer_backends,
+    frontend_app_dir,
+)
+from forge.sync.forge_to_project.updater._merge_driver import (
+    project_fragment_root,
+    project_proxy_name,
+)
 from forge.sync.manifest import read_forge_toml
 from forge.sync.merge import file_three_way_decide, sha256_of_file
 
@@ -143,15 +152,33 @@ def plan_update(
     current_plan_fragments = {rf.fragment.name for rf in plan.ordered}
     uninstalls = sorted(disabled_fragments(data.provenance, current_plan_fragments))
 
+    # Place project-scoped fragments exactly as the update does: a
+    # frontend-targeted one inside the recorded frontend app, or not at all.
+    # cast: a plugin frontend's sentinel behaves like a member (see the updater).
+    frontend_framework = cast("FrontendFramework", _frontend_framework_from_manifest(data.frontend))
+    frontend_dir = frontend_app_dir(project_root, data.frontend, frontend_framework)
+
     decisions: list[FilePlanEntry] = []
     for rf in plan.ordered:
+        project_dir, _skip_reason = project_fragment_root(
+            rf.fragment,
+            project_root,
+            frontend_framework=frontend_framework,
+            frontend_dir=frontend_dir,
+        )
         for backend in rf.target_backends:
             impl = rf.fragment.implementations.get(backend)
             if impl is None:
                 continue
-            backend_dir, backend_label = _backend_dir_and_label(
-                project_root, backend, config.backends, impl.scope
-            )
+            if impl.scope == "project":
+                if project_dir is None:
+                    continue
+                backend_dir: Path | None = project_dir
+                backend_label = "<project>" if project_dir == project_root else "<frontend>"
+            else:
+                backend_dir, backend_label = _backend_dir_and_label(
+                    project_root, backend, config.backends, impl.scope
+                )
             if backend_dir is None:
                 continue
             decisions.extend(
@@ -220,15 +247,16 @@ def _safe_render_context(
     """Build the Jinja render context the apply path uses, for .jinja files.
 
     Mirrors :class:`FragmentContext` construction in the updater's merge
-    driver: a synthetic ``project`` proxy for project-scope fragments (the
-    same ``project_name=""`` proxy the generate + update paths render with) and
+    driver: a synthetic proxy for project-scope fragments (the same
+    ``project_name=""`` proxy, named by :func:`project_proxy_name`, that the
+    generate + update paths render with) and
     the matching :class:`BackendConfig` for backend-scope ones. Returns ``None``
     on any failure so the caller falls back to the raw-template hash.
     """
     try:
         if getattr(impl, "scope", "") == "project":
             bc = BackendConfig(
-                name="project",
+                name=project_proxy_name(backend_dir, project_root),
                 project_name="",
                 language=backend_language,
                 server_port=5000,
