@@ -1,0 +1,76 @@
+import { expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+{%- if include_auth %}
+import { http, HttpResponse } from 'msw'
+{%- endif %}
+import ProfilePage from '../../src/features/profile/ui/ProfilePage.vue'
+import { AvatarFallback } from '../../src/shared/ui/avatar'
+import { Badge } from '../../src/shared/ui/badge'
+import { useAuth } from '../../src/shared/composables/useAuth'
+{%- if include_auth %}
+import { server } from '../../src/shared/mocks/node'
+{%- endif %}
+
+{% if include_auth %}
+it('shows the identity the gateway session reports and clears it on sign out', async () => {
+  server.use(http.get('*/auth/userinfo', () => HttpResponse.json({
+    userId: '7a1c2b3d-0000-4000-8000-000000000001',
+    email: 'ada@example.com',
+    preferredUsername: 'ada',
+    givenName: 'Ada',
+    familyName: 'Lovelace',
+    roles: ['analyst'],
+    customerId: '7a1c2b3d-0000-4000-8000-000000000002',
+    orgId: 'engines',
+  })))
+  const auth = useAuth()
+  await auth.init()
+  expect(auth.isAuthenticated.value).toBe(true)
+  const wrapper = mount(ProfilePage)
+  expect(wrapper.get('h2').text()).toBe('Ada Lovelace')
+  expect(wrapper.text()).toContain('@ada')
+  expect(wrapper.getComponent(AvatarFallback).text()).toBe('AL')
+  expect(wrapper.findAllComponents(Badge).map(badge => badge.text())).toEqual(['analyst'])
+  for (const [label, value] of [
+    ['Email', 'ada@example.com'],
+    ['User ID', '7a1c2b3d-0000-4000-8000-000000000001'],
+    ['Customer ID', '7a1c2b3d-0000-4000-8000-000000000002'],
+    ['Organization', 'engines'],
+  ]) {
+    expect(wrapper.text()).toContain(label + value)
+  }
+
+  // Sign-out clears the session locally, then hands over to the gateway's /logout.
+  await wrapper.findAll('button').find(button => button.text() === 'Sign Out')!.trigger('click')
+  expect(auth.user.value).toBeNull()
+  expect(wrapper.getComponent(AvatarFallback).text()).toBe('?')
+  expect(wrapper.findAllComponents(Badge)).toHaveLength(0)
+  wrapper.unmount()
+})
+{% else %}
+it('shows the signed-in identity and clears it on sign out', async () => {
+  // Authentication is disabled in this project: the development user is signed in.
+  const auth = useAuth()
+  await auth.init()
+  const wrapper = mount(ProfilePage)
+  expect(wrapper.get('h2').text()).toBe('Dev User')
+  expect(wrapper.text()).toContain('@dev-user')
+  expect(wrapper.getComponent(AvatarFallback).text()).toBe('DU')
+  expect(wrapper.findAllComponents(Badge).map(badge => badge.text())).toEqual(['admin', 'user'])
+  for (const [label, value] of [
+    ['Email', 'dev@localhost'],
+    ['User ID', '00000000-0000-0000-0000-000000000001'],
+    ['Customer ID', '00000000-0000-0000-0000-000000000001'],
+    ['Organization', 'N/A'],
+  ]) {
+    expect(wrapper.text()).toContain(label + value)
+  }
+
+  await wrapper.findAll('button').find(button => button.text() === 'Sign Out')!.trigger('click')
+  expect(auth.user.value).toBeNull()
+  expect(wrapper.getComponent(AvatarFallback).text()).toBe('?')
+  expect(wrapper.findAllComponents(Badge)).toHaveLength(0)
+  expect(wrapper.text()).not.toContain('dev@localhost')
+  wrapper.unmount()
+})
+{% endif -%}

@@ -18,8 +18,8 @@ const { data: info, isLoading: infoLoading } = useServiceInfo()
 const { data: readiness, isLoading: readinessLoading } = useReadiness()
 
 const quickActions = [
-  { label: 'Browse Items', icon: Package, route: '/items' },
-  { label: 'Create Item', icon: Plus, route: '/items/new' },
+  // --- feature quick actions ---
+  // --- end feature quick actions ---
   { label: 'View Profile', icon: User, route: '/profile' },
   { label: 'Settings', icon: Settings, route: '/settings' },
 ]

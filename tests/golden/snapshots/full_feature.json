@@ -121,8 +121,8 @@
       "sha256": "0f61424bd6ad73f8"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 21932,
-      "sha256": "6ac541c638a9e18b"
+      "size": 22660,
+      "sha256": "e4f03017aad74278"
     },
     "apps/frontend/scripts/remap-browser.mjs": {
       "size": 778,
@@ -473,8 +473,8 @@
       "sha256": "7d33b8e23a42017f"
     },
     "apps/frontend/src/features/home/ui/HomePage.vue": {
-      "size": 4739,
-      "sha256": "efee2fe9ea2b8ba8"
+      "size": 4939,
+      "sha256": "b2fa53f75de5c91b"
     },
     "apps/frontend/src/features/items/api/queryKeys.ts": {
       "size": 312,
@@ -1233,8 +1233,8 @@
       "sha256": "bc70a0fe8260e80b"
     },
     "apps/frontend/tests/integration/home-page.test.ts": {
-      "size": 2848,
-      "sha256": "9f7f4fe676a2d375"
+      "size": 2920,
+      "sha256": "3d2acf6bbbc25cb0"
     },
     "apps/frontend/tests/integration/items.test.ts": {
       "size": 135,
@@ -1249,8 +1249,8 @@
       "sha256": "6dfe9c29568abf47"
     },
     "apps/frontend/tests/integration/profile-page.test.ts": {
-      "size": 1525,
-      "sha256": "3e2c3c93269c1a9d"
+      "size": 1879,
+      "sha256": "4769e6ff4487ed23"
     },
     "apps/frontend/tests/integration/settings-page.test.ts": {
       "size": 2895,

@@ -117,6 +117,7 @@ HUB_ROUTER_ROUTE = _mod.HUB_ROUTER_ROUTE
 HUB_SIDEBAR_NAV = _mod.HUB_SIDEBAR_NAV
 HUB_MSW_IMPORT = _mod.HUB_MSW_IMPORT
 HUB_MSW_SPREAD = _mod.HUB_MSW_SPREAD
+HUB_HOME_ACTIONS = _mod.HUB_HOME_ACTIONS
 
 
 # ─── File Helpers ───
@@ -168,13 +169,17 @@ def generate_feature(ctx: dict[str, str]) -> None:
         "import { testCrud } from './crud';\n"
         f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r});\n",
     )
-    write_file(
-        PROJECT_DIR / "tests" / "integration" / f"{ctx['plural']}.test.ts",
-        f"import {{ {ctx['plural']}Routes }} from '../../src/features/{ctx['plural']}'\n"
-        "import { testCrud } from './crud'\n"
-        f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r}, "
-        f"{ctx['plural']}Routes)\n",
-    )
+    # Copier re-runs this task in the project on `copier update`; the page test
+    # is scaffold that projects extend, so an existing file is never replaced.
+    integration_test = PROJECT_DIR / "tests" / "integration" / f"{ctx['plural']}.test.ts"
+    if not integration_test.exists():
+        write_file(
+            integration_test,
+            f"import {{ {ctx['plural']}Routes }} from '../../src/features/{ctx['plural']}'\n"
+            "import { testCrud } from './crud'\n"
+            f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r}, "
+            f"{ctx['plural']}Routes)\n",
+        )
 
 
 def generate_msw_handlers(ctx: dict[str, str]) -> None:
@@ -186,12 +191,14 @@ def inject_feature_into_hubs(ctx: dict[str, str]) -> None:
     router_file = PROJECT_DIR / "src" / "app" / "router" / "index.ts"
     sidebar_file = PROJECT_DIR / "src" / "shared" / "components" / "AppSidebar.vue"
     handlers_file = PROJECT_DIR / "src" / "shared" / "mocks" / "handlers.ts"
+    home_file = PROJECT_DIR / "src" / "features" / "home" / "ui" / "HomePage.vue"
 
     inject_after_marker(router_file, "// --- feature imports ---", HUB_ROUTER_IMPORT.format(**ctx))
     inject_after_marker(router_file, "// --- feature routes ---", HUB_ROUTER_ROUTE.format(**ctx))
     inject_after_marker(sidebar_file, "// --- feature nav items ---", HUB_SIDEBAR_NAV.format(**ctx))
     inject_after_marker(handlers_file, "// --- feature handler imports ---", HUB_MSW_IMPORT.format(**ctx))
     inject_after_marker(handlers_file, "// --- feature handlers ---", HUB_MSW_SPREAD.format(**ctx))
+    inject_after_marker(home_file, "// --- feature quick actions ---", HUB_HOME_ACTIONS.format(**ctx))
 
 
 # ─── Conditional Patching ───
@@ -494,6 +501,11 @@ def main() -> None:
         sidebar = PROJECT_DIR / "src" / "shared" / "components" / "AppSidebar.vue"
         sidebar.write_text(
             sidebar.read_text(encoding="utf-8").replace("  Package,\n", ""),
+            encoding="utf-8",
+        )
+        home = PROJECT_DIR / "src" / "features" / "home" / "ui" / "HomePage.vue"
+        home.write_text(
+            home.read_text(encoding="utf-8").replace("{ Package, Plus, User,", "{ User,"),
             encoding="utf-8",
         )
 

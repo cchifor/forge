@@ -737,3 +737,7 @@ HUB_ROUTER_ROUTE = "      ...{plural}Routes,\n"
 HUB_SIDEBAR_NAV = "  {{ title: '{Plural}', url: '/{plural}', icon: Package }},\n"
 HUB_MSW_IMPORT = "import {{ {plural}Handlers }} from './{plural}.handlers'\n"
 HUB_MSW_SPREAD = "  ...{plural}Handlers,\n"
+HUB_HOME_ACTIONS = (
+    "  {{ label: 'Browse {Plural}', icon: Package, route: '/{plural}' }},\n"
+    "  {{ label: 'Create {Singular}', icon: Plus, route: '/{plural}/new' }},\n"
+)

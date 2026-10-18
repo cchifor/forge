@@ -1,25 +1,22 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import { http, HttpResponse } from 'msw'
 import HomePage from '../../src/features/home/ui/HomePage.vue'
+import application from '../../src/app/router'
 import { queryClient } from '../../src/app/providers/query-client'
 import { server } from '../../src/shared/mocks/node'
 import { useAuth } from '../../src/shared/composables/useAuth'
 
-const Empty = defineComponent({ render: () => null })
 let wrapper: VueWrapper | undefined
 let router: Router
 
 beforeEach(async () => {
   vi.stubEnv('VITE_AUTH_DISABLED', 'true')
   await useAuth().init()
-  router = createRouter({
-    history: createMemoryHistory(),
-    routes: ['/', '/items', '/items/new', '/profile', '/settings'].map(path => ({ path, component: Empty })),
-  })
+  // The application's own route table, without browser history or guards.
+  router = createRouter({ history: createMemoryHistory(), routes: application.options.routes })
   await router.push('/')
   wrapper = mount(HomePage, { global: { plugins: [router, [VueQueryPlugin, { queryClient }]] } })
 })
@@ -40,15 +37,17 @@ it('greets the user and reports service information and readiness', async () => 
   expect(wrapper!.text()).toContain('UP')
 })
 
-it('navigates from every quick action', async () => {
-  const targets: string[] = []
-  for (const label of ['Browse Items', 'Create Item', 'View Profile', 'Settings']) {
-    const action = wrapper!.findAll('button').find(button => button.text() === label)!
-    await action.trigger('click')
-    await flushPromises()
-    targets.push(router.currentRoute.value.path)
+it('offers only quick actions that lead to application routes', async () => {
+  const push = vi.spyOn(router, 'push')
+  const actions = wrapper!.findAll('button')
+  for (const action of actions) await action.trigger('click')
+  await flushPromises()
+  const targets = push.mock.calls.map(([target]) => String(target))
+  expect(targets).toHaveLength(actions.length)
+  expect(targets).toEqual(expect.arrayContaining(['/profile', '/settings']))
+  for (const target of targets) {
+    expect(router.resolve(target).name, `quick action to ${target}`).not.toBe('not-found')
   }
-  expect(targets).toEqual(['/items', '/items/new', '/profile', '/settings'])
 })
 
 it('shows degraded components reported by the readiness probe', async () => {
