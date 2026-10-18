@@ -121,8 +121,8 @@
       "sha256": "0f61424bd6ad73f8"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 21575,
-      "sha256": "69f60f968204597b"
+      "size": 21932,
+      "sha256": "6ac541c638a9e18b"
     },
     "apps/frontend/scripts/remap-browser.mjs": {
       "size": 778,
@@ -1228,9 +1228,33 @@
       "size": 504,
       "sha256": "3faf42307082123a"
     },
+    "apps/frontend/tests/integration/crud.ts": {
+      "size": 8983,
+      "sha256": "bc70a0fe8260e80b"
+    },
+    "apps/frontend/tests/integration/home-page.test.ts": {
+      "size": 2848,
+      "sha256": "9f7f4fe676a2d375"
+    },
+    "apps/frontend/tests/integration/items.test.ts": {
+      "size": 135,
+      "sha256": "8fed7f7ba3dc5c70"
+    },
+    "apps/frontend/tests/integration/orders.test.ts": {
+      "size": 140,
+      "sha256": "890a410d520974b9"
+    },
     "apps/frontend/tests/integration/primitives.test.ts": {
       "size": 4257,
       "sha256": "6dfe9c29568abf47"
+    },
+    "apps/frontend/tests/integration/profile-page.test.ts": {
+      "size": 1525,
+      "sha256": "3e2c3c93269c1a9d"
+    },
+    "apps/frontend/tests/integration/settings-page.test.ts": {
+      "size": 2895,
+      "sha256": "a1823f975f07c5f2"
     },
     "apps/frontend/tests/integration/splitter.test.ts": {
       "size": 888,
@@ -1273,7 +1297,7 @@
       "sha256": "11084b79a8580abe"
     },
     "forge.toml": {
-      "size": 138834,
+      "size": 140216,
       "sha256": "<version-dependent>"
     },
     "package.json": {

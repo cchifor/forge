@@ -168,6 +168,13 @@ def generate_feature(ctx: dict[str, str]) -> None:
         "import { testCrud } from './crud';\n"
         f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r});\n",
     )
+    write_file(
+        PROJECT_DIR / "tests" / "integration" / f"{ctx['plural']}.test.ts",
+        f"import {{ {ctx['plural']}Routes }} from '../../src/features/{ctx['plural']}'\n"
+        "import { testCrud } from './crud'\n"
+        f"testCrud({ctx['plural']!r}, {ctx['singular']!r}, {ctx['backend_name']!r}, "
+        f"{ctx['plural']}Routes)\n",
+    )
 
 
 def generate_msw_handlers(ctx: dict[str, str]) -> None:
