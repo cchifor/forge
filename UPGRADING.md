@@ -166,6 +166,8 @@ Nothing mounts the session-timeout dialog automatically. To show it, mount
 `SessionTimeoutModal`, or your own dialog built on `useSessionTimeout()`, once in
 the authenticated layout. The Flutter `SessionTimeoutModal` needs an `onSignOut`
 callback outside the web; on the web it defaults to navigating to `/logout`.
+Flutter apps now declare `http` and `url_launcher` even without the login UI
+(`include_auth=false`), because the session-timeout fragment imports both.
 An ownership-managed update stops, without changing anything, when `forge.toml`
 records the frontend app anywhere other than `apps/frontend`, where the
 generator writes it. The MCP UI components are written only to Vue apps;

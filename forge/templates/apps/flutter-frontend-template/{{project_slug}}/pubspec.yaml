@@ -27,6 +27,11 @@ dependencies:
 
   # Networking
   dio: ^5.11.1
+  # http and url_launcher are declared whatever include_auth says: the
+  # session-timeout fragment, which forge adds whenever auth.mode=generate
+  # (an app without the login UI included), imports both.
+  http: ^1.6.0
+  url_launcher: ^6.3.3
 {%- if include_openapi %}
   retrofit: ^4.10.0
 {%- endif %}
@@ -66,8 +71,6 @@ dependencies:
   # Auth
   flutter_appauth: ^12.1.0
   flutter_secure_storage: ^11.2.0
-  url_launcher: ^6.3.3
-  http: ^1.6.0
 {%- endif %}
 
   # Storage

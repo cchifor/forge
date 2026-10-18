@@ -17,12 +17,14 @@ fails here before it reaches a project:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from collections.abc import Iterable, Iterator
 from pathlib import Path, PurePosixPath
 
 import pytest
 import tomlkit
+import yaml
 
 from forge.config import (
     BackendConfig,
@@ -315,6 +317,45 @@ def test_rendered_flutter_project_keeps_frontend_fragments_in_the_app(
         assert f"import 'package:{package}/src/features/auth/data/" in source
         # The preview renders the test the same way, so its hash matches.
         _assert_preview_matches(root, monkeypatch, "platform_auth_session_timeout_flutter")
+    finally:
+        shutil.rmtree(root.parent)
+
+
+_DART_PACKAGE_IMPORT = re.compile(r"""^\s*(?:import|export)\s+['"]package:([a-z0-9_]+)/""", re.M)
+
+
+@pytest.mark.parametrize("include_auth", [False, True], ids=["no-auth-ui", "auth-ui"])
+def test_flutter_session_timeout_imports_only_declared_packages(include_auth: bool) -> None:
+    # The fragment follows auth.mode=generate, not the app's login UI, so an app
+    # generated without include_auth still gets it; every package its files
+    # import must then be in that app's pubspec.yaml.
+    config = _gatekeeper_project(FrontendFramework.FLUTTER)
+    assert config.frontend is not None
+    config.frontend.include_auth = include_auth
+    config.options = {"auth.provider": "gatekeeper"}
+    root = generate(config, quiet=True, dry_run=True)
+    try:
+        app = root / "apps/frontend"
+        pubspec = yaml.safe_load((app / "pubspec.yaml").read_text(encoding="utf-8"))
+        declared = {
+            pubspec["name"],
+            *(pubspec.get("dependencies") or {}),
+            *(pubspec.get("dev_dependencies") or {}),
+        }
+        provenance = read_forge_toml(root / "forge.toml").provenance
+        emitted = [
+            rel
+            for rel, record in provenance.items()
+            if record.get("fragment_name") == "platform_auth_session_timeout_flutter"
+        ]
+        assert len(emitted) == 4, emitted
+        imported = {
+            package: rel
+            for rel in emitted
+            for package in _DART_PACKAGE_IMPORT.findall((root / rel).read_text(encoding="utf-8"))
+        }
+        assert {"http", "url_launcher"} <= imported.keys()
+        assert not {p: rel for p, rel in imported.items() if p not in declared}
     finally:
         shutil.rmtree(root.parent)
 
