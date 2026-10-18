@@ -23,6 +23,7 @@ fragments = [
     "cli_commands",
     "agents_md",
     "mcp_server",
+    "mcp_config",
     "mcp_ui",
     "mcp_ui_svelte",
     "mcp_ui_flutter",

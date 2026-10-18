@@ -27,7 +27,7 @@
 
 	const session = getSessionTimeout();
 	let isExtending = $state(false);
-	let visibilityState = $state<DocumentVisibilityState>('visible');
+	let visibilityState = $state<'visible' | 'hidden'>('visible');
 
 	function syncVisibility() {
 		if (typeof document !== 'undefined') {

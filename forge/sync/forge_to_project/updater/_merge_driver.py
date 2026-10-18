@@ -161,6 +161,12 @@ def apply_project_features(
     track frontend choice (the updater path) — gating becomes a no-op
     in that case so existing behavior is preserved until the caller is
     wired through.
+
+    ``frontend_dir`` is the active frontend app (``apps/<slug>/``). Every
+    fragment with a non-empty ``target_frontends`` emits there, because its
+    ``files/`` tree is app-relative; one that would otherwise apply is skipped
+    when ``frontend_dir`` is ``None``. Other project-scoped fragments emit at
+    the project root.
     """
     if option_values is None:
         option_values = {}
@@ -177,17 +183,21 @@ def apply_project_features(
                     f"project frontend={frontend_framework.value}"
                 )
             continue
-        # Layered-component emitter fragments (``component_<Name>``) emit into the
-        # active frontend app (apps/<slug>/), not the project root — their files
-        # use the app-relative ``files/src/...`` convention. Scoped to component
-        # fragments so existing frontend fragments (auth, etc.) keep their current
-        # placement; ``frontend_dir=None`` (updater path) also preserves it.
-        is_component = rf.fragment.name.startswith("component_")
-        apply_root = (
-            frontend_dir
-            if (frontend_dir is not None and is_component and rf.fragment.target_frontends)
-            else project_root
-        )
+        # A fragment that declares ``target_frontends`` ships code for one
+        # frontend framework, written app-relative (``files/src/...``), so it
+        # emits into the active frontend app (apps/<slug>/), never the project
+        # root. Without an app dir there is no correct place for those files:
+        # skip rather than leave them orphaned at the root.
+        apply_root = project_root
+        if rf.fragment.target_frontends:
+            if frontend_dir is None:
+                if not quiet:
+                    print(
+                        f"  [frag] skipping '{rf.fragment.name}' — targets a frontend "
+                        "but no frontend app directory is known"
+                    )
+                continue
+            apply_root = frontend_dir
         for lang in rf.target_backends:
             impl = rf.fragment.implementations[lang]
             if impl.scope == "project":
@@ -196,8 +206,11 @@ def apply_project_features(
                 # 5000 mirrors BackendConfig's own default server_port; the
                 # primary backend's port (when known) makes project-level
                 # templates like the Helm values.yaml render the real port.
+                # Inside the app the proxy takes the app's directory name, so
+                # a fragment's ``{{ project_slug }}`` renders the slug the
+                # frontend templates use (the Flutter package name).
                 proxy = BackendConfig(
-                    name="project",
+                    name="project" if apply_root == project_root else apply_root.name,
                     project_name="",
                     language=lang,
                     server_port=primary_server_port if primary_server_port else 5000,

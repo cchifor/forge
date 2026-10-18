@@ -144,6 +144,31 @@ operator can instead purge those `gk:delegation_grant:*` records during a coordi
 cutover before issuing replacements. Grant lookup does not extend their TTL.
 See [S2S](docs/guides/service-to-service.md) and [API keys](docs/guides/api-keys.md).
 
+### Frontend fragment files move into the frontend app
+
+Fragments that target a frontend now write into `apps/frontend/`. Earlier
+versions wrote the session-timeout composable and dialog (Vue, Svelte and
+Flutter) and the MCP UI components to a root `src/` or `lib/`, outside any app,
+and placed a `.keep` file from the Gatekeeper key-generation fragment at the
+project root. A project generated with Gatekeeper authentication and a Vue
+frontend contained `src/shared/composables/useSessionTimeout.ts` and
+`src/features/auth/components/SessionTimeoutModal.vue`.
+
+`forge --update` writes these files inside the app, deletes the protected root
+copies and removes their records from `forge.toml`. It leaves editable files the
+generator no longer writes in place, here the root `.keep` and Flutter's root
+`test/src/features/auth/data/session_timeout_service_test.dart`: delete them,
+then the root `src/` or `lib/` once nothing else uses it. A project without the
+ownership recipe (`.forge/quality.json`) keeps the root copies and their records
+until it adopts the recipe, which `forge --quality migrate` proposes.
+
+Nothing mounts the session-timeout dialog automatically. To show it, mount
+`SessionTimeoutModal`, or your own dialog built on `useSessionTimeout()`, once in
+the authenticated layout. The MCP UI components are written only to Vue apps;
+`mcp.config.example.json` stays at the project root. Plugin fragments that declare
+`target_frontends` now land in the app as well, so ship their `files/` tree
+app-relative (`files/src/...`).
+
 ## 1.0 → 1.1
 
 The 1.1 series opens the 12-month post-1.0 roadmap. Early alphas are additive except where called out below.

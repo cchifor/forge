@@ -132,11 +132,15 @@ class _SessionTimeoutOverlay extends StatelessWidget {
                     ]),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  // Lays the actions out in a row when they fit, stacked
+                  // otherwise (narrow cards, large text), as dialogs do.
+                  OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    overflowAlignment: OverflowBarAlignment.end,
+                    spacing: 12,
+                    overflowSpacing: 8,
                     children: <Widget>[
                       _StaySignedInButton(onPressed: onStaySignedIn),
-                      const SizedBox(width: 12),
                       OutlinedButton(
                         onPressed: onSignOut,
                         child: const Text('Sign out'),

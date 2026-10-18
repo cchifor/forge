@@ -40,10 +40,6 @@
       "size": 523,
       "sha256": "99517caa29227052"
     },
-    ".keep": {
-      "size": 1,
-      "sha256": "01ba4719c80b6fe9"
-    },
     ".pre-commit-config.yaml": {
       "size": 471,
       "sha256": "52e8e600cab57fa5"
@@ -440,6 +436,14 @@
       "size": 1291,
       "sha256": "291f3ad6c92fa763"
     },
+    "apps/frontend/src/features/auth/components/SessionTimeoutModal.test.ts": {
+      "size": 3215,
+      "sha256": "cae16b9a18c504d5"
+    },
+    "apps/frontend/src/features/auth/components/SessionTimeoutModal.vue": {
+      "size": 4487,
+      "sha256": "30841dcb97710d3c"
+    },
     "apps/frontend/src/features/auth/index.ts": {
       "size": 164,
       "sha256": "52ed49ed3bb6aa87"
@@ -719,6 +723,14 @@
     "apps/frontend/src/shared/composables/useSavedViews.ts": {
       "size": 1630,
       "sha256": "415a5a1d58b41e87"
+    },
+    "apps/frontend/src/shared/composables/useSessionTimeout.test.ts": {
+      "size": 9217,
+      "sha256": "83b2c4af4f8b9d13"
+    },
+    "apps/frontend/src/shared/composables/useSessionTimeout.ts": {
+      "size": 9925,
+      "sha256": "35a26e80e20a90bb"
     },
     "apps/frontend/src/shared/composables/useSidebarShortcut.test.ts": {
       "size": 1441,
@@ -1589,7 +1601,7 @@
       "sha256": "1382f086b4a75dde"
     },
     "forge.toml": {
-      "size": 181465,
+      "size": 181852,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -2523,14 +2535,6 @@
     "services/api/uv.lock": {
       "size": 296595,
       "sha256": "937e435e82b75f33"
-    },
-    "src/features/auth/components/SessionTimeoutModal.vue": {
-      "size": 4487,
-      "sha256": "30841dcb97710d3c"
-    },
-    "src/shared/composables/useSessionTimeout.ts": {
-      "size": 9925,
-      "sha256": "35a26e80e20a90bb"
     },
     "tests/e2e/.agent-context/prompt.md": {
       "size": 2572,

@@ -3,8 +3,8 @@
 Admin UI (``admin_panel``), outbound webhooks (``webhooks``), CLI
 extensions (``cli_commands``), AI-agent docs (``agents_md``) and the
 MCP (Model Context Protocol) server + per-frontend UI components.
-``mcp_ui*`` fragments are project-scoped and copy frontend-specific
-UI helpers into the active frontend tree.
+``mcp_ui*`` fragments are project-scoped, frontend-targeted and copy
+frontend-specific UI helpers into the active frontend app.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from forge.api import ForgeAPI
-from forge.config import BackendLanguage
+from forge.config import BackendLanguage, FrontendFramework
 from forge.fragments._spec import Fragment, FragmentImplSpec
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -94,6 +94,22 @@ def register_all(api: ForgeAPI) -> None:
                     env_vars=(("MCP_CONFIG_PATH", "mcp.config.json"),),
                 ),
             },
+            depends_on=("mcp_config",),
+        )
+    )
+
+    # The project-root ``mcp.config.example.json`` the server's config
+    # documents. Frontend-agnostic, so it is not part of a frontend-targeted
+    # ``mcp_ui*`` fragment, whose files land in the frontend app.
+    api.add_fragment(
+        Fragment(
+            name="mcp_config",
+            implementations={
+                BackendLanguage.PYTHON: FragmentImplSpec(
+                    fragment_dir=_project("mcp_config"),
+                    scope="project",
+                ),
+            },
         )
     )
 
@@ -106,6 +122,7 @@ def register_all(api: ForgeAPI) -> None:
                     scope="project",
                 ),
             },
+            target_frontends=(FrontendFramework.VUE,),
         )
     )
 
@@ -118,6 +135,7 @@ def register_all(api: ForgeAPI) -> None:
                     scope="project",
                 ),
             },
+            target_frontends=(FrontendFramework.SVELTE,),
         )
     )
 
@@ -130,5 +148,6 @@ def register_all(api: ForgeAPI) -> None:
                     scope="project",
                 ),
             },
+            target_frontends=(FrontendFramework.FLUTTER,),
         )
     )

@@ -5,12 +5,14 @@
 ///    http.Client to drive the bootstrap + extend code paths.
 ///  - **native**: refresh-token rotation via the injected
 ///    RefreshAccessToken callback. Drives idle-timeout +
-///    forced-logout paths via FakeAsync-style timer manipulation.
+///    forced-logout paths with short real timers, so these are plain
+///    `test`s: a `testWidgets` fake clock never fires them.
 ///
 /// Mirrors the parity-spec scenarios that gate cross-platform
 /// behavior: drift-immune countdown, visibility gating, debounced
 /// activity, server-side disabled detection, refresh-rejection
 /// → forced-logout.
+library;
 
 import 'dart:convert';
 
@@ -86,8 +88,7 @@ void main() {
       svc.dispose();
     });
 
-    testWidgets('init() bootstraps from /auth/session GET',
-        (WidgetTester tester) async {
+    test('init() bootstraps from /auth/session GET', () async {
       final stub = _StubHttp(baselineState);
       final svc = SessionTimeoutService(
         client: stub.build(),
@@ -103,8 +104,7 @@ void main() {
       expect(svc.warnAtSeconds, 60);
     });
 
-    testWidgets('extend() POSTs to /auth/session and applies new state',
-        (WidgetTester tester) async {
+    test('extend() POSTs to /auth/session and applies new state', () async {
       final stub = _StubHttp(baselineState);
       final svc = SessionTimeoutService(
         client: stub.build(),
@@ -126,8 +126,7 @@ void main() {
       expect(svc.idleRemainingSeconds, inInclusiveRange(1795, 1800));
     });
 
-    testWidgets('bootstrap returning 401 silently disables the service',
-        (WidgetTester tester) async {
+    test('bootstrap returning 401 silently disables the service', () async {
       final stub = _StubHttp(baselineState)..respondWithStatus(401);
       final svc = SessionTimeoutService(
         client: stub.build(),
@@ -140,8 +139,7 @@ void main() {
           reason: 'unauthenticated bootstrap must disable the service');
     });
 
-    testWidgets('serverSideDisabled (idle=0 && absolute=0) disables the service',
-        (WidgetTester tester) async {
+    test('serverSideDisabled (idle=0 && absolute=0) disables the service', () async {
       final stub = _StubHttp(const SessionState(
         idleRemainingSeconds: 0,
         absoluteRemainingSeconds: 0,
@@ -161,8 +159,7 @@ void main() {
   });
 
   group('SessionTimeoutService — native mode', () {
-    testWidgets('forNative factory creates a native-mode service',
-        (WidgetTester tester) async {
+    test('forNative factory creates a native-mode service', () async {
       Future<DateTime?> stubRefresh() async => DateTime.now().add(const Duration(minutes: 5));
       final svc = SessionTimeoutService.forNative(
         refreshAccessToken: stubRefresh,
@@ -173,8 +170,7 @@ void main() {
       svc.dispose();
     });
 
-    testWidgets('init() bootstraps from configured timeouts (no server call)',
-        (WidgetTester tester) async {
+    test('init() bootstraps from configured timeouts (no server call)', () async {
       var refreshCallCount = 0;
       Future<DateTime?> stubRefresh() async {
         refreshCallCount++;
@@ -199,9 +195,7 @@ void main() {
       expect(svc.warnAtSeconds, 60);
     });
 
-    testWidgets(
-        'extend() rotates via refreshAccessToken and resets idle countdown',
-        (WidgetTester tester) async {
+    test('extend() rotates via refreshAccessToken and resets idle countdown', () async {
       var refreshCallCount = 0;
       Future<DateTime?> stubRefresh() async {
         refreshCallCount++;
@@ -231,9 +225,7 @@ void main() {
       expect(beforeExtend, lessThan(1800));
     });
 
-    testWidgets(
-        'extend() caps idle countdown at configured idle timeout',
-        (WidgetTester tester) async {
+    test('extend() caps idle countdown at configured idle timeout', () async {
       // Long-lived access token (1 hour). Idle window is 30 min.
       // The cap MUST clamp to 30 min so a long token doesn't widen
       // the compliance window.
@@ -257,8 +249,7 @@ void main() {
       expect(svc.idleRemainingSeconds, inInclusiveRange(1795, 1800));
     });
 
-    testWidgets('refresh-token rejection fires onForcedLogout',
-        (WidgetTester tester) async {
+    test('refresh-token rejection fires onForcedLogout', () async {
       Future<DateTime?> failingRefresh() async {
         throw Exception('refresh token revoked');
       }
@@ -282,8 +273,7 @@ void main() {
       expect(svc.enabled, isFalse);
     });
 
-    testWidgets('idle countdown elapsed → forced logout via tick timer',
-        (WidgetTester tester) async {
+    test('idle countdown elapsed → forced logout via tick timer', () async {
       Future<DateTime?> stubRefresh() async =>
           DateTime.now().add(const Duration(minutes: 5));
 
@@ -310,8 +300,7 @@ void main() {
               '— it just disables the service');
     });
 
-    testWidgets('manual idle expiry triggers forced logout via tick',
-        (WidgetTester tester) async {
+    test('manual idle expiry triggers forced logout via tick', () async {
       // Refresh returns a near-immediate expiry so the tick timer's
       // forced-logout branch fires fast.
       Future<DateTime?> nearImmediateRefresh() async =>
@@ -339,8 +328,7 @@ void main() {
       expect(svc.enabled, isFalse);
     });
 
-    testWidgets('drift-immune countdown — recomputed at read time',
-        (WidgetTester tester) async {
+    test('drift-immune countdown — recomputed at read time', () async {
       Future<DateTime?> stubRefresh() async =>
           DateTime.now().add(const Duration(minutes: 5));
 
@@ -367,8 +355,7 @@ void main() {
   });
 
   group('SessionTimeoutService — activity hints', () {
-    testWidgets('valid activity hint queues a debounced extend',
-        (WidgetTester tester) async {
+    test('valid activity hint queues a debounced extend', () async {
       var refreshCallCount = 0;
       Future<DateTime?> stubRefresh() async {
         refreshCallCount++;
@@ -394,8 +381,7 @@ void main() {
       expect(refreshCallCount, 1);
     });
 
-    testWidgets('unknown activity hint is rejected',
-        (WidgetTester tester) async {
+    test('unknown activity hint is rejected', () async {
       var refreshCallCount = 0;
       Future<DateTime?> stubRefresh() async {
         refreshCallCount++;
@@ -416,8 +402,7 @@ void main() {
               'preserve the cross-platform telemetry contract');
     });
 
-    testWidgets('debounce coalesces rapid bursts to one extend',
-        (WidgetTester tester) async {
+    test('debounce coalesces rapid bursts to one extend', () async {
       var refreshCallCount = 0;
       Future<DateTime?> stubRefresh() async {
         refreshCallCount++;
