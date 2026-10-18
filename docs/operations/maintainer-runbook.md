@@ -325,7 +325,10 @@ do not wait for the weekly batch to fix an exploitable vulnerability.
    checks, and authentication parity with `--group auth-parity`. Build and test
    rendered Python/Node/Rust applications and Vue/Svelte/Flutter frontends.
    Run native generated-code architecture and unit/integration/E2E coverage
-   gates without changing their thresholds. Inspect actual upload/SBOM output
+   gates without changing their thresholds. Advance `FORGE_NPM_SNAPSHOT` in
+   `.github/workflows/generated-quality.yml` to the time you resolved the
+   rendered npm manifests, so the required check validates the versions you
+   tested. Inspect actual upload/SBOM output
    when updating reporting or release tools. The generator coverage job publishes
    required GitHub artifacts; verify their contents and revision-linked summary.
    Nightly status artifacts describe the same execution that determines the gate.
@@ -353,3 +356,22 @@ suite, its native report, and its source hashes before changing code. Missing or
 stale reports require rerunning the suite; coverage failures require behavior
 coverage. Do not weaken exclusions, ownership, or thresholds to make a run green.
 The [quality guide](generated-code-quality.md) defines what each check establishes.
+
+Rendered Node, Vue and Svelte applications ship ranged `package.json` manifests
+and no lockfile, so every run resolves their dependency tree. Pull request and
+push runs resolve it as of `FORGE_NPM_SNAPSHOT` (npm's `before` setting); the
+weekly scheduled run and manual dispatches resolve against the live registry.
+A red scheduled run with a green `main` means an upstream release changed the
+rendered applications. Reproduce it locally by running the lane with and without
+the snapshot:
+
+```bash
+npm_config_before=<FORGE_NPM_SNAPSHOT> uv run --locked python scripts/check_generated_quality.py --language vue --output .artifacts/generated-vue-snapshot
+uv run --locked python scripts/check_generated_quality.py --language vue --output .artifacts/generated-vue-live
+```
+
+Diff the two rendered `package-lock.json` files to find the release, fix the
+template or its tests, and advance the snapshot in the same pull request. A
+template range that requires a release newer than the snapshot fails resolution
+(`ETARGET`) until the snapshot advances. The snapshot does not cover the Rust
+lane: `cargo generate-lockfile` always resolves the latest compatible crates.

@@ -53,7 +53,7 @@
       "sha256": "77ac9733140f48bb"
     },
     "apps/frontend/.copier-answers.yml": {
-      "size": 1279,
+      "size": 1275,
       "sha256": "<version-dependent>"
     },
     "apps/frontend/.env": {
@@ -121,8 +121,8 @@
       "sha256": "0f61424bd6ad73f8"
     },
     "apps/frontend/scripts/post_generate.py": {
-      "size": 21575,
-      "sha256": "69f60f968204597b"
+      "size": 22660,
+      "sha256": "e4f03017aad74278"
     },
     "apps/frontend/scripts/remap-browser.mjs": {
       "size": 778,
@@ -481,8 +481,8 @@
       "sha256": "7d33b8e23a42017f"
     },
     "apps/frontend/src/features/home/ui/HomePage.vue": {
-      "size": 4739,
-      "sha256": "efee2fe9ea2b8ba8"
+      "size": 4939,
+      "sha256": "b2fa53f75de5c91b"
     },
     "apps/frontend/src/features/items/api/queryKeys.ts": {
       "size": 312,
@@ -1244,9 +1244,33 @@
       "size": 504,
       "sha256": "3faf42307082123a"
     },
+    "apps/frontend/tests/integration/crud.ts": {
+      "size": 8983,
+      "sha256": "bc70a0fe8260e80b"
+    },
+    "apps/frontend/tests/integration/home-page.test.ts": {
+      "size": 2920,
+      "sha256": "3d2acf6bbbc25cb0"
+    },
+    "apps/frontend/tests/integration/items.test.ts": {
+      "size": 135,
+      "sha256": "8fed7f7ba3dc5c70"
+    },
+    "apps/frontend/tests/integration/orders.test.ts": {
+      "size": 140,
+      "sha256": "890a410d520974b9"
+    },
     "apps/frontend/tests/integration/primitives.test.ts": {
       "size": 4257,
       "sha256": "6dfe9c29568abf47"
+    },
+    "apps/frontend/tests/integration/profile-page.test.ts": {
+      "size": 1879,
+      "sha256": "4769e6ff4487ed23"
+    },
+    "apps/frontend/tests/integration/settings-page.test.ts": {
+      "size": 2895,
+      "sha256": "a1823f975f07c5f2"
     },
     "apps/frontend/tests/integration/splitter.test.ts": {
       "size": 888,
@@ -1601,7 +1625,7 @@
       "sha256": "1382f086b4a75dde"
     },
     "forge.toml": {
-      "size": 181852,
+      "size": 183234,
       "sha256": "<version-dependent>"
     },
     "package.json": {
@@ -1725,7 +1749,7 @@
       "sha256": "c6ebc62488d3a40a"
     },
     "services/api/.copier-answers.yml": {
-      "size": 548,
+      "size": 544,
       "sha256": "<version-dependent>"
     },
     "services/api/.env.example": {
@@ -2541,7 +2565,7 @@
       "sha256": "d3c7f25811409282"
     },
     "tests/e2e/.copier-answers.yml": {
-      "size": 596,
+      "size": 592,
       "sha256": "<version-dependent>"
     },
     "tests/e2e/Dockerfile": {
