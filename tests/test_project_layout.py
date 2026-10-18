@@ -321,7 +321,32 @@ def test_rendered_flutter_project_keeps_frontend_fragments_in_the_app(
         shutil.rmtree(root.parent)
 
 
-_DART_PACKAGE_IMPORT = re.compile(r"""^\s*(?:import|export)\s+['"]package:([a-z0-9_]+)/""", re.M)
+# A whole import/export directive, up to its ';', and every package: URI in it
+# (conditional alternatives after ``if (...)`` included).
+_DART_DIRECTIVE = re.compile(r"^\s*(?:import|export)\b[^;]*;", re.M)
+_DART_PACKAGE_URI = re.compile(r"""['"]package:([a-z0-9_]+)/""")
+
+
+def _dart_imported_packages(source: str) -> set[str]:
+    return {
+        package
+        for directive in _DART_DIRECTIVE.findall(source)
+        for package in _DART_PACKAGE_URI.findall(directive)
+    }
+
+
+def test_dart_imported_packages_include_conditional_alternatives() -> None:
+    source = """import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'stub.dart'
+    if (dart.library.html) 'package:web/web.dart'
+    if (dart.library.io) 'package:path/path.dart';
+export 'package:frontend/src/a.dart' show A;
+"""
+    imported = _dart_imported_packages(source)
+    assert imported == {"http", "web", "path", "frontend"}
+    # A conditional alternative missing from the pubspec is reported.
+    assert imported - {"http", "path", "frontend"} == {"web"}
 
 
 @pytest.mark.parametrize("include_auth", [False, True], ids=["no-auth-ui", "auth-ui"])
@@ -352,7 +377,7 @@ def test_flutter_session_timeout_imports_only_declared_packages(include_auth: bo
         imported = {
             package: rel
             for rel in emitted
-            for package in _DART_PACKAGE_IMPORT.findall((root / rel).read_text(encoding="utf-8"))
+            for package in _dart_imported_packages((root / rel).read_text(encoding="utf-8"))
         }
         assert {"http", "url_launcher"} <= imported.keys()
         assert not {p: rel for p, rel in imported.items() if p not in declared}
