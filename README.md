@@ -402,8 +402,11 @@ Start at [docs/README.md](docs/README.md) for task-based navigation.
 
 ## Contributing and support
 
+You do not need write access to contribute: fork the repository and open the
+pull request from your fork.
+
 ```bash
-git clone https://github.com/cchifor/forge.git
+gh repo fork cchifor/forge --clone
 cd forge
 uv sync --locked --dev
 uv run pre-commit install

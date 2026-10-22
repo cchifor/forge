@@ -4,12 +4,22 @@ Thanks for your interest. Forge is a small CLI; the codebase is intentionally co
 
 ## Setup
 
+You do not need write access to contribute. Anyone with a GitHub account can
+open a pull request, but only collaborators can push branches to
+`cchifor/forge`. A `git push` from a plain clone of this repository fails with
+`Write access to repository not granted` (HTTP 403). Fork the repository and
+push your branches to the fork:
+
 ```bash
-git clone <repo>
+gh repo fork cchifor/forge --clone   # or fork in the web UI and clone your fork
 cd forge
 uv sync --all-extras --dev
 uv run pre-commit install
 ```
+
+`gh repo fork --clone` adds this repository as the `upstream` remote. If you
+already cloned `cchifor/forge`, run `gh repo fork --remote` inside that clone.
+It renames the `origin` remote to `upstream` and adds your fork as `origin`.
 
 ## Local CI parity
 
@@ -103,6 +113,23 @@ ADR. If it affects how the `forge` CLI / SDK *behaves*, it's an RFC.
 - One logical change per PR; keep refactors and feature additions separate.
 - PR description: motivation + a one-line "how to verify" (typically a `make` target or `uv run forge ...` command).
 - The CHANGELOG is updated on release, not per-PR.
+- Do not add AI co-author trailers. The required check rejects new commits with
+  a `Co-authored-by:` line naming Claude.
+
+## Opening a pull request
+
+1. Branch from the current `main`:
+   `git fetch upstream && git switch -c my-change upstream/main`.
+2. Push the branch to your fork with `git push -u origin my-change`.
+3. Open the pull request against `main` in `cchifor/forge`, with `gh pr create`
+   or the **Compare & pull request** button on your fork.
+4. Leave **Allow edits by maintainers** selected. `main` requires branches to be
+   up to date before merging, and this lets a maintainer update yours.
+
+GitHub holds workflow runs from first-time contributors until a maintainer
+approves them, so checks on your first pull request can wait for a while. The
+required `generated-quality` check runs on GitHub-hosted runners and uses no
+repository secrets, so it behaves the same on a fork as on a branch here.
 
 ## Reporting issues
 
