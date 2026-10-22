@@ -530,7 +530,7 @@ def _unwrap(value: Any) -> Any:
         return float(value)
     if isinstance(value, str):
         return str(value)
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_unwrap(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _unwrap(v) for k, v in value.items()}

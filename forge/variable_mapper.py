@@ -228,7 +228,7 @@ def _frontend_api_target_url(typed: TypedConfig) -> str:
     ``none`` variant, matching the pre-typed behaviour where
     ``options.get("frontend.api_target.url", "")`` returned the default.
     """
-    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+    if isinstance(typed.frontend, FrontendGenerate | FrontendExternal):
         return typed.frontend.api_target_url
     return ""
 
@@ -251,7 +251,7 @@ def _external_api_mode(typed: TypedConfig) -> bool:
         return False
     if typed.backend.mode == "none":
         return True
-    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+    if isinstance(typed.frontend, FrontendGenerate | FrontendExternal):
         return typed.frontend.api_target_type == "external"
     return False
 

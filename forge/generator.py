@@ -1355,9 +1355,9 @@ def _write_copier_answers(template_path: Path, dst_path: Path, data: dict[str, A
         val = data[key]
         # Drop non-serializable values (paths, enums) — Copier's own answers
         # file only records scalar / list / dict shapes.
-        if isinstance(val, (str, int, float, bool)) or val is None:
+        if isinstance(val, str | int | float | bool) or val is None:
             answers[key] = val
-        elif isinstance(val, (list, tuple)):
+        elif isinstance(val, list | tuple):
             answers[key] = list(val)
         elif isinstance(val, dict):
             answers[key] = dict(val)
