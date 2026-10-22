@@ -1757,8 +1757,12 @@
       "sha256": "f1df9a1321a4e33c"
     },
     "services/api/.gitignore": {
-      "size": 174,
-      "sha256": "31910a941b109f81"
+      "size": 158,
+      "sha256": "3efb3e509a4c13dd"
+    },
+    "services/api/.python-version": {
+      "size": 5,
+      "sha256": "02e735b3dfe1c328"
     },
     "services/api/AGENT_AGUI_HARDENING.md": {
       "size": 3177,
