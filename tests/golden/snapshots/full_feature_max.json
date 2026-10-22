@@ -1597,8 +1597,8 @@
       "sha256": "e3b0c44298fc1c14"
     },
     "deploy/infra/gatekeeper/uv.lock": {
-      "size": 382502,
-      "sha256": "c7a1c579c08600e3"
+      "size": 382508,
+      "sha256": "1447b23872702fb7"
     },
     "deploy/infra/keycloak/Dockerfile": {
       "size": 368,
@@ -1745,8 +1745,8 @@
       "sha256": "92b4d508b4aa3d9b"
     },
     "packages/platform-auth/uv.lock": {
-      "size": 174336,
-      "sha256": "c6ebc62488d3a40a"
+      "size": 174339,
+      "sha256": "459f95079ae5c647"
     },
     "services/api/.copier-answers.yml": {
       "size": 544,
@@ -2557,8 +2557,8 @@
       "sha256": "3e7454fc99b0eed2"
     },
     "services/api/uv.lock": {
-      "size": 296595,
-      "sha256": "937e435e82b75f33"
+      "size": 296601,
+      "sha256": "870f96fcdc8d9e3d"
     },
     "tests/e2e/.agent-context/prompt.md": {
       "size": 2572,
