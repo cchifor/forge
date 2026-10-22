@@ -36,7 +36,7 @@ from forge.config import (
 from forge.errors import FragmentError, OptionsError, PluginError
 from forge.feature_manifest import parse_feature_manifest
 from forge.fragments import FRAGMENT_REGISTRY, Fragment, FragmentImplSpec
-from forge.generator import _frontend_manifest_data
+from forge.generator import _frontend_manifest_data, generate
 from forge.quality.model import read_recipe, write_recipe
 from forge.sync.manifest import ForgeFrontendData, read_forge_toml, write_forge_toml
 from forge.variable_mapper import svelte_context, vue_context
@@ -105,6 +105,13 @@ class TestFrontendRefusals:
     def test_unknown_kit_is_refused_with_the_choices(self) -> None:
         with pytest.raises(ValueError, match=r"UI kit 'vuetify' is not available for vue\. "):
             _frontend(ui_kit="vuetify").validate()
+
+    @pytest.mark.parametrize("value", [["shadcn"], {"name": "shadcn"}, 3])
+    def test_a_value_that_is_not_a_name_is_refused(self, value) -> None:
+        # A stack file can carry any YAML shape; the refusal must stay a
+        # ValueError, which the CLI turns into its configuration error.
+        with pytest.raises(ValueError, match="ui_kit must be a UI kit name"):
+            _frontend(ui_kit=value).validate()
 
     def test_nuxt_ui_is_refused_until_selectable(self) -> None:
         with pytest.raises(
@@ -208,6 +215,20 @@ class TestEntryPoints:
             _Resolver(Namespace(), {"frontend": {"framework": "vue"}}), "P", "d"
         )
         assert fe is not None and fe.ui_kit == "shadcn"
+
+    def test_a_malformed_stack_value_is_a_configuration_error(self) -> None:
+        cfg = {"frontend": {"framework": "vue", "ui_kit": ["shadcn"]}}
+        fe, _ = _build_frontend_from_cfg(_Resolver(Namespace(), cfg), "P", "d")
+        assert fe is not None
+        with pytest.raises(ValueError, match="ui_kit must be a UI kit name, got list"):
+            fe.validate()
+
+    @pytest.mark.parametrize("kit", ["vuetify", "nuxt-ui"])
+    def test_generation_refuses_a_kit_without_validate(self, kit: str) -> None:
+        # Programmatic callers may skip ProjectConfig.validate(); the generator
+        # still refuses before rendering, so it never records a kit it did not render.
+        with pytest.raises(ValueError, match=f"UI kit '{kit}' is not available for vue"):
+            generate(_project(_frontend(ui_kit=kit)), quiet=True, dry_run=True)
 
     def _interactive(self, monkeypatch, selects: list[str]) -> tuple[ProjectConfig, list[str]]:
         class _Tty:

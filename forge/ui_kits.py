@@ -132,29 +132,48 @@ def nuxt_ui_primary(color_scheme: str) -> str:
     return _PALETTE_FOR_SCHEME.get(color_scheme, color_scheme)
 
 
-def check_frontend(frontend: FrontendConfig) -> None:
-    """Refuse a kit the frontend cannot render with its other settings.
+def check_kit(frontend: FrontendConfig) -> UiKit | None:
+    """Refuse a ``ui_kit`` value forge cannot render, whatever the other settings.
 
-    Raises ``ValueError`` (the error type ``FrontendConfig.validate`` uses) for
-    an unknown or unselectable kit, a kit set on a template that has none, a
-    layout that does not list the kit, chat on a kit without the chat UI, and a
-    colour scheme the kit does not accept.
+    Returns the kit when the framework has kits, ``None`` when it has none.
+    Raises ``ValueError`` for a value that is not a name, a kit set on a
+    template without kits, and an unknown or unselectable kit. The generator
+    calls this too, so a programmatic config that skipped ``validate()`` cannot
+    render one kit while recording another.
     """
     framework = frontend.framework
     name = frontend.ui_kit
+    if not isinstance(name, str):
+        raise ValueError(f"ui_kit must be a UI kit name, got {type(name).__name__}: {name!r}")
     if not applies_to(framework):
         if name != DEFAULT_UI_KIT:
             raise ValueError(
                 f"ui_kit '{name}' applies to the Vue template only; "
                 f"{framework.value} keeps its own UI kit."
             )
-        return
+        return None
     kit = get_ui_kit(name)
     if kit is None or not kit.supported or framework not in kit.frameworks:
         choices = ", ".join(available_ui_kits(framework))
         raise ValueError(
             f"UI kit '{name}' is not available for {framework.value}. Choose from: {choices}"
         )
+    return kit
+
+
+def check_frontend(frontend: FrontendConfig) -> None:
+    """Refuse a kit the frontend cannot render with its other settings.
+
+    Raises ``ValueError`` (the error type ``FrontendConfig.validate`` uses) for
+    everything :func:`check_kit` refuses, a layout that does not list the kit,
+    chat on a kit without the chat UI, and a colour scheme the kit does not
+    accept.
+    """
+    kit = check_kit(frontend)
+    if kit is None:
+        return
+    framework = frontend.framework
+    name = kit.name
 
     # Local import: forge.layout_variants imports forge.config, which imports
     # this module lazily from FrontendConfig.validate.

@@ -27,8 +27,8 @@ the generated kit and hooks scaffold files to make the two coexist:
   shadcn-vue and drift from the project's look.
 - `.dark` gets two writers: the generated settings store and Nuxt UI's colour
   mode, each with its own storage key.
-- Every hook is an edited scaffold file, so every generator update proposes it
-  again as a `.forge-merge` sidecar.
+- Every hook is an edited scaffold file, so every generator update that changes
+  the same file proposes it again as a `.forge-merge` sidecar.
 
 Fixing this in forge removes the cause. Once the generator emits the Nuxt UI
 wiring, the ownership rules protect it instead of fighting it, the generated
@@ -52,16 +52,16 @@ Read at the base on 2026-10-22.
 | --- | --- |
 | The Vue template | `forge/templates/apps/vue-frontend-template/`: a Copier template of 281 files; `copier.yml` questions include `include_auth`, `include_chat`, `include_openapi`, `include_sentry`, `frontend_layout`, `default_color_scheme` (`include_dag_editor` arrives from the variable mapper); `_tasks` runs `scripts/post_generate.py`, which also renders the CRUD pages of every generated feature from `scripts/feature_templates.py` (743 lines: list, create and detail pages importing `@/shared/ui/card`, `button`, `input`, `label`, `textarea`, `skeleton`, `dropdown-menu`). Only `.jinja` files are templated; `.vue` files are copied verbatim, and Copier skips any path part that renders empty. |
 | The kit | `src/shared/ui/` with 20 shadcn-vue component directories (1,458 lines) on radix-vue 1.9, `class-variance-authority`, `clsx`, `tailwind-merge`, `@lucide/vue`, `vue-sonner`; `components.json`, `tailwind.config.ts`; the generated README names "Shadcn-Vue (Radix Vue + Tailwind CSS 4)". |
-| The screens | about 2,000 lines outside the kit: `MainLayout.vue` (203), `AppSidebar.vue` (193), `SettingsPage.vue` (161, the theme control on the settings store), `HomePage.vue` (145), `AppHeader.vue` (104), `ProfilePage.vue` (97), `LoginPage.vue` (83), `ConfirmDialog`, `ConfirmHost`, `StatusBadge`, `HealthIndicator`, `VerticalSplitter`, `EmptyState`, `AuthStuckPage`, `NotFoundPage`, `AuthLayout`. The `ai_chat` feature (7,906 lines, 20 of its 63 files importing the kit) is emitted only with `include_chat`; with it off only the two generated protocol files land. |
-| The post-generate script | `post_generate.py` (568 lines) carries three Vue sources as Python strings: the no-chat `MainLayout.vue` (96 lines, written over the template's when `include_chat` is off under the `sidebar` layout), the no-chat `App.vue` and the no-Keycloak `useAuth.ts`; it writes the app title into `AppSidebar.vue` by string replacement. Chat off under `sidebar` is the first consumer's configuration, so the layout it renders is the Python string, not `MainLayout.vue`. |
+| The screens | about 2,000 lines outside the kit: `MainLayout.vue` (203), `AppSidebar.vue` (193), `SettingsPage.vue` (161, the theme control on the settings store), `HomePage.vue` (145), `AppHeader.vue` (104), `ProfilePage.vue` (97), `LoginPage.vue` (83), `ConfirmDialog`, `ConfirmHost`, `StatusBadge`, `HealthIndicator`, `VerticalSplitter`, `EmptyState`, `AuthStuckPage`, `NotFoundPage`, `AuthLayout`. The `ai_chat` feature (7,906 lines; 20 of its 63 files import a kit module, 12 of them `@/shared/ui`) is emitted only with `include_chat`; with it off only the two generated protocol files land. |
+| The post-generate script | `post_generate.py` (568 lines) carries three Vue sources as Python strings: the no-chat `MainLayout.vue` (53 lines, written over the template's when `include_chat` is off under the `sidebar` layout), the no-chat `App.vue` and the no-Keycloak `useAuth.ts`; it writes the app title into `AppSidebar.vue` by string replacement. Chat off under `sidebar` is the first consumer's configuration, so the layout it renders is the Python string, not `MainLayout.vue`. |
 | Theming | `settings.store.ts` is the one writer: `.dark` and `.oled` on `<html>`, `--primary-h/s/l` from 20 runtime schemes, `--font-size` for the text-size axis, four `localStorage` keys; `useTheme.ts` wraps it; `main.ts` applies it and listens to `prefers-color-scheme`. `tailwind.config.ts` (`darkMode: 'class'`) is a Tailwind 3 leftover nothing reads, and no CSS declares a class-based `dark` variant, so the `dark:` utilities in seven template files follow the operating system, not the class. |
 | Config model | `FrontendConfig` (`forge/config/_frontend.py`): `framework`, `include_auth`, `include_chat`, `include_openapi`, `default_color_scheme` (Vue only), `layout`; `forge/cli/builder.py` maps `frontend.*` of a stack file onto it; `forge/variable_mapper.py` passes the values to Copier in four per-framework context builders; `forge --schema` publishes the option registry only (`frontend.mode`, `frontend.api_target.*`, `frontend.openapi_spec_url`), not these fields. |
-| Layout variants | `forge/layout_variants.py` and `forge/templates/layouts/vue/<name>/layout.toml`: `sidebar` is the base template rendered once; `bento`, `docs`, `tabbar`, `threepane`, `topnav` are thin overlays rendered after the base (two-stage render), 25 files in all, 13 of them importing `@/shared/ui/avatar` or `dropdown-menu`. `supported = false` registers a variant while hiding it from selection. |
-| Ownership | `forge/quality/model.py`: under `apps/<app>/`, `src/shared/**` is `generated`; a path containing `custom`, `tests`, `test` or `docs` is `scaffold`; a fragment's files are `generated`; everything else emitted is `scaffold`; files not emitted are `user`. A brand module under `src/custom/` is scaffold with no new rule. |
+| Layout variants | `forge/layout_variants.py` and `forge/templates/layouts/vue/<name>/layout.toml`: `sidebar` is the base template rendered once; `bento`, `docs`, `tabbar`, `threepane`, `topnav` are thin overlays rendered after the base (two-stage render), 25 files in all, 9 of them importing a kit module: `@lucide/vue` in all 9, `@/shared/ui/avatar` and `dropdown-menu` in 2. `supported = false` registers a variant while hiding it from selection. |
+| Ownership | `forge/quality/model.py`: under `apps/<app>/`, `src/shared/**` is `generated`; a path containing `custom`, `tests`, `test` or `docs` is `scaffold`; a fragment's source files (`.py`, `.ts`, `.vue` and the like) are `generated` and its other files `scaffold`; everything else emitted is `scaffold`; files not emitted are `user`. A brand module under `src/custom/` is scaffold with no new rule. |
 | Component features | Eight component features emit Vue files that import the kit: `data_table` (Layer 1, seven files with its own popover and checkbox), `async_state_block` (1), `checkbox_input`, `switch_input`, `popover_input`, `page_actions` (1), `notifications` (2), `dag_editor`; `status_dot`, `stat_card` and `chatfirst_template` import nothing from it but use its `text-muted-foreground` class. Component features compile to project-scoped fragments gated on `target_frontends`, with the template tree hard-coded as `component_<Name>/all/files/` (`forge/components/_compile.py`); `tests/test_features_ui_primitives.py` asserts the radix import. |
 | Frontend fragments | `platform_auth_session_timeout_vue` (the composable under `src/shared/composables/` and `SessionTimeoutModal.vue` under `src/features/auth/components/` since #371) with Svelte and Flutter siblings; its `all/files/` tree is copied verbatim; the only frontend gating is `target_frontends`, applied in `forge/capability_resolver.py`; `tests/test_three_frontend_coverage.py` resolves siblings by stripping `_vue` and requires a sibling or a recorded skip reason for every Vue-shipping fragment. |
 | Update | `forge --update` renders a candidate from the recipe and compares provenance: protected files are rewritten, untouched scaffold is updated in place, edited scaffold gets a `.forge-merge` sidecar, and while any sidecar is open only sidecars are written. Generated files that vanish from the new provenance are deleted; vanished scaffold is left on disk; new output colliding with an existing unrecorded file aborts the update. |
-| The rendered-quality lane | `scripts/check_generated_quality.py --language vue` renders auth, chat and OpenAPI off, then runs lint, type-check, Vitest unit and integration, and Playwright through `forge/quality/runner.py`. A fresh render has no git base, so the gate is total: more than 80 % of every executable line, all three suite reports present, no source file absent from them. The generated `.env` sets `VITE_AUTH_DISABLED` from `include_auth`; the runner does not override it. |
+| The rendered-quality lane | `scripts/check_generated_quality.py --language vue` renders auth, chat and OpenAPI off, then checks the architecture, locks and audits the dependencies, and runs Vitest unit and integration and Playwright through `forge/quality/runner.py`; it does not run the app's lint or type-check. A fresh render has no git base, so the gate is total: more than 80 % of every executable line, all three suite reports present, no source file absent from them. The generated `.env` sets `VITE_AUTH_DISABLED` from `include_auth`; the runner does not override it. |
 | Tests touching the kit | `tests/integration/button.test.ts` and `primitives.test.ts` mount the shadcn kit by relative import; `splitter.test.ts` and `status-confirmation.test.ts` mount `VerticalSplitter`, `StatusBadge` and `ConfirmHost`; `settings-page.test.ts` asserts the settings store. `tests/test_golden_snapshots.py` hashes `.forge/quality.json` (the recipe serialises every `FrontendConfig` field) and tracks the size of `forge.toml`. |
 | Common files | `forge/templates/_common/`: the `forge-platform` skill copied to `.agents/skills/` and `.claude/skills/`, `claude-settings.json`, `AGENTS.md`, `CLAUDE.md`, the CI workflows, the browser-coverage scripts (`forge/common_files.py`, copy-if-absent); `LICENSE.MIT` already ships for vendored MIT material. |
 | Content security | `security.csp` is on by default and only emits `deploy/infra/nginx-csp.conf` from the `security_csp` fragment. Nothing includes the snippet; it references `$csp_nonce`, which nothing defines, so nginx refuses to start with it; the `vite-plugin-csp-guard` it names is not a dependency; and it enforces `require-trusted-types-for 'script'`. The frontend's `nginx.conf`, rendered from `forge/templates/deploy/nginx.conf.j2` as scaffold and supplied at runtime by a compose bind-mount or by the Helm chart's ConfigMap, whose default server block is in `deploy/helm/templates/frontend.yaml`, sends no headers. `index.html` puts an inline `style` attribute on `<body>` and links Google Fonts. The first consumer recorded the snippet as a generator defect and serves a policy of its own. |
@@ -294,7 +294,7 @@ gives. The vendored commit follows the `@nuxt/ui` minor.
 Phase 1 covers the first consumer's configuration: the `sidebar` layout,
 `include_auth` on, `include_chat` off, the CRUD features, the session-timeout
 fragment. Phase 2, when a consumer needs it: the `ai_chat` UI (20 of 63 files
-import the kit), the layout overlays (13 files), the Nuxt UI variants of the
+import a kit module), the layout overlays (9 files), the Nuxt UI variants of the
 eight component features (`data_table` the largest).
 
 ## Critical files
@@ -413,9 +413,12 @@ a red lane blocking all of it.
   checklist asks for a public-contract change); switching an existing project
   and the `security.csp` repair (F-02, §Consumer adoption).
 - `CHANGELOG.md`: an entry under Unreleased with each pull request, as recent
-  ones do. The Unreleased heading still says "targeting 1.2.0" although `v1.2.0`
-  was tagged in June with part of its entries; sorting that out is a release
-  task for the maintainer, not part of this plan.
+  ones do. `CONTRIBUTING.md` says instead that the changelog is updated on
+  release, not per pull request; the maintainer decides which rule holds, and
+  the entries are dropped if it is the latter. The Unreleased heading still
+  says "targeting 1.2.0" although `v1.2.0` was tagged in June with part of its
+  entries; sorting that out is a release task for the maintainer, not part of
+  this plan.
 - `docs/plans/README.md`: a row for this plan, linked to the guides once the work
   completes.
 - A tag (`v1.3.0`) after the first consumer validates the merge commit it pins;
@@ -423,8 +426,10 @@ a red lane blocking all of it.
 
 ## Consumer adoption
 
-A project switches by setting `frontend.ui_kit: nuxt-ui` in its stack file or
-recipe and running `forge --update`. UPGRADING describes what follows:
+A project switches by setting `ui_kit` to `nuxt-ui` under `config.frontend` in
+`.forge/quality.json` and running `forge --update`. The update renders from that
+recipe and never reads the stack file, so a project that keeps one changes it
+too. UPGRADING describes what follows:
 
 - Generated files are rewritten. The kit directory, the settings store and
   `useTheme.ts` vanish from the provenance and are deleted.
@@ -446,7 +451,8 @@ uses:
 
 - With the option on, the default, the frontend starts serving an enforced
   policy. An untouched `nginx.conf` is updated in place; an edited one receives
-  a sidecar. `deploy/infra/nginx-csp.conf` is generated output and is deleted.
+  a sidecar. `deploy/infra/nginx-csp.conf` is scaffold, since `.conf` is not a
+  source suffix, so the update leaves it on disk; UPGRADING says to delete it.
 - Project code that inserts `<style>` elements, or `style` attributes as
   markup, is blocked from then on. UPGRADING lists what to look for and how to
   turn the option off.

@@ -221,6 +221,12 @@ def generate(
     # and skip ``config.validate()``: reject a traversal/separator slug before
     # it is joined onto any path (staging, dry-run temp dir, or final root).
     validate_slug(config.project_slug)
+    # Same defence for the UI kit: an unknown or unselectable kit would render
+    # the default kit's files while the recipe and manifest record the other.
+    if config.frontend is not None:
+        from forge.ui_kits import check_kit  # noqa: PLC0415
+
+        check_kit(config.frontend)
 
     if dry_run:
         # dry_run: generate into a throwaway temp dir as before.

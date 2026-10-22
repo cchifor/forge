@@ -23,7 +23,8 @@ hooks scaffold files to make the two coexist. Both kits define the same
 Tailwind colour utilities from different tokens. The generated settings store
 and Nuxt UI's colour mode both write `.dark`, each from its own storage key.
 The generated screens keep rendering on shadcn-vue. Every hook is an edited
-scaffold file, so every generator update proposes it again as a sidecar.
+scaffold file, so every generator update that changes the same file proposes
+it again as a sidecar.
 
 Those clashes exist only because the template has one kit. Nuxt UI is a
 complete kit with its own theming, colour mode, icons and overlay layer; it
@@ -83,8 +84,9 @@ and tests to vary only the component layer.
 
 ### Nuxt UI wired by each consumer
 
-Rejected. Consumer hooks are edited scaffold, which every update re-proposes
-as sidecars, and the generated screens would stay on shadcn-vue.
+Rejected. Consumer hooks are edited scaffold, which an update re-proposes as
+sidecars whenever it changes those files, and the generated screens would stay
+on shadcn-vue.
 
 ### Keeping the shadcn-era theming under Nuxt UI
 
