@@ -84,11 +84,6 @@ PACKAGE_MANAGER = _answers["package_manager"]
 APP_TITLE = _answers["app_title"]
 PROJECT_NAME = _answers["project_name"]
 VERSION = _answers["version"]
-# UI app-shell layout. Only ``sidebar`` uses the static no-chat MainLayout
-# replacement below; every other layout ships its own chat-conditional
-# MainLayout (Jinja ``{% if include_chat %}``), so the replacement must not
-# clobber it.
-LAYOUT = _answers.get("frontend_layout", "sidebar")
 
 
 # ─── Load feature_templates.py ───
@@ -202,118 +197,11 @@ def inject_feature_into_hubs(ctx: dict[str, str]) -> None:
 
 
 # ─── Conditional Patching ───
-
-APP_VUE_NO_CHAT = """\
-<script setup lang="ts">
-import { Toaster } from 'vue-sonner'
-</script>
-
-<template>
-  <RouterView />
-  <Toaster
-    position="bottom-right"
-    :expand="true"
-    rich-colors
-    close-button
-  />
-</template>
-"""
-
-MAIN_LAYOUT_NO_CHAT = """\
-<script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { Home, Package, User, Settings } from '@lucide/vue'
-import AppSidebar from '@/shared/components/AppSidebar.vue'
-import AppHeader from '@/shared/components/AppHeader.vue'
-import { useBreakpoint } from '@/shared/composables/useBreakpoint'
-
-const route = useRoute()
-const { isMedium, isExpanded } = useBreakpoint()
-
-const bottomNavItems = [
-  { title: 'Home', url: '/', icon: Home },
-  { title: 'Items', url: '/items', icon: Package },
-  { title: 'Profile', url: '/profile', icon: User },
-  { title: 'Settings', url: '/settings', icon: Settings },
-]
-
-function isNavActive(url: string) {
-  if (url === '/') return route.path === '/'
-  return route.path.startsWith(url)
-}
-</script>
-
-<template>
-  <div v-if="isExpanded" class="flex h-svh overflow-hidden">
-    <AppSidebar />
-    <div class="flex flex-1 flex-col overflow-hidden">
-      <AppHeader />
-      <main class="flex-1 overflow-auto p-4"><RouterView /></main>
-    </div>
-  </div>
-  <div v-else-if="isMedium" class="flex h-svh overflow-hidden">
-    <AppSidebar :force-collapsed="true" />
-    <div class="flex flex-1 flex-col overflow-hidden">
-      <AppHeader />
-      <main class="flex-1 overflow-auto p-4"><RouterView /></main>
-    </div>
-  </div>
-  <div v-else class="flex h-svh flex-col overflow-hidden">
-    <AppHeader :compact="true" />
-    <main class="flex-1 overflow-auto p-4"><RouterView /></main>
-    <nav class="flex h-14 shrink-0 items-center border-t bg-card">
-      <RouterLink
-        v-for="item in bottomNavItems" :key="item.url" :to="item.url"
-        class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs interactive-press"
-        :class="isNavActive(item.url) ? 'text-primary' : 'text-muted-foreground'"
-      >
-        <component :is="item.icon" class="h-5 w-5" />
-        <span>{{ item.title }}</span>
-      </RouterLink>
-    </nav>
-  </div>
-</template>
-"""
-
-USE_AUTH_NO_KEYCLOAK = """\
-import { ref, computed, readonly } from 'vue'
-
-export interface AuthUser {
-  id: string; email: string; username: string; firstName: string
-  lastName: string; roles: string[]; customerId: string; orgId: string | null
-}
-
-const user = ref<AuthUser | null>(null)
-const isLoading = ref(false)
-const isInitialized = ref(false)
-
-const DEV_USER: AuthUser = {
-  id: '00000000-0000-0000-0000-000000000001', email: 'dev@localhost',
-  username: 'dev-user', firstName: 'Dev', lastName: 'User',
-  roles: ['admin', 'user'], customerId: '00000000-0000-0000-0000-000000000001', orgId: null,
-}
-
-// Auth disabled: the dev user is always authenticated, so there is never a
-// post-login redirect to persist. These no-ops keep the export surface
-// identical to the full useAuth so consumers (e.g. router guards) compile.
-export const POST_LOGIN_REDIRECT_KEY = 'auth.post_login_redirect'
-
-export function persistPostLoginRedirect(_target: string): void {}
-
-export function consumePostLoginRedirect(): string | null {
-  return null
-}
-
-export function useAuth() {
-  const isAuthenticated = computed(() => !!user.value)
-  async function init() { if (!isInitialized.value) { user.value = DEV_USER; isLoading.value = false; isInitialized.value = true } }
-  async function getToken(): Promise<string | null> { return 'dev-token' }
-  function login() { user.value = DEV_USER }
-  function logout() { user.value = null }
-  function hasRole(role: string): boolean { return user.value?.roles.includes(role) ?? false }
-  return { user: readonly(user), isAuthenticated, isLoading: readonly(isLoading), init, getToken, login, logout, hasRole }
-}
-"""
+#
+# The no-chat App.vue and MainLayout.vue and the no-Keycloak useAuth.ts are
+# template files under Copier conditional names (``{% if not include_chat %}``
+# / ``{% if not include_auth %}``), so they are reviewable as source and a
+# layout overlay rendered after the base still replaces MainLayout.vue.
 
 
 def patch_home_api_paths(first_backend: str) -> None:
@@ -341,18 +229,11 @@ def patch_conditional_files() -> None:
         sidebar.write_text(content, encoding="utf-8")
 
     if not INCLUDE_CHAT:
-        app_vue = PROJECT_DIR / "src" / "app" / "App.vue"
-        app_vue.write_text(APP_VUE_NO_CHAT, encoding="utf-8")
-
         header = PROJECT_DIR / "src" / "shared" / "components" / "AppHeader.vue"
         if header.exists():
             content = header.read_text(encoding="utf-8")
             lines = [l for l in content.splitlines(keepends=True) if "AiChatButton" not in l and "ai_chat" not in l]
             header.write_text("".join(lines), encoding="utf-8")
-
-        layout = PROJECT_DIR / "src" / "shared" / "layouts" / "MainLayout.vue"
-        if LAYOUT == "sidebar" and layout.exists():
-            layout.write_text(MAIN_LAYOUT_NO_CHAT, encoding="utf-8")
 
         # The vendored canvas-core lives under src/features/ai_chat/ (deleted
         # below when chat is off), so drop its tsconfig path alias too — a
@@ -362,10 +243,6 @@ def patch_conditional_files() -> None:
             content = tsconfig.read_text(encoding="utf-8")
             lines = [l for l in content.splitlines(keepends=True) if "@forge/canvas-core" not in l]
             tsconfig.write_text("".join(lines), encoding="utf-8")
-
-    if not INCLUDE_AUTH:
-        auth_file = PROJECT_DIR / "src" / "shared" / "composables" / "useAuth.ts"
-        auth_file.write_text(USE_AUTH_NO_KEYCLOAK, encoding="utf-8")
 
 
 def remove_conditional_files() -> list[str]:

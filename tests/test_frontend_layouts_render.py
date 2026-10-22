@@ -33,6 +33,7 @@ def _generate(
     *,
     framework: FrontendFramework = FrontendFramework.VUE,
     include_chat: bool = True,
+    include_auth: bool = True,
 ) -> Path:
     """Generate a project with ``layout`` (Vue by default) and return its root."""
     cfg = ProjectConfig(
@@ -51,6 +52,7 @@ def _generate(
             framework=framework,
             layout=layout,
             include_chat=include_chat,
+            include_auth=include_auth,
             include_openapi=True,
         ),
     )
@@ -102,6 +104,32 @@ def test_chat_off_degrades_cleanly(tmp_path: Path, layout: str) -> None:
     txt = ml.read_text(encoding="utf-8")
     assert "{%" not in txt, f"{layout}: unresolved Jinja tag in chat-off MainLayout"
     assert "<AiChat" not in txt, f"{layout}: chat-off MainLayout still mounts <AiChat>"
+
+
+@pytest.mark.parametrize("chat,auth", [(True, True), (False, False)])
+def test_sidebar_sources_follow_chat_and_auth(
+    tmp_path: Path, chat: bool, auth: bool
+) -> None:
+    """The base template picks App.vue, MainLayout.vue and useAuth.ts by
+    Copier conditional file names, e.g.
+    ``{% if not include_chat %}App.vue{% endif %}``, which replaced
+    post-generate string writes. Each variant renders under the
+    plain name, and no conditional name leaks into the project."""
+    root = _generate(tmp_path, "sidebar", include_chat=chat, include_auth=auth)
+    frontend = root / "apps" / "frontend"
+
+    def read(rel: str) -> str:
+        return (frontend / rel).read_text(encoding="utf-8")
+
+    app = read("src/app/App.vue")
+    layout = read("src/shared/layouts/MainLayout.vue")
+    use_auth = read("src/shared/composables/useAuth.ts")
+    assert ("useAiChat" in app) is chat
+    assert ("<AiChat" in layout) is chat
+    assert ("@/features/ai_chat" in layout) is chat
+    assert ("VITE_AUTH_DISABLED" in use_auth) is auth
+    assert ("Auth disabled:" in use_auth) is not auth
+    assert not [p for p in frontend.rglob("*") if "{%" in p.name or "%}" in p.name]
 
 
 # --- Svelte + Flutter: cross-framework two-stage render coverage --------------
