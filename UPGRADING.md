@@ -175,6 +175,28 @@ generator writes it. The MCP UI components are written only to Vue apps;
 `target_frontends` now land in the app as well, so ship their `files/` tree
 app-relative (`files/src/...`).
 
+### Vue UI kit option (unreleased)
+
+`frontend.ui_kit` (`--ui-kit`) selects the Vue template's component library.
+`shadcn` is the default and, for now, the only selectable kit; `nuxt-ui` is
+registered for the Nuxt UI 4 rendering that follows ([ADR-011](docs/architecture-decisions/ADR-011-ui-kit-option-for-the-vue-template.md)).
+Existing projects keep their output. On the next `forge --update` the quality
+recipe gains `ui_kit` and `forge.toml` records it under `[forge.frontend]`;
+older recipes and manifests read as `shadcn`. The option applies to Vue only:
+setting another kit for Svelte or Flutter is refused.
+
+The generated `scripts/post_generate.py` no longer carries the no-chat
+`App.vue` and `MainLayout.vue` or the no-Keycloak `useAuth.ts` as strings.
+The template renders them under Copier conditional file names, with the same
+bytes as before.
+
+Plugin authors: a component feature declares the kits it renders with in
+`[feature.component].ui_kits` (default `["shadcn"]`) and may name a
+replacement per kit in `[feature.component.replaced_by]`; a fragment may set
+`Fragment.ui_kits` (default: any kit). Forge refuses, at plan time, a component
+or fragment whose kits exclude the project's. Plugin layouts render with
+`shadcn`.
+
 ## 1.0 → 1.1
 
 The 1.1 series opens the 12-month post-1.0 roadmap. Early alphas are additive except where called out below.

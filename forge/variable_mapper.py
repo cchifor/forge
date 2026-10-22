@@ -228,7 +228,7 @@ def _frontend_api_target_url(typed: TypedConfig) -> str:
     ``none`` variant, matching the pre-typed behaviour where
     ``options.get("frontend.api_target.url", "")`` returned the default.
     """
-    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+    if isinstance(typed.frontend, FrontendGenerate | FrontendExternal):
         return typed.frontend.api_target_url
     return ""
 
@@ -251,7 +251,7 @@ def _external_api_mode(typed: TypedConfig) -> bool:
         return False
     if typed.backend.mode == "none":
         return True
-    if isinstance(typed.frontend, (FrontendGenerate, FrontendExternal)):
+    if isinstance(typed.frontend, FrontendGenerate | FrontendExternal):
         return typed.frontend.api_target_type == "external"
     return False
 
@@ -337,6 +337,9 @@ def vue_context(config: ProjectConfig) -> dict[str, Any]:
         "keycloak_realm": fc.keycloak_realm,
         "keycloak_client_id": fc.keycloak_client_id or config.frontend_slug,
         "default_color_scheme": fc.default_color_scheme,
+        # The component library the template renders on (forge.ui_kits);
+        # kit-specific files are selected by Copier conditional names.
+        "ui_kit": fc.ui_kit,
         "backend_features": _build_backend_features_json(config),
         "proxy_targets": _build_proxy_targets_json(config),
         "vite_proxy_config": _build_vite_proxy_config(config),

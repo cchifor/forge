@@ -19,7 +19,9 @@ so generation + re-application produce identical output.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from forge.config import BackendLanguage, FrontendFramework, ProjectConfig
 from forge.errors import (
@@ -32,6 +34,9 @@ from forge.errors import (
 )
 from forge.fragments import FRAGMENT_REGISTRY, Fragment
 from forge.options import OPTION_REGISTRY, resolve_alias
+
+if TYPE_CHECKING:
+    from forge.components import ComponentNode
 
 logger = logging.getLogger(__name__)
 
@@ -639,7 +644,83 @@ def _collect_component_fragments(config: ProjectConfig) -> set[str]:
     )
 
     resolved = resolve_components(components, COMPONENT_REGISTRY)
+    _check_component_ui_kits(config, components, resolved.ordered, COMPONENT_REGISTRY)
     return {component_fragment_name(name) for name in resolved.ordered}
+
+
+def _project_ui_kit(config: ProjectConfig) -> str | None:
+    """The project's Vue UI kit, or ``None`` when its frontend has no kits."""
+    from forge.ui_kits import applies_to  # noqa: PLC0415
+
+    if config.frontend is None or not applies_to(config.frontend.framework):
+        return None
+    return config.frontend.ui_kit
+
+
+def _check_component_ui_kits(
+    config: ProjectConfig,
+    selected: list[str],
+    ordered: tuple[str, ...],
+    registry: Mapping[str, ComponentNode],
+) -> None:
+    """Refuse selected components, or children they pull in, the kit cannot render.
+
+    A refused child is reported through the selected component that needs it,
+    with the component the kit offers instead when the manifest names one.
+    """
+    kit = _project_ui_kit(config)
+    if kit is None:
+        return
+    from forge.ui_kits import refusal  # noqa: PLC0415
+
+    via: dict[str, str | None] = dict.fromkeys(selected)
+    pending = list(selected)
+    while pending:
+        name = pending.pop()
+        node = registry.get(name)
+        for child in sorted(node.children) if node is not None else ():
+            if child not in via:
+                via[child] = via[name] or name
+                pending.append(child)
+    refused = [registry[name] for name in ordered if kit not in registry[name].ui_kits]
+    if refused:
+        raise OptionsError(
+            " ".join(
+                refusal(
+                    "Component",
+                    node.name,
+                    node.ui_kits,
+                    kit,
+                    via=via.get(node.name),
+                    replaced_by=node.replaced_by,
+                )
+                for node in refused
+            ),
+            code=OPTIONS_INVALID_VALUE,
+            context={"ui_kit": kit, "components": [node.name for node in refused]},
+        )
+
+
+def _check_fragment_ui_kits(config: ProjectConfig, fragment_set: set[str]) -> None:
+    """Refuse frontend fragments that declare kits without the project's."""
+    kit = _project_ui_kit(config)
+    if kit is None:
+        return
+    from forge.ui_kits import refusal  # noqa: PLC0415
+
+    refused = sorted(
+        name
+        for name in fragment_set
+        if FRAGMENT_REGISTRY[name].ui_kits and kit not in FRAGMENT_REGISTRY[name].ui_kits
+    )
+    if refused:
+        raise OptionsError(
+            " ".join(
+                refusal("Fragment", name, FRAGMENT_REGISTRY[name].ui_kits, kit) for name in refused
+            ),
+            code=OPTIONS_INVALID_VALUE,
+            context={"ui_kit": kit, "fragments": refused},
+        )
 
 
 def resolve(config: ProjectConfig) -> ResolvedPlan:
@@ -693,6 +774,7 @@ def resolve(config: ProjectConfig) -> ResolvedPlan:
     fragment_set = _collect_fragments(option_values)
     fragment_set |= _collect_component_fragments(config)
     fragment_set = _expand_deps(fragment_set)
+    _check_fragment_ui_kits(config, fragment_set)
     _check_security_constraints(option_values, fragment_set)
     _validate_reads_options(fragment_set)
     _check_conflicts(fragment_set, project_backends)

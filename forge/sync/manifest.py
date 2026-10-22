@@ -150,6 +150,10 @@ class ForgeFrontendData:
     # of silently resetting to the default. Empty ⇒ pre-layout manifest (treat
     # as the default at the consume site).
     layout: str = ""
+    # Vue UI kit (``--ui-kit`` / FrontendConfig.ui_kit), persisted for the same
+    # reason as ``layout``. Empty ⇒ a manifest from before the option, or a
+    # framework without kits: the default kit at the consume site.
+    ui_kit: str = ""
 
 
 @dataclass
@@ -325,6 +329,7 @@ def read_forge_toml(path: Path) -> ForgeTomlData:
             framework=explicit_framework,
             app_dir=str(_unwrap(frontend_tbl.get("app_dir", ""))),
             layout=str(_unwrap(frontend_tbl.get("layout", ""))),
+            ui_kit=str(_unwrap(frontend_tbl.get("ui_kit", ""))),
         )
     else:
         frontend = _infer_frontend_from_v3(path.parent, templates)
@@ -530,7 +535,7 @@ def _unwrap(value: Any) -> Any:
         return float(value)
     if isinstance(value, str):
         return str(value)
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_unwrap(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _unwrap(v) for k, v in value.items()}
@@ -630,6 +635,8 @@ def write_forge_toml(
             fe_tbl.add("app_dir", frontend.app_dir)
         if frontend.layout:
             fe_tbl.add("layout", frontend.layout)
+        if frontend.ui_kit:
+            fe_tbl.add("ui_kit", frontend.ui_kit)
         forge_tbl.add("frontend", fe_tbl)
 
     options_tbl = tomlkit.table()

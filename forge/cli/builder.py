@@ -263,6 +263,7 @@ def _build_frontend_from_cfg(
             "generate_e2e_tests", "frontend", "generate_e2e_tests", default=True
         ),
         layout=r.get("layout", "frontend", "layout", default="sidebar"),
+        ui_kit=r.get("ui_kit", "frontend", "ui_kit", default="shadcn"),
     )
     return frontend, include_auth
 

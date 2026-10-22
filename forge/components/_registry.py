@@ -50,6 +50,12 @@ def component_node_from_manifest(manifest: FeatureManifest) -> ComponentNode:
         children=dict(manifest.component_children),
         contract=manifest.component_contract,
         aggregates=tuple(manifest.component_aggregates),
+        ui_kits=(
+            manifest.component_ui_kits
+            if manifest.component_ui_kits is not None
+            else ComponentNode.ui_kits
+        ),
+        replaced_by=dict(manifest.component_replaced_by),
     )
 
 

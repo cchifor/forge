@@ -221,6 +221,12 @@ def generate(
     # and skip ``config.validate()``: reject a traversal/separator slug before
     # it is joined onto any path (staging, dry-run temp dir, or final root).
     validate_slug(config.project_slug)
+    # Same defence for the UI kit: an unknown or unselectable kit would render
+    # the default kit's files while the recipe and manifest record the other.
+    if config.frontend is not None:
+        from forge.ui_kits import check_kit  # noqa: PLC0415
+
+        check_kit(config.frontend)
 
     if dry_run:
         # dry_run: generate into a throwaway temp dir as before.
@@ -1248,10 +1254,14 @@ def _frontend_manifest_data(config: ProjectConfig):
 
     if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
         return None
+    from forge.ui_kits import applies_to  # noqa: PLC0415
+
     return ForgeFrontendData(
         framework=config.frontend.framework.value,
         app_dir=f"apps/{config.frontend_slug}",
         layout=config.frontend.layout,
+        # Only templates with kits record one; Svelte/Flutter manifests stay as they were.
+        ui_kit=config.frontend.ui_kit if applies_to(config.frontend.framework) else "",
     )
 
 
@@ -1355,9 +1365,9 @@ def _write_copier_answers(template_path: Path, dst_path: Path, data: dict[str, A
         val = data[key]
         # Drop non-serializable values (paths, enums) — Copier's own answers
         # file only records scalar / list / dict shapes.
-        if isinstance(val, (str, int, float, bool)) or val is None:
+        if isinstance(val, str | int | float | bool) or val is None:
             answers[key] = val
-        elif isinstance(val, (list, tuple)):
+        elif isinstance(val, list | tuple):
             answers[key] = list(val)
         elif isinstance(val, dict):
             answers[key] = dict(val)

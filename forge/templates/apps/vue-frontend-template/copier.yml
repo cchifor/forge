@@ -75,6 +75,12 @@ frontend_layout:
   default: "sidebar"
   help: "UI app-shell layout slug (set by forge from FrontendConfig.layout)"
 
+ui_kit:
+  type: str
+  when: false
+  default: "shadcn"
+  help: "Component library (set by forge from FrontendConfig.ui_kit; see forge.ui_kits)"
+
 consumed_services:
   type: str
   default: ""

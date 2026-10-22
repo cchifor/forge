@@ -229,11 +229,31 @@ def _collect_inputs() -> ProjectConfig | None:
             # so OpenAPI generation is mandatory (see FrontendConfig.validate).
             include_openapi = True
 
+        # UI kit — only prompt when the framework offers a choice. The colour
+        # schemes and layouts offered next depend on it.
+        from forge.ui_kits import (  # noqa: PLC0415
+            DEFAULT_UI_KIT,
+            applies_to,
+            available_ui_kits,
+            get_ui_kit,
+        )
+
+        ui_kit = DEFAULT_UI_KIT
+        _kits = available_ui_kits(framework)
+        if len(_kits) > 1:
+            _kit_labels = {
+                kit.display_label: kit.name
+                for kit in (get_ui_kit(_n) for _n in _kits)
+                if kit is not None
+            }
+            ui_kit = _kit_labels[_ask_select("UI kit:", choices=list(_kit_labels))]
+        _kit = get_ui_kit(ui_kit)
+
         color_scheme = "blue"
         if framework == FrontendFramework.VUE:
             color_scheme = _ask_select(
                 "Default color scheme:",
-                choices=COLOR_SCHEMES,
+                choices=list(_kit.color_schemes) if _kit is not None else COLOR_SCHEMES,
             )
 
         org_name = "com.example"
@@ -250,6 +270,12 @@ def _collect_inputs() -> ProjectConfig | None:
 
         layout = DEFAULT_LAYOUT
         _layouts = available_layouts(framework)
+        if applies_to(framework):
+            _layouts = tuple(
+                _name
+                for _name in _layouts
+                if ui_kit in getattr(get_layout_variant(framework, _name), "ui_kits", ())
+            )
         if len(_layouts) > 1:
             _labels: dict[str, str] = {}
             for _name in _layouts:
@@ -274,6 +300,7 @@ def _collect_inputs() -> ProjectConfig | None:
             default_color_scheme=color_scheme,
             org_name=org_name,
             layout=layout,
+            ui_kit=ui_kit,
         )
 
     include_keycloak = include_auth

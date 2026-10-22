@@ -7,4 +7,6 @@ stability = "experimental"
 layer = 1
 
 [feature.component]
+# No kit imports or kit colour classes: renders with every Vue UI kit.
+ui_kits = ["shadcn", "nuxt-ui"]
 contract = "EntityList"
