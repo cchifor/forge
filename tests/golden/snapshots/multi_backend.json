@@ -357,8 +357,12 @@
       "sha256": "3642388451347786"
     },
     "services/api-py/.gitignore": {
-      "size": 174,
-      "sha256": "31910a941b109f81"
+      "size": 158,
+      "sha256": "3efb3e509a4c13dd"
+    },
+    "services/api-py/.python-version": {
+      "size": 5,
+      "sha256": "02e735b3dfe1c328"
     },
     "services/api-py/Dockerfile": {
       "size": 3091,
