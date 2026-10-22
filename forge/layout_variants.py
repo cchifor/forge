@@ -64,6 +64,9 @@ class LayoutVariant:
         base_template_dir: Optional shared-base template (relative path)
             rendered *before* ``template_dir`` overlays it. Empty ⇒
             self-contained single render.
+        ui_kits: The UI kits (:mod:`forge.ui_kits`) this shell renders
+            with. A manifest without ``ui_kits`` renders the default kit
+            only, so a new kit is refused until a layout opts in.
     """
 
     framework: FrameworkKey
@@ -72,6 +75,7 @@ class LayoutVariant:
     display_label: str
     supported: bool = True
     base_template_dir: str = ""
+    ui_kits: tuple[str, ...] = ("shadcn",)
 
 
 LAYOUT_VARIANTS: dict[tuple[FrameworkKey, str], LayoutVariant] = {}
@@ -148,6 +152,9 @@ def _discover() -> None:
         framework = _framework_from_value(str(fw_value))
         if framework is None:
             continue
+        kits = layout.get("ui_kits", ["shadcn"])
+        if not isinstance(kits, list) or not all(isinstance(k, str) and k for k in kits):
+            continue
         register_layout_variant(
             LayoutVariant(
                 framework=framework,
@@ -156,6 +163,7 @@ def _discover() -> None:
                 display_label=str(layout.get("display_label", name)),
                 supported=bool(layout.get("supported", True)),
                 base_template_dir=str(layout.get("base", "")),
+                ui_kits=tuple(kits),
             )
         )
 

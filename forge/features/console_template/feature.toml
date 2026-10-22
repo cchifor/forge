@@ -6,5 +6,10 @@ category = "template"
 stability = "experimental"
 layer = 3
 
+[feature.component]
+# Its own files are kit-free; a kit is still refused through any child
+# that lacks it (StatCard today).
+ui_kits = ["shadcn", "nuxt-ui"]
+
 [feature.component.children]
 StatCard = "*"

@@ -232,6 +232,12 @@ class Fragment:
     # default) preserves existing behavior — no built-in variant is excluded, so
     # the golden snapshots stay byte-identical.
     excluded_app_templates: tuple[str, ...] = ()
+    # The Vue UI kits (``forge.ui_kits``) a frontend fragment renders with.
+    # Empty (the default) = any kit: the fragment's files depend on no kit, so
+    # every existing fragment keeps applying unchanged. Non-empty = the
+    # resolver refuses the fragment for a Vue project on another kit
+    # (``tests/test_ui_kit_coverage.py`` checks the files honour the claim).
+    ui_kits: tuple[str, ...] = ()
 
     def supports(self, language: BackendLanguage) -> bool:
         return language in self.implementations
@@ -295,6 +301,12 @@ class Fragment:
                     "after": list(self.after),
                     "overlap": sorted(before_after_overlap),
                 },
+            )
+        if not all(isinstance(kit, str) and kit for kit in self.ui_kits):
+            raise FragmentError(
+                f"Fragment {self.name!r} declares ui_kits with an empty or "
+                f"non-string entry: {list(self.ui_kits)}",
+                context={"fragment": self.name, "ui_kits": list(self.ui_kits)},
             )
         if self.parity_tier is None:
             object.__setattr__(self, "parity_tier", _auto_parity_tier(self.implementations))

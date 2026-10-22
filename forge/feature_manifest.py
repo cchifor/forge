@@ -39,6 +39,12 @@ class FeatureManifest:
     component_contract: str | None = None
     component_children: dict[str, str] = field(default_factory=dict)
     component_aggregates: tuple[str, ...] = ()
+    # ``[feature.component].ui_kits`` — the Vue UI kits the component renders
+    # with (``forge.ui_kits``). ``None`` when absent: the component node then
+    # takes the default, the shadcn kit only. ``replaced_by`` maps a kit to the
+    # component a project on that kit uses instead (named in the refusal).
+    component_ui_kits: tuple[str, ...] | None = None
+    component_replaced_by: dict[str, str] = field(default_factory=dict)
 
 
 def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
@@ -111,6 +117,8 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
     component_contract: str | None = None
     component_children: dict[str, str] = {}
     component_aggregates: tuple[str, ...] = ()
+    component_ui_kits: tuple[str, ...] | None = None
+    component_replaced_by: dict[str, str] = {}
     component_raw = feature.get("component")
     if component_raw is not None:
         if not isinstance(component_raw, dict):
@@ -164,6 +172,29 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
                 )
         component_aggregates = tuple(aggregates_raw)
 
+        kits_raw = component_raw.get("ui_kits")
+        if kits_raw is not None:
+            if not isinstance(kits_raw, list) or not all(
+                isinstance(k, str) and k.strip() for k in kits_raw
+            ):
+                raise PluginError(
+                    "[feature.component].ui_kits must be a list of UI kit names",
+                    code=FEATURE_MANIFEST_INVALID,
+                    context={"path": str(path)},
+                )
+            component_ui_kits = tuple(str(k) for k in kits_raw)
+
+        replaced_raw = component_raw.get("replaced_by", {})
+        if not isinstance(replaced_raw, dict) or not all(
+            isinstance(v, str) and v.strip() for v in replaced_raw.values()
+        ):
+            raise PluginError(
+                "[feature.component.replaced_by] must be a table of UI kit → component name",
+                code=FEATURE_MANIFEST_INVALID,
+                context={"path": str(path)},
+            )
+        component_replaced_by = {str(k): str(v) for k, v in replaced_raw.items()}
+
     depends_raw = feature.get("depends", {})
     if not isinstance(depends_raw, dict):
         raise PluginError(
@@ -210,6 +241,8 @@ def parse_feature_manifest(path: Path, *, module_path: str) -> FeatureManifest:
         component_contract=component_contract,
         component_children=component_children,
         component_aggregates=component_aggregates,
+        component_ui_kits=component_ui_kits,
+        component_replaced_by=component_replaced_by,
     )
 
 

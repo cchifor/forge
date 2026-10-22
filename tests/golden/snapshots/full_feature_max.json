@@ -25,8 +25,8 @@
       "sha256": "2ac15b8600196a9b"
     },
     ".forge/quality.json": {
-      "size": 1684,
-      "sha256": "7fd9a964c7dbb0c5"
+      "size": 1704,
+      "sha256": "dc4f2238208c3d1d"
     },
     ".github/workflows/ci.yml": {
       "size": 1089,

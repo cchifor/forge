@@ -5,3 +5,10 @@ summary = "A TanStack-Table data grid — column visibility/order/pinning/sizing
 category = "component"
 stability = "experimental"
 layer = 1
+
+[feature.component]
+# Built on the shadcn-vue kit (its imports or colour classes); see forge.ui_kits.
+ui_kits = ["shadcn"]
+
+[feature.component.replaced_by]
+nuxt-ui = "UTable"

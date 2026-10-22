@@ -11,3 +11,7 @@ display_label = "Sidebar App Shell"
 template_dir = "apps/vue-frontend-template"
 base = ""
 supported = true
+# The base template carries both kits, kit-specific files side by side under
+# Copier conditional names; the nuxt-ui files land with F-02 of
+# plans/2026-10-22-vue-ui-kit-nuxt-ui.md, until then the kit is unselectable.
+ui_kits = ["shadcn", "nuxt-ui"]

@@ -1248,10 +1248,14 @@ def _frontend_manifest_data(config: ProjectConfig):
 
     if config.frontend is None or config.frontend.framework == FrontendFramework.NONE:
         return None
+    from forge.ui_kits import applies_to  # noqa: PLC0415
+
     return ForgeFrontendData(
         framework=config.frontend.framework.value,
         app_dir=f"apps/{config.frontend_slug}",
         layout=config.frontend.layout,
+        # Only templates with kits record one; Svelte/Flutter manifests stay as they were.
+        ui_kit=config.frontend.ui_kit if applies_to(config.frontend.framework) else "",
     )
 
 

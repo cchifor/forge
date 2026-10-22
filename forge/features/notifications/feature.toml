@@ -6,6 +6,10 @@ category = "component"
 stability = "experimental"
 layer = 2
 
+[feature.component]
+# Built on the shadcn-vue kit (its imports or colour classes); see forge.ui_kits.
+ui_kits = ["shadcn"]
+
 # NotificationBell renders inside the shared Popover primitive. Compose it as a
 # child so selecting NotificationCenter pulls the Popover component (which owns
 # shared/ui/popover/) into the closure — this feature no longer ships its own

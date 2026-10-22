@@ -11,6 +11,7 @@ import argparse
 import functools
 
 from forge.config import FrontendFramework
+from forge.ui_kits import COLOR_SCHEMES as _COLOR_SCHEMES
 
 FRAMEWORK_MAP = {
     "vue": FrontendFramework.VUE,
@@ -19,7 +20,7 @@ FRAMEWORK_MAP = {
     "none": FrontendFramework.NONE,
 }
 
-COLOR_SCHEMES = ["blue", "indigo", "teal", "green", "deepPurple", "red", "amber", "cyan"]
+COLOR_SCHEMES = list(_COLOR_SCHEMES)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -146,6 +147,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Frontend app-shell layout (framework-scoped, e.g. sidebar). "
         "Defaults to 'sidebar'. Run interactively to see the layouts available "
         "for your chosen framework.",
+    )
+    p.add_argument(
+        "--ui-kit",
+        metavar="NAME",
+        help="Component library of the Vue template. Defaults to 'shadcn'. "
+        "Svelte and Flutter keep their own kits.",
     )
 
     # Frontend toggles

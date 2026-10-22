@@ -66,6 +66,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Finish Git's automatic maintenance before generation returns, so background
   object repacking cannot race the unchanged-file check.
 
+### Vue UI kits
+
+- Add `frontend.ui_kit` (`--ui-kit`) to choose the Vue template's component
+  library. `shadcn` stays the default; `nuxt-ui` is registered and becomes
+  selectable with its rendering ([ADR-011](docs/architecture-decisions/ADR-011-ui-kit-option-for-the-vue-template.md)).
+  Layouts, component features and fragments declare their kits; forge refuses
+  an incompatible combination before writing, naming the replacement component.
+- Render the Vue template's no-chat `App.vue` and `MainLayout.vue` and its
+  no-Keycloak `useAuth.ts` from Copier conditional file names instead of
+  post-generate strings; generated output is unchanged.
+
 ### Platform routing
 
 - Route new `microservices` and `headless-api` projects directly from the edge

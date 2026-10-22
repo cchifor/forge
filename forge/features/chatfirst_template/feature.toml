@@ -5,3 +5,7 @@ summary = "Chat-first app template — results surface above a docked agent chat
 category = "template"
 stability = "experimental"
 layer = 3
+
+[feature.component]
+# Built on the shadcn-vue kit (its imports or colour classes); see forge.ui_kits.
+ui_kits = ["shadcn"]

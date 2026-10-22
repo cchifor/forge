@@ -68,6 +68,7 @@ def component_fragments(
             "Layered-component model is Vue-first; Svelte/Flutter component "
             "emitters follow once the model is proven."
         ),
+        ui_kits=node.ui_kits,
     )
     return (fragment,)
 

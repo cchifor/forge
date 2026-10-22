@@ -199,6 +199,7 @@ class FrontendConfig:
     api_proxy_target: str = ""
     generate_e2e_tests: bool = True
     layout: str = "sidebar"  # UI app-shell layout; see forge.layout_variants
+    ui_kit: str = "shadcn"  # Vue only: component library; see forge.ui_kits
 
     def effective_mode(self, options_mode: str = "generate") -> str:
         """Collapse two sources of frontend-mode truth into one value.
@@ -287,3 +288,8 @@ class FrontendConfig:
                 f"Layout '{self.layout}' is not available for {self.framework.value}. "
                 f"Choose from: {', '.join(avail)}"
             )
+        # The UI kit must render with the chosen layout, chat and colour scheme.
+        # Local import for the same cycle reason as layout_variants above.
+        from forge.ui_kits import check_frontend  # noqa: PLC0415
+
+        check_frontend(self)

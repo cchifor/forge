@@ -5,3 +5,7 @@ summary = "A small colored status indicator dot with optional pulse + label — 
 category = "component"
 stability = "experimental"
 layer = 1
+
+[feature.component]
+# Built on the shadcn-vue kit (its imports or colour classes); see forge.ui_kits.
+ui_kits = ["shadcn"]

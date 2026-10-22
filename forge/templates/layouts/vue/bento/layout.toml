@@ -12,3 +12,6 @@ display_label = "Bento Grid Dashboard"
 template_dir = "layouts/vue/bento"
 base = "apps/vue-frontend-template"
 supported = true
+# The overlay's regions are built on the shadcn-vue kit; Nuxt UI variants
+# arrive with phase 2 of plans/2026-10-22-vue-ui-kit-nuxt-ui.md.
+ui_kits = ["shadcn"]
